@@ -178,8 +178,10 @@ function prepare(version) {
 
   // Node runs the TypeScript directly (type stripping), so this needs no installed dependencies.
   execFileSync(process.execPath, [resolve(root, 'scripts/version.ts'), version], { cwd: root, stdio: 'inherit' });
+  // The new version needs its contract snapshot (`gen:contracts:check` in CI); this step uses the installed dependencies.
+  execFileSync('pnpm', ['-s', 'gen:contracts'], { cwd: root, stdio: 'inherit' });
   if (target.beta === null) dateChangelogs(version, new Date().toISOString().slice(0, 10));
-  const files = ['package.json', 'apps/macos/project.yml', 'apps/mobile/iosApp/project.yml', ...CHANGELOGS.map(({ path }) => path)];
+  const files = ['package.json', 'apps/macos/project.yml', 'apps/mobile/iosApp/project.yml', `packages/contracts/schema/released/${version}.json`, ...CHANGELOGS.map(({ path }) => path)];
   git('add', '--', ...files);
   git('commit', '--quiet', '-m', `chore: release v${version}`);
   git('tag', '--annotate', `v${version}`, '-m', `Riffet ${version}`);

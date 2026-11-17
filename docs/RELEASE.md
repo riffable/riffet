@@ -46,7 +46,7 @@
 
 ```bash
 pnpm release:notes                  # 整理两份未发布节
-pnpm release:prepare 0.8.0-beta.1   # 预检、改版本、（stable 时）定稿变更记录、提交、打 annotated tag
+pnpm release:prepare 0.8.0-beta.1   # 预检、改版本、生成契约快照、（stable 时）定稿变更记录、提交、打 annotated tag
 git push origin main v0.8.0-beta.1  # 推送后触发 .github/workflows/release.yml
 ```
 
