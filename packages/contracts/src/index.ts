@@ -20,7 +20,7 @@ export { AGENT_ICON_ROUTE, PLUGIN_CHANNEL_ROUTE, COMMAND_ICONS, COMMAND_MENUS, C
 export { NATIVE_BACKEND_IDS, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID_MAX, isAgentOfPlugin, isBuiltinBackendId, isNativeBackendId, isPluginAgentId } from './agent-ids.js';
 export type { BuiltinBackendId, NativeBackendId, PluginAgentId } from './agent-ids.js';
 export { isDoneUnseen, isRunningSession, isUnread, needsYou } from './session-attention.js';
-export { ASSISTANT_STANDING_BACKEND, assistantChoice, type AssistantChoice } from './assistant-choice.js';
+export { ASSISTANT_STANDING_BACKEND, assistantChoice, workItemAgentChoice, type AssistantChoice } from './assistant-choice.js';
 
 export * from './protocol.js';
 export * from './devices.js';

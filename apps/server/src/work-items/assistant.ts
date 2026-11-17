@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { AssistantDelegation, Automation, AssistantInstructions, NativeBackendCatalogEntry, NativeBackendId, Project, Session, WorkItem, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import type { AssistantChoice, AssistantDelegation, Automation, AssistantInstructions, NativeBackendCatalogEntry, NativeBackendId, Project, Session, WorkItem, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { isRunningSession, needsYou } from '../../../../packages/contracts/src/session-attention.js';
 import { AppError } from '../errors.js';
 import { servingKey } from '../journal/ingest.js';
@@ -121,6 +121,8 @@ export class AssistantBoard {
     workItems: WorkItemService;
     /** The agent a task gets when the 助理 names none: the owner's default. */
     defaultBackend(): NativeBackendId;
+    /** Who a new task goes to by the owner's settings (`workItemAgentChoice`); with `named`, only that agent's saved provider and model. */
+    workItemChoice?(named?: string): Promise<AssistantChoice | undefined>;
     /** A conversation's provider transcript, when its backend can be read without starting it (`NativeBackendService.indexableTranscript`). */
     transcript(sessionId: string): Promise<WorkbenchEvent[]>;
     /** `assistantSearch` of `search/`. */
@@ -325,12 +327,16 @@ export class AssistantBoard {
         const project = optionalText(args, 'project');
         const projectId = project ? this.projects().find(item => item.id === project || item.name === project)?.id : undefined;
         if (!projectId) throw invalid(project ? `There is no project ${project}; call list_projects` : 'project is required; call list_projects');
-        const agent = optionalText(args, 'agent') ?? this.deps.defaultBackend();
+        // No agent named: the board's saved choice (agent, provider, model). The saved agent named again keeps its provider and model.
+        const named = optionalText(args, 'agent');
+        const saved = this.deps.workItemChoice ? await this.deps.workItemChoice(named) : undefined;
+        const agent = named ?? saved?.backendId ?? this.deps.defaultBackend();
+        const use = saved && saved.backendId === agent ? saved : undefined;
         const item = this.deps.workItems.create({
           title: args.title as string,
           ...(optionalText(args, 'description') ? { description: optionalText(args, 'description')! } : {}),
           ...(args.criteria !== undefined ? { criteria: args.criteria as string[] } : {}),
-          assignee: { kind: 'agent', backendId: agent as NativeBackendId }, projectId,
+          assignee: { kind: 'agent', backendId: agent as NativeBackendId, ...(use?.profileId ? { profileId: use.profileId } : {}), ...(use?.model ? { model: use.model } : {}) }, projectId,
         }, { source: 'assistant' });
         if (args.start !== true || this.deps.dispatch?.() === 'all') return { created: this.summary(item), next: args.start === true ? 'The owner starts every task you plan; it waits in this conversation as a card.' : 'It waits in this conversation for the owner to start it.' };
         const started = await this.deps.workItems.start(item.id);

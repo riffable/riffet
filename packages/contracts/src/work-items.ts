@@ -13,8 +13,11 @@ import type { NativeBackendId } from './agent-ids.js';
 export const WORK_ITEM_STATUSES = ['todo', 'doing', 'review', 'done', 'cancelled'] as const;
 export type WorkItemStatus = typeof WORK_ITEM_STATUSES[number];
 
-/** Who works on it: an agent (by backend, its default profile and model), or the owner themself. */
-export type WorkItemAssignee = { kind: 'agent'; backendId: NativeBackendId } | { kind: 'owner' };
+/**
+ * Who works on it: an agent, or the owner themself. An agent's `profileId` and `model` (with the composer's
+ * parameters, `model[effort=high]`) are what its conversations start on; unset, the agent's own defaults.
+ */
+export type WorkItemAssignee = { kind: 'agent'; backendId: NativeBackendId; profileId?: string; model?: string } | { kind: 'owner' };
 
 export interface WorkItem {
   id: string;

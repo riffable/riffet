@@ -71,6 +71,7 @@ export interface AppSettings {
   maxAgentMemoryMb?: number;
   quickChat?: QuickChatSettings;
   assistant?: AssistantSettings;
+  workItems?: WorkItemSettings;
   /**
    * The destinations the sidebar shows as rows, in order, on every device; the rest sit under its
    * 更多 menu. Unset means `DEFAULT_SIDEBAR_PINNED`. Ids a client does not offer are kept and skipped.
@@ -108,6 +109,17 @@ export interface AssistantSettings {
    */
   dispatch?: 'edits' | 'all';
 }
+/**
+ * 任务看板's settings (docs/TASK-BOARD.md §10), on every device. `backendId`, `profileId` and `model` are what a new
+ * task is given to; unset, the composer's default agent and that agent's defaults.
+ */
+export interface WorkItemSettings {
+  /** A conversation started from the composer opens a task too. Unset means off. */
+  composerSessions?: boolean;
+  backendId?: NativeBackendId; profileId?: string; model?: string;
+}
+/** Each field given replaces its own; `null` clears it. */
+export type WorkItemSettingsUpdate = { [K in keyof WorkItemSettings]?: WorkItemSettings[K] | null };
 /** Each field given replaces its own; `null` clears it. */
 export type AssistantSettingsUpdate = { [K in keyof AssistantSettings]?: AssistantSettings[K] | null };
 /** What starts a delegation's run: a time, or a change the server watches for without the model. */
@@ -205,4 +217,4 @@ export type AuxiliaryModelsUpdate = Partial<Record<AuxiliaryModelPurpose, Auxili
 export type QuickChatSettingsUpdate = Omit<QuickChatSettings, 'presets'> & { presets?: QuickChatPreset[] | null };
 /** Only the uses given change; `null` clears one. */
 export type PluginModelsUpdate = Record<string, AuxiliaryModelRef | null>;
-export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };
+export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant' | 'workItems'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate; workItems?: WorkItemSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };

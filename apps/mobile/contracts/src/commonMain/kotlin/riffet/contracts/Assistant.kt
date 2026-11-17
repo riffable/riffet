@@ -135,3 +135,25 @@ data class AssistantDelegation(
 
 @Serializable
 data class AssistantDelegations(val delegations: List<AssistantDelegation> = emptyList())
+
+/** `AppSettings.workItems` (docs/TASK-BOARD.md §10); an unset agent is the composer's default with its own defaults. */
+@Serializable
+data class WorkItemSettings(
+    /** A conversation started from the composer opens a task too. Off unless set. */
+    val composerSessions: Boolean? = null,
+    val backendId: NativeBackendId? = null,
+    val profileId: String? = null,
+    val model: String? = null,
+)
+
+/** A PATCH of [WorkItemSettings]: each field given replaces its own, a JSON `null` clears it. */
+@Serializable
+data class WorkItemSettingsUpdate(
+    val composerSessions: Boolean? = null,
+    val backendId: JsonElement? = null,
+    val profileId: JsonElement? = null,
+    val model: JsonElement? = null,
+)
+
+@Serializable
+data class WorkItemSettingsPatch(val workItems: WorkItemSettingsUpdate)

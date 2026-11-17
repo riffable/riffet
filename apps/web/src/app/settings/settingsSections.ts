@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { IconActivity, IconBot, IconCornerDownLeft, IconColumns2, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelLeft, IconPanelRight, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
+import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelLeft, IconPanelRight, IconSend, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSquareKanban, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
 
 /** The settings dialog's box, shared with the frame that stands in while its chunk loads. */
 export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';
@@ -12,18 +12,20 @@ export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col 
  * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
  * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'workitems' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
-/** The navigation's groups. 通用设置 stands alone at the top, untitled; the others are titled. */
-export type SettingsSectionGroup = 'general' | 'appearance' | 'behavior' | 'models' | 'connection' | 'support';
+/** The navigation's groups. 通用设置 and 个人资料 stand alone at the top, untitled; the others are titled. */
+export type SettingsSectionGroup = 'general' | 'appearance' | 'behavior' | 'features' | 'models' | 'access' | 'server' | 'support';
 
 const groupTitles: Record<SettingsSectionGroup, MessageDescriptor | undefined> = {
   general: undefined,
   appearance: msg`外观`,
   behavior: msg`行为`,
+  features: msg`功能`,
   models: msg`模型`,
-  connection: msg`连接`,
+  access: msg`访问`,
+  server: msg`服务器`,
   support: msg`支持`,
 };
 
@@ -53,8 +55,7 @@ interface SettingsSectionDefinition extends Omit<SettingsSectionItem, 'label'> {
 const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'profile', label: msg`个人资料`, group: 'general', icon: IconUser },
   { id: 'general', label: msg`通用设置`, group: 'general', icon: IconSettings2 },
-  { id: 'assistant', label: msg`个人助理`, group: 'general', icon: IconBot },
-  { id: 'appearance', label: msg`主题`, group: 'appearance', icon: IconSun },
+    { id: 'appearance', label: msg`主题`, group: 'appearance', icon: IconSun },
   { id: 'typography', label: msg`排版`, group: 'appearance', icon: IconWrapText },
   { id: 'sidebar', label: msg`侧栏`, group: 'appearance', icon: IconPanelLeft },
   { id: 'tabs', label: msg`标签页`, group: 'appearance', icon: IconColumns2 },
@@ -64,17 +65,19 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'interaction', label: msg`输入`, group: 'behavior', icon: IconCornerDownLeft },
   { id: 'notifications', label: msg`通知`, group: 'behavior', icon: IconActivity },
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog },
+  { id: 'assistant', label: msg`个人助理`, group: 'features', icon: IconBot },
+  { id: 'workitems', label: msg`任务看板`, group: 'features', icon: IconSquareKanban },
+  { id: 'quickchat', label: msg`快速对话`, group: 'features', icon: IconMessagesSquare },
+  { id: 'channels', label: msg`机器人`, group: 'features', icon: IconSend },
   { id: 'backends', label: msg`Agent`, group: 'models', icon: IconSparkles },
   { id: 'providers', label: msg`模型提供商`, group: 'models', icon: IconLayers },
   { id: 'auxiliary', label: msg`辅助模型`, group: 'models', icon: IconCpu },
-  { id: 'quickchat', label: msg`快速对话`, group: 'models', icon: IconMessagesSquare },
-  { id: 'connection', label: msg`连接与访问`, group: 'connection', icon: IconLaptop },
-  { id: 'shares', label: msg`会话分享`, group: 'connection', icon: IconSquareArrowOutUpRight, parent: 'connection' },
-  { id: 'devices', label: msg`设备管理`, group: 'connection', icon: IconSmartphone },
-  { id: 'channels', label: msg`机器人`, group: 'connection', icon: IconBot },
-  { id: 'service', label: msg`服务管理`, group: 'connection', icon: IconServer },
-  { id: 'storage', label: msg`存储空间`, group: 'connection', icon: IconDatabase },
-  { id: 'backup', label: msg`备份与恢复`, group: 'connection', icon: IconHardDriveDownload },
+  { id: 'connection', label: msg`连接与访问`, group: 'access', icon: IconLaptop },
+  { id: 'shares', label: msg`会话分享`, group: 'access', icon: IconSquareArrowOutUpRight, parent: 'connection' },
+  { id: 'devices', label: msg`设备管理`, group: 'access', icon: IconSmartphone },
+  { id: 'service', label: msg`服务管理`, group: 'server', icon: IconServer },
+  { id: 'storage', label: msg`存储空间`, group: 'server', icon: IconDatabase },
+  { id: 'backup', label: msg`备份与恢复`, group: 'server', icon: IconHardDriveDownload },
   { id: 'diagnostics', label: msg`诊断`, group: 'support', icon: IconGauge },
   { id: 'design', label: msg`设计规范`, group: 'support', icon: IconSwatchBook },
   { id: 'about', label: msg`关于 Riffet`, group: 'support', icon: IconInfo },

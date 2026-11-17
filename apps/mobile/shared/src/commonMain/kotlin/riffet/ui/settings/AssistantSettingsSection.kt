@@ -200,7 +200,7 @@ internal fun AssistantSettingsSection(api: RiffetApi, controller: SettingsContro
     )
 }
 
-private data class ModelRead(
+internal data class ModelRead(
     val models: List<ModelInfo> = emptyList(),
     val available: Boolean = true,
     val reason: String? = null,

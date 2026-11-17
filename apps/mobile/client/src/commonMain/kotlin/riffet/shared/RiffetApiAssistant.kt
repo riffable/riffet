@@ -11,7 +11,10 @@ import riffet.contracts.AssistantPacks
 import riffet.contracts.AssistantRunUsage
 import riffet.contracts.AssistantSettingsPatch
 import riffet.contracts.AssistantSettingsUpdate
+import riffet.contracts.AgentIds
 import riffet.contracts.NativeBackendId
+import riffet.contracts.WorkItemSettingsPatch
+import riffet.contracts.WorkItemSettingsUpdate
 
 /** `GET /api/assistant/instructions`: the 助理's `AGENTS.md`. */
 @Throws(Exception::class)
@@ -84,3 +87,19 @@ suspend fun RiffetApi.setAssistantDailyRuns(count: Int): AppSettings = patchAssi
 
 private suspend fun RiffetApi.patchAssistant(update: AssistantSettingsUpdate): AppSettings =
     patch("/api/settings", wireBody(AssistantSettingsPatch(update))).decode()
+
+/** 任务看板: 新会话作为任务. */
+@Throws(Exception::class)
+suspend fun RiffetApi.setWorkItemComposerSessions(on: Boolean): AppSettings = patchWorkItems(WorkItemSettingsUpdate(composerSessions = on))
+
+/** 任务看板's agent and model for new tasks; a null [backendId] clears all three, a null [model] only the model. */
+@Throws(Exception::class)
+suspend fun RiffetApi.setWorkItemAgent(backendId: NativeBackendId?, profileId: String?, model: String?): AppSettings =
+    patchWorkItems(WorkItemSettingsUpdate(
+        backendId = AssistantSettingsUpdate.clearable(backendId?.let(AgentIds::wire)),
+        profileId = AssistantSettingsUpdate.clearable(if (backendId == null) null else profileId),
+        model = AssistantSettingsUpdate.clearable(if (backendId == null) null else model?.takeIf { it.isNotBlank() }),
+    ))
+
+private suspend fun RiffetApi.patchWorkItems(update: WorkItemSettingsUpdate): AppSettings =
+    patch("/api/settings", wireBody(WorkItemSettingsPatch(update))).decode()

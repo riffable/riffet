@@ -1132,13 +1132,13 @@ msgctxt "design-sample"
 msgid "任务"
 msgstr "Tasks"
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "任务文件位置"
-msgstr "Task file location"
-
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "任务的会话停下、你不在时，核对交付或推动它"
 msgstr "When a task's conversation stops while you're away, checks the delivery or moves it on"
+
+#: src/app/settings/settingsSections.ts
+msgid "任务看板"
+msgstr "Task board"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "会丢失输入"
@@ -2105,6 +2105,10 @@ msgstr "Already taken by the previous command"
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
 msgstr "{remaining}% remaining"
+
+#: src/app/settings/settingsSections.ts
+msgid "功能"
+msgstr "Features"
 
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4158,6 +4162,10 @@ msgstr "Shortcuts, focus order"
 msgid "快速对话"
 msgstr "Quick chat"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "快速对话和个人助理除外"
+msgstr "Quick chat and the personal assistant are excluded"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "思考"
@@ -5033,6 +5041,10 @@ msgstr "New"
 msgid "新会话、任务、设置三个目的地，只有图标"
 msgstr "Three destinations, new session, tasks and settings, icons only"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "新会话作为任务"
+msgstr "New conversations as tasks"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "新会话在这里启动。"
 msgstr "New conversations start here."
@@ -5288,10 +5300,6 @@ msgctxt "settings-build-read-failed"
 msgid "无法读取"
 msgstr "Couldn't read"
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "无法读取任务文件位置"
-msgstr "Could not read task file location"
-
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
@@ -5313,6 +5321,10 @@ msgstr "Couldn't load push settings"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法读取插件"
 msgstr "Could not load plugins"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法读取无项目会话的目录"
+msgstr "Could not read the directory for conversations without a project"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "无法读取服务器状态"
@@ -5368,6 +5380,10 @@ msgstr "Accessibility on"
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "无需确认"
 msgstr "No confirmation needed"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无项目会话的目录"
+msgstr "Directory for conversations without a project"
 
 #: src/app/settings/StorageSection.tsx
 msgid "日志与诊断"
@@ -5552,6 +5568,7 @@ msgid "有本地修改"
 msgstr "Local changes"
 
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/settingsSections.ts
 msgid "服务器"
 msgstr "Server"
 
@@ -5568,8 +5585,8 @@ msgid "服务器没有返回状态数据。"
 msgstr "The server returned no status data."
 
 #: src/app/settings/PreferencesSections.tsx
-msgid "服务器目录，仅影响新任务。"
-msgstr "A directory on the server; applies to new tasks only."
+msgid "服务器目录，仅影响新建的会话。"
+msgstr "A directory on the server; applies to new conversations only."
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "服务器进程"
@@ -7776,6 +7793,7 @@ msgid "设计规范页的组、文档和代码目录一一对应。"
 msgstr "Groups, docs and code directories of the design system page correspond one to one."
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/settingsSections.ts
 msgid "访问"
 msgstr "Access"
 
@@ -8009,6 +8027,10 @@ msgstr "Follow up on tasks"
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "跟随快速对话"
 msgstr "Same as Quick chat"
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "跟随新会话"
+msgstr "Same as new conversations"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随界面主题"
@@ -8364,10 +8386,6 @@ msgstr "A busy button keeps its width; the spinner sits in place."
 #: src/app/design/components/InputsChapter.tsx
 msgid "远程服务器"
 msgstr "Remote server"
-
-#: src/app/settings/settingsSections.ts
-msgid "连接"
-msgstr "Connection"
 
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -9228,6 +9246,7 @@ msgstr "14 px by default, secondary text color; use text-current inside buttons.
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
+#: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认 Agent"
 msgstr "Default Agent"
 
@@ -9253,6 +9272,7 @@ msgstr "Default provider"
 #: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
+#: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认模型"
 msgstr "Default model"
 

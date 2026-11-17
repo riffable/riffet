@@ -31,21 +31,39 @@ async function boot() {
 
 describe('work items', () => {
   it('starts only the task a new conversation names; a composer conversation opens none', async () => {
-    const { store, call, create, items, workItems } = await boot();
+    const { store, call, create, items, workItems, settings } = await boot();
     const first = await create('s1');
     expect(first.statusCode, first.body).toBe(202);
     expect((await items()).items).toHaveLength(0);
     expect(store.getSession('s1').workItemId).toBeUndefined();
 
-    // Tasks composer conversations opened before go at startup, unless something happened on them.
+    // Tasks composer conversations opened before 2026-11-16 go at startup, unless something happened on them.
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-11-14T00:00:00Z'));
     const idle = workItems.create({ title: 'Idle', status: 'doing' }, { source: 'composer', originSessionId: 's1' });
     workItems.attachSession('s1', idle.id);
     const discussed = workItems.create({ title: 'Discussed', status: 'doing' }, { source: 'composer' });
+    vi.useRealTimers();
     workItems.addComment(discussed.id, 'keep this');
+    workItems.dropComposerItems();
+    expect((await items()).items).toHaveLength(2); // startup already ran it: it runs once
+    store.setSetting('work-items:composer-dropped', false);
     workItems.dropComposerItems();
     expect((await items()).items.map(entry => entry.id)).toEqual([discussed.id]);
     expect(store.getSession('s1').workItemId).toBeUndefined();
     workItems.delete(discussed.id);
+
+    // With 新建会话即任务 on, a composer conversation opens a task on its agent, and a retry finds the same one.
+    settings.setSettings({ workItems: { composerSessions: true } });
+    expect((await create('s2', 'Fix the login\nthen more')).statusCode).toBe(202);
+    expect((await create('s2', 'Fix the login\nthen more')).statusCode).toBe(202);
+    const made = (await items()).items;
+    expect(made).toHaveLength(1);
+    expect(made[0]).toMatchObject({ title: 'Fix the login', status: 'doing', source: 'composer', titleSessionId: 's2', assignee: { kind: 'agent', backendId: 'cursor' } });
+    expect(store.getSession('s2').workItemId).toBe(made[0]!.id);
+    settings.setSettings({ workItems: { composerSessions: null } as never });
+    expect((await create('s4', 'Another')).statusCode).toBe(202);
+    expect(store.getSession('s4').workItemId).toBeUndefined();
+    workItems.delete(made[0]!.id);
 
     // 开始 on the board: a conversation named for an item joins it and moves it to doing.
     const todo = (await call('POST', '/api/work-items', { id: 'w-todo', title: 'Later', assignee: { kind: 'agent', backendId: 'cursor' } })).json() as WorkItem;
@@ -163,7 +181,7 @@ describe('work items', () => {
     const home = store.listProjects().find(entry => entry.system === 'assistant')!;
     // The assistant's own conversation is not a task, and only it is given the board tools.
     const mainReply = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a1', initialMessage: { commandId: 'c-a1', text: 'Fix the login and add a test' } });
-    expect(mainReply.statusCode).toBe(202);
+    expect(mainReply.statusCode, mainReply.body).toBe(202);
     // The reply names the main conversation, so a client never shows it as an ordinary one first.
     expect(mainReply.json().project).toMatchObject({ id: home.id, mainSessionId: 'a1' });
     expect(store.getSession('a1').workItemId).toBeUndefined();

@@ -59,9 +59,17 @@ function status(value: unknown, allowed: readonly WorkItemStatus[] = WORK_ITEM_S
   return value as WorkItemStatus;
 }
 function assignee(value: unknown): WorkItemAssignee {
-  const item = value as { kind?: unknown; backendId?: unknown } | null;
+  const item = value as { kind?: unknown; backendId?: unknown; profileId?: unknown; model?: unknown } | null;
   if (item?.kind === 'owner') return { kind: 'owner' };
-  if (item?.kind === 'agent' && typeof item.backendId === 'string' && item.backendId && item.backendId.length <= 100) return { kind: 'agent', backendId: item.backendId as NativeBackendId };
+  if (item?.kind === 'agent' && typeof item.backendId === 'string' && item.backendId && item.backendId.length <= 100) {
+    const pick = (key: 'profileId' | 'model') => {
+      const given = item[key];
+      if (given === undefined || given === null) return {};
+      if (typeof given !== 'string' || !given || given.length > 200 || /[\0\r\n]/.test(given)) throw invalid(`assignee.${key} must be 1 to 200 characters`);
+      return { [key]: given };
+    };
+    return { kind: 'agent', backendId: item.backendId as NativeBackendId, ...pick('profileId'), ...pick('model') };
+  }
   throw invalid('assignee must be the owner or an agent with a backendId');
 }
 function clientId(value: unknown, name = 'id'): string | undefined {
@@ -76,8 +84,12 @@ export interface WorkItemMessenger {
   send(sessionId: string, text: string, commandId: string): void;
   /** Opens a conversation with [text]; [attach] runs in the write that creates it. Returns its id. */
   /** `title` names the conversation after the task, rather than after the brief's first line. */
-  open(target: { projectId: string; backendId: NativeBackendId; title: string }, text: string, attach: (sessionId: string) => void): Promise<string>;
+  open(target: { projectId: string; backendId: NativeBackendId; backendProfileId?: string; model?: string; title: string }, text: string, attach: (sessionId: string) => void): Promise<string>;
 }
+
+const COMPOSER_DROPPED_KEY = 'work-items:composer-dropped';
+/** When composer conversations stopped opening tasks by themselves. */
+const COMPOSER_CUTOFF = '2026-11-16';
 
 const languageOf = (texts: readonly string[]): BriefLanguage => texts.some(value => /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(value)) ? 'zh' : 'en';
 
@@ -85,6 +97,8 @@ export interface SessionTaskSource {
   id: string;
   title: string;
   backendId?: string;
+  backendProfileId?: string;
+  model?: string;
   projectId?: string;
 }
 
@@ -237,7 +251,7 @@ export class WorkItemService {
     if (!this.messenger) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
     this.starting.add(id);
     try {
-      const sessionId = await this.messenger().open({ projectId: item.projectId, backendId: item.assignee.backendId, title: item.title }, this.brief(id), session => { this.attachSession(session, id); });
+      const sessionId = await this.messenger().open({ projectId: item.projectId, backendId: item.assignee.backendId, ...(item.assignee.profileId ? { backendProfileId: item.assignee.profileId } : {}), ...(item.assignee.model ? { model: item.assignee.model } : {}), title: item.title }, this.brief(id), session => { this.attachSession(session, id); });
       return { item: this.get(id), sessionId };
     } finally { this.starting.delete(id); }
   }
@@ -497,7 +511,7 @@ export class WorkItemService {
     return this.write(() => {
       const item = this.create({
         title: session.title.trim().slice(0, WORK_ITEM_LIMITS.title) || 'New task', status: 'doing',
-        ...(session.backendId ? { assignee: { kind: 'agent', backendId: session.backendId as NativeBackendId } } : {}),
+        ...(session.backendId ? { assignee: { kind: 'agent', backendId: session.backendId as NativeBackendId, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}), ...(session.model ? { model: session.model } : {}) } } : {}),
         ...(projectId ? { projectId } : {}),
       }, { source: 'session', titleSessionId: session.id, originSessionId: session.id });
       this.attachSession(session.id, item.id);
@@ -506,14 +520,37 @@ export class WorkItemService {
   }
 
   /**
-   * Composer conversations no longer open a task by themselves (docs/TASK-BOARD.md §4.3). The ones they
-   * opened before go, unless the owner or the agent did something with them: a comment, a question, an
-   * answer, a submission, a rework, or a sub-task. Their conversations stay as they are, without a task.
+   * Before 2026-11-16 every composer conversation opened a task (docs/TASK-BOARD.md §4.3). Those go, once,
+   * unless the owner or the agent did something with them: a comment, a question, an answer, a submission,
+   * a rework, or a sub-task. Their conversations stay as they are, without a task. Composer tasks made since,
+   * with `workItems.composerSessions` on, are the owner's choice and stay.
    */
   dropComposerItems(): void {
-    const kept = new Set(['comment', 'question', 'answer', 'submit', 'rework']);
-    const stale = this.items.all().filter(item => item.source === 'composer'
-      && !this.items.hasChildren(item.id) && !this.items.events(item.id).some(event => kept.has(event.kind)));
-    for (const item of stale) this.delete(item.id);
+    if (this.store.getSetting<boolean>(COMPOSER_DROPPED_KEY, false)) return;
+    this.write(() => {
+      const kept = new Set(['comment', 'question', 'answer', 'submit', 'rework']);
+      const stale = this.items.all().filter(item => item.source === 'composer' && item.createdAt < COMPOSER_CUTOFF
+        && !this.items.hasChildren(item.id) && !this.items.events(item.id).some(event => kept.has(event.kind)));
+      for (const item of stale) this.delete(item.id);
+      this.store.setSetting(COMPOSER_DROPPED_KEY, true);
+    });
+  }
+
+  /**
+   * The task opened with the first message of a composer conversation when the owner has that on
+   * (docs/TASK-BOARD.md §4.3): the one already made for `sessionId` (a retried creation), or a new one in
+   * `doing` that follows the conversation's title. Called in the creation's transaction.
+   */
+  ensureForComposerSession(sessionId: string, input: { text: string; backendId?: string; profileId?: string; model?: string; projectId?: string }): WorkItem {
+    return this.write(() => {
+      const existing = this.items.byOrigin(sessionId);
+      if (existing) return existing;
+      const first = input.text.split('\n').map(line => line.trim()).find(Boolean) ?? '';
+      return this.create({
+        title: first.slice(0, 80).trim() || 'New task', status: 'doing',
+        ...(input.backendId ? { assignee: { kind: 'agent', backendId: input.backendId as NativeBackendId, ...(input.profileId ? { profileId: input.profileId } : {}), ...(input.model ? { model: input.model } : {}) } } : {}),
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+      }, { source: 'composer', titleSessionId: sessionId, originSessionId: sessionId });
+    });
   }
 }

@@ -443,7 +443,7 @@ export function FilesSettingsSection({ settings, onSaved, onError, onDirtyChange
     rootBaseline.current = saved;
     if (!projectlessTasks) return;
     let active = true;
-    void api.taskWorkspaceLocation().then((value) => { if (active) setLocation(value); }).catch((error) => { if (active) onError(errorMessage(error, t`无法读取任务文件位置`)); });
+    void api.taskWorkspaceLocation().then((value) => { if (active) setLocation(value); }).catch((error) => { if (active) onError(errorMessage(error, t`无法读取无项目会话的目录`)); });
     return () => { active = false; };
   }, [settings.taskWorkspaceRoot, projectlessTasks, onError, t]);
   const [editor, setEditor] = useState(settings.editorCommand ?? '');
@@ -481,15 +481,15 @@ export function FilesSettingsSection({ settings, onSaved, onError, onDirtyChange
   return <div className="flex flex-col gap-6">
     <p className="text-xs text-fg-3"><Trans>保存在服务器，所有设备生效。</Trans></p>
     {projectlessTasks && <Group>
-      <Row title={t`任务文件位置`} description={t`服务器目录，仅影响新任务。`}>
+      <Row title={t`无项目会话的目录`} description={t`服务器目录，仅影响新建的会话。`}>
         <div className="flex w-80 min-w-0 items-center gap-1.5 max-md:w-full">
-          <Input aria-label={t`任务文件位置`} disabled={busy} className="h-8 min-w-0 flex-1 font-mono max-md:h-11" value={root} placeholder={location?.path} onChange={(event) => setRoot(event.target.value)} />
+          <Input aria-label={t`无项目会话的目录`} disabled={busy} className="h-8 min-w-0 flex-1 font-mono max-md:h-11" value={root} placeholder={location?.path} onChange={(event) => setRoot(event.target.value)} />
           <Button size="icon-sm" variant="quiet" aria-label={t`浏览…`} disabled={busy} onClick={() => setPickerOpen(true)}><IconFolderOpen /></Button>
           {root && <Button size="xs" variant="ghost" disabled={busy} onClick={() => setRoot('')}><Trans>默认</Trans></Button>}
         </div>
       </Row>
       {location && root.trim() && root.trim() !== location.path && <p className="break-all pb-2 font-mono text-xs text-fg-3">{location.path}</p>}
-      {location?.error && <p role="status" className="pb-2 text-xs text-warning">{textOf({ code: location.error }) ?? t`无法读取任务文件位置`}</p>}
+      {location?.error && <p role="status" className="pb-2 text-xs text-warning">{textOf({ code: location.error }) ?? t`无法读取无项目会话的目录`}</p>}
     </Group>}
     <DirectoryPicker open={pickerOpen} onOpenChange={setPickerOpen} initialPath={root.trim() || location?.path} onPick={setRoot} onError={onError} />
     <Group title={t`文件访问`}>

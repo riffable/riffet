@@ -135,6 +135,7 @@ struct SettingsView: View {
         case .auxiliaryModels: AuxiliaryModelSettings()
         case .quickChat: QuickChatSettingsView()
         case .assistant: AssistantSettingsView()
+        case .workItems: WorkItemsSettingsView()
         case .connection: ConnectionSettings()
         case .shares: SharesSettings()
         case .channels: ChannelsSettings()

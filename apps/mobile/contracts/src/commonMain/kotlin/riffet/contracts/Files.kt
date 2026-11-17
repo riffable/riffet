@@ -217,6 +217,8 @@ data class AppSettings(
     val sidebarPinned: List<String>? = null,
     /** The agent and model the 助理 starts with, on every device. */
     val assistant: AssistantSettings? = null,
+    /** 任务看板: whether composer conversations open tasks, and the agent and model a new task starts with. */
+    val workItems: WorkItemSettings? = null,
     /** The model for each plugin-declared use, keyed by use id (`<pluginId>/<name>`). */
     val pluginModels: Map<String, AuxiliaryModelRef>? = null,
 ) {

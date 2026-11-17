@@ -34,6 +34,10 @@ msgstr ""
 msgid "{source} 有变化"
 msgstr ""
 
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "Agent 交付时逐条说明，由你验收"
+msgstr ""
+
 #. placeholder {0}: file.path
 #: src/app/work-items/AssistantSetup.tsx
 msgid "下载 {0}"
@@ -99,18 +103,6 @@ msgstr ""
 msgid "创建"
 msgstr ""
 
-#: src/app/work-items/NewWorkItemDialog.tsx
-msgid "创建任务"
-msgstr ""
-
-#: src/app/work-items/NewWorkItemDialog.tsx
-msgid "创建后开始"
-msgstr ""
-
-#: src/app/work-items/NewWorkItemDialog.tsx
-msgid "创建子任务"
-msgstr ""
-
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "删除…"
 msgstr ""
@@ -131,6 +123,10 @@ msgstr ""
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "加入待办"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -163,10 +159,6 @@ msgstr ""
 msgid "回答：{0}"
 msgstr ""
 
-#: src/app/work-items/WorkItemsPage.tsx
-msgid "在新会话页发出第一条消息时会建一个任务。"
-msgstr ""
-
 #: src/app/work-items/parts.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -189,6 +181,14 @@ msgstr ""
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"
 msgid "完成"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "完成标准"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "完成标准，一条一行"
 msgstr ""
 
 #. placeholder {0}: trigger.cron
@@ -214,6 +214,7 @@ msgstr ""
 msgid "已达成"
 msgstr ""
 
+#: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/PlanDock.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "开始"
@@ -268,7 +269,6 @@ msgstr ""
 msgid "或者写下回答…"
 msgstr ""
 
-#: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "执行者"
@@ -279,7 +279,6 @@ msgstr ""
 msgid "推不动：{0}"
 msgstr ""
 
-#: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "描述"
 msgstr ""
@@ -370,7 +369,6 @@ msgstr ""
 msgid "标签"
 msgstr ""
 
-#: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "标题"
 msgstr ""
@@ -438,6 +436,10 @@ msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "能力"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "要做什么"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
@@ -532,7 +534,6 @@ msgstr ""
 msgid "项目"
 msgstr ""
 
-#: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "验收标准"
 msgstr ""
@@ -544,4 +545,8 @@ msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "默认"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "默认模型"
 msgstr ""

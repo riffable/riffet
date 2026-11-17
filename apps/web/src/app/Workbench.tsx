@@ -299,10 +299,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     if (item.projectId && !target) { toast.error(t`这个任务的项目已移除或归档`); return false; }
     if (!target && !projectlessTasks) { toast.error(t`先为这个任务选一个项目`); return false; }
     // The server writes the first message: what the task is, what done means, what came before (docs/TASK-BOARD.md §6).
+    // A provider removed since the task was planned: the agent's default, and its model with it.
+    const run = ({ backendId, profileId, model }: { backendId: string; profileId?: string; model?: string }) =>
+      profileId && !backends.find((entry) => entry.backendId === backendId)?.profiles.some((profile) => profile.id === profileId) ? {} : { ...(profileId ? { backendProfileId: profileId } : {}), ...(model ? { model } : {}) };
     let prompt: string;
     try { prompt = (await api.workItemBrief(item.id)).text; }
     catch (error) { toast.error(errorMessage(error, t`无法开始这个任务`)); return false; }
-    return Boolean(await createNative({ ...(target ? { projectId: target.id } : { projectless: true }), title: item.title, prompt, attachments: [], context: [], backendId: item.assignee.backendId, workItemId: item.id, follow: false }));
+    return Boolean(await createNative({ ...(target ? { projectId: target.id } : { projectless: true }), title: item.title, prompt, attachments: [], context: [], backendId: item.assignee.backendId, ...run(item.assignee), workItemId: item.id, follow: false }));
   };
   const { projectAction, addProject, startSessionInDirectory, startIsolatedDirectory, openWorktreeProject, onWorktreeMerged, chooseSessionDirectory, openInEditor } = useProjectActions({ project, loadBootstrap, selectProject });
   const { createShell, closeTerminal } = useTerminalActions();

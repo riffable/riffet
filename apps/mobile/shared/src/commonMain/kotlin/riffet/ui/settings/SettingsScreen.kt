@@ -194,6 +194,7 @@ internal fun SettingsScreen(
                         SettingsSection.INTERACTION -> InteractionSection(controller)
                         SettingsSection.QUICK_CHAT -> QuickChatSection(controller, auxiliaryOptions.first, auxiliaryOptions.second) { pages.push(SettingsPageRoute.QuickChatPresets) }
                         SettingsSection.ASSISTANT -> AssistantSettingsSection(api, controller)
+                        SettingsSection.TASK_BOARD -> TaskBoardSettingsSection(api, controller)
                         SettingsSection.BACKENDS -> Unit
                         SettingsSection.PROVIDERS -> Unit
                         SettingsSection.FILES -> FilesSettingsSection(controller)

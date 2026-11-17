@@ -15,6 +15,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Task board: a conversation can belong to a task, its status changes from the sidebar menu, and the task shows in the conversation's info.
 - Assistant: one long-running personal assistant with its own page, memory, background runs and capability packs; `/new` starts it over. Available on the web, Mac, Android and iPhone.
 - Automations run a prompt by hand or on a schedule and keep the last 50 runs.
+- A new task takes one sentence, lets you pick the model, and is either added to To do or started right away; completion criteria are optional. A new Task board settings page sets the default agent and model, and whether new conversations become tasks (off by default).
+- Settings are regrouped: new Features, Access and Server groups; bots, the assistant and quick chat sit under Features.
 - Work a turn delegated (subagents, background commands) stays visible after the turn ends.
 
 ### Backends

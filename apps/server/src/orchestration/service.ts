@@ -232,9 +232,9 @@ export class OrchestrationService {
    * defaults, opened with [text], as the composer would. [attach] runs in the same write, before the
    * conversation's CLI can start, so whatever it records is there from its first turn.
    */
-  async open(target: { projectId: string; backendId?: string; title?: string }, text: string, attach: (sessionId: string) => void): Promise<Session> {
+  async open(target: { projectId: string; backendId?: string; backendProfileId?: string; model?: string; title?: string }, text: string, attach: (sessionId: string) => void): Promise<Session> {
     if (this.closed) throw new AppError('SERVICE_CLOSED', 'The workbench is shutting down', 503);
-    const input = await resolveNativeSessionInput(this.deps, { projectId: target.projectId, ...(target.backendId ? { backendId: target.backendId } : {}), ...(target.title ? { title: target.title } : {}) });
+    const input = await resolveNativeSessionInput(this.deps, { projectId: target.projectId, ...(target.backendId ? { backendId: target.backendId } : {}), ...(target.backendProfileId ? { backendProfileId: target.backendProfileId } : {}), ...(target.model ? { model: target.model } : {}), ...(target.title ? { title: target.title } : {}) });
     const result = this.deps.store.transaction(() => {
       const created = this.deps.store.createNativeSubmission(randomUUID(), input, randomUUID(), textInput(text));
       attach(created.session.id);

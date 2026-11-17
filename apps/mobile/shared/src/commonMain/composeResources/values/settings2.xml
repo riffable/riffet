@@ -185,4 +185,12 @@
     <string name="settings_device_app_ask">询问</string>
     <string name="settings_device_app_block">禁止</string>
     <string name="settings_device_apps_note">付款始终由你完成；询问时，发送、删除、提交要在手机上确认</string>
+    <string name="settings_group_features">功能</string>
+    <string name="settings_group_access">访问</string>
+    <string name="settings_group_server">服务器</string>
+    <string name="task_board_title">任务看板</string>
+    <string name="task_board_composer_sessions">新会话作为任务</string>
+    <string name="task_board_agent">默认 Agent</string>
+    <string name="task_board_model">默认模型</string>
+    <string name="task_board_follow_composer">跟随新会话</string>
 </resources>

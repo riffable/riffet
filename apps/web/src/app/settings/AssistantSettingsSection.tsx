@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { ASSISTANT_BUDGET, assistantChoice, catalogEntry, catalogSelection, parseSelection, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
+import { ASSISTANT_BUDGET, assistantChoice, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
 import { Segmented, Select, Switch } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -8,23 +8,13 @@ import { toast } from '@/lib/toast';
 import { errorMessage } from '@/lib/utils';
 import { isAssistantProject } from '@/lib/project-family';
 import { formatTokens } from '@/lib/stats-format';
-import { cleanLabel } from '@/lib/utils';
-import { useAgentModels } from '../session/agentModels';
-import { ModelPicker, type ModelProviderChoices } from '../session/ModelPicker';
-import type { Choice } from '../session/model';
+import { useAgentModelChoice } from '../session/agentModelChoice';
+import { ModelPicker } from '../session/ModelPicker';
 import { useCatalog, useLists, useSettings, useStores } from '../state/stores';
 import { DelegationsDialog } from '../work-items/AssistantSetup';
 import { SettingsGroup, SettingsLinkRow, SettingsRow } from './SettingsLayout';
 
 const DAILY_RUNS = [10, 30, 100];
-/** A choice names its provider too, as in the composer: two providers may offer the same model id. */
-const SEPARATOR = '\u0000';
-const compose = (profileId: string | undefined, model: string) => profileId === undefined ? model : `${profileId}${SEPARATOR}${model}`;
-function split(id: string): { profileId?: string; model: string } {
-  const at = id.indexOf(SEPARATOR);
-  return at < 0 ? { model: id } : { profileId: id.slice(0, at), model: id.slice(at + 1) };
-}
-
 /**
  * The 个人助理's settings (docs/ASSISTANT.md §7): what it does in the background, which is what costs the owner
  * tokens while they are away, and how it starts tasks. Saved at once, on the server, for every device.
@@ -35,7 +25,6 @@ export function AssistantSettingsSection() {
   const assistant = useSettings((value) => value.assistant);
   const backends = useCatalog((state) => state.backends);
   const projectId = useLists((state) => state.projects.find(isAssistantProject)?.id) ?? '';
-  const agentModels = useAgentModels(projectId);
   const [usage, setUsage] = useState<AssistantRunUsage>();
   const [delegations, setDelegations] = useState<AssistantDelegation[]>();
   const [delegationsOpen, setDelegationsOpen] = useState(false);
@@ -56,30 +45,11 @@ export function AssistantSettingsSection() {
 
   // The 助理's model, from every provider of its agent, as the composer offers them; its background runs use it too.
   const choice = assistantChoice(assistant, backends);
-  const backendId = choice?.backendId;
-  const backend = backends.find((entry) => entry.backendId === backendId);
-  const profiles = backend?.profiles ?? [];
-  const activeProfileId = choice?.profileId ?? profiles.find((profile) => profile.isDefault)?.id ?? profiles[0]?.id;
-  const { load } = agentModels;
-  useEffect(() => { if (backendId) load(backendId, activeProfileId); }, [load, backendId, activeProfileId]);
-  const listed = (profileId: string | undefined): Choice[] => backendId ? (agentModels.read(backendId, profileId) ?? []).map((item) => ({ id: compose(profileId, item.value), label: cleanLabel(item.name) })) : [];
-  const providers: ModelProviderChoices[] | undefined = profiles.length ? profiles.map((profile) => {
-    const models = listed(profile.id);
-    return { id: profile.id, label: profile.name, models, loading: !models.length && Boolean(backendId) && agentModels.loading(backendId!, profile.id), ...(!models.length && backendId && agentModels.issue(backendId, profile.id) ? { issue: agentModels.issue(backendId, profile.id) } : {}) };
-  }) : undefined;
-  // The saved model carries the composer's parameters (`model[effort=high]`); the list names the model alone.
-  const saved = parseSelection(choice?.model);
-  const savedModel = backendId && saved.model ? catalogEntry(agentModels.read(backendId, activeProfileId) ?? [], saved.model)?.value ?? saved.model : saved.model;
-  const modelValue = savedModel ? compose(profiles.length ? activeProfileId : undefined, savedModel) : undefined;
-  const listedAll = providers ? providers.flatMap((provider) => provider.models.map((model) => ({ ...model, group: provider.label }))) : listed(undefined);
-  // Until its provider's list arrives, the trigger still names the model rather than the raw choice id.
-  const models = modelValue && !listedAll.some((item) => item.id === modelValue) ? [...listedAll, { id: modelValue, label: cleanLabel(savedModel) }] : listedAll;
+  const { picker, pick } = useAgentModelChoice({ projectId, backends, choice });
+  const backend = backends.find((entry) => entry.backendId === choice?.backendId);
   const pickModel = (id: string) => {
-    if (!backendId) return;
-    const picked = split(id);
-    // Kept as the composer keeps them: the parameters the new model also has.
-    const model = picked.model ? catalogSelection(agentModels.read(backendId, picked.profileId) ?? [], picked.model, saved.params) : '';
-    settings.rememberAssistant({ backendId, profileId: picked.profileId ?? null, model: model || null });
+    const picked = pick(id);
+    if (picked) settings.rememberAssistant({ backendId: picked.backendId, profileId: picked.profileId ?? null, model: picked.model ?? null });
   };
   const dailyRuns = assistant?.dailyRuns ?? ASSISTANT_BUDGET.dailyRuns;
   const dailyOptions = DAILY_RUNS.includes(dailyRuns) ? DAILY_RUNS : [...DAILY_RUNS, dailyRuns].sort((a, b) => a - b);
@@ -102,11 +72,7 @@ export function AssistantSettingsSection() {
   return <div className="flex flex-col gap-6">
     <SettingsGroup>
       <SettingsRow title={t`模型`} description={backend?.label}>
-        <ModelPicker side="bottom" align="end" className="h-8 rounded-lg border border-line-strong bg-elevated px-3 text-fg-2 max-md:min-w-0 max-md:flex-1" models={models} value={modelValue} placeholder={t`默认模型`} disabled={!backendId}
-          providers={providers} activeProviderId={activeProfileId} onPreviewProvider={(id) => { if (backendId) agentModels.load(backendId, id); }}
-          loading={Boolean(backendId) && agentModels.loading(backendId!, activeProfileId) && !models.length}
-          refreshCatalog={() => { if (backendId) agentModels.load(backendId, activeProfileId, true); }}
-          onChange={pickModel} />
+        <ModelPicker side="bottom" align="end" className="h-8 rounded-lg border border-line-strong bg-elevated px-3 text-fg-2 max-md:min-w-0 max-md:flex-1" placeholder={t`默认模型`} disabled={!choice} {...picker} onChange={pickModel} />
       </SettingsRow>
     </SettingsGroup>
     {packs && packs.length > 0 && <SettingsGroup title={t`能力包`} note={t`个人助理空闲时生效；去掉后记忆保留`}>

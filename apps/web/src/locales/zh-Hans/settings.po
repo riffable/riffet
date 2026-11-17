@@ -1132,13 +1132,13 @@ msgctxt "design-sample"
 msgid "任务"
 msgstr "任务"
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "任务文件位置"
-msgstr "任务文件位置"
-
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "任务的会话停下、你不在时，核对交付或推动它"
 msgstr "任务的会话停下、你不在时，核对交付或推动它"
+
+#: src/app/settings/settingsSections.ts
+msgid "任务看板"
+msgstr "任务看板"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "会丢失输入"
@@ -2105,6 +2105,10 @@ msgstr "前一个命令已占用"
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
 msgstr "剩余 {remaining}%"
+
+#: src/app/settings/settingsSections.ts
+msgid "功能"
+msgstr "功能"
 
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4158,6 +4162,10 @@ msgstr "快捷键、焦点顺序"
 msgid "快速对话"
 msgstr "快速对话"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "快速对话和个人助理除外"
+msgstr "快速对话和个人助理除外"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "思考"
@@ -5033,6 +5041,10 @@ msgstr "新会话"
 msgid "新会话、任务、设置三个目的地，只有图标"
 msgstr "新会话、任务、设置三个目的地，只有图标"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "新会话作为任务"
+msgstr "新会话作为任务"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "新会话在这里启动。"
 msgstr "新会话在这里启动。"
@@ -5288,10 +5300,6 @@ msgctxt "settings-build-read-failed"
 msgid "无法读取"
 msgstr "无法读取"
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "无法读取任务文件位置"
-msgstr "无法读取任务文件位置"
-
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
@@ -5313,6 +5321,10 @@ msgstr "无法读取推送设置"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法读取插件"
 msgstr "无法读取插件"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法读取无项目会话的目录"
+msgstr "无法读取无项目会话的目录"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "无法读取服务器状态"
@@ -5368,6 +5380,10 @@ msgstr "无障碍已开启"
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "无需确认"
 msgstr "无需确认"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无项目会话的目录"
+msgstr "无项目会话的目录"
 
 #: src/app/settings/StorageSection.tsx
 msgid "日志与诊断"
@@ -5552,6 +5568,7 @@ msgid "有本地修改"
 msgstr "有本地修改"
 
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/settingsSections.ts
 msgid "服务器"
 msgstr "服务器"
 
@@ -5568,8 +5585,8 @@ msgid "服务器没有返回状态数据。"
 msgstr "服务器没有返回状态数据。"
 
 #: src/app/settings/PreferencesSections.tsx
-msgid "服务器目录，仅影响新任务。"
-msgstr "服务器目录，仅影响新任务。"
+msgid "服务器目录，仅影响新建的会话。"
+msgstr "服务器目录，仅影响新建的会话。"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "服务器进程"
@@ -7776,6 +7793,7 @@ msgid "设计规范页的组、文档和代码目录一一对应。"
 msgstr "设计规范页的组、文档和代码目录一一对应。"
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/settingsSections.ts
 msgid "访问"
 msgstr "访问"
 
@@ -8009,6 +8027,10 @@ msgstr "跟进任务"
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "跟随快速对话"
 msgstr "跟随快速对话"
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "跟随新会话"
+msgstr "跟随新会话"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随界面主题"
@@ -8364,10 +8386,6 @@ msgstr "进行中的按钮宽度不变，Spinner 叠在原位。"
 #: src/app/design/components/InputsChapter.tsx
 msgid "远程服务器"
 msgstr "远程服务器"
-
-#: src/app/settings/settingsSections.ts
-msgid "连接"
-msgstr "连接"
 
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -9228,6 +9246,7 @@ msgstr "默认 14 像素、次级文字色；在按钮里用 text-current。"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
+#: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认 Agent"
 msgstr "默认 Agent"
 
@@ -9253,6 +9272,7 @@ msgstr "默认提供商"
 #: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
+#: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认模型"
 msgstr "默认模型"
 

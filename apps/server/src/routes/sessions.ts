@@ -43,7 +43,13 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
    * The 任务 a new conversation starts (docs/TASK-BOARD.md §4.3): only one the request names. A conversation
    * opened from a composer is not a task by itself. Called inside the creation's transaction.
    */
-  const startedWorkItem=(requested:unknown)=>{const named=requestedWorkItemId(requested);return named?workItems.get(named).id:undefined;};
+  const startedWorkItem=(requested:unknown,session?:{clientSessionId:string;text:string;backendId?:string;profileId?:string;model?:string;projectId?:string})=>{
+    const named=requestedWorkItemId(requested);
+    if(named)return workItems.get(named).id;
+    if(!session||settings.getSettings().workItems?.composerSessions!==true)return undefined;
+    const {clientSessionId,...rest}=session;
+    return workItems.ensureForComposerSession(clientSessionId,rest).id;
+  };
   /** With `since`, only what changed after that revision (docs/LIST-SYNC.md). */
   app.get<{Querystring:{since?:string}}>('/api/sessions',async(request,reply)=>{
     const listed=(items:readonly IdentifiedSession[])=>visibleSessionsForClient(request.headers,withoutQuickChats(items,request),id=>store.getProject(id));
@@ -81,7 +87,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===sessionInput.mode):sessionInput.mode!=='agent')throw new AppError('INVALID_MODE','The saved task mode is no longer available');
         if(sessionInput.approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===sessionInput.approval)))throw new AppError('INVALID_APPROVAL_MODE','The saved task permission is no longer available');
       },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
-        const workItemId=startedWorkItem(body.workItemId);
+        const workItemId=startedWorkItem(body.workItemId,{clientSessionId,text:message.text,backendId:sessionInput.backendId,profileId:sessionInput.backendProfileId,...(sessionInput.model?{model:sessionInput.model}:{})});
         const accepted=store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);
         if(workItemId)workItems.attachSession(clientSessionId,workItemId);return accepted;}));
       requireSessionVisibleToClient(request.headers,result.session,id=>store.getProject(id));
@@ -109,7 +115,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
       const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
         const project=store.getProject(input.projectId);
         // Quick chats and the 助理's own conversations are not work on the board.
-        const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:startedWorkItem(body.workItemId);
+        const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:startedWorkItem(body.workItemId,{clientSessionId,text:message.text,...(input.backendId?{backendId:input.backendId}:{}),...(input.backendProfileId?{profileId:input.backendProfileId}:{}),...(input.model?{model:input.model}:{}),...(project.system?{}:{projectId:project.id})});
         assertNoOtherConversation(store,project,clientSessionId);
         const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);
         const main=claimMainConversation(store,project,clientSessionId);

@@ -6610,6 +6610,107 @@
         }
       }
     },
+    "任务看板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task board"
+          }
+        }
+      }
+    },
+    "新会话作为任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New conversations as tasks"
+          }
+        }
+      }
+    },
+    "跟随新会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same as new conversations"
+          }
+        }
+      }
+    },
+    "无项目会话的目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projectless conversation folder"
+          }
+        }
+      }
+    },
+    "新会话和任务的默认 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default agent for new conversations and tasks"
+          }
+        }
+      }
+    },
+    "任务 看板 新会话 默认 agent 模型 task board work item": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "task board new conversation default agent model work item"
+          }
+        }
+      }
+    },
+    "编辑器、无项目会话的目录与文件访问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor, projectless conversation folder and file access"
+          }
+        }
+      }
+    },
+    "功能": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Features"
+          }
+        }
+      }
+    },
+    "访问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Access"
+          }
+        }
+      }
+    },
+    "服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        }
+      }
+    },
     "会向终端发送 Ctrl+C。Agent 会停止当前任务，并可能接着发送它自己排队的消息。": {
       "localizations": {
         "en": {

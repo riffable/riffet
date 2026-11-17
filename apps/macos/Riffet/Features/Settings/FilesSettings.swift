@@ -104,7 +104,7 @@ struct FilesSettings: View {
     private func serverSections(_ workbench: Workbench) -> some View {
         let outside = workbench.settings?.allowOutsideRead?.boolValue != false
         if workbench.supportsProjectlessTasks {
-            SettingsBlock("任务文件") {
+            SettingsBlock("无项目会话的目录") {
                 SettingsFieldRow(
                     String(localized: "存放位置"),
                     detail: workbench.local ? String(localized: "仅影响新任务。") : String(localized: "服务器目录，仅影响新任务。")
@@ -118,7 +118,7 @@ struct FilesSettings: View {
                         if workbench.local {
                             Button {
                                 Task {
-                                    guard let url = await DirectoryPanel.choose(prompt: String(localized: "任务文件位置")) else { return }
+                                    guard let url = await DirectoryPanel.choose(prompt: String(localized: "无项目会话的目录")) else { return }
                                     workspaceRoot = url.path
                                     await saveWorkspaceRoot(workbench)
                                 }

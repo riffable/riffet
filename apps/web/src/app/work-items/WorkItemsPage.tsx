@@ -126,7 +126,6 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
           className="mt-16"
           icon={<IconSquareKanban />}
           title={t`还没有任务`}
-          description={t`在新会话页发出第一条消息时会建一个任务。`}
         >
           <Button variant="secondary" onClick={() => setDraft(newDraft())}><IconPlus /><Trans>新建任务</Trans></Button>
         </EmptyState>

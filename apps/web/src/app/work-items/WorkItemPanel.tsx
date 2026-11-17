@@ -124,7 +124,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
             <dt className="text-fg-3"><Trans>执行者</Trans></dt>
             <dd className="flex min-h-7 items-center">
               <ValueMenu label={<><AssigneeMark assignee={item.assignee} />{assigneeLabel(item.assignee)}</>}>
-                <DropdownMenuRadioGroup value={assigneeValue(item.assignee)} onValueChange={(value) => { const next = assigneeChoices(backends).find((choice) => assigneeValue(choice) === value); if (next) update({ assignee: next }); }}>
+                <DropdownMenuRadioGroup value={assigneeValue(item.assignee)} onValueChange={(value) => { const next = assigneeChoices(backends).find((choice) => assigneeValue(choice) === value); if (next && !(next.kind === 'agent' && item.assignee.kind === 'agent' && next.backendId === item.assignee.backendId)) update({ assignee: next }); }}>
                   {assigneeChoices(backends).map((choice) => <DropdownMenuRadioItem key={assigneeValue(choice)} value={assigneeValue(choice)}><AssigneeMark assignee={choice} size={16} />{assigneeLabel(choice)}</DropdownMenuRadioItem>)}
                 </DropdownMenuRadioGroup>
               </ValueMenu>

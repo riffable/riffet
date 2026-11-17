@@ -1,4 +1,4 @@
-import type { AppSettings, AssistantSettings, AssistantSettingsUpdate, NativeBackendDefaults, NativeBackendId } from '@contracts';
+import type { AppSettings, AssistantSettings, AssistantSettingsUpdate, NativeBackendDefaults, NativeBackendId, WorkItemSettings, WorkItemSettingsUpdate } from '@contracts';
 import { api } from '@/lib/api';
 import { mergeSavedSettings, preserveNewerDefaultModel } from '@/lib/reconcile';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -142,6 +142,19 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
       put({ ...latest, assistant: next as AssistantSettings });
       const body = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === '' ? null : value])) as AssistantSettingsUpdate;
       void enqueue(() => api.updateSettings({ assistant: body })).catch((error) => { console.warn('Could not save the assistant settings', error); });
+    },
+    /** 任务看板's settings: shown at once, saved in the background. `null` clears a field. */
+    rememberWorkItems(given: WorkItemSettingsUpdate): void {
+      if (Object.keys(given).length === 0) return;
+      const latest = get();
+      const next: Record<string, unknown> = { ...latest.workItems };
+      for (const [key, value] of Object.entries(given)) {
+        if (value === null || value === undefined || value === '') delete next[key];
+        else next[key] = value;
+      }
+      put({ ...latest, workItems: next as WorkItemSettings });
+      const body = Object.fromEntries(Object.entries(given).map(([key, value]) => [key, value === '' ? null : value])) as WorkItemSettingsUpdate;
+      void enqueue(() => api.updateSettings({ workItems: body })).catch((error) => { console.warn('Could not save the task board settings', error); });
     },
   };
 }

@@ -56,6 +56,36 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Assistant" } }
       }
     },
+    "功能" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Features" } }
+      }
+    },
+    "访问" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Access" } }
+      }
+    },
+    "任务看板" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Task board" } }
+      }
+    },
+    "新会话作为任务" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New conversations as tasks" } }
+      }
+    },
+    "默认 Agent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Default agent" } }
+      }
+    },
+    "跟随新会话" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Same as new conversations" } }
+      }
+    },
     "个人助理" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Personal assistant" } }

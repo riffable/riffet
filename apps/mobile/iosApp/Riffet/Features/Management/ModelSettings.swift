@@ -185,6 +185,68 @@ private struct AuxiliaryModelChoice: View {
     }
 }
 
+/// 任务看板 (docs/TASK-BOARD.md §10): whether composer conversations open tasks, and the agent and model a new task
+/// starts with. Saved at once, on the server, for every device.
+struct TaskBoardSettingsView: View {
+    let workbench: Workbench
+    @State private var saving = false
+    @State private var error: String?
+    @Environment(\.palette) private var palette
+
+    private static let follow = ""
+
+    var body: some View {
+        let saved = workbench.settings?.workItems
+        let backend = workbench.backends.first { $0.backendId == saved?.backendId }
+        let projectID = workbench.assistantProject?.id ?? workbench.projects.first?.id
+        let agents = workbench.backends.filter { $0.available || $0.backendId == saved?.backendId }
+        RiffetForm {
+            Section {
+                Toggle(String(localized: "新会话作为任务", bundle: .riffet), isOn: Binding(
+                    get: { saved?.composerSessions?.boolValue == true },
+                    set: { on in save { try await $0.setWorkItemComposerSessions(on: on) } }
+                ))
+                .tint(palette.accent).disabled(saving)
+                RiffetPickerRow(
+                    title: String(localized: "默认 Agent", bundle: .riffet),
+                    options: [.init(id: Self.follow, title: String(localized: "跟随新会话", bundle: .riffet))] + agents.map { .init(id: $0.backendId.name, title: $0.label) },
+                    selection: Binding(get: { saved?.backendId?.name ?? Self.follow }, set: { id in
+                        let next = agents.first { $0.backendId.name == id }?.backendId
+                        save { try await $0.setWorkItemAgent(backendId: next, profileId: nil, model: nil) }
+                    })
+                ).disabled(saving)
+                if let saved, let backend, let backendId = saved.backendId, let projectID {
+                    NavigationLink {
+                        NewTaskModelPicker(workbench: workbench, backend: backendId, projectID: projectID, profiles: backend.profiles,
+                                           selectedProfileID: saved.profileId, selection: saved.model) { _, profileID, model in
+                            save { try await $0.setWorkItemAgent(backendId: backendId, profileId: profileID, model: model) }
+                        }
+                    } label: {
+                        SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet), value: saved.model?.isEmpty == false ? saved.model : nil)
+                    }
+                    .disabled(saving)
+                } else {
+                    SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet))
+                }
+            }
+            RiffetNotice.section(.error, error)
+        }
+        .navigationTitle(String(localized: "任务看板", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func save(_ write: @escaping (RiffetApi) async throws -> AppSettings) {
+        guard !saving, let api = workbench.api else { return }
+        saving = true
+        Task {
+            defer { saving = false }
+            do {
+                workbench.store.applySavedSettings(settings: try await write(api))
+                error = nil
+            } catch is CancellationError {} catch { self.error = error.riffetMessage }
+        }
+    }
+}
+
 /// 个人助理 (docs/ASSISTANT.md §7.6): its model, what it does in the background, which spends the owner's tokens while
 /// they are away, and how it starts tasks. Saved at once, on the server, for every device.
 struct AssistantSettingsView: View {

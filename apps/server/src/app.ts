@@ -111,7 +111,7 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -346,10 +346,15 @@ export async function createApp(options: AppOptions = {}) {
   terminalHolds.start();
   const workItems=new WorkItemService(store,()=>({
     send:(sessionId,text,commandId)=>{orchestration.message(sessionId,text,commandId);},
-    open:async(target,text,attach)=>(await orchestration.open(target,text,attach)).id,
+    open:async(target,text,attach)=>{
+      // A provider removed since the task was planned: the agent's default, and its model with it.
+      const kept=!target.backendProfileId||(await nativeBackends.catalog.listBackends()).find(entry=>entry.backendId===target.backendId)?.profiles.some(profile=>profile.id===target.backendProfileId);
+      const {backendProfileId:_profile,model:_model,...rest}=target;
+      return (await orchestration.open(kept?target:rest,text,attach)).id;
+    },
   }));
   workItemsRef=workItems;
-  assistantRef=new AssistantBoard({store,workItems,defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
+  assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:savedDefaultBackendId(saved)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
     search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[],work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
   const deps:RouteDeps={assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);

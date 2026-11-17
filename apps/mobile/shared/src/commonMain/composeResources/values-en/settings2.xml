@@ -185,4 +185,12 @@
     <string name="settings_device_app_ask">Ask</string>
     <string name="settings_device_app_block">Block</string>
     <string name="settings_device_apps_note">Paying is always left to you; with Ask, sending, deleting and submitting need your confirmation on the phone</string>
+    <string name="settings_group_features">Features</string>
+    <string name="settings_group_access">Access</string>
+    <string name="settings_group_server">Server</string>
+    <string name="task_board_title">Task board</string>
+    <string name="task_board_composer_sessions">New conversations as tasks</string>
+    <string name="task_board_agent">Default agent</string>
+    <string name="task_board_model">Default model</string>
+    <string name="task_board_follow_composer">Same as new conversations</string>
 </resources>

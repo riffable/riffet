@@ -6,9 +6,6 @@ import RiffetKit
 struct AssistantSettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var palette
-    /// The assistant's agent catalog per provider (profile id, "" for none), as the composer reads them.
-    @State private var catalogs: [String: NativeBackendCatalogEntry] = [:]
-    @State private var issues: [String: String] = [:]
     @State private var usage: AssistantRunUsage?
     @State private var delegations: [AssistantDelegation]?
     @State private var showsDelegations = false
@@ -153,66 +150,25 @@ struct AssistantSettingsView: View {
     private func choice(_ workbench: Workbench) -> (backend: String, profileId: String?, model: String?)? {
         let saved = workbench.settings?.assistant
         let savedBackend = saved?.backendId.map(backendWire)
-        guard let entry = savedBackend.flatMap({ id in workbench.backends.first { $0.agent == id } })
-            ?? workbench.backends.first(where: { $0.agent == "claude" && $0.available }) else { return nil }
-        let kept = saved?.profileId.map { id in id.isEmpty || entry.profiles.contains { $0.id == id } } ?? true
+        guard let entry = workbench.backends.assistantEntry(saved: savedBackend) else { return nil }
+        // A saved provider and model belong to the saved agent only.
+        let kept = entry.agent == savedBackend && (saved?.profileId.map { id in id.isEmpty || entry.profiles.contains { $0.id == id } } ?? true)
         let profile = kept ? saved?.profileId.flatMap { $0.isEmpty ? nil : $0 } : nil
         let model = kept ? saved?.model.flatMap { $0.isEmpty ? nil : $0 } : nil
         return (entry.agent, profile, model)
     }
 
-    private func profileKey(_ id: String?) -> String { id ?? "" }
-
     private func modelRow(_ workbench: Workbench) -> some View {
         let own = choice(workbench)
-        let entry = own.flatMap { own in workbench.backends.first { $0.agent == own.backend } }
-        let profiles = entry?.profiles ?? []
-        let active = own?.profileId ?? profiles.first { $0.isDefault?.boolValue == true }?.id ?? profiles.first?.id
-        let current = catalogs[profileKey(active)]
-        let providers = profiles.count > 1
-            ? profiles.map { ProviderModels(profile: $0, models: catalogs[profileKey($0.id)]?.models, issue: issues[profileKey($0.id)]) }
-            : []
-        return SettingsRow(String(localized: "模型"), detail: entry?.label) {
-            if let entry {
-                ModelControls(
-                    catalog: current?.models ?? [],
-                    selection: own?.model,
-                    loading: current == nil,
-                    providers: providers,
-                    activeProviderId: active,
-                    chooseInProvider: { provider, value in remember(workbench, entry, profile: provider, model: value) },
-                    retryProvider: { provider in Task { await loadModels(workbench, reload: true, only: provider) } },
-                    scope: "\(entry.agent)|\(active ?? "")|\(workbench.catalogs.connectionRevision)",
-                    refresh: { await loadModels(workbench, reload: true) }
-                ) { value in
-                    remember(workbench, entry, profile: active, model: value)
-                }
-                .id("\(entry.agent)|\(active ?? "")")
-                .disabled(save.busy)
-            }
-        }
-        .task(id: "\(entry?.agent ?? "")|\(profiles.map(\.id).joined(separator: ","))|\(workbench.backendRevision)") {
-            await loadModels(workbench)
-        }
-    }
-
-    private func remember(_ workbench: Workbench, _ entry: NativeBackendCatalogEntry, profile: String?, model: String) {
-        persist(workbench) { try await $0.rememberAssistant(backendId: entry.backendId, profileId: profile, model: model) }
-    }
-
-    private func loadModels(_ workbench: Workbench, reload: Bool = false, only: String? = nil) async {
-        guard let own = choice(workbench), let entry = workbench.backends.first(where: { $0.agent == own.backend }) else { return }
-        let ids: [String?] = entry.profiles.isEmpty ? [nil] : entry.profiles.map(\.id)
-        for id in ids where only == nil || id == only {
-            do {
-                if let loaded = try await workbench.catalogs.loadCatalog(entry.agent, profileId: id, projectId: nil, reload: reload) {
-                    catalogs[profileKey(id)] = loaded
-                    issues[profileKey(id)] = nil
-                }
-            } catch is CancellationError {
-            } catch {
-                issues[profileKey(id)] = error.riffetMessage
-            }
+        return AgentModelRow(
+            workbench: workbench,
+            title: String(localized: "模型"),
+            agent: own?.backend,
+            profileId: own?.profileId,
+            model: own?.model,
+            disabled: save.busy
+        ) { entry, profile, value in
+            persist(workbench) { try await $0.rememberAssistant(backendId: entry.backendId, profileId: profile, model: value) }
         }
     }
 
@@ -244,11 +200,9 @@ struct AssistantSettingsView: View {
         async let latest = try? api.settings()
         async let used = try? api.assistantRunUsage()
         async let listed: Void = loadDelegations(workbench)
-        async let models: Void = loadModels(workbench)
         if let list = try? await api.assistantPacks() { packs = list }
         if let used = await used { usage = used }
         await listed
-        await models
         if let settings = await latest { workbench.store.applySavedSettings(settings: settings) }
     }
 
