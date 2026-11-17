@@ -1828,6 +1828,59 @@ html.dark {
   border-radius: 10px;
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
+  font-variant-numeric: tabular-nums;
+}
+.md > .md-table:last-child table {
+  margin-bottom: 0;
+}
+@media (hover: hover) {
+  .md .md-table-copy {
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--duration-fast) var(--ease-standard) 220ms,
+      visibility 0s linear calc(220ms + var(--duration-fast));
+  }
+  .md .md-table:hover .md-table-copy,
+  .md .md-table:has(:focus-visible:not([data-pointer-focus])) .md-table-copy {
+    opacity: 1;
+    visibility: visible;
+    transition:
+      opacity var(--duration-fast) var(--ease-standard) 0ms,
+      visibility 0s linear 0ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .md .md-table-copy {
+      transition-property: opacity, visibility !important;
+      transition-duration: 100ms, 0s !important;
+      transition-delay: 220ms, 320ms !important;
+    }
+    .md .md-table:hover .md-table-copy,
+    .md .md-table:has(:focus-visible:not([data-pointer-focus])) .md-table-copy {
+      transition-delay: 0ms, 0ms !important;
+    }
+  }
+}
+@media (hover: none) {
+  .md .md-table {
+    padding-top: 32px;
+  }
+  .md .md-table-copy {
+    bottom: auto;
+    top: -6px;
+    right: 0;
+    margin-right: 0;
+    padding: 0;
+  }
+  .md.share-md .md-table {
+    padding-top: 0;
+  }
+}
+.md.share-md .md-table {
+  width: 100%;
+}
+.md.share-md .md-table-copy {
+  display: none;
 }
 .md table {
   overflow-wrap: normal;
@@ -1839,8 +1892,21 @@ html.dark {
   overflow-wrap: break-word;
   padding: 7px 12px;
   border-bottom: 1px solid var(--line);
-  text-align: left;
   vertical-align: top;
+}
+.md th:not([align]),
+.md td:not([align]),
+.md th[align='left'],
+.md td[align='left'] {
+  text-align: left;
+}
+.md th[align='center'],
+.md td[align='center'] {
+  text-align: center;
+}
+.md th[align='right'],
+.md td[align='right'] {
+  text-align: right;
 }
 .md td code,
 .md th code {
@@ -1912,6 +1978,19 @@ html.dark {
 .md sup a {
   color: var(--accent);
   text-decoration: none;
+}
+.md sub,
+.md sup {
+  position: relative;
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: baseline;
+}
+.md sup {
+  top: -0.45em;
+}
+.md sub {
+  bottom: -0.2em;
 }
 .md [data-footnote-backref] {
   margin-left: 2px;
@@ -3037,15 +3116,15 @@ html.dark {
   /* END GENERATED text-scaled */
   /* The answer surface (`.md`, `.md-muted`): a looser leading than `--text-base` for long prose. */
   --text-md: calc(14px * var(--text-scale));
-  --leading-md: 1.8;
+  --leading-md: calc(26px * var(--text-scale));
   --text-h1: calc(20px * var(--text-scale));
-  --leading-h1: calc(27px * var(--text-scale));
+  --leading-h1: calc(28px * var(--text-scale));
   --text-h2: calc(17px * var(--text-scale));
-  --leading-h2: calc(25px * var(--text-scale));
+  --leading-h2: calc(26px * var(--text-scale));
   --text-h3: calc(15px * var(--text-scale));
-  --leading-h3: calc(23px * var(--text-scale));
-  --leading-h4: calc(23px * var(--text-scale));
-  --text-code: calc(12.5px * var(--text-scale));
+  --leading-h3: calc(24px * var(--text-scale));
+  --leading-h4: calc(24px * var(--text-scale));
+  --text-code: calc(13px * var(--text-scale));
   --leading-code: calc(20px * var(--text-scale));
 }
 

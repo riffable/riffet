@@ -816,6 +816,10 @@ msgstr ""
 msgid "复制消息"
 msgstr ""
 
+#: src/app/session/Markdown.tsx
+msgid "复制表格"
+msgstr ""
+
 #: src/app/session/Timeline.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "复制路径"

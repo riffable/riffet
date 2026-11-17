@@ -1365,8 +1365,8 @@ struct RowBuilder {
             }
             fragments.append(Fragment(frame: CGRect(x: x, y: y, width: 2, height: cursor - y), kind: .box(BoxSpec(fill: style.color(\.lineStrong), radius: 1))))
             return cursor - y
-        case let .table(header, rows):
-            return table(header: header, rows: rows, x: x, y: y, width: width)
+        case let .table(header, rows, alignments):
+            return table(header: header, rows: rows, alignments: alignments, x: x, y: y, width: width)
         case .rule:
             fragments.append(Fragment(frame: CGRect(x: x, y: y + 8, width: width, height: 1), kind: .box(BoxSpec(fill: style.color(\.line)))))
             return 17
@@ -1530,22 +1530,42 @@ struct RowBuilder {
         return cursor - y
     }
 
-    private mutating func table(header: [AttributedString], rows: [[AttributedString]], x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private mutating func table(header: [AttributedString], rows: [[AttributedString]], alignments: [MarkdownTableAlignment], x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let columns = max(header.count, rows.map(\.count).max() ?? 0)
         guard columns > 0 else { return 0 }
         let maxText: CGFloat = 336
-        func cell(_ value: AttributedString?, header: Bool) -> TextLayout {
-            let attributed = text.cell(value ?? AttributedString(""), size: 13, lineHeight: 20, weight: header ? .medium : .regular, color: header ? style.color(\.fg2) : style.color(\.fg))
-            let natural = TextLayout(attributed, width: maxText, wraps: false)
-            return natural.size.width <= maxText ? natural : TextLayout(attributed, width: maxText)
+        func nsAlignment(_ column: Int) -> NSTextAlignment {
+            guard column < alignments.count else { return .left }
+            switch alignments[column] {
+            case .center: return .center
+            case .right: return .right
+            case .left: return .left
+            }
         }
-        let headerCells = (0..<columns).map { cell($0 < header.count ? header[$0] : nil, header: true) }
-        let bodyCells = rows.map { row in (0..<columns).map { cell($0 < row.count ? row[$0] : nil, header: false) } }
+        func attributed(_ value: AttributedString?, header: Bool, alignment: NSTextAlignment) -> NSAttributedString {
+            text.cell(value ?? AttributedString(""), size: 13, lineHeight: 20, weight: header ? .medium : .regular, color: header ? style.color(\.fg2) : style.color(\.fg), alignment: alignment)
+        }
+        func naturalLayout(_ value: AttributedString?, header: Bool, alignment: NSTextAlignment) -> TextLayout {
+            let attr = attributed(value, header: header, alignment: alignment)
+            let natural = TextLayout(attr, width: maxText, wraps: false)
+            return natural.size.width <= maxText ? natural : TextLayout(attr, width: maxText)
+        }
+        var headerCells = (0..<columns).map { naturalLayout($0 < header.count ? header[$0] : nil, header: true, alignment: nsAlignment($0)) }
+        var bodyCells = rows.map { row in (0..<columns).map { naturalLayout($0 < row.count ? row[$0] : nil, header: false, alignment: nsAlignment($0)) } }
         var widths = headerCells.map { $0.size.width + 24 }
         for row in bodyCells {
             for (index, layout) in row.enumerated() { widths[index] = max(widths[index], layout.size.width + 24) }
         }
         widths = widths.map { ceil(min(360, max(40, $0))) }
+        for column in 0..<columns {
+            let align = nsAlignment(column)
+            guard align != .left else { continue }
+            let cellWidth = max(1, widths[column] - 24)
+            headerCells[column] = TextLayout(attributed(column < header.count ? header[column] : nil, header: true, alignment: align), width: cellWidth)
+            for rowIndex in rows.indices {
+                bodyCells[rowIndex][column] = TextLayout(attributed(column < rows[rowIndex].count ? rows[rowIndex][column] : nil, header: false, alignment: align), width: cellWidth)
+            }
+        }
         let headerHeight = (headerCells.map(\.size.height).max() ?? 0) + 14
         let rowHeights = bodyCells.map { ($0.map(\.size.height).max() ?? 0) + 14 }
         let spec = TableSpec(header: headerCells, rows: bodyCells, columns: widths, headerHeight: headerHeight, rowHeights: rowHeights)

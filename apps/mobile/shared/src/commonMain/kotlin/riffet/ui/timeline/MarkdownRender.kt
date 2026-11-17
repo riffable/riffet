@@ -44,6 +44,7 @@ import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.MarkdownColors
+import com.mikepenz.markdown.model.MarkdownAnnotator
 import com.mikepenz.markdown.model.MarkdownTypography
 import com.mikepenz.markdown.model.ReferenceLinkHandlerImpl
 import com.mikepenz.markdown.model.State
@@ -52,6 +53,7 @@ import com.mikepenz.markdown.model.markdownDimens
 import com.mikepenz.markdown.model.markdownExtendedSpans
 import com.mikepenz.markdown.model.markdownPadding
 import org.intellij.markdown.MarkdownElementTypes
+import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.parser.MarkdownParser
 import org.jetbrains.compose.resources.stringResource
 import riffet.theme.RiffetColors
@@ -293,15 +295,21 @@ private fun MarkdownDocument(
     val typography = remember(colors, prose, style) { markdownTypography(colors, prose, style) }
     val markdownColors = remember(colors, color) { markdownColors(colors, color) }
     val quoteColors = remember(colors) { markdownColors(colors, colors.fg2) }
-    val components = remember(colors, prose, codeStyle, quoteColors) { transcriptComponents(prose, codeStyle, quoteColors) }
-    // The library's annotator is kept for everything but `**strong**`, which it sets in Bold:
-    // Medium here, since CJK at 600 reads as a smudge rather than emphasis. Re-entering the annotation for the span's children needs the
-    // settings the library builds inside `Markdown`, so `success` hands them over before any text
-    // is annotated.
+    // The library's annotator is kept for everything but `**strong**` (Medium, since CJK at 600
+    // reads as a smudge) and safe `<br>` line-break tags. Re-entering the annotation for strong
+    // spans needs the settings the library builds inside `Markdown`, so `success` hands them over
+    // before any text is annotated.
     val settings = remember { arrayOfNulls<AnnotatorSettings>(1) }
     val findMark = colors.warningSoft
     val annotator = remember(marks, findMark) {
         markdownAnnotator { content, child ->
+            if (child.type == MarkdownTokenTypes.HTML_TAG) {
+                val breaks = safeBreakNewlines(child.getTextInNode(content).toString())
+                if (breaks != null) {
+                    append(breaks)
+                    return@markdownAnnotator true
+                }
+            }
             val marked = marks?.get(child.startOffset)
             if (marked != null && isMarkableLeaf(child.type)) {
                 val leaf = child.getTextInNode(content).toString()
@@ -317,6 +325,9 @@ private fun MarkdownDocument(
             pop()
             true
         }
+    }
+    val components = remember(colors, prose, codeStyle, quoteColors, annotator) {
+        transcriptComponents(prose, codeStyle, quoteColors, annotator)
     }
     // The web's inline code chip: rounded, and only as tall as the code, not the whole line box.
     val extendedSpans = markdownExtendedSpans {
@@ -370,7 +381,12 @@ private fun MarkdownDocument(
 }
 
 /** The library's components with the transcript's lists, quotes, code blocks, tables and images. */
-private fun transcriptComponents(prose: ProseScale, codeStyle: TextStyle, quoteColors: MarkdownColors) =
+private fun transcriptComponents(
+    prose: ProseScale,
+    codeStyle: TextStyle,
+    quoteColors: MarkdownColors,
+    annotator: MarkdownAnnotator,
+) =
     markdownComponents(
         codeFence = { model ->
             MarkdownCodeFence(model.content, model.node, style = codeStyle) { code, language, _ ->
@@ -391,9 +407,21 @@ private fun transcriptComponents(prose: ProseScale, codeStyle: TextStyle, quoteC
                 node = model.node,
                 style = model.typography.table,
                 cellPadding = PaddingValues(horizontal = prose.tableCellHorizontal, vertical = prose.tableCellVertical),
+                annotator = annotator,
             )
         },
     )
+
+private val SafeBreakBlock = Regex("""^(?:<br\s*/?>\s*)+$""", RegexOption.IGNORE_CASE)
+private val SafeBreakTag = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+
+/** Returns `\n` per `<br>` when [rawHtml] contains only `<br>` tags, or null for any other HTML. */
+internal fun safeBreakNewlines(rawHtml: String): String? {
+    val trimmed = rawHtml.trim()
+    if (trimmed.isEmpty() || !SafeBreakBlock.matches(trimmed)) return null
+    val count = SafeBreakTag.findAll(trimmed).count().coerceAtLeast(1)
+    return "\n".repeat(count)
+}
 
 /** Each background job owns its parser instance; no parser state crosses workers. */
 private fun parseOffMainThread(document: String): State? =

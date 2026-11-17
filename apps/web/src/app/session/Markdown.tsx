@@ -8,6 +8,7 @@ import remarkMath from 'remark-math';
 import { IconEye, IconPencilLine, IconWrapText } from '@/components/icons';
 import { boundedCache } from '@/lib/bounded-cache';
 import { CopyButton } from '@/components/ui/copy-button';
+import { Kbd } from '@/components/ui/controls';
 import { projectFileUrl } from '@/lib/files';
 import { cachedHighlight, highlightCode, languageForFence, languageForPath } from '@/lib/highlight';
 import { useInView } from '@/lib/use-in-view';
@@ -126,6 +127,27 @@ function citation(info: string): { start: number; end: number; path: string } | 
   return match ? { start: Number(match[1]), end: Number(match[2]), path: match[3]! } : undefined;
 }
 
+/** Keeps the filename and line range visible when a long directory path has to truncate. */
+function CitedFenceLabel({ cited }: { cited: { start: number; end: number; path: string } }) {
+  const slash = cited.path.lastIndexOf('/');
+  const dir = slash > 0 ? cited.path.slice(0, slash) : '';
+  const file = slash > 0 ? cited.path.slice(slash + 1) : cited.path;
+  return (
+    <span className="flex min-w-0 items-center overflow-hidden font-mono text-2xs text-fg-3" title={`${cited.path} · L${cited.start}–${cited.end}`}>
+      {dir ? (
+        <>
+          <span className="min-w-0 shrink-[99] truncate">{dir}</span>
+          <span className="shrink-0">/</span>
+          <span className="min-w-0 shrink truncate">{file}</span>
+        </>
+      ) : (
+        <span className="min-w-0 truncate">{file}</span>
+      )}
+      <span className="shrink-0 whitespace-nowrap">{'\u00A0·\u00A0'}L{cited.start}–{cited.end}</span>
+    </span>
+  );
+}
+
 const escapeText = (text: string) => text.replace(/[&<>]/g, (char) => (char === '&' ? '&amp;' : char === '<' ? '&lt;' : '&gt;'));
 
 /**
@@ -213,7 +235,7 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
       */}
       <div className="md-code-head flex h-8 items-center justify-between bg-muted edge-b pl-3 pr-1 no-hover:h-11">
         {cited
-          ? <span className="min-w-0 truncate font-mono text-2xs text-fg-3" title={cited.path}>{cited.path} · L{cited.start}–{cited.end}</span>
+          ? <CitedFenceLabel cited={cited} />
           : <span className="min-w-0 truncate font-mono text-2xs uppercase tracking-wide text-fg-3">{info || 'text'}</span>}
         <div className="flex shrink-0 items-center gap-0.5">
           {renderable && (
@@ -303,10 +325,112 @@ const components: Components = {
   // The table scrolls horizontally when its columns need the room, and a hidden overflow is not
   // keyboard-reachable in Chromium unless the element itself takes focus (the reveal-on-hover rule
   // in `styles/index.css` follows the same idea).
-  table({ children }) {
-    return <table tabIndex={0}>{children}</table>;
+  table({ node, children }) {
+    return <MarkdownTable node={node}>{children}</MarkdownTable>;
   },
-};
+  kbd({ children }) {
+    return <Kbd className="mx-0.5 align-baseline">{children}</Kbd>;
+  },
+} as Components;
+
+interface HastNodeLike {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNodeLike[];
+}
+
+function inlineCodeMarkdown(text: string): string {
+  let maxFence = 0;
+  for (const match of text.matchAll(/`+/g)) maxFence = Math.max(maxFence, match[0].length);
+  const fence = '`'.repeat(maxFence + 1);
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
+function tableCellMarkdown(node: HastNodeLike): string {
+  if (node.type === 'text') return node.value ?? '';
+  if (node.type !== 'element') return '';
+  if (node.tagName === 'br') return '<br>';
+  const classes = Array.isArray(node.properties?.className) ? node.properties.className : [];
+  if (classes.includes('katex-html')) return '';
+  if (node.tagName === 'annotation' && node.properties?.encoding === 'application/x-tex') {
+    const tex = (node.children ?? []).map((child) => (child.type === 'text' ? child.value ?? '' : '')).join('').trim();
+    return tex ? `$${tex}$` : '';
+  }
+  if (classes.includes('katex-mathml')) {
+    const annotation = (node.children ?? []).map(tableCellMarkdown).join('');
+    if (annotation) return annotation;
+  }
+  if (node.tagName === 'math') {
+    for (const child of node.children ?? []) {
+      const tex = tableCellMarkdown(child);
+      if (tex.startsWith('$') && tex.endsWith('$')) return tex;
+    }
+  }
+  if (node.tagName === 'semantics') {
+    for (const child of node.children ?? []) {
+      if (child.type === 'element' && child.tagName === 'annotation') return tableCellMarkdown(child);
+    }
+  }
+  const inner = (node.children ?? []).map(tableCellMarkdown).join('');
+  if (node.tagName === 'code') {
+    if (classes.includes('math-inline')) return `$${inner}$`;
+    return inlineCodeMarkdown(inner);
+  }
+  return inner;
+}
+
+function tableMarkdownText(table: ExtraProps['node'] | undefined): string {
+  if (!table) return '';
+  const rows: Array<{ cells: string[]; aligns: Array<string | undefined> }> = [];
+  const collectRows = (node: HastNodeLike) => {
+    if (node.type !== 'element') return;
+    if (node.tagName === 'tr') {
+      const cells: string[] = [];
+      const aligns: Array<string | undefined> = [];
+      for (const child of node.children ?? []) {
+        if (child.type !== 'element' || (child.tagName !== 'th' && child.tagName !== 'td')) continue;
+        const text = tableCellMarkdown(child).replace(/\r?\n+/g, ' ').trim().replace(/\|/g, '\\|');
+        cells.push(text);
+        const align = child.properties?.align;
+        aligns.push(typeof align === 'string' ? align : undefined);
+      }
+      if (cells.length) rows.push({ cells, aligns });
+      return;
+    }
+    for (const child of node.children ?? []) collectRows(child);
+  };
+  collectRows(table as unknown as HastNodeLike);
+  if (!rows.length) return '';
+  const columns = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
+  if (!columns) return '';
+  const padRow = (cells: string[]) => `| ${Array.from({ length: columns }, (_, i) => cells[i] ?? '').join(' | ')} |`;
+  const sep = Array.from({ length: columns }, (_, i) => {
+    const align = rows[0]?.aligns[i];
+    if (align === 'center') return ':---:';
+    if (align === 'right') return '---:';
+    if (align === 'left') return ':---';
+    return '---';
+  });
+  return [padRow(rows[0]!.cells), `| ${sep.join(' | ')} |`, ...rows.slice(1).map((row) => padRow(row.cells))].join('\n');
+}
+
+function MarkdownTable({ node, children }: { node?: ExtraProps['node']; children?: ReactNode }) {
+  const { t } = useLingui();
+  const markdown = useMemo(() => tableMarkdownText(node), [node]);
+  return (
+    <div className="md-table group/table relative w-fit max-w-full">
+      <table tabIndex={0}>{children}</table>
+      {markdown && (
+        <span className="md-table-copy absolute bottom-full right-0 -mr-1 pb-1.5 pl-6 pr-1 pt-2">
+          <CopyButton text={markdown} label={t`复制表格`} size="xs" />
+        </span>
+      )}
+    </div>
+  );
+}
 
 /**
  * A link to a local file opens it in the side preview. The href is the file itself, so a modified
@@ -400,7 +524,7 @@ interface MarkdownNode {
   depth?: number;
   position?: { start: { offset?: number } };
   children?: MarkdownNode[];
-  data?: { hProperties?: Record<string, unknown> };
+  data?: { hName?: string; hProperties?: Record<string, unknown> };
 }
 
 /** GitHub alerts remain ordinary Markdown; only their marker receives semantic styling. */
@@ -421,8 +545,79 @@ function remarkAlerts() {
   };
 }
 
+/**
+ * Converts a narrow set of safe inline HTML tags (`<br>`, matched `<kbd>`, `<sup>`, `<sub>` pairs)
+ * without enabling full `rehype-raw`, so generic brackets like `<T>` and unclosed streaming tags
+ * stay literal text.
+ */
+function remarkSafeHtml() {
+  const SAFE_BREAKS = /^(?:<br\s*\/?>\s*)+$/i;
+  const SAFE_BREAK_ITEM = /<br\s*\/?>/gi;
+  const SAFE_TAG_OPEN = /^<(kbd|sup|sub)>$/i;
+  const SAFE_TAG_CLOSE = /^<\/(kbd|sup|sub)>$/i;
+  const SAFE_INLINE_PAIR = /^<(kbd|sup|sub)>([^<>]+)<\/\1>$/i;
+
+  return (tree: unknown) => {
+    const transformChildren = (children: MarkdownNode[]) => {
+      for (let index = 0; index < children.length; index += 1) {
+        const node = children[index]!;
+        if (node.type === 'html') {
+          const raw = (node.value ?? '').trim();
+          if (SAFE_BREAKS.test(raw)) {
+            const count = raw.match(SAFE_BREAK_ITEM)?.length ?? 1;
+            const breaks: MarkdownNode[] = Array.from({ length: count }, () => ({ type: 'break' }));
+            children.splice(index, 1, ...breaks);
+            index += breaks.length - 1;
+            continue;
+          }
+          const single = SAFE_INLINE_PAIR.exec(raw);
+          if (single) {
+            const tag = single[1]!.toLowerCase();
+            children[index] = {
+              type: 'safeInlineHtml',
+              data: { hName: tag },
+              children: [{ type: 'text', value: single[2]! }],
+            };
+            continue;
+          }
+          const open = SAFE_TAG_OPEN.exec(raw);
+          if (open) {
+            const tag = open[1]!.toLowerCase();
+            let closeIndex = -1;
+            for (let scan = index + 1; scan < children.length; scan += 1) {
+              const candidate = children[scan]!;
+              if (candidate.type !== 'html') continue;
+              const candidateRaw = (candidate.value ?? '').trim();
+              const nestedOpen = SAFE_TAG_OPEN.exec(candidateRaw);
+              if (nestedOpen && nestedOpen[1]!.toLowerCase() === tag) break;
+              const close = SAFE_TAG_CLOSE.exec(candidateRaw);
+              if (close && close[1]!.toLowerCase() === tag) {
+                closeIndex = scan;
+                break;
+              }
+            }
+            if (closeIndex > index) {
+              const inner = children.slice(index + 1, closeIndex);
+              transformChildren(inner);
+              children.splice(index, closeIndex - index + 1, {
+                type: 'safeInlineHtml',
+                data: { hName: tag },
+                children: inner,
+              });
+              continue;
+            }
+          }
+        }
+        if (node.children?.length) transformChildren(node.children);
+      }
+    };
+    const root = tree as MarkdownNode;
+    if (root.children?.length) transformChildren(root.children);
+  };
+}
+
 /** CommonMark leaves `**结论：**正文` as literal asterisks; `remark-cjk-friendly` lets it close. */
-const remarkPlugins = [remarkAlerts, remarkGfm, remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath];
+const remarkPlugins = [remarkAlerts, remarkGfm, remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath, remarkSafeHtml];
 const noPlugins: [] = [];
 
 /**

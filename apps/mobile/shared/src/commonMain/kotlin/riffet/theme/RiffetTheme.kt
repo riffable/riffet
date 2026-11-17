@@ -1767,12 +1767,12 @@ object RiffetText {
  * both sides, as a browser lays them out.
  */
 object RiffetProse {
-    val body = RiffetTextStyle(15.sp, 27.sp)
-    val h1 = RiffetTextStyle(20.sp, 27.sp)
-    val h2 = RiffetTextStyle(17.sp, 25.sp)
-    val h3 = RiffetTextStyle(15.sp, 23.sp)
-    val h4 = RiffetTextStyle(15.sp, 23.sp)
-    val code = RiffetTextStyle(12.5.sp, 20.sp)
+    val body = RiffetTextStyle(15.sp, 26.sp)
+    val h1 = RiffetTextStyle(20.sp, 28.sp)
+    val h2 = RiffetTextStyle(17.sp, 26.sp)
+    val h3 = RiffetTextStyle(15.sp, 24.sp)
+    val h4 = RiffetTextStyle(15.sp, 24.sp)
+    val code = RiffetTextStyle(13.sp, 20.sp)
     val table = RiffetTextStyle(13.sp, 20.sp)
     val paragraphGap = 14.dp
     val itemGap = 3.dp

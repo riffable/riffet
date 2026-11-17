@@ -162,8 +162,8 @@ struct ConversationMarkdown: View {
                     }
                 }
             })
-        case let .table(header, rows):
-            return AnyView(ConversationMarkdownTable(header: header, rows: rows, origin: workbench.baseURL))
+        case let .table(header, rows, alignments):
+            return AnyView(ConversationMarkdownTable(header: header, rows: rows, alignments: alignments, origin: workbench.baseURL))
         case .rule: return AnyView(Divider())
         }
     }
@@ -175,6 +175,7 @@ struct ConversationMarkdown: View {
 struct ConversationMarkdownTable: View {
     let header: [AttributedString]
     let rows: [[AttributedString]]
+    var alignments: [MarkdownTableAlignment] = []
     let origin: URL
     @ScaledMetric(relativeTo: .body) private var pointSize = 16.0
     @Environment(\.palette) private var palette
@@ -198,13 +199,29 @@ struct ConversationMarkdownTable: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.line, lineWidth: 0.5))
         .accessibilityIdentifier("markdownTable")
     }
+    private func columnAlignment(_ column: Int) -> Alignment {
+        guard column < alignments.count else { return .topLeading }
+        switch alignments[column] {
+        case .center: return .top
+        case .right: return .topTrailing
+        case .left: return .topLeading
+        }
+    }
+    private func textAlignment(_ column: Int) -> NSTextAlignment {
+        guard column < alignments.count else { return .left }
+        switch alignments[column] {
+        case .center: return .center
+        case .right: return .right
+        case .left: return .left
+        }
+    }
     private func row(_ values: [AttributedString], columns: [CGFloat], heading: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(columns.indices, id: \.self) { column in
-                ConversationInlineText(source: column < values.count ? values[column] : AttributedString(), origin: origin, bold: heading)
+                ConversationInlineText(source: column < values.count ? values[column] : AttributedString(), origin: origin, bold: heading, alignment: textAlignment(column))
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(width: max(1, columns[column] - 20), alignment: .topLeading)
+                    .frame(width: max(1, columns[column] - 20), alignment: columnAlignment(column))
                     .padding(10)
             }
         }
@@ -229,6 +246,26 @@ enum ConversationTableLayout {
     }
 }
 
+/// Some agents cite code as ```12:40:path/to/file.ts — a line range and a file, not a language.
+private struct ConversationCodeCitation {
+    let start: Int
+    let end: Int
+    let path: String
+
+    init?(_ info: String?) {
+        guard let trimmed = info?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        let ns = trimmed as NSString
+        guard let match = Self.regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: ns.length)),
+              let start = Int(ns.substring(with: match.range(at: 1))),
+              let end = Int(ns.substring(with: match.range(at: 2))) else { return nil }
+        self.start = start
+        self.end = end
+        self.path = ns.substring(with: match.range(at: 3))
+    }
+
+    private static let regex = try! NSRegularExpression(pattern: #"^(\d+):(\d+):(.+)$"#)
+}
+
 struct ConversationCode: View {
     let text: String
     var language: String?
@@ -251,8 +288,13 @@ struct ConversationCode: View {
     @State private var preview: Bool? = nil
     @State private var highlighting: ConversationSyntax.Result?
     @State private var presentationCache = ConversationCodePresentation.Cache()
-    private var isDiagram: Bool { ConversationCodePreview.isDiagram(language) }
-    private var canPreview: Bool { (isDiagram || ["html", "htm", "svg", "md", "markdown", "mdx"].contains(language?.lowercased() ?? "")) && workbench != nil && projectID != nil }
+    private var cited: ConversationCodeCitation? { ConversationCodeCitation(language) }
+    private var syntaxLanguage: String? {
+        if let cited { return ConversationSyntax.language(forPath: cited.path) }
+        return language.flatMap { ConversationSyntax.language($0) }
+    }
+    private var isDiagram: Bool { cited == nil && ConversationCodePreview.isDiagram(language) }
+    private var canPreview: Bool { cited == nil && (isDiagram || ["html", "htm", "svg", "md", "markdown", "mdx"].contains(language?.lowercased() ?? "")) && workbench != nil && projectID != nil }
     private var isExpanded: Bool {
         get { stateID.flatMap { disclosureState?[$0 + ".expanded"] } ?? expanded }
         nonmutating set {
@@ -271,11 +313,19 @@ struct ConversationCode: View {
     var body: some View {
         let presentation = presentationCache.presentation(text: text, expanded: isExpanded)
         let source = presentation.visibleText
-        let highlighted = highlighting?.text == source && highlighting?.language == ConversationSyntax.language(language ?? "")
+        let highlighted = highlighting?.text == source && highlighting?.language == syntaxLanguage
         let displayed = highlighted ? highlighting!.attributed(palette: palette, codeTheme: themeStore.codeTheme, dark: scheme == .dark) : presentation.plainText
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
-                Text((language?.isEmpty == false ? language! : "text").uppercased()).riffetFont(.monoSmall).tracking(0.8).foregroundStyle(palette.fg3).lineLimit(1)
+                if let cited {
+                    Text("\(cited.path) · L\(cited.start)–\(cited.end)")
+                        .riffetFont(.monoSmall)
+                        .foregroundStyle(palette.fg3)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                } else {
+                    Text((language?.isEmpty == false ? language! : "text").uppercased()).riffetFont(.monoSmall).tracking(0.8).foregroundStyle(palette.fg3).lineLimit(1)
+                }
                 Spacer(minLength: 8)
                 if canPreview {
                     Button { readAction(); isPreviewing.toggle() } label: { Image(systemName: isPreviewing ? "chevron.left.forwardslash.chevron.right" : "eye").riffetFont(.caption).frame(width: 44, height: Self.headerHeight) }.accessibilityLabel(isPreviewing ? "显示源码" : "预览")
@@ -319,11 +369,12 @@ struct ConversationCode: View {
         .accessibilityElement(children: .contain)
         .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 10))
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .task(id: ConversationSyntax.Key(text: presentation.visibleText, language: language ?? "")) {
+        .task(id: ConversationSyntax.Key(text: presentation.visibleText, language: syntaxLanguage ?? "")) {
             do {
                 try await Task.sleep(for: .milliseconds(100))
                 try Task.checkCancellation()
-                let result = await ConversationSyntax.shared.highlight(source, language: language ?? "")
+                guard let syntaxLanguage else { return }
+                let result = await ConversationSyntax.shared.highlight(source, language: syntaxLanguage)
                 try Task.checkCancellation()
                 guard presentationCache.isCurrent(presentation) else { return }
                 highlighting = result

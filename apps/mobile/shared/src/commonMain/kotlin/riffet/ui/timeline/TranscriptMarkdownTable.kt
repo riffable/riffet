@@ -34,7 +34,12 @@ import androidx.compose.ui.unit.dp
 import com.mikepenz.markdown.compose.LocalMarkdownDimens
 import com.mikepenz.markdown.compose.LocalMarkdownComponents
 import com.mikepenz.markdown.compose.MarkdownElement
+import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownTableBasicText
+import com.mikepenz.markdown.annotator.AnnotatorSettings
+import com.mikepenz.markdown.annotator.annotatorSettings
+import com.mikepenz.markdown.model.MarkdownAnnotator
+import com.mikepenz.markdown.model.markdownAnnotator
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes
@@ -44,10 +49,17 @@ private val TableGridThickness = 0.5.dp
 
 /** Wrap cells, preserve inline Markdown and column alignment, and draw a complete table grid. */
 @Composable
-internal fun TranscriptMarkdownTable(content: String, node: ASTNode, style: TextStyle, cellPadding: PaddingValues) {
+internal fun TranscriptMarkdownTable(
+    content: String,
+    node: ASTNode,
+    style: TextStyle,
+    cellPadding: PaddingValues,
+    annotator: MarkdownAnnotator = markdownAnnotator { _, _ -> false },
+) {
     val colors = TimelineTheme.colors
     val dimens = LocalMarkdownDimens.current
     val components = LocalMarkdownComponents.current
+    val cellAnnotatorSettings: AnnotatorSettings = annotatorSettings(annotator = annotator)
     val rows = remember(node) {
         node.children.filter { it.type == GFMElementTypes.HEADER || it.type == GFMElementTypes.ROW }
             .map { row -> row.children.filter { it.type == GFMTokenTypes.CELL } }
@@ -97,12 +109,13 @@ internal fun TranscriptMarkdownTable(content: String, node: ASTNode, style: Text
                                         content = content,
                                         cell = cell,
                                         style = style.copy(
-                                            fontWeight = if (header) FontWeight.SemiBold else style.fontWeight,
+                                            fontWeight = if (header) FontWeight.Medium else style.fontWeight,
                                             color = if (header) colors.fg2 else style.color,
                                             textAlign = alignment,
                                         ),
                                         maxLines = Int.MAX_VALUE,
                                         overflow = TextOverflow.Clip,
+                                        annotatorSettings = cellAnnotatorSettings,
                                     )
                                 }
                             }

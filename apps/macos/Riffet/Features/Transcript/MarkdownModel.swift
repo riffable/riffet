@@ -63,13 +63,26 @@ enum MarkdownSegmentModel {
     case visualization(path: String, title: String?, wide: Bool)
 }
 
+enum MarkdownTableAlignment: Sendable, Equatable {
+    case left, center, right
+}
+
+enum MarkdownInlineTag: String, Codable, Hashable, Sendable {
+    case kbd, sup, sub
+}
+
+enum MarkdownInlineTagKey: AttributedStringKey {
+    typealias Value = MarkdownInlineTag
+    static let name = "RiffetMarkdownInlineTag"
+}
+
 indirect enum MarkdownBlock {
     case paragraph(AttributedString)
     case heading(Int, AttributedString)
     case code(language: String?, text: String)
     case list(ordered: Bool, start: Int, items: [MarkdownListItem])
     case quote([MarkdownPart])
-    case table(header: [AttributedString], rows: [[AttributedString]])
+    case table(header: [AttributedString], rows: [[AttributedString]], alignments: [MarkdownTableAlignment])
     case rule
 }
 
@@ -269,11 +282,22 @@ private struct MarkdownConverter {
         case let table as Markdown.Table:
             let header = table.head.cells.map { inline($0) }
             let rows = table.body.rows.map { row in Array(row.cells.map { inline($0) }) }
-            return .table(header: Array(header), rows: Array(rows))
+            let alignments: [MarkdownTableAlignment] = table.columnAlignments.map { alignment in
+                switch alignment {
+                case .center: return .center
+                case .right: return .right
+                case .left, nil: return .left
+                }
+            }
+            return .table(header: Array(header), rows: Array(rows), alignments: alignments)
         case is ThematicBreak:
             return .rule
         case let html as HTMLBlock:
-            // The web escapes raw HTML and shows it as text; so does this, tag for tag.
+            // Safe `<br>` breaks render as line breaks; single-line safe inline tags render with their semantic tag.
+            if Self.isLineBreakHTML(html.rawHTML, multiple: true) { return nil }
+            if let pair = Self.inlinePair(html.rawHTML.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                return .paragraph(tagged(AttributedString(pair.text), tag: pair.tag))
+            }
             return .paragraph(AttributedString(html.rawHTML))
         default:
             let text = markup.format()
@@ -288,9 +312,97 @@ private struct MarkdownConverter {
 
     /// [linkify] is off inside a `Markdown.Link`, whose children must not become links of their own.
     func inline(_ markup: Markup, linkify: Bool = true) -> AttributedString {
+        inlineChildren(Array(markup.children), linkify: linkify)
+    }
+
+    private func inlineChildren(_ children: [Markup], linkify: Bool) -> AttributedString {
         var result = AttributedString()
-        for child in markup.children { result += span(child, linkify: linkify) }
+        var index = 0
+        while index < children.count {
+            let child = children[index]
+            if let html = child as? InlineHTML {
+                let raw = html.rawHTML.trimmingCharacters(in: .whitespacesAndNewlines)
+                if Self.isLineBreakHTML(raw, multiple: true) {
+                    let count = Self.breakCount(raw)
+                    result += AttributedString(String(repeating: "\n", count: count))
+                    index += 1
+                    continue
+                }
+                if let pair = Self.inlinePair(raw) {
+                    result += tagged(AttributedString(pair.text), tag: pair.tag)
+                    index += 1
+                    continue
+                }
+                if let tag = Self.openTag(raw),
+                   let closeIndex = Self.matchingCloseIndex(children, from: index + 1, tag: tag) {
+                    let inner = inlineChildren(Array(children[(index + 1)..<closeIndex]), linkify: linkify)
+                    result += tagged(inner, tag: tag)
+                    index = closeIndex + 1
+                    continue
+                }
+            }
+            result += span(child, linkify: linkify)
+            index += 1
+        }
         return result
+    }
+
+    private func tagged(_ text: AttributedString, tag: MarkdownInlineTag) -> AttributedString {
+        var value = text
+        value[MarkdownInlineTagKey.self] = tag
+        if tag == .kbd {
+            for run in value.runs {
+                value[run.range].inlinePresentationIntent = (run.inlinePresentationIntent ?? []).union(.code)
+            }
+        }
+        return value
+    }
+
+    private static let breakSingleRegex = try! NSRegularExpression(pattern: #"^<br\s*/?>$"#, options: .caseInsensitive)
+    private static let breakMultipleRegex = try! NSRegularExpression(pattern: #"^(?:<br\s*/?>\s*)+$"#, options: .caseInsensitive)
+    private static let breakItemRegex = try! NSRegularExpression(pattern: #"<br\s*/?>"#, options: .caseInsensitive)
+    private static let inlinePairRegex = try! NSRegularExpression(pattern: #"^<(kbd|sup|sub)>([^<>]+)</\1>$"#, options: .caseInsensitive)
+    private static let openTagRegex = try! NSRegularExpression(pattern: #"^<(kbd|sup|sub)>$"#, options: .caseInsensitive)
+    private static let closeTagRegex = try! NSRegularExpression(pattern: #"^</(kbd|sup|sub)>$"#, options: .caseInsensitive)
+
+    private static func isLineBreakHTML(_ raw: String, multiple: Bool = false) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let regex = multiple ? breakMultipleRegex : breakSingleRegex
+        return regex.firstMatch(in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length)) != nil
+    }
+
+    private static func breakCount(_ raw: String) -> Int {
+        max(1, breakItemRegex.numberOfMatches(in: raw, range: NSRange(location: 0, length: (raw as NSString).length)))
+    }
+
+    private static func inlinePair(_ raw: String) -> (tag: MarkdownInlineTag, text: String)? {
+        let ns = raw as NSString
+        guard let match = inlinePairRegex.firstMatch(in: raw, range: NSRange(location: 0, length: ns.length)),
+              let tag = MarkdownInlineTag(rawValue: ns.substring(with: match.range(at: 1)).lowercased()) else { return nil }
+        return (tag, ns.substring(with: match.range(at: 2)))
+    }
+
+    private static func openTag(_ raw: String) -> MarkdownInlineTag? {
+        let ns = raw as NSString
+        guard let match = openTagRegex.firstMatch(in: raw, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        return MarkdownInlineTag(rawValue: ns.substring(with: match.range(at: 1)).lowercased())
+    }
+
+    private static func closeTag(_ raw: String) -> MarkdownInlineTag? {
+        let ns = raw as NSString
+        guard let match = closeTagRegex.firstMatch(in: raw, range: NSRange(location: 0, length: ns.length)) else { return nil }
+        return MarkdownInlineTag(rawValue: ns.substring(with: match.range(at: 1)).lowercased())
+    }
+
+    private static func matchingCloseIndex(_ children: [Markup], from start: Int, tag: MarkdownInlineTag) -> Int? {
+        for index in start..<children.count {
+            guard let html = children[index] as? InlineHTML else { continue }
+            let raw = html.rawHTML.trimmingCharacters(in: .whitespacesAndNewlines)
+            if openTag(raw) == tag { return nil }
+            if closeTag(raw) == tag { return index }
+        }
+        return nil
     }
 
     private func span(_ markup: Markup, linkify: Bool) -> AttributedString {
@@ -347,7 +459,9 @@ private struct MarkdownConverter {
         case is LineBreak:
             return AttributedString("\n")
         case let html as InlineHTML:
-            return AttributedString(html.rawHTML)
+            return Self.isLineBreakHTML(html.rawHTML, multiple: true)
+                ? AttributedString(String(repeating: "\n", count: Self.breakCount(html.rawHTML)))
+                : AttributedString(html.rawHTML)
         default:
             return inline(markup, linkify: linkify)
         }

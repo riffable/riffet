@@ -186,8 +186,8 @@ private struct BlockView: View {
             BlockStack(blocks: ShareMarkdown.flatten(parts), context: ShareMarkdown.Context(colors: colors, type: type, wide: context.wide, quoted: true, projectId: context.projectId))
                 .padding(.leading, 16)
                 .overlay(alignment: .leading) { Rectangle().fill(colors.hair2).frame(width: 2) }
-        case let .table(header, rows):
-            table(header: header, rows: rows)
+        case let .table(header, rows, alignments):
+            table(header: header, rows: rows, alignments: alignments)
         case .rule:
             Text("·  ·  ·")
                 .font(Font(ShareType.sans(14)))
@@ -339,16 +339,42 @@ private struct BlockView: View {
         return result
     }
 
-    private func table(header: [AttributedString], rows: [[AttributedString]]) -> some View {
+    private func table(header: [AttributedString], rows: [[AttributedString]], alignments: [MarkdownTableAlignment]) -> some View {
         let columns = max(header.count, rows.map(\.count).max() ?? 0)
         let size: CGFloat = 14
         let gap = ShareType(serif: false).lineGap(ShareType.sans(size), lineHeight: size * 1.6)
+        func frameAlignment(_ column: Int) -> Alignment {
+            guard column < alignments.count else { return .leading }
+            switch alignments[column] {
+            case .center: return .center
+            case .right: return .trailing
+            case .left: return .leading
+            }
+        }
+        func textAlignment(_ column: Int) -> TextAlignment {
+            guard column < alignments.count else { return .leading }
+            switch alignments[column] {
+            case .center: return .center
+            case .right: return .trailing
+            case .left: return .leading
+            }
+        }
+        func horizontalAlignment(_ column: Int) -> HorizontalAlignment {
+            guard column < alignments.count else { return .leading }
+            switch alignments[column] {
+            case .center: return .center
+            case .right: return .trailing
+            case .left: return .leading
+            }
+        }
         func cell(_ value: AttributedString?, header: Bool, column: Int) -> some View {
             Text(inline(value ?? AttributedString(""), size: size, weight: header ? .semibold : .regular, color: header ? colors.ink2 : colors.ink, sans: true, tracking: 0))
                 .monospacedDigit()
+                .multilineTextAlignment(textAlignment(column))
                 .shareLines(gap)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: column == columns - 1 ? .infinity : nil, alignment: .leading)
+                .gridColumnAlignment(horizontalAlignment(column))
+                .frame(maxWidth: column == columns - 1 ? .infinity : nil, alignment: frameAlignment(column))
         }
         return Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 0) {
             GridRow {
@@ -385,8 +411,15 @@ private struct BlockView: View {
                 continue
             }
             let intent = run.inlinePresentationIntent ?? []
+            let inlineTag = run[MarkdownInlineTagKey.self]
             var part = AttributedString(piece)
-            if intent.contains(.code) {
+            if inlineTag == .sup || inlineTag == .sub {
+                let scriptSize = max(9, size * 0.75)
+                let strong = intent.contains(.stronglyEmphasized)
+                part.font = Font(sans ? ShareType.sans(scriptSize, strong ? .semibold : weight) : type.body(scriptSize, strong ? (type.serif ? .bold : .semibold) : weight))
+                part.foregroundColor = color
+                part.swiftUI.baselineOffset = inlineTag == .sup ? size * 0.35 : -size * 0.18
+            } else if intent.contains(.code) {
                 part.font = Font(ShareType.mono(size * 0.84))
                 part.foregroundColor = colors.ink2
                 part.backgroundColor = colors.code

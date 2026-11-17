@@ -171,10 +171,16 @@ struct TranscriptText {
                 continue
             }
             let intent = run.inlinePresentationIntent ?? []
+            let inlineTag = run[MarkdownInlineTagKey.self]
             let strong = intent.contains(.stronglyEmphasized)
             let code = intent.contains(.code)
             var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color]
-            if code {
+            if inlineTag == .sup || inlineTag == .sub {
+                let scriptSize = max(9, size * 0.75)
+                let font = style.font(scriptSize, strong ? .medium : weight)
+                attributes[.font] = intent.contains(.emphasized) ? style.italic(font) : font
+                attributes[.baselineOffset] = inlineTag == .sup ? size * 0.35 : -size * 0.18
+            } else if code {
                 attributes[.font] = style.mono((plain ? MarkdownStyle.plainInlineCodeSize : MarkdownStyle.inlineCodeSize) * size / MarkdownStyle.bodySize, strong ? .semibold : .regular)
                 attributes.merge(chip) { $1 }
             } else {
@@ -234,10 +240,11 @@ struct TranscriptText {
     }
 
     /// A table cell or a heading outside a prose run: one paragraph of inline Markdown.
-    mutating func cell(_ text: AttributedString, size: CGFloat, lineHeight: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSAttributedString {
+    mutating func cell(_ text: AttributedString, size: CGFloat, lineHeight: CGFloat, weight: NSFont.Weight, color: NSColor, alignment: NSTextAlignment = .left) -> NSAttributedString {
         let result = inline(text, size: size, weight: weight, color: color)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = style.lineGap(size: size, lineHeight: lineHeight)
+        paragraph.alignment = alignment
         result.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: result.length))
         return result
     }

@@ -1211,7 +1211,7 @@ final class TableBlockView: FragmentView {
                 var x: CGFloat = 0
                 for column in spec.columns.indices {
                     let layout = layouts[index]
-                    cells[index].frame = NSRect(x: x + 12, y: y + 7, width: layout.size.width + 2, height: layout.size.height)
+                    cells[index].frame = NSRect(x: x + 12, y: y + 7, width: max(layout.size.width + 2, spec.columns[column] - 24), height: layout.size.height)
                     x += spec.columns[column]
                     index += 1
                 }

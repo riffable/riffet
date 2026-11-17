@@ -219,6 +219,23 @@ actor ConversationSyntax {
         // Refractor accepts its registered aliases directly; only presentation aliases differ.
         return ["shell": "bash", "console": "bash", "shellscript": "bash", "zsh": "bash", "jsonc": "json", "env": "ini", "conf": "ini", "cfg": "ini", "mdx": "markdown", "golang": "go", "c#": "csharp", "c++": "cpp", "objc": "objectivec", "ps1": "powershell"][word] ?? word
     }
+    static func language(forPath path: String) -> String? {
+        let name = (path as NSString).lastPathComponent
+        let ext = (name as NSString).pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+        return [
+            "ts": "typescript", "mts": "typescript", "cts": "typescript", "tsx": "tsx",
+            "js": "javascript", "mjs": "javascript", "cjs": "javascript", "jsx": "jsx",
+            "json": "json", "yaml": "yaml", "yml": "yaml", "toml": "toml",
+            "sh": "bash", "bash": "bash", "zsh": "bash",
+            "css": "css", "scss": "scss", "less": "less",
+            "html": "markup", "htm": "markup", "xml": "markup", "svg": "markup", "vue": "markup", "svelte": "markup",
+            "sql": "sql", "md": "markdown", "markdown": "markdown", "py": "python", "go": "go", "rs": "rust",
+            "java": "java", "kt": "kotlin", "kts": "kotlin", "swift": "swift",
+            "c": "c", "h": "c", "cc": "cpp", "cpp": "cpp", "cxx": "cpp", "hpp": "cpp", "hh": "cpp", "hxx": "cpp",
+            "rb": "ruby", "php": "php", "cs": "csharp",
+        ][ext]
+    }
     private static func token(_ name: String) -> String? {
         switch name {
         case "comment", "prolog", "doctype", "cdata": return "comment"
@@ -268,6 +285,7 @@ struct ConversationInlineText: View {
     var bold = false
     var secondary = false
     var spacing: CGFloat = 5
+    var alignment: NSTextAlignment = .left
     /// Occurrences of the needle in the markdown blocks before this one; nil marks every match.
     var findOffset: Int? = nil
     @Environment(\.colorScheme) private var scheme
@@ -295,7 +313,7 @@ struct ConversationInlineText: View {
     }
     var body: some View {
         let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), code: UIColor(palette.press))
-        ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, open: { openURL($0) }, quote: quote)
+        ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, alignment: alignment, open: { openURL($0) }, quote: quote)
             .task(id: key) {
                     guard !formulas.isEmpty else { return }
                     var ready: [String: ConversationInlineMathRenderer.Rendered] = [:]
@@ -318,6 +336,7 @@ struct ConversationParagraph: UIViewRepresentable {
     let bold: Bool
     let colors: Colors
     let spacing: CGFloat
+    var alignment: NSTextAlignment = .left
     let open: (URL) -> Void
     let quote: ((String) -> Void)?
     func makeCoordinator() -> Coordinator { Coordinator(open: open) }
@@ -358,6 +377,7 @@ struct ConversationParagraph: UIViewRepresentable {
             let bold: Bool
             let colors: Colors
             let spacing: CGFloat
+            let alignment: NSTextAlignment
         }
         struct Layout { let text: NSAttributedString; let height: CGFloat }
         private var key: ContentKey?
@@ -373,10 +393,10 @@ struct ConversationParagraph: UIViewRepresentable {
         init(open: @escaping (URL) -> Void) { self.open = open }
         func reportMark(_ view: UITextView) { probe?.report(view, marked: view.attributedText.findMarkRange != nil) }
         func configure(_ value: ConversationParagraph) {
-            let next = ContentKey(source: value.source, images: value.images.mapValues { ImageKey(identity: ObjectIdentifier($0.image), descent: $0.descent) }, fontSize: value.fontSize, bold: value.bold, colors: value.colors, spacing: value.spacing)
+            let next = ContentKey(source: value.source, images: value.images.mapValues { ImageKey(identity: ObjectIdentifier($0.image), descent: $0.descent) }, fontSize: value.fontSize, bold: value.bold, colors: value.colors, spacing: value.spacing, alignment: value.alignment)
             guard key != next else { return }
             key = next; generation += 1; layouts.removeAll(keepingCapacity: true)
-            factory = { width in ConversationFormulaText.attributed(value.source, images: value.images, fontSize: value.fontSize, bold: value.bold, color: value.colors.text, codeFill: value.colors.code, spacing: value.spacing, maximumWidth: width) }
+            factory = { width in ConversationFormulaText.attributed(value.source, images: value.images, fontSize: value.fontSize, bold: value.bold, color: value.colors.text, codeFill: value.colors.code, spacing: value.spacing, alignment: value.alignment, maximumWidth: width) }
         }
         private func widthKey(_ width: CGFloat) -> Int { max(1, min(10_000, Int(width.rounded(.down)))) }
         func layout(width: CGFloat) -> Layout {
@@ -487,21 +507,25 @@ enum ConversationFormulaText {
         }
         return text
     }
-    static func attributed(_ source: AttributedString, images: [String: ConversationInlineMathRenderer.Rendered], fontSize: Double, bold: Bool = false, color: UIColor = .label, codeFill: UIColor = .tertiarySystemFill, spacing: CGFloat = 5, maximumWidth: CGFloat = 320) -> NSAttributedString {
+    static func attributed(_ source: AttributedString, images: [String: ConversationInlineMathRenderer.Rendered], fontSize: Double, bold: Bool = false, color: UIColor = .label, codeFill: UIColor = .tertiarySystemFill, spacing: CGFloat = 5, alignment: NSTextAlignment = .left, maximumWidth: CGFloat = 320) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
-        let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = spacing
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = spacing; paragraph.alignment = alignment
         for run in source.runs {
             // Strong text is Medium, not Bold; headings are Semibold.
             let strong = run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
-            var font = UIFont.systemFont(ofSize: fontSize, weight: bold ? .semibold : strong ? .medium : .regular)
+            let inlineTag = run[MarkdownInlineTagKey.self]
+            let isScript = inlineTag == .sup || inlineTag == .sub
+            let size = isScript ? max(10.0, fontSize * 0.75) : fontSize
+            var font = UIFont.systemFont(ofSize: size, weight: bold ? .semibold : strong ? .medium : .regular)
             var traits: UIFontDescriptor.SymbolicTraits = []
             if run.inlinePresentationIntent?.contains(.emphasized) == true { traits.insert(.traitItalic) }
-            if run.inlinePresentationIntent?.contains(.code) == true { font = UIFont.monospacedSystemFont(ofSize: fontSize * 0.875, weight: .regular) }
+            if !isScript && run.inlinePresentationIntent?.contains(.code) == true { font = UIFont.monospacedSystemFont(ofSize: fontSize * 0.875, weight: .regular) }
             if let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(traits)) { font = UIFont(descriptor: descriptor, size: font.pointSize) }
             var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
+            if isScript { attributes[.baselineOffset] = inlineTag == .sup ? fontSize * 0.35 : -fontSize * 0.18 }
             if let link = run.link { attributes[.link] = link }
             if run.strikethroughStyle != nil { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-            if run.inlinePresentationIntent?.contains(.code) == true { attributes[.backgroundColor] = codeFill }
+            if !isScript && run.inlinePresentationIntent?.contains(.code) == true { attributes[.backgroundColor] = codeFill }
             // Only find sets a run's background: the run is also tagged, so the list can find where it is drawn.
             if let mark = run.backgroundColor { attributes[.backgroundColor] = UIColor(mark); attributes[.conversationFindMark] = true }
             if let tex = run.link.flatMap(MathText.tex), let rendered = images[tex] {

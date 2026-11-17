@@ -99,7 +99,7 @@ internal fun ProseBlocks(
     Column(modifier) {
         var previous: ASTNode? = null
         nodes.forEach { node ->
-            val silent = node.type in SilentTypes
+            val silent = node.type in SilentTypes || (node.type == MarkdownElementTypes.HTML_BLOCK && safeBreakNewlines(content.substring(node.startOffset, node.endOffset)) != null)
             if (!silent) {
                 previous?.let { Spacer(Modifier.height(gapBefore(it, node, context, prose))) }
                 previous = node
