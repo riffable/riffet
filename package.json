@@ -1,7 +1,7 @@
 {
   "name": "riffet",
-  "version": "0.7.0",
-  "buildNumber": 26111202,
+  "version": "0.8.0",
+  "buildNumber": 26111701,
   "private": true,
   "type": "module",
   "description": "A self-hosted workbench for native Cursor, Codex, Claude Code, DeepSeek Harness, Factory Droid and TRAE CLI sessions, reachable from a browser, Mac or phone",
