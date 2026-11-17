@@ -36,6 +36,7 @@ import riffet.contracts.NativeBackendOption
 import riffet.ui.app.TabTopBar
 import riffet.ui.assistant.AssistantEntries
 import riffet.ui.assistant.AssistantSheet
+import riffet.shared.ASSISTANT_BACKENDS
 import riffet.shared.assistantSettings
 import riffet_mobile.shared.generated.resources.assistant_title
 import riffet_mobile.shared.generated.resources.assistant_memory
@@ -270,7 +271,7 @@ fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): H
         HomeConfigs(
             task = HomeConfig(api, scope, catalogReadFailed, providerNotRead, preferences = preferences),
             chat = HomeConfig(api, scope, catalogReadFailed, providerNotRead, quickChat = true),
-            assistant = HomeConfig(api, scope, catalogReadFailed, providerNotRead),
+            assistant = HomeConfig(api, scope, catalogReadFailed, providerNotRead, offers = { it in ASSISTANT_BACKENDS }),
         )
     }
 }
@@ -1309,6 +1310,8 @@ internal class HomeConfig(
     private var initialMode: String? = null,
     /** Keeps the last tool pick, so the next new conversation starts from it. */
     private val preferences: AppPreferences? = null,
+    /** The agents this composer offers; the assistant's are only those that isolate it. */
+    private val offers: (NativeBackendId) -> Boolean = { true },
 ) {
     /** The phones the next session may control: what the last one on this device was given, read before the first frame. */
     var toolGroups by mutableStateOf(ToolGroups.decode(preferences?.string(PreferenceKeys.TOOL_GROUPS)))
@@ -1620,7 +1623,7 @@ internal class HomeConfig(
             providerCatalogsLoading = false
             try {
                 val choices = if (backends.isEmpty() || force) {
-                    try { api.backends() }
+                    try { api.backends().filter { offers(it.backendId) } }
                     catch (cancellation: CancellationException) { throw cancellation }
                     catch (_: Throwable) { backends }
                 } else backends

@@ -1021,7 +1021,7 @@ export class NativeBackendService {
     return this.registry.list().filter((driver) => driver.stored?.readOnly).map((driver) => driver.id);
   }
 
-  async sendRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options: { now?: boolean } = {}): Promise<void> {
+  async sendRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options: { now?: boolean } = {}): Promise<void | { settled: true }> {
     if (!run.native) throw new AppError('NOT_NATIVE_RUN', 'Only native runs can be dispatched', 409);
     await assertTaskWorkspaceAvailable(this.options.store.getProject(session.projectId));
     if (run.native.intent === 'steer') throw new AppError('STEER_REJECTED', 'An in-flight instruction must use the steer endpoint.', 409);
@@ -1039,13 +1039,14 @@ export class NativeBackendService {
       mode: session.mode,
       ...(session.approval !== undefined ? { approval: session.approval } : {}),
     };
-    await driver.send(this.host, {
+    const outcome = await driver.send(this.host, {
       session, project: this.options.store.getProject(session.projectId), profile,
       commandId: run.commandId, runId: run.id, sourceText: run.native.input.text, input: this.options.prepareContextInput ? await this.options.prepareContextInput(run) : run.native.input, config,
       commitDispatchFence,
       ...(options.now && driver.sendsNow ? { now: true } : {}),
     });
     this.bindProfile(this.options.store.getSession(session.id), driver, profile);
+    return outcome;
   }
 
   async steerRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run): Promise<void | { deferred: true }> {

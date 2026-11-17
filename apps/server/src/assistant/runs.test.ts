@@ -54,7 +54,10 @@ describe('assistant background runs', () => {
     // A main conversation for the note to reach, opened as a client opens it.
     const status = await first.app.inject({ method: 'GET', url: '/api/auth/status', headers: { host: '127.0.0.1:4317' } });
     const headers = { host: '127.0.0.1:4317', cookie: String(status.headers['set-cookie']).split(';')[0]!, 'x-csrf-token': (status.json() as { csrfToken: string }).csrfToken };
-    const opened = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'cursor', clientSessionId: 'main', initialMessage: { commandId: 'm1', text: 'hello' } } });
+    // Not on an agent that does not isolate it: it would run with the owner's own configuration.
+    const elsewhere = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'cursor', clientSessionId: 'elsewhere', initialMessage: { commandId: 'e1', text: 'hello' } } });
+    expect(elsewhere.json()).toMatchObject({ error: { code: 'ASSISTANT_BACKEND_UNSUPPORTED' } });
+    const opened = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'claude', clientSessionId: 'main', initialMessage: { commandId: 'm1', text: 'hello' } } });
     expect(opened.statusCode, opened.body).toBe(202);
     expect(assistantProject(first.store, stateDir).mainSessionId).toBe('main');
     // The push is held back, as if the server stopped before it went out.

@@ -4030,7 +4030,7 @@ describe('Codex configuration changes', () => {
 
   it('advertises only the presets', async () => {
     const h = makeHarness();
-    expect((await h.adapter.capabilities(h.host, h.profile)).permissions.map(item => item.id)).toEqual(['on-request', 'read-only', 'danger-full-access']);
+    expect((await h.adapter.capabilities(h.host, h.profile)).permissions.map(item => item.id)).toEqual(['on-request', 'dontAsk', 'read-only', 'danger-full-access']);
   });
 });
 

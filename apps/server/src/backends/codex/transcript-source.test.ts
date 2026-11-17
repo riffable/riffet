@@ -470,6 +470,48 @@ describe('Codex transcript source', () => {
     checkSession(journal, 's');
   });
 
+  it('goes on in the next thread after a new topic, keeps the earlier rows, and reads the threads again in order', async () => {
+    const native = new FakeThreads();
+    native.threads.set('thread-1', [turn('t1', 10, [user('u-1', 'Remember PLUM'), answer('a-1', 'OK')])]);
+    const earlier: string[] = [];
+    const source = () => new CodexTranscriptSource({ sessionId: 's', backend: 'codex', threadId: () => native.current,
+      earlierThreads: () => earlier,
+      topicAfter: threadId => threadId === 'thread-1' ? { commandId: 'cmd-new', runId: 'run-new', text: '/new', at: new Date(15_000).toISOString() } : undefined,
+      reader: async () => native, commandOf: () => undefined, runOf: () => undefined,
+      observe: feed => { native.feeds.add(feed); return () => { native.feeds.delete(feed); }; },
+    });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = JournalLaneWriter.open(journal, 's');
+    const signal = new AbortController().signal;
+    const users = () => [...new Set(rowsOf(journal, 's').filter(row => row.kind === 'user_message_chunk').map(row => row.nativeId))];
+    const live = source();
+    const unwatch = live.watch!(writer, () => undefined);
+    await pullLane(live, writer, signal);
+    // The conversation moves to thread-2, whose first turn is heard on the feed before any read of it.
+    earlier.push('thread-1');
+    native.current = 'thread-2';
+    native.notify('turn/started', { turn: { id: 'n1', startedAt: 20 } });
+    native.notify('item/completed', { turnId: 'n1', item: user('u-n1', 'Which word?') });
+    native.turns().push(turn('n1', 20, [user('u-n1', 'Which word?'), answer('a-n1', 'UNKNOWN')]));
+    native.notify('turn/completed', { turn: { id: 'n1', status: 'completed', items: [] } });
+    await pullLane(live, writer, signal);
+    unwatch();
+    const expected = ['thread-1:t1:u-1:user', 'thread-1:topic:web:cmd-new:user', 'thread-2:n1:u-n1:user'];
+    expect(users()).toEqual(expected);
+    expect(writer.turnEndStatus('n1')).toBe('completed');
+    expect(writer.identity).toBe('thread-1');
+    checkSession(journal, 's');
+
+    // Read again from scratch: the earlier thread first, then the message that ended it, then the current one.
+    writer.rebuild('identity-changed');
+    const fresh = source();
+    for (let pulls = 0; pulls < 10 && !(await pullLane(fresh, writer, signal)).caughtUp; pulls += 1) { /* a bounded import step per pull */ }
+    expect(users()).toEqual(expected);
+    expect(writer.turnEndStatus('t1')).toBe('completed');
+    expect(writer.turnEndStatus('n1')).toBe('completed');
+    checkSession(journal, 's');
+  });
+
   // Recovery guarantee: a persisted erroneous end must converge without changing identity or
   // replaying execution. Existing streaming coverage only starts with an unpoisoned cursor.
   it('reconciles a persisted interrupted boundary, streams again and survives another reader restart', async () => {

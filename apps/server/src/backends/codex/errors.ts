@@ -11,6 +11,12 @@ export function isUnmaterializedThreadError(error: unknown, threadId?: string): 
   return Boolean(match && (threadId === undefined || match[1] === threadId));
 }
 
+/** The app-server has no such thread, loaded or on disk (a thread without a first message is never written). */
+export function isMissingThreadError(error: unknown, threadId: string): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.trim() === `thread not loaded: ${threadId}`;
+}
+
 export function isUnavailableSocket(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   return code === 'ENOENT' || code === 'ECONNREFUSED';

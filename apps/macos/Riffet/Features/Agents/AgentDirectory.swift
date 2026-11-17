@@ -90,6 +90,17 @@ extension NativeBackendCatalogEntry {
 
 func backendWire(_ id: NativeBackendId) -> String { AgentIds.shared.wire(id: id) }
 
+/// The agents the assistant runs on, first the one it starts on (`ASSISTANT_BACKENDS` in `packages/contracts`).
+let assistantAgents: [String] = AssistantKt.ASSISTANT_BACKENDS.map(backendWire)
+
+extension Array where Element == NativeBackendCatalogEntry {
+    /// The assistant's agent: the saved one while it is offered and one the assistant runs on, else the first of [assistantAgents] that can run.
+    func assistantEntry(saved: String?) -> NativeBackendCatalogEntry? {
+        saved.flatMap { id in assistantAgents.contains(id) ? first { $0.agent == id } : nil }
+            ?? assistantAgents.lazy.compactMap { id in first { $0.agent == id && $0.available } }.first
+    }
+}
+
 /// The wire id as a built-in, or nil for a plugin's.
 func builtinBackend(_ agent: String) -> NativeBackendId? { AgentIds.shared.builtin(raw: agent) }
 

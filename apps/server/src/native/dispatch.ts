@@ -2,6 +2,7 @@ import { basename, join, resolve, sep } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { isAssistantBackend } from '../../../../packages/contracts/src/assistant-choice.js';
 import type { NativeDeliveryState, NativeQueue, NativeRunInput, NativeRunRecovery, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Run, Session, TerminalInfo } from '../../../../packages/contracts/src/index.js';
 import { samePromptText } from '../../../../packages/contracts/src/prompt-match.js';
 import type { Store } from '../store.js';
@@ -96,7 +97,8 @@ export interface NativeDispatcherBackend {
   status(sessionId: string): NativeStatus;
   /** Whether a driver is bound to the session; without it every session counts as possibly live. */
   hasRuntime?(sessionId: string): boolean;
-  sendRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options?: { now?: boolean }): Promise<void>;
+  /** `settled`: the backend carried the message out itself and no native turn follows. */
+  sendRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options?: { now?: boolean }): Promise<void | { settled: true }>;
   supportsSteer?(session: Session): Promise<boolean>;
   steerRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run): Promise<void | { deferred: true }>;
   /** True when this session's backend can take the first user message as a launch argument. */
@@ -500,7 +502,10 @@ export class NativeDispatcher {
     try {
       let session = this.store.getSession(run.sessionId);
       if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
-      if (this.store.getProject(session.projectId).archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
+      const project = this.store.getProject(session.projectId);
+      if (project.archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
+      // A 助理 conversation started on an agent it no longer runs on (docs/ASSISTANT.md §4) would run with the owner's configuration.
+      if (project.system === 'assistant' && !isAssistantBackend(session.backendId)) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'The personal assistant runs on Claude Code or Codex', 409);
       // The checkpoint has to be taken before the CLI can change a file, not before it starts: a CLI that
       // has yet to start takes seconds, and the checkpoint is taken meanwhile. A CLI carrying the first
       // prompt from its spawn waits for it at the spawn (`beforeSpawn`); a message for one started
@@ -535,6 +540,7 @@ export class NativeDispatcher {
       // else keeps its own send path. render() has no side effects here because the gate above
       // already rejected attachments and context extras.
       const argvPrompt = argvEligible ? await this.render(initial.input) : undefined;
+      let settled = false;
       // A resumed chat already has rows; only an echo after them can be this prompt's receipt.
       const argvBaseline = argvPrompt !== undefined && session.nativeSessionId
         ? (await this.native.snapshot(session.id)).events.at(-1)?.sequence ?? 0
@@ -600,7 +606,7 @@ export class NativeDispatcher {
           });
         }
       } else if (this.native.sendRun) {
-        await this.native.sendRun(session, run, binding => {
+        settled = (await this.native.sendRun(session, run, binding => {
           if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
           if (!options.now && this.interruptingSessions.has(session.id)) throw new AppError('NATIVE_INTERRUPT_IN_PROGRESS', 'The current turn is stopping; the message was not sent', 409);
           const latest = this.store.getSession(session.id);
@@ -621,7 +627,7 @@ export class NativeDispatcher {
           });
           if (!changed) throw new AppError('RUN_CANCELLED', 'The message was cancelled', 409);
           return changed;
-        }, options.now ? { now: true } : undefined);
+        }, options.now ? { now: true } : undefined))?.settled === true;
       } else {
         const text = await this.render(initial.input);
         const deliver = options.now ? this.native.deliverNow : this.native.deliver;
@@ -651,8 +657,9 @@ export class NativeDispatcher {
         run = this.store.getRun(runId);
         this.store.transitionNativeRun(runId, ['dispatching'], { delivery: 'input_sent', stage: 'confirmation', timings: { ...run.native?.timings, inputSentAt: now() } });
       }
-      // A slash command the CLI answers in its own pane uses a successful PTY submission as its delivery boundary.
-      if (this.traits(session.backendId).settlesSlashOnSubmit && isSlashCommand(this.store.getRun(runId).native ?? initial)) this.store.transitionNativeRun(runId, ['input_sent'], { stage: 'command_sent' }, { state: 'completed' });
+      // A slash command the CLI answers in its own pane uses a successful PTY submission as its delivery boundary;
+      // a message the backend carried out itself (a new Codex thread) has no turn to wait for.
+      if (settled || this.traits(session.backendId).settlesSlashOnSubmit && isSlashCommand(this.store.getRun(runId).native ?? initial)) this.store.transitionNativeRun(runId, ['input_sent'], { stage: 'command_sent' }, { state: 'completed' });
       else {
         // Only a head start on the receipt the stream brings anyway. A provider that cannot list a
         // thread whose first turn it is still writing (Codex) fails this read, and that says nothing

@@ -15,6 +15,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Task board: a conversation can belong to a task, its status changes from the sidebar menu, and the task shows in the conversation's info.
 - Assistant: one long-running personal assistant with its own page, memory, background runs and capability packs; `/new` starts it over. Available on the web, Mac, Android and iPhone.
 - Automations run a prompt by hand or on a schedule and keep the last 50 runs.
+- The assistant runs on Claude Code or Codex, the two agents that keep it apart from your own instructions, skills and MCP servers. On Codex it now has its directory's and packs' MCP servers, cannot edit your files, compacts at 200k tokens, and runs its background work there too.
 - A new task takes one sentence, lets you pick the model, and is either added to To do or started right away; completion criteria are optional. A new Task board settings page sets the default agent and model, and whether new conversations become tasks (off by default).
 - Settings are regrouped: new Features, Access and Server groups; bots, the assistant and quick chat sit under Features.
 - Work a turn delegated (subagents, background commands) stays visible after the turn ends.
@@ -24,6 +25,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Antigravity CLI is a supported agent.
 - Antigravity: a model the gateway serves under its own id (such as `gemini-4-hydrogen-sonar`) no longer turns into agy's default model when the conversation starts, and the conversation says so when agy still picks another; models offer a thinking effort; agy 1.5.10 is supported.
 - Codex conversations continue when switching to a compatible model provider; Codex CLI 0.167.2 is supported.
+- Codex has a Deny permission mode: it edits the workspace freely and refuses anything more instead of asking.
 - Goals from Claude Code `/goal`, Codex and DeepSeek Harness show on every client.
 - New Cursor conversations start on a warm CLI, and live output token counts reach the usage view.
 - Fixes for Claude Code: `/clear` moving to a new session, auto-compaction placement, `!` commands sent from Riffet, fallback confirmations in auto mode, forked Skill subagents.

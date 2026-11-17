@@ -1,6 +1,6 @@
 import type { AppSettings, AssistantChoice } from '@contracts';
 
-export { assistantChoice, type AssistantChoice } from '@contracts';
+export { assistantChoice, isAssistantBackend, type AssistantChoice } from '@contracts';
 
 /** The settings a composer reads its opening model from, with the 助理's in place of the agent's own. */
 export function withAssistantDefaults(settings: AppSettings, choice: AssistantChoice): AppSettings {

@@ -15,6 +15,7 @@ import { readClaudeShare } from '../shared/share-read.js';
 import { launchSource, modelSourceOf } from '../shared/model-source.js';
 import { materializeNativeInput } from '../attachments.js';
 import type { NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareReadOptions, NativeDriverExtensions, NativeDriverExternal, NativeDriverStored, ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec } from '../types.js';
+import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import { ClaudeHookBridge } from './hook-bridge.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { claudeHistoryMetrics, claudeUsageRecord, runForClaudeStep } from './metering.js';
@@ -32,7 +33,6 @@ export { CLAUDE_CONFIG_SETTLE_MS } from './runtime.js';
 const PROFILE_ID = 'local';
 
 /** Older provider session ids kept on a conversation that had to start over. */
-const MAX_PREVIOUS_SESSION_IDS = 8;
 
 /** How long a transcript must sit unwritten before its trailing response is taken as finished. */
 const TRANSCRIPT_QUIET_MS = 60_000;
@@ -124,6 +124,7 @@ function isClaudeSessionId(value: string): boolean {
  */
 export const CLAUDE_TRAITS: NativeBackendTraits = {
   settlesSlashOnSubmit: true,
+  startsNewTopic: true,
   reportsTurnOutcome: true,
   survivesRestart: true,
   offlineMayBeRunning: true,
@@ -314,7 +315,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
         // under a new id instead, and keep the old ones on the session: their transcripts still lead
         // the conversation the reader sees (see `ClaudeTranscript`).
         await this.dispose(host, session.id);
-        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), stored.nativeSessionId].slice(-MAX_PREVIOUS_SESSION_IDS), quickExitCount: 0 });
+        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), stored.nativeSessionId].slice(-MAX_PREVIOUS_NATIVE_SESSIONS), quickExitCount: 0 });
         current = host.setNativeSessionId(session.id, randomUUID());
         launchNotice = `Claude Code 已连续 ${QUICK_EXIT_LIMIT} 次在启动后 ${QUICK_EXIT_MS / 1000} 秒内退出，这次放弃 --resume，以全新的 Claude 会话启动；之前的对话记录仍会显示在本会话中。`;
       }
@@ -336,9 +337,8 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       // Only a message naming a `/token` needs the catalog; one that cannot be listed is sent as
       // typed and judged by its text alone.
       const sourceText = request.sourceText ?? request.input.text;
-      // A standing conversation's own command, which the CLI knows by another name.
-      const standing = host.standing?.rewrite?.(request.session.id, sourceText);
-      if (standing) { await runtime.send(request, { deliverText: standing, command: true }); return; }
+      // A new topic is the CLI's `/clear`: the same CLI goes on under a new session id.
+      if (host.standing?.newTopic?.(request.session.id, sourceText)) { await runtime.send(request, { deliverText: '/clear', command: true }); return; }
       const items = slashTokens(sourceText).length
         ? await claudeSlashItems(request.profile, request.project.cwd, SEND_SLASH_CATALOG_MAX_AGE_MS, standingArgs(host, request.project)).catch(() => undefined)
         : undefined;
@@ -615,7 +615,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       // After `/clear` the conversation goes on under the CLI's new id: the old one leads its history.
       const stored = host.getSession(session.id);
       if (stored.nativeSessionId === cleared.nativeSessionId) {
-        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), cleared.nativeSessionId].slice(-MAX_PREVIOUS_SESSION_IDS) });
+        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), cleared.nativeSessionId].slice(-MAX_PREVIOUS_NATIVE_SESSIONS) });
         host.setNativeSessionId(session.id, cleared.clearedTo);
       }
       this.runtimes.delete(session.id);

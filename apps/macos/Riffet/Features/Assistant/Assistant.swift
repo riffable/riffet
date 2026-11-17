@@ -208,7 +208,7 @@ struct AssistantPage: View {
     /// The agent and, when it has several, its provider: the choice the assistant is started with.
     @ViewBuilder
     private var agentMenu: some View {
-        let entries = workbench.backends.filter(\.isPickable)
+        let entries = workbench.backends.filter { assistantAgents.contains($0.agent) }
         NativeChipMenu(text: entries.first { $0.agent == backend }?.label ?? backendLabel(backend), symbol: "sparkle") {
             [.header("Agent")] + entries.map { entry in
                 .item(entry.label, subtitle: entry.available ? nil : entry.reason, checked: entry.agent == backend, enabled: entry.available) {
@@ -243,14 +243,14 @@ struct AssistantPage: View {
 
     // MARK: Choice
 
-    /// The saved agent and model while that agent is still offered; else Claude Code where it can run
-    /// (`assistantChoice` in `packages/contracts/src/assistant-choice.ts`).
+    /// The saved agent and model while that agent is still offered and one the assistant runs on; else the first
+    /// of `assistantAgents` that can run (`assistantChoice` in `packages/contracts/src/assistant-choice.ts`).
     private func applyChoice() {
         guard backend.isEmpty else { return }
         let saved = workbench.assistant.saved
-        let entries = workbench.backends
-        guard let entry = saved.backendId.flatMap({ id in entries.first { $0.agent == id } })
-            ?? entries.first(where: { $0.agent == "claude" && $0.available }) else { return }
+        guard let entry = workbench.backends.assistantEntry(saved: saved.backendId) else { return }
+        // A saved provider and model belong to the saved agent only.
+        guard entry.agent == saved.backendId else { return select(entry.agent, profile: nil, model: nil) }
         let profileKept = saved.profileId.map { id in entry.profiles.contains { $0.id == id } } ?? false
         select(entry.agent, profile: profileKept ? saved.profileId : nil, model: profileKept || saved.profileId == nil ? saved.model : nil)
     }

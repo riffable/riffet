@@ -47,7 +47,7 @@ import { useTabs } from './tabs/useTabs';
 import { AppearanceBackdrop } from '@/components/appearance-backdrop';
 import { WorkbenchOverlays } from './WorkbenchOverlays';
 import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
-import { assistantChoice, withAssistantDefaults } from './work-items/assistant';
+import { assistantChoice, isAssistantBackend, withAssistantDefaults } from './work-items/assistant';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
 const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
 const AutomationsPage = lazy(() => import('./automations/AutomationsPage').then((module) => ({ default: module.AutomationsPage })));
@@ -180,6 +180,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   // 助理's, not the composer's everywhere else (docs/ASSISTANT.md).
   const assistantHome = isAssistantProject(project) && !session;
   const assistantPick = useMemo(() => assistantHome ? assistantChoice(settings.assistant, backends) : undefined, [assistantHome, settings.assistant, backends]);
+  // The 助理 runs only on the agents that isolate it (docs/ASSISTANT.md §4).
+  const homeBackends = useMemo(() => assistantHome ? backends.filter((entry) => isAssistantBackend(entry.backendId)) : backends, [assistantHome, backends]);
   const homeBackendId = assistantPick?.backendId ?? pickedBackendId;
   const homeProfileId = assistantPick ? assistantPick.profileId : pickedProfileId;
   /** The model the composer opens with: under the 助理, its own. */
@@ -421,7 +423,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const composerProps = {
     directories: recentDirectories,
     settings: composerSettings,
-    backends,
+    backends: homeBackends,
     backendId: homeBackendId,
     profileId: homeProfileId,
     backend,

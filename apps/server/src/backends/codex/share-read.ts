@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { NativeWorkbenchEvent, Session, ShareModelInfo, ShareSelection, ShareTurn } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { NativeEventLog } from '../../journal/native-log.js';
+import type { Journal } from '../../journal/journal.js';
 import type { NativeBackendHost, NativeShareReadOptions, NativeShareTranscript } from '../types.js';
 import { readIngestState } from './journal-space.js';
 import { rolloutRows } from './rollout-records.js';
@@ -449,16 +450,12 @@ export async function readCodexShare(host: NativeBackendHost, session: Session, 
   const threadId = session.nativeSessionId;
   if (!threadId) return { events: [], subagents: [], turns: [], selectedTurnIds: [] };
   if (options.selection?.mode === 'selected' && options.selection.nativeChatId && options.selection.nativeChatId !== threadId) throw new AppError('SHARE_SELECTION_INVALID', 'The selected messages do not belong to this conversation', 409, undefined, { reason: 'session' });
-  // A retained journal is a fallback only when the original file was pruned. `ready` carries no
-  // rollout watermark, so it cannot prove that an external CLI has not appended more history.
+  // A retained journal is read only when the original file was pruned, or the conversation spans several threads.
+  // `ready` carries no rollout watermark, so it cannot prove that an external CLI has not appended more history.
   const journal = host.journal, state = journal ? readIngestState(journal, session.id) : undefined;
   const head = state?.phase === 'ready' && state.threadId === threadId ? journal?.peek(session.id) : undefined;
-  let source: Awaited<ReturnType<typeof readSelectedRollout>>;
-  try { source = await readSelectedRollout(stateHome, threadId, options); }
-  catch (error) {
-    // A retained complete journal also supports sessions whose provider pruned its rollout.
-    if (!(error instanceof AppError) || error.code !== 'SHARE_HISTORY_NOT_FOUND' || !head || !journal) throw error;
-    const retained = new NativeEventLog(journal, session.id).tail(head.lastSeq + 1);
+  const retainedShare = (journal: Journal, lastSeq: number, warnings: string[]): NativeShareTranscript => {
+    const retained = new NativeEventLog(journal, session.id).tail(lastSeq + 1);
     const events = options.messagesOnly ? retained.flatMap(event => messageOnlyJournalEvent(event) ?? []) : retained;
     const byTurn = new Map<string, ShareTurn>(), userTurns = new Set<string>();
     for (const event of events) if (event.type === 'user_message_chunk' || (options.messagesOnly && event.type === 'agent_message_chunk')) {
@@ -473,8 +470,17 @@ export async function readCodexShare(host: NativeBackendHost, session: Session, 
     return {
       events: options.catalogOnly ? [] : options.messagesOnly || (options.selection && options.selection.mode !== 'all') ? events.filter(event => selected.has(event.nativeTurnId ?? event.runId ?? '')) : events,
       subagents: [], turns, selectedTurnIds,
-      warnings: ['原生历史文件已清理，分享使用本地保留记录', ...(events.some(event => event.data.subagent) ? ['子 Agent 的历史不可用'] : [])],
+      warnings: [...warnings, ...(events.some(event => event.data.subagent) ? ['子 Agent 的历史不可用'] : [])],
     };
+  };
+  // A conversation that went on in new threads (`/new`) spans several rollouts; the journal holds them all in order.
+  if (session.previousNativeSessionIds?.length && head && journal) return retainedShare(journal, head.lastSeq, []);
+  let source: Awaited<ReturnType<typeof readSelectedRollout>>;
+  try { source = await readSelectedRollout(stateHome, threadId, options); }
+  catch (error) {
+    // A retained complete journal also supports sessions whose provider pruned its rollout.
+    if (!(error instanceof AppError) || error.code !== 'SHARE_HISTORY_NOT_FOUND' || !head || !journal) throw error;
+    return retainedShare(journal, head.lastSeq, ['原生历史文件已清理，分享使用本地保留记录']);
   }
   if (options.catalogOnly) return { events: [], subagents: [], turns: source.turns, selectedTurnIds: source.selectedTurnIds };
   const root = projectShareRollout(source.content, session.id, threadId, options.messagesOnly), warnings: string[] = [], subagents: NativeShareTranscript['subagents'] = [];

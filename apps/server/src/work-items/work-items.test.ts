@@ -180,7 +180,7 @@ describe('work items', () => {
     const { store, call, project, items, riffetMcp, assistant } = await boot();
     const home = store.listProjects().find(entry => entry.system === 'assistant')!;
     // The assistant's own conversation is not a task, and only it is given the board tools.
-    const mainReply = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a1', initialMessage: { commandId: 'c-a1', text: 'Fix the login and add a test' } });
+    const mainReply = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'claude', clientSessionId: 'a1', initialMessage: { commandId: 'c-a1', text: 'Fix the login and add a test' } });
     expect(mainReply.statusCode, mainReply.body).toBe(202);
     // The reply names the main conversation, so a client never shows it as an ordinary one first.
     expect(mainReply.json().project).toMatchObject({ id: home.id, mainSessionId: 'a1' });
@@ -197,7 +197,7 @@ describe('work items', () => {
     expect(store.getProject(home.id).mainSessionId).toBe('a1');
     expect(store.getSession('a1')).toMatchObject({ title: '个人助理', titleSource: 'user' });
     // While it can be opened, no client starts a second one there.
-    const another = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a2', initialMessage: { commandId: 'c-a2', text: 'Another' } });
+    const another = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'claude', clientSessionId: 'a2', initialMessage: { commandId: 'c-a2', text: 'Another' } });
     expect([another.statusCode, (another.json() as { error: { code: string } }).error.code]).toEqual([409, 'ASSISTANT_CONVERSATION_EXISTS']);
     expect(store.getProject(home.id).mainSessionId).toBe('a1');
     expect(store.getProject(project.id).mainSessionId).toBeUndefined();

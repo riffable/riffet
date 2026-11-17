@@ -54,6 +54,7 @@ import {
 } from './config.js';
 import { fastServiceTier, listModels, modelBackendVariant, resolveModelSelection } from './catalog.js';
 import { extensionsOffNames } from '../../extensions/toggles.js';
+import { codexStanding, standingProtects, standingThreadConfig, useStandingSkillRoots, type CodexStanding } from './standing.js';
 import { readConfiguredMcpNames } from './extensions.js';
 import type { RuntimeAttachment, RuntimeContext } from '@riffet/plugin-api';
 import type { PluginRegistry } from '../../plugins/registry.js';
@@ -215,6 +216,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private modeReconciliation: Promise<void> | undefined;
   private readonly modeRequests = new WeakMap<CodexPendingInteraction, { observation: number; decision?: string }>();
   private permissionObservation = 0;
+  /** A sandbox other than the 助理's profile was named on the loaded thread (`standingProfile`). */
+  private standingSandboxNamed = false;
+  private readonly standingMoments = new Set<'start' | 'compact'>();
+  /** The files each of the 助理's open file changes writes, by item: an approval request names only the item. */
+  private readonly standingWrites = new Map<string, string[]>();
   private commandConfigObserver?: (settings: Record<string, unknown>) => void;
   private permissionSettings: Record<string, unknown> | undefined;
   /**
@@ -555,6 +561,30 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   profileSwitchFailed(message: string): void {
     this.setStatus({ ...this.status, notice: message, noticeLevel: 'error' }, 'other');
+  }
+
+  /**
+   * Lets go of the thread for a new topic (docs/ASSISTANT.md §5.5): what it wrote is read into the journal, the TUI
+   * that shows it stops and the app-server unloads it. The app-server stays, for the thread that follows. Only an idle
+   * thread is left; the caller holds the session lock and replaces this runtime afterwards.
+   */
+  async leaveThread(): Promise<string> {
+    const busy = () => new AppError('CLI_BUSY', 'The current task is still running; start a new topic when it finishes.', 409);
+    const threadId = this.nativeSessionId;
+    if (!threadId || !this.attached) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
+    if (!this.canSwitchProfile) throw busy();
+    this.assertWritable();
+    const transport = this.requireTransport();
+    await this.host.transcript?.drain(this.session.id);
+    if (!this.canSwitchProfile) throw busy();
+    if (this.terminalId) {
+      const terminalId = this.terminalId;
+      this.terminalId = undefined;
+      this.host.updateSession(this.session.id, { terminalId: undefined });
+      await this.host.terminal.stop(terminalId).catch(() => undefined);
+    }
+    await transport.request('thread/unsubscribe', { threadId }).catch(() => undefined);
+    return threadId;
   }
 
   /** Release only an idle, verified owner; a provider change never interrupts its current work. */
@@ -912,6 +942,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.nativeSessionId = thread.id;
       // A newly created thread has no older transcript to seed before accepting live events.
       if (!existingId) {
+        // A new thread of a conversation that may have had others: the 助理 is told what it lacks (§5.1).
+        if (this.isStanding()) this.standingMoments.add('start');
         this.history.startMaterialization(thread.id);
         this.space.adoptThread(thread.id);
         if (!this.space.initialized) { this.space.bind('real'); this.space.writeState({ phase: 'ready', turns: 0 }); this.space.markInitialized(); }
@@ -959,6 +991,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private async resumeWithConfiguration(threadId: string, selection: NativeModelSelection, permission: ReturnType<typeof permissionOf> | undefined): Promise<{ thread: RpcThread } & Record<string, unknown>> {
+    const standing = await this.standingThread();
     const effort = nativeModelEffort(selection);
     const serviceTier = fastServiceTier(this.flavor, selection.model, nativeModelFast(selection));
     const backendVariant = modelBackendVariant(this.flavor, selection);
@@ -967,8 +1000,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(backendVariant ? { model_backend_variant: backendVariant } : {}),
       ...this.riffetMcpConfig(),
       ...await this.extensionsOffConfig(),
+      ...standing?.config,
     };
     return await this.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
+      ...standing?.instructions,
       threadId,
       cwd: this.project.cwd,
       model: selection.model || null,
@@ -977,6 +1012,49 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(Object.keys(config).length ? { config } : {}),
       excludeTurns: true,
     });
+  }
+
+  /**
+   * The 助理's isolation (`standing.ts`), given again at every start and resume: a resumed thread keeps nothing of the
+   * last one's overrides, and the directory's files may have changed since. Undefined for any other conversation.
+   */
+  private async standingThread(): Promise<{ instructions: { baseInstructions: string; developerInstructions: string }; config: Record<string, unknown> } | undefined> {
+    const standing = this.standing();
+    if (!standing) return undefined;
+    const transport = this.requireTransport();
+    await useStandingSkillRoots(transport, standing);
+    const riffet = Object.keys(this.riffetMcpConfig()).map(key => key.slice('mcp_servers.'.length));
+    return {
+      instructions: { baseInstructions: standing.baseInstructions, developerInstructions: standing.developerInstructions },
+      config: await standingThreadConfig(transport, this.project.cwd, standing, riffet),
+    };
+  }
+
+  private isStanding(): boolean {
+    return this.flavor.id === 'codex' && Boolean(this.host.standing?.launch(this.project, this.host.getSession(this.session.id)));
+  }
+
+  /** The 助理's isolation when this is one of its conversations (`standing.ts`); TRAE's app-server is not isolated. */
+  private standing(): CodexStanding | undefined {
+    return this.flavor.id === 'codex' ? codexStanding(this.host.standing?.launch(this.project, this.host.getSession(this.session.id))) : undefined;
+  }
+
+  /**
+   * Whether the 助理's permission profile is the sandbox in force: in the workspace-write preset, until a sandbox of
+   * another mode was named on the loaded thread, which stays in force over the profile until the thread is loaded
+   * again. Then the preset is named instead, without the profile's read-only files (docs/ASSISTANT.md §4.1).
+   */
+  private standingProfile(permission: ReturnType<typeof permissionOf>): boolean {
+    if (!this.isStanding()) return false;
+    if (permission.sandbox !== 'workspace-write') { this.standingSandboxNamed = true; return false; }
+    return !this.standingSandboxNamed;
+  }
+
+  /** The moments the 助理 has not been told of yet (`StandingMoment`): a new thread, a summarized one. Taken once. */
+  takeStandingMoments(): Array<'start' | 'compact'> {
+    const moments = [...this.standingMoments];
+    this.standingMoments.clear();
+    return moments;
   }
 
   /**
@@ -990,8 +1068,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   /**
-   * The MCP servers this conversation switched off (docs/EXTENSIONS.md), as per-thread overrides. Skills are not
-   * switched off here: the app-server has no verified per-thread skill switch.
+   * The MCP servers this conversation switched off (docs/EXTENSIONS.md), as per-thread overrides. Skills the owner
+   * switched off stay in the CLI's own configuration; only the 助理's thread switches skills off itself (`standing.ts`).
    */
   private async extensionsOffConfig(): Promise<Record<string, unknown>> {
     // A dotted key cannot carry a dot inside a server name; the CLI's own names never have one.
@@ -1007,6 +1085,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private async startThread(selection: NativeModelSelection, permission: ReturnType<typeof permissionOf>): Promise<{ thread: RpcThread } & Record<string, unknown>> {
+    const standing = await this.standingThread();
     const effort = nativeModelEffort(selection);
     const serviceTier = fastServiceTier(this.flavor, selection.model, nativeModelFast(selection));
     const backendVariant = modelBackendVariant(this.flavor, selection);
@@ -1015,8 +1094,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(backendVariant ? { model_backend_variant: backendVariant } : {}),
       ...this.riffetMcpConfig(),
       ...await this.extensionsOffConfig(),
+      ...standing?.config,
     };
     return await this.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/start', {
+      ...standing?.instructions,
       cwd: this.project.cwd,
       model: selection.model || null,
       ...this.permissionParams(permission, 'sandbox', true),
@@ -1694,7 +1775,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         // Unlike resume overrides, this applies to an already loaded thread. Null effort preserves
         // the old effort, so an explicit default above resolves to the model catalog's actual value.
         await transport.request('thread/settings/update', { threadId, cwd: this.project.cwd, model: selection.model,
-          approvalPolicy: permission.approvalPolicy, approvalsReviewer: 'user', sandboxPolicy: sandbox,
+          approvalPolicy: permission.approvalPolicy, approvalsReviewer: 'user', ...(this.standingProfile(permission) ? {} : { sandboxPolicy: sandbox }),
           ...(effort !== undefined ? { effort } : {}), ...(tier !== undefined ? { serviceTier: tier } : {}),
         });
         const deadline = Date.now() + 5_000;
@@ -1836,6 +1917,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // An unchanged TRAE mode inherits the actual native profile, including additional roots and
     // custom restrictions. Only an explicit switch may replace it with a bare built-in preset.
     if (this.flavor.id === 'traex' && !force && this.nativeApproval === permission.id && !this.host.getSession(this.session.id).configPending) return {};
+    if (this.standingProfile(permission)) return { approvalPolicy: permission.approvalPolicy };
     return permissionParamsOf(permission, sandboxField);
   }
 
@@ -1874,8 +1956,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
           threadId,
           cwd: this.project.cwd,
           model: selection.model || null,
-          approvalPolicy: permission.approvalPolicy,
-          sandbox: permission.sandbox,
+          ...this.permissionParams(permission, 'sandbox', true),
           ...(serviceTier ? { serviceTier } : {}),
           ...(Object.keys(modelConfig).length ? { config: modelConfig } : {}),
           excludeTurns: true,
@@ -3029,6 +3110,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const turn = asRecord(params.turn);
       const turnId = str(turn?.id);
       this.observation?.release(this.nativeSessionId);
+      this.standingWrites.clear();
       if (turnId && this.nativeCommand?.type === 'compact') {
         const items = asArray<RpcItem>(turn?.items);
         if (items.some(item => item.type === 'userMessage')) this.nativeCommand.userTurns.add(turnId);
@@ -3143,8 +3225,17 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const turnId = str(params.turnId);
       if (!item || !turnId) return;
       if (item.type === 'userMessage' && this.nativeCommand?.type === 'compact') this.nativeCommand.userTurns.add(turnId);
+      if (item.type === 'fileChange' && typeof item.id === 'string' && this.isStanding()) {
+        if (method === 'item/started') this.standingWrites.set(item.id, asArray<Record<string, unknown>>(item.changes).flatMap(change => [str(change.path), str(asRecord(change.kind)?.move_path)]).filter((path): path is string => Boolean(path)));
+        else this.standingWrites.delete(item.id);
+      }
       if (item.type === 'contextCompaction') {
         if (this.nativeCommand?.type === 'compact') this.confirmNativeCommand(turnId);
+        if (this.isStanding()) {
+          // As Claude Code's PreCompact and its SessionStart after one: the 助理 saves what matters, and is then told.
+          if (method === 'item/started') { try { this.host.standing?.compacting?.(this.session.id); } catch { /* a standing host's trouble is not the turn's */ } }
+          else this.standingMoments.add('compact');
+        }
         if (method === 'item/started') this.activities.compactionStarted(item, turnId, Number(params.startedAtMs));
         else this.activities.compactionCompleted(item, turnId, typeof params.completedAtMs === 'number' ? params.completedAtMs : undefined);
         return;
@@ -3234,6 +3325,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const threadId = str(request.params.threadId) ?? this.nativeSessionId;
     if (threadId && threadId !== this.nativeSessionId && !this.subagents.owns(threadId)) {
       throw new Error(`Request belongs to a different ${this.label} thread.`);
+    }
+    // The owner's files are not the 助理's to change in any mode (docs/ASSISTANT.md §2): the profile has them
+    // read-only, and the approval Codex then asks for is declined here, as Claude Code's deny rule does.
+    if (request.method === 'item/fileChange/requestApproval') {
+      const writes = this.standingWrites.get(str(request.params.itemId) ?? '');
+      const standing = writes?.length ? this.standing() : undefined;
+      if (standing && writes!.some(path => standingProtects(path, standing))) return { decision: 'decline' };
     }
     const requestId = this.scopedRequestId(threadId, String(request.id));
     const main = threadId === this.nativeSessionId;

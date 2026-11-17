@@ -16,7 +16,7 @@ export const MAX_ROLLOUT_BYTES = 64 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 const probes = new Map<string, Promise<AppServerProbe>>();
 const PROFILE_PREFERENCE_FIELDS = new Set(['id', 'backendId', 'name', 'description', 'isDefault', 'defaultModel', 'enabledModels', 'modelInputModalities']);
-type CodexPermissionId = 'on-request' | 'read-only' | 'danger-full-access';
+type CodexPermissionId = 'on-request' | 'dontAsk' | 'read-only' | 'danger-full-access';
 type PermissionId = CodexPermissionId | 'auto-review';
 type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 interface Permission {
@@ -32,10 +32,12 @@ interface Permission {
  * approval policy alone is not a permission — `never` inside the read-only sandbox Codex falls back
  * to for an untrusted project can neither write nor ask to. Ids recorded before the presets existed
  * (`never`, `untrusted`) settle on the default rather than widening what was chosen; `unrestricted`
- * is the cross-backend "run everything".
+ * is the cross-backend "run everything". `dontAsk` has Claude Code's name and meaning: what would need asking is
+ * refused, which is what a run nobody watches needs (docs/ASSISTANT.md §6).
  */
 const CODEX_PERMISSIONS: Record<CodexPermissionId, { approvalPolicy: 'on-request' | 'never'; sandbox: CodexSandboxMode }> = {
   'on-request': { approvalPolicy: 'on-request', sandbox: 'workspace-write' },
+  dontAsk: { approvalPolicy: 'never', sandbox: 'workspace-write' },
   'read-only': { approvalPolicy: 'on-request', sandbox: 'read-only' },
   'danger-full-access': { approvalPolicy: 'never', sandbox: 'danger-full-access' },
 };
@@ -43,6 +45,7 @@ const CODEX_PERMISSIONS: Record<CodexPermissionId, { approvalPolicy: 'on-request
 export function normalizePermission(value: string | undefined, flavor: CodexFlavor['id'] = 'codex'): PermissionId {
   if (flavor === 'traex' && value === 'auto-review') return value;
   if (value === 'read-only' || value === 'danger-full-access') return value;
+  if (value === 'dontAsk' && flavor === 'codex') return value;
   if (value === 'unrestricted') return 'danger-full-access';
   return 'on-request';
 }

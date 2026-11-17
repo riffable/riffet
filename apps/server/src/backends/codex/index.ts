@@ -23,7 +23,7 @@ import { findCodexRollout, RolloutUsageReader } from './rollout-usage.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { codexTrustArgs } from '../shared/cli-trust.js';
 import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
-import { AppError } from '../../errors.js';
+import { AppError, sessionInTerminal } from '../../errors.js';
 import { materializeAttachment } from '../attachments.js';
 import type {
   ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec,
@@ -31,6 +31,7 @@ import type {
   NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
   NativeDriverExtensions, NativeDriverExternal, NativeDriverStored,
 } from '../types.js';
+import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
   normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, matchesRuntimeFingerprint, assertSupportedProfile, providerEnv,
@@ -46,7 +47,8 @@ import { safeProviderError, safeTurnError } from './errors.js';
 import { isKnownBlockingTitle } from '../../agent-host/interaction-choice.js';
 import { CodexSessionRuntime, type NativeRuntimeHooks } from './runtime.js';
 import { rolloutItemSpans } from './item-spans.js';
-import { CodexTranscriptSource, type CodexLiveFeed } from './transcript-source.js';
+import { CodexTranscriptSource, newTopicAfter, newTopicBoundary, type CodexLiveFeed } from './transcript-source.js';
+import { codexStanding, standingContextItem, standingSkill, useStandingSkillRoots, type CodexStanding } from './standing.js';
 import { codexObservation, type CodexObservation } from './observation.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import type { RpcItem } from './types.js';
@@ -84,7 +86,7 @@ interface CodexSessionListeners {
  * A Codex turn is settled by its own `turn/completed`, never by an idle status; closing the driver
  * detaches the reusable app-server that per-session disposal would stop.
  */
-export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, survivesRestart: true, offlineMayBeRunning: true, closesSessionsItself: true, resumesByNativeId: true, riffetTools: true, extensionToggles: { mcp: true, skills: false }, consumesProtocols: ['openai-responses'] };
+export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, startsNewTopic: true, survivesRestart: true, offlineMayBeRunning: true, closesSessionsItself: true, resumesByNativeId: true, riffetTools: true, extensionToggles: { mcp: true, skills: false }, consumesProtocols: ['openai-responses'] };
 
 export class CodexBackendAdapter implements NativeBackendDriver {
   readonly extensions: NativeDriverExtensions = {
@@ -323,6 +325,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         { id: 'read-only', label: 'Read Only' },
       ] : [
         { id: 'on-request', label: 'Default', description: 'Edits the workspace freely; asks before going outside it or onto the network' },
+        { id: 'dontAsk', label: 'Deny tools that need permission', shortLabel: 'Deny', description: 'Edits the workspace freely; refuses anything more instead of asking' },
         { id: 'read-only', label: 'Read only', description: 'Reads anything; asks before every edit or command that needs more' },
         { id: 'danger-full-access', label: 'Full access', description: 'No sandbox and never asks: edits and network anywhere' },
       ],
@@ -407,8 +410,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     });
   }
 
-  async send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void> {
+  async send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void | { settled: true }> {
     const sourceText = request.sourceText ?? request.input.text;
+    if (host.standing?.newTopic?.(request.session.id, sourceText)) return await this.newTopic(host, request);
     const command = this.flavor.id === 'codex' ? parseCodexNativeCommand(sourceText) : undefined;
     if (command && (request.input.attachmentIds.length || request.input.context.length || request.input.references?.length)) {
       throw new AppError('NATIVE_COMMAND_ARGUMENTS', 'Remove attachments and context references before running this command.', 400);
@@ -425,13 +429,18 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const nativeSessionId = await runtime.openOrResume();
       await runtime.ensureTui();
       const { input, images, renderedText } = await renderInput(host, request.input);
-      const skills = command ? [] : await this.skillInputs(runtime.transport, request.project.cwd, request.profile, sourceText);
+      const standing = this.standingOf(host, request.project);
+      const skills = command ? [] : await this.skillInputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
       if (host.isRunCancelled(request.runId)) return;
+      // The 助理 is told the time and what it missed with each message, ahead of the owner's text (docs/ASSISTANT.md §5.1),
+      // and first what it lacks: the conversation's last turns in a new thread, that the thread was just summarized.
+      const moments = standing && !command ? [...runtime.takeStandingMoments(), 'prompt' as const] : [];
+      const context = standingContextItem(moments.map(moment => host.standing?.context(request.session.id, moment)));
       const result = await runtime.send({
         runId: request.runId,
         commandId: request.commandId,
         renderedText,
-        input: [...input, ...images, ...skills],
+        input: [...context, ...input, ...images, ...skills],
         config: { ...request.config, ...(request.config.model === undefined && typeof request.profile.config.defaultModel === 'string'
           ? { model: request.profile.config.defaultModel } : {}) },
         nativeSessionId,
@@ -439,6 +448,64 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         commitDispatchFence: request.commitDispatchFence,
       });
       runtime.recordSubmittedTurn(result.turnId, request.runId, request.commandId);
+    });
+  }
+
+  /** The 助理's isolation when [project] is its directory (docs/ASSISTANT.md §4); TRAE CLI's app-server is not isolated. */
+  private standingOf(host: NativeBackendHost, project: Project): CodexStanding | undefined {
+    return this.flavor.id === 'codex' ? codexStanding(host.standing?.launch(project)) : undefined;
+  }
+
+  /**
+   * A new topic in the 助理's main conversation (docs/ASSISTANT.md §5.5). The app-server cannot clear a thread's
+   * context, so the conversation goes on in a new thread on the same app-server, and the old one leads its history
+   * (`previousNativeSessionIds`), as after Claude Code's `/clear`. No turn is started: the run is settled here.
+   */
+  private async newTopic(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<{ settled: true }> {
+    if (request.input.attachmentIds.length || request.input.context.length || request.input.references?.length) {
+      throw new AppError('NATIVE_COMMAND_ARGUMENTS', 'Remove attachments and context references before running this command.', 400);
+    }
+    const sessionId = request.session.id;
+    return await host.withSessionLock(sessionId, async () => {
+      if (!await this.applyProfileSwitch(host, sessionId)) {
+        throw new AppError('CLI_BUSY', 'The current task is still running; the provider change will apply when it finishes.', 409);
+      }
+      const session = host.getSession(sessionId);
+      if (session.terminalHold) throw sessionInTerminal();
+      const previous = session.nativeSessionId;
+      const settle = () => { request.commitDispatchFence({ backendId: this.flavor.id, slashCommand: true, renderedText: request.input.text }); return { settled: true as const }; };
+      // A conversation that never started has no context to clear.
+      if (!previous) return settle();
+      const runtime = await this.ensureRuntime(host, session, request.project, request.profile, true);
+      if (!runtime.canRunWith(request.project, request.profile)) {
+        const blocked = runtime.deferWriteBlocked(request.project, request.profile);
+        throw new AppError(blocked.code, blocked.message, 409);
+      }
+      await runtime.openOrResume();
+      // Nor does a thread nothing was sent in yet, which is never written to disk.
+      const head = await runtime.turnsPage({ threadId: previous, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded' }).catch(() => undefined);
+      if (!head?.data?.length) return settle();
+      // Fenced before the thread is left, so a send that fails part way is not replayed into a third thread. The
+      // boundary names the thread it ends: the journal's reader shows the message there (`transcript-source.ts`).
+      request.commitDispatchFence({ backendId: this.flavor.id, slashCommand: true, renderedText: request.input.text, nativeSessionId: previous, nativeInputBoundary: newTopicBoundary(previous) });
+      // The journal's reader must not bring up a runtime of its own while the thread changes hands.
+      this.restarting.add(sessionId);
+      try {
+        const left = await runtime.leaveThread();
+        const stored = host.getSession(sessionId);
+        host.updateSession(sessionId, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), left].slice(-MAX_PREVIOUS_NATIVE_SESSIONS), terminalId: undefined });
+        host.setNativeSessionId(sessionId, undefined);
+        this.runtimes.delete(sessionId);
+        await runtime.dispose(host, { keepRunning: true });
+        const next = await this.ensureRuntime(host, host.getSession(sessionId), request.project, request.profile, true);
+        await next.openOrResume();
+        // A new topic starts from nothing: the new thread is not told the last turns.
+        next.takeStandingMoments();
+        await next.ensureTui();
+      } finally {
+        this.restarting.delete(sessionId);
+      }
+      return { settled: true };
     });
   }
 
@@ -457,7 +524,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (!runtime.steerTarget) await runtime.prime();
       await runtime.attachLoadedOwner();
       const { input, images, renderedText } = await renderInput(host, request.input);
-      const skills = await this.skillInputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true);
+      const skills = await this.skillInputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true, this.standingOf(host, request.project));
       if (host.isRunCancelled(request.runId)) throw new AppError('RUN_CANCELLED', 'Instruction was cancelled before delivery.', 409);
       await runtime.steer({
         runId: request.runId, commandId: request.commandId, target: request.target,
@@ -641,20 +708,27 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return await this.withTransport(project, profile, live, transport => readUsage(transport, this.flavor, { account: !usesOwnProvider(profile.config) }));
   }
 
-  async slashItems(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
+  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
     const cwd = await queryDirectory(project, profile);
-    const items = await this.withTransport(project, profile, undefined, transport => listSkills(transport, cwd));
+    const standing = project && this.standingOf(host, project);
+    const items = await this.withTransport(project, profile, undefined, async transport => {
+      if (standing) await useStandingSkillRoots(transport, standing);
+      return await listSkills(transport, cwd, standing);
+    });
     this.rememberSkillNames(cwd, profile, items);
     return items;
   }
 
-  private async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
+  private async loadedExtensions(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
     const cwd = await queryDirectory(project, profile);
+    const standing = this.standingOf(host, project);
     return await this.withTransport(project, profile, undefined, async transport => {
-      const [servers, configured, skills] = await Promise.all([readMcpServers(transport), readConfiguredMcpNames(transport, cwd), listSkills(transport, cwd)]);
+      if (standing) await useStandingSkillRoots(transport, standing);
+      const [servers, configured, skills] = await Promise.all([readMcpServers(transport), readConfiguredMcpNames(transport, cwd), listSkills(transport, cwd, standing)]);
       return {
         // Plugin and app servers are listed by the app-server but cannot be switched off per thread (`readConfiguredMcpNames`).
-        mcp: servers.filter(server => server.name !== RIFFET_MCP_NAME && configured.has(server.name)),
+        // The 助理's thread switches every configured one off and declares the directory's and the packs' (`standing.ts`).
+        mcp: standing ? Object.keys(standing.mcpServers).map(name => ({ name })) : servers.filter(server => server.name !== RIFFET_MCP_NAME && configured.has(server.name)),
         skills: skills.map(skill => ({ name: skill.name, ...(skill.description ? { description: skill.description } : {}) })),
       };
     });
@@ -831,7 +905,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     if (this.knownSkillNames.size > 64) this.knownSkillNames.delete(this.knownSkillNames.keys().next().value!);
   }
 
-  private async skillInputs(transport: CodexAppServerClient | undefined, cwd: string, profile: NativeBackendProfileConfig, text: string, strictSteer = false): Promise<unknown[]> {
+  private async skillInputs(transport: CodexAppServerClient | undefined, cwd: string, profile: NativeBackendProfileConfig, text: string, strictSteer = false, standing?: CodexStanding): Promise<unknown[]> {
     const tokens = slashTokens(text);
     const leading = tokens.find(token => token.start === text.length - text.trimStart().length);
     const rejectCommand = () => new AppError('STEER_REJECTED', 'Steering accepts only messages or enabled skills; use the matching conversation action for CLI commands.', 409);
@@ -846,7 +920,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       return onUnavailable();
     }
     let skills: Awaited<ReturnType<typeof listSkills>>;
-    try { skills = await listSkills(transport, cwd); }
+    try { skills = await listSkills(transport, cwd, standing); }
     catch {
       return onUnavailable();
     }
@@ -892,6 +966,11 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       backend: this.flavor.id,
       ...(this.observation ? { observedChanges: (toolCallId: string) => this.observation?.changes(sessionId, toolCallId) } : {}),
       threadId: threadOf,
+      earlierThreads: () => host.getSession(sessionId).previousNativeSessionIds ?? [],
+      topicAfter: threadId => {
+        const run = host.listRuns?.(sessionId).find(candidate => candidate.native?.backendId === this.flavor.id && newTopicAfter(candidate.native.nativeInputBoundary) === threadId);
+        return run?.native ? { commandId: run.commandId, runId: run.id, text: run.native.input.text, at: run.createdAt } : undefined;
+      },
       reader: async () => {
         if (!threadOf()) return undefined;
         // The restart drains the old journal before stopping its writer. Do not have that drain
@@ -957,6 +1036,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
 
   private async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<import('../../../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]> {
     if (!session.nativeSessionId) return [];
+    // Earlier topics are other threads' rollouts; the journal holds them all in order.
+    if (session.previousNativeSessionIds?.length) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'Use the saved journal for a conversation over several threads', 409);
     const file = await findCodexRollout(this.flavor.stateHome(profile.config), session.nativeSessionId);
     if (!file) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'The native history file is unavailable', 409);
     const content = await readContextFile(file, options.maxBytes, options.signal);
@@ -1207,7 +1288,8 @@ async function renderInput(host: NativeBackendHost, input: NativeBackendSendRequ
 }
 
 /** Enabled skills for `cwd` in the app-server's precedence order, one per name. */
-async function listSkills(transport: CodexAppServerClient, cwd: string): Promise<Array<NativeSlashItem & { path: string }>> {
+/** The enabled skills; for the 助理, only its own (`standing.ts`), whatever else the process finds. */
+async function listSkills(transport: CodexAppServerClient, cwd: string, standing?: CodexStanding): Promise<Array<NativeSlashItem & { path: string }>> {
   const response = await transport.request<{ data?: Array<{ cwd?: string; skills?: unknown[] }> }>('skills/list', { cwds: [cwd] });
   const seen = new Set<string>();
   const items: Array<NativeSlashItem & { path: string }> = [];
@@ -1215,7 +1297,7 @@ async function listSkills(transport: CodexAppServerClient, cwd: string): Promise
     for (const skill of asArray<Record<string, unknown>>(entry.skills)) {
       const name = str(skill.name);
       const path = str(skill.path);
-      if (!name || !path || skill.enabled === false || seen.has(name)) continue;
+      if (!name || !path || (standing ? !standingSkill(path, standing) : skill.enabled === false) || seen.has(name)) continue;
       seen.add(name);
       const face = asRecord(skill.interface) ?? {};
       const description = str(face.shortDescription) ?? str(skill.shortDescription) ?? str(skill.description);

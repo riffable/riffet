@@ -4,6 +4,7 @@ import { activityId } from '../../journal/activity.js';
 import type { SyncLane } from '../../../../../packages/contracts/src/sync.js';
 import type { LaneWriter, SubagentBinding, TranscriptSource, TurnEndStatus } from '../../journal/ingest.js';
 import { readCompaction } from './activities.js';
+import { isMissingThreadError } from './errors.js';
 import { messagePhase } from './drafts.js';
 import { notificationSpan, type ItemSpans } from './item-spans.js';
 import type { CodexIngestState } from './journal-space.js';
@@ -104,6 +105,10 @@ export interface CodexTranscriptOptions {
   observedChanges?: ObservedChanges;
   /** The thread the conversation follows now. */
   threadId(): string | undefined;
+  /** The threads it followed before, oldest first: each new topic (`/new`) went on in a new thread (`Session.previousNativeSessionIds`). */
+  earlierThreads?(): readonly string[];
+  /** The message that ended `threadId` and started the next thread: the `/new` the owner sent. */
+  topicAfter?(threadId: string): { commandId: string; runId: string; text: string; at: string } | undefined;
   /** A reader of the thread when one is connected; undefined while offline. */
   reader(): Promise<CodexThreadReader | undefined>;
   /** The workbench command a user item answers, by the tag the flavor echoes. */
@@ -149,6 +154,24 @@ function decode(cursor: string | null): LaneState | undefined {
   } catch { /* not one of ours */ }
   // A cursor this reader cannot place is read again from the start; what the log holds already writes nothing.
   return { phase: 'importing' };
+}
+
+/** The thread a lane's cursor was written for. */
+function cursorThread(cursor: string | null): string | undefined {
+  if (cursor === null) return undefined;
+  try { return str((JSON.parse(cursor) as CodexIngestState).threadId); } catch { return undefined; }
+}
+
+const NEW_TOPIC_BOUNDARY = 'codex-new-topic';
+/** The `nativeInputBoundary` of the message that ends `threadId` for a new topic. */
+export function newTopicBoundary(threadId: string): string { return JSON.stringify({ type: NEW_TOPIC_BOUNDARY, after: threadId }); }
+/** The thread a `nativeInputBoundary` says its message ended, when it is a new topic's. */
+export function newTopicAfter(boundary: string | undefined): string | undefined {
+  if (!boundary) return undefined;
+  try {
+    const parsed = asRecord(JSON.parse(boundary));
+    return parsed?.type === NEW_TOPIC_BOUNDARY ? str(parsed.after) : undefined;
+  } catch { return undefined; }
 }
 
 function encode(threadId: string, state: LaneState): string {
@@ -211,16 +234,28 @@ export class CodexTranscriptSource implements TranscriptSource {
 
   constructor(private readonly options: CodexTranscriptOptions) {}
 
-  identity(): string | undefined { return this.options.threadId(); }
+  /**
+   * The conversation's first thread: a new topic goes on in another thread (`/new`) without starting the lane over,
+   * whose rows of the earlier threads stay. Only a conversation that follows another thread altogether is a new identity.
+   */
+  identity(): string | undefined { return this.earlier()[0] ?? this.options.threadId(); }
+
+  /** The threads before the current one, oldest first. */
+  private earlier(): readonly string[] {
+    const current = this.options.threadId();
+    return (this.options.earlierThreads?.() ?? []).filter(id => id !== current);
+  }
 
   async pull(w: LaneWriter, signal: AbortSignal): Promise<{ caughtUp: boolean }> {
     this.main = w;
     const threadId = this.follow();
-    if (!threadId) return { caughtUp: true };
+    if (!threadId && !this.earlier().length) return { caughtUp: true };
     const reader = await this.options.reader();
     if (!reader || signal.aborted) return { caughtUp: false };
-    this.seedQuestions(reader, threadId);
-    const main = await this.readMain(w, reader, threadId, signal);
+    // A new topic can have moved the conversation to another thread while the reader came up.
+    const current = this.follow();
+    if (current) this.seedQuestions(reader, current);
+    const main = await this.readChain(w, reader, current, signal);
     const children = await this.readChildren(reader, signal);
     return { caughtUp: main && children && !signal.aborted };
   }
@@ -261,8 +296,10 @@ export class CodexTranscriptSource implements TranscriptSource {
     const threadId = this.follow();
     if (!threadId) return;
     const reader = await this.options.reader();
-    if (!reader) return;
+    if (!reader || this.follow() !== threadId) return;
     this.seedQuestions(reader, threadId);
+    // A lane still in an earlier thread is brought to this one first; its cursor names a turn this thread lacks.
+    if (this.behind(w, threadId)) { await this.readChain(w, reader, threadId, new AbortController().signal); return; }
     const serving = w.scratch ?? w;
     if (decode(serving.cursor)?.phase !== 'ready') return;
     await this.refresh(serving, reader, threadId, 0);
@@ -273,7 +310,7 @@ export class CodexTranscriptSource implements TranscriptSource {
 
   /** The thread now followed; whatever was known about another one goes. */
   private follow(): string | undefined {
-    const threadId = this.identity();
+    const threadId = this.options.threadId();
     if (threadId !== this.thread) {
       this.thread = threadId;
       this.questions = new CodexQuestionHistory();
@@ -288,6 +325,84 @@ export class CodexTranscriptSource implements TranscriptSource {
       this.repairDue = true;
     }
     return threadId;
+  }
+
+  /** Whether the main lane was last written in a thread before `current`. */
+  private behind(w: LaneWriter, current: string | undefined): boolean {
+    const at = cursorThread(w.cursor);
+    return at !== undefined && at !== current && this.earlier().includes(at);
+  }
+
+  /**
+   * Brings the main lane to the thread the conversation follows now. Each earlier thread is read to its end in
+   * turn, then the message that ended it, then the next: they are settled and do not change. A lane never read
+   * imports them from the first, while a window serves the current thread's newest turns.
+   */
+  private async readChain(w: LaneWriter, reader: CodexThreadReader, current: string | undefined, signal: AbortSignal): Promise<boolean> {
+    const earlier = this.earlier();
+    if (!earlier.length) return current ? await this.readMain(w, reader, current, signal) : true;
+    if (w.cursor === null && !w.scratch) return await this.firstChainRead(w, reader, earlier[0]!, current);
+    for (let steps = 0; steps <= earlier.length && !signal.aborted; steps += 1) {
+      // A cursor that names no thread of the conversation is read again from its first thread.
+      const at = cursorThread(w.cursor) ?? earlier[0]!;
+      if (at === current || !earlier.includes(at)) return current ? await this.readMain(w, reader, current, signal) : true;
+      if (w.scratch) {
+        const window = decode(w.scratch.cursor);
+        this.restoreAgents(w.scratch, window, 0);
+        if (current && this.repairNow() && window?.phase === 'ready') await this.refresh(w.scratch, reader, current, 0, true);
+        if (current) this.flushLive(w.scratch, current);
+      }
+      const state = decode(w.cursor) ?? { phase: 'importing' as const };
+      this.restoreAgents(w, state, 0);
+      let done: boolean;
+      try {
+        done = state.phase === 'importing'
+          ? await this.importSteps(w, reader, at, state, 0, signal)
+          : await this.refresh(w, reader, at, 0);
+      } catch (error) {
+        // A thread whose rollout is gone has nothing more to read.
+        if (!isMissingThreadError(error, at)) throw error;
+        done = true;
+      }
+      // The thread was rewritten and the lane started over, or it is not all read yet.
+      if (!done || cursorThread(w.cursor) !== at) return false;
+      const next = earlier[earlier.indexOf(at) + 1] ?? current;
+      // The next thread is still being started.
+      if (!next) return true;
+      this.leaveThread(w, at, next);
+    }
+    return false;
+  }
+
+  /** A lane never read, of a conversation that has had earlier topics: a window onto the current thread, and an import from the first. */
+  private async firstChainRead(w: LaneWriter, reader: CodexThreadReader, first: string, current: string | undefined): Promise<boolean> {
+    this.repairDue = false;
+    const page = current ? await this.readPage(reader, { threadId: current, limit: TAIL_TURNS, sortDirection: 'desc' }) : undefined;
+    const turns = [...asArray<RpcTurn>(page?.data)].reverse();
+    if (current && turns.length) await this.writeTurns(w.openScratch(), current, turns, { phase: 'ready' }, 0);
+    w.commit({ events: [], cursor: encode(first, { phase: 'importing', turns: 0 }) });
+    return false;
+  }
+
+  /**
+   * The lane has read `threadId` to its end: the message that ended it follows, as a turn of its own that started
+   * no model turn, and the lane goes on in `next`. A turn the thread left open never ends now, so it ends interrupted.
+   */
+  private leaveThread(w: LaneWriter, threadId: string, next: string): void {
+    const state = decode(w.cursor);
+    if (state?.open && w.turnEndStatus(state.open) === undefined) w.turnEnded(state.open, 'interrupted', new Date().toISOString());
+    const topic = this.options.topicAfter?.(threadId);
+    const turnId = `${threadId}:topic`;
+    if (topic) w.turnStarted(turnId, topic.at, topic.runId);
+    const events: NativeWorkbenchEvent[] = topic ? [{
+      sequence: 0, sessionId: this.options.sessionId, runId: topic.runId, type: 'user_message_chunk',
+      data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: topic.text }, commandId: topic.commandId },
+      createdAt: topic.at, nativeId: `${turnId}:web:${topic.commandId}:user`, nativeTurnId: turnId,
+    }] : [];
+    w.commit({ events, cursor: encode(next, { phase: 'ready', turns: state?.turns ?? 0 }) });
+    if (topic) w.turnEnded(turnId, 'completed', topic.at);
+    // Nothing of `next` is in the lane yet, whatever the live feed has carried.
+    this.repairDue = true;
   }
 
   private async readMain(w: LaneWriter, reader: CodexThreadReader, threadId: string, signal: AbortSignal): Promise<boolean> {
@@ -875,7 +990,8 @@ export class CodexTranscriptSource implements TranscriptSource {
   /** Writes what the live feed said since the last read into `w`, which serves; a lane being imported reads it from the thread instead. */
   private flushLive(w: LaneWriter, threadId: string): void {
     const ops = this.live;
-    if (!ops.length) return;
+    // The live feed is of the thread followed now; a read of a thread it has since left must not write it.
+    if (!ops.length || threadId !== this.thread) return;
     this.live = [];
     const state = decode(w.cursor);
     if (state?.phase !== 'ready') { this.drafts.clear(); this.repairDue = true; return; }

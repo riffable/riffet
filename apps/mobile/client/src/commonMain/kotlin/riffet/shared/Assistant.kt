@@ -21,15 +21,24 @@ fun assistantMain(project: Project?, sessions: List<Session>): Session? {
 }
 
 /**
+ * The agents the assistant runs on, first the one it starts on: those that launch it isolated from the
+ * owner's own configuration, `ASSISTANT_BACKENDS` of `packages/contracts`.
+ */
+val ASSISTANT_BACKENDS = listOf(NativeBackendId.CLAUDE, NativeBackendId.CODEX)
+
+fun isAssistantBackend(id: NativeBackendId): Boolean = id in ASSISTANT_BACKENDS
+
+/**
  * The agent the assistant's composer starts with, `assistantChoice` of `packages/contracts`: the saved
- * choice while its agent is still offered, else Claude Code where it can run. A saved provider that is
- * gone falls back to the agent's default one, and its model with it.
+ * choice while its agent is still offered and one it runs on, else the first of [ASSISTANT_BACKENDS] that
+ * can run. A saved provider that is gone falls back to the agent's default one, and its model with it.
  */
 fun assistantChoice(saved: AssistantSettings?, backends: List<NativeBackendCatalogEntry>): AssistantChoice? {
-    val backend = saved?.backendId?.let { id -> backends.firstOrNull { it.backendId == id } }
-        ?: backends.firstOrNull { it.backendId == NativeBackendId.CLAUDE && it.available }
+    val backend = saved?.backendId?.takeIf { it in ASSISTANT_BACKENDS }?.let { id -> backends.firstOrNull { it.backendId == id } }
+        ?: ASSISTANT_BACKENDS.firstNotNullOfOrNull { id -> backends.firstOrNull { it.backendId == id && it.available } }
         ?: return null
-    val kept = saved?.profileId == null || backend.profiles.any { it.id == saved.profileId }
+    // A saved provider and model belong to the saved agent only.
+    val kept = backend.backendId == saved?.backendId && (saved.profileId == null || backend.profiles.any { it.id == saved.profileId })
     return AssistantChoice(backend.backendId, saved?.profileId.takeIf { kept }, saved?.model.takeIf { kept })
 }
 
@@ -38,7 +47,9 @@ fun assistantSettings(settings: AppSettings?, backends: List<NativeBackendCatalo
     settings ?: return null
     val saved = settings.assistant
     // Before the agent list is read, the saved agent or Claude Code, so the first catalog read is the right one.
-    val choice = assistantChoice(saved, backends) ?: AssistantChoice(saved?.backendId ?: NativeBackendId.CLAUDE, saved?.profileId, saved?.model)
+    val choice = assistantChoice(saved, backends)
+        ?: saved?.backendId?.takeIf { it in ASSISTANT_BACKENDS }?.let { AssistantChoice(it, saved.profileId, saved.model) }
+        ?: AssistantChoice(ASSISTANT_BACKENDS.first(), null, null)
     return settings.withAssistantChoice(choice)
 }
 

@@ -71,8 +71,9 @@ export interface Session {
   /** Provider-owned resumable session reference. Cursor sessions mirror this into cursorSessionId for old clients. */
   nativeSessionId?: string;
   /**
-   * Earlier provider session ids of this conversation, oldest first. Claude Code starts over under a
-   * new id after repeated launch crashes; the old ids keep their transcripts readable.
+   * Earlier provider session ids of this conversation, oldest first: Claude Code starts over under a
+   * new id after repeated launch crashes or `/clear`, and Codex starts a new thread for a new topic
+   * (`/new`). The old ids keep their transcripts readable; at most eight are kept.
    */
   previousNativeSessionIds?: string[];
   /** Consecutive Claude Code launches that exited within seconds; at two, the next launch starts fresh. */

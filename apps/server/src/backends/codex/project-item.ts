@@ -48,9 +48,7 @@ export function rowTextKey(event: NativeWorkbenchEvent): string | undefined {
   return text ? `${event.type}\u0000${text}` : undefined;
 }
 
-export function userMessageText(item: RpcItem): string {
-  return asArray<Record<string, unknown>>(item.content).filter(part => part.type === 'text').map(part => str(part.text) ?? '').join('');
-}
+export function userMessageText(item: RpcItem): string { return userItemText(item); }
 
 export function projectCodexItem(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'startedAt' | 'status' | 'items'>, context: CodexItemContext): NativeWorkbenchEvent[] {
   const { threadId, runId, commandId } = context;

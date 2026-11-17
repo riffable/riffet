@@ -24,7 +24,8 @@ const IGNORED = '.claude/settings.local.json\n';
  * What is kept under git: the 助理's rules, its notes and its skills. Anything else it leaves in the directory
  * (a download, an MCP file holding a token) stays out of a history that deleting the file would not clean.
  */
-const COMMITTED = ['AGENTS.md', 'CLAUDE.md', USER_FILE, MEMORY_DIR, '.claude/skills', 'packs', '.gitignore'];
+const SKILLS_DIR = '.claude/skills';
+const COMMITTED = ['AGENTS.md', 'CLAUDE.md', USER_FILE, MEMORY_DIR, SKILLS_DIR, 'packs', '.gitignore'];
 /**
  * Capability packs (docs/ASSISTANT.md §8.2): each folder here is a Claude Code plugin the owner put in (skills, the MCP
  * servers they need), loaded with Riffet's own. A pack's `memory.md` seeds a topic file of the same name once.
@@ -47,6 +48,10 @@ export interface AssistantHome {
   /** The directory's own MCP servers, when it declares any. */
   mcpConfigFiles(): string[];
   protectedFiles: string[];
+  /** What every session starts with, in order: the rules, the owner's profile, the memory index (`CLAUDE.md` and the CLI's memory, for Claude Code). */
+  instructionFiles: string[];
+  /** The skills the owner added. */
+  skillsDir: string;
 }
 
 /** The files a conversation of the 助理 starts with; each is written only when missing. */
@@ -64,7 +69,10 @@ export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHom
   const pluginDir = join(runtimeDir, 'riffet');
   writeSkillPlugin(pluginDir);
   const mcp = join(cwd, '.mcp.json');
-  return { systemPromptFile, memoryDir, pluginDir, packDirs: () => packs(cwd, memoryDir), mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles: PROTECTED.map(file => join(cwd, file)) };
+  return {
+    systemPromptFile, memoryDir, pluginDir, packDirs: () => packs(cwd, memoryDir), mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles: PROTECTED.map(file => join(cwd, file)),
+    instructionFiles: [join(cwd, 'AGENTS.md'), join(cwd, USER_FILE), join(memoryDir, MEMORY_INDEX)], skillsDir: join(cwd, SKILLS_DIR),
+  };
 }
 
 /** The pack folders that are plugins; each one's memory seed is written once, beside the index, as `<pack>.md`. */

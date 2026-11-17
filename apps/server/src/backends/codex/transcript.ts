@@ -3,6 +3,7 @@ import { toolImageContent } from '../shared/tool-images.js';
 import type { RpcTurn, RpcItem } from './types.js';
 import { firstLine, str, finiteToken, asRecord, asArray } from './util.js';
 import { splitUnifiedDiff, type DiffHunk } from '../shared/unified-diff.js';
+import { withoutStandingContext } from './standing.js';
 
 /** When an item began and ended (`item-spans.ts`). */
 export interface ItemSpan { startedAt: string; completedAt: string }
@@ -378,8 +379,9 @@ export function taskNotice(text: string): Record<string, unknown> | undefined {
     ...(result ? { detail: result } : {}),
   };
 }
+/** What the user wrote: the context Riffet sends the 助理 ahead of it (`standing.ts`) is not theirs. */
 export function userItemText(item: RpcItem): string {
-  return asArray<Record<string, unknown>>(item.content).filter(part => part.type === 'text').map(part => str(part.text) ?? '').join('');
+  return withoutStandingContext(asArray<Record<string, unknown>>(item.content).filter(part => part.type === 'text').map(part => str(part.text) ?? '').join(''));
 }
 
 /**

@@ -70,6 +70,9 @@ struct NewTaskOptions: View {
     /// A quick chat has the chat backend's models and nothing else; [selectedModel] is the one it will start with.
     var quickChat = false
     var selectedModel: String?
+    /// The assistant's composer, which offers only the agents that isolate it.
+    var assistant = false
+    private var agents: [NativeBackendCatalogEntry] { assistant ? workbench.backends.filter { AssistantKt.isAssistantBackend(id: $0.backendId) } : workbench.backends }
     @State private var reader = ExtensionsReader()
     var body: some View {
         Group {
@@ -104,7 +107,7 @@ struct NewTaskOptions: View {
             Section {
                 NavigationLink {
                     RiffetList {
-                        ForEach(workbench.backends, id: \.backendId) { entry in
+                        ForEach(agents, id: \.backendId) { entry in
                             Button {
                                 guard entry.available else { return }
                                 draft.backendName = entry.backendId.name
@@ -113,7 +116,7 @@ struct NewTaskOptions: View {
                                 ConfigurationChoiceRow(title: entry.label, markBackend: entry.backendId.name, detail: entry.available ? nil : entry.reason ?? String(localized: "此 Mac 上不可用", bundle: .riffet), selected: entry.backendId == backend)
                             }.disabled(!entry.available).foregroundStyle(palette.fg).accessibilityIdentifier("agentChoice.\(entry.backendId.name)")
                         }
-                        if workbench.backends.isEmpty { Text(workbench.backendError ?? String(localized: "尚未读取到 Agent", bundle: .riffet)).foregroundStyle(palette.fg2) }
+                        if agents.isEmpty { Text(workbench.backendError ?? String(localized: "尚未读取到 Agent", bundle: .riffet)).foregroundStyle(palette.fg2) }
                     }.navigationTitle(String(localized: "选择 Agent", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                 } label: { SettingsRowLabel(title: String(localized: "Agent", bundle: .riffet), value: catalog?.label ?? workbench.backends.first { $0.backendId == backend }?.label ?? backend.name.capitalized) }
             }

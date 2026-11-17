@@ -1,6 +1,6 @@
 # Riffet 助理
 
-日期：2026-11-16。状态：§2–§6 的服务端与 Web 已实现，Claude Code 2.1.322 上用真实 CLI 验证（`scripts/probe-assistant-e2e.ts`）；§8.1 Riffet 自带的 skill 已实现并同样验证；§7 后台运行的服务端与 Web 已实现，后台运行用真实 CLI 验证（场景 `r`）；Mac 的个人助理页、手机的「助理」标签、飞书私聊已实现，编译通过，未在设备上看过；§8.2 的能力包（一个自带的包）和 §5.5 的 `/new` 已实现，用真实 CLI 验证（场景 `p`）。任务看板与跟进的规则在 [TASK-BOARD.md](TASK-BOARD.md)。
+日期：2026-11-16。状态：§2–§6 的服务端与 Web 已实现，Claude Code 2.1.322 上用真实 CLI 验证（`scripts/probe-assistant-e2e.ts`）；§8.1 Riffet 自带的 skill 已实现并同样验证；§7 后台运行的服务端与 Web 已实现，后台运行用真实 CLI 验证（场景 `r`）；Mac 的个人助理页、手机的「助理」标签、飞书私聊已实现，编译通过，未在设备上看过；§8.2 的能力包（一个自带的包）和 §5.5 的 `/new` 已实现，用真实 CLI 验证（场景 `p`）；Codex 的 `/new` 和隔离（§4.1）在 codex-cli 0.167.2 上用真实 CLI 验证（`scripts/probe-codex-assistant.ts`）。任务看板与跟进的规则在 [TASK-BOARD.md](TASK-BOARD.md)。
 
 ## 1. 定位
 
@@ -42,7 +42,7 @@
 - `memory/` 是 Claude Code 自带记忆机制的目录：启动设置里把 `autoMemoryDirectory` 指到这里，CLI 启动时加载索引，压缩后重新加载。
 - 系统提示（`apps/server/src/prompts/assistant-system.md`）写到目录之外的 `<数据目录>/assistant-runtime/system-prompt.md`，Riffet 自带的 skill 写到同一目录下的 `riffet/`（§8）。两者每次服务端启动重写，不在助理目录里，不进它的提交历史。
 - 助理的一轮结束（包括被用户停止）5 秒后，服务端在目录里提交一次（`assistant/home.ts`）。只提交 `AGENTS.md`、`CLAUDE.md`、`USER.md`、`memory/`、`.claude/skills/` 和 `.gitignore`；其中整个被删掉的路径，删除也记进这次提交。助理留在目录里的其他文件（下载的内容、带令牌的 `.mcp.json`）不进历史。有改动才提交；主机没有 git 时不提交。提交历史用于查看和撤销助理对自己文件的改动。
-- 用户的文件助理改不了：启动设置对 `AGENTS.md`、`CLAUDE.md`、`.mcp.json`、`.claude/settings.json`、`.claude/settings.local.json` 加了 `Edit` 拒绝规则，在任何权限模式下都生效；系统提示也要求它只提出修改建议。规则拦的是 CLI 的文件工具，拦不住 shell 命令。
+- 用户的文件助理改不了：启动设置对 `AGENTS.md`、`CLAUDE.md`、`.mcp.json`、`.claude/settings.json`、`.claude/settings.local.json` 加了 `Edit` 拒绝规则，在任何权限模式下都生效；系统提示也要求它只提出修改建议。规则拦的是 CLI 的文件工具，拦不住 shell 命令。Codex 上的做法见 §4.1。
 
 ## 3. 主对话
 
@@ -105,7 +105,7 @@
 
 ## 4. 运行时
 
-底层是 Claude Code，由 `AppSettings.assistant` 选 Provider 和模型。这项设置为空时，个人助理页在 Claude Code 可用的前提下从它开始，不跟随新会话页上次用的 Agent（`work-items/assistant.ts` 的 `assistantChoice`）；用户在页面上改选别的 Agent 后以所选为准。驱动层通过 `NativeBackendHost.standing`（`backends/types.ts`）取得助理项目的启动设置，其他后端忽略它，按普通会话运行。
+底层默认是 Claude Code，也可以选 Codex（§4.1），由 `AppSettings.assistant` 选 Agent、Provider 和模型。只有这两个 Agent 实现了下面的隔离，助理也只在这两个上运行（`packages/contracts` 的 `ASSISTANT_BACKENDS`）：各端助理页的 Agent 菜单只列它们；服务端拒绝在助理项目里用其他 Agent 建会话，也拒绝给其他 Agent 上已有的助理会话发消息（`ASSISTANT_BACKEND_UNSUPPORTED`）；设置里存的其他 Agent 读出时连同 Provider 和模型一起丢掉。设置为空时，个人助理页从这两个里第一个可用的开始，不跟随新会话页上次用的 Agent（`assistantChoice`）；用户在页面上改选后以所选为准。驱动层通过 `NativeBackendHost.standing`（`backends/types.ts`）取得助理项目的启动设置。
 
 助理项目里的会话启动时多出这些参数和设置：
 
@@ -123,6 +123,32 @@
 隔离不改变配置目录（`CLAUDE_CONFIG_DIR`），所以登录凭据沿用所选 Provider 的，不需要为助理另外登录。用户设置文件（配置目录下的 `settings.json`）里与连接模型有关的几项由服务端读出，写进这次启动的设置里（`claude/launch.ts` 的 `readOwnerConnection`）：`env`、`apiKeyHelper`、`model`、`awsAuthRefresh`、`awsCredentialExport`、`forceLoginMethod`。不少用户把接口地址和令牌放在 `env` 里，不带过来 CLI 就无法连接。该文件的其他内容（hook、插件、权限）不带。优先级：Provider 自己配置的地址或密钥最高，其次是助理目录自己的设置文件，最后才是用户设置文件。扩展管理页列出助理加载的 skill 和 MCP 时，探测进程带同样的隔离参数（`claude/index.ts` 的 `loadedExtensions`）。
 
 配置隔离不是沙箱：CLI 的文件和命令工具仍能访问主机上的其他路径。
+
+### 4.1 Codex
+
+选 Codex 时，同样的隔离在每次 `thread/start` 和 `thread/resume` 时按 thread 交给 app-server（`codex/standing.ts`），不改 `CODEX_HOME`，登录和会话记录沿用用户的。codex-cli 0.167.2 上用真实 CLI 按模型实际收到的请求核对过（`scripts/probe-codex-assistant.ts`）。
+
+| 参数或设置 | 作用 |
+| --- | --- |
+| `baseInstructions` | 用助理的系统提示替换 Codex 自带的编码提示 |
+| `project_doc_max_bytes = 0`，`developerInstructions` | 目录里的 `AGENTS.md` 不再作为项目文件读，改为和 `USER.md`、记忆索引一起放进 developer 指令，每次启动时从目录读出 |
+| `skills/extraRoots/set` | 把 Riffet 自带的 skill、能力包和 `.claude/skills/` 设为进程的额外 skill 目录。Codex 认得 Claude Code 的插件布局，列为 `riffet:<名称>`、`<包>:<名称>` |
+| `skills.config` | `skills/list` 找到的其余 skill（用户的、插件的）按路径逐个关掉 |
+| `skills.bundled.enabled = false`，`features.plugins = false`，`features.apps = false` | 去掉 Codex 自带的 skill、插件（连同插件的 skill 和 hook）和 ChatGPT apps |
+| `mcp_servers.<名称>.enabled = false` | 用户 `config.toml` 里的每个 MCP 服务器都关掉，只留 Riffet 的 |
+| `mcp_servers.<名称>` | 目录的 `.mcp.json` 和能力包的 `.mcp.json` 里的服务器，转成 Codex 的写法，只在这个 thread 里声明。`${VAR}`、`${VAR:-默认值}` 和插件的 `${CLAUDE_PLUGIN_ROOT}` 由服务端展开，Codex 不展开它们 |
+| `default_permissions`，`permissions.riffet_assistant` | 在 workspace-write 预设上，把 §2 的用户文件和 `packs/` 设为只读。文件工具和 shell 都写不进去；确认模式下 Codex 为此发起的批准请求由服务端直接拒绝，不交给用户 |
+| `model_auto_compact_token_limit = 200000` | 同 `--autocompact`：上下文到 20 万 token 时压缩 |
+| 权限 `dontAsk` | `approvalPolicy: never` 加 workspace-write 沙箱：需要更多权限的操作直接失败，不停下来问。与 Claude Code 的同名权限同义，后台运行用它（§6） |
+| 消息前的 `<riffet-context>` | §5.1 的时间和离开期间的结果，放在用户这条消息的最前面；时间线、分享和搜索读出时去掉 |
+
+斜杠菜单、扩展管理页和发送时的 `/skill` 也只认上面这些 skill。扩展管理页的项目一栏按 Claude Code 的布局列 `.claude/skills/` 和 `.mcp.json`，不列这个 thread 关掉的 `.agents/skills/`、`.codex/`；能力包在设置里管理，它们的 skill 和 MCP 列在已加载的一栏。
+
+§5.1 的告知没有 hook 可用：Codex 的 hook 要用户逐个确认信任，所以改由服务端看 app-server 的事件，把内容放进下一条消息的 `<riffet-context>`。新 thread（不是 `/new` 换出的）的第一条消息带上换段时的内容；`contextCompaction` 开始时调用 `compacting`，结束后的下一条消息带上压缩后的内容。
+
+- 现状：用户的全局 `~/.codex/AGENTS.md` 仍会加载，Codex 没有关掉它的开关（只能换 `CODEX_HOME`，会连登录一起换掉）；developer 指令说明它是写给编程会话的、不必遵守。用户 `hooks.json` 里的 hook 仍会运行：Riffet 自己的命令观测也是 hook，hook 不能整体关掉。
+- 现状：用户文件只读只在 workspace-write 下成立（默认、`dontAsk`）。完全访问没有沙箱，不保护（Claude Code 的拒绝规则在任何模式下都生效）。回合一旦带了别的沙箱（切到只读或完全访问），它会一直留在已加载的 thread 上，压过权限配置；切回默认后服务端只能给不带只读文件的预设，直到 thread 重新加载（`/new`、服务重启）。按回合选权限配置要 app-server 的实验接口，Riffet 没有开。
+- 现状：压缩后的告知要等下一条消息才送到。Codex 在回合开始前压缩时，这一回合的模型不知道刚压缩过；压缩后它也不重读规则和记忆索引，developer 指令仍是 thread 加载时读出的那份。`.mcp.json` 里的 SSE 服务器 Codex 不支持，略过。改了规则、skill 或 `.mcp.json` 后，已加载在 app-server 里的 thread 要换话题（`/new`）或重新启动才用上。
 
 ## 5. 长对话
 
@@ -164,11 +190,14 @@ Claude 后端连续两次在启动后 30 秒内退出时，放弃 `--resume`，�
 
 主对话只有一条（§3），所以「从头开始」不是新开一条对话，而是在这条对话里开一个新话题。
 
-- 用户在主对话里发 `/new`：服务端交给 CLI 的是 `/clear`（`AssistantStanding.rewrite`，在 Claude 后端的发送里调用），时间线上记的是用户打的 `/new`。CLI 换一个原生会话（旧 id 进 `previousNativeSessionIds`），模型的上下文从空开始，只有 `AGENTS.md`、`USER.md` 和记忆索引；`/clear` 换出的原生会话不触发 §5.1 的「新的原生会话」告知，上一个话题不会被带过来。
+- 用户在主对话里发 `/new`：服务端判定它是新话题（`AssistantStanding.newTopic`），由后端各自执行，时间线上记的是用户打的 `/new`。两种后端都换一个原生会话（旧 id 进 `previousNativeSessionIds`），模型的上下文从空开始，上一个话题不会被带过来。
+  - Claude Code：交给 CLI 的是 `/clear`，同一个 CLI 换到新的 session id，上下文只有 `AGENTS.md`、`USER.md` 和记忆索引；`/clear` 换出的原生会话不触发 §5.1 的「新的原生会话」告知。
+  - Codex：app-server 没有原地清空 thread 的接口，所以在同一个 app-server 上新开一个 thread（`CodexBackendAdapter.newTopic`）：先把旧 thread 读进 journal、停掉显示它的 TUI 并 `thread/unsubscribe`，再开新 thread、拉起新的 TUI。不起模型回合，这条消息在发送时就算完成（`send` 返回 `settled`）。还没发过消息的 thread 不换（它没有上下文，也不落盘）。
 - 对话本身不变：历史留在原处，助理仍能用 `history_search` 查到以前的话题。
-- 主对话的斜杠菜单里有 `/new`（`/api/backends/:id/slash` 带主对话的 `sessionId` 时加上）；飞书私聊里的 `/new` 同样是新话题，回「已开始新话题，记忆保留」。
+- 主对话的斜杠菜单里有 `/new`（`/api/backends/:id/slash` 带主对话的 `sessionId`、且后端的 trait 有 `startsNewTopic` 时加上，目前是 Claude Code 和 Codex）；飞书私聊里的 `/new` 同样是新话题，回「已开始新话题，记忆保留」。
 - 为什么要有：长对话在提示缓存过期后，每次唤醒都按未缓存价格重读整段上下文；换话题是用户自己能做的最直接的省钱办法。
-- 接上新会话：CLI 执行 `/clear` 后以新的 `session_id` 发 `SessionStart`（`source: clear`），运行时记下它（`clearedTo`）。新 id 还没有登记的处理方，hook 命令带着发起它的 Riffet 会话（`--owner`），hook 通道按这个会话找到原来的运行时（`ClaudeHookBridge`）；下一条消息开始时，Claude 后端把旧 id 移进 `previousNativeSessionIds`、记下新 id，换一个运行时接管同一个终端里的 CLI。这是 Claude 后端的通用处理，项目会话里用户直接发 `/clear` 也一样。
+- Codex 的时间线跨 thread 读（`codex/transcript-source.ts`）：lane 的身份是对话的第一个 thread，换话题不重建 lane；游标记着读到哪个 thread，读完一个旧 thread 后写入结束它的 `/new`（发送时 fence 里记了 `nativeInputBoundary`，指明它结束的 thread），再进下一个。从头重读时先给当前 thread 开尾部窗口，再从第一个 thread 依次导入。分享和会话引用读 journal，因为它按顺序存着所有 thread。
+- 接上新会话（Claude Code）：CLI 执行 `/clear` 后以新的 `session_id` 发 `SessionStart`（`source: clear`），运行时记下它（`clearedTo`）。新 id 还没有登记的处理方，hook 命令带着发起它的 Riffet 会话（`--owner`），hook 通道按这个会话找到原来的运行时（`ClaudeHookBridge`）；下一条消息开始时，Claude 后端把旧 id 移进 `previousNativeSessionIds`、记下新 id，换一个运行时接管同一个终端里的 CLI。这是 Claude 后端的通用处理，项目会话里用户直接发 `/clear` 也一样。
 - 现状：时间线上只是一条 `/new` 消息，没有单独的分隔样式。`previousNativeSessionIds` 最多保留 8 段，换过 8 次以上话题后，最早的话题不再出现在时间线上。
 
 ## 6. 工具
@@ -198,7 +227,7 @@ Claude 后端连续两次在启动后 30 秒内退出时，放弃 `--resume`，�
 
 第三级由工具集保证：没有对应的工具。前两级目前靠提示词约束。给其他会话发消息只有跟进运行的 `task_continue`、`task_rework`，只能发给它所跟进的任务，连续两次没有进展后拒绝。
 
-后台运行以 `dontAsk` 权限启动：不停下来问，需要许可的工具直接拒绝；预先允许的只有读文件、在助理目录里改文件、网页读取和搜索，以及 Riffet MCP（`StandingLaunch.allow`）。
+后台运行以 `dontAsk` 权限启动：不停下来问，需要许可的工具直接拒绝；预先允许的只有读文件、在助理目录里改文件、网页读取和搜索，以及 Riffet MCP（`StandingLaunch.allow`）。Codex 上没有逐个工具的允许表，`dontAsk` 是 workspace-write 沙箱里不问（§4.1）：沙箱允许的都直接做，其余失败。
 
 ## 7. 后台运行
 
@@ -314,7 +343,7 @@ skill 按场景划分：文件名里的场景决定它提供给哪类会话，`r
 
 skill 只写做法和边界，不替代工具集：对应的工具没有列给这条对话时（设备未授权、插件未启用），skill 的正文要求照实告诉用户缺什么。
 
-交付方式：服务端启动时把这些文件按 Claude Code 的插件布局写到 `<数据目录>/assistant-runtime/riffet/`（`.claude-plugin/plugin.json` 和 `skills/<名称>/SKILL.md`，`assistant/home.ts` 的 `writeSkillPlugin`），启动助理时用 `--plugin-dir` 加载，CLI 把它们列为 `riffet:<名称>`。目录每次启动先清空再写，服务端升级后内容随之更新，删掉的 skill 不会残留。它在助理目录之外，助理的文件工具改不到自己的做法，也不会和用户在 `.claude/skills/` 里同名的 skill 冲突。
+交付方式（Codex 读同一个目录，见 §4.1）：服务端启动时把这些文件按 Claude Code 的插件布局写到 `<数据目录>/assistant-runtime/riffet/`（`.claude-plugin/plugin.json` 和 `skills/<名称>/SKILL.md`，`assistant/home.ts` 的 `writeSkillPlugin`），启动助理时用 `--plugin-dir` 加载，CLI 把它们列为 `riffet:<名称>`。目录每次启动先清空再写，服务端升级后内容随之更新，删掉的 skill 不会残留。它在助理目录之外，助理的文件工具改不到自己的做法，也不会和用户在 `.claude/skills/` 里同名的 skill 冲突。
 
 默认规则（`prompts/assistant.md`）只保留总的要求和限制，具体做法指向对应的 skill。用户改过 `AGENTS.md` 的，不随服务端更新（§2）。
 
@@ -383,5 +412,4 @@ skill 只写做法和边界，不替代工具集：对应的工具没有列给�
 - 委托的订阅源目前只有 GitHub 发版和网页内容。网页按去掉标签后的文字比对，页面上的时间戳、计数这类每次都变的内容会让它每次都触发；需要时再加按选择器截取或 RSS。
 - 网页订阅由服务端抓取，可以访问服务端所在网络里的地址。助理用自己的网页工具本来也能访问，但如果以后对外开放订阅，要限制目标地址。
 - 「先问用户」一级里「启动会改代码的任务」可以由设置「开始任务前：都先问我」改为服务端强制（`AppSettings.assistant.dispatch = 'all'`：`task_create` 的 `start` 不生效，`task_start` 拒绝）。「向 Riffet 之外发送」发生在 CLI 自己的工具里（shell、网页），服务端拦不到，仍靠提示词；后台运行以 `dontAsk` 启动，这类工具直接被拒（§6）。
-- 其他后端（Codex 等）当助理时的隔离与告知：目前只有 Claude Code 实现了 `standing`。 Codex 的对应做法（来自官方文档，未实测）：`skills.bundled.enabled = false` 去掉自带的 skill，`[[skills.config]]` 按名字或路径关单个 skill，`model_instructions_file` 替换系统提示，`CODEX_HOME` 换目录可去掉用户级配置，但登录、MCP 和历史也一并去掉；用户主目录下 `.agents/skills` 里的 skill 不随 `CODEX_HOME` 变化，没有找到整体关闭的开关。
 - 归档的旧主对话和改版前按话题建的会话只能通过搜索打开。服务端已拒绝客户端在主对话还能打开时在助理项目里建第二条会话（`ASSISTANT_CONVERSATION_EXISTS`，`assertNoOtherConversation`）；是否为旧主对话提供「以前的对话」入口，看使用后的需要。

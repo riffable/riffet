@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { riffetSkillEntries, scopeInEffect } from './riffet-skills.js';
+import { riffetSkillEntries, scopeInEffect, standingCodexProject } from './riffet-skills.js';
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -237,6 +237,8 @@ function configTargets(ctx: ExtensionContext, scope: SourceRoot['scope'], role: 
   if (role === 'claude-global') return [{ relative: '.claude.json', kind: 'mcp' }];
   if (role !== 'agent') return [];
   if (ctx.layout) return ctx.layout.configFiles[scope];
+  const standing = scope === 'project' ? standingCodexProject(ctx) : undefined;
+  if (standing) return [{ relative: standing.mcp, kind: 'mcp' }];
   switch (ctx.backendId) {
     case 'codex': return scope === 'project' ? [{ relative: '.codex/config.toml', kind: 'config' }, { relative: '.codex/hooks.json', kind: 'hook' }] : [{ relative: 'config.toml', kind: 'config' }, { relative: 'hooks.json', kind: 'hook' }];
     case 'claude': return scope === 'project'
@@ -261,6 +263,8 @@ function markdownDirectories(ctx: ExtensionContext, source: Pick<SourceRoot, 'sc
   if (role === 'pi-shared-skills') return kind === 'skill' ? ['.agents/skills'] : [];
   if (role !== 'agent') return [];
   if (ctx.layout) return ctx.layout.directories[scope][kind];
+  const standing = scope === 'project' ? standingCodexProject(ctx) : undefined;
+  if (standing) return kind === 'skill' ? [standing.skill] : [];
   const layouts: Partial<Record<ExtensionContext['backendId'], Record<'user' | 'project', Record<'skill' | 'rule' | 'command', string[]>>>> = {
     codex: {
       user: { skill: ['skills'], rule: ['rules'], command: ['prompts'] },
@@ -290,6 +294,7 @@ function markdownDirectories(ctx: ExtensionContext, source: Pick<SourceRoot, 'sc
 function pluginDirectories(ctx: ExtensionContext, scope: SourceRoot['scope'], role: SourceRoot['role']): string[] {
   if (role !== 'agent') return [];
   if (ctx.layout) return ctx.layout.directories[scope].plugin;
+  if (scope === 'project' && standingCodexProject(ctx)) return [];
   switch (ctx.backendId) {
     case 'codex': return scope === 'project' ? ['.codex/plugins'] : ['plugins'];
     case 'claude': return scope === 'project' ? ['.claude/plugins'] : ['plugins'];
@@ -307,6 +312,11 @@ function createTargetList(ctx: ExtensionContext, source: SourceRoot): ExtensionC
   if (source.role === 'pi-shared-skills') return [];
   if (source.role !== 'agent') return [];
   if (ctx.layout) return ctx.layout.create[scope].map(target => ({ ...target, id: `${scope}:${target.id}`, scope, directory: target.directory === '.' ? '' : target.directory }));
+  const standing = scope === 'project' ? standingCodexProject(ctx) : undefined;
+  if (standing) return [
+    { id: 'project:skill', label: 'Skill', kind: 'skill', scope, directory: standing.skill },
+    { id: 'project:mcp', label: 'Project MCP servers', kind: 'mcp', scope, directory: '', fileName: standing.mcp },
+  ];
   const skillDir: Partial<Record<ExtensionContext['backendId'], string>> = scope === 'project'
     ? { codex: '.agents/skills', claude: '.claude/skills', droid: '.factory/skills', pi: '.pi/skills' }
     : { codex: 'skills', claude: 'skills', droid: 'skills', traex: 'skills', pi: 'skills' };

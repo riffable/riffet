@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -515,13 +515,16 @@ function validateAssistant(raw: unknown): AssistantSettings {
   const values = raw as Record<string, unknown>;
   if (Object.keys(values).some(key => !['backendId', 'profileId', 'model', 'timeZone', 'supervision', 'consolidation', 'dailyRuns', 'dispatch'].includes(key))) throw new AppError('INVALID_SETTINGS', 'assistant contains an unknown field');
   const result: AssistantSettings = {};
-  if (values.backendId !== undefined) {
-    if (typeof values.backendId !== 'string' || !isNativeBackendId(values.backendId) || values.backendId === 'chat') throw new AppError('INVALID_SETTINGS', 'assistant.backendId is invalid');
+  // An agent the 助理 no longer runs on (docs/ASSISTANT.md §4), saved before that, is dropped with its provider and
+  // model rather than failing the settings: the 助理 goes back to its default agent (`assistantChoice`).
+  const retired = typeof values.backendId === 'string' && isNativeBackendId(values.backendId) && !isAssistantBackend(values.backendId);
+  if (values.backendId !== undefined && !retired) {
+    if (typeof values.backendId !== 'string' || !isNativeBackendId(values.backendId)) throw new AppError('INVALID_SETTINGS', 'assistant.backendId is invalid');
     result.backendId = values.backendId as NativeBackendId;
   }
   for (const key of ['profileId', 'model'] as const) {
     const value = values[key];
-    if (value === undefined) continue;
+    if (value === undefined || retired) continue;
     if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `assistant.${key} is invalid`);
     result[key] = value;
   }

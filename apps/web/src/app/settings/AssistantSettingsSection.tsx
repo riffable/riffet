@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { ASSISTANT_BUDGET, assistantChoice, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
+import { ASSISTANT_BUDGET, assistantChoice, isAssistantBackend, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
 import { Segmented, Select, Switch } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -45,7 +45,7 @@ export function AssistantSettingsSection() {
 
   // The 助理's model, from every provider of its agent, as the composer offers them; its background runs use it too.
   const choice = assistantChoice(assistant, backends);
-  const { picker, pick } = useAgentModelChoice({ projectId, backends, choice });
+  const { picker, pick } = useAgentModelChoice({ projectId, backends: backends.filter((entry) => isAssistantBackend(entry.backendId)), choice });
   const backend = backends.find((entry) => entry.backendId === choice?.backendId);
   const pickModel = (id: string) => {
     const picked = pick(id);

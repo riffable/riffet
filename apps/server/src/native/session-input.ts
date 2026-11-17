@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders } from 'node:http';
-import type { NativeBackendId, NativeSessionInput, Project } from '../../../../packages/contracts/src/index.js';
+import { isAssistantBackend, type NativeBackendId, type NativeSessionInput, type Project } from '../../../../packages/contracts/src/index.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeBackendService } from '../backends/service.js';
 import { AppError, requireString } from '../errors.js';
@@ -41,6 +41,8 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   const defaultBackendId=quickChat?'chat':defaultBackendForClient(headers,savedDefaultBackendId(savedSettings),nativeBackends.offeredBackendIds());
   const backendId:NativeBackendId=body.backendId===undefined?defaultBackendId as NativeBackendId:isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
   if(quickChat!==(backendId==='chat'))throw new AppError('INVALID_BACKEND',quickChat?'Only a quick chat runs here':'A quick chat has no project');
+  // The 助理 runs only where it is isolated (docs/ASSISTANT.md §4); on another agent it would have the owner's configuration.
+  if(project.system==='assistant'&&!isAssistantBackend(backendId))throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED','The personal assistant runs on Claude Code or Codex');
   const defaults=savedSettings.nativeBackendDefaults?.[backendId];
   const requestedProfileId=body.backendProfileId===undefined?defaults?.profileId:requireString(body.backendProfileId,'backendProfileId',200);
   const selectedProfile=nativeBackends.catalog.validateProfile(backendId,requestedProfileId);

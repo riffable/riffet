@@ -53,7 +53,7 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const {project,session}=queryContext(request);
     const catalog=await nativeBackends.catalog.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
     // The 个人助理's main conversation starts a new topic in place of a new conversation (docs/ASSISTANT.md §5.5).
-    if(project?.system!=='assistant'||!session||project.mainSessionId!==session.id)return catalog;
+    if(project?.system!=='assistant'||!session||project.mainSessionId!==session.id||!nativeBackends.catalog.traits(request.params.id).startsNewTopic)return catalog;
     return {...catalog,items:[{name:NEW_TOPIC.slice(1),description:'Start a new topic: the context is cleared, memory stays',kind:'command' as const},...catalog.items.filter(item=>item.name!==NEW_TOPIC.slice(1))]};
   });
   app.get<{Params:{id:string}}>('/api/backends/:id/command-observation',async(request)=>{

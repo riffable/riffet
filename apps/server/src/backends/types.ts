@@ -50,6 +50,9 @@ export interface NativePtyLaunchSpec {
   reuseLive?: boolean;
 }
 
+/** How many earlier provider sessions a conversation keeps readable (`Session.previousNativeSessionIds`). */
+export const MAX_PREVIOUS_NATIVE_SESSIONS = 8;
+
 /** Values that identify the native execution endpoint whose input is about to be sent. */
 export interface NativeDispatchBinding {
   backendId?: NativeBackendId;
@@ -200,6 +203,13 @@ export interface StandingLaunch {
   compactAtTokens: number;
   /** Permission rules allowed without asking, for a conversation nobody answers (the 助理's background runs). */
   allow?: string[];
+  /**
+   * For a CLI that reads none of the directory's Claude Code files (Codex), which Claude Code reads itself: what its
+   * `CLAUDE.md` and memory bring into every session, in order (the rules, the owner's profile, the memory index)...
+   */
+  instructionFiles: string[];
+  /** ...and the folder of the skills the owner added, one `<name>/SKILL.md` each. */
+  skillsDir: string;
 }
 
 /** `prompt`: a message is about to be read. `start`: a newly launched CLI session, with no history of its own. `compact`: the history was just summarized. */
@@ -212,8 +222,11 @@ export interface NativeStandingHost {
   context(sessionId: string, moment: StandingMoment): string | undefined;
   /** The conversation's CLI is about to summarize it on its own. */
   compacting?(sessionId: string): void;
-  /** What the CLI is given instead of a message the owner typed (`/new` → `/clear`); undefined sends it as typed. */
-  rewrite?(sessionId: string, text: string): string | undefined;
+  /**
+   * Whether the message starts a new topic (docs/ASSISTANT.md §5.5): the model's context starts over in the same
+   * conversation, each driver in its own way (Claude Code's `/clear`, a new Codex thread).
+   */
+  newTopic?(sessionId: string, text: string): boolean;
 }
 
 /** A stdio MCP server for one conversation's CLI: the Riffet shim and its credential file. */
@@ -303,6 +316,8 @@ export interface NativeBackendTraits {
   acceptsInputWhileBusy?: boolean;
   /** A slash command is answered in the CLI's own pane: its successful submission completes the run. */
   settlesSlashOnSubmit?: boolean;
+  /** A standing conversation's new topic (`NativeStandingHost.newTopic`) is carried out: the model's context starts over. */
+  startsNewTopic?: boolean;
   /** The provider's prompt echo carries no command id, so a receipt is matched by text after the captured boundary. */
   untaggedEcho?: boolean;
   /** A hook reports each turn's end against the active turn, so a run whose turn was hooked waits for that outcome. */
@@ -559,7 +574,8 @@ export interface NativeBackendDriver {
 
   /** `initialPrompt` is only supplied to backends whose capabilities declare `supportsInitialPromptArgs`. */
   openOrResume(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, options?: NativeBackendOpenOptions): Promise<NativeBackendOpenResult>;
-  send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void>;
+  /** `settled`: the driver carried the message out itself and no native turn follows; its run completes now. */
+  send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void | { settled: true }>;
   /** Append to exactly this active turn; never starts a turn or falls back to a queued send. */
   steer?(host: NativeBackendHost, request: NativeBackendSendRequest & { target: NativeTurnTarget }): Promise<void | { deferred: true }>;
   /**

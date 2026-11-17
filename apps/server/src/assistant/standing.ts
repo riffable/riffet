@@ -59,6 +59,7 @@ export class AssistantStanding implements NativeStandingHost {
     const home = this.deps.home();
     return {
       systemPromptFile: home.systemPromptFile, memoryDir: home.memoryDir, mcpConfigFiles: home.mcpConfigFiles(), pluginDirs: [home.pluginDir, ...home.packDirs()], protectedFiles: home.protectedFiles, compactAtTokens: COMPACT_AT_TOKENS,
+      instructionFiles: home.instructionFiles, skillsDir: home.skillsDir,
       ...(session?.origin?.kind === 'assistant' ? { allow: RUN_ALLOWED } : {}),
     };
   }
@@ -69,13 +70,13 @@ export class AssistantStanding implements NativeStandingHost {
   }
 
   /**
-   * `/new` in the main conversation is a new topic (docs/ASSISTANT.md §5.5): the CLI clears its context, the
+   * `/new` in the main conversation is a new topic (docs/ASSISTANT.md §5.5): the model's context starts over, the
    * conversation goes on, and the memory files are what carries over.
    */
-  rewrite(sessionId: string, text: string): string | undefined {
-    if (text.trim() !== NEW_TOPIC) return undefined;
+  newTopic(sessionId: string, text: string): boolean {
+    if (text.trim() !== NEW_TOPIC) return false;
     const project = this.project(sessionId);
-    return project && this.isMain(sessionId, project) ? '/clear' : undefined;
+    return Boolean(project && this.isMain(sessionId, project));
   }
 
   private isRun(sessionId: string): boolean {

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isAssistantBackend } from '../../../../packages/contracts/src/assistant-choice.js';
 import type { ExtensionItem } from '../../../../packages/contracts/src/extensions.js';
 import { riffetSkills, type SkillScenario } from '../prompts/index.js';
 import type { ExtensionContext, ExtensionDocumentDescriptor } from './types.js';
@@ -7,9 +8,9 @@ export const RIFFET_SKILLS_REASON = 'Provided by Riffet. Updated with the server
 
 type Launch = Pick<ExtensionContext, 'backendId' | 'project'>;
 
-/** The 助理's conversations on the agent that isolates them: launched without the owner's own configuration (docs/ASSISTANT.md §4). */
+/** The 助理's conversations on the agents that isolate them: launched without the owner's own configuration (docs/ASSISTANT.md §4). */
 function standing(ctx: Launch): boolean {
-  return ctx.project?.system === 'assistant' && ctx.backendId === 'claude';
+  return ctx.project?.system === 'assistant' && isAssistantBackend(ctx.backendId);
 }
 
 /** Which set of Riffet's own skills a conversation of this request context receives, if any. */
@@ -24,6 +25,14 @@ export function riffetSkillScenario(ctx: Launch): SkillScenario | undefined {
  */
 export function scopeInEffect(ctx: Launch, scope: ExtensionItem['scope']): boolean {
   return !standing(ctx) || scope === 'project' || scope === 'riffet';
+}
+
+/**
+ * The project files the 助理 reads on Codex, which are Claude Code's (docs/ASSISTANT.md §4.1): its skills folder and
+ * `.mcp.json`. Codex's own project files are switched off in its thread. Undefined for every other context.
+ */
+export function standingCodexProject(ctx: Launch): { skill: string; mcp: string } | undefined {
+  return standing(ctx) && ctx.backendId === 'codex' ? { skill: '.claude/skills', mcp: '.mcp.json' } : undefined;
 }
 
 function id(ctx: ExtensionContext, part: string, scenario: SkillScenario, name: string): string {
