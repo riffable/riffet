@@ -27,6 +27,7 @@ import { PluginLogs } from './logs.js';
 import type { PluginActivationState, PluginLogEntry } from '../../../../packages/contracts/src/plugin-management.js';
 import { compatibility, referencedFiles, requestedCapabilities, serverIncompatibility } from '../plugins-host/compat.js';
 import { PackageStore, checkExpected, type PackageInput } from '../plugins-host/packages.js';
+import { checkMarketSource } from '../plugins-host/market.js';
 import { remotePlugin } from '../plugins-host/remote.js';
 import { satisfies } from '../plugins-host/semver.js';
 
@@ -164,7 +165,8 @@ export class PluginRegistry {
   private readonly versionInUse: (pluginId: string, version: string) => boolean;
   private readonly runningTasks: (pluginId: string) => number;
   private readonly statusTimeoutMs: number;
-  private readonly serverPorts: () => readonly number[];
+  /** The loopback ports this server answers on. */
+  readonly serverPorts: () => readonly number[];
   /** Installs, version switches and removals, one at a time. */
   private management: Promise<unknown> = Promise.resolve();
   private storeProblem?: string;
@@ -800,6 +802,7 @@ export class PluginRegistry {
         const version = manifest.version!;
         const existing = this.entries.get(id);
         if (existing && existing.source !== 'installed') throw new AppError('PLUGIN_ID_TAKEN', `${id} is ${existing.source === 'builtin' ? 'a built-in plugin' : 'a development package'}; an installed package cannot take its id`, 409);
+        checkMarketSource(this.packages.record(id), request.source, id);
         const clash = this.invalidManifest(manifest, id);
         if (clash) throw new AppError('PLUGIN_PACKAGE_INVALID', clash, 422);
         if (this.wouldCycle(id, manifest.requires)) throw new AppError('PLUGIN_DEPENDENCY_CYCLE', 'Its requirements would make a dependency cycle', 409);

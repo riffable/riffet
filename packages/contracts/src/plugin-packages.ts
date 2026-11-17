@@ -56,17 +56,55 @@ export interface PluginGrantRequired {
   executables?: string[];
 }
 
+/** The id of the public plugin index, the source every server starts with. */
+export const PLUGIN_SOURCE_BUILTIN = 'riffet';
+
 /**
- * `GET /api/integrations/market/:id?version=`: a release in the public plugin index, before it is
+ * A plugin index this server reads (docs/PLUGINS.md「插件市场」). Sources are kept in plugins.json, so
+ * every client of the server sees the same ones. Adding a source decides what can be found, not what
+ * runs: each install is still confirmed with its grant.
+ *
+ * `POST /api/integrations/sources` `{ url }` reads the index once and saves it (an address that cannot
+ * be read is refused); `PATCH /api/integrations/sources/:id` `{ enabled }`; `DELETE /api/integrations/sources/:id`
+ * (not the built-in one). Each replies with the `PluginMarketList`.
+ */
+export interface PluginSource {
+  /** Derived from the address, so adding the same address again gives the same id and installs pinned to it find it again. */
+  id: string;
+  url: string;
+  /** The index's own `name`, as last read; clients fall back to the address's host. */
+  name?: string;
+  /** The public index: it can be turned off, not removed. */
+  builtin?: boolean;
+  /** The address is set by the service's `RIFFET_PLUGIN_INDEX` and cannot be changed here. */
+  fixed?: boolean;
+  enabled: boolean;
+  /** How many packages it lists that this server could install, as last read. */
+  plugins?: number;
+  /** Why the last read failed; the other sources are listed regardless. */
+  error?: string;
+}
+
+/**
+ * `GET /api/integrations/market/:id?version=&source=`: a release in a plugin index, before it is
  * installed. Shaped like a grant request so the same confirmation serves both; installing it is
- * `POST /api/integrations/install` with `{ market: { id, version }, grant, trusted? }`.
+ * `POST /api/integrations/install` with `{ market: { source, id, version }, grant, trusted? }`.
+ * An installed package stays with the source it came from: installing the same id from another
+ * source is refused (409 `PLUGIN_SOURCE_CONFLICT`) until it is uninstalled.
  */
 export interface PluginMarketOffer extends PluginGrantRequired {
   title?: Record<string, string>;
+  sourceId: string;
 }
 
-/** One package in the plugin index, at the newest release this server can run (or the newest, when none can). */
+/** One package in a plugin index, at the newest release this server can run (or the newest, when none can). The same id may be listed once per source. */
 export interface PluginMarketEntry {
+  /** The source listing it. */
+  sourceId: string;
+  /** Installed on this server: the selected version, and whether it came from this source. Only an entry from the same source offers updates. */
+  installed?: { version: string; sameSource: boolean };
+  /** With `installed.sameSource`: this entry's version is newer than the installed one and runs on this server. */
+  update?: boolean;
   id: string;
   vendor: string;
   title?: Record<string, string>;
@@ -77,7 +115,7 @@ export interface PluginMarketEntry {
   license?: string;
   /** Where its source is published. */
   source?: string;
-  /** Its page on the marketplace site next to the index, when the index is served over http(s). */
+  /** Its page on the browse page the index declares (`page`, relative to the index), as `<page>#/<id>`; absent when the index declares none. */
   page?: string;
   /** The package's README as Markdown, links made absolute. */
   readme?: string;
@@ -92,9 +130,11 @@ export interface PluginMarketEntry {
   compatible: boolean;
 }
 
-/** `GET /api/integrations/market`: the plugin index as this server reads it, built-in plugins left out. */
+/** `GET /api/integrations/market`: every enabled plugin index as this server reads it, built-in plugins left out. */
 export interface PluginMarketList {
   plugins: PluginMarketEntry[];
+  /** All sources, enabled or not, the built-in one first. */
+  sources: PluginSource[];
   /** This request came directly from the service machine, where explicit trust is allowed. */
   trustedAllowed: boolean;
 }

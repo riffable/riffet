@@ -1,5 +1,6 @@
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { validatePackage, watchPlugin, type PluginBuildResult } from '../../../packages/plugin-api/src/tooling.js';
 import { claimStateDirectory } from './compat.js';
 import { PluginStore } from './plugins/store.js';
@@ -7,7 +8,9 @@ import type { PluginDescriptor } from '../../../packages/contracts/src/index.js'
 import { localServerUrl, type PairingDaemon } from './cli-pairing.js';
 import { AppError } from './errors.js';
 import { PackageStore, checkExpected, type PackageInput } from './plugins-host/packages.js';
-import { downloadMarketPackage, parseMarketReference, resolveMarketPackage, type MarketPackage } from './plugins-host/market.js';
+import { addMarketSource, checkMarketSource, checkSourceAddress, downloadMarketPackage, findMarketSource, installedPackages, listMarket, marketRecord, marketSourceId, marketSources, parseMarketReference, removeMarketSource, resolveMarketPackage, setMarketSourceEnabled, type MarketOptions, type MarketPackage, type MarketReference } from './plugins-host/market.js';
+import { buildRegistry, writeIndex } from './plugins-host/index-builder.js';
+import type { PluginMarketList, PluginSource } from '../../../packages/contracts/src/index.js';
 import { developmentDirectories, readPackage } from './plugins/development.js';
 import { PluginLogs } from './plugins/logs.js';
 import { PLUGIN_ID } from '../../../packages/contracts/src/plugins.js';
@@ -102,24 +105,39 @@ function parseGrant(value: string | undefined): string[] | undefined {
   return value === undefined ? undefined : value.split(',').map(item => item.trim()).filter(Boolean);
 }
 
+interface InstallOptions { grant?: string; yes?: boolean; trusted?: boolean; from?: string }
+type InstallTarget = { path: string } | { market: MarketReference };
+
+/** What the offline commands read of the sources and of what is installed. */
+const offlineMarket = (context: PluginCliContext): MarketOptions => ({
+  sources: marketSources(new PluginStore(context.stateDir)),
+  installed: installedPackages(new PackageStore(context.stateDir).records()),
+});
+
 /**
  * Installs the package at `path` (a directory, or a .tgz), or, when no such path exists, `<id>[@version]`
- * from the plugin index. It asks for capabilities; `grant` or `yes` must accept exactly those, otherwise
- * nothing is installed and the list is printed.
+ * from a plugin index (`from` names the source). It asks for capabilities; `grant` or `yes` must accept
+ * exactly those, otherwise nothing is installed and the list is printed.
  */
-export async function installPlugin(context: PluginCliContext, path: string, options: { grant?: string; yes?: boolean; trusted?: boolean }): Promise<string[]> {
+export async function installPlugin(context: PluginCliContext, path: string, options: InstallOptions): Promise<string[]> {
   const source = resolve(path);
-  const market = existsSync(source) ? undefined : parseMarketReference(path);
+  const exists = existsSync(source);
+  const market = exists ? undefined : parseMarketReference(path);
+  if (options.from !== undefined && !market) throw new Error('--from names a source for <id>[@version]; it cannot be used with a path.');
+  return installTarget(context, market ? { market: { ...market, ...(options.from ? { source: options.from } : {}) } } : { path: source }, options);
+}
+
+async function installTarget(context: PluginCliContext, target: InstallTarget, options: InstallOptions): Promise<string[]> {
   const given = parseGrant(options.grant);
+  const market = 'market' in target ? target.market : undefined;
   if (context.daemon) {
     const call = await connect(context.daemon, context.token());
-    const target = market ? { market } : { path: source };
     let reply = await call('POST', '/api/integrations/install', { ...target, grant: given ?? [], trusted: options.trusted === true });
-    const details = reply.body.error?.details as { id?: string; version?: string; capabilities?: string[] } | undefined;
+    const details = reply.body.error?.details as { id?: string; version?: string; sourceId?: string; capabilities?: string[] } | undefined;
     if (reply.status === 409 && reply.body.error?.code === 'PLUGIN_GRANT_REQUIRED' && details?.capabilities) {
       if (!options.yes) return [`${details.id} ${details.version} asks for: ${details.capabilities.join(', ')}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'].map(String);
       // The release the user was shown, even if the index changed since.
-      const confirmed = market && details.id && details.version ? { market: { id: details.id, version: details.version } } : target;
+      const confirmed = market && details.id && details.version ? { market: { ...(details.sourceId ? { source: details.sourceId } : {}), id: details.id, version: details.version } } : target;
       reply = await call('POST', '/api/integrations/install', { ...confirmed, grant: details.capabilities, trusted: options.trusted === true });
     }
     if (reply.status !== 200) fail(reply);
@@ -128,8 +146,10 @@ export async function installPlugin(context: PluginCliContext, path: string, opt
   }
   const store = new PackageStore(context.stateDir);
   let found: MarketPackage | undefined;
-  let input: PackageInput = { path: source };
-  if (market) { found = await resolveMarketPackage(market); input = { archive: await downloadMarketPackage(found) }; }
+  let input: PackageInput;
+  let origin: string;
+  if (market) { found = await resolveMarketPackage(market, offlineMarket(context)); input = { archive: await downloadMarketPackage(found) }; origin = marketRecord(found); }
+  else { const { path } = target as { path: string }; input = { path }; origin = `path:${path}`; }
   const staged = await store.stage(input, { trusted: options.trusted === true });
   if (found) {
     try { checkExpected(staged, found); } catch (error) { await store.discard(staged); throw error; }
@@ -143,6 +163,7 @@ export async function installPlugin(context: PluginCliContext, path: string, opt
     await store.discard(staged);
     throw new AppError('PLUGIN_ID_TAKEN', `${String(staged.manifest.id)} is linked for development; unlink it before installing`, 409);
   }
+  try { checkMarketSource(store.record(String(staged.manifest.id)), origin, String(staged.manifest.id)); } catch (error) { await store.discard(staged); throw error; }
   const grant = options.yes ? staged.capabilities : [...new Set(given ?? [])].sort();
   if (grant.length !== staged.capabilities.length || grant.some((item, index) => item !== staged.capabilities[index])) {
     await store.discard(staged);
@@ -150,8 +171,72 @@ export async function installPlugin(context: PluginCliContext, path: string, opt
   }
   const id = String(staged.manifest.id);
   const existing = store.record(id);
-  const { status } = await store.commit(staged, found ? `market:${found.id}@${found.version}` : `path:${source}`, true);
+  const { status } = await store.commit(staged, origin, true);
   return [status === 'present' ? `${id} ${staged.manifest.version} is already installed.` : `Installed ${id} ${staged.manifest.version}${existing ? ' and selected it' : ''}; it takes effect when Riffet starts.`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
+}
+
+/**
+ * Installs the newest compatible release of each package that came from a source and has a newer one
+ * there (all of them, or the ids given), through the same confirmation as `install`.
+ */
+export async function updatePlugins(context: PluginCliContext, ids: string[], options: InstallOptions): Promise<string[]> {
+  for (const id of ids) if (!PLUGIN_ID.test(id) || id.length > 64) throw new Error(`${id} is not a plugin id.`);
+  let list: Pick<PluginMarketList, 'plugins' | 'sources'>;
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('GET', '/api/integrations/market?refresh=1');
+    if (reply.status !== 200) fail(reply);
+    list = reply.body as unknown as PluginMarketList;
+  } else list = await listMarket({ ...offlineMarket(context), fresh: true });
+  const lines = list.sources.filter(source => source.enabled && source.error).map(source => `Source ${source.id} could not be read: ${source.error}`);
+  const targets = list.plugins.filter(entry => entry.update && (!ids.length || ids.includes(entry.id)));
+  for (const id of ids) {
+    if (targets.some(entry => entry.id === id)) continue;
+    const known = list.plugins.filter(entry => entry.id === id && entry.installed);
+    lines.push(known.some(entry => entry.installed?.sameSource) ? `${id} is up to date.` : known.length ? `${id} was installed from another origin; it has no update here.` : `${id} is not installed from a source.`);
+  }
+  for (const entry of targets) lines.push(...await installTarget(context, { market: { source: entry.sourceId, id: entry.id, version: entry.version } }, options));
+  return lines.length ? lines : ['Everything installed from a source is up to date.'];
+}
+
+const sourceLine = (source: PluginSource) =>
+  [source.id, source.enabled ? 'on' : 'off', source.url, ...(source.name ? [source.name] : []), ...(source.plugins !== undefined ? [`${source.plugins} plugins`] : []), ...(source.error ? [`error: ${source.error}`] : [])].join('  ');
+
+/** `riffet plugin source list|add|remove|enable|disable`. Offline, plugins.json is changed under the state-directory lock. */
+export async function manageSources(context: PluginCliContext, action: 'list' | 'add' | 'remove' | 'enable' | 'disable', argument?: string): Promise<string[]> {
+  if (action !== 'list' && !argument) throw new Error(action === 'add' ? 'Give the address of the plugin index.' : 'Give a source id' + (action === 'remove' ? ' or address.' : '.'));
+  const idOf = (value: string) => /^[a-z0-9][a-z0-9-]*$/.test(value) ? value : marketSourceId(checkSourceAddress(value));
+  if (context.daemon) {
+    const call = await connect(context.daemon, context.token());
+    const reply = action === 'list' ? await call('GET', '/api/integrations/market')
+      : action === 'add' ? await call('POST', '/api/integrations/sources', { url: argument })
+      : action === 'remove' ? await call('DELETE', `/api/integrations/sources/${encodeURIComponent(idOf(argument!))}`)
+      : await call('PATCH', `/api/integrations/sources/${encodeURIComponent(argument!)}`, { enabled: action === 'enable' });
+    if (reply.status !== 200) fail(reply);
+    const sources = (reply.body as unknown as PluginMarketList).sources;
+    return action === 'add' ? [`Added ${sourceLine(sources.find(item => item.id === idOf(argument!)) ?? sources.at(-1)!)}`] : sources.map(sourceLine);
+  }
+  if (action === 'list') return marketSources(new PluginStore(context.stateDir)).map(source => sourceLine({ ...source }));
+  mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
+  const release = claimStateDirectory(context.stateDir);
+  try {
+    const store = new PluginStore(context.stateDir);
+    if (action === 'add') { const added = await addMarketSource(store, argument!); return [`Added ${added.id}  ${added.url}`]; }
+    const id = findMarketSource(store, argument!)?.id ?? argument!;
+    if (action === 'remove') removeMarketSource(store, id); else setMarketSourceEnabled(store, id, action === 'enable');
+    return [`${action === 'remove' ? 'Removed' : action === 'enable' ? 'Turned on' : 'Turned off'} ${id}.${action === 'remove' ? ' Packages installed from it are kept.' : ''}`];
+  } finally { release(); }
+}
+
+/** `riffet plugin index build`: a static plugin index any server can add as a source (docs/PLUGINS.md「插件市场」). */
+export async function buildPluginIndex(registryDirectory: string, options: { out: string; name?: string; published?: string }): Promise<string[]> {
+  const registry = resolve(registryDirectory);
+  const out = resolve(options.out);
+  if (!existsSync(registry)) throw new Error(`${registry} does not exist.`);
+  if (out === registry) throw new Error('--out must be a different directory from the registry.');
+  const published = options.published ?? 'none';
+  const plugins = await buildRegistry({ registry, out, ...(published !== 'none' ? { published, carryForward: true, strictPublished: true } : {}), warn: message => console.warn(message) });
+  await writeIndex(out, { plugins, ...(options.name ? { name: options.name } : {}) });
+  return [`${join(out, 'index.json')}: ${plugins.length} plugins`, ...plugins.map(entry => `  ${entry.id}  ${entry.versions.map(item => item.version).join(', ')}`)];
 }
 
 export async function listPlugins(context: PluginCliContext): Promise<string[]> {

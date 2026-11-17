@@ -698,7 +698,7 @@ function renderDetail(p) {
   const v = p.latest, m = p.m, looks = p.look?.palette, pack = !looks && p.a.iconPacks?.length && firstPack(p);
   const text = command(p), shown = text.replace(/ (--\S+)/g, ' <span class="o">$1</span>');
   // Riffet lists the same index on its Plugins page; from here the Mac app opens the release for confirmation.
-  const open = `riffet://plugins/install?id=${encodeURIComponent(p.id)}&version=${encodeURIComponent(v.version)}`;
+  const open = `riffet://plugins/install?source=riffet&id=${encodeURIComponent(p.id)}&version=${encodeURIComponent(v.version)}`;
   const get = p.origin === 'builtin' ? `<p class="ships">${t('ships')}</p>`
     : `<div class="get"><a class="btn" href="${esc(open)}">${t('open')}</a><div class="cmd"><span><span class="p">$ </span>${shown}</span><button type="button" data-copy="${esc(text)}" aria-label="${t('copy')}">${ICON.copy}</button></div></div>`;
   const links = `<a href="${esc(p.source)}">${t('source')}</a>`;

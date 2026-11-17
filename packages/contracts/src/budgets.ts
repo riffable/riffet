@@ -137,3 +137,19 @@ export const PLUGIN_COMMAND_BUDGET = {
   /** `text` results a client keeps shown under their messages, in memory and across conversations; the oldest go first. */
   keptResults: 64,
 } as const;
+
+/** Plugin indexes the server reads (docs/PLUGINS.md「插件市场」). */
+export const PLUGIN_MARKET_BUDGET = {
+  /** Sources a user may add; the built-in one is not counted. */
+  maxSources: 16,
+  /** Largest index document read; a bigger one makes its source fail, not the others. */
+  indexBytes: 16 * MIB,
+  /** How long a read index, or a failed read, is reused; installs check content against the index either way. */
+  cacheMs: 60_000,
+  /** Indexes read at the same time. */
+  concurrentReads: 4,
+  /** How long one index read may take. */
+  readMs: 10_000,
+  /** How long listing every source may take; a source not read by then is reported as not read, the others are listed. Below the clients' market timeout. */
+  listMs: 15_000,
+} as const;

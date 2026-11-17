@@ -5,10 +5,11 @@ import type { PluginEnablement } from '../../../../packages/contracts/src/index.
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 import { AppError } from '../errors.js';
 import { migratePluginStorage } from '../compat.js';
+import type { StoredSource } from '../plugins-host/market.js';
 
 export interface PluginItem { enablement: PluginEnablement; settings: Record<string, string>; secrets: Record<string, string> }
 export interface PluginItemPatch { enablement?: PluginEnablement; settings?: Record<string, string | null>; secrets?: Record<string, string | null> }
-interface Document { version: 1; items: Record<string, Record<string, unknown>>; defaultSharePublisher?: string; recovery?: boolean; development?: Record<string, string>; excludedDevelopment?: string[] }
+interface Document { version: 1; items: Record<string, Record<string, unknown>>; defaultSharePublisher?: string; recovery?: boolean; development?: Record<string, string>; excludedDevelopment?: string[]; sources?: StoredSource[] }
 
 const ENABLEMENTS: readonly PluginEnablement[] = ['auto', 'on', 'off'];
 
@@ -75,6 +76,16 @@ export class PluginStore {
     this.document = document;
   }
 
+  /** Plugin indexes added to this server, and whether the built-in one is off (an entry with id `riffet`); docs/PLUGINS.md「插件市场」. */
+  sources(): StoredSource[] { return (this.read().sources ?? []).map(item => ({ ...item })); }
+
+  setSources(sources: StoredSource[]): void {
+    const { sources: _previous, ...rest } = this.read();
+    const document: Document = { ...rest, ...(sources.length ? { sources } : {}) };
+    this.write(document);
+    this.document = document;
+  }
+
   revision(id: string): string { const value = this.read().items[id]?.revision; return typeof value === 'string' ? value : '0'; }
 
   /** The plugin the user chose for new shares, if any; it may not be enabled now. */
@@ -124,6 +135,15 @@ export class PluginStore {
     if (document.defaultSharePublisher !== undefined && typeof document.defaultSharePublisher !== 'string') throw corrupt();
     if (document.development !== undefined && (!strings(document.development) || Object.entries(document.development).some(([id, path]) => !PLUGIN_ID.test(id) || id.length > 64 || !isAbsolute(path) || path.includes('\0')))) throw corrupt();
     if (document.excludedDevelopment !== undefined && (!Array.isArray(document.excludedDevelopment) || document.excludedDevelopment.some(path => typeof path !== 'string' || !isAbsolute(path) || path.includes('\0')))) throw corrupt();
+    if (document.sources !== undefined) {
+      const ids = new Set<string>();
+      for (const item of Array.isArray(document.sources) ? document.sources : [undefined]) {
+        const source = item as Record<string, unknown> | undefined;
+        if (!source || typeof source !== 'object' || Array.isArray(source) || typeof source.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(source.id) || ids.has(source.id)) throw corrupt();
+        ids.add(source.id);
+        if ((source.url !== undefined && typeof source.url !== 'string') || (source.id !== 'riffet' && !source.url) || (source.enabled !== undefined && typeof source.enabled !== 'boolean') || (source.addedAt !== undefined && typeof source.addedAt !== 'string')) throw corrupt();
+      }
+    }
     for (const raw of Object.values(document.items)) {
       // Unknown keys inside an item are kept: a newer Riffet may have added them.
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw corrupt();

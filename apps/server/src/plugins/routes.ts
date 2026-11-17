@@ -7,7 +7,7 @@ import { localRequest } from '../auth.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { MAX_ARCHIVE_BYTES } from '../plugins-host/archive.js';
 import { parseMultipart } from '../plugins-host/multipart.js';
-import { checkMarketReference, downloadMarketPackage, listMarket, marketOffer, resolveMarketPackage } from '../plugins-host/market.js';
+import { addMarketSource, checkMarketReference, downloadMarketPackage, installedPackages, listMarket, marketOffer, marketRecord, marketSources, removeMarketSource, resolveMarketPackage, setMarketSourceEnabled, type MarketOptions } from '../plugins-host/market.js';
 
 const onServiceMachine = (request: FastifyRequest) => localRequest(request);
 
@@ -25,16 +25,24 @@ function grantOf(text: string): string[] {
 export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps, 'plugins'> & Partial<Pick<RouteDeps, 'store' | 'auth'>>): void {
   const { plugins } = deps;
   if (deps.store && deps.auth) registerChannelRoute(app, plugins, deps.store, deps.auth);
-  const install = async (request: FastifyRequest, input: Parameters<typeof plugins.install>[0]) => {
+  const install = async (request: FastifyRequest, input: Parameters<typeof plugins.install>[0], details: Record<string, unknown> = {}) => {
     try { return await plugins.install(input); }
     catch (error) {
       if (error instanceof AppError && (error.code === 'PLUGIN_GRANT_REQUIRED' || error.code === 'PLUGIN_TRUST_REQUIRED') && error.details && typeof error.details === 'object') {
-        throw new AppError(error.code, error.message, error.statusCode, { ...error.details, trustedAllowed: onServiceMachine(request) });
+        throw new AppError(error.code, error.message, error.statusCode, { ...error.details, ...details, trustedAllowed: onServiceMachine(request) });
       }
       throw error;
     }
   };
   const list = async (): Promise<PluginsResponse> => ({ integrations: await plugins.descriptors(), recovery: plugins.store.recovery() });
+  // The sources to read and what is installed from them, as of now. A built-in or development plugin holds its id too, from no source.
+  const marketOptions = async (fresh = false): Promise<MarketOptions> => ({
+    sources: marketSources(plugins.store), ports: plugins.serverPorts(), fresh,
+    installed: installedPackages((await plugins.descriptors()).map(item => item.source === 'installed' && item.installed
+      ? { id: item.id, selected: item.installed.selected, versions: item.installed.versions }
+      : { id: item.id, selected: item.version ?? '', versions: [{ version: item.version ?? '', source: item.source ?? 'builtin' }] })),
+  });
+  const marketList = async (request: FastifyRequest, fresh = false): Promise<PluginMarketList> => ({ ...await listMarket(await marketOptions(fresh)), trustedAllowed: onServiceMachine(request) });
   // The last evaluation: only `refresh` detects again.
   app.get('/api/integrations', list);
   app.post<{ Body: { enabled?: unknown } }>('/api/integrations/recovery', async request => {
@@ -60,13 +68,26 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     return { integrations: await plugins.unlinkDevelopment(request.params.id) };
   });
 
-  // The public plugin index (docs/PLUGINS.md「插件市场」): what can be installed, and one release before installing it.
-  app.get<{ Querystring: { refresh?: string } }>('/api/integrations/market', async (request): Promise<PluginMarketList> => ({
-    plugins: await listMarket({ fresh: request.query.refresh === '1' }), trustedAllowed: onServiceMachine(request),
-  }));
-  app.get<{ Params: { id: string }; Querystring: { version?: string } }>('/api/integrations/market/:id', async request => {
-    const found = await resolveMarketPackage(checkMarketReference({ id: request.params.id, version: request.query.version || undefined }));
+  // The plugin indexes (docs/PLUGINS.md「插件市场」): what can be installed from them, and one release before installing it.
+  app.get<{ Querystring: { refresh?: string } }>('/api/integrations/market', async (request): Promise<PluginMarketList> => marketList(request, request.query.refresh === '1'));
+  app.get<{ Params: { id: string }; Querystring: { version?: string; source?: string } }>('/api/integrations/market/:id', async request => {
+    const found = await resolveMarketPackage(checkMarketReference({ id: request.params.id, version: request.query.version || undefined, source: request.query.source || undefined }), await marketOptions());
     return { ...marketOffer(found), ...(found.trustedRequired ? { trustedAllowed: onServiceMachine(request) } : {}) };
+  });
+  // Any signed-in client may manage sources: adding one decides what can be found, and every install still needs its grant.
+  app.post<{ Body: { url?: unknown } }>('/api/integrations/sources', { bodyLimit: 4096 }, async request => {
+    if (typeof request.body?.url !== 'string' || !request.body.url.trim()) throw new AppError('INVALID_INPUT', 'url must be text');
+    await addMarketSource(plugins.store, request.body.url, { ports: plugins.serverPorts() });
+    return marketList(request);
+  });
+  app.patch<{ Params: { id: string }; Body: { enabled?: unknown } }>('/api/integrations/sources/:id', { bodyLimit: 4096 }, async request => {
+    if (typeof request.body?.enabled !== 'boolean') throw new AppError('INVALID_INPUT', 'enabled must be a boolean');
+    setMarketSourceEnabled(plugins.store, request.params.id, request.body.enabled);
+    return marketList(request);
+  });
+  app.delete<{ Params: { id: string } }>('/api/integrations/sources/:id', async request => {
+    removeMarketSource(plugins.store, request.params.id);
+    return marketList(request);
   });
 
   app.post('/api/integrations/refresh', { bodyLimit: 4096 }, async () => { await plugins.refresh(); return list(); });
@@ -81,7 +102,7 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
 
   // Installing: a multipart upload of a .tgz (`package`, with `grant`), `{ path, grant }` naming a
   // directory or .tgz on this machine, which only a request from this machine may do (the CLI), or
-  // `{ market: { id, version? }, grant }`, a release of the plugin index that the server downloads.
+  // `{ market: { source?, id, version? }, grant }`, a release of a plugin index that the server downloads.
   // The parser is local to this scope so no other route accepts a multipart body.
   void app.register(async scope => {
     scope.addContentTypeParser('multipart/form-data', { parseAs: 'buffer', bodyLimit: MAX_ARCHIVE_BYTES + 1024 * 1024 }, (_request, body, done) => done(null, body));
@@ -106,9 +127,10 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
       if (market !== undefined) {
         const reference = checkMarketReference(market);
         if (trusted === true && !onServiceMachine(request)) throw new AppError('PLUGIN_TRUST_LOCAL_ONLY', 'Trusted installation is only available directly on the service machine', 403);
-        const found = await resolveMarketPackage(reference);
-        const archive = await downloadMarketPackage(found);
-        return install(request, { input: { archive }, source: `market:${found.id}@${found.version}`, grant, expected: found, ...(trusted === true ? { trusted: true } : {}) });
+        const options = await marketOptions();
+        const found = await resolveMarketPackage(reference, options);
+        const archive = await downloadMarketPackage(found, { ports: options.ports });
+        return install(request, { input: { archive }, source: marketRecord(found), grant, expected: found, ...(trusted === true ? { trusted: true } : {}) }, { sourceId: found.sourceId });
       }
       if (typeof path !== 'string' || !path) throw new AppError('INVALID_INPUT', 'path must be text');
       if (!onServiceMachine(request)) throw new AppError('PLUGIN_PATH_INSTALL_LOCAL_ONLY', 'Installing from a path is only available from this machine; upload the package instead', 403);

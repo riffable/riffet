@@ -70,7 +70,7 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 
 保存配置使用 configRevision 防止覆盖其他客户端的修改；冲突后重新读取再编辑。恢复模式暂停外部插件并保留原启用策略，重启后仍生效。服务无法正常启动时先运行 riffet plugin recovery on，再启动排查；recovery off 恢复原策略。riffet plugin diagnostics <id> 与 reload <id> 操作正在运行的服务。
 
-除本地包外，可以从公共插件市场按 ID 安装，见「插件市场」；签名来源验证和远程更新未开放。
+除本地包外，可以从插件市场（公共源和自己添加的源）按 ID 安装，见「插件市场」；签名来源验证和远程更新未开放。
 
 ## Manifest
 
@@ -194,7 +194,7 @@ riffet plugin install "$PWD/dist/android.tgz" --trusted --yes
 
 - `riffet plugin uninstall <id> [version]`：省略版本时卸载全部安装版本；保留设置、密钥和数据，运行中的相关任务会阻止整插件卸载。Web/Mac 插件详情直接提供“卸载插件”；内置包不提供卸载。
 - 开发包在详情的“管理”中使用“卸载插件”，保留源目录、设置和数据，并持久排除该目录的自动发现；显式重新关联后恢复。`unlink` 仍用于仅解除保存的开发关联。监听中的 dev 不会重新建立已移除的关联。
-- `riffet plugin install <路径> [--yes | --grant a,b] [--trusted]`：接受目录或上述归档；服务运行时经接口生效，停止时直接记录，下次启动生效。无能力包无需 `--yes`，有能力包需精确授权。
+- `riffet plugin install <路径> [--yes | --grant a,b] [--trusted]`：接受目录或上述归档（`<id>[@版本] [--from <源>]` 见「插件市场」）；服务运行时经接口生效，停止时直接记录，下次启动生效。无能力包无需 `--yes`，有能力包需精确授权。
 - `POST /api/integrations/install`：`multipart/form-data` 上传归档，`grant` 为能力名数组或 JSON，`trusted` 是显式确认的布尔字符串；或本机 JSON `{ path, grant, trusted? }`。路径安装拒绝非本机和代理请求；上传可带 `trusted=true`，只允许直接来自服务所在设备的请求（回环对端、无代理头、`Host` 为回环名）。
 - 安装先在临时目录校验声明、入口、资源与兼容性，再计算内容完整性摘要。不同归档格式包含同样的路径、文件字节和执行位时得到同一摘要；摘要只证明内容未变，不认证发布者。
 
@@ -204,15 +204,44 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 
 ## 插件市场
 
-[插件市场](https://riffable.github.io/riffet/plugins/)是 `site/plugins/` 的静态页面，和它旁边的 `index.json` 一起由 `pnpm build:site` 生成、随 Pages 发布。页面和每个 Riffet 读同一份索引：每个包的 manifest、说明，以及每个版本的归档地址、内容完整性摘要、要求的能力和是否需要显式信任。
+插件索引是一份静态的 `index.json`：每个包的 manifest、说明，以及每个版本的归档地址、内容完整性摘要、要求的能力和是否需要显式信任。服务读一个内置源和任意个用户添加的源；包的安装、更新都以某一个源为单位。[公共市场](https://riffable.github.io/riffet/plugins/)是内置源，`site/plugins/` 的静态页面和它旁边的 `index.json` 由 `pnpm build:site` 生成、随 Pages 发布。
 
-- 安装：`riffet plugin install <id>[@版本]`。参数不是已存在的路径时按 ID 查索引；不写版本时取索引里本机能运行（`hostApi`）的最新版本。授权与信任规则和本地包相同（`--yes`、`--grant`、`--trusted`）。
-- 校验：服务端（或服务未运行时的 CLI）下载归档，按安装时的方式解包，内容完整性必须等于索引所列，否则得 422 `PLUGIN_MARKET_MISMATCH`，什么也不安装。摘要与归档格式无关，同 `riffet plugin pack` 输出的那个；安装记录的来源为 `market:<id>@<版本>`。摘要只证明内容是索引审核时的那份，不证明发布者。
-- 接口：`GET /api/integrations/market` 列出索引里可安装的包（内置插件除外），各取本服务能运行的最新版本，`?refresh=1` 跳过一分钟的缓存；`GET /api/integrations/market/:id?version=` 返回形如授权请求的 `PluginMarketOffer`；`POST /api/integrations/install` 接受 `{ market: { id, version? }, grant, trusted? }`。任何客户端都可以请求，显式信任仍只限服务所在设备。
-- 客户端：Web 与 Mac 的插件页有「浏览」，经服务端读同一份索引，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
-- 索引地址：默认 `https://riffable.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。下载手动处理重定向（至多 5 跳），每一跳在请求前按同一规则检查。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
+**索引格式**：顶层 `schemaVersion`（目前为 1）、可选 `name`（源的显示名）、可选 `page`（浏览页地址，相对索引）和 `plugins`。条目的 `page` 只在索引声明了 `page` 时给出（`<page>#/<id>`）；公共站点写 `"page": "./"`，没有浏览页的索引不写。归档地址必须是 https，或与索引同协议；下载手动处理重定向（至多 5 跳），每一跳在请求前按同一规则检查。
 
-发布：`riffet plugin pack` 输出归档路径和它的完整性摘要。把归档放到可公开下载的 https 地址（如 GitHub Release），再提交 `site/plugins/registry/<id>.json`：
+**源**：保存在 `<stateDir>/plugins.json` 的 `sources`，所有客户端看到同一份。
+
+- 内置源的 ID 是 `riffet`，地址是默认的 `https://riffable.github.io/riffet/plugins/index.json`，或环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址；设置后该源标为 `fixed`）。它只能关闭，不能删除；关闭记为 `{ "id": "riffet", "enabled": false }`。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`。
+- 添加的源：`{ id, url, enabled?, addedAt? }`。ID 由规范化后的地址推出：主机名第一段加 `-` 加地址 SHA-256 的前 16 位十六进制，如 `riffet-plugins-1a2b3c4d5e6f7a8b`，同一地址得到同一个 ID，按 ID 固定的安装因此在重新添加后仍能找到它；位数足够长，别的地址凑不出同一个 ID，接手不了已固定的安装。地址必须是 https，或回环地址上的 http；不接受 file、带凭据的地址，也不接受本服务自己的端口（与 `host.gateway.fetchModels` 同理）。同一地址再加得 409 `PLUGIN_SOURCE_EXISTS`，超过 `PLUGIN_MARKET_BUDGET.maxSources`（16）得 409 `PLUGIN_SOURCE_LIMIT`。添加时先读一次索引，读不到返回 422 `PLUGIN_SOURCE_UNREADABLE` 并写明原因，什么也不保存。
+- 添加源只决定能找到什么，不决定能运行什么：每次安装仍要确认授权，显式信任仍只限服务所在设备。任何已登录的客户端都可以管理源。
+- 读取：每个源各自缓存（预算见 `PLUGIN_MARKET_BUDGET`：缓存一分钟、索引不超过 16 MB、同时最多读 4 个、单次读取 10 秒），各自失败：读不到的源带 `error`，其余照常列出。读取失败也缓存一分钟，挂起的源不会让每次列出都等它；整次列出最多 15 秒，到时还没读到的源报未读到。索引里类型不对的版本和条目被跳过，不影响同一源的其他插件。源被删除或关闭时释放它的缓存。
+
+**安装与固定**
+
+- `riffet plugin install <id>[@版本] [--from <源 ID>]`。参数不是已存在的路径时按 ID 查索引；不写版本时取该源里本机能运行（`hostApi`）的最新版本。授权与信任规则和本地包相同（`--yes`、`--grant`、`--trusted`）。
+- 没有指定源时：已从某个源装过的包用它固定的源；否则取唯一列出该 ID 的已启用源；有多个得 409 `PLUGIN_MARKET_AMBIGUOUS`，消息列出这些源。
+- 校验：服务端（或服务未运行时的 CLI）下载归档，按安装时的方式解包，内容完整性必须等于索引所列，否则得 422 `PLUGIN_MARKET_MISMATCH`，什么也不安装。摘要与归档格式无关，同 `riffet plugin pack` 输出的那个。摘要只证明内容是索引发布时的那份，不证明发布者。
+- 来源记录：市场安装记为 `market:<源 ID>/<插件 ID>@<版本>`；旧的 `market:<插件 ID>@<版本>` 视为内置源。
+- 固定：已安装的包，其选中版本的来源记录不是 `market:<同一个源 ID>/…`（来自另一个源、上传或路径）时，再从市场安装得 409 `PLUGIN_SOURCE_CONFLICT`，需先卸载（设置和数据保留）。服务和离线 CLI 走同一处检查。删除或关闭源不影响已装的包，它们保留记录，但不再有更新。
+
+**更新**：`riffet plugin update [id...]` 对每个从某个源安装、且该源里有更新的包，安装该源里本机能运行的最新版本，授权与信任确认同 `install`（`--yes`、`--grant`、`--trusted`）。更新只看固定的源：另一个源的更高版本不算。列表里每一项带 `installed`（已装的选中版本，及是否来自这个源；同 ID 的内置插件和开发包也算已安装，不来自任何源）和 `update`（同源、更新、且能在本机运行）。
+
+**接口**（前缀 `/api/integrations`）
+
+- `GET /market[?refresh=1]`：`PluginMarketList`，每个启用的源里可安装的包（内置插件除外）各取本服务能运行的最新版本，同一个 ID 在每个源里各一项；`sources` 列出全部源（含关闭的），内置源在前。`refresh=1` 跳过缓存。
+- `GET /market/:id?version=&source=`：形如授权请求的 `PluginMarketOffer`，带 `sourceId`。
+- `POST /install`：`{ market: { source?, id, version? }, grant, trusted? }`；授权不符的 409 里带 `sourceId`。
+- `POST /sources` `{ url }`、`PATCH /sources/:id` `{ enabled }`、`DELETE /sources/:id`：都返回 `PluginMarketList`。删除内置源得 409 `PLUGIN_SOURCE_BUILTIN`，已装的包不受影响；`DELETE`、`PATCH` 找不到源得 404 `PLUGIN_SOURCE_NOT_FOUND`。
+
+**命令行**：`riffet plugin source list`、`source add <url>`、`source remove <id|url>`、`source enable <id>`、`source disable <id>`。服务运行时经接口，停止时在状态目录锁下直接改 `plugins.json`，与 `install` 相同。
+
+**客户端**：Web 与 Mac 的插件页有「浏览」，经服务端读同一批源，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
+
+**自建索引**：`riffet plugin index build <registry-dir> --out <dir> [--name <文本>] [--published <索引地址>|none]` 从一个记录目录生成 `<dir>/index.json`、`packages/` 和 `assets/`，放到任何静态主机上即可作为源添加。输出没有 HTML 页面，也没有 `readmeHtml`。记录和下面的公共站点相同：`{ "path": "<包目录>" }`（相对记录目录；构建并打包，归档由索引托管在 `packages/` 下）或外部包的记录；外部记录的 `archive`、`readme` 还可以写相对记录目录的路径，归档会复制进 `packages/`。
+
+- `--published` 是已发布的同一份索引地址。给出时，已发布索引里列出的版本内容不能再变；`{ "path" }` 记录比当前版本更旧、且已发布索引列出的版本会保留：下载归档、核对完整性、重新托管在 `packages/` 下，排在当前版本之后（新的在前）。部署会整体替换站点，不保留旧版本就会丢失它们。已发布的索引读不到时构建失败（HTTP 404 视为尚无已发布版本）；`none` 跳过这些，默认也是 `none`。
+- 当前版本的发布日期取记录的 `date`，没有则取构建当天；已发布索引里同版本同摘要的版本沿用它原来的日期。
+
+发布到公共市场：`riffet plugin pack` 输出归档路径和它的完整性摘要。把归档放到可公开下载的 https 地址（如 GitHub Release），再提交 `site/plugins/registry/<id>.json`：
 
 ```json
 {
@@ -224,7 +253,7 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 }
 ```
 
-`versions` 新版本在前，顺序不对则构建失败。构建会下载每个归档、核对 ID、版本与摘要，不符则失败；已在公共索引里的版本内容不能再变（本仓库的包改了文件就要升版本），`--published none` 跳过这项检查。说明的相对链接改为指向源码；索引同时带 Markdown 原文（客户端用自己的渲染器）和页面用的 HTML（原始 HTML 与不安全的链接协议被去掉）。本仓库里的包只写 `{ "path": "examples/plugins/echo" }`，构建时打包并由站点托管。内置插件自动列出，标为随 Riffet 提供。
+`versions` 新版本在前，顺序不对则构建失败。构建会下载每个归档、核对 ID、版本与摘要，不符则失败；已在公共索引里的版本内容不能再变（本仓库的包改了文件就要升版本），`--published none` 跳过这项检查。说明的相对链接改为指向源码；索引同时带 Markdown 原文（客户端用自己的渲染器）和页面用的 HTML（原始 HTML 与不安全的链接协议被去掉）。本仓库里的包只写 `{ "path": "examples/plugins/echo" }`（相对仓库根目录），构建时打包并由站点托管。内置插件自动列出，标为随 Riffet 提供。构建逻辑与 `riffet plugin index build` 共用（`apps/server/src/plugins-host/index-builder.ts`），站点另加内置插件、页面用的 HTML 和 `page`。
 
 ## 版本、回滚与数据
 

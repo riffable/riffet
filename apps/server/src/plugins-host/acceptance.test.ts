@@ -250,16 +250,18 @@ async function localPackage(id: string, version: string, body: string, extra: Re
 
 describe('the public plugin index', () => {
   /** An index at a loopback address that lists one release of the theme sample, served with `served` as its archive. */
-  async function index(listed: { integrity: string }, served: Buffer, redirect?: string) {
+  async function index(listed: { integrity: string }, served: Buffer, redirect?: string, extra: unknown[] = []) {
     const server: Server = createServer((request, response) => {
       if (request.url === '/plugins/index.json') {
-        response.setHeader('content-type', 'application/json').end(JSON.stringify({ schemaVersion: 1, plugins: [{ id: 'example.graphite-theme', manifest: { title: { en: 'Graphite' } }, versions: [{ version: '1.0.0', archive: 'packages/graphite.tgz', integrity: listed.integrity, capabilities: [] }] }] }));
+        response.setHeader('content-type', 'application/json').end(JSON.stringify({ schemaVersion: 1, plugins: [{ id: 'example.graphite-theme', manifest: { title: { en: 'Graphite' } }, versions: [{ version: '1.0.0', archive: 'packages/graphite.tgz', integrity: listed.integrity, capabilities: [] }] }, ...extra] }));
       } else if (request.url === '/plugins/packages/graphite.tgz') { if (redirect) response.writeHead(302, { location: redirect }).end(); else response.end(served); }
       else response.writeHead(404).end();
     }).listen(0, '127.0.0.1');
     await new Promise(done => server.once('listening', done));
     cleanups.push(() => new Promise(done => server.close(done)));
-    vi.stubEnv('RIFFET_PLUGIN_INDEX', `http://127.0.0.1:${(server.address() as { port: number }).port}/plugins/index.json`);
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/plugins/index.json`;
+    vi.stubEnv('RIFFET_PLUGIN_INDEX', url);
+    return url;
   }
 
   it('installs the release the index lists and refuses content it does not vouch for', async () => {
@@ -276,7 +278,33 @@ describe('the public plugin index', () => {
     await index(packed, packed.archive);
     const installed = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme', version: '1.0.0' }, grant: [] });
     expect(installed.statusCode, installed.body).toBe(200);
-    expect((await row('example.graphite-theme')).installed?.versions[0]).toMatchObject({ version: '1.0.0', source: 'market:example.graphite-theme@1.0.0', integrity: packed.integrity });
+    expect((await row('example.graphite-theme')).installed?.versions[0]).toMatchObject({ version: '1.0.0', source: 'market:riffet/example.graphite-theme@1.0.0', integrity: packed.integrity });
+  });
+
+  it('lists several sources, pins an install to its source and refuses the same id from another', async () => {
+    const packed = await packPlugin(join(examples, 'graphite-theme'));
+    // Entries with the wrong types are someone else's mistake: they are left out, the rest of the source is listed.
+    const added = await index(packed, packed.archive, undefined, [
+      { id: 'acme.broken', versions: [{ version: '1.0.0', archive: 'b.tgz', integrity: 'sha256-0', hostApi: { server: 1 } }] },
+      { id: 'acme.untitled', manifest: { title: { en: 7 } }, versions: [{ version: '1.0.0', archive: 'u.tgz', integrity: 'sha256-0' }] },
+    ]);
+    await index(packed, packed.archive);
+    const { call, row } = await boot();
+    const sourceId = ((await call('POST', '/api/integrations/sources', { url: added })).json() as { sources: Array<{ id: string }> }).sources[1]!.id;
+    expect((await call('POST', '/api/integrations/sources', { url: added })).json().error.code).toBe('PLUGIN_SOURCE_EXISTS');
+    const listed = (await call('GET', '/api/integrations/market')).json() as { plugins: Array<{ sourceId: string; id: string; title?: unknown }>; sources: unknown[] };
+    expect(listed.plugins.map(item => `${item.sourceId} ${item.id}`).sort()).toEqual([`riffet example.graphite-theme`, `${sourceId} acme.untitled`, `${sourceId} example.graphite-theme`].sort());
+    expect(listed.plugins.find(item => item.id === 'acme.untitled')?.title).toBeUndefined();
+    const ambiguous = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme' }, grant: [] });
+    expect(ambiguous.json().error.code).toBe('PLUGIN_MARKET_AMBIGUOUS');
+    expect((await call('POST', '/api/integrations/install', { market: { source: sourceId, id: 'example.graphite-theme' }, grant: [] })).statusCode).toBe(200);
+    expect((await row('example.graphite-theme')).installed?.versions[0]?.source).toBe(`market:${sourceId}/example.graphite-theme@1.0.0`);
+    const other = await call('POST', '/api/integrations/install', { market: { source: 'riffet', id: 'example.graphite-theme' }, grant: [] });
+    expect([other.statusCode, other.json().error.code]).toEqual([409, 'PLUGIN_SOURCE_CONFLICT']);
+    const after = (await call('GET', '/api/integrations/market')).json() as { plugins: Array<{ sourceId: string; installed?: { sameSource: boolean } }> };
+    expect(after.plugins.map(item => [item.sourceId, item.installed?.sameSource])).toEqual(expect.arrayContaining([['riffet', false], [sourceId, true]]));
+    expect((await call('DELETE', `/api/integrations/sources/${sourceId}`)).statusCode).toBe(200);
+    expect(await row('example.graphite-theme')).toBeDefined();
   });
 
   it('checks every redirect hop of a download before requesting it', async () => {

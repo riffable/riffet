@@ -409,7 +409,7 @@ Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也
 
 恢复模式持久化在 plugins.json 的 recovery 字段，先于外部插件的 detect 执行；内置包不暂停，每个插件原本的 on/off/auto 保持不变，服务重启后仍有效。运行任务沿用现有等待停用规则。命令行 riffet plugin recovery on/off 可在服务停止时修改恢复状态，并取得状态目录锁；reload <id> 和 diagnostics <id> 需要正在运行的服务。
 
-安装渠道是本地 TGZ/ZIP/TAR 上传、本机 CLI 目录安装和按 ID 从静态索引安装（见 [插件市场](PLUGINS.md#插件市场)）；没有远程自动更新，也不做作者签名认证；SDK 已能独立生成归档，尚未发布至 registry。完整性哈希用于发现内容变化，不代表作者身份认证。
+安装渠道是本地 TGZ/ZIP/TAR 上传、本机 CLI 目录安装和按 ID 从静态索引安装；索引可以有多个源（内置的公共源加用户添加的源），已装的包固定在它安装时的源，只从该源更新，换源要先卸载（见 [插件市场](PLUGINS.md#插件市场)）。更新由用户显式执行（`riffet plugin update` 或客户端的更新入口），没有后台自动更新，也不做作者签名认证；`riffet plugin index build` 可以为任意静态主机生成索引。完整性哈希用于发现内容变化，不代表作者身份认证。
 
 
 ## 独立分发与后续改进（2026-11-09）
@@ -425,9 +425,9 @@ Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也
 | P1 | 按需激活 | 已实现模型源、命令/登录、任务、视图的按需激活，静态目录不执行代码，缺省旧包仍启动激活，懒升级失败也恢复最近成功版本 | [VS Code activation events](https://code.visualstudio.com/api/references/activation-events) |
 | P1 | 声明式跨端界面与能力协商 | Web/Mac 共同承接 tasks/list/form/detail，客户端独立验证版本与所需能力；桥扩展当前项目分页、请求取消和数据失效订阅 | [Raycast manifest](https://developers.raycast.com/information/manifest)、[VS Code extension host](https://code.visualstudio.com/api/advanced-topics/extension-host) |
 | P1 | 可归因的运行日志与开发重载 | 已实现按 ID/版本/代次归属的有限持久日志、阶段耗时、脱敏、CLI/Web/Mac 查看和内容快照开发重载 | [Raycast debugging](https://developers.raycast.com/basics/debug-an-extension)、[Obsidian lifecycle](https://docs.obsidian.md/plugins/guides/lifecycle-management) |
-| P2 | 更新源和发布认证 | 复用已有固定版本、授权差异、备份和失败回退，先做显式检查与更新；公共市场排后 | [Raycast publishing](https://developers.raycast.com/basics/publish-an-extension) |
+| P2 | 更新源和发布认证 | 复用已有固定版本、授权差异、备份和失败回退，先做显式检查与更新（已做：多源索引、按源固定、`plugin update`）；后台自动更新和发布签名排后 | [Raycast publishing](https://developers.raycast.com/basics/publish-an-extension) |
 
-P0、P1 项已按上述范围实现；P2 的远程更新、发布签名和公共市场尚未实施。竞品对比依据官方文档，没有运行竞品进行性能或安全实测。完整接口与开发命令见 [插件开发指南](PLUGINS.md)。
+P0、P1 项已按上述范围实现；P2 中，多源市场与显式更新已实现；后台自动更新和发布签名尚未实施。竞品对比依据官方文档，没有运行竞品进行性能或安全实测。完整接口与开发命令见 [插件开发指南](PLUGINS.md)。
 
 ### 开发与打包的统一入口
 

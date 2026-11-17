@@ -27,6 +27,7 @@
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
 | `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、解析后转录缓存上限、事件循环阻塞阈值 |
 | `AGENT_PROCESS_BUDGET` | 会话 CLI 的空闲阈值与内存预算、内存压力下的缩短倍数、最短存活时间、Droid/Pi/DSH 的空闲停止时间、临时实例的空闲退出时间、扫除的宽限时间 |
+| `PLUGIN_MARKET_BUDGET` | 可添加的插件源个数、单个索引大小上限、索引（含读取失败）缓存时长、同时读取的索引数、单次读取和整次列出的时限 |
 
 各端的占用口径：Mac 用活动监视器的「内存」（`footprint` 的 phys_footprint），Web 用 JS 堆，iOS 用 phys_footprint，Android 用总 PSS，服务端用 RSS。
 
