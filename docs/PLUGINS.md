@@ -211,7 +211,7 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 **源**：保存在 `<stateDir>/plugins.json` 的 `sources`，所有客户端看到同一份。
 
 - 内置源的 ID 是 `riffet`，地址是默认的 `https://riffable.github.io/riffet/plugins/index.json`，或环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址；设置后该源标为 `fixed`）。它只能关闭，不能删除；关闭记为 `{ "id": "riffet", "enabled": false }`。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`。
-- 添加的源：`{ id, url, enabled?, addedAt? }`。ID 由规范化后的地址推出：主机名第一段加 `-` 加地址 SHA-256 的前 16 位十六进制，如 `riffet-plugins-1a2b3c4d5e6f7a8b`，同一地址得到同一个 ID，按 ID 固定的安装因此在重新添加后仍能找到它；位数足够长，别的地址凑不出同一个 ID，接手不了已固定的安装。地址必须是 https，或回环地址上的 http；不接受 file、带凭据的地址，也不接受本服务自己的端口（与 `host.gateway.fetchModels` 同理）。同一地址再加得 409 `PLUGIN_SOURCE_EXISTS`，超过 `PLUGIN_MARKET_BUDGET.maxSources`（16）得 409 `PLUGIN_SOURCE_LIMIT`。添加时先读一次索引，读不到返回 422 `PLUGIN_SOURCE_UNREADABLE` 并写明原因，什么也不保存。
+- 添加的源：`{ id, url, enabled?, addedAt? }`。ID 由规范化后的地址推出：主机名第一段加 `-` 加地址 SHA-256 的前 16 位十六进制，如 `plugins-1a2b3c4d5e6f7a8b`，同一地址得到同一个 ID，按 ID 固定的安装因此在重新添加后仍能找到它；位数足够长，别的地址凑不出同一个 ID，接手不了已固定的安装。地址必须是 https，或回环地址上的 http；不接受 file、带凭据的地址，也不接受本服务自己的端口（与 `host.gateway.fetchModels` 同理）。同一地址再加得 409 `PLUGIN_SOURCE_EXISTS`，超过 `PLUGIN_MARKET_BUDGET.maxSources`（16）得 409 `PLUGIN_SOURCE_LIMIT`。添加时先读一次索引，读不到返回 422 `PLUGIN_SOURCE_UNREADABLE` 并写明原因，什么也不保存。
 - 添加源只决定能找到什么，不决定能运行什么：每次安装仍要确认授权，显式信任仍只限服务所在设备。任何已登录的客户端都可以管理源。
 - 读取：每个源各自缓存（预算见 `PLUGIN_MARKET_BUDGET`：缓存一分钟、索引不超过 16 MB、同时最多读 4 个、单次读取 10 秒），各自失败：读不到的源带 `error`，其余照常列出。读取失败也缓存一分钟，挂起的源不会让每次列出都等它；整次列出最多 15 秒，到时还没读到的源报未读到。索引里类型不对的版本和条目被跳过，不影响同一源的其他插件。源被删除或关闭时释放它的缓存。
 
