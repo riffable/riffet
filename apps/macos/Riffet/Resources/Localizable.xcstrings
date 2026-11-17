@@ -21,6 +21,16 @@
         }
       }
     },
+    "%lld 个插件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld plugins"
+          }
+        }
+      }
+    },
     "它的文件夹会删除，可以从个人助理目录的提交历史找回": {
       "localizations": {
         "en": {
@@ -81,12 +91,42 @@
         }
       }
     },
+    "已安装的插件保留，不再收到更新。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed plugins stay, but no longer receive updates."
+          }
+        }
+      }
+    },
+    "插件源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugin sources"
+          }
+        }
+      }
+    },
     "用个人助理的模型，按用量计费": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Uses the assistant's model, billed by usage"
+          }
+        }
+      }
+    },
+    "移除插件源？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove plugin source?"
           }
         }
       }

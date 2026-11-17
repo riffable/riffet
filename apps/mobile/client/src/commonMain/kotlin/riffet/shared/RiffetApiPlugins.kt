@@ -62,6 +62,12 @@ suspend fun RiffetApi.installPluginPackage(bytes: ByteArray, fileName: String, g
 /** One plugin of the public index as the server lists it; text maps are keyed by locale. */
 @Serializable
 data class PluginMarketEntry(
+    /** The source listing it. */
+    val sourceId: String = PLUGIN_SOURCE_BUILTIN,
+    /** Installed on this server: the selected version, and whether it came from this source. */
+    val installed: PluginMarketInstalled? = null,
+    /** With `installed.sameSource`: this entry is newer than the installed version and runs here. */
+    val update: Boolean = false,
     val id: String,
     val vendor: String,
     val title: Map<String, String>? = null,
@@ -83,21 +89,74 @@ data class PluginMarketEntry(
 )
 
 @Serializable
-data class PluginMarketList(val plugins: List<PluginMarketEntry> = emptyList(), val trustedAllowed: Boolean = false)
+data class PluginMarketInstalled(val version: String, val sameSource: Boolean = false)
+
+/** The id of the public plugin index, the source every server starts with. */
+const val PLUGIN_SOURCE_BUILTIN = "riffet"
+
+/** A plugin index the server reads; a failed read leaves the others listed. */
+@Serializable
+data class PluginSource(
+    val id: String,
+    val url: String,
+    val name: String? = null,
+    val builtin: Boolean = false,
+    val fixed: Boolean = false,
+    val enabled: Boolean = true,
+    val plugins: Int? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class PluginMarketList(
+    val plugins: List<PluginMarketEntry> = emptyList(),
+    val sources: List<PluginSource> = emptyList(),
+    val trustedAllowed: Boolean = false,
+)
 
 @Throws(Exception::class)
-suspend fun RiffetApi.marketPlugins(): PluginMarketList = get("/api/integrations/market", timeoutMillis = 30_000).decode()
+suspend fun RiffetApi.marketPlugins(refresh: Boolean = false): PluginMarketList =
+    get("/api/integrations/market", if (refresh) listOf("refresh" to "1") else emptyList(), timeoutMillis = 30_000).decode()
+
+/** Reads the index once and saves it; an address that cannot be read is refused. */
+@Throws(Exception::class)
+suspend fun RiffetApi.addPluginSource(url: String): PluginMarketList =
+    post("/api/integrations/sources", kotlinx.serialization.json.buildJsonObject { put("url", kotlinx.serialization.json.JsonPrimitive(url)) }).decode()
+
+@Throws(Exception::class)
+suspend fun RiffetApi.setPluginSourceEnabled(id: String, enabled: Boolean): PluginMarketList =
+    patch("/api/integrations/sources/" + id.enc(), kotlinx.serialization.json.buildJsonObject { put("enabled", kotlinx.serialization.json.JsonPrimitive(enabled)) }).decode()
+
+@Throws(Exception::class)
+suspend fun RiffetApi.removePluginSource(id: String): PluginMarketList =
+    delete("/api/integrations/sources/" + id.enc()).decode()
+
+/** A release of a plugin index before it is installed: the grant request, and the source it came from. */
+@Serializable
+data class PluginMarketOffer(
+    val id: String,
+    val version: String,
+    val sourceId: String = PLUGIN_SOURCE_BUILTIN,
+    val capabilities: List<String> = emptyList(),
+    val trustedRequired: Boolean = false,
+    val trustedAllowed: Boolean = false,
+    val modelSources: List<PluginGrantModelSource>? = null,
+    val executables: List<String>? = null,
+) {
+    val grant: PluginGrantRequired get() = PluginGrantRequired(id, version, capabilities, trustedRequired, trustedAllowed, modelSources, executables)
+}
 
 /** A release in the public plugin index, before it is installed; it has the shape of a grant request so one sheet confirms both. */
 @Throws(Exception::class)
-suspend fun RiffetApi.marketPluginOffer(id: String, version: String? = null): PluginGrantRequired =
-    get("/api/integrations/market/" + id.enc(), version?.let { listOf("version" to it) } ?: emptyList(), timeoutMillis = 30_000).decode()
+suspend fun RiffetApi.marketPluginOffer(id: String, version: String? = null, source: String? = null): PluginMarketOffer =
+    get("/api/integrations/market/" + id.enc(), listOfNotNull(version?.let { "version" to it }, source?.let { "source" to it }), timeoutMillis = 30_000).decode()
 
 /** The server downloads the release from the plugin index and installs it only if its content is what the index lists. */
 @Throws(Exception::class)
-suspend fun RiffetApi.installMarketPlugin(id: String, version: String, grant: List<String>, trusted: Boolean = false): PluginInstallationResult {
+suspend fun RiffetApi.installMarketPlugin(id: String, version: String, source: String, grant: List<String>, trusted: Boolean = false): PluginInstallationResult {
     val body = kotlinx.serialization.json.buildJsonObject {
         put("market", kotlinx.serialization.json.buildJsonObject {
+            put("source", kotlinx.serialization.json.JsonPrimitive(source))
             put("id", kotlinx.serialization.json.JsonPrimitive(id))
             put("version", kotlinx.serialization.json.JsonPrimitive(version))
         })

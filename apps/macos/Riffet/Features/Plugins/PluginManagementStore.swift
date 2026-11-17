@@ -25,7 +25,7 @@ final class PluginManagementStore {
     var trustedInstall = false
     @ObservationIgnored private var package: (data: Data, name: String)?
     /// A release of the plugin index being installed, or asked for by a `riffet://plugins/install` link before this page connected.
-    @ObservationIgnored private var market: (id: String, version: String?)?
+    @ObservationIgnored private var market: (id: String, version: String?, source: String?)?
     @ObservationIgnored private var api: RiffetApi?
     @ObservationIgnored private var serverKey: String?
     @ObservationIgnored private var generation = 0
@@ -33,6 +33,10 @@ final class PluginManagementStore {
     var marketList: PluginMarketList?
     var marketLoading = false
     var marketError: String?
+    /// The source the market list is narrowed to; "all" is every enabled one.
+    var marketSource = "all"
+    var sourceBusy = false
+    var sourceError: String?
     @ObservationIgnored private var marketSerial = 0
     var connected: Bool { api != nil }
     /// For the plugin's own page, which talks to the server itself.
@@ -55,7 +59,7 @@ final class PluginManagementStore {
             if !busy { await refresh() }
             return
         }
-        generation += 1; busy = false; loading = false; marketLoading = false; trustedInstall = false
+        generation += 1; busy = false; loading = false; marketLoading = false; sourceBusy = false; sourceError = nil; marketSource = "all"; trustedInstall = false
         if let next, serverKey != next.baseUrl {
             // A link that arrived before the first connection is for this server; one left pending on another is not.
             if serverKey != nil { market = nil }
@@ -65,23 +69,23 @@ final class PluginManagementStore {
         }
         api = next
         await refresh()
-        if let market, grant == nil { await offer(id: market.id, version: market.version) }
+        if let market, grant == nil { await offer(id: market.id, version: market.version, source: market.source) }
     }
 
     /// From the plugin market page: the release is shown for confirmation, never installed by the link alone.
-    func requestMarketInstall(id: String, version: String?) async {
-        package = nil; market = (id, version); trustedInstall = false
-        if api != nil { await offer(id: id, version: version) }
+    func requestMarketInstall(id: String, version: String?, source: String? = nil) async {
+        package = nil; market = (id, version, source); trustedInstall = false
+        if api != nil { await offer(id: id, version: version, source: source) }
     }
-    private func offer(id: String, version: String?) async {
+    private func offer(id: String, version: String?, source: String?) async {
         let current = generation
         await run { api in
-            let offer = try await api.marketPluginOffer(id: id, version: version)
-            if current == self.generation { self.market = (offer.id, offer.version); self.grant = offer }
+            let offer = try await api.marketPluginOffer(id: id, version: version, source: source)
+            if current == self.generation { self.market = (offer.id, offer.version, offer.sourceId); self.grant = offer.grant }
         }
         if grant == nil { market = nil }
     }
-    func loadMarket() async {
+    func loadMarket(refresh: Bool = false) async {
         guard let api else { return }
         let current = generation
         marketSerial += 1
@@ -89,11 +93,47 @@ final class PluginManagementStore {
         marketLoading = true; marketError = nil
         defer { if current == generation, reading == marketSerial { marketLoading = false } }
         do {
-            let list = try await api.marketPlugins()
+            let list = try await api.marketPlugins(refresh: refresh)
             guard current == generation, reading == marketSerial else { return }
-            marketList = list
+            marketList = list; keepSourceFilter()
         } catch { if current == generation, reading == marketSerial { marketError = error.riffetMessage } }
     }
+    /// Sources that feed the list, in the server's order.
+    var enabledSources: [PluginSource] { (marketList?.sources ?? []).filter(\.enabled) }
+    /// Names are shown only when there is more than one source to tell apart.
+    var multipleSources: Bool { enabledSources.count > 1 }
+    func sourceName(_ id: String) -> String {
+        marketList?.sources.first { $0.id == id }.map(Self.displayName) ?? id
+    }
+    private static func installedKey(_ items: [PluginDescriptor]) -> String {
+        items.map { "\($0.id)@\($0.installed?.selected ?? $0.version ?? "")" }.sorted().joined(separator: "\n")
+    }
+    static func displayName(_ source: PluginSource) -> String {
+        if let name = source.name, !name.isEmpty { return name }
+        if source.builtin { return "Riffet" }
+        if let host = URL(string: source.url)?.host(), !host.isEmpty { return host }
+        return source.url
+    }
+    private func keepSourceFilter() {
+        if marketSource != "all", !enabledSources.contains(where: { $0.id == marketSource }) { marketSource = "all" }
+    }
+    /// Source changes answer with the whole list, which replaces the one shown.
+    private func changeSources(_ action: (RiffetApi) async throws -> PluginMarketList) async -> Bool {
+        guard let api, !sourceBusy else { return false }
+        let current = generation
+        sourceBusy = true; sourceError = nil
+        defer { if current == generation { sourceBusy = false } }
+        do {
+            let list = try await action(api)
+            guard current == generation else { return false }
+            marketList = list; marketError = nil; keepSourceFilter()
+            return true
+        } catch { if current == generation { sourceError = error.riffetMessage }; return false }
+    }
+    func addSource(_ url: String) async -> Bool { await changeSources { try await $0.addPluginSource(url: url) } }
+    func setSource(_ id: String, enabled: Bool) async { _ = await changeSources { try await $0.setPluginSourceEnabled(id: id, enabled: enabled) } }
+    func removeSource(_ id: String) async { _ = await changeSources { try await $0.removePluginSource(id: id) } }
+
     func select(_ plugin: PluginDescriptor) { selectedID = Self.key(plugin); baseline = plugin; draft = [:]; diagnostics = []; logs = [] }
     func collapse() { selectedID = ""; baseline = nil; draft = [:]; diagnostics = []; logs = [] }
     func discard() { draft = [:]; baseline = selected }
@@ -111,7 +151,10 @@ final class PluginManagementStore {
             let loaded = inventory.integrations
             guard current == generation, reading == readSerial else { return }
             recovery = inventory.recovery
+            // The market marks what is installed as of its read: a change to the installed list reads it again.
+            let installedChanged = Self.installedKey(items) != Self.installedKey(loaded)
             items = loaded; if !dirty { error = nil }
+            if installedChanged, marketList != nil { Task { await self.loadMarket() } }
             if !dirty && !busy { baseline = selected }
             PluginsStore.shared.update(loaded)
         } catch { if current == generation, reading == readSerial { self.error = error.riffetMessage } }
@@ -171,7 +214,7 @@ final class PluginManagementStore {
                 let result = if let package {
                     try await api.installPluginPackage(bytes: byteArrayFromData(data: package.data), fileName: package.name, grant: capabilities, trusted: trusted)
                 } else {
-                    try await api.installMarketPlugin(id: market!.id, version: market!.version!, grant: capabilities, trusted: trusted)
+                    try await api.installMarketPlugin(id: market!.id, version: market!.version!, source: market!.source ?? "riffet", grant: capabilities, trusted: trusted)
                 }
                 guard current == self.generation else { return }
                 self.grant = result.grant

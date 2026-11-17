@@ -22,6 +22,7 @@ struct PluginsPage: View {
     @State private var pendingConfigurationPage: String?
     @State private var browsing = false
     @State private var browsed: PluginMarketEntry?
+    @State private var managingSources = false
 
     init(workbench: Workbench) { self.workbench = workbench; store = workbench.pageModels.plugins }
     private var visible: [PluginDescriptor] {
@@ -53,8 +54,12 @@ struct PluginsPage: View {
             text: Binding(get: { store.query }, set: { store.query = $0; store.collapse() }),
             prompt: String(localized: "搜索插件")
         )) {
-            PageMenuButton(symbol: store.filter == "all" ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill", help: String(localized: "筛选"), build: filterMenu)
-                .disabled(store.busy || store.dirty || browsing)
+            PageMenuButton(symbol: (browsing ? store.marketSource : store.filter) == "all" ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill", help: String(localized: "筛选"), build: filterMenu)
+                .disabled(store.busy || store.dirty || (browsing && !store.multipleSources))
+            if browsing {
+                PageActionButton(title: String(localized: "插件源"), symbol: "square.stack.3d.up") { managingSources = true }
+                    .disabled(store.marketList == nil)
+            }
             PageActionButton(title: String(localized: "安装"), symbol: "plus") {
                 if store.dirty { installing = true } else { Task { await store.choosePackage() } }
             }
@@ -77,6 +82,7 @@ struct PluginsPage: View {
         .sheet(isPresented: managementPresentation) {
             if store.grant != nil { grantSheet } else { inspectorSheet }
         }
+        .sheet(isPresented: $managingSources) { PluginSourcesSheet(store: store) }
         .sheet(isPresented: Binding(get: { browsed != nil && store.grant == nil }, set: { if !$0 { browsed = nil } })) {
             if let entry = browsed { marketDetail(entry) }
         }
@@ -290,6 +296,17 @@ struct PluginsPage: View {
 
     private func filterMenu() -> NSMenu {
         let menu = NSMenu()
+        if browsing {
+            let all = MenuAction.item(String(localized: "全部")) { store.marketSource = "all" }
+            all.state = store.marketSource == "all" ? .on : .off
+            menu.addItem(all)
+            for source in store.enabledSources {
+                let item = MenuAction.item(PluginManagementStore.displayName(source)) { store.marketSource = source.id }
+                item.state = store.marketSource == source.id ? .on : .off
+                menu.addItem(item)
+            }
+            return menu
+        }
         let options: [(String, String)] = [
             ("all", String(localized: "全部")), ("enabled", String(localized: "已启用")),
             ("disabled", String(localized: "已停用")), ("attention", String(localized: "异常")),
@@ -600,6 +617,8 @@ struct PluginsPage: View {
     }
     private var browseEntries: [PluginMarketEntry] {
         (store.marketList?.plugins ?? []).filter {
+            store.marketSource == "all" || $0.sourceId == store.marketSource
+        }.filter {
             store.query.isEmpty || (marketTitle($0) + " " + $0.id + " " + $0.vendor).localizedCaseInsensitiveContains(store.query)
         }
     }
@@ -617,6 +636,21 @@ struct PluginsPage: View {
                 }
             }
         }
+        let failed = store.enabledSources.filter { $0.error != nil }
+        if !failed.isEmpty {
+            Section {
+                ForEach(failed, id: \.id) { source in
+                    HStack(alignment: .center, spacing: Space.md) {
+                        VStack(alignment: .leading, spacing: Space.xs) {
+                            Text(PluginManagementStore.displayName(source)).font(.callout).foregroundStyle(palette.fg)
+                            Text(source.error ?? "").font(.caption).foregroundStyle(palette.fg3).textSelection(.enabled)
+                        }
+                        Spacer()
+                        Button("重试") { Task { await store.loadMarket(refresh: true) } }.disabled(store.marketLoading)
+                    }
+                }
+            }
+        }
         if store.marketLoading && store.marketList == nil {
             Section { Spinner(size: .small).frame(maxWidth: .infinity) }
         } else if browseEntries.isEmpty && store.marketError == nil {
@@ -627,16 +661,20 @@ struct PluginsPage: View {
         }
         if !browseEntries.isEmpty {
             Section {
-                ForEach(browseEntries, id: \.id) { entry in
-                    MarketRow(entry: entry, title: marketTitle(entry), open: { browsed = entry }) { marketAction(entry) }
+                ForEach(browseEntries, id: \.rowID) { entry in
+                    MarketRow(entry: entry, title: marketTitle(entry), sourceName: store.multipleSources ? store.sourceName(entry.sourceId) : nil, open: { browsed = entry }) { marketAction(entry) }
                 }
             }
         }
     }
 
     @ViewBuilder private func marketAction(_ entry: PluginMarketEntry) -> some View {
-        if store.items.contains(where: { $0.id == entry.id }) {
-            Button("已安装") {}.disabled(true)
+        if let installed = entry.installed {
+            if installed.sameSource && entry.update {
+                Button("更新") { installFromMarket(entry) }.disabled(store.busy || !store.connected)
+            } else {
+                Button("已安装") {}.disabled(true)
+            }
         } else if !entry.compatible {
             Button("不兼容") {}.disabled(true)
         } else {
@@ -646,7 +684,7 @@ struct PluginsPage: View {
 
     private func installFromMarket(_ entry: PluginMarketEntry) {
         browsed = nil
-        Task { await store.requestMarketInstall(id: entry.id, version: entry.version) }
+        Task { await store.requestMarketInstall(id: entry.id, version: entry.version, source: entry.sourceId) }
     }
 
     private func marketTitle(_ entry: PluginMarketEntry) -> String {
@@ -659,7 +697,7 @@ struct PluginsPage: View {
                 PluginIcon(id: entry.id, title: marketTitle(entry), size: 36)
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(marketTitle(entry)).font(.title3.weight(.semibold)).foregroundStyle(palette.fg).lineLimit(1)
-                    Text([entry.vendor, "v" + entry.version, entry.date].compactMap { $0 }.joined(separator: " · "))
+                    Text([entry.vendor, "v" + entry.version, entry.date, store.multipleSources ? store.sourceName(entry.sourceId) : nil].compactMap { $0 }.joined(separator: " · "))
                         .font(.caption).foregroundStyle(palette.fg3)
                 }
                 Spacer(minLength: Space.md)
@@ -847,6 +885,7 @@ private struct PluginRow<Trailing: View>: View {
 private struct MarketRow<Trailing: View>: View {
     let entry: PluginMarketEntry
     let title: String
+    var sourceName: String?
     let open: () -> Void
     @ViewBuilder let trailing: Trailing
     @Environment(\.palette) private var palette
@@ -860,7 +899,8 @@ private struct MarketRow<Trailing: View>: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title).font(.riffet(size: S(13))).foregroundStyle(palette.fg).lineLimit(1)
                         let description = localizedText(entry.description_, fallback: "")
-                        Text(description.isEmpty ? entry.vendor + " · " + entry.version : description + "  " + entry.vendor + " · " + entry.version)
+                        let tail = [entry.vendor + " · " + entry.version, sourceName].compactMap { $0 }.joined(separator: " · ")
+                        Text(description.isEmpty ? tail : description + "  " + tail)
                             .font(.riffet(size: S(11.5))).foregroundStyle(palette.fg3).lineLimit(1)
                     }
                     Spacer(minLength: Space.md)
@@ -952,4 +992,9 @@ struct PluginIcon: View {
     private var ink: Color {
         scheme == .dark ? Color(hue: hue, saturation: 0.3, brightness: 0.9) : Color(hue: hue, saturation: 0.55, brightness: 0.45)
     }
+}
+
+private extension PluginMarketEntry {
+    /// The same id may be listed by several sources.
+    var rowID: String { sourceId + "/" + id }
 }
