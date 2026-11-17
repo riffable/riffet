@@ -80,7 +80,7 @@ function memoryPlugin(traits?: AgentTraits) {
     manifest: { id: 'test.agent', vendor: 'Test', name: 'agent', apiVersion: 1, defaultEnabled: false, contributes: { agentBackends: [{ id: 'test.agent', title: { en: 'Memory agent' } }] } },
     activate: () => ({ agentBackends: [backend] }),
   };
-  return { plugin, calls, backend, hosts };
+  return { plugin, calls, backend, hosts, history };
 }
 
 async function build(plugin: Plugin, workspace: object = {}) {
@@ -96,7 +96,7 @@ async function build(plugin: Plugin, workspace: object = {}) {
   cleanups.push(async () => { backends.close(); await service.closeAll(); ingest.close(); await plugins.close(); store.close(); await rm(directory, { recursive: true, force: true }); });
   const project = store.createProject('/tmp/riffet-plugin-backend', 'plugin');
   const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'test.agent', mode: 'agent' });
-  return { store, plugins, registry, service, session };
+  return { store, plugins, registry, service, session, ingest };
 }
 
 describe('an Agent backend from a plugin', () => {
@@ -291,11 +291,12 @@ describe('an Agent backend from a plugin', () => {
   it('hands the readers of a conversation to the new driver when its plugin is turned off and on, and starts it once per activation', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const plugin = memoryPlugin();
-    const { plugins, service, session } = await build(plugin.plugin);
+    const { store, plugins, service, session, ingest } = await build(plugin.plugin);
     const count = (call: string) => plugin.calls.filter(item => item === call).length;
     await plugins.update('test.agent', { enablement: 'on' });
     await vi.waitFor(() => expect(count('start:default')).toBe(1));
     await service.ensure(session);
+    const following = ingest.follow(session.id);
     const first: string[] = [];
     const reader = service.watchControl(session.id, message => { if (message.type === 'status') first.push(message.status.phase); });
     expect(reader.status()).toMatchObject({ phase: 'idle', model: 'memory' });
@@ -315,6 +316,12 @@ describe('an Agent backend from a plugin', () => {
     expect(count('start:default')).toBe(2);
     expect(count('observe') - count('unobserve')).toBe(1);
     expect(reader.status()).toMatchObject({ phase: 'idle', model: 'memory' });
+
+    // The journal, which followed the session throughout, reads it through the new driver too.
+    plugin.history.push({ type: 'agent_message_chunk', nativeId: 'after-reload', nativeTurnId: 't1', createdAt: at, data: { content: { type: 'text', text: 'after' } } });
+    ingest.wake(session.id);
+    await vi.waitFor(() => expect(store.journal.range(laneKey(session.id, 'main'), 0, 50).map(row => row.nativeId)).toContain('after-reload'));
+    following();
 
     // Closing the last reader releases the one watch there is.
     reader.close(); waiting.close();

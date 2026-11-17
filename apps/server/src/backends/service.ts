@@ -295,6 +295,13 @@ export class NativeBackendService {
    */
   attachBackend(backendId: NativeBackendId): void {
     if (this.closed) return;
+    // The journal reads these conversations through the new driver too, not the one released with the old activation.
+    this.ingest?.reopen(sessionId => {
+      try {
+        const session = this.options.store.getSession(sessionId);
+        return session.kind === 'native' && this.backendId(session) === backendId;
+      } catch { return false; }
+    });
     for (const [sessionId, readers] of [...this.controlReaders]) {
       if (!readers.size) continue;
       try {

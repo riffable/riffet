@@ -18,7 +18,8 @@ export interface TranscriptIngestDeps {
 }
 
 interface Followed {
-  readonly source: TranscriptSource;
+  /** Replaced when the session's backend is registered again (`reopen`). */
+  source: TranscriptSource;
   readonly abort: AbortController;
   holders: number;
   /** What runs and what waits for this session, in order. */
@@ -72,6 +73,30 @@ export class TranscriptIngest {
       entry.holders -= 1;
       if (!entry.holders) this.linger(sessionId, entry);
     };
+  }
+
+  /**
+   * The backends of the matching sessions were registered again (a plugin reloaded or updated): a session
+   * still followed drops the source the earlier activation gave it, which reads nothing any more, and is
+   * read through the current one from now on. Holders and the writer stay as they were.
+   */
+  reopen(match: (sessionId: string) => boolean): void {
+    for (const [sessionId, entry] of [...this.followed]) {
+      if (entry.abort.signal.aborted || !match(sessionId)) continue;
+      let source: TranscriptSource | undefined;
+      try { source = this.deps.source(sessionId); }
+      catch (error) { this.report(sessionId, error); continue; }
+      if (!source || source === entry.source) continue;
+      try { entry.unwatch?.(); } catch { /* the old source is let go either way */ }
+      entry.unwatch = undefined;
+      // A read in flight finishes on the old source, which reads nothing; the next one reads this.
+      entry.source = source;
+      if (entry.holders && source.watch) {
+        try { entry.unwatch = source.watch(this.writer(sessionId), () => this.wake(sessionId)); }
+        catch (error) { this.report(sessionId, error); }
+      }
+      entry.reading = this.pull(sessionId, entry);
+    }
   }
 
   /** Settles once the read the latest `follow` started is done, caught up or failed; undefined for a session without a source. */
