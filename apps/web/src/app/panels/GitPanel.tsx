@@ -79,7 +79,7 @@ function ReviewComposer({ path, draft, comments, onDraft, onAdd, onRemove }: {
         </div>
       )}
       {draft ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-line bg-elevated p-2.5 shadow-xs">
+        <div className="flex flex-col gap-2 rounded-xl border border-line bg-elevated p-2.5 shadow-soft">
           <div className="flex items-center gap-2 text-xs text-fg-3">
             <IconMessageSquareText className="size-3.5 text-accent" />
             <span className="text-fg-2">{lineLabel({ line: draft.range.from, endLine: draft.range.to })}</span>
