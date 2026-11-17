@@ -846,6 +846,10 @@ msgstr "Medium"
 msgid "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
 msgstr "Neutral overlays, small radii, outlined secondary buttons, thin-track switches and underlined fields."
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "中性灰与一种低饱和蓝的配色。"
+msgstr "A neutral grey with one muted blue."
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "中文"
 msgstr "Chinese"
@@ -1754,6 +1758,10 @@ msgstr "Inset"
 #: src/app/design/mac/notes.ts
 msgid "内缩卡片"
 msgstr "Inset card"
+
+#: src/app/design/components/NavigationChapter.tsx
+msgid "内置"
+msgstr "Built-in"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "内置官方插件"
@@ -3192,6 +3200,7 @@ msgstr "Its folder is deleted; the assistant directory's commit history keeps it
 msgid "安装"
 msgstr "Install"
 
+#: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "安装到当前连接的服务器"
 msgstr "Install on the connected server"
@@ -4389,6 +4398,10 @@ msgid "把超时统一成一个常量"
 msgstr "Unify timeouts into one constant"
 
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/design/components/NavigationChapter.tsx
+msgid "把兼容 OpenAI 接口的网关作为模型源。"
+msgstr "Use an OpenAI-compatible gateway as a model source."
+
 msgid "把配色改成画板"
 msgstr "Turn the palette into a canvas"
 
@@ -4841,8 +4854,8 @@ msgid "收藏"
 msgstr "Favorite"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务、插件"
-msgstr "Favorites, tasks, plugins"
+msgid "收藏、任务"
+msgstr "Favorites, tasks"
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "收藏夹"
@@ -4949,6 +4962,10 @@ msgstr "Tidy the timeout constants"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
+#: src/app/design/components/NavigationChapter.tsx
+msgid "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+msgstr "The whole card opens the details; the footer controls sit above it. Two lines of description, one to three columns by the content width."
+
 msgstr "One conversation per group"
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -6704,6 +6721,7 @@ msgstr "Confirm"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "确定要删除吗？"
+#: src/app/design/components/NavigationChapter.tsx
 msgstr "Are you sure you want to delete?"
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -7346,6 +7364,10 @@ msgstr "Grid"
 #: src/app/settings/SupportSections.tsx
 msgid "网页交互诊断"
 msgstr "Browser interaction diagnostics"
+#: src/app/design/components/NavigationChapter.tsx
+msgid "网关模型"
+msgstr "Gateway models"
+
 
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "置顶"
@@ -7785,8 +7807,8 @@ msgid "设计规范"
 msgstr "Design system"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范；扩展管理用 PageHeader 自建"
-msgstr "Design system; extension management is built with PageHeader"
+msgid "设计规范、插件；扩展管理用 PageHeader 自建"
+msgstr "Design system, plugins; extension management is built with PageHeader"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "设计规范页的组、文档和代码目录一一对应。"

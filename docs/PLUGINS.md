@@ -235,7 +235,7 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 
 **命令行**：`riffet plugin source list`、`source add <url>`、`source remove <id|url>`、`source enable <id>`、`source disable <id>`。服务运行时经接口，停止时在状态目录锁下直接改 `plugins.json`，与 `install` 相同。
 
-**客户端**：Web 与 Mac 的插件页有「浏览」，经服务端读同一批源，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
+**客户端**：Web 插件页左侧目录列出每个源，可添加、停用、移除，Mac 插件页是「浏览」页签；两端都经服务端读同一批源，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
 
 **自建索引**：`riffet plugin index build <registry-dir> --out <dir> [--name <文本>] [--published <索引地址>|none]` 从一个记录目录生成 `<dir>/index.json`、`packages/` 和 `assets/`，放到任何静态主机上即可作为源添加。输出没有 HTML 页面，也没有 `readmeHtml`。记录和下面的公共站点相同：`{ "path": "<包目录>" }`（相对记录目录；构建并打包，归档由索引托管在 `packages/` 下）或外部包的记录；外部记录的 `archive`、`readme` 还可以写相对记录目录的路径，归档会复制进 `packages/`。
 

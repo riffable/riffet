@@ -1,6 +1,6 @@
 # 导航
 
-在视图和条目之间移动：`UnderlineTabs` 与列表行。画面在 `/design/components/navigation`，页签在 `apps/web/src/components/ui/controls.tsx:100`。
+在视图和条目之间移动：`UnderlineTabs`、列表行与卡片网格（`Tile`）。画面在 `/design/components/navigation`，页签在 `apps/web/src/components/ui/controls.tsx:100`。
 
 ## UnderlineTabs
 
@@ -61,6 +61,33 @@
 
 - `SessionRow` 以 `ListRow` 为外壳，保留自己的「时间与操作同格」布局和 `RowMenu` 触发器（24 见方，悬停 `bg-active`），尚未换成 `Button size="icon-sm"`。
 - `SessionInfo.tsx` 的 `infoRow` 仍被 `session/SessionWorkActions.tsx`、`session/marks.tsx` 以类名使用，尚未换成 `ListRow`。
+
+## Tile（卡片网格）
+
+一组可挑选、每项要看说明才能分辨的对象排成的卡片，比如插件。实现在 `components/ui/tile.tsx`。
+
+### 用途
+
+- 用于：看板档正文里的目录，每项有标志、名称、一两句说明和自己的控件（开关、安装）。
+- 不用于：只靠名称就能分辨的条目（用 `ListRow`）；设置项（用 `SettingsRow`）；单选（用 `SettingsThumbChoice`）。
+
+### 结构
+
+`TileGrid` 按自己的宽度排列：一列，512 起两列，768 起三列，间距 12。卡片 `rounded-xl`、`border-line`、底 `bg-elevated`、内边距 16，平面无阴影。从上到下：40 见方的标志（`rounded-xl bg-muted`）与标题（`text-sm font-medium fg`，可跟一枚 `Badge`）、`meta` 一行（`text-xs fg-3`）；说明 `text-xs fg-2`，最多两行；页脚在底部对齐，左边是 `facts`（14 的图标，`fg-4`，每个带 `Tip`），右边是 `actions`。
+
+### 状态
+
+悬停时边框换 `line-strong`；标题按钮获得键盘焦点时整张卡片画焦点环；禁用时标题不可点，页脚的控件各自处理禁用。
+
+### 键盘与无障碍
+
+标题是 `h4` 里的 `<button>`（卡片放在 `h3` 分组标题下），它的 `::after` 铺满卡片，所以点卡片任何空白处都等于点标题；页脚里只有各个事实和控件在这一层之上，开关和按钮各自可聚焦。Tab 依次经过标题和页脚的控件。`facts` 的图标是 `role="img"`，名称写在 `aria-label`。
+
+### 不要
+
+- 在卡片上再放一个与标题同义的「详情」按钮。
+- 把整段权限、说明放进卡片：卡片只放图标和两行说明，完整内容在详情里。
+- 在文档档（768）里用：两列以下不如列表。
 
 ## 可排序列表（SortableList）
 

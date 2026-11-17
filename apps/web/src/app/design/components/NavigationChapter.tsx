@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { IconEllipsis, IconFileText, IconFolder, IconGitBranch, IconMessageSquareText, IconTerminal } from '@/components/icons';
+import { IconCpu, IconEllipsis, IconFileText, IconFolder, IconGitBranch, IconGlobe, IconMessageSquareText, IconSun, IconTerminal } from '@/components/icons';
 import { AgentMark } from '@/components/agent-marks';
 import { Button } from '@/components/ui/button';
-import { UnderlineTabs } from '@/components/ui/controls';
+import { Badge, Switch, UnderlineTabs } from '@/components/ui/controls';
+import { Tile } from '@/components/ui/tile';
 import { ListRow, RowActions } from '@/components/ui/list-row';
 import { menuItem } from '@/components/ui/dropdown-menu';
 import { SortableList, SortHandle } from '@/components/ui/sortable-list';
@@ -114,6 +115,14 @@ export function NavigationChapter() {
             <ListRow leading={<IconFileText />} actions={<RowActions><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></RowActions>}>{t`文件`}</ListRow>
             {/* The same row as hover draws it, so the hidden actions can be seen. */}
             <ListRow className="bg-hover text-fg" leading={<IconFileText />} actions={<RowActions className="pointer-events-auto opacity-100"><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></RowActions>}>{t`文件`}</ListRow>
+          </div>
+        </Specimen>
+      </Family>
+      <Family title="Tile">
+        <Specimen name={t`默认`} prop="media · meta · description · facts · actions" note={t`整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。`} wide>
+          <div className="grid w-full max-w-xl grid-cols-2 gap-3">
+            <Tile media={<span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-fg-2"><IconCpu className="size-5" /></span>} title={t`网关模型`} meta="Example · v1.0.0" description={t`把兼容 OpenAI 接口的网关作为模型源。`} facts={<><IconCpu /><IconGlobe /></>} actions={<Button size="sm" variant="secondary">{t`安装`}</Button>} onOpen={() => {}} />
+            <Tile className="border-line-strong" media={<span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-fg-2"><IconSun className="size-5" /></span>} title={t`石墨`} badge={<Badge className="font-normal">{t`内置`}</Badge>} meta="Example · v1.0.0" description={t`中性灰与一种低饱和蓝的配色。`} actions={<Switch checked aria-label={t`石墨`} onCheckedChange={() => {}} />} onOpen={() => {}} />
           </div>
         </Specimen>
       </Family>

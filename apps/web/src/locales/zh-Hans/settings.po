@@ -846,6 +846,10 @@ msgstr "中"
 msgid "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
 msgstr "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "中性灰与一种低饱和蓝的配色。"
+msgstr "中性灰与一种低饱和蓝的配色。"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "中文"
 msgstr "中文"
@@ -1754,6 +1758,10 @@ msgstr "内缩"
 #: src/app/design/mac/notes.ts
 msgid "内缩卡片"
 msgstr "内缩卡片"
+
+#: src/app/design/components/NavigationChapter.tsx
+msgid "内置"
+msgstr "内置"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "内置官方插件"
@@ -3192,6 +3200,7 @@ msgstr "它的文件夹会删除，可以从个人助理目录的提交历史找
 msgid "安装"
 msgstr "安装"
 
+#: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "安装到当前连接的服务器"
 msgstr "安装到当前连接的服务器"
@@ -4389,6 +4398,10 @@ msgid "把超时统一成一个常量"
 msgstr "把超时统一成一个常量"
 
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/design/components/NavigationChapter.tsx
+msgid "把兼容 OpenAI 接口的网关作为模型源。"
+msgstr "把兼容 OpenAI 接口的网关作为模型源。"
+
 msgid "把配色改成画板"
 msgstr "把配色改成画板"
 
@@ -4841,8 +4854,8 @@ msgid "收藏"
 msgstr "收藏"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务、插件"
-msgstr "收藏、任务、插件"
+msgid "收藏、任务"
+msgstr "收藏、任务"
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "收藏夹"
@@ -4949,6 +4962,10 @@ msgstr "整理超时常量"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
+#: src/app/design/components/NavigationChapter.tsx
+msgid "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+msgstr "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+
 msgstr "整群一个会话"
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -6704,6 +6721,7 @@ msgstr "确定"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "确定要删除吗？"
+#: src/app/design/components/NavigationChapter.tsx
 msgstr "确定要删除吗？"
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -7346,6 +7364,10 @@ msgstr "网格"
 #: src/app/settings/SupportSections.tsx
 msgid "网页交互诊断"
 msgstr "网页交互诊断"
+#: src/app/design/components/NavigationChapter.tsx
+msgid "网关模型"
+msgstr "网关模型"
+
 
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "置顶"
@@ -7785,8 +7807,8 @@ msgid "设计规范"
 msgstr "设计规范"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范；扩展管理用 PageHeader 自建"
-msgstr "设计规范；扩展管理用 PageHeader 自建"
+msgid "设计规范、插件；扩展管理用 PageHeader 自建"
+msgstr "设计规范、插件；扩展管理用 PageHeader 自建"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "设计规范页的组、文档和代码目录一一对应。"

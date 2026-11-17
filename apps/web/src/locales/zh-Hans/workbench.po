@@ -15,11 +15,6 @@ msgstr ""
 msgid "{0} 不可用"
 msgstr "{0} 不可用"
 
-#. placeholder {0}: source.plugins
-#: src/app/plugins/PluginSources.tsx
-msgid "{0} 个插件"
-msgstr "{0} 个插件"
-
 #. placeholder {0}: git.changes
 #: src/app/SessionInfo.tsx
 msgid "{0} 个文件"
@@ -48,7 +43,7 @@ msgstr "{schedules, plural, other {# 个定时计划继续运行。}}"
 msgid "「{0}」{body}"
 msgstr "「{0}」{body}"
 
-#: src/app/plugins/PluginsPage.tsx
+#: src/app/plugins/PluginMark.tsx
 msgid "Agent 与模型"
 msgstr "Agent 与模型"
 
@@ -255,6 +250,10 @@ msgstr "修改状态"
 #: src/app/Workbench.tsx
 msgid "停止当前运行"
 msgstr "停止当前运行"
+#: src/app/plugins/PluginSources.tsx
+msgid "停用插件源"
+msgstr "停用插件源"
+
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
@@ -265,7 +264,6 @@ msgid "先为这个任务选一个项目"
 msgstr "先为这个任务选一个项目"
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
 msgid "全部"
 msgstr "全部"
@@ -273,6 +271,7 @@ msgstr "全部"
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
 msgstr "全部会话"
+#: src/app/plugins/PluginsNav.tsx
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
@@ -477,6 +476,7 @@ msgid "取消"
 msgstr "取消"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/DirectoryPicker.tsx
 msgctxt "workbench-cancel-action"
 msgid "取消"
@@ -539,6 +539,10 @@ msgstr "启用插件后可打开专用配置"
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可用"
 msgstr "启用插件后可用"
+#: src/app/plugins/PluginSources.tsx
+msgid "启用插件源"
+msgstr "启用插件源"
+
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用策略"
@@ -620,6 +624,7 @@ msgstr "复制命令"
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 msgstr "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
+#: src/app/plugins/PluginSources.tsx
 
 #: src/app/SidebarUserMenu.tsx
 msgid "复制地址"
@@ -694,7 +699,7 @@ msgstr "展开其余 {hiddenCount} 个会话"
 msgid "工作区导航"
 msgstr "工作区导航"
 
-#: src/app/plugins/PluginsPage.tsx
+#: src/app/plugins/PluginMark.tsx
 msgid "工作台"
 msgstr "工作台"
 
@@ -723,6 +728,7 @@ msgstr "已启用"
 msgid "已复制地址"
 msgstr "已复制地址"
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已安装"
@@ -779,6 +785,7 @@ msgstr "开发包"
 #: src/app/plugins/PluginsPage.tsx
 msgid "开启"
 msgstr "开启"
+#: src/app/plugins/PluginsNav.tsx
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "异常"
@@ -966,13 +973,13 @@ msgstr "插件"
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件 ID"
 msgstr "插件 ID"
+#: src/app/plugins/PluginsNav.tsx
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr "插件已不可用，当前内容会保留到关闭"
 
-#: src/app/plugins/PluginSources.tsx
-#: src/app/plugins/PluginsPage.tsx
+#: src/app/plugins/PluginsNav.tsx
 msgid "插件源"
 msgstr "插件源"
 
@@ -1438,11 +1445,13 @@ msgstr "更早"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务与分享"
+#: src/app/plugins/PluginSources.tsx
 msgstr "服务与分享"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
 msgstr "服务器版本不兼容"
+#: src/app/plugins/PluginsPage.tsx
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
@@ -1450,7 +1459,12 @@ msgstr "服务器版本不兼容"
 msgid "未关联项目"
 msgstr "未关联项目"
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/Sidebar.tsx
+msgid "有更新"
+msgstr "有更新"
+
+#: src/app/plugins/PluginMark.tsx
 msgid "未读"
 msgstr "未读"
 
@@ -1566,11 +1580,6 @@ msgstr "没有符合筛选的记录"
 msgid "浅色"
 msgstr "浅色"
 
-#: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-market"
-msgid "浏览"
-msgstr "浏览"
-
 #: src/app/AddProjectDialog.tsx
 msgid "浏览…"
 msgstr "浏览…"
@@ -1603,6 +1612,11 @@ msgstr "清空"
 #: src/plugins/ModelField.tsx
 msgid "清除"
 msgstr "清除"
+#: src/app/plugins/PluginsNav.tsx
+#: src/app/plugins/PluginSources.tsx
+msgid "添加插件源"
+msgstr "添加插件源"
+
 
 #: src/plugins/LogRecords.tsx
 msgid "清除筛选"
@@ -1710,11 +1724,6 @@ msgstr "移除"
 #: src/app/plugins/PluginPageView.tsx
 msgid "移除 {value}"
 msgstr "移除 {value}"
-
-#. placeholder {0}: sourceName(source)
-#: src/app/plugins/PluginSources.tsx
-msgid "移除“{0}”"
-msgstr "移除“{0}”"
 
 #. placeholder {0}: sourceName(source)
 #: src/app/plugins/PluginSources.tsx

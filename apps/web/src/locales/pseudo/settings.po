@@ -846,6 +846,10 @@ msgstr ""
 msgid "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
 msgstr ""
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "中性灰与一种低饱和蓝的配色。"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "中文"
 msgstr ""
@@ -1753,6 +1757,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "内缩卡片"
+msgstr ""
+
+#: src/app/design/components/NavigationChapter.tsx
+msgid "内置"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -3192,6 +3200,7 @@ msgstr ""
 msgid "安装"
 msgstr ""
 
+#: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "安装到当前连接的服务器"
 msgstr ""
@@ -4389,6 +4398,10 @@ msgid "把超时统一成一个常量"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/design/components/NavigationChapter.tsx
+msgid "把兼容 OpenAI 接口的网关作为模型源。"
+msgstr ""
+
 msgid "把配色改成画板"
 msgstr ""
 
@@ -4841,7 +4854,7 @@ msgid "收藏"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务、插件"
+msgid "收藏、任务"
 msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
@@ -4949,6 +4962,10 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
+#: src/app/design/components/NavigationChapter.tsx
+msgid "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+msgstr ""
+
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -6704,6 +6721,7 @@ msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "确定要删除吗？"
+#: src/app/design/components/NavigationChapter.tsx
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -7346,6 +7364,10 @@ msgstr ""
 #: src/app/settings/SupportSections.tsx
 msgid "网页交互诊断"
 msgstr ""
+#: src/app/design/components/NavigationChapter.tsx
+msgid "网关模型"
+msgstr ""
+
 
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "置顶"
@@ -7785,7 +7807,7 @@ msgid "设计规范"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范；扩展管理用 PageHeader 自建"
+msgid "设计规范、插件；扩展管理用 PageHeader 自建"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
