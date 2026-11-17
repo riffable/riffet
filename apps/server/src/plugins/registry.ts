@@ -274,12 +274,12 @@ export class PluginRegistry {
         ...(declared.hint ? { hint: declared.hint } : {}),
         resolve: () => ({ reason: `Model source ${declared.id} is awaiting activation` }),
         prepare: async () => { await this.ensureContribution('model-source', declared.id); },
-        catalog: async (backend, overrides) => {
+        catalog: async (backend, overrides, protocol) => {
           await this.ensureContribution('model-source', declared.id);
           const provider = entry.active?.contributions?.modelSources?.find(source => source.id === declared.id);
           if (!provider) throw new AppError('PLUGIN_CONTRIBUTION_UNAVAILABLE', 'This model source is unavailable', 409);
           await provider.prepare?.(overrides);
-          return provider.catalog(backend, overrides);
+          return provider.catalog(backend, overrides, protocol);
         },
       }));
     });

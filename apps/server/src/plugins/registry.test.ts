@@ -1079,17 +1079,17 @@ describe('calls into plugin code and process restarts', () => {
     try {
       await registry.refresh();
       const provider = live(registry, 'hung-source');
-      await expect(provider.catalog('codex', {})).rejects.toMatchObject({ message: expect.stringMatching(/acme\.hung: modelSource\.catalog did not finish within 0\.02s/) });
+      await expect(provider.catalog('codex', {}, 'openai-responses')).rejects.toMatchObject({ message: expect.stringMatching(/acme\.hung: modelSource\.catalog did not finish within 0\.02s/) });
       expect((await registry.logs('acme.hung')).some(item => item.level === 'error' && item.message.includes('modelSource.catalog failed'))).toBe(true);
-      await expect(provider.catalog('codex', {})).rejects.toThrow('did not finish');
-      await expect(provider.catalog('codex', {})).rejects.toThrow('did not finish');
+      await expect(provider.catalog('codex', {}, 'openai-responses')).rejects.toThrow('did not finish');
+      await expect(provider.catalog('codex', {}, 'openai-responses')).rejects.toThrow('did not finish');
       expect(catalog).toHaveBeenCalledTimes(3);
       expect((await byId(registry, 'acme.hung')).status).toMatchObject({ state: 'attention', message: expect.stringContaining('not responding') });
-      await expect(provider.catalog('codex', {})).rejects.toMatchObject({ code: 'PLUGIN_NOT_RESPONDING' });
+      await expect(provider.catalog('codex', {}, 'openai-responses')).rejects.toMatchObject({ code: 'PLUGIN_NOT_RESPONDING' });
       expect(catalog).toHaveBeenCalledTimes(3);
       await new Promise(resolve => setTimeout(resolve, 140));
       hang = false;
-      await expect(provider.catalog('codex', {})).resolves.toEqual([]);
+      await expect(provider.catalog('codex', {}, 'openai-responses')).resolves.toEqual([]);
       expect(catalog).toHaveBeenCalledTimes(4);
       expect((await byId(registry, 'acme.hung')).status?.state).not.toBe('attention');
     } finally { await registry.close(); }
@@ -1100,7 +1100,7 @@ describe('calls into plugin code and process restarts', () => {
     const registry = new PluginRegistry({ stateDir: await stateDir(), callTimeoutMs: 20, plugins: [custom('acme.down', () => ({ modelSources: [{ ...source('down-source'), catalog }] }))] });
     try {
       await registry.refresh();
-      for (let index = 0; index < 5; index++) await expect(live(registry, 'down-source').catalog('codex', {})).rejects.toMatchObject({ code: 'GATEWAY_DOWN', message: 'gateway is down', statusCode: 502 });
+      for (let index = 0; index < 5; index++) await expect(live(registry, 'down-source').catalog('codex', {}, 'openai-responses')).rejects.toMatchObject({ code: 'GATEWAY_DOWN', message: 'gateway is down', statusCode: 502 });
       expect(catalog).toHaveBeenCalledTimes(5);
       expect((await registry.logs('acme.down')).filter(item => item.message.includes('modelSource.catalog failed'))).toHaveLength(5);
     } finally { await registry.close(); }

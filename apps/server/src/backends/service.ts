@@ -186,6 +186,7 @@ export class NativeBackendService {
       listTerminals: () => options.store.listTerminals(),
       recordActivity: (id, at) => options.store.updateSessionActivity(id, at),
       getProfile: session => this.resolveSync(session).profile,
+      findProfile: (backendId, profileId) => this.catalog.profiles(options.registry.require(backendId)).find(profile => profile.id === profileId),
       updateSession: (id, patch) => options.store.updateSession(id, patch),
       bumpConfig: (id, patch) => options.store.bumpConfig(id, patch),
       setNativeSessionId: (id, nativeSessionId) => {

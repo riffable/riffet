@@ -319,9 +319,9 @@ class RemoteModelSource implements ModelSourceProvider {
     return running;
   }
 
-  async catalog(backend: ModelSourceBackend, overrides: SourceOverrides) {
+  async catalog(backend: ModelSourceBackend | undefined, overrides: SourceOverrides, protocol: GatewayProtocol) {
     await this.prepare(overrides).catch(() => undefined);
-    return this.addresses.during(overrides, () => this.call('modelSource.catalog', { id: this.id, backend, overrides }, TIMEOUTS.catalog));
+    return this.addresses.during(overrides, () => this.call('modelSource.catalog', { id: this.id, ...(backend ? { backend } : {}), overrides, protocol }, TIMEOUTS.catalog));
   }
 }
 

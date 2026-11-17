@@ -92,7 +92,7 @@ export class FakeHost implements AgentHost {
   }
 
   /** Cursor names no model source. */
-  readonly modelSources: AgentHost['modelSources'] = { resolve: async () => undefined };
+  readonly modelSources: AgentHost['modelSources'] = { resolve: async () => undefined, models: async () => undefined };
   readonly terminals: AgentTerminals = {
     inspect: async () => undefined,
     launch: async (sessionId, spec) => {

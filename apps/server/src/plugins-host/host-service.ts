@@ -28,13 +28,14 @@ const denied = (capability: string) => new AppError('PLUGIN_CAPABILITY_DENIED', 
 /** Only fields the proxy host forwards, each checked: the package's request is data, not an object of the server's. */
 function gatewayRequest(value: unknown): GatewayModelsRequest {
   if (!isRecord(value)) throw new AppError('INVALID_INPUT', 'request must be an object');
-  const { baseUrl, apiKey, auth, timeoutMs, reasoningLevels, modelsPath, headers } = value;
+  const { baseUrl, apiKey, auth, timeoutMs, reasoningLevels, modelsPath, headers, protocol } = value;
   let url: URL | undefined;
   if (typeof baseUrl === 'string' && baseUrl.length <= 2048) try { url = new URL(baseUrl); } catch { /* rejected below */ }
   if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) throw new AppError('INVALID_INPUT', 'baseUrl must be an http or https address');
   if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 64 * 1024)) throw new AppError('INVALID_INPUT', 'apiKey must be text');
   if (auth !== undefined && auth !== 'bearer' && auth !== 'anthropic') throw new AppError('INVALID_INPUT', 'auth must be bearer or anthropic');
   if (modelsPath !== undefined && (typeof modelsPath !== 'string' || !modelsPath.startsWith('/') || modelsPath.length > 256)) throw new AppError('INVALID_INPUT', 'modelsPath must be a path');
+  if (protocol !== undefined && (typeof protocol !== 'string' || !/^[a-z0-9][a-z0-9.-]{0,63}$/.test(protocol))) throw new AppError('INVALID_INPUT', 'protocol must be a protocol id');
   let sent: Record<string, string> | undefined;
   if (headers !== undefined) {
     if (!isRecord(headers) || Object.keys(headers).length > MAX_HEADERS || Object.values(headers).some(item => typeof item !== 'string' || item.length > 4096)) throw new AppError('INVALID_INPUT', 'headers must map names to text');
@@ -48,6 +49,7 @@ function gatewayRequest(value: unknown): GatewayModelsRequest {
     ...(reasoningLevels === true ? { reasoningLevels: true } : {}),
     ...(modelsPath ? { modelsPath: modelsPath as string } : {}),
     ...(sent ? { headers: sent } : {}),
+    ...(protocol ? { protocol: protocol as string } : {}),
   } as GatewayModelsRequest;
 }
 

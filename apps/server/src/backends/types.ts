@@ -127,6 +127,8 @@ export interface NativeBackendHost {
   recordActivity?(sessionId: string, at: string): Session | undefined;
   /** Desired settings for a long-lived history reader after the profile is edited. */
   getProfile?(session: Session): NativeBackendProfileConfig;
+  /** A configured profile of `backendId` as the driver would receive it (`config` merged, secrets included); absent when there is none. */
+  findProfile?(backendId: NativeBackendId, profileId: string): NativeBackendProfileConfig | undefined;
   updateSession(sessionId: string, patch: Partial<Session>): Session;
   /** A settings change of meaning: applies `patch` and moves `configRevision` in one store write. */
   bumpConfig(sessionId: string, patch: Partial<Session>): Session;

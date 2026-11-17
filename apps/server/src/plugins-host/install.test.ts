@@ -380,7 +380,7 @@ describe('running an installed package', () => {
     expect(source!.resolve({ apiKey: 'k1' })).toMatchObject({ codexBaseUrl: 'https://models.example/v1', headers: { codex: { 'x-key': 'k1' } } });
     expect(source!.resolve({ apiKey: 'other' })).toMatchObject({ reason: expect.stringContaining('尚未准备好') });
     await vi.waitFor(() => expect(source!.resolve({ apiKey: 'other' })).toMatchObject({ codexBaseUrl: 'https://models.example/v1' }));
-    expect(await source!.catalog('codex', {})).toEqual([{ value: 'm1', name: 'M1', configOptions: [] }]);
+    expect(await source!.catalog('codex', {}, 'openai-responses')).toEqual([{ value: 'm1', name: 'M1', configOptions: [] }]);
     // A command credential would run outside the sandbox (Claude Code's apiKeyHelper, Codex's auth.command): it never reaches a driver.
     await source!.prepare!({ apiKey: 'command' });
     const commanded = source!.resolve({ apiKey: 'command' });

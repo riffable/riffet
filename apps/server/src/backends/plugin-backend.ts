@@ -9,7 +9,8 @@ import { NativeInteractions } from '../agent-host/interactions.js';
 import { AppError } from '../errors.js';
 import type { LaneWriter, TranscriptSource } from '../journal/ingest.js';
 import { backendIdOf } from '../session-identity.js';
-import { launchSource, modelSourceOf, modelSourceProvider, sourceEndpoint } from './shared/model-source.js';
+import { fetchGatewayModels } from './shared/gateway-models.js';
+import { launchSource, modelSourceOf, modelSourceProvider, sourceCatalog, sourceEndpoint } from './shared/model-source.js';
 import { isWarmupTerminal, warmupOf, type WarmupTerminalInfo } from '../terminal/service.js';
 import type {
   NativeBackendAvailability, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendProfileConfig, NativeBackendSendRequest,
@@ -566,6 +567,18 @@ export class PluginBackendDriver implements NativeBackendDriver {
     /** The sessions of this agent, for the synchronous reads. A foreign or missing one is simply not there. */
     const ownSession = (id: string): Session | undefined => { try { const session = native.getSession(id); return backendIdOf(session) === this.id ? session : undefined; } catch { return undefined; } };
     const ownSessions = (): Session[] => (native.listSessions?.() ?? []).filter(session => backendIdOf(session) === this.id);
+    /**
+     * Only this Agent's own profiles: another's config carries its own keys. A configured one first, then the one a
+     * session still uses (deleting a provider keeps its sessions), then the Agent's builtin ones.
+     */
+    const ownProfile = (profileId: string) => {
+      const resolveOwn = (session: Session) => { try { return native.getProfile?.(session); } catch { return undefined; } };
+      const profile = native.findProfile?.(this.id, profileId)
+        ?? ownSessions().filter(session => session.backendProfileId === profileId).map(resolveOwn).find(item => item?.id === profileId)
+        ?? this.backend.profiles(this.hostFor(native)).find(item => item.id === profileId);
+      if (!profile) throw new AppError('AGENT_PROFILE_FOREIGN', `Profile ${profileId} does not belong to ${this.label}`, 403);
+      return profile;
+    };
     const interactions = this.interactions ??= new NativeInteractions(native.terminal, this.backend.settledScreen ? { settledScreen: screen => this.backend.settledScreen!(screen) } : {});
     const lock = <T>(sessionId: string, operation: () => Promise<T> | T, options?: { detached?: boolean }): Promise<T> => {
       own(sessionId);
@@ -687,13 +700,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
       },
       modelSources: {
         resolve: async (profileId, protocol) => {
-          // Only this Agent's own profiles: another's config carries its own keys.
-          // A session can outlive its provider (deleting one keeps its sessions), so a profile that no longer
-          // resolves is skipped rather than failing every launch of this Agent.
-          const resolveOwn = (session: Session) => { try { return native.getProfile?.(session); } catch { return undefined; } };
-          const profile = ownSessions().filter(session => session.backendProfileId === profileId).map(resolveOwn).find(item => item?.id === profileId)
-            ?? this.backend.profiles(this.hostFor(native)).find(item => item.id === profileId);
-          if (!profile) throw new AppError('AGENT_PROFILE_FOREIGN', `Profile ${profileId} does not belong to ${this.label}`, 403);
+          const profile = ownProfile(profileId);
           const source = modelSourceOf(profile.config);
           const provider = source ? modelSourceProvider(source) : undefined;
           if (!provider || !sourceProtocols(provider).includes(protocol)) return undefined;
@@ -703,6 +710,16 @@ export class PluginBackendDriver implements NativeBackendDriver {
           // A `command` credential runs outside Riffet (the drivers' helper scripts): it is not data to hand over.
           const credential = resolved?.credential?.kind === 'static' ? { kind: 'static' as const, key: resolved.credential.key } : undefined;
           return { baseUrl: endpoint.baseUrl, ...(endpoint.headers ? { headers: { ...endpoint.headers } } : {}), ...(credential ? { credential } : {}) };
+        },
+        models: async (profileId, protocol) => {
+          const { config } = ownProfile(profileId);
+          // A source answers for the protocol itself; a typed API endpoint is read in that protocol's own directory.
+          const source = modelSourceOf(config);
+          if (source) return await sourceCatalog(source, [protocol], config);
+          const endpoint = typeof config.apiEndpoint === 'string' ? config.apiEndpoint.trim() : '';
+          if (!endpoint) return undefined;
+          const apiKey = typeof config.apiKey === 'string' && config.apiKey ? config.apiKey : undefined;
+          return await fetchGatewayModels({ baseUrl: endpoint, ...(apiKey ? { apiKey } : {}), protocol, reasoningLevels: true });
         },
       },
       terminals: {

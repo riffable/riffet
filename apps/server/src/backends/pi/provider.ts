@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { ModelInfo, NativeModelApiProtocol } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { validateNativeModelApiProtocol } from '../../settings/index.js';
-import { effortOption, fetchGatewayModels, gatewayBaseUrl, gatewayRootUrl, modelIdOf } from '../shared/gateway-models.js';
+import { effortOption, fetchGatewayModels, gatewayBaseUrl, gatewayRootUrl, googleBaseUrl, modelIdOf } from '../shared/gateway-models.js';
 import { parseNativeModelSelection } from '../shared/model-selection.js';
 import type { NativeBackendProfileConfig } from '../types.js';
 
@@ -29,13 +29,6 @@ export function piCustomModelId(profile: NativeBackendProfileConfig, value: stri
   return model.startsWith(prefix) ? model.slice(prefix.length) : model;
 }
 
-function googleBaseUrl(endpoint: string): string {
-  const url = new URL(endpoint);
-  const path = url.pathname.replace(/\/+$/, '');
-  url.pathname = /\/v\d+(?:beta\d*)?$/.test(path) ? path : `${path}/v1beta`;
-  return url.toString().replace(/\/$/, '');
-}
-
 /** Catalog lookup never launches pi; output limits are collected separately from the public model DTO. */
 export async function piProviderModels(profile: NativeBackendProfileConfig, outputLimits?: Map<string, number>): Promise<ModelInfo[]> {
   const endpoint = piCustomEndpoint(profile);
@@ -45,16 +38,10 @@ export async function piProviderModels(profile: NativeBackendProfileConfig, outp
   let models: ModelInfo[];
   try {
     models = await fetchGatewayModels({
-      baseUrl: api === 'google-generative-ai' ? googleBaseUrl(endpoint) : endpoint,
-      ...(api !== 'google-generative-ai' && key ? { apiKey: key } : {}),
-      // Compatible gateways expose an OpenAI-style directory even for Anthropic inference.
-      // Native Anthropic directories need x-api-key instead, so retry that scheme after a 401.
-      ...(api === 'anthropic-messages' ? { fallbackAuth: 'anthropic' as const } : {}),
-      ...(api === 'google-generative-ai' ? {
-        modelsPath: '/models', headers: key ? { 'x-goog-api-key': key } : {},
-      } : {}),
+      baseUrl: endpoint,
+      ...(key ? { apiKey: key } : {}),
+      protocol: api,
       select: entry => {
-        if (api === 'google-generative-ai' && Array.isArray(entry.supportedGenerationMethods) && !entry.supportedGenerationMethods.includes('generateContent')) return false;
         const id = modelIdOf(entry);
         const runtime = entry.runtime && typeof entry.runtime === 'object' && !Array.isArray(entry.runtime) ? entry.runtime as Record<string, unknown> : undefined;
         const limit = [runtime?.max_output_tokens, entry.max_output_tokens, entry.max_tokens, entry.maxTokens, entry.outputTokenLimit]
@@ -70,7 +57,6 @@ export async function piProviderModels(profile: NativeBackendProfileConfig, outp
     if (!configured.length && !profile.config.defaultModel) throw error;
     models = [];
   }
-  if (api === 'google-generative-ai') models = models.map(model => ({ ...model, value: model.value.replace(/^models\//, '') }));
   const configured = [
     ...(Array.isArray(profile.config.enabledModels) ? profile.config.enabledModels : []),
     ...(typeof profile.config.defaultModel === 'string' && profile.config.defaultModel ? [profile.config.defaultModel] : []),

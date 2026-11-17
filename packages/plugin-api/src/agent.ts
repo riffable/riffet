@@ -897,6 +897,12 @@ export interface AgentHost {
      * handed over: `credential` is present only for a static key.
      */
     resolve(profileId: string, protocol: GatewayProtocol): Promise<AgentModelEndpoint | undefined>;
+    /**
+     * The models the profile `profileId` reaches over `protocol`: its source's catalog for that protocol, or what its
+     * own API endpoint (`config.apiEndpoint`, `config.apiKey`) lists in that protocol's standard directory.
+     * `undefined` when the profile names neither; a failed read rejects. A profile of another Agent is refused.
+     */
+    models(profileId: string, protocol: GatewayProtocol): Promise<ModelInfo[] | undefined>;
   };
 
   terminals: AgentTerminals;

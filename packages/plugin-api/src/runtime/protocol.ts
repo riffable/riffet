@@ -71,7 +71,8 @@ export type HostToChild = {
   /** The server checks the page before a client sees it. */
   'page.read': { params: { locale: string }; result: unknown };
   'page.run': { params: { locale: string; action: string; item?: string }; result: { message?: string } };
-  'modelSource.catalog': { params: { id: string; backend: ModelSourceBackend; overrides: SourceOverrides }; result: ModelInfo[] };
+  /** `protocol` is absent from a host older than it; `backend` from one asking for a protocol without an older name. */
+  'modelSource.catalog': { params: { id: string; backend?: ModelSourceBackend; overrides: SourceOverrides; protocol?: GatewayProtocol }; result: ModelInfo[] };
   'modelSource.prepare': { params: { id: string; overrides: SourceOverrides }; result: ResolvedSource };
   'modelSource.usage': { params: { id: string; overrides: SourceOverrides }; result: NativeBackendUsage };
   'task.detect': { params: { provider: string; project: ProjectCall }; result: boolean };

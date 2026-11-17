@@ -176,7 +176,7 @@ const manifest = {
 
 Agent 后端是正式扩展点。它接入一个 Agent 的会话与执行协议；模型源提供模型目录、网关地址与凭证，两者可以由同一个包提供，但身份和职责分别定义。例如接入 Cursor Agent 与为 Claude Code 配置第三方模型源是不同能力，不预设模型源能驱动完整 Agent。
 
-现有 `ModelSourceBackend` 只有 `claude`、`codex`，`ResolvedSource` 也按这两个后端给出地址和请求头。开放 Agent 身份后，模型源改为声明所提供的网关协议，例如 Anthropic Messages 或 OpenAI Responses；Agent 后端声明能消费的协议，两者按协议匹配，不依赖 Agent ID。现有字段保留为兼容映射。
+现有 `ModelSourceBackend` 只有 `claude`、`codex`，`ResolvedSource` 也按这两个后端给出地址和请求头。开放 Agent 身份后，模型源改为声明所提供的网关协议，例如 Anthropic Messages 或 OpenAI Responses；Agent 后端声明能消费的协议，两者按协议匹配，不依赖 Agent ID。目录同样按协议读取：`catalog(backend, overrides, protocol)` 的 `protocol` 是本次要的协议，`backend` 只是它的旧名字，仅 `anthropic-messages`、`openai-responses` 有。现有字段保留为兼容映射。
 
 现有 `NativeBackendDriver` 已覆盖探测、配置、打开会话、发送、中断、历史、审批和订阅，但 `NativeBackendHost` 含同步宿主状态修改、进程管理对象及回调。它作为内部适配层保留，不能原样成为第三方 SDK。公共 Agent 接口以异步操作、可序列化事件和受限资源句柄表达，复用现有 journal、投递与恢复实现。
 
@@ -386,7 +386,6 @@ E 是工作量和回归风险最大的阶段，建议的顺序是：A 与 E1 同
 | 签名、来源验证与第三方分发的权限策略 | 接纳第三方分发前 | 现在只有完整性摘要，只证明内容未变 |
 | SDK 的发布形式与稳定性声明 | 开放第三方安装前 | `plugin-api`、`plugin-web` 与消息桥客户端没有独立发布的包，样例靠复制源码；Agent 协议与 Web SDK 标为实验性 |
 | 已安装包提供 Agent 后端 | 出现第三方 Agent 接入需求时 | 跨进程的 `AgentBackend` 与 `AgentHost`（同步 `view`、终端与预留池）能否成立；现在只有可信开发包可以声明 |
-| 自定义协议的模型源目录 | 出现第三方模型源或插件 Agent 需要 `openai-chat` 或自定义协议时 | 已安装包的模型源按协议声明与解析、插件 Agent 经 `host.modelSources.resolve` 读取已完成；`ModelSourceProvider.catalog` 仍只接受 `claude`、`codex`，`openai-chat` 与自定义协议的目录读不到 |
 | 可选依赖与插件间服务注册 | 出现消费其他插件服务的插件时 | 已定：可选依赖变化时依赖它的插件重新激活；同进程的内置与开发包可经 `Contributions.services` 与 `host.services.get(pluginId, name, range)` 使用服务（须在 `requires` 里列出提供方，调用不带额外权限），已安装包不提供也拿不到。服务没有 schema 声明，完整的动态依赖重绑定仍待实际需求 |
 | 插件命令的执行路径、菜单与快捷键 | 出现提供命令的插件时 | 已定：`POST /api/integrations/:id/commands/:name` 重新校验插件状态、作用域、可见性、项目与会话归属、`when` 与参数，同一 `requestId` 十分钟内只执行一次；Android 插件提供一个命令；Web 命令面板与快捷键、Mac 命令入口由客户端实现。已安装包的命令由子进程代理执行，宿主不向它提供 `host.tasks` |
 | 客户端自行核对 `hostApi.web` 与消息桥版本 | 下一次升级 Web SDK 或消息桥版本前 | 第 4.4 节不允许以服务端版本代替客户端版本；Mac 单独发布 |

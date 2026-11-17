@@ -930,7 +930,7 @@ frame-summary.json                     捕获帧的分片与错误复放
 
 - 四端新增 builtin `antigravity` 和 `antigravity-agent` feature。旧客户端不会收到不认识的 backend；保存旧客户端设置不会删除隐藏的 Antigravity 配置。
 - 自定义提供商固定使用 `google-generative-ai`。探测复用 Gemini `/v1beta/models`，Key 不回显。
-- 模型目录来自私有 `--gemini_dir` 下的 `agy models`（按认证方式与可执行文件缓存 5 分钟）。同一模型的 `-low/-medium/-high/-xhigh/-max` 变体合成一项并带 effort 选项，选择仍存原生变体 ID。`enabledModels` 中 agy 不认识的 ID（网关自有名称，如 `gemini-4-hydrogen-sonar`）在 API Key 模式下写入本次启动 `--settings` 的 `customModelsConfig.customModels.<id>.modelName`，effort 经 `--effort` 传入，只开放 low/medium/high（1.5.10 对自定义模型拒绝 xhigh/max）。只传 `--model` 时 agy 会静默回退到 settings 中保存的模型（1.5.8/1.5.10 实测）。
+- 填了服务地址或选了模型源的 provider，模型目录就是 `host.modelSources.models(profileId, 'google-generative-ai')`：模型源按 Gemini 协议给出的目录，或宿主读该地址 `GET …/v1beta/models` 的结果；读不到时不退回 agy 的列表。agy 自带列表里的模型网关未必提供，且 agy 按自己的名字请求（如 `gemini-4-hydrogen-high` 请求 `gemini-4-hydrogen`）。未配服务地址时，目录来自私有 `--gemini_dir` 下的 `agy models`（按认证方式与可执行文件缓存 5 分钟）。网关 ID 与 agy 模型家族同名时沿用 agy 的变体，同一模型的 `-low/-medium/-high/-xhigh/-max` 变体合成一项并带 effort 选项，选择仍存原生变体 ID。`enabledModels` 中 agy 不认识的 ID（网关自有名称，如 `gemini-4-hydrogen-sonar`）在 API Key 模式下写入本次启动 `--settings` 的 `customModelsConfig.customModels.<id>.modelName`，effort 经 `--effort` 传入，只开放 low/medium/high（1.5.10 对自定义模型拒绝 xhigh/max）。只传 `--model` 时 agy 会静默回退到 settings 中保存的模型（1.5.8/1.5.10 实测）。
 - 状态栏在 `authenticating`/`initializing` 期间报告 settings 中保存的模型，`--model` 生效后才变；只在 `idle`/`working` 时回读模型。回读结果与本次启动请求不一致且会话仍持有启动时的选择时，视为 agy 回退并在会话中提示。
 - 发送使用 TUI 输入事务。先核验空 composer、原生空闲、MCP 清单，再持久化 fence；粘贴被观察到后只发一次 Enter。断线之后只核对真实 USER_INPUT，不自动重发。候选要求输入基线仍是同一活动分支前缀，重复候选保持不确定。
 - PNG 使用单独路径粘贴，确认转换为 native media 后输入问题；非媒体文件保留文件路径。未验证的图像、音频、视频类型在发送前拒绝。

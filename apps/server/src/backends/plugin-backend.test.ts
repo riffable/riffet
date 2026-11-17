@@ -199,7 +199,7 @@ describe('an Agent backend from a plugin', () => {
   it('offers a model source to a plugin Agent by the gateway protocol it consumes, whatever its id', async () => {
     const asked: string[] = [];
     const gateway = (id: string, served: { protocols?: readonly string[]; backends?: Array<'claude' | 'codex'> }) => ({
-      id, label: id, ...served, resolve: () => ({}), catalog: async (backend: string) => { asked.push(`${id}:${backend}`); return [{ value: 'm1', name: 'M1', configOptions: [] }]; },
+      id, label: id, ...served, resolve: () => ({}), catalog: async (backend?: string) => { asked.push(`${id}:${backend}`); return [{ value: 'm1', name: 'M1', configOptions: [] }]; },
     });
     provideModelSources(() => [gateway('responses-gw', { protocols: ['openai-responses'] }), gateway('older-gw', { backends: ['codex'] }), gateway('messages-gw', { protocols: ['anthropic-messages'] })]);
     cleanups.push(() => provideModelSources(() => []));

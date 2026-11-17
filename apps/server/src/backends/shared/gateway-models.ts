@@ -63,6 +63,11 @@ export interface GatewayModelsRequest {
    * is the only side that knows which CLI the profile drives.
    */
   select?: (entry: Record<string, unknown>) => boolean;
+  /**
+   * Read the standard model directory of this wire protocol at `baseUrl`: its path, credential header and entry
+   * shape. Absent means the OpenAI-style `GET /v1/models`, which Anthropic-compatible gateways serve too.
+   */
+  protocol?: string;
 }
 
 /**
@@ -91,6 +96,14 @@ export function gatewayBaseUrl(baseUrl: string, segment = '/v1'): string {
   const url = new URL(baseUrl);
   const path = url.pathname.replace(/\/+$/, '');
   url.pathname = /\/v\d+$/.test(path) ? path : `${path}${segment}`;
+  return url.toString().replace(/\/$/, '');
+}
+
+/** Gemini's API root, which `GOOGLE_GEMINI_BASE_URL` takes without it: `<root>/v1beta`, unless a version is already there. */
+export function googleBaseUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  const path = url.pathname.replace(/\/+$/, '');
+  url.pathname = /\/v\d+(?:beta\d*)?$/.test(path) ? path : `${path}/v1beta`;
   return url.toString().replace(/\/$/, '');
 }
 
@@ -191,7 +204,28 @@ function toModel(entry: unknown, reasoningLevels: boolean): ModelInfo | undefine
  * Throws on an unreachable or rejecting gateway so callers can surface the reason; an endpoint
  * that answers with no usable entries yields an empty list rather than an error.
  */
-export async function fetchGatewayModels({ baseUrl, apiKey, auth = 'bearer', fallbackAuth, timeoutMs = GATEWAY_MODELS_TIMEOUT_MS, signal, reasoningLevels = false, modelsPath, headers: extraHeaders, select }: GatewayModelsRequest): Promise<ModelInfo[]> {
+export async function fetchGatewayModels(request: GatewayModelsRequest): Promise<ModelInfo[]> {
+  const { protocol, ...rest } = request;
+  if (protocol === 'google-generative-ai') {
+    // Gemini lists at `<root>/v1beta/models` as `models/<id>`, keyed by `x-goog-api-key`, and names models that cannot
+    // generate content (embeddings) alongside.
+    const { apiKey, select } = rest;
+    const models = await fetchFrom({
+      ...rest,
+      baseUrl: googleBaseUrl(rest.baseUrl),
+      modelsPath: rest.modelsPath ?? '/models',
+      apiKey: undefined,
+      headers: { ...(apiKey ? { 'x-goog-api-key': apiKey } : {}), ...rest.headers },
+      select: entry => (!Array.isArray(entry.supportedGenerationMethods) || entry.supportedGenerationMethods.includes('generateContent')) && (!select || select(entry)),
+    });
+    return models.map(model => ({ ...model, value: model.value.replace(/^models\//, '') }));
+  }
+  // An Anthropic-only directory takes `x-api-key`; compatible gateways take a bearer key there too.
+  if (protocol === 'anthropic-messages') return fetchFrom({ fallbackAuth: 'anthropic', ...rest });
+  return fetchFrom(rest);
+}
+
+async function fetchFrom({ baseUrl, apiKey, auth = 'bearer', fallbackAuth, timeoutMs = GATEWAY_MODELS_TIMEOUT_MS, signal, reasoningLevels = false, modelsPath, headers: extraHeaders, select }: Omit<GatewayModelsRequest, 'protocol'>): Promise<ModelInfo[]> {
   const url = gatewayModelsUrl(baseUrl, modelsPath);
   const timeout = AbortSignal.timeout(timeoutMs);
   const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;

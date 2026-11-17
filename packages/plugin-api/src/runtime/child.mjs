@@ -237,10 +237,10 @@ const handlers = {
     return (await page.run({ locale }, action, item)) ?? {};
   },
 
-  'modelSource.catalog'({ id, backend, overrides }) {
+  'modelSource.catalog'({ id, backend, overrides, protocol }) {
     const source = sourceOf(id);
     if (!source) throw new Error(`no model source ${id}`);
-    return source.catalog(backend, overrides);
+    return source.catalog(backend, overrides, protocol);
   },
   async 'modelSource.prepare'({ id, overrides }) {
     const source = sourceOf(id);

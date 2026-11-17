@@ -253,6 +253,8 @@ export interface GatewayModelsRequest {
   modelsPath?: string;
   headers?: Record<string, string>;
   select?: (entry: Record<string, unknown>) => boolean;
+  /** Read the standard model directory of this protocol at `baseUrl` (its path, key header and entry shape); absent means `GET /v1/models`. */
+  protocol?: GatewayProtocol;
 }
 
 export interface PluginHost {
@@ -420,7 +422,11 @@ export interface ModelSourceProvider {
    * fetched for these overrides (a `reason` until the first one), and refreshes it in the background when it is old.
    */
   prepare?(overrides: SourceOverrides): Promise<void>;
-  catalog(backend: ModelSourceBackend, overrides: SourceOverrides): Promise<ModelInfo[]>;
+  /**
+   * The models the source serves over `protocol`, one the source declares. `backend` is the older, per-CLI name of
+   * that protocol, present only for `anthropic-messages` (`claude`) and `openai-responses` (`codex`).
+   */
+  catalog(backend: ModelSourceBackend | undefined, overrides: SourceOverrides, protocol: GatewayProtocol): Promise<ModelInfo[]>;
   /**
    * Quota and load for these credentials, independent of the Agent consuming this source.
    * A failed read must reject rather than report zero or unlimited quota.

@@ -104,24 +104,35 @@ export function agyCatalog(native: AgyModel[]): ModelInfo[] {
   });
 }
 
-const isNative = (native: AgyModel[], model: string) => native.some(item => item.value === model || familyOf(item.value) === model);
-
 /** A model id agy does not know by itself, which a Gemini API gateway serves under its own name. */
 function customEntry(value: string, apiKey: boolean): ModelInfo {
   return { value, name: value, configOptions: apiKey ? [effortOption('default', ['default', ...CUSTOM_EFFORTS])] : [] };
 }
 
+/**
+ * The models a profile offers. With its own API endpoint or a model source, that is what the host reads for the Gemini
+ * protocol: agy's built-in list names models a gateway may not have, and agy asks the endpoint for them under its own
+ * names. An id there that is one of agy's model families keeps agy's effort variants. Without either (a sign-in, or
+ * Google's own API) the list is agy's; one whose endpoint cannot be read lists none. Ids saved on the profile or the
+ * session that the list does not name stay usable.
+ */
 export async function listModels(hub: Hub, host: AgentHost, query: AgentModelQuery): Promise<ModelInfo[]> {
   const profile = await launchProfile(host, query.profile).catch(() => undefined);
   const native = profile ? await nativeModels(hub, profile) : [];
+  const apiKey = Boolean(profile?.hasApiKey);
+  const catalog = agyCatalog(native);
+  const entryOf = (id: string, name = id) => catalog.find(entry => entry.value === id || entry.aliases?.includes(id)) ?? { ...customEntry(id, apiKey), name };
   const config = query.profile.config;
-  const named = [
-    ...(Array.isArray(config.enabledModels) ? config.enabledModels : []),
-    query.session?.model,
-    config.defaultModel,
-  ].flatMap(value => (typeof value === 'string' && value.trim() ? [parseSelection(value).model] : []));
-  const extra = [...new Set(named)].filter(model => !isNative(native, model));
-  return [...agyCatalog(native), ...extra.map(model => customEntry(model, Boolean(profile?.hasApiKey)))];
+  // A profile with its own endpoint never falls back to agy's list: those are not models that endpoint is known to serve.
+  const own = Boolean(config.modelSource || config.apiEndpoint);
+  const served = await host.modelSources.models(query.profile.id, 'google-generative-ai').catch(() => undefined);
+  const listed = served ? served.map(model => entryOf(model.value, model.name)) : own ? [] : catalog;
+  const saved = [...(Array.isArray(config.enabledModels) ? config.enabledModels : []), query.session?.model, config.defaultModel].flatMap(value =>
+    typeof value === 'string' && value.trim() ? [parseSelection(value).model] : [],
+  );
+  const extra = [...new Set(saved)].filter(id => !listed.some(entry => entry.value === id || entry.aliases?.includes(id)));
+  const added = new Map(extra.map(id => entryOf(id)).map(entry => [entry.value, entry]));
+  return [...listed, ...added.values()];
 }
 
 export interface AgyLaunchModel {

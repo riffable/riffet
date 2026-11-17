@@ -101,11 +101,9 @@ export async function sourceCatalog(source: NativeModelSource, consumes: readonl
   if (!provider) throw new Error(unavailable(source));
   const served = sourceProtocols(provider);
   const protocol = consumes.find(item => served.includes(item));
-  // `catalog` still takes the older per-CLI name, which only the two built-in protocols have.
-  const backend = protocol && protocolBackend(protocol);
-  if (!backend) throw new Error(`${provider.label} 不支持这个 CLI`);
-  const overrides = overridesOf(config);
-  return await provider.catalog(backend, overrides);
+  if (!protocol) throw new Error(`${provider.label} 不支持这个 CLI`);
+  // The older per-CLI name goes along for sources written before `catalog` took the protocol.
+  return await provider.catalog(protocolBackend(protocol), overridesOf(config), protocol);
 }
 
 /** Quota belongs to the selected source's credentials, independently of the CLI's own login. */
