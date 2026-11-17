@@ -1,9 +1,9 @@
-import type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo, NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams } from '@riffet/contracts';
+import type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo, CommandMessage, CommandSelection, NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { GatewayProtocol } from '@riffet/contracts';
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
-export type { PluginCommandResult };
+export type { CommandMessage, CommandSelection, PluginCommandResult };
 /**
  * The plugin API version this host provides. A manifest's `apiVersion` is accepted when it lies in
  * [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`]. Raising the minimum is the only breaking step and is done
@@ -306,9 +306,45 @@ export interface PluginHost {
             title?: string;
             body: string;
         }): void;
+        /**
+         * Saves an image as one of Riffet's own attachments and returns its absolute `path`: a tool result that names that path
+         * is shown by the conversation's timeline on every client, which an inline image over 40 KB is not. Old files are pruned
+         * with the other attachments. Absent on a host that predates it.
+         */
+        saveImage?(sessionId: string, image: {
+            name: string;
+            mimeType: string;
+            data: Buffer;
+        }): Promise<{
+            id: string;
+            path: string;
+        }>;
+    };
+    /**
+     * One completion on a model the user chose in Riffet, so the plugin keeps no key of its own: a system prompt and one
+     * user message in, the text back. With `use`, one of the plugin's own `modelUses`, it runs on the model chosen for that
+     * use on the 辅助模型 settings page, or on its declared `fallback`; without, on the model chosen for 快速对话. When
+     * there is none it rejects with 409 `PLUGIN_MODEL_NOT_CHOSEN` (`details.use` names the use), and a client offers to
+     * choose one. The text the plugin sends goes to that model's provider. In-process packages only; absent for isolated
+     * installed packages and on a host that predates it.
+     */
+    models?: {
+        complete(request: ModelCompletionRequest): Promise<string>;
     };
     /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
     error(code: string, message: string, statusCode?: number): Error;
+}
+/** What `host.models.complete` sends. Thinking is off where the protocol allows; a reply cut off at `maxOutputTokens` rejects. */
+export interface ModelCompletionRequest {
+    /** One of the plugin's own `modelUses` ids; another plugin's is refused (403 `PLUGIN_MODEL_USE_FOREIGN`). */
+    use?: string;
+    system: string;
+    content: string;
+    /** At most 16,000. */
+    maxOutputTokens: number;
+    /** Default 60 seconds, at most 120. */
+    timeoutMs?: number;
+    signal?: AbortSignal;
 }
 /** What a command runs with. `projectId` and `sessionId` have been checked by the server against the command's scope and the caller. */
 export interface CommandContext {
@@ -318,6 +354,12 @@ export interface CommandContext {
     readonly args: Readonly<Record<string, string | number | boolean>>;
     /** The approval a caller sent for a plan of a task this command starts; pass it on as `host.tasks.start`'s `confirm`. */
     readonly confirm?: string;
+    /** The message it was chosen for, for a command listed in the `message` menu; the server has checked its length. Answer it with a `text` result. */
+    readonly message?: CommandMessage;
+    /** The text selected in an answer, for a command listed in the `selection` menu; the server has checked its length. Answer it with a `text` result. At most one of `message` and `selection` is set. */
+    readonly selection?: CommandSelection;
+    /** The caller's language as a BCP-47 tag, such as `zh-Hans`, when the client sent one. */
+    readonly locale?: string;
     /** Aborts when the plugin is turned off, or the command takes too long. */
     readonly signal: AbortSignal;
 }
@@ -363,6 +405,8 @@ export interface ResolvedSource {
     reason?: string;
 }
 export interface ModelSourceProvider {
+    /** A source supplies a connection; an adapter adds gateway behavior to a profile's existing API connection. Omitted means source. */
+    role?: 'source' | 'adapter';
     /** Stored in a profile's `modelSource`: `/^[a-z0-9][a-z0-9.-]{0,63}$/`, unique across integrations. */
     id: string;
     label: string;

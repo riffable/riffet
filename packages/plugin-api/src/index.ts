@@ -10,14 +10,14 @@
 
 import type {
   ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo,
-  CommandMessage, NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
+  CommandMessage, CommandSelection, NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { GatewayProtocol } from '@riffet/contracts';
 
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
-export type { CommandMessage, PluginCommandResult };
+export type { CommandMessage, CommandSelection, PluginCommandResult };
 
 /**
  * The plugin API version this host provides. A manifest's `apiVersion` is accepted when it lies in
@@ -350,6 +350,8 @@ export interface CommandContext {
   readonly confirm?: string;
   /** The message it was chosen for, for a command listed in the `message` menu; the server has checked its length. Answer it with a `text` result. */
   readonly message?: CommandMessage;
+  /** The text selected in an answer, for a command listed in the `selection` menu; the server has checked its length. Answer it with a `text` result. At most one of `message` and `selection` is set. */
+  readonly selection?: CommandSelection;
   /** The caller's language as a BCP-47 tag, such as `zh-Hans`, when the client sent one. */
   readonly locale?: string;
   /** Aborts when the plugin is turned off, or the command takes too long. */

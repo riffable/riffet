@@ -23,6 +23,7 @@ const declared: CommandDeclaration[] = [
   { id: 'acme.cmd/nohandler', title, scope: 'global' },
   { id: 'acme.cmd/task', title, scope: 'global' },
   { id: 'acme.cmd/explain', title, scope: 'session', menus: ['message'], icon: 'sparkles' },
+  { id: 'acme.cmd/quote', title, scope: 'session', menus: ['selection'], icon: 'sparkles' },
 ];
 
 async function harness(projectTypes: string[] = ['android']) {
@@ -31,6 +32,7 @@ async function harness(projectTypes: string[] = ['android']) {
     manifest: { id: 'acme.cmd', vendor: 'Acme', name: 'cmd', apiVersion: 1, defaultEnabled: true, contributes: { commands: declared } },
     activate: () => ({ commands: {
       'acme.cmd/global': { run }, 'acme.cmd/build': { run }, 'acme.cmd/talk': { run }, 'acme.cmd/task': { run: async () => ({ kind: 'task' as const, taskId: 'someone-elses' }) },
+      'acme.cmd/quote': { run: async (context: CommandContext) => ({ kind: 'text' as const, text: `> ${context.selection?.text}` }) },
       'acme.cmd/explain': { run: async (context: CommandContext) => ({ kind: 'text' as const, text: `> ${context.message?.text}`, title: { en: 'Explained' } }) },
     } }),
   };
@@ -124,6 +126,17 @@ describe('commands of the message menu', () => {
     await expect(call('explain', { requestId: 'req-6', sessionId: session.id, message: { ...message, text: 'Other' } })).resolves.toMatchObject({ text: '> Other' });
     run.mockResolvedValueOnce({ kind: 'text', text: 'not for a palette command' } as never);
     await expect(call('talk', { requestId: 'req-5', sessionId: session.id })).rejects.toMatchObject({ code: 'COMMAND_FAILED' });
+  });
+});
+
+describe('commands of the selection menu', () => {
+  it('run on the selection, which a message-only command refuses and which never comes with a message', async () => {
+    const { session, call } = await harness();
+    const selection = { text: 'Hel', runId: 'run-1' };
+    await expect(call('quote', { sessionId: session.id, selection })).resolves.toEqual({ kind: 'text', text: '> Hel' });
+    await expect(call('explain', { requestId: 'req-2', sessionId: session.id, selection })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
+    await expect(call('quote', { requestId: 'req-3', sessionId: session.id })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
+    await expect(call('quote', { requestId: 'req-4', sessionId: session.id, selection, message: { role: 'assistant', text: 'Hello' } })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
   });
 });
 

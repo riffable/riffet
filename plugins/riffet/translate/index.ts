@@ -15,7 +15,7 @@ export const translate: Plugin = {
   manifest: {
     id: 'riffet.translate', vendor: 'riffet', name: 'translate', apiVersion: PLUGIN_API_VERSION, defaultEnabled: true, version: '1.0.0',
     title: { 'zh-Hans': '翻译', en: 'Translate' },
-    description: { 'zh-Hans': '在回答的更多菜单里翻译这条回答。', en: 'Translates an answer from its more menu.' },
+    description: { 'zh-Hans': '在回答的更多菜单里翻译这条回答，或翻译选中的文字。', en: 'Translates an answer from its more menu, or the text selected in one.' },
     // Edited on the plugin's page (page.ts); `auto` or absent follows the language of the client that asks.
     settings: [{ key: 'target', label: 'Target language', kind: 'text' }],
     activation: ['command'],
@@ -24,7 +24,7 @@ export const translate: Plugin = {
       modelUses: [{ id: TRANSLATE_MODEL, title: { 'zh-Hans': '翻译', en: 'Translation' }, fallback: 'chat' }],
       commands: [{
         id: TRANSLATE_COMMAND, title: { 'zh-Hans': '翻译', en: 'Translate' },
-        scope: 'session', menus: ['message'], icon: 'languages',
+        scope: 'session', menus: ['message', 'selection'], icon: 'languages',
       }],
     },
   },

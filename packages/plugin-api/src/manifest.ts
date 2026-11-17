@@ -194,7 +194,8 @@ function command(pluginId: string, value: unknown, path: string): string | undef
   if (value.menus !== undefined) {
     const menus = oneOf(value.menus, COMMAND_MENUS, `${path}.menus`, 'menu');
     if (menus) return menus;
-    if ((value.menus as unknown[]).includes('message') && value.scope !== 'session') return `${path}.scope must be session for the message menu`;
+    const needing = (value.menus as unknown[]).find(menu => menu === 'message' || menu === 'selection');
+    if (needing && value.scope !== 'session') return `${path}.scope must be session for the ${String(needing)} menu`;
   }
   if (value.icon !== undefined && !COMMAND_ICONS.includes(value.icon as never)) return `${path}.icon must be one of ${COMMAND_ICONS.join(', ')}`;
   return value.when === undefined ? undefined : condition(value.when, `${path}.when`);

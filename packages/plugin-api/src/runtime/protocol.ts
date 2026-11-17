@@ -5,7 +5,7 @@
 
 import type { ActionOutcome, AvatarStyleRequest, GatewayProtocol, ModelSourceBackend, ResolvedSource, SourceOverrides, TaskActionSpec, TaskDiagnostic, TaskPlan } from '../index.js';
 import type { DoctorCheck, GatewayModelsRequest, PluginStatus } from '../index.js';
-import type { CommandMessage, ModelInfo, NativeBackendUsage, PluginCommandResult, Task, TaskParams } from '@riffet/contracts';
+import type { CommandMessage, CommandSelection, ModelInfo, NativeBackendUsage, PluginCommandResult, Task, TaskParams } from '@riffet/contracts';
 
 export const RUNTIME_PROTOCOL_VERSION = 1;
 
@@ -82,6 +82,6 @@ export type HostToChild = {
   /** `args` have been validated against the declaration; the child stops the handler's `signal` after `timeoutMs`, before the server gives up on the call. */
   /** Resolves with the style's SVG; the server checks it before drawing it. */
   'avatar.generate': { params: { id: string; request: AvatarStyleRequest }; result: string };
-  /** `message` and `locale` are absent from a server written before the message menu. */
-  'command.run': { params: { id: string; projectId?: string; sessionId?: string; args: Record<string, string | number | boolean>; message?: CommandMessage; locale?: string; timeoutMs: number }; result: PluginCommandResult };
+  /** `message` and `locale` are absent from a server written before the message menu, `selection` from one written before the selection menu. */
+  'command.run': { params: { id: string; projectId?: string; sessionId?: string; args: Record<string, string | number | boolean>; message?: CommandMessage; selection?: CommandSelection; locale?: string; timeoutMs: number }; result: PluginCommandResult };
 };

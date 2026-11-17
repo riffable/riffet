@@ -82,8 +82,10 @@ export type CommandScope = typeof COMMAND_SCOPES[number];
  * Menus of the host a command may be listed in besides the palette (docs/PLUGIN_ARCHITECTURE.md「消息菜单」).
  * `message` is the more menu of an answer: the command runs with that message (`CommandRunRequest.message`),
  * needs a conversation (`scope: 'session'`), and is not listed in the palette, which has no message to give it.
+ * `selection` is the toolbar shown when the reader selects text in an answer: the command runs with that text
+ * (`CommandRunRequest.selection`), under the same rules.
  */
-export const COMMAND_MENUS = ['message'] as const;
+export const COMMAND_MENUS = ['message', 'selection'] as const;
 export type CommandMenu = typeof COMMAND_MENUS[number];
 
 /**
@@ -119,6 +121,14 @@ export interface CommandMessage {
   runId?: string;
 }
 
+/** The text a command runs on when it is chosen from the selection toolbar: what the reader selected in one answer. */
+export interface CommandSelection {
+  /** At most `PLUGIN_COMMAND_BUDGET.messageChars`. */
+  text: string;
+  /** The run the answer belongs to, when Riffet sent that turn. */
+  runId?: string;
+}
+
 /** The body of `POST /api/integrations/:id/commands/:name`. The same `requestId` with the same body within 10 minutes returns the same result and runs the command once. */
 export interface CommandRunRequest {
   requestId: string;
@@ -129,6 +139,8 @@ export interface CommandRunRequest {
   confirm?: string;
   /** Required by a command listed in the `message` menu, refused by any other. */
   message?: CommandMessage;
+  /** Required by a command listed in the `selection` menu, refused by any other; a request carries at most one of `message` and `selection`. */
+  selection?: CommandSelection;
   /** The client's language as a BCP-47 tag, such as `zh-Hans`. */
   locale?: string;
 }
@@ -141,7 +153,7 @@ export type PluginCommandResult =
   /** A task the command started through the task service: open its view and select it. */
   | { kind: 'task'; taskId: string }
   /**
-   * Markdown shown under the message the command ran on, for a command run from the `message` menu; at most
+   * Markdown shown under the message the command ran on, for a command run from the `message` or `selection` menu; at most
    * `PLUGIN_COMMAND_BUDGET.resultChars`. `title` labels it (such as 译文). The client keeps it for as long as the
    * conversation is open, and never stores it.
    */

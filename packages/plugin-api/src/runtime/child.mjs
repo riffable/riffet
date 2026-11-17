@@ -256,14 +256,14 @@ const handlers = {
 
   'avatar.generate'({ id, request }) { return avatarStyleOf(id).generate(request); },
 
-  async 'command.run'({ id, projectId, sessionId, args, message, locale, timeoutMs }) {
+  async 'command.run'({ id, projectId, sessionId, args, message, selection, locale, timeoutMs }) {
     const command = commandOf(id);
     const controller = new AbortController();
     running.add(controller);
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     timer.unref();
     try {
-      return await command.run({ ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), args, ...(message ? { message } : {}), ...(locale ? { locale } : {}), signal: controller.signal });
+      return await command.run({ ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), args, ...(message ? { message } : {}), ...(selection ? { selection } : {}), ...(locale ? { locale } : {}), signal: controller.signal });
     } finally { clearTimeout(timer); running.delete(controller); }
   },
 

@@ -59,10 +59,10 @@ export class Translator {
   constructor(private readonly host: PluginHost) {}
 
   async run(context: CommandContext): Promise<PluginCommandResult> {
-    const { message } = context;
-    if (!message) throw this.host.error('COMMAND_ARGS_INVALID', 'Translate runs on a message', 400);
+    const source = context.selection?.text ?? context.message?.text;
+    if (!source) throw this.host.error('COMMAND_ARGS_INVALID', 'Translate runs on a message or a selection', 400);
     const target = targetLanguage(this.host.settings().target, context.locale);
-    const text = await this.translate(message.text, target, context.signal);
+    const text = await this.translate(source, target, context.signal);
     return { kind: 'text', text, title: TITLE };
   }
 
