@@ -218,7 +218,8 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       leading={<SessionIndicator session={session} mobile={mobile} selected={selected} taskRing={Boolean(taskStatus)} />}
       // The others recede a step so the selected row reads first.
       className={cn('cursor-default', mobile && 'text-fg hover:text-fg', session.archivedAt && 'opacity-60')}
-      actions={<>
+      // Decoration, not controls: in `actions` a click on them would stay theirs and never open the row.
+      trailing={<>
       {marked && <span role="img" aria-label={t`已收藏`} title={t`已收藏`} className="inline-flex shrink-0 text-accent"><IconBookmarkFilled className="size-3.5" /></span>}
       {/* Idle, a row is a title and its time: which agent ran it and which directory it belongs to
           are only worth the width once the pointer is on the row (or the keyboard is inside it),
@@ -227,6 +228,8 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
         <AgentLogo backend={backend} size={11} style={agentMarkStyle(backend)} />
       </span>
       {projectName && <span className="max-w-[40%] shrink-0 truncate text-2xs text-fg-4 can-hover:hidden can-hover:group-hover/row:block can-hover:group-focus-within/row:block">{projectName}</span>}
+      </>}
+      actions={<>
       {/* The time and the ⋯ button share one grid cell so the trigger keeps a stable box while
           the menu plays its exit animation. Toggling `display` here would collapse the popper
           anchor to 0×0 and make the closing menu jump to the viewport corner.

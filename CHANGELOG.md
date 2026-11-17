@@ -48,6 +48,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Sidebar: pinned destinations with the rest under More, and footer actions in the avatar menu.
 - Sidebar: a running conversation shows a spinner, set apart from the dot for a new result; a task conversation's status ring turns while it runs.
 - Sidebar: when a newer release is out, its version shows at the bottom right and opens Settings › About Riffet, which lists what changed since your version.
+- Sidebar: clicking a conversation's project name or agent icon opens the conversation; before, the click did nothing.
 - The image viewer shows the image alone; on the web it grows from its thumbnail.
 - Web on a phone: the image viewer no longer lets the page show through, flickers between two sizes, or covers the image with zoom buttons (pinch to zoom); scrolling the sidebar no longer opens a conversation's ⋯ menu; the avatar opens Settings; a conversation's header keeps an info button at its right end, and its details fit on one screen with every command under More; page titles sit closer to the menu button; the send and stop button is smaller.
 - Plugins page: installed plugins and each plugin source are listed side by side, and plugins show as cards in up to three columns. Plugin sources are added, turned off and removed from that list; plugins with an update get their own entry.
