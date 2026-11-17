@@ -1270,7 +1270,7 @@ describe('Claude system activities', () => {
     expect(transcript.allEvents().find(event => event.type === 'task_notification')!.data).toMatchObject({ kind: 'workflow', status: 'completed', detail: 'all clear' });
   });
 
-  it('reads a `!` command and its output as one command row, not two prompts', async () => {
+  it('reads a `!` command as the reader\'s message and one command row for it and its output', async () => {
     const transcript = await open([
       text('u1', 1, '<bash-input> xcodebuild build -quiet</bash-input>', { promptId: 'p1' }),
       text('u2', 12, '<bash-stdout></bash-stdout><bash-stderr>error: database is locked\n** BUILD FAILED **\n</bash-stderr>', { promptId: 'p1' }),
@@ -1283,7 +1283,7 @@ describe('Claude system activities', () => {
       detail: 'error: database is locked\n** BUILD FAILED **', durationMs: 11000,
     });
     expect(latest.get('claude:shell:u3')).toMatchObject({ status: 'unknown', task: { command: 'sleep 600' } });
-    expect(transcript.allEvents().filter(event => event.type === 'user_message_chunk').map(event => (event.data.content as { text: string }).text)).toEqual(['next']);
+    expect(transcript.allEvents().filter(event => event.type === 'user_message_chunk').map(event => (event.data.content as { text: string }).text)).toEqual(['! xcodebuild build -quiet', '!sleep 600', 'next']);
   });
 
   it('only reads task output from the CLI’s own task directory', () => {

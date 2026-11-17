@@ -1,9 +1,9 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
+import type { NativeWorkbenchEvent, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { ActivityLedger, activityOfEvent } from '../../journal/activity.js';
 import { projectEvents } from '../../../../../packages/timeline/src/projectEvents.js';
 import { ClaudeActivities } from './activity.js';
@@ -690,6 +690,51 @@ describe('Claude transcript source', () => {
     await importAll(source(), journal);
     expect(new Set(compactionRows().map(row => activityOfEvent(row.payload)!.id))).toEqual(new Set([id]));
     expect(activityOfEvent(compactionRows().at(-1)!.payload)).toMatchObject({ status: 'completed', compaction: { trigger: 'auto' } });
+    checkSession(journal, 'wb');
+  });
+
+  it('reads a `!` command as its own turn, ended by its output or by the answer to it, and claims the run it was sent by', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-shell-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').turn('t1');
+    // The send whose receipt never came (no prompt hook fires for a `!` command): only its row can confirm it.
+    const run = { id: 'run-sent', commandId: 'riffet-command', sessionId: 'wb', native: {
+      backendId: 'claude', nativeSessionId: file.id, input: { text: '! kill 1', attachmentIds: [], context: [] }, renderedText: '! kill 1',
+      delivery: 'uncertain', timings: { dispatchAt: Date.UTC(2026, 9, 20) },
+    } } as unknown as Run;
+    const receipts: NativeWorkbenchEvent[] = [];
+    const source = new ClaudeTranscriptSource({
+      sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path,
+      hooks: { inputRuns: () => [run], inputReceipt: event => receipts.push(event) },
+    });
+    const user = (uuid: string, promptId: string, content: string, fields: Record<string, unknown> = {}) => ({ type: 'user', uuid, promptId, message: { role: 'user', content }, ...fields });
+    // Typed into the terminal and not answered (before 2.1.322, or `respondToBashCommands` off): the CLI writes its caveat first.
+    file.write(
+      user('caveat', 'p-typed', '<local-command-caveat>Caveat: run directly in Claude Code</local-command-caveat>', { isMeta: true }),
+      user('u-typed', 'p-typed', '<bash-input>ls</bash-input>'),
+      user('o-typed', 'p-typed', '<bash-stdout>a</bash-stdout><bash-stderr></bash-stderr>'),
+    );
+    // Sent from here and answered: the output row is marked as the turn's input.
+    run.native!.nativeInputBoundary = JSON.stringify({ type: 'claude-transcript', nativeSessionId: file.id, offset: statSync(file.path).size });
+    file.write(
+      user('u-sent', 'p-sent', '<bash-input> kill 1</bash-input>'),
+      user('o-sent', 'p-sent', '<bash-stdout></bash-stdout><bash-stderr>no such process</bash-stderr>', { turnOrigin: 'human' }),
+    ).answer('sent').duration('sent');
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source, journal);
+    const rows = rowsOf(journal, 'wb');
+    const ended = (turnId: string) => rows.filter(row => row.kind === 'meta.turn_ended' && row.turnId === turnId).map(row => (row.payload as { status?: string }).status);
+    expect(ended('p-typed')).toEqual(['completed']);
+    expect(ended('p-sent')).toEqual(['completed']);
+    expect(rows.filter(row => row.kind === 'user_message_chunk' && row.turnId !== 'p-t1').map(row => {
+      const { content, commandId } = (row.payload as NativeWorkbenchEvent).data as { content: { text: string }; commandId?: string };
+      return [row.turnId, content.text, commandId];
+    })).toEqual([['p-typed', '!ls', undefined], ['p-sent', '! kill 1', 'riffet-command']]);
+    expect(receipts).toMatchObject([{ type: 'native_input_receipt', runId: run.id, nativeTurnId: 'p-sent', data: { commandId: run.commandId } }]);
+    const shells = rows.filter(row => activityOfEvent(row.payload)?.kind === 'local_command');
+    expect(new Set(shells.map(row => row.turnId))).toEqual(new Set(['p-typed', 'p-sent']));
+    const answer = rows.find(row => row.kind === 'agent_message_chunk' && row.nativeId.includes(':a-sent:'))!;
+    expect(answer.turnId).toBe('p-sent');
     checkSession(journal, 'wb');
   });
 

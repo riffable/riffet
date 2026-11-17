@@ -25,7 +25,7 @@ export interface ActiveTurn {
   kind: 'running' | 'compacting';
   promptId?: string;
   origin: ClaudeTurnOrigin;
-  /** The prompt began with `/`: a local command writes its output instead of a Stop (see `command_output`). */
+  /** A local command (`/name`, or a `!` shell command): it writes its output instead of a Stop (see `command_output`). */
   slash: boolean;
   /**
    * The transcript has shown this turn's own opening row. Until then a `turn_duration` can only be the

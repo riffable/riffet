@@ -268,6 +268,12 @@ export function claudeRowSignals(row: ClaudeRow, parents?: Map<string, string>, 
   // 2.1.322 can persist the command after its compact_boundary. Its success output also closes
   // the command's journal turn, which did not exist yet when that boundary was read.
   if (output) return [{ type: compactedOutput(output) ? 'compact_boundary' : 'command_output' }];
+  // A `!` command is a local command: its output ends it, unless the CLI hands that output to the model
+  // (2.1.322's `respondToBashCommands`), when it marks the output row as the turn's input and the model answers.
+  if (row.isMeta !== true && shellInputOf(text) !== undefined) {
+    return [{ type: 'prompt', source: 'transcript', origin: 'human', ...(promptId ? { promptId } : {}), slash: true, ...(string(row.uuid) ? { uuid: string(row.uuid)! } : {}) }];
+  }
+  if (row.isMeta !== true && shellOutputOf(text) !== undefined) return row.turnOrigin === undefined ? [{ type: 'command_output' }] : [];
   const kind = string(record(row.origin)?.kind);
   const notice = kind === 'task-notification' ? taskNotification(content) : undefined;
   const signals: ClaudeSignal[] = notice?.toolUseId && notice.status !== 'running' ? [{ type: 'background_done', toolUseId: notice.toolUseId }] : [];
@@ -649,9 +655,20 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         if (row.isCompactSummary === true) return [...events, ...activities.compactionSummary(uuid, raw, createdAt, state.turnId)];
         const output = localCommandOutput(raw);
         if (output) return [...events, ...activities.localOutput(output, uuid, promptId, createdAt, state.turnId)];
-        // A `!` command and what it printed are written as two user rows; they read as one command row.
+        // A `!` command is typed the way `/cost` is: the reader's message, and one command row for it and what it
+        // printed (two user rows), in a turn of its own that the output ends or the model's answer goes on (`claudeRowSignals`).
+        // As a message it is also what a run sent from here is claimed by, like any prompt.
         const shell = shellInputOf(raw);
-        if (shell !== undefined) return [...events, ...activities.shellInput(shell, uuid, createdAt, state.turnId)];
+        if (shell !== undefined) {
+          state.nativeTurnId = promptId;
+          state.turnId = `claude-turn:${uuid}`;
+          state.turnPromptId = promptId;
+          state.turnAt = createdAt;
+          const typed = `!${/<bash-input>([\s\S]*?)<\/bash-input>/.exec(raw)![1]}`;
+          const commandId = hooks.commandForUserMessage?.({ uuid, ...(promptId ? { promptId } : {}), text: typed });
+          events.push({ ...base(0), type: 'user_message_chunk', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: typed }, ...(commandId ? { commandId } : {}) } });
+          return [...events, ...activities.promptSubmitted(promptId, createdAt, state.turnId), ...activities.shellInput(shell, uuid, createdAt, state.turnId)];
+        }
         const printed = shellOutputOf(raw);
         if (printed !== undefined) return [...events, ...activities.shellOutput(printed, uuid, createdAt, state.turnId)];
         // `/compact` is written twice (bare, then as `<command-name>` markup): one bubble is the reader's command.
