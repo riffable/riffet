@@ -11,6 +11,7 @@ import type { NativeBackendTraits, NativeDispatchBinding } from '../backends/typ
 import { AppError } from '../errors.js';
 import { backendIdOf } from '../session-identity.js';
 import { isAgentTerminal } from '../terminal/kinds.js';
+import { launchArgAccepted } from '../terminal/launch-args.js';
 import { redactSensitiveText } from '../settings/config-documents.js';
 import { admission, holdsUnconfirmed, queueOf, steerTurnEnded, type Admission } from './lane.js';
 
@@ -460,10 +461,9 @@ export class NativeDispatcher {
     if (initial.input.attachmentIds.length > 0) return false;
     if (initial.input.context.length > 0 || initial.input.references?.length) return false;
     if (session.resumePicker) return false;
-    // Linux MAX_ARG_STRLEN is 128 KiB per arg; cap conservatively at 64 KiB so execve never
-    // fails with E2BIG for a composer paste. Larger drafts fall back to the paste path, which
-    // streams through a tmux paste-buffer and has no comparable limit.
-    if (Buffer.byteLength(initial.input.text, 'utf8') > 64 * 1024) return false;
+    // The terminal accepts the same argument it is given here; a longer draft goes through the
+    // paste path, which streams through a tmux paste-buffer and has no comparable limit.
+    if (!launchArgAccepted(initial.input.text)) return false;
     // A live terminal cannot absorb a positional argv prompt retroactively — fall back to paste.
     return !this.hasLiveTerminal(session);
   }
@@ -533,9 +533,8 @@ export class NativeDispatcher {
       // Decide BEFORE spawning: can this run's text be delivered as a positional argv to a
       // brand-new agent CLI, skipping the "paste into TUI composer" path entirely? Only when
       // (a) no live terminal yet, (b) the composer owns the message (not a slash command),
-      // (c) no attachments/context extras (render() may append file paths; keep the simple
-      // single-line argv contract for Phase 1). This is Phase 1 of the botmux-layered refactor
-      // in plans/replicated-gathering-hammock.md.
+      // (c) no attachments/context extras (render() may append file paths), and (d) the text fits
+      // one launch argument (`terminal/launch-args.ts`).
       // Only a backend that declares the capability can absorb a launch-time prompt; everything
       // else keeps its own send path. render() has no side effects here because the gate above
       // already rejected attachments and context extras.

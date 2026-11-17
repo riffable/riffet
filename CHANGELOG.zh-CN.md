@@ -4,6 +4,10 @@
 
 ## 未发布
 
+### 修复
+
+- Cursor：没有预热好的 CLI 时，多行或以 `;` 结尾的第一条消息不再报「Native terminal launch command is invalid」。
+
 ## 0.8.0 - 2026-11-17
 
 ### 升级须知

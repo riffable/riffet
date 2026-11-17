@@ -483,6 +483,18 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     plain.dispose();
   }, 40_000);
 
+  it('hands a launch argument with line breaks or a trailing semicolon to the CLI unchanged', async () => {
+    const { service, store, directory, terminal } = await shell();
+    const output = join(directory, 'argv.json');
+    const script = `require('node:fs').writeFileSync(${JSON.stringify(output)},JSON.stringify(process.argv.slice(1)))`;
+    const args = ['first line\nsecond line', 'ends with;', 'ends with\\;'];
+    const session = store.createSession({ projectId: terminal.projectId, kind: 'native', backendId: 'codex' });
+    const raw = await service.create(store.getProject(terminal.projectId), { kind: 'native', sessionId: session.id, launchSpec: { command: process.execPath, args: ['-e', script, ...args], cwd: directory } });
+    cleanups.push(async () => { await service.stop(raw.id).catch(() => undefined); });
+    await vi.waitFor(() => expect(existsSync(output)).toBe(true), { timeout: 5000 });
+    expect(JSON.parse(readFileSync(output, 'utf8'))).toEqual(args);
+  });
+
   it('delivers input bytes to the CLI exactly, in order and across the 512-byte command chunks', async () => {
     const { service, store, directory, terminal } = await shell();
     const output = join(directory, 'input-bytes.txt');

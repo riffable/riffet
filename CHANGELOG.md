@@ -4,6 +4,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Fixes
+
+- Cursor: a first message with several lines, or one ending in `;`, no longer fails with "Native terminal launch command is invalid" when no warm CLI is ready.
+
 ## 0.8.0 - 2026-11-17
 
 ### Upgrade notes

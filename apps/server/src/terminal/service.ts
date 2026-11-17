@@ -19,6 +19,7 @@ import { ControlClient, sendKeysLines, tmuxTooOld, TMUX_MIN_VERSION } from './co
 import { assembleSeed, seedCommands, seedLine, SEED_BLOCKS, type Seed } from './seed.js';
 import { resolveTerminalAppearance, sameTerminalAppearance } from './appearance.js';
 import { claimTmuxServerCommands } from './orphans.js';
+import { launchArgAccepted, tmuxArgument } from './launch-args.js';
 import { stripTerminalSequences } from '../../../../packages/plugin-api/src/kit/terminal-text.js';
 
 /**
@@ -430,7 +431,7 @@ export class TerminalService {
     if (!spec) throw new AppError('NATIVE_LAUNCH_REQUIRED', 'A native terminal needs a linked session and an adapter launch specification', 400);
     if (spec.cwd !== project.cwd) throw new AppError('NATIVE_LAUNCH_CWD_INVALID', 'Native terminal cwd must match its project workspace', 400);
     if (!spec.command || spec.command.length > 4096 || /[\0\r\n]/.test(spec.command)
-      || !Array.isArray(spec.args) || spec.args.length > 200 || spec.args.some(arg => typeof arg !== 'string' || arg.length > 8192 || /[\0\r\n]/.test(arg))) {
+      || !Array.isArray(spec.args) || spec.args.length > 200 || !spec.args.every(launchArgAccepted)) {
       throw new AppError('NATIVE_LAUNCH_INVALID', 'Native terminal launch command is invalid', 400);
     }
     for (const [key, value] of Object.entries({ ...spec.env, ...spec.secretEnv })) {
@@ -482,8 +483,9 @@ export class TerminalService {
       const tmuxCommands=['start-server',';',...claimTmuxServerCommands(this.stateDir),...[...this.launchEnv().managed,...Object.keys(secretEnv)].flatMap(name=>[';','if-shell','-F',`#{m:*${name}*,#{update-environment}}`,'',`set-option -ga update-environment ${name}`]),';','set-option','-g','history-limit',String(HISTORY_LIMIT),';','set-option','-g','remain-on-exit','on',';','new-session'];
       await this.runTmux([
         ...tmuxCommands,
-        ...Object.entries(sessionEnv).flatMap(([key, value]) => ['-e', `${key}=${value}`]), '-d', '-P', '-F', '#{session_id}',
-        '-x', String(cols), '-y', String(rows), '-s', terminalName(terminalId), '-c', currentProject.cwd, command, ...args,
+        // Every value that is not Riffet's own can end in `;`, which tmux would read as the end of the command.
+        ...Object.entries(sessionEnv).flatMap(([key, value]) => ['-e', tmuxArgument(`${key}=${value}`)]), '-d', '-P', '-F', '#{session_id}',
+        '-x', String(cols), '-y', String(rows), '-s', terminalName(terminalId), '-c', tmuxArgument(currentProject.cwd), tmuxArgument(command), ...args.map(tmuxArgument),
         // Per window, never `-g`: tmux 3.6b's server exits when a session is created while the global option is `manual`.
         ';', 'set-option', '-w', '-t', terminalName(terminalId), 'window-size', 'manual',
         // The driver's opaque launch fingerprint, bound to the pane process it describes in the same
