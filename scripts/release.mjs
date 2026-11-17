@@ -6,6 +6,8 @@
 //   pnpm release:prepare 0.8.0-beta.1   check, bump, (stable: date the changelogs), commit and tag; no push
 //   node scripts/release.mjs check v0.8.0 [--notes <file>]
 //                                       what the release workflow verifies before building anything
+//   node scripts/release.mjs changelog <base>..<head>
+//                                       CI: warns when user-facing commits leave both changelogs untouched
 //
 // Stable releases move the "Unreleased" sections of CHANGELOG.md and CHANGELOG.zh-CN.md under the
 // version. A beta leaves them in place: its notes are the upcoming release's sections as they are at
@@ -21,6 +23,9 @@ const CHANGELOGS = [
   { path: 'CHANGELOG.zh-CN.md', unreleased: '未发布', language: '简体中文' },
 ];
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.([1-9]\d*))?$(?!\s)/;
+
+// `feat`, `fix` and `perf` reach users, except for the repository's own tooling.
+const USER_FACING = /^\S+ (feat|fix|perf)(\((?!(?:ci|scripts|tests|build)\))[^)]*\))?!?:/;
 
 const fail = (message) => { console.error(`release: ${message}`); process.exit(1); };
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -149,7 +154,7 @@ function notes() {
   const last = releaseTags().sort(compare).at(-1);
   const range = last ? `v${last}..HEAD` : 'HEAD';
   const log = tryGit('log', '--no-merges', '--format=%h %s', range) ?? '';
-  const visible = log.split('\n').filter((line) => /^\S+ (feat|fix|perf)(\(|!|:)/.test(line));
+  const visible = log.split('\n').filter((line) => USER_FACING.test(line));
   console.log(`${visible.length} user-facing commits since ${last ? `v${last}` : 'the first commit'}:\n`);
   console.log(visible.join('\n'));
 }
@@ -213,8 +218,24 @@ function check(tag, options) {
   console.log(lines);
 }
 
+/**
+ * Changelog entries are written with the change (AGENTS.md). Only a warning: some fixes are invisible
+ * to users, and the entries are curated again before a release.
+ */
+function changelog(range) {
+  const commits = (tryGit('log', '--no-merges', '--format=%h %s', range) ?? '').split('\n').filter((line) => USER_FACING.test(line));
+  if (!commits.length) return console.log(`No user-facing commits in ${range}.`);
+  const changed = new Set((tryGit('diff', '--name-only', range) ?? '').split('\n'));
+  const touched = CHANGELOGS.filter((log) => changed.has(log.path));
+  const warn = (message) => console.log(process.env.GITHUB_ACTIONS ? `::warning title=Changelog::${message}` : `warning: ${message}`);
+  if (!touched.length) warn(`${commits.length} user-facing commit(s) without a changelog entry: ${commits.join('; ')}. Add one to the unreleased sections of CHANGELOG.md and CHANGELOG.zh-CN.md, or ignore this if users cannot notice the change.`);
+  else if (touched.length < CHANGELOGS.length) warn(`only ${touched[0].path} changed; CHANGELOG.md and CHANGELOG.zh-CN.md list the same entries.`);
+  else console.log(`Changelogs updated for ${commits.length} user-facing commit(s).`);
+}
+
 const [command, ...rest] = process.argv.slice(2);
 if (command === 'notes' && !rest.length) notes();
 else if (command === 'prepare' && rest.length === 1) prepare(rest[0]);
 else if (command === 'check' && (rest.length === 1 || (rest.length === 3 && rest[1] === '--notes'))) check(rest[0], { notes: rest[2] });
-else fail('usage: release.mjs notes | prepare <version> | check <tag> [--notes <file>]');
+else if (command === 'changelog' && rest.length === 1) changelog(rest[0]);
+else fail('usage: release.mjs notes | prepare <version> | check <tag> [--notes <file>] | changelog <base>..<head>');

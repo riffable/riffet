@@ -95,6 +95,7 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 
 - 提交信息用 `type(scope): 小写开头的英文摘要`，例如 `feat(web): …`、`fix(tabs): …`、`docs(design): …`。
 - 有 AI 参与编写的提交，带上实际模型的 `Co-authored-by` 署名。
+- 使用者能感知的 `feat`、`fix`、`perf`，在同一个提交里给 `CHANGELOG.md` 和 `CHANGELOG.zh-CN.md` 的未发布节各加一条，两份一一对应，写使用者看到的变化而不是实现。CI 对漏写的提交只给警告。
 - 仓库会公开。代码、文档、提交信息里不写凭据、个人信息、内部系统的地址和内部数据。
 - PR 按 [模板](.github/pull_request_template.md) 填写；涉及界面的，勾选设计规范的自查项。
 

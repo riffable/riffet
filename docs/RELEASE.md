@@ -37,7 +37,7 @@
 
 ## 2. 变更记录
 
-- `CHANGELOG.md`（英文）与 `CHANGELOG.zh-CN.md`（中文）内容一一对应，只写使用者能感知的变化，由人整理，不从提交信息生成。开发期间写在各自的「Unreleased」「未发布」节。`pnpm release:notes` 列出上一个发布以来的 `feat` / `fix` / `perf` 提交，作为整理素材。
+- `CHANGELOG.md`（英文）与 `CHANGELOG.zh-CN.md`（中文）内容一一对应，只写使用者能感知的变化，由人整理，不从提交信息生成。开发期间随改动的提交一起写在各自的「Unreleased」「未发布」节；CI 发现用户可感知的提交没有对应条目时给出警告（`release.mjs changelog`，不阻塞）。`pnpm release:notes` 列出上一个发布以来的 `feat` / `fix` / `perf` 提交（不含 `ci`、`scripts`、`tests`、`build` 作用域），发布前对照补齐。
 - stable：`release:prepare` 把两份文件的未发布节改为 `## <版本> - <日期>`，再在上方新建空的未发布节。
 - beta：不改动变更记录。它的发布说明取 tag 所在提交上的未发布节，因此变更记录里只出现 stable 版本。
 - GitHub Release 正文：英文在前，中文放在 `<details><summary>简体中文</summary>` 里。appcast 把两段分别写成 `xml:lang="en"` 与 `xml:lang="zh-Hans"` 的说明，Sparkle 按 App 的语言选用。

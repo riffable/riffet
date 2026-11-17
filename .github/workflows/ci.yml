@@ -27,7 +27,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: No private data in the new commits
+      - name: The new commits
+        id: range
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -36,14 +37,25 @@ jobs:
           AFTER: ${{ github.sha }}
         run: |
           if [ "$EVENT" = pull_request ]; then
-            node scripts/check-privacy.mjs --range "$PR_BASE..$PR_HEAD"
+            echo "range=$PR_BASE..$PR_HEAD" >> "$GITHUB_OUTPUT"
           elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
             echo "New branch: no previous push to compare with; skipped."
           elif ! git merge-base --is-ancestor "$BEFORE" "$AFTER" 2>/dev/null; then
             echo "Force push: $BEFORE is not an ancestor of $AFTER; skipped."
           else
-            node scripts/check-privacy.mjs --range "$BEFORE..$AFTER"
+            echo "range=$BEFORE..$AFTER" >> "$GITHUB_OUTPUT"
           fi
+      - name: No private data in the new commits
+        if: steps.range.outputs.range != ''
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: node scripts/check-privacy.mjs --range "$RANGE"
+      # Only warns: some fixes are invisible to users, and entries are curated again before a release.
+      - name: Changelog entries for user-facing commits
+        if: steps.range.outputs.range != ''
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: node scripts/release.mjs changelog "$RANGE"
 
   mobile:
     # The Gradle build is independent of pnpm. Only the JVM test targets run here: the iOS targets
