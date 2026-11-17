@@ -130,7 +130,13 @@ describe('channel core', () => {
   });
 
   it("continues the 个人助理's one main conversation from any thread of a private chat, and never offers it to a group", async () => {
-    const { store, account, inbound, bind, message, pickers, context, sent } = await boot();
+    const { store, account, inbound, bind, message, pickers, context, sent, nativeBackends } = await boot();
+    // The assistant runs on Claude Code or Codex only; the runner may have neither installed.
+    const listBackends = nativeBackends.catalog.listBackends.bind(nativeBackends.catalog);
+    vi.spyOn(nativeBackends.catalog, 'listBackends').mockImplementation(async (...args) => {
+      const entries = await listBackends(...args);
+      return entries.map(entry => entry.backendId === 'claude' ? { ...entry, available: true } : entry);
+    });
     await bind();
     inbound(message('m1', 'hello'));
     await vi.waitFor(() => expect(pickers).toHaveLength(1));
