@@ -34,7 +34,7 @@ export async function checkLatest(current: BuildInfo = SERVER_BUILD): Promise<Up
 }
 
 /** `build` is the build the check describes; `attemptedAt` is when a background check last started. */
-interface Cached { checkedAt?: string; build?: string; check?: UpdateCheck; attemptedAt?: string }
+interface Cached { checkedAt?: string; build?: string; check?: UpdateCheck; attemptedAt?: string; declinedTag?: string; declinedAt?: string }
 
 const age = (iso: string | undefined) => (iso ? Date.now() - Date.parse(iso) : Number.NaN);
 const within = (iso: string | undefined, ms: number) => age(iso) <= ms; // false for a missing or unreadable time
@@ -70,6 +70,18 @@ export function claimBackgroundCheck(stateDir: string): boolean {
   return true;
 }
 
+/** Whether the user already declined an interactive CLI prompt for `tag` within the cache window. */
+export function wasUpdateDeclined(stateDir: string, tag: string): boolean {
+  const cached = readFile(stateDir);
+  return cached.declinedTag === tag && within(cached.declinedAt, CACHE_MS);
+}
+
+/** Remembers that the user declined updating to `tag` so the next command does not ask again right away. */
+export function markUpdateDeclined(stateDir: string, tag: string): void {
+  const cached = readFile(stateDir);
+  try { writeFile(stateDir, { ...cached, declinedTag: tag, declinedAt: new Date().toISOString() }); } catch { /* ignore */ }
+}
+
 /**
  * Records a check for everyone else. A failed lookup does not replace a good answer about the same build:
  * a network blip must not hide an available update for a day.
@@ -79,7 +91,12 @@ export function writeCachedCheck(stateDir: string, check: UpdateCheck): UpdateCh
   const previous = readFile(stateDir);
   const build = buildLabel(check.current);
   const keep = check.status === 'unavailable' && previous.build === build && previous.check?.status && previous.check.status !== 'unavailable';
-  if (!keep) writeFile(stateDir, { checkedAt, build, check: { ...check, checkedAt: undefined }, attemptedAt: checkedAt });
+  if (!keep) {
+    writeFile(stateDir, {
+      checkedAt, build, check: { ...check, checkedAt: undefined }, attemptedAt: checkedAt,
+      ...(previous.declinedTag ? { declinedTag: previous.declinedTag, declinedAt: previous.declinedAt } : {}),
+    });
+  }
   return { ...check, checkedAt };
 }
 

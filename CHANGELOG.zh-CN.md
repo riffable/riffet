@@ -52,7 +52,7 @@
 ### 命令行
 
 - `riffet` 改为英文输出：帮助按用途分组，配色克制，命令拼错时给出建议。新增 `ls`、带可搜索选择器的 `resume`、`logs --since` / `--scope`、`service status`，以及 zsh、bash、fish 的命令补全。
-- npm 安装可用 `riffet update` 自更新；有新版本时 `riffet status` 会提示。
+- npm 安装可用 `riffet update` 自更新；有新版本时 `riffet status` 会提示，`riffet`、`riffet start` 和 `riffet resume` 在可直接更新时会在运行前询问是否立即更新。
 
 ### 客户端
 

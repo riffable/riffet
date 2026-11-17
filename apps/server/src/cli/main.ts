@@ -14,11 +14,15 @@ import { installService, serviceStatus, uninstallService } from './service.js';
 import { list, resume } from './sessions.js';
 import { status } from './status.js';
 import { update } from './update.js';
-import { refreshUpdateCheck } from './update-notice.js';
+import { promptForUpdate, refreshUpdateCheck, relaunchAfterUpdate } from './update-notice.js';
 import { Cancelled, CliError, UsageError, err, interactive, out, printError, printLines, success, suggest, warning } from './ui.js';
 
 // Captured before the environment is normalized: `update` fetches with the user's own Git agent.
 const updateSshAuthSocket = process.env.SSH_AUTH_SOCK;
+
+class UpdateRelaunched extends Error {
+  constructor(readonly exitCode: number) { super('Updated'); }
+}
 
 type Global = { stateDir: string };
 /** The global options merged into a command's own. */
@@ -38,7 +42,7 @@ const EXAMPLES = (lines: Array<[string, string]>) => () => {
   return `\n${out.bold('Examples:')}\n${lines.map(([command, text]) => `  ${out.cmd(command.padEnd(width))}  ${out.dim(text)}`).join('\n')}\n`;
 };
 
-export function buildProgram(): Command {
+export function buildProgram(relaunchArgs?: string[]): Command {
   const program = new Command()
     .name('riffet')
     .description('Run Riffet, the workbench for Cursor, Codex, Claude Code and other agent CLIs')
@@ -69,6 +73,15 @@ export function buildProgram(): Command {
     // One environment for every entry point; the state directory caches the last good PATH.
     await applyProcessEnvironment(dir ? { stateDir: stateDir(dir) } : {});
     if (action.name() === 'update' && updateSshAuthSocket) process.env.SSH_AUTH_SOCK = updateSshAuthSocket;
+    const name = action.name();
+    if (relaunchArgs && (name === 'start' || name === 'resume' || (name === 'open' && !action.args[0]))) {
+      const resolved = stateDir(dir);
+      if (await promptForUpdate(resolved, { requireActive: name === 'resume' })) {
+        if (updateSshAuthSocket) process.env.SSH_AUTH_SOCK = updateSshAuthSocket;
+        await update({ stateDir: resolved });
+        throw new UpdateRelaunched(relaunchAfterUpdate(relaunchArgs));
+      }
+    }
   });
 
   // ---- Server
@@ -289,8 +302,12 @@ export async function main(argv = process.argv): Promise<void> {
   // `riffet logs | head` closes the pipe early; that is the reader being done, not an error.
   for (const stream of [process.stdout, process.stderr]) stream.on('error', error => { if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0); throw error; });
   try {
-    await buildProgram().parseAsync(argv);
+    await buildProgram(argv.slice(2)).parseAsync(argv);
   } catch (error) {
+    if (error instanceof UpdateRelaunched) {
+      process.exitCode = error.exitCode;
+      return;
+    }
     if (error instanceof CommanderError) {
       // Help and version end here too, with their own code.
       process.exitCode = error.exitCode === 0 ? 0 : 2;

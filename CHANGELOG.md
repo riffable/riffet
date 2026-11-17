@@ -52,7 +52,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Command line
 
 - `riffet` is redone in English: help grouped by purpose, calm colors, and a suggestion for a mistyped command. New `ls`, `resume` with a searchable picker, `logs --since` / `--scope`, `service status`, and tab completion for zsh, bash and fish.
-- An npm install updates itself with `riffet update`; `riffet status` notes when a newer release is out.
+- An npm install updates itself with `riffet update`; `riffet status` notes when a newer release is out, and `riffet`, `riffet start` and `riffet resume` offer to update before running when a newer release is ready to install.
 
 ### Clients
 
