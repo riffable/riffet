@@ -8,6 +8,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 - Scanning a pairing QR works when the Mac has several network addresses and the phone can reach only some of them, such as Wi-Fi that keeps wireless devices apart while the wired address answers: the QR carries every address and the phone pairs at the first that answers. Android also falls back to these addresses later if the one it uses stops answering.
 - Sending a message to an agent no longer waits seconds for the undo checkpoint in a project with many uncommitted changes: about 0.3 s for a hundred changed files, from 3.5 s.
+- Cursor with an API gateway starts in about a second instead of 10–30: the queries the CLI makes before its prompt are answered from the server's memory and refreshed behind it, so a change to models or plugins shows one start later.
 - Cursor: a first message with several lines, or one ending in `;`, no longer fails with "Native terminal launch command is invalid" when no warm CLI is ready.
 - A conversation that failed while its first message was sending shows the error once, not twice.
 - An agent that fails at startup (a wrong model, an invalid key) before Riffet has attached to its terminal now shows as failed with its reason, instead of going idle with no explanation.

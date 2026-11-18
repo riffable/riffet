@@ -102,6 +102,19 @@ export const SERVER_BUDGET = {
   loopBlockMs: 200,
 } as const;
 
+/**
+ * The Cursor API front's answers to cursor-agent's startup queries (`plugins/riffet/cursor/backend/api-cache.ts`).
+ * Memory only, dropped when the backend closes; past either cap the least recently used goes.
+ */
+export const CURSOR_API_CACHE_BUDGET = {
+  maxEntries: 64,
+  maxBytes: 4 * MIB,
+  /** An answer older than this is not served; the start waits for a fresh one. */
+  maxStaleMs: 24 * 60 * 60_000,
+  /** An access token with more than this left is handed out again; above the CLI's own five-minute renewal. */
+  tokenReuseMarginMs: 15 * 60_000,
+} as const;
+
 /** Checking for a newer Riffet release (docs/UPDATE.md「提示」). */
 export const UPDATE_CHECK_BUDGET = {
   /** A check result is reused this long by the CLI, the server and every client; a check runs out of band once it is older. */

@@ -149,6 +149,17 @@ export function parseScreen(text: string): ScreenState {
   return { phase: busy ? 'busy' : bar >= 0 ? 'idle' : 'attention', footer: true, ...(model ? { model } : {}), ...(permission ? { permission } : {}), ...(error ? { error } : {}) };
 }
 
+/**
+ * The splash a cursor-agent without credentials stops at, under its name and version:
+ *
+ *     Press any key to log in...
+ */
+const LOGIN_PROMPT = /^\s*Press any key to log in/im;
+
+export function cursorLoginPrompt(text: string): boolean {
+  return LOGIN_PROMPT.test(text);
+}
+
 /** The CLI is back at its own prompt (or busy at it): the footer is on screen. What `NativeInteractions` takes as an answer completed. */
 export function promptSettled(text: string): boolean {
   const screen = parseScreen(text);

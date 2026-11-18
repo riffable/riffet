@@ -9,7 +9,7 @@ import {
   type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
 } from '@riffet/plugin-api/experimental/agent';
 import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError } from './cli-adapter.js';
-import { CURSOR_LAUNCH_ENV, cursorLaunchProfileOf, cursorLaunchSpec, redactCursorOutput, runCursor, type CursorLaunchProfile } from './cli-driver.js';
+import { CURSOR_LAUNCH_ENV, cursorApiFrontable, cursorLaunchProfileOf, setCursorApiFront, cursorLaunchSpec, redactCursorOutput, runCursor, type CursorLaunchProfile } from './cli-driver.js';
 import { cursorCapabilityReport, cursorNeedsLogin, describeCursorProfile, runCursorOperation } from './config.js';
 import { cursorPort, type CursorPort } from './host-port.js';
 import { CursorActivities } from './backend/activity.js';
@@ -19,6 +19,7 @@ import { CursorLiveReceipts } from './backend/live-receipts.js';
 import { CursorProjectConfigs } from './backend/project-configs.js';
 import { readCursorShare } from './backend/share-read.js';
 import { CursorSteerBridge } from './backend/steer.js';
+import { CursorApiCache } from './backend/api-cache.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
 import { workspaceChatsDir } from './native/chat-store.js';
@@ -102,6 +103,7 @@ interface CursorParts {
   live: CursorLive;
   receipts: CursorLiveReceipts;
   usage: CursorUsageIngest;
+  apiCache?: CursorApiCache;
 }
 
 /**
@@ -226,8 +228,13 @@ export class CursorBackend implements AgentBackend {
       this.activities.get(sessionId)?.tracker.settleLiveCompaction();
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.changed();
     };
-    runtime.useLaunchPlugin(session => steering.launchArgs(session));
-    this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage };
+    // A gateway's startup queries are answered locally; the first launch waits for the front, a failed one is skipped.
+    const apiCache = cursorApiFrontable(launch, true) ? new CursorApiCache(launch.apiEndpoint!, join(this.options.stateDir, 'cursor-api-front.json')) : undefined;
+    const front = apiCache?.start().then(url => { if (!this.shutdown) setCursorApiFront(launch, url); }, error => {
+      console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    runtime.useLaunchPlugin(async session => { await front; return steering.launchArgs(session); });
+    this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage, ...(apiCache ? { apiCache } : {}) };
     this.ensureLiveUsageWatch();
     return this.built;
   }
@@ -585,6 +592,8 @@ export class CursorBackend implements AgentBackend {
       built.titles.disposeAll();
       built.receipts.close();
       built.live.close();
+      setCursorApiFront(built.profile, undefined);
+      await built.apiCache?.close();
     })();
   }
 }

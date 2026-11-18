@@ -9,7 +9,7 @@ import type { CursorPort } from '../host-port.js';
 import { strictInputHandle } from './strict-input-handle.js';
 import { ChatReader, workspaceChatsDir, type ChatMeta } from './chat-store.js';
 import { readJobLog } from './job-log.js';
-import { parseScreen, turnControls, type FollowUps } from './screen.js';
+import { cursorLoginPrompt, parseScreen, turnControls, type FollowUps } from './screen.js';
 import { normalizeNativeModelSelection } from './model-catalog.js';
 import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list.js';
 import { Transcript, visible } from './transcript.js';
@@ -73,6 +73,12 @@ const UNRECOGNIZED_PANE_NOTICE_POLLS = 4;
 const ANSWERED_SETTLE_MS = 3_000;
 const UNRECOGNIZED_PANE_ATTENTION_POLLS = 16;
 const UNRECOGNIZED_PANE_NOTICE = '暂时无法识别 CLI 终端画面，正在等待它恢复；如长时间无变化，请打开终端查看。';
+/**
+ * How long a CLI may boot without drawing its footer before the session asks for the terminal.
+ * Behind a remote gateway a healthy cursor-agent takes 20–30 s to its first prompt, so a shorter
+ * window flagged ordinary starts as stuck. The login screen is recognized on sight instead.
+ */
+const CURSOR_BOOT_STALL_MS = 60_000;
 
 /** The bottom of a pane, enough to tell which dialog it was, for the server log. */
 function paneTail(screen: string): string {
@@ -958,7 +964,7 @@ export class NativeService {
         if (watch.booting?.terminalId !== info.id) watch.booting = { terminalId: info.id, since: Date.now() };
         const screen = await this.port.terminals.screen(info.id);
         if (watch.closed) return;
-        const stalled = Date.now() - watch.booting.since >= 15_000;
+        let stalled = Date.now() - watch.booting.since >= CURSOR_BOOT_STALL_MS;
         if (screen !== undefined) {
           const { footer, subview, error: cliError, ...parsed } = parseScreen(screen);
           const interaction = this.port.dialogs.observe(screen, info)
@@ -966,6 +972,8 @@ export class NativeService {
           if (footer || subview) watch.booted = info.id;
           // The resume picker is shown instead of the footer on purpose; everything else footer-less is boot.
           const booting = !footer && !subview && watch.booted !== info.id && !(session.resumePicker && !session.nativeSessionId);
+          const login = booting && cursorLoginPrompt(screen);
+          if (login) stalled = true;
           if (parsed.phase === 'busy' || subview?.working) watch.paneBusyAt = Date.now();
           const hiddenTurn = parsed.phase === 'idle' && watch.chat !== undefined
             && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt });
@@ -987,7 +995,8 @@ export class NativeService {
             }
           }
           if (cliError !== watch.cliError?.text) watch.cliError = cliError ? { text: cliError, paneBusyAt: watch.paneBusyAt } : undefined;
-          if (booting && stalled && !interaction) startupNotice = 'CLI 尚未出现可输入的提示栏，请查看终端中的登录、提示或错误。就绪后会自动恢复。';
+          if (login && !interaction) startupNotice = 'Cursor CLI 需要登录，请在终端中完成登录。登录后会自动恢复。';
+          else if (booting && stalled && !interaction) startupNotice = 'CLI 尚未出现可输入的提示栏，请查看终端中的登录、提示或错误。就绪后会自动恢复。';
           else if (cliError && phase === 'idle' && watch.cliError?.paneBusyAt === watch.paneBusyAt) {
             startupNotice = `Cursor CLI 报错，上一轮已中断：${cliError}。发送「继续」可以让它接着做。`;
             startupNoticeLevel = 'error';

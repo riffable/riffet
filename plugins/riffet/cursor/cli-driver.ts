@@ -103,9 +103,28 @@ export function cursorConfigDirectory(cli:string|CursorLaunchProfile):string {
   return typeof cli==='string'?resolveCursorLaunchProfile(undefined,cli).configDir:cli.configDir;
 }
 
-function launchArgs(profile:CursorLaunchProfile,relayGateway=false):string[] {
+/** A running startup-query front (backend/api-cache.ts) per launch profile; launches go through it while it is set. */
+const apiFronts=new WeakMap<CursorLaunchProfile,string>();
+
+export function setCursorApiFront(profile:CursorLaunchProfile,url:string|undefined):void {
+  if(url)apiFronts.set(profile,url);else apiFronts.delete(profile);
+}
+
+/**
+ * Whether a profile's API endpoint may be fronted: a custom gateway whose agent stream has its own
+ * explicit endpoint. Without one the CLI would derive the agent URL from the front, and Cursor's own
+ * hosts are left as they are.
+ */
+export function cursorApiFrontable(profile:CursorLaunchProfile,relayGateway=false):boolean {
+  if(!profile.apiEndpoint||!(relayGateway||profile.agentEndpoint))return false;
+  return !new URL(profile.apiEndpoint).hostname.endsWith('.cursor.sh');
+}
+
+function launchArgs(profile:CursorLaunchProfile,relayGateway=false):{args:string[];front?:string} {
   const agentEndpoint=relayGateway?profile.apiEndpoint:profile.agentEndpoint;
-  return [...(profile.apiEndpoint?['--endpoint',profile.apiEndpoint]:[]),...(agentEndpoint?['--agent-endpoint',agentEndpoint]:[]),...(profile.disableAutoUpdate?['--disable-auto-update']:[])];
+  const front=cursorApiFrontable(profile,relayGateway)?apiFronts.get(profile):undefined;
+  const endpoint=front??profile.apiEndpoint;
+  return {args:[...(endpoint?['--endpoint',endpoint]:[]),...(agentEndpoint?['--agent-endpoint',agentEndpoint]:[]),...(profile.disableAutoUpdate?['--disable-auto-update']:[])],...(front?{front}:{})};
 }
 
 /** Byte Relay speaks HTTP/1. Preserve the user's other native CLI settings. */
@@ -160,7 +179,11 @@ export function cursorCommand(input:string|CursorLaunchProfile,args:string[],env
     childEnv.CURSOR_CONFIG_DIR=profile.configDir;
     prepareRelayTransport(profile.configDir);
   }
-  let commandArgs=[...launchArgs(profile,relayGateway),...args];
+  const launch=launchArgs(profile,relayGateway);
+  // The CLI names its website after the API origin; behind the front that would be the loopback address.
+  const website=launch.front&&!childEnv.CURSOR_WEBSITE_URL?new URL(profile.apiEndpoint!).origin:undefined;
+  if(website)childEnv.CURSOR_WEBSITE_URL=website;
+  let commandArgs=[...launch.args,...args];
   if(functionName){
     if(!/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(functionName))throw new AppError('INVALID_CLI_COMMAND','Shell launcher must name one function or command');
     // The function lives in the user's own startup file, so run it in the user's own shell.
@@ -172,7 +195,7 @@ export function cursorCommand(input:string|CursorLaunchProfile,args:string[],env
   if(apiKey!==undefined)childEnv.AGENT_CLI_CREDENTIAL_STORE='memory';
   let tmuxEnv:Record<string,string>|undefined;
   if(options.terminal){
-    tmuxEnv={CURSOR_CONFIG_DIR:profile.configDir,...(apiKey!==undefined?{AGENT_CLI_CREDENTIAL_STORE:'memory'}:{}),...(env.NO_OPEN_BROWSER?{NO_OPEN_BROWSER:env.NO_OPEN_BROWSER}:{})};
+    tmuxEnv={CURSOR_CONFIG_DIR:profile.configDir,...(apiKey!==undefined?{AGENT_CLI_CREDENTIAL_STORE:'memory'}:{}),...(website?{CURSOR_WEBSITE_URL:website}:{}),...(env.NO_OPEN_BROWSER?{NO_OPEN_BROWSER:env.NO_OPEN_BROWSER}:{})};
   }
   return {command,args:commandArgs,env:childEnv,custom:Boolean(functionName||profileSecrets.has(profile)||profile.apiEndpoint||profile.agentEndpoint||apiKey||process.env.CURSOR_API_KEY),...(tmuxEnv?{tmuxEnv}:{})};
 }
