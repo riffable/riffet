@@ -130,13 +130,6 @@ struct NewTaskView: View {
                         // The line and the card are what stays put across 新建任务 and 快速对话; what differs hangs below.
                         VStack(alignment: .leading, spacing: 0) {
                             slot.riffetTypeBoundary()
-                            if let assistant {
-                                AssistantPackEntries(packs: assistant.packs) { entry in
-                                    draft.text = AssistantPackEntries.draft(entry, typed: draft.text)
-                                    writing = true
-                                }
-                                .padding(.horizontal, -RiffetMetrics.pageInset)
-                            }
                             cardSlot.riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)

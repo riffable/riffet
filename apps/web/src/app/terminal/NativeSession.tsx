@@ -26,7 +26,6 @@ import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
 import { ComposerDock } from '../session/ComposerDock';
-import { AssistantEntries } from '../work-items/AssistantEntries';
 import { PlanDock } from '../work-items/PlanDock';
 import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../automations/SendLater';
 import { pickerBlockReason } from '../session/pickers';
@@ -1312,7 +1311,6 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             </Button> : undefined} />
         {/* The composer stays mounted, so its draft survives the hold; `contents` keeps its layout as it was. */}
         <div className={held ? 'hidden' : 'contents'} inert={held}>
-          {assistantMain && !archived && <AssistantEntries onPick={(text) => setRestoreDraft({ text, attachments: [], nonce: Date.now() })} />}
           <Composer
             {...composerProps}
             autoFocus={!discussionOpen && !held}

@@ -260,9 +260,6 @@ struct ConversationView: View {
                             TerminalHoldBar(workbench: workbench, session: session)
                                 .onAppear { fullscreen = false }
                         } else {
-                            if !fullscreen, workbench.isAssistantMain(session) {
-                                AssistantEntries(workbench: workbench, composer: composer)
-                            }
                             composerView(state, fullscreen: $fullscreen)
                                 .frame(maxHeight: fullscreen ? .infinity : nil)
                         }

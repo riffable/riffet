@@ -410,6 +410,10 @@ msgstr "视图"
 msgid "移出会话「{0}」"
 msgstr "移出会话「{0}」"
 
+#: src/app/work-items/PlanDock.tsx
+msgid "移除"
+msgstr "移除"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "移除标签 {label}"
 msgstr "移除标签 {label}"

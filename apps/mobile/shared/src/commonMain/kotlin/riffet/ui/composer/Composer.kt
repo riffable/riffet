@@ -394,12 +394,6 @@ fun Composer(
             )
         }
 
-        riffet.ui.assistant.AssistantPackEntries(packs) { entry ->
-            text = riffet.ui.assistant.draftWithEntry(entry, text)
-            drafts?.save(session.id, draft)
-            inputFocus.requestFocus()
-        }
-
         // A terminal holding the conversation is its only writer: the bar takes the card's place.
         if (session.terminalHold != null) TerminalHoldBar(store = store, sessionId = session.id) else ComposerCard(
             text = text,

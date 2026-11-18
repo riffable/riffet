@@ -148,8 +148,6 @@ struct AssistantPage: View {
 
     private var composerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            AssistantEntries(workbench: workbench, composer: composer)
-                .padding(.bottom, Space.sm)
             ComposerView(
                 model: composer,
                 placeholder: String(localized: "发送消息…"),

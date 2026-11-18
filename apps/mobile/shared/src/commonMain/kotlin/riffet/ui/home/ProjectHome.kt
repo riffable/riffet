@@ -1080,14 +1080,6 @@ private fun HomeContent(
                 Column {
                     slot()
                     Spacer(Modifier.height(metrics.controlInset / 2))
-                    if (assistant != null) {
-                        riffet.ui.assistant.AssistantPackEntries(assistant.packs) { entry ->
-                            text = riffet.ui.assistant.draftWithEntry(entry, text)
-                            drafts?.save(draftId, draft)
-                            composerFocus.requestFocus()
-                        }
-                        Spacer(Modifier.height(metrics.controlInset / 3))
-                    }
                     ComposerCard(
                         text = text,
                         onTextChange = { text = it },
