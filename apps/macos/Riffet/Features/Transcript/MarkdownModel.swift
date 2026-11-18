@@ -569,8 +569,8 @@ func nativeDeliveryLabel(_ run: Run, stopShown: Bool = true) -> String {
 
 /// Running, failed and interrupted process blocks open by default; only work that completed
 /// normally folds, as on the web (`TurnProcess`). Explicit choices and the completed-process
-/// preference take priority. A block the reader is looking at when it ends (scrolled up to it)
-/// stays open, as if they had opened it.
+/// preference take priority. A block with an expanded detail or active text selection when it ends
+/// stays open, as if the reader had opened it.
 /// Not thread-safe; the transcript reads and writes it under its own lock.
 final class ProcessFolds {
     /// Subagent detail views can show completed tool work by default, while the main transcript

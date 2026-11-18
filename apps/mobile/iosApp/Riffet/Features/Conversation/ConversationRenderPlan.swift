@@ -92,7 +92,7 @@ enum ConversationRenderPlan {
     /// `scope` names the transcript (server and session) for tool-run fold choices; `readingAbove`: the
     /// reader is not at the bottom.
     static func entries(rows: [any TimelineRow], compactAbove: [Bool], expanded: [String: Bool], focusedRow: String?,
-                        scope: String, readingAbove: Bool) -> [Entry] {
+                        scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState? = nil) -> [Entry] {
         var result: [Entry] = []
         result.reserveCapacity(rows.count)
         for (index, row) in rows.enumerated() {
@@ -101,7 +101,7 @@ enum ConversationRenderPlan {
             case let .process(process):
                 let open = expanded[process.key] ?? (focusedRow == process.key || process.running || process.issueCount > 0)
                 result.append(Entry(id: process.key, rowKey: process.key, topSpacing: spacing, isLastInRow: false, content: .processHeader(process, open: open)))
-                if open { appendChildren(of: process, scope: scope, readingAbove: readingAbove, to: &result) }
+                if open { appendChildren(of: process, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, to: &result) }
                 if process.settled, process.endsTurn, let answer = process.answerText, !answer.isEmpty {
                     result.append(Entry(id: childID(role: "footer", row: process.key), rowKey: process.key, topSpacing: 4, isLastInRow: false, content: .footer(process)))
                 }
@@ -114,7 +114,7 @@ enum ConversationRenderPlan {
     }
 
     @MainActor
-    private static func appendChildren(of process: TimelineRowProcess, scope: String, readingAbove: Bool, to result: inout [Entry]) {
+    private static func appendChildren(of process: TimelineRowProcess, scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState?, to result: inout [Entry]) {
         let items = Array(process.items)
         var previous: (any TimelineItem)?
         var index = 0
@@ -130,7 +130,7 @@ enum ConversationRenderPlan {
                 let kinds = toolRunKinds(items: members.compactMap { $0 as? TimelineItemTool })
                 let choiceKey = scope + "|" + id
                 let choices = ConversationToolRunChoices.shared
-                let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, process: process, followed: followed), readingAbove: readingAbove)
+                let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, process: process, followed: followed, disclosureState: disclosureState), readingAbove: readingAbove)
                 result.append(Entry(id: id, rowKey: process.key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, kinds: kinds, open: open))))
                 if open {
                     for member in members { child(member, id: childID(role: "item", row: process.key, item: member.key), nested: true, spacing: 0) }
@@ -148,7 +148,7 @@ enum ConversationRenderPlan {
 
     /// Where the run starting at `start` ends, or `start` when none starts there: a run needs a call in
     /// it and two items, or its items stand on their own. Prose, delegations and anything else end it.
-    private static func toolRunEnd(_ items: [any TimelineItem], from start: Int) -> Int {
+    static func toolRunEnd(_ items: [any TimelineItem], from start: Int) -> Int {
         var end = start
         while end < items.count, joinsToolRun(items[end]) { end += 1 }
         return end - start > 1 && items[start..<end].contains(where: { isToolRunItem(item: $0) }) ? end : start
@@ -157,10 +157,11 @@ enum ConversationRenderPlan {
         isToolRunItem(item: item) || (item as? TimelineItemThought)?.channel == .thinking
     }
 
-    /// Open while a call is working or never settled, or while nothing follows the run; the reader's choice wins.
+    /// Open while a call is working or never settled, while a member row is expanded, or while nothing follows the run; the reader's choice wins.
     @MainActor
-    private static func defaultOpen(_ members: [any TimelineItem], process: TimelineRowProcess, followed: Bool) -> Bool {
+    private static func defaultOpen(_ members: [any TimelineItem], process: TimelineRowProcess, followed: Bool, disclosureState: ConversationDisclosureState?) -> Bool {
         if !followed { return true }
+        if let disclosureState, members.contains(where: { disclosureState.isItemOpen($0) }) { return true }
         let stale = !process.turnActive
         for case let tool as TimelineItemTool in members {
             let state = ConversationToolRunState.state(tool, stale: stale)

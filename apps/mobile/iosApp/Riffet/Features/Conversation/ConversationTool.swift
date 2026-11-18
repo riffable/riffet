@@ -23,9 +23,9 @@ struct ConversationTool: View {
     private var isExpanded: Bool {
         // Failures stay folded like everything else: bursting open with raw output is what made long turns
         // unreadable. The error is one tap away, preserved per tool.
-        get { disclosureState?["tool.\(presentation.id).expanded"] ?? expanded ?? false }
+        get { disclosureState?["tool.\(item.key).expanded"] ?? expanded ?? false }
         nonmutating set {
-            if let disclosureState { disclosureState["tool.\(presentation.id).expanded"] = newValue }
+            if let disclosureState { disclosureState["tool.\(item.key).expanded"] = newValue }
             else { expanded = newValue }
         }
     }

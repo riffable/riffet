@@ -431,7 +431,7 @@ struct ConversationView: View {
         let speeds = presentation?.speeds ?? [:]
         let rowKeys = Set(rows.map(\.key))
         let entries = ConversationRenderPlan.entries(rows: rows, compactAbove: compactAbove, expanded: effectiveProcessExpansion(), focusedRow: focusedRow,
-                                                     scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom)
+                                                     scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom, disclosureState: disclosureState)
         var result: [ConversationTranscriptList.Row] = []
         let find = findHighlight
         func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, highlight: ConversationFindHighlight? = nil, content: V) {
@@ -529,30 +529,30 @@ struct ConversationView: View {
     /// after it — two snapshots, one visible slide of everything above.
     private func effectiveProcessExpansion() -> [String: Bool] {
         var expanded = processExpansion
+        let scope = workbench.baseURL.absoluteString + "|" + sessionID
         let running = Set(rows.compactMap { $0 as? TimelineRowProcess }.filter(\.running).map(\.key))
         for process in rows.compactMap({ $0 as? TimelineRowProcess })
         where runningProcesses.contains(process.key) && !running.contains(process.key)
             && process.issueCount == 0 {
-            // One direction only: never un-pin on account of the scroll
-            // position. `nearBottom` flips as the reader crosses its threshold,
-            // and deriving a fold from it made settled blocks collapse and
-            // re-expand mid-scroll, sliding everything after them.
-            if !nearBottom && expanded[process.key] != false { expanded[process.key] = true }
+            if disclosureState.hasOpenDetail(in: process, scope: scope) && expanded[process.key] != false {
+                expanded[process.key] = true
+            }
         }
         return expanded
     }
 
     private func updateProcessExpansion() {
         let processes = rows.compactMap { $0 as? TimelineRowProcess }
+        let scope = workbench.baseURL.absoluteString + "|" + sessionID
         let running = Set(processes.filter(\.running).map(\.key))
         let keys = Set(processes.map(\.key))
         processExpansion = processExpansion.filter { keys.contains($0.key) }
         for process in processes {
             if runningProcesses.contains(process.key) && !running.contains(process.key),
                process.issueCount == 0 && processExpansion[process.key] == nil {
-                // Keep an active process open while the reader is reviewing history; its
-                // header may already be offscreen, so header visibility is not sufficient.
-                if !nearBottom { processExpansion[process.key] = true }
+                if disclosureState.hasOpenDetail(in: process, scope: scope) {
+                    processExpansion[process.key] = true
+                }
             }
         }
         runningProcesses = running

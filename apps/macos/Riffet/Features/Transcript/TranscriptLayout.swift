@@ -9,10 +9,16 @@ final class TranscriptUIStore: @unchecked Sendable {
     private let lock = NSLock()
     private let folds: ProcessFolds
     private var opened: Set<String> = []
+    /// Open item disclosures (`thought:…`, `tool:…`, `job:…`, `status:…`, `notice:…`) per row key.
+    private var openedInRow: [String: Set<String>] = [:]
     /// A tool run's fold as the reader set it; absent, the run follows `RowBuilder.toolRunOpen`.
     private var toolRunChoices: [String: Bool] = [:]
+    /// Tool runs explicitly opened by the reader per row key.
+    private var toolRunsInRow: [String: Set<String>] = [:]
     /// The run each folded-able tool call belongs to, so a search hit inside a folded run can open it.
     private var toolRunOfItem: [String: String] = [:]
+    /// The run each item disclosure id (`thought:…`, `tool:…`, `job:…`) belongs to.
+    private var toolRunOfDisclosure: [String: String] = [:]
     private var wrapped: Set<String> = []
     private var rendered: Set<String> = []
     private var versions: [String: Int] = [:]
@@ -98,13 +104,18 @@ final class TranscriptUIStore: @unchecked Sendable {
     func setToolRunChoice(_ id: String, open: Bool, row: String) {
         locked {
             toolRunChoices[id] = open
+            if open { toolRunsInRow[row, default: []].insert(id) }
+            else { toolRunsInRow[row]?.remove(id) }
             versions[row, default: 0] += 1
         }
     }
 
-    /// Notes which run [items] were laid out in; read by `revealToolRun`.
-    func noteToolRun(_ id: String, items: [String]) {
-        locked { for item in items { toolRunOfItem[item] = id } }
+    /// Notes which run [items] were laid out in; read by `revealToolRun` and `hasOpenDetail`.
+    func noteToolRun(_ id: String, items: [String], disclosures: [String] = []) {
+        locked {
+            for item in items { toolRunOfItem[item] = id }
+            for disclosure in disclosures { toolRunOfDisclosure[disclosure] = id }
+        }
     }
 
     /// Opens the run holding [item]; false when it is in none.
@@ -112,6 +123,7 @@ final class TranscriptUIStore: @unchecked Sendable {
         locked {
             guard let id = toolRunOfItem[item], toolRunChoices[id] != true else { return false }
             toolRunChoices[id] = true
+            toolRunsInRow[row, default: []].insert(id)
             versions[row, default: 0] += 1
             return true
         }
@@ -121,10 +133,24 @@ final class TranscriptUIStore: @unchecked Sendable {
     func isWrapped(_ id: String) -> Bool { locked { wrapped.contains(id) } }
     func isRendered(_ id: String, default defaultValue: Bool = false) -> Bool { locked { rendered.contains(id) ? !defaultValue : defaultValue } }
 
+    func hasOpenDetail(inRow row: String) -> Bool {
+        locked {
+            if !(toolRunsInRow[row]?.isEmpty ?? true) { return true }
+            guard let ids = openedInRow[row] else { return false }
+            return ids.contains { id in
+                guard let runId = toolRunOfDisclosure[id] else { return true }
+                return toolRunChoices[runId] != false
+            }
+        }
+    }
+
     func toggle(_ action: TranscriptAction, row: String) {
         locked {
             switch action {
-            case let .toggle(id): flip(&opened, id)
+            case let .toggle(id):
+                flip(&opened, id)
+                if opened.contains(id) { openedInRow[row, default: []].insert(id) }
+                else { openedInRow[row]?.remove(id) }
             case let .toggleWrap(id): flip(&wrapped, id)
             case let .toggleRendered(id): flip(&rendered, id)
             default: return
@@ -712,8 +738,16 @@ struct RowBuilder {
             tool.job.map { $0.status == .running } ?? presentation.running
         }
         let incomplete = presentations.contains { $0.dangling }
-        let open = ui.toolRunChoice(id) ?? (active || incomplete || !followedByContent)
-        ui.noteToolRun(id, items: run.map(\.key))
+        let disclosures: [String] = run.compactMap { item in
+            switch onEnum(of: item) {
+            case let .thought(thought): "thought:\(thought.key)"
+            case let .tool(tool): tool.job.map { "job:\($0.id ?? tool.key)" } ?? "tool:\(tool.key)"
+            default: nil
+            }
+        }
+        let childOpen = disclosures.contains { ui.isOpen($0) }
+        let open = ui.toolRunChoice(id) ?? (active || incomplete || !followedByContent || childOpen)
+        ui.noteToolRun(id, items: run.map(\.key), disclosures: disclosures)
         let kinds = toolRunKinds(items: tools)
         let names = kinds.prefix(2).map(Self.toolRunLabel).joined(separator: String(localized: "、"))
         let title = kinds.count > 2 ? String(localized: "\(names)等") : names

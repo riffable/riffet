@@ -57,6 +57,40 @@ private struct ConversationQuoteKey: EnvironmentKey { static let defaultValue: (
         get { flags[key] }
         set { flags[key] = newValue }
     }
+
+    @MainActor
+    func isItemOpen(_ item: any TimelineItem) -> Bool {
+        switch onEnum(of: item) {
+        case let .thought(thought): return flags["reasoning." + thought.key] == true
+        case let .tool(tool):
+            if let job = tool.job, flags["job." + job.toolCallId] == true { return true }
+            return flags["tool.\(tool.key).expanded"] == true
+        case let .status(status): return flags["status." + status.key] == true
+        case let .taskNotification(notice): return flags["notice." + notice.key] == true
+        case let .activity(activity): return flags["activity." + activity.key] == true
+        default: return false
+        }
+    }
+
+    @MainActor
+    func hasOpenDetail(in process: TimelineRowProcess, scope: String? = nil) -> Bool {
+        let choices = ConversationToolRunChoices.shared
+        let items = Array(process.items)
+        var index = 0
+        while index < items.count {
+            let end = ConversationRenderPlan.toolRunEnd(items, from: index)
+            if end > index {
+                let choice = scope.flatMap { choices["\($0)|toolrun:\(items[index].key)"] }
+                if choice == true { return true }
+                if choice != false, items[index..<end].contains(where: { isItemOpen($0) }) { return true }
+                index = end
+                continue
+            }
+            if isItemOpen(items[index]) { return true }
+            index += 1
+        }
+        return false
+    }
 }
 
 extension EnvironmentValues {
@@ -121,7 +155,7 @@ private struct ConversationProcess: View {
         }
         .onScrollVisibilityChange(threshold: 0.1) { visible = $0 }
         .onChange(of: row.running) { old, running in
-            if old && !running && expansion == nil && visible && readingHistory {
+            if old && !running && expansion == nil && disclosureState?.hasOpenDetail(in: row) == true {
                 expansion = true
             }
         }

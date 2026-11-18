@@ -617,10 +617,14 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         // Until the first reveal the row to restore the reader's place at is the one to lay out first.
         let restoring: Set<String> = pendingRestore.map { Set([$0.key]) } ?? Set<String>()
         let visible = Set(visibleKeys())
+        let selectedRow = TextLayoutView.selectedView.flatMap { view in
+            visibleCells().first { view.isDescendant(of: $0) }?.key
+        }
+        let reading = Set(laidOut.map(\.key).filter { ui.hasOpenDetail(inRow: $0) }).union(selectedRow.map { [$0] } ?? [])
         let input = BuildInput(
             feed: feed, width: column, viewport: scrollView.contentView.bounds.height, style: style, ui: ui,
             previous: previous, byIdentity: byIdentity, priority: visible.union(restoring),
-            reading: (following ? restoring : visible.union(restoring)), refresh: refresh, tail: benchTail, fresh: entries.isEmpty
+            reading: reading, refresh: refresh, tail: benchTail, fresh: entries.isEmpty
         )
         runLayout {
             let output = Perf.measure("transcript.build") { Self.build(input) }

@@ -71,10 +71,41 @@ function toolRuns(items: TimelineItem[]): Map<number, number> {
   return runs;
 }
 
+function rememberedItemOpen(remembered: ReadonlyMap<string, unknown> | undefined, item: TimelineItem): boolean {
+  if (!remembered) return false;
+  const prefix = `${item.key}\n`;
+  return remembered.get(`${prefix}tool`) === true
+    || remembered.get(`${prefix}job`) === true
+    || remembered.get(`${prefix}thought`) === true
+    || remembered.get(`${prefix}notice`) === true
+    || remembered.get(`${prefix}activity`) === true;
+}
+
+function hasOpenProcessDetail(remembered: ReadonlyMap<string, unknown> | undefined, items: readonly TimelineItem[], runs: ReadonlyMap<number, number>): boolean {
+  if (!remembered?.size) return false;
+  for (let index = 0; index < items.length;) {
+    const end = runs.get(index);
+    if (end !== undefined) {
+      const choice = remembered.get(`${items[index]!.key}\ntool-run-choice`);
+      if (choice === true) return true;
+      if (choice !== false) {
+        for (let at = index; at < end; at += 1) if (rememberedItemOpen(remembered, items[at]!)) return true;
+      }
+      index = end;
+      continue;
+    }
+    if (rememberedItemOpen(remembered, items[index]!)) return true;
+    index += 1;
+  }
+  return false;
+}
+
 /** A run of ordinary tool calls within the open process. */
-function ToolRun({ items, followedByContent, stale, latestTurn, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; followedByContent: boolean; stale: boolean; latestTurn: boolean; children: ReactNode; reveal?: number }) {
+function ToolRun({ items, entries, followedByContent, stale, latestTurn, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; stale: boolean; latestTurn: boolean; children: ReactNode; reveal?: number }) {
   const jobs = useContext(NativeJobStoreContext);
   const resources = useTranscriptResources();
+  const remembered = useContext(RememberedValues);
+  const [, refresh] = useState(0);
   // A background job can outlive the call that started it. Subscribe while folded too.
   const subscribe = useCallback((listener: () => void) => {
     const unsubscribers = items.flatMap(item => {
@@ -111,13 +142,14 @@ function ToolRun({ items, followedByContent, stale, latestTurn, children, reveal
   // arrives. An earlier turn is over; nothing catching up brings changes it.
   const unconfirmed = useRef(catchingUp && latestTurn);
   if (!catchingUp) unconfirmed.current = false;
-  // Reasoning, delegation or the answer closes a completed run. A growing tail opens by default,
-  // while an explicit reader choice still controls it during the call.
-  const open = choice ?? (unconfirmed.current ? false : active || incomplete || !followedByContent);
+  const childOpen = entries.some((entry) => rememberedItemOpen(remembered, entry));
+  // Reasoning, delegation or the answer closes a completed run unless the reader opened a row inside
+  // it. A growing tail opens by default, while an explicit reader choice still controls it.
+  const open = choice ?? (unconfirmed.current ? false : active || incomplete || !followedByContent || childOpen);
   const contentsId = useId();
   useLayoutEffect(() => { if (reveal !== undefined) setChoice(true); }, [reveal, setChoice]);
   return (
-    <div data-tool-run-open={open} className="flex min-w-0 flex-col">
+    <div data-tool-run-open={open} data-tool-run-choice={choice === true ? 'true' : undefined} className="flex min-w-0 flex-col">
       <button type="button" aria-expanded={open} aria-controls={open ? contentsId : undefined} onClick={() => setChoice(!open)}
         className="group/tool-run flex min-h-[calc(24px*var(--text-scale))] w-fit max-w-full items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors hover:text-fg-2 no-hover:min-h-9">
         <span className="grid size-4 shrink-0 place-items-center text-fg-4 [&_svg]:size-[15px]"><Icon /></span>
@@ -126,7 +158,7 @@ function ToolRun({ items, followedByContent, stale, latestTurn, children, reveal
         <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft', open ? 'rotate-90' : 'can-hover:opacity-0 can-hover:group-hover/tool-run:opacity-100')} />
       </button>
       <Collapse open={open} keep still={quiet} id={contentsId} onReveal={() => setChoice(true)}>
-        <div className="ml-2 mt-0.5 mb-1.5 flex min-w-0 flex-col edge-l pl-4 pt-0.5">{children}</div>
+        <div className="ml-2 mt-0.5 mb-1.5 flex min-w-0 flex-col edge-l pl-4 pt-0.5" onClick={() => refresh((n) => n + 1)}>{children}</div>
       </Collapse>
     </div>
   );
@@ -420,6 +452,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
 const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
   const resources = useTranscriptResources();
+  const remembered = useContext(RememberedValues);
   const attach = useCallback((element: HTMLElement | null) => measure(row.key, element), [measure, row.key]);
   // Both explicit choices survive virtual unmounting; undefined means automatic folding.
   const [processChoice, rememberProcessChoice] = useRemembered<boolean | undefined>('process', undefined);
@@ -436,6 +469,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const first = items.find((item) => item.kind !== 'activity')!;
     const lastOutputIndex = items.findLastIndex((item) => item.kind !== 'activity');
     const runs = toolRuns(items);
+    const detailOpen = hasOpenProcessDetail(remembered, items, runs);
     const runCovered = new Set([...runs].flatMap(([start, end]) => Array.from({ length: end - start - 1 }, (_, offset) => start + 1 + offset)));
     const lastTime = timelineItemTime(items[lastOutputIndex]!);
     return (
@@ -461,8 +495,8 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
           footerPinned={footerPinned}
           footerActions={<AnswerActions text={row.answerText} runId={row.runId} onTurnAction={context.onTurnAction} at={lastTime} />}
           defaultOpen={context.completedProcessesOpen}
+          detailOpen={detailOpen}
           choice={processChoice}
-          following={context.following}
           onOpenChange={rememberProcessChoice}
           reveal={reveal?.version}
           {...footerProgress}
@@ -484,7 +518,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
               );
               return <RememberedScope.Provider key={item.key} value={item.key}>
                 <div className={cn('min-w-0', gaps[itemIndex], isFresh(fresh, item.key, row.key) && enter)}>
-                  <ToolRun items={tools} stale={!running} latestTurn={latestTurn} followedByContent={(!row.interrupted && row.followedByAnswer) || end < items.length}
+                  <ToolRun items={tools} entries={run} stale={!running} latestTurn={latestTurn} followedByContent={(!row.interrupted && row.followedByAnswer) || end < items.length}
                     reveal={run.some(entry => reveal?.item === entry.key) ? reveal?.version : undefined}>
                     {run.map(showItem)}
                   </ToolRun>

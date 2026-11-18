@@ -31,6 +31,8 @@ interface Props {
   footerActions?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** An item or tool run inside this process block was opened by the reader. */
+  detailOpen?: boolean;
   /** The reader's remembered choice, including an explicit false. */
   choice?: boolean;
   /** The reader opened or folded the block by hand. */
@@ -38,7 +40,7 @@ interface Props {
   /** Opens the block, as for a 收藏 jump to something inside it, which then stays open to read. */
   reveal?: number;
   /** The transcript follows its newest row; its scroll position may lag while an answer arrives. */
-  following: RefObject<boolean>;
+  following?: RefObject<boolean>;
   /** The turn runs and ends on this block for now: the footer's place is held, showing this (the working line, or nothing). */
   progress?: ReactNode;
 }
@@ -49,11 +51,11 @@ interface Props {
  * turn completes normally, and stays open after interruption, steering or a tool failure.
  * Mirrors the visual language of a single lightweight row instead of a boxed card.
  */
-export function TurnProcess({ running, issueCount, interrupted, stopped = false, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, choice, onOpenChange, reveal, following, progress }: Props) {
+export function TurnProcess({ running, issueCount, interrupted, stopped = false, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, detailOpen = false, choice, onOpenChange, reveal, progress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const { quiet } = useContext(TranscriptCatchUp);
-  const [open, setOpen] = useState(choice ?? (defaultOpen || running || interrupted || issueCount > 0));
+  const [open, setOpen] = useState(choice ?? (defaultOpen || detailOpen || running || interrupted || issueCount > 0));
   /** Explicit reader choices survive completion; automatic expansion never records a choice. */
   const manuallySet = useRef(choice !== undefined);
   const previousRunning = useRef(running);
@@ -87,7 +89,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 
   useEffect(() => {
     const fold = () => {
-      if (!following.current && beingRead(section.current)) chooseOpen(true);
+      if (detailOpen || beingRead(section.current)) chooseOpen(true);
       else setOpen(false);
     };
     if (running && !previousRunning.current) {
@@ -99,7 +101,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
     // output then too, while preserving an explicit choice to close it.
     if ((interrupted || issueCount > 0) && !manuallySet.current) setOpen(true);
     previousRunning.current = running;
-  }, [running, issueCount, interrupted, defaultOpen]);
+  }, [running, issueCount, interrupted, defaultOpen, detailOpen]);
 
 
   const now = useNow(running);
@@ -159,15 +161,17 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 }
 
 /**
- * The reader has scrolled up from the end of the transcript and [element] is on screen: folding it
- * now would pull what they are reading out from under them.
+ * The reader is inspecting something inside [element] — an expanded tool run, tool call or thought,
+ * or an active text selection within it — so folding the block on completion would close what they
+ * opened. Merely scrolling past a tall process block does not keep it open.
  */
 function beingRead(element: HTMLElement | null): boolean {
-  const scroller = element?.closest<HTMLElement>('[data-transcript-scroll]');
-  if (!element || !scroller) return false;
-  const awayFromEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 48;
-  if (!awayFromEnd) return false;
-  const view = scroller.getBoundingClientRect();
-  const rect = element.getBoundingClientRect();
-  return rect.bottom > view.top && rect.top < view.bottom;
+  if (!element) return false;
+  if (element.querySelector('[data-tool-run-choice="true"]')) return true;
+  for (const node of element.querySelectorAll('[data-slot="disclosure"][aria-expanded="true"]')) {
+    if (!node.closest('[data-tool-run-open="false"]')) return true;
+  }
+  const selection = element.ownerDocument.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
+  return selection.getRangeAt(0).intersectsNode(element);
 }

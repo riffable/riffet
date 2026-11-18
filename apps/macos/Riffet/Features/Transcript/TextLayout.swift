@@ -179,6 +179,10 @@ final class ChipLayoutManager: NSLayoutManager {
 final class TextLayoutView: NSView {
     /// The view holding a selection; selecting in another clears it.
     private static weak var selecting: TextLayoutView?
+    static var selectedView: TextLayoutView? {
+        guard let view = selecting, view.selection.length > 0 else { return nil }
+        return view
+    }
 
     var layout: TextLayout? {
         didSet {
