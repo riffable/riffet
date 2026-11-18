@@ -308,7 +308,6 @@
 
     <!-- App shell -->
     <string name="app_back">返回</string>
-    <string name="app_connect_pairing">连接与配对</string>
     <string name="app_operation_failed">操作失败</string>
     <string name="composer_check_status">检查状态</string>
     <string name="composer_continue">继续对话</string>

@@ -26,7 +26,7 @@ struct ProjectConfigSettings: View {
             if let workbench = model.workbench {
                 editor(workbench)
             } else {
-                DisconnectedSettings()
+                NeedsServerView()
             }
         }
         // The grouped Form panes sit on the window's own surface; this custom master-detail

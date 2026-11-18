@@ -11,7 +11,7 @@ struct WorkItemsSettingsView: View {
         if let workbench = model.workbench {
             form(workbench)
         } else {
-            DisconnectedSettings()
+            NeedsServerView()
         }
     }
 

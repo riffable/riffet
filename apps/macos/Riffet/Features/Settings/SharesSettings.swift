@@ -29,10 +29,12 @@ struct SharesSettings: View {
     @State private var removing: SessionShare?
 
     var body: some View {
+        if app.workbench == nil { NeedsServerView() } else { form }
+    }
+
+    private var form: some View {
         Form {
-            if app.workbench == nil {
-                Section { SettingsHint("连接服务器后可修改。") }
-            } else if let items {
+            if let items {
                 content(items)
             } else if let error {
                 Section {

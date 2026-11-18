@@ -1,6 +1,81 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "扫码配对" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scan to pair" } }
+      }
+    },
+    "输入地址" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter address" } }
+      }
+    },
+    "没有找到可用的 Agent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No usable Agent found" } }
+      }
+    },
+    "Agent 会在所选目录里读写文件" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The Agent reads and writes files in the chosen folder" } }
+      }
+    },
+    "需要连接服务器" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Server connection required" } }
+      }
+    },
+    "在任何设备上查看和接手电脑上的编程 Agent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "See and take over the coding Agents on your computer, from any device" } }
+      }
+    },
+    "开始" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Get started" } }
+      }
+    },
+    "连接你的电脑" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect your computer" } }
+      }
+    },
+    "二维码在电脑上 Riffet 设置的「设备管理」里" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The QR code is under Device management in Riffet settings on your computer" } }
+      }
+    },
+    "需要你时通知你" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Get notified when needed" } }
+      }
+    },
+    "Agent 等待审批、提问或完成时" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "When an Agent awaits approval, asks, or finishes" } }
+      }
+    },
+    "允许通知" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Allow notifications" } }
+      }
+    },
+    "以后再说" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not now" } }
+      }
+    },
+    "kiln · 运行命令" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "kiln · Run command" } }
+      }
+    },
+    "pnpm install 等待确认" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "pnpm install awaits approval" } }
+      }
+    },
     "CLI 内存上限" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "CLI memory limit" } }
@@ -3224,16 +3299,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Opens paths outside the project read-only; the file tree and search stay within the project."
-          }
-        }
-      }
-    },
-    "同一网络中的设备" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Devices on the same network"
           }
         }
       }
@@ -11348,11 +11413,6 @@
     "粘贴" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Paste" } }
-      }
-    },
-    "Riffet 运行在你的服务器上" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Riffet runs on your server" } }
       }
     },
     "局域网 HTTP 不加密；跨网络连接请使用你配置的 HTTPS 地址。" : {

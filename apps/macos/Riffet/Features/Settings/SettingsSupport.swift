@@ -214,18 +214,6 @@ struct SettingsErrorText: View {
     }
 }
 
-struct DisconnectedSettings: View {
-    var detail = String(localized: "连接服务器后可修改。")
-
-    var body: some View {
-        SettingsEmptyState(
-            title: String(localized: "尚未连接"),
-            message: detail,
-            symbol: "network.slash"
-        )
-    }
-}
-
 extension Notification.Name {
     /// Posted by `SettingsPaneController` after a section becomes the visible pane. Cached panes
     /// stay alive (and so do their tasks), so this is the moment to re-read server state.

@@ -96,8 +96,11 @@ struct LiveBrandMark: View {
     let front: Color
     let back: Color
     var style: LiveBrandStyle?
+    /// Plays the `draw` loop's first pass, faster, and stays drawn: the welcome page's one-time mark.
+    var once = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var settled = false
     @State private var picked = LiveBrandStyle.random()
     @State private var startedAt = Date()
     @State private var bounceAt: Date?
@@ -107,10 +110,11 @@ struct LiveBrandMark: View {
     /// How much larger than the frame the canvas is, so the speed lines and a bounce are not clipped.
     private static let spill: CGFloat = 1.8
 
-    init(front: Color, back: Color, style: LiveBrandStyle? = nil) {
+    init(front: Color, back: Color, style: LiveBrandStyle? = nil, once: Bool = false) {
         self.front = front
         self.back = back
-        self.style = style
+        self.style = once ? .draw : style
+        self.once = once
     }
 
     var body: some View {
@@ -120,10 +124,12 @@ struct LiveBrandMark: View {
             let current = style ?? picked
             GeometryReader { geo in
                 // motion-loop: ambient brand mark in the logo slot, static under Reduce Motion
-                TimelineView(.animation(minimumInterval: nil, paused: !visible)) { timeline in
+                TimelineView(.animation(minimumInterval: nil, paused: !visible || settled)) { timeline in
                     Canvas { context, size in
                         let now = timeline.date
-                        let elapsed = max(0, now.timeIntervalSince(startedAt))
+                        let raw = max(0, now.timeIntervalSince(startedAt))
+                        // The loop's drawn pose lasts from 78% to 92% of its 4.2 s; a first pass at 1.75x ends there.
+                        let elapsed = once ? min(raw * 1.75, 3.5) : raw
                         let bounce = bounceAt.map { now.timeIntervalSince($0) } ?? 1
                         LiveBrandMark.draw(context: context, size: size, style: current, elapsed: elapsed,
                                            bounce: bounce, now: now, model: model, front: front, back: back)
@@ -138,6 +144,11 @@ struct LiveBrandMark: View {
             .allowsHitTesting(style == nil)
             .pointerStyle(style == nil ? .link : .default)
             .accessibilityHidden(true)
+            .task(id: once) {
+                guard once else { return }
+                try? await Task.sleep(for: .seconds(2.2))
+                settled = true
+            }
         }
     }
 

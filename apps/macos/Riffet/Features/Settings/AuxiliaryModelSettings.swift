@@ -30,7 +30,7 @@ struct AuxiliaryModelSettings: View {
                 AuxiliaryModelPreview(workbench: workbench, selection: selection)
             }
         } else {
-            DisconnectedSettings()
+            NeedsServerView()
         }
     }
 }

@@ -10,6 +10,10 @@ struct SidebarSettings: View {
     @State private var error: String?
 
     var body: some View {
+        if model.workbench == nil { NeedsServerView() } else { form }
+    }
+
+    private var form: some View {
         Form {
             if let workbench = model.workbench {
                 let saved = pending ?? workbench.settings?.sidebarPinned
@@ -34,8 +38,6 @@ struct SidebarSettings: View {
                     }
                 }
                 if let error { Section { SettingsErrorText(message: error) } }
-            } else {
-                Section { SettingsHint("连接服务器后可修改。") }
             }
             SettingsScopeFooter()
         }

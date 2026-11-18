@@ -1,77 +1,11 @@
 import SwiftUI
 import RiffetKit
 
-/// What the pairing page starts from: a server the reader picked, or nothing.
-private struct PairingPrefill: Hashable {
+/// What the pairing page starts from: a server the reader picked, or nothing; `scan` opens the camera at once.
+struct PairingPrefill: Hashable {
     var address = ""
     var name: String?
-}
-
-/// The first page of an unpaired phone (mobile.md §9.7): the mark, one sentence, the pairing action;
-/// servers already paired and Macs found on the network are rows under it.
-struct ConnectionView: View {
-    @Bindable var model: AppModel
-    @Environment(\.palette) private var palette
-    @State private var discovery = BonjourDiscovery()
-    @State private var target: PairingPrefill?
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 20) {
-                BrandMark(front: palette.fg, back: palette.accent).frame(width: 56, height: 56)
-                Text(String(localized: "Riffet 运行在你的服务器上", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg2).multilineTextAlignment(.center)
-                Button { target = PairingPrefill(address: model.address) } label: {
-                    Text(String(localized: "配对", bundle: .riffet)).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: 280)
-                .accessibilityIdentifier("pairNew")
-            }
-            .padding(.horizontal, RiffetMetrics.pageInset)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if !model.pairedServers.isEmpty || !discovery.servers.isEmpty || discovery.failure != nil {
-                RiffetList {
-                    if !model.pairedServers.isEmpty {
-                        PairedServersSection(model: model, connects: true) { server in target = PairingPrefill(address: server.baseUrl, name: server.name) }
-                    }
-                    if !discovery.servers.isEmpty {
-                        Section { ForEach(discovery.servers) { found in discovered(found) } }
-                            header: { RiffetSectionTitle(String(localized: "同一网络中的设备", bundle: .riffet)) }
-                    }
-                    // Without local-network permission the search fails; say so, the address still pairs by hand.
-                    RiffetNotice.section(.warning, discovery.failure, actionTitle: String(localized: "重新查找", bundle: .riffet)) {
-                        discovery.stop(); discovery.start()
-                    }
-                }
-                .containerRelativeFrame(.vertical) { height, _ in height * 0.5 }
-            }
-        }
-        .background(palette.bg)
-        .navigationTitle("").navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(item: $target) { prefill in
-            PairingView(model: model, initialAddress: prefill.address, initialName: prefill.name)
-        }
-        .task {
-            model.error = nil
-            await model.refreshPairedServers()
-            discovery.start()
-        }
-        .onDisappear { discovery.stop() }
-    }
-
-    private func discovered(_ found: DiscoveredRiffetServer) -> some View {
-        Button { target = PairingPrefill(address: found.baseURL, name: found.name) } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(found.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                    Text(found.baseURL).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg3)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
+    var scan = false
 }
 
 /// The pairing page (mobile.md §2.3): the server address and the code, 配对 on the bar's trailing edge,
@@ -81,6 +15,7 @@ struct PairingView: View {
     var initialServer: PairedServer? = nil
     var initialAddress: String? = nil
     var initialName: String? = nil
+    var initialScan = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var address = ""
@@ -155,6 +90,7 @@ struct PairingView: View {
             serviceName = initialServer?.name ?? initialName
             namedAddress = initialServer?.baseUrl ?? initialAddress ?? ""
             model.error = nil
+            if initialScan { scanning = true }
         }
         .navigationDestination(isPresented: $scanning) {
             PairingScanner(onDecoded: { raw in
@@ -164,6 +100,8 @@ struct PairingView: View {
                     address = value.address; code = value.code
                     serviceName = value.name; namedAddress = value.address; alternates = value.alternates
                     scannerError = nil; model.error = nil
+                    // Opened by 扫码配对: the code is the whole input, so scanning it pairs.
+                    if initialScan { pair() }
                 } catch { scannerError = error.riffetMessage }
             }, onFailure: { failure in scannerError = failure.localizedDescription; scanning = false })
             .overlay { ScannerFrame() }

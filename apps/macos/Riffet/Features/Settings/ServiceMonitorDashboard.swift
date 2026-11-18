@@ -25,7 +25,7 @@ struct ServiceMonitorDashboard: View {
     var body: some View {
         ZStack {
             if model.workbench == nil {
-                DisconnectedSettings(detail: String(localized: "连接服务器后可查看。"))
+                NeedsServerView()
             } else if let snapshot {
                 form(snapshot)
             } else if let error {

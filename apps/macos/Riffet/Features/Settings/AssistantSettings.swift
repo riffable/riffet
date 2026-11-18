@@ -20,13 +20,7 @@ struct AssistantSettingsView: View {
         if let workbench = model.workbench {
             form(workbench)
         } else {
-            Form {
-                Section {
-                    SettingsHint("连接服务器后可修改。")
-                }
-                SettingsScopeFooter()
-            }
-            .riffetForm()
+            NeedsServerView()
         }
     }
 

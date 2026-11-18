@@ -53,6 +53,10 @@ internal enum class SettingsSection(
 
     val label: String @Composable get() = stringResource(title)
 
+    /** Reads or writes the paired server's data: without a connection it shows the empty state instead of a page. */
+    val needsServer: Boolean get() = serverSettings || this == EXTENSIONS || this == PROVIDERS || this == BACKENDS ||
+        this == DEVICES || this == SERVICE
+
     val available: Boolean get() = when (this) {
         LANGUAGE -> appLanguageSupported
         NOTIFICATIONS -> NativeFeature.ALERTS.supported || NativeFeature.BACKGROUND_WATCH.supported
@@ -70,7 +74,7 @@ internal fun appLanguageLabel(language: AppLanguage): String = stringResource(wh
 @Composable
 internal fun SectionList(
     themeMode: ThemeMode, themes: List<ThemeEntry>, themeId: String, server: String,
-    iconPacks: IconPackState, onSelect: (SettingsSection) -> Unit,
+    iconPacks: IconPackState, connected: Boolean = true, onSelect: (SettingsSection) -> Unit,
 ) {
     val display = DisplaySettings.shared
     val mode = stringResource(when (themeMode) {
@@ -86,7 +90,8 @@ internal fun SectionList(
     entries.groupBy { it.group }.forEach { (group, sections) ->
         SettingsGroup(group?.let { stringResource(it) }.orEmpty()) {
             sections.forEach { section ->
-                val summary = when (section) {
+                val offline = !connected && (section.needsServer || section == SettingsSection.CONNECTION)
+                val summary = if (offline) stringResource(Res.string.needs_server_state) else when (section) {
                     SettingsSection.LANGUAGE -> appLanguageLabel(AppLanguages.current)
                     SettingsSection.STYLE -> interfaceStyleLabel(display.interfaceStyle) + " · " + surfaceMaterialLabel(display.surfaceMaterial)
                     SettingsSection.APPEARANCE -> stringResource(Res.string.settings_theme_summary, theme, mode)
@@ -99,7 +104,7 @@ internal fun SectionList(
                     SettingsSection.DEVICES -> if (DeviceControl.platform != null && deviceAllowed) stringResource(Res.string.settings_allowed) else ""
                     else -> ""
                 }
-                SettingsNavigationRow(section.label, summary, section.icon) { onSelect(section) }
+                SettingsNavigationRow(section.label, summary, section.icon, muted = offline) { onSelect(section) }
             }
         }
     }

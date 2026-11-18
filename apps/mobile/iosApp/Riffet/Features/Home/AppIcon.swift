@@ -288,8 +288,11 @@ struct LiveBrandMark: View {
     var front: Color
     var back: Color
     var style: LiveBrandStyle? = nil
+    /// Plays `style` through once and stays at its resting mark (the first-launch welcome); only `.draw` has a resting end.
+    var once = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var finished = false
     @State private var picked = LiveBrandStyle.random()
     @State private var started = Date()
     @State private var bounced = false
@@ -305,8 +308,8 @@ struct LiveBrandMark: View {
                 GeometryReader { box in
                     let side = min(box.size.width, box.size.height)
                     // motion-loop: ambient brand mark, animated is false under Reduce Motion
-                    TimelineView(.animation(paused: !animated)) { timeline in
-                        let elapsed = timeline.date.timeIntervalSince(started)
+                    TimelineView(.animation(paused: !animated || finished)) { timeline in
+                        let elapsed = once ? min(timeline.date.timeIntervalSince(started), 3.8) : timeline.date.timeIntervalSince(started)
                         Canvas { context, size in
                             Self.draw(&context, size: size, unit: side / 24, style: current, elapsed: animated ? elapsed : nil,
                                       bounce: animated && bounced ? elapsed : nil, front: front, back: back)
@@ -318,6 +321,11 @@ struct LiveBrandMark: View {
                 .allowsHitTesting(false)
             }
             .contentShape(Rectangle())
+            .task(id: once) {
+                guard once else { return }
+                try? await Task.sleep(for: .seconds(4))
+                finished = true
+            }
             .onTapGesture {
                 guard style == nil, animated else { return }
                 picked = .random(except: picked); started = Date(); bounced = true

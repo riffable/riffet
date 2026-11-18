@@ -57,7 +57,7 @@ struct CursorCliPage: View {
             if let workbench = model.workbench {
                 form(workbench)
             } else {
-                DisconnectedSettings()
+                NeedsServerView()
             }
         }
         .onChange(of: running || checking, initial: true) { _, busy in onBusyChange(busy) }

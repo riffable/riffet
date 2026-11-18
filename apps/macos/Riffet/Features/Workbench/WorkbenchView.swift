@@ -516,7 +516,12 @@ struct WorkbenchView: View {
 
     @ViewBuilder
     private var cover: some View {
-        if let page = workbench.page {
+        if let page = workbench.page, !workbench.connected {
+            // Every one-level page reads the server: without one they all say the same thing.
+            NeedsServerView()
+                .navigationTitle(page.title)
+                .pageChrome(page, workbench: workbench)
+        } else if let page = workbench.page {
             switch page {
             case .assistant: AssistantPage(workbench: workbench)
             case .stats: StatsView(workbench: workbench)

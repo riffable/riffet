@@ -62,6 +62,8 @@ fun LiveBrandMark(
     fg: Color,
     accent: Color,
     style: LiveBrandStyle? = null,
+    /** Plays the loop to its settled frame and stops there; for the welcome page's single drawing. */
+    once: Boolean = false,
 ) {
     val reduced = rememberReducedMotion()
     var picked by remember { mutableStateOf(LiveBrandStyle.entries.random()) }
@@ -79,8 +81,9 @@ fun LiveBrandMark(
         while (true) {
             withFrameNanos { now ->
                 if (origin < 0L) origin = now
-                clock.longValue = now - origin
+                clock.longValue = if (once) minOf(now - origin, ONCE_SETTLED_NANOS) else now - origin
             }
+            if (once && clock.longValue >= ONCE_SETTLED_NANOS) break
         }
     }
 
@@ -112,6 +115,8 @@ fun LiveBrandMark(
     )
 }
 
+/** The Draw loop's held frame, just before it fades out (92% of 4.2 s). */
+private const val ONCE_SETTLED_NANOS = 3_800_000_000L
 private const val BOUNCE_MILLIS = 360
 private const val BOUNCE_PEAK = 0.55f
 private val BOUNCE_EASING = CubicBezierEasing(0.2f, 0.8f, 0.3f, 1f)

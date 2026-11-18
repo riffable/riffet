@@ -81,6 +81,19 @@ final class Workbench {
     let baseURL: URL
     /// The server runs on this Mac, so paths can be opened in local apps.
     let local: Bool
+    /// Whether a server stands behind this window. A window without one is the same shell (sidebar,
+    /// pages, new-session page, local preferences) over an empty store; what needs a server shows
+    /// `NeedsServerView`, and nothing reads or writes the network for it (`host.api` is nil).
+    let connected: Bool
+
+    /// The address a detached workbench is keyed by in per-server preferences (sidebar view, last home
+    /// target, project visits). Those local choices are kept under it; it is never shown or dialled.
+    static let detachedURL = URL(string: "riffet://detached")!
+
+    /// The shell of a window with no server.
+    static func detached(host: MacHost) -> Workbench {
+        Workbench(store: host.installDetached(), host: host, baseURL: detachedURL, local: false, connected: false)
+    }
 
     private(set) var list = SessionListState(projects: [], sessions: [], settings: nil, backendRevision: 0, loading: false, loaded: false, error: nil, cachedAt: nil, canDeleteSessions: false)
     /// The list's backend revision on its own: model catalogs follow it, not every list frame.
@@ -292,8 +305,9 @@ final class Workbench {
     /// The list's first load restores the last open conversation, unless the reader navigated before it.
     @ObservationIgnored private var restoredLastSession = false
 
-    init(store: SessionStore, host: MacHost, baseURL: URL, local: Bool, role: Role = .main, presenter: TimelinePresenter? = nil, listStore: SessionStore? = nil) {
+    init(store: SessionStore, host: MacHost, baseURL: URL, local: Bool, connected: Bool = true, role: Role = .main, presenter: TimelinePresenter? = nil, listStore: SessionStore? = nil) {
         self.role = role
+        self.connected = connected
         terminalClientId = role == .main ? TerminalController.mainClientId : "mac-" + UUID().uuidString.lowercased()
         self.store = store
         self.listStore = listStore ?? store
@@ -318,6 +332,10 @@ final class Workbench {
             if list.settings != self.settings { self.settings = list.settings }
             if list.projects != self.projectList { self.projectList = list.projects }
             guard self.role == .main else { return }
+            // A server that was late or offline at launch has not told the Agents yet: ask once it answers.
+            if self.connected, list.loaded, list.error == nil, !self.backendsLoaded, !self.backendsReading {
+                Task { await self.loadBackends() }
+            }
             if list.error != nil || list.cachedAt != nil {
                 self.ownerStale = true
             } else if list.loaded, self.ownerStale {
@@ -326,7 +344,7 @@ final class Workbench {
             }
             self.restoreLastSession()
             self.sidebar.schedule()
-            SpotlightIndex.schedule(sessions: list.sessions, projects: list.projects)
+            if self.connected { SpotlightIndex.schedule(sessions: list.sessions, projects: list.projects) }
         }
         subscriptions.observe(store.openSession) { [weak self] state in self?.apply(state) }
         subscriptions.observe(self.listStore.removedSessions) { [weak self] ids in self?.sessionsRemoved(ids) }
@@ -1431,14 +1449,33 @@ final class Workbench {
 
     func loadBackends() async {
         guard let api = host.api else { return }
+        backendsReading = true
+        defer { backendsReading = false }
         if let health = try? await api.health() {
             supportsProjectlessTasks = health.protocol?.features.contains("projectless-tasks") == true
             serverFeaturesLoaded = true
         }
         // Written only when they changed: settings re-read them often, and every page follows them.
-        let backends = (try? await api.backends()) ?? []
+        let read = try? await api.backends()
+        if read != nil, !backendsLoaded { backendsLoaded = true }
+        if (read == nil) != backendsReadFailed { backendsReadFailed = read == nil }
+        let backends = read ?? []
         if backends != self.backends { self.backends = backends }
         AgentDirectory.shared.update(backends: backends)
+    }
+
+    /// The Agents have been read from the server at least once.
+    private(set) var backendsLoaded = false
+    /// The last read of the Agents failed: what they are is unknown, which is not the same as none.
+    private(set) var backendsReadFailed = false
+    @ObservationIgnored private var backendsReading = false
+    /// An Agent that can run now; quick chat is not one.
+    var hasAvailableAgent: Bool { backends.contains { $0.isPickable && $0.available && $0.needsLogin?.boolValue != true } }
+    /// Whether the new-session page has a project, or has been told to go without: what the setup
+    /// card's last step is. A server with projects is past it.
+    var homeProjectChosen: Bool {
+        if homeTaskProjectId != nil { return true }
+        return supportsProjectlessTasks && (homeTaskSelection == "__projectless__" || projects.contains { !$0.isSystemProject })
     }
 
     private func noteProjectTypes(_ projectId: String) {

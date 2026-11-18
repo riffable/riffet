@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch and the unconnected main UI -->
+    <string name="onboarding_skip">跳过</string>
+    <string name="onboarding_start">开始</string>
+    <string name="onboarding_brand">Riffet</string>
+    <string name="onboarding_tagline">在任何设备上查看和接手电脑上的编程 Agent</string>
+    <string name="onboarding_connect_title">连接你的电脑</string>
+    <string name="onboarding_connect_hint">二维码在电脑上 Riffet 设置的「设备管理」里</string>
+    <string name="onboarding_scan">扫码配对</string>
+    <string name="onboarding_enter_address">输入地址</string>
+    <string name="onboarding_connect">连接</string>
+    <string name="onboarding_notify_title">需要你时通知你</string>
+    <string name="onboarding_notify_hint">Agent 等待审批、提问或完成时</string>
+    <string name="onboarding_notify_allow">允许通知</string>
+    <string name="onboarding_notify_later">以后再说</string>
+    <string name="onboarding_sample_title">kiln · 运行命令</string>
+    <string name="onboarding_sample_body">pnpm install 等待确认</string>
+    <string name="setup_server">服务器</string>
+    <string name="setup_agent">Agent</string>
+    <string name="setup_project">项目</string>
+    <string name="setup_no_agent">没有找到可用的 Agent</string>
+    <string name="setup_project_hint">Agent 会在所选目录里读写文件</string>
+    <string name="setup_pick_project">选择项目</string>
+    <string name="needs_server_title">需要连接服务器</string>
+    <string name="needs_server_state">未连接</string>
+</resources>

@@ -255,7 +255,7 @@ struct ConnectionSettings: View {
         return date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
 
-    private static func qrImage(_ pairing: PairingCodeResponse) -> NSImage? {
+    static func qrImage(_ pairing: PairingCodeResponse) -> NSImage? {
         // The server's own string when it sends one; an older server gets the same fields built here.
         guard let payload = pairing.payload ?? pairingPayload(pairing) else { return nil }
         return QRCode.image(payload)

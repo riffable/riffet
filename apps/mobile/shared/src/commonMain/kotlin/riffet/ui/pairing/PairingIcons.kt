@@ -22,6 +22,15 @@ internal object PairingIcons {
         glyph("ClipboardPaste", "M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 14h10M16 4h2a2 2 0 0 1 2 2v1.344M17 18l4-4-4-4M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113")
     }
 
+    /** Lucide `server` and `wifi`. */
+    val Server: ImageVector by lazy {
+        glyph("Server", "M4 2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM4 14h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2zM6 6h.01M6 18h.01")
+    }
+
+    val Wifi: ImageVector by lazy {
+        glyph("Wifi", "M12 20h.01M2 8.82a15 15 0 0 1 20 0M5 12.859a10 10 0 0 1 14 0M8.5 16.429a5 5 0 0 1 7 0")
+    }
+
     private fun glyph(name: String, pathData: String): ImageVector =
         ImageVector.Builder("Pairing$name", 24.dp, 24.dp, 24f, 24f)
             .addPath(

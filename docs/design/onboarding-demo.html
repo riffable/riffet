@@ -1,0 +1,888 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 未连接与首次使用（交互原型）</title>
+<style>
+/*
+ * Prototype: the main window without a server, the in-place setup that replaces the composer, the
+ * brand mark drawn once on first launch, and the full-window first-launch flow. Drawn with the design system
+ * (docs/design/system/): role colours from apps/web/src/styles/index.css, motion tokens from
+ * design-tokens.ts, the Riffet style rules in docs/design/riffet-style.md. Brand geometry is
+ * apps/web/src/lib/app-icon.ts; icons are lucide paths at stroke 1.25.
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --bg-sidebar: #f7f8fa; --bg-subtle: #f5f6f8; --bg-muted: #eef0f3; --bg-elevated: #ffffff; --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055); --bg-active: rgb(35 45 70 / 0.09); --bg-bubble: #eef3fd;
+  --fg: #2a2c2e; --fg-2: #50555d; --fg-3: #60666e; --fg-4: #adb2ba;
+  --line: rgb(15 23 42 / 0.08); --line-soft: rgb(15 23 42 / 0.055); --line-strong: rgb(15 23 42 / 0.13);
+  --primary: #15171a; --primary-hover: #34373d; --primary-fg: #ffffff;
+  --accent: #3867f0;
+  --warning: #c77f06; --danger: #e0454b;
+  --agent-claude: #d97757;
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --scrim: rgb(0 0 0 / 0.25);
+  --canvas: var(--bg-sidebar);
+  --focus-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1); --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --duration-fast: 150ms; --duration-base: 200ms; --duration-medium: 250ms; --duration-slow: 400ms; --duration-exit-fast: 100ms;
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, "PingFang SC", monospace;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416; --bg-sidebar: #1a1a1d; --bg-subtle: #1d1d20; --bg-muted: #27272b; --bg-elevated: #1f1f22; --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06); --bg-active: rgb(255 255 255 / 0.1); --bg-bubble: #27282c;
+  --fg: #d2d4d7; --fg-2: #b6bac1; --fg-3: #9da2aa; --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075); --line-soft: rgb(255 255 255 / 0.05); --line-strong: rgb(255 255 255 / 0.12);
+  --primary: #eceef1; --primary-hover: #d3d6db; --primary-fg: #141416;
+  --accent: #5b8cff; --warning: #e5a13a; --danger: #f0676c; --agent-claude: #e8916f;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.18);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--fg); font: 13px/20px var(--font-sans); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
+button, input, textarea { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: default; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+svg.i * { vector-effect: non-scaling-stroke; }
+.mono { font-family: var(--font-mono); }
+.trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-2 { color: var(--fg-2); } .fg-3 { color: var(--fg-3); } .fg-4 { color: var(--fg-4); }
+.spin { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Button — components/ui/button.tsx */
+.btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), scale var(--duration-fast) var(--ease-standard); }
+.btn:active { scale: 0.97; }
+.btn:disabled { opacity: .5; pointer-events: none; }
+.btn.xs { height: 24px; padding: 0 8px; border-radius: 8px; font-size: 12px; line-height: 18px; } .btn.xs svg.i { width: 14px; height: 14px; }
+.btn.sm { height: 28px; padding: 0 10px; border-radius: 10px; } .btn.sm svg.i { width: 14px; height: 14px; }
+.btn.md { height: 32px; padding: 0 12px; border-radius: 10px; }
+.btn.icon-xs { width: 24px; height: 24px; border-radius: 8px; } .btn.icon-xs svg.i { width: 14px; height: 14px; }
+.btn.primary { background: var(--primary); color: var(--primary-fg); } .btn.primary:hover { background: var(--primary-hover); }
+.btn.secondary { background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--fg); }
+.btn.secondary:hover { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+.btn.ghost { color: var(--fg-2); } .btn.quiet { color: var(--fg-3); }
+.btn.ghost:hover, .btn.quiet:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* Segmented — controls.tsx */
+.seg { position: relative; display: inline-flex; align-items: center; padding: 2px; border-radius: 10px; background: var(--bg-muted); box-shadow: inset 0 0 0 .5px var(--line); }
+.seg button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--fg-3); transition: color var(--duration-base) var(--ease-standard), background-color var(--duration-base); }
+.seg button:hover { color: var(--fg-2); }
+.seg button[aria-checked="true"] { color: var(--fg); background: var(--bg-elevated); box-shadow: 0 0 0 .5px var(--line-strong), var(--shadow-soft); }
+.dark .seg button[aria-checked="true"] { background: var(--bg-active); }
+.seg svg.i { width: 14px; height: 14px; }
+
+/* Menu, dialog — dropdown-menu.tsx, dialog.tsx */
+.menu { position: fixed; z-index: 75; min-width: 200px; padding: 4px; border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-pop); color: var(--fg); animation: pop-in var(--duration-fast) var(--ease-decelerate) both; }
+@keyframes pop-in { from { opacity: 0; transform: scale(.96) translateY(4px); } }
+.mi { display: flex; width: 100%; min-height: 32px; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; font-size: 13px; }
+.mi:hover, .mi.hl { background: var(--bg-hover); }
+.mi > svg.i:first-child { color: var(--fg-3); }
+.mi .end { margin-left: auto; padding-left: 16px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg-3); font-size: 12px; }
+.mlabel { padding: 6px 8px 4px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--fg-3); }
+.msep { height: 1px; margin: 4px -4px; background: var(--line); }
+.scrim { position: fixed; inset: 0; z-index: 69; background: var(--scrim); backdrop-filter: blur(1.5px); animation: fade-in var(--duration-fast) var(--ease-decelerate) both; }
+.dialog { position: fixed; z-index: 70; left: 50%; top: 50%; width: min(448px, calc(100vw - 32px)); transform: translate(-50%, -50%); display: flex; flex-direction: column; border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-pop); animation: dialog-in var(--duration-fast) var(--ease-decelerate) both; }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes dialog-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.96); } }
+.dialog .dh { padding: 20px 48px 12px 20px; font-size: 16px; line-height: 24px; font-weight: 500; }
+.dialog .dx { position: absolute; top: 12px; right: 12px; }
+.dialog .db { display: flex; flex-direction: column; gap: 16px; padding: 0 20px 8px; }
+.dialog .df { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 16px 20px 20px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span { font-size: 13px; font-weight: 500; }
+.input { width: 100%; height: 32px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--bg-elevated); font-size: 13px; outline: none; }
+.input::placeholder { color: var(--fg-4); }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* ---------- prototype chrome (not part of the design) ---------- */
+.demo-bar { position: fixed; inset: 0 0 auto 0; height: 44px; z-index: 50; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; background: var(--canvas); box-shadow: inset 0 -1px var(--line); }
+.demo-bar .name { font-weight: 500; color: var(--fg-3); }
+.demo-bar .sp { flex: 1; }
+.demo-bar .sub { display: flex; align-items: center; gap: 8px; }
+.stage { position: absolute; inset: 44px 0 0 0; }
+.scene { position: absolute; inset: 0; display: none; }
+.scene.on { display: flex; }
+.note { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 12px; color: var(--fg-4); white-space: nowrap; pointer-events: none; }
+
+/* ---------- workbench: sidebar on the canvas, main card inset 8, radius 12 ---------- */
+.sb { width: 256px; flex: none; display: flex; flex-direction: column; min-height: 0; }
+.sb-top { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; }
+.sb-top .brand { font-size: 14px; line-height: 22px; font-weight: 600; letter-spacing: -.01em; }
+.sb-nav { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 8px; }
+.nav { display: flex; height: 32px; align-items: center; gap: 9px; padding: 0 8px; border-radius: 10px; color: var(--fg-2); transition: background-color var(--duration-fast), color var(--duration-fast); }
+.nav svg.i { width: 18px; height: 18px; }
+.nav:hover { background: var(--bg-hover); color: var(--fg); }
+.nav[aria-current="page"] { background: var(--bg-active); color: var(--fg); }
+.sb-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px; }
+.sb-sec { display: flex; align-items: center; gap: 6px; height: 28px; margin-top: 12px; padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--fg-3); }
+.sb-sec svg.i { width: 14px; height: 14px; color: var(--fg-3); }
+.sb-row { display: flex; height: 30px; align-items: center; gap: 8px; padding: 0 8px 0 28px; border-radius: 8px; color: var(--fg-2); }
+.sb-row.sel { background: var(--bg-active); color: var(--fg); }
+.sb-row .t { flex: 1; min-width: 0; }
+.sb-row .when { font-size: 12px; color: var(--fg-4); }
+.sb-foot { display: flex; align-items: center; height: 52px; flex: none; padding: 0 12px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-active); color: var(--fg-3); }
+.avatar:hover { color: var(--fg); }
+.avatar svg.i { width: 15px; height: 15px; }
+.main { position: relative; flex: 1; min-width: 0; margin: 8px 8px 8px 0; border-radius: 12px; background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+.page-h { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; }
+.page-h h1 { margin: 0; font-size: 13px; line-height: 20px; font-weight: 500; }
+
+/* ---------- the brand mark: drawn once, then still ---------- */
+.mark { overflow: visible; }
+.mark .head { fill: currentColor; stroke: currentColor; stroke-width: 1; stroke-linejoin: round; }
+.mark .tooth { fill: var(--accent); stroke: var(--accent); stroke-width: .6; stroke-linejoin: round; }
+.mark.draw .head { stroke-dasharray: 1.02 1; animation: draw-line 1.9s var(--ease-standard) both; }
+.mark.draw .p-tooth { animation: draw-pop .42s var(--ease-decelerate) both; }
+.mark.draw .p-tooth.n1 { animation-delay: 1.25s; } .mark.draw .p-tooth.n2 { animation-delay: 1.38s; } .mark.draw .p-tooth.n3 { animation-delay: 1.51s; }
+.mark.draw .p-eye { animation: draw-pop .36s var(--ease-decelerate) 1.72s both; }
+@keyframes draw-line { 0% { stroke-dashoffset: 1; fill-opacity: 0; } 62% { stroke-dashoffset: 0; fill-opacity: 0; } 100% { stroke-dashoffset: 0; fill-opacity: 1; } }
+@keyframes draw-pop { 0% { transform: scale(0); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mark.draw .head, .mark.draw .p-tooth, .mark.draw .p-eye { animation: none; stroke-dasharray: none; } }
+
+/* ---------- home: the new-session page ---------- */
+.home { flex: 1; min-height: 0; overflow-y: auto; }
+.home-col { max-width: 720px; margin: 0 auto; padding: max(48px, 14vh) 32px 64px; display: flex; flex-direction: column; }
+.home-hero { display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 32px; margin-bottom: 24px; text-align: center; }
+.home-hero .mark { width: 64px; height: 64px; margin-bottom: 8px; color: var(--fg); }
+.home-hero h1 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -.01em; animation: fade-up var(--duration-medium) var(--ease-decelerate) both; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(4px); } }
+
+/*
+ * Setup: the composer's own card (radius 16, shadow-composer) holding the three conditions. Done
+ * steps show what they resolved to; the open step is the only one with a body. When the last one
+ * closes, the card keeps its frame and its contents cross-fade into the composer.
+ */
+.card16 { border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-composer); overflow: hidden; transition: height var(--duration-slow) var(--ease-standard); }
+.steps { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; }
+.step { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--fg-4); font-weight: 500; transition: color var(--duration-base); }
+.step.open { color: var(--fg); }
+.step.done { color: var(--fg-2); font-weight: 400; }
+.step .v { max-width: 160px; }
+.step-sep { flex: 0 1 28px; min-width: 12px; height: 1px; background: var(--line-strong); }
+.glyph { position: relative; width: 16px; height: 16px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.25px currentColor; display: grid; place-items: center; transition: background-color var(--duration-base), box-shadow var(--duration-base); }
+.step.open .glyph { box-shadow: inset 0 0 0 1.25px var(--fg); }
+.step.open .glyph::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--fg); }
+.step.busy .glyph { box-shadow: none; }
+.step.busy .glyph::after { display: none; }
+.step.busy .glyph svg.i { width: 16px; height: 16px; color: var(--fg-3); }
+.step.done .glyph { background: var(--fg-2); box-shadow: none; color: var(--bg); animation: tick-in var(--duration-medium) var(--ease-decelerate) both; }
+.step.done .glyph svg.i { width: 11px; height: 11px; stroke-width: 2.2; }
+@keyframes tick-in { from { transform: scale(.6); } }
+.step-body { padding: 0 16px 14px; animation: fade-in var(--duration-base) var(--ease-decelerate) both; }
+.step-line { display: flex; align-items: center; gap: 12px; min-height: 32px; }
+.step-line .what { flex: 1; min-width: 0; color: var(--fg-2); }
+.step-line .acts { display: flex; gap: 6px; }
+.install { margin-top: 8px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); padding: 4px; }
+.install .r { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 4px 0 8px; border-radius: 8px; }
+.install .r:hover { background: var(--bg-hover); }
+.install .r .n { width: 124px; white-space: nowrap; flex: none; display: flex; align-items: center; gap: 8px; color: var(--fg); }
+.install .r code { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.amark { width: 14px; height: 14px; flex: none; }
+
+/* composer (surfaces §1.8) */
+.composer textarea { display: block; width: 100%; min-height: 76px; padding: 16px 16px 4px; border: 0; background: none; resize: none; outline: none; font-size: 14px; line-height: 24px; }
+.composer textarea::placeholder { color: var(--fg-4); }
+.composer .bar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; }
+.plus { width: 28px; height: 28px; border-radius: 10px; display: grid; place-items: center; color: var(--fg-3); }
+.plus:hover, .plus.on { background: var(--bg-hover); color: var(--fg); }
+.plus svg.i { width: 18px; height: 18px; }
+.capsule { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 10px; border-radius: 13px; color: var(--fg-3); }
+.capsule:hover { background: var(--bg-hover); color: var(--fg); }
+.send { width: 32px; height: 32px; margin-left: auto; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--primary-fg); flex: none; }
+.send svg.i { width: 16px; height: 16px; }
+.send:disabled { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-4); }
+.swap-in { animation: fade-in var(--duration-medium) var(--ease-decelerate) both; }
+
+
+/* EmptyState — the page a server-backed destination shows without a server */
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 0 24px 96px; text-align: center; }
+.empty .tile { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: var(--bg-subtle); color: var(--fg-2); }
+.empty .tile svg.i { width: 20px; height: 20px; }
+.empty h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+.ghost-page { flex: 1; display: grid; place-items: center; color: var(--fg-4); font-size: 12px; }
+
+/* settings (dialog size wide) */
+.settings { position: fixed; z-index: 70; left: 50%; top: 50%; width: min(860px, calc(100vw - 48px)); height: min(600px, calc(100vh - 96px)); transform: translate(-50%, -50%); display: flex; border-radius: 16px; overflow: hidden; background: var(--bg-elevated); box-shadow: var(--shadow-pop); animation: dialog-in var(--duration-fast) var(--ease-decelerate) both; }
+.set-nav { width: 216px; flex: none; overflow-y: auto; padding: 12px 8px; background: var(--bg-sidebar); }
+.set-nav .g { padding: 12px 8px 4px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.set-nav .g:first-child { padding-top: 0; }
+.set-nav .nav { width: 100%; height: 30px; }
+.set-nav .nav svg.i { width: 16px; height: 16px; }
+.set-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.set-body .page-h { padding-left: 24px; }
+.set-scroll { flex: 1; overflow-y: auto; padding: 4px 24px 32px; }
+.sgroup { margin-bottom: 24px; }
+.sgroup .h { height: 28px; display: flex; align-items: center; padding: 0 2px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.sframe { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); }
+.srow { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 14px; }
+.srow + .srow { box-shadow: inset 0 1px var(--line-soft); }
+.srow .k { flex: 1; min-width: 0; }
+.srow .k small { display: block; font-size: 12px; line-height: 16px; color: var(--fg-3); }
+.srow .v { color: var(--fg-3); }
+
+
+/*
+ * Hint: one line that slides out from behind the composer's top edge, shown once and gone for good
+ * once dismissed or acted on. It reads as part of the composer, not as a toast over the timeline.
+ */
+/* ---------- phones ---------- */
+.phones { flex: 1; display: flex; justify-content: center; align-items: center; gap: 48px; padding: 24px; overflow: auto; }
+.phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.phone { position: relative; width: 360px; height: 760px; flex: none; display: flex; flex-direction: column; overflow: hidden; border-radius: 48px; background: var(--bg);
+  box-shadow: 0 0 0 10px #0d0d0f, 0 0 0 11px #2c2c30, 0 30px 60px -20px rgb(0 0 0 / .45); font-size: 15px; line-height: 22px; }
+.phone.grouped { background: var(--bg-sidebar); }
+.p-status { height: 50px; flex: none; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 32px 6px 36px; font-size: 15px; font-weight: 600; }
+.p-status .sig { display: flex; gap: 3px; align-items: flex-end; height: 12px; }
+.p-status .sig i { display: block; width: 3px; border-radius: 1px; background: currentColor; }
+.p-bar { height: 44px; flex: none; display: flex; align-items: center; padding: 0 8px; }
+.p-bar .title { flex: 1; text-align: center; font-size: 17px; font-weight: 600; }
+.p-large { padding: 4px 20px 8px; font-size: 32px; line-height: 40px; font-weight: 700; letter-spacing: -.01em; }
+.p-main { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; }
+.p-hero { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding-bottom: 40px; }
+.p-hero .mark { width: 56px; height: 56px; color: var(--fg); }
+.p-hero h1 { margin: 0; font-size: 22px; line-height: 30px; font-weight: 600; animation: fade-up var(--duration-medium) var(--ease-decelerate) both; }
+/* the floating glass island (mobile only): the setup takes its place and its material */
+.island { margin: 0 12px 10px; border-radius: 24px; background: color-mix(in srgb, var(--bg-elevated) 78%, transparent); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5); box-shadow: inset 0 0 0 1px var(--line-strong), var(--shadow-soft); overflow: hidden; }
+.island .steps { height: 52px; gap: 6px; padding: 0 16px; font-size: 14px; }
+.island .step .v { max-width: 92px; }
+.island .step-sep { flex-basis: 16px; min-width: 8px; }
+.island .step-body { padding: 0 12px 12px; }
+.island .what { padding: 0 4px 10px; color: var(--fg-2); font-size: 14px; }
+.p-btn { display: flex; width: 100%; height: 48px; align-items: center; justify-content: center; gap: 8px; border-radius: 14px; font-size: 16px; font-weight: 500; }
+.p-btn.primary { background: var(--primary); color: var(--primary-fg); }
+.p-btn.secondary { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.p-btn svg.i { width: 18px; height: 18px; }
+.found { display: flex; align-items: center; gap: 12px; min-height: 56px; margin-top: 8px; padding: 0 8px 0 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line); animation: fade-up var(--duration-medium) var(--ease-decelerate) .9s both; }
+.found svg.i { width: 18px; height: 18px; color: var(--fg-3); }
+.found .b { flex: 1; min-width: 0; }
+.found .b small { display: block; font-size: 12px; line-height: 16px; color: var(--fg-3); font-family: var(--font-mono); }
+.found .btn { height: 36px; padding: 0 14px; border-radius: 12px; font-size: 14px; }
+.island textarea { display: block; width: 100%; height: 52px; padding: 15px 16px 0; border: 0; background: none; resize: none; outline: none; font-size: 16px; }
+.island textarea::placeholder { color: var(--fg-4); }
+.island .bar { display: flex; align-items: center; gap: 4px; padding: 0 8px 8px; }
+.island .send { width: 36px; height: 36px; }
+.tabbar { flex: none; display: flex; height: 82px; padding: 6px 8px 28px; box-shadow: inset 0 1px var(--line); background: var(--bg); }
+.phone.grouped .tabbar { background: var(--bg-sidebar); }
+.tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; line-height: 12px; font-weight: 500; color: var(--fg-4); }
+.tabbar button[aria-current] { color: var(--fg); }
+.tabbar svg.i { width: 24px; height: 24px; }
+.p-home { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--fg); opacity: .85; }
+.p-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding-bottom: 64px; }
+.p-empty .tile { width: 56px; height: 56px; border-radius: 18px; display: grid; place-items: center; background: var(--bg-subtle); color: var(--fg-2); }
+.p-empty .tile svg.i { width: 24px; height: 24px; }
+.p-empty h2 { margin: 0; font-size: 17px; font-weight: 500; }
+.p-empty .p-btn { width: auto; height: 40px; padding: 0 20px; font-size: 15px; }
+.p-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 24px; }
+.p-sec { padding: 20px 16px 6px; font-size: 13px; line-height: 18px; color: var(--fg-3); }
+.p-group { border-radius: 14px; background: var(--bg-elevated); overflow: hidden; }
+.p-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px 0 16px; }
+.p-row + .p-row { box-shadow: inset 46px 0 0 var(--bg-elevated), inset 0 1px 0 var(--line); }
+.p-row > svg.i:first-child { width: 20px; height: 20px; color: var(--fg-2); }
+.p-row .t { flex: 1; }
+.p-row .v { color: var(--fg-3); font-size: 15px; }
+.p-row .v.off { color: var(--fg-4); }
+.p-row > svg.i:last-child { width: 16px; height: 16px; color: var(--fg-4); }
+.phone-cap { font-size: 12px; color: var(--fg-3); }
+.sheet-scrim { position: absolute; inset: 0; z-index: 5; background: var(--scrim); animation: fade-in var(--duration-base) both; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; padding: 8px 16px 40px; border-radius: 24px 24px 0 0; background: var(--bg-elevated); animation: sheet-in var(--duration-medium) var(--ease-decelerate) both; }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+.sheet .grab { width: 36px; height: 5px; margin: 0 auto 12px; border-radius: 3px; background: var(--line-strong); }
+.sheet h3 { margin: 0 0 8px; padding: 0 4px; font-size: 17px; font-weight: 600; }
+.sheet .p-row { padding: 0 4px; }
+.sheet .p-row + .p-row { box-shadow: inset 0 1px 0 var(--line); }
+
+/* ---------- first launch: the whole window, one decision per page ---------- */
+.onb { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
+.onb-top { height: 52px; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px; }
+.onb-top .l { justify-self: start; } .onb-top .r { justify-self: end; }
+.progress { display: flex; gap: 6px; }
+.progress i { width: 24px; height: 3px; border-radius: 2px; background: var(--line-strong); transition: background-color var(--duration-base); }
+.progress i.on { background: var(--fg); }
+.onb-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; }
+.onb-col { width: 440px; max-width: calc(100% - 48px); padding: 13vh 0 48px; display: flex; flex-direction: column; animation: page-in var(--duration-medium) var(--ease-decelerate) both; }
+.onb-col.back { animation-name: page-back; }
+@keyframes page-in { from { opacity: 0; transform: translateX(16px); } }
+@keyframes page-back { from { opacity: 0; transform: translateX(-16px); } }
+.onb h1 { margin: 0; font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -.01em; }
+.onb .sub { margin: 8px 0 0; font-size: 14px; line-height: 22px; color: var(--fg-3); }
+.onb .content { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
+.onb .foot { margin-top: 28px; display: flex; gap: 8px; }
+.onb .foot .btn { height: 40px; border-radius: 12px; font-size: 14px; }
+.onb .foot .btn.primary { flex: 1; }
+.welcome { align-items: center; text-align: center; padding-top: 18vh; }
+.welcome .mark { width: 88px; height: 88px; color: var(--fg); margin-bottom: 24px; }
+.welcome .brand { font-size: 32px; line-height: 40px; font-weight: 600; letter-spacing: -.02em; animation: fade-up var(--duration-slow) var(--ease-decelerate) 1.9s both; }
+.welcome .sub { animation: fade-up var(--duration-slow) var(--ease-decelerate) 2.05s both; }
+.welcome .foot { width: 240px; animation: fade-up var(--duration-slow) var(--ease-decelerate) 2.2s both; }
+.choice { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 10px 16px 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); text-align: left; transition: box-shadow var(--duration-fast), background-color var(--duration-fast); }
+.choice:hover { background: var(--bg-hover); }
+.choice[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--fg); }
+.choice .tile { width: 40px; height: 40px; flex: none; border-radius: 10px; display: grid; place-items: center; background: var(--bg-subtle); color: var(--fg-2); }
+.choice .tile svg.i { width: 20px; height: 20px; }
+.choice .b { flex: 1; min-width: 0; }
+.choice .b b { display: block; font-size: 14px; line-height: 22px; font-weight: 500; }
+.choice .b small { display: block; font-size: 12px; line-height: 18px; color: var(--fg-3); }
+.choice .radio { width: 16px; height: 16px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--fg-4); display: grid; place-items: center; }
+.choice[aria-checked="true"] .radio { box-shadow: inset 0 0 0 1.25px var(--fg); }
+.choice[aria-checked="true"] .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fg); }
+.remote-fields { display: flex; flex-direction: column; gap: 12px; padding: 8px 4px 4px; animation: fade-in var(--duration-base) both; }
+.agents { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); padding: 4px; }
+.agent { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px 6px 12px; border-radius: 8px; }
+.agent .amark { width: 18px; height: 18px; }
+.agent .b { flex: 1; min-width: 0; }
+.agent .b b { display: block; font-weight: 500; font-size: 14px; line-height: 20px; }
+.agent .b code { display: block; font-family: var(--font-mono); font-size: 12px; line-height: 18px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-3); }
+.agent .st svg.i { width: 14px; height: 14px; }
+.agent .st.ok { color: var(--fg-2); }
+.browser { border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.browser .crumb { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 8px; box-shadow: inset 0 -1px var(--line); font-family: var(--font-mono); font-size: 12px; color: var(--fg-3); }
+.browser .list { padding: 4px; }
+.browser .r { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 10px; border-radius: 8px; text-align: left; }
+.browser .r:hover { background: var(--bg-hover); }
+.browser .r[aria-selected="true"] { background: var(--bg-active); }
+.browser .r svg.i { color: var(--fg-3); }
+.browser .r .t { flex: 1; }
+.browser .r small { font-size: 12px; color: var(--fg-4); }
+.pair { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px; border-radius: 16px; box-shadow: inset 0 0 0 1px var(--line); }
+.pair .code { width: 184px; height: 184px; border-radius: 12px; background: #fff; padding: 10px; display: block; }
+.pair .code svg { width: 100%; height: 100%; display: block; }
+.pair .state { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-3); }
+.pair .state svg.i { width: 14px; height: 14px; }
+.pair .state.ok { color: var(--fg); }
+.pair .state.ok svg.i { width: 16px; height: 16px; }
+.phones.strip { gap: 28px; zoom: .8; }
+.phone .onb-col { width: auto; max-width: none; padding: 0 20px; flex: 1; }
+.p-onb { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.p-onb .top { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; }
+.p-onb .pc { flex: 1; display: flex; flex-direction: column; padding: 24px 24px 0; }
+.p-onb .pc.center { align-items: center; justify-content: center; text-align: center; padding-bottom: 80px; }
+.p-onb h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -.01em; }
+.p-onb .sub { margin: 8px 0 0; font-size: 16px; line-height: 24px; color: var(--fg-3); }
+.p-onb .brand { font-size: 34px; line-height: 42px; font-weight: 600; letter-spacing: -.02em; }
+.p-onb .mark { width: 88px; height: 88px; color: var(--fg); margin-bottom: 24px; }
+.p-onb .bottom { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 0 20px 44px; }
+.p-onb .bottom .p-btn { height: 52px; border-radius: 16px; font-size: 17px; }
+.p-onb .bottom .p-btn.ghost { color: var(--fg-2); }
+.p-onb .found { animation: none; margin-top: 24px; }
+.bell { width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center; background: var(--bg-subtle); color: var(--fg-2); margin: 32px auto 0; }
+.bell svg.i { width: 32px; height: 32px; }
+.notif { margin-top: 28px; padding: 12px 14px; border-radius: 18px; background: var(--bg-subtle); display: flex; gap: 12px; align-items: flex-start; text-align: left; }
+.notif .ic { width: 36px; height: 36px; border-radius: 9px; background: #15171a; display: grid; place-items: center; flex: none; }
+.notif .b { flex: 1; min-width: 0; font-size: 14px; line-height: 19px; }
+.notif .b b { font-weight: 600; }
+.notif .b span { color: var(--fg-2); }
+.onb.leaving { animation: onb-out var(--duration-medium) var(--ease-accelerate) both; pointer-events: none; }
+@keyframes onb-out { to { opacity: 0; transform: scale(.985); } }
+.scene.entering .main, .scene.entering .sb { animation: fade-in var(--duration-slow) var(--ease-decelerate) both; }
+.scene.entering .sb { animation-delay: 80ms; }
+.onb .btn .kbd { margin-left: 2px; font-size: 12px; opacity: .45; font-weight: 400; }
+.agent-note { margin-top: 2px; font-size: 12px; line-height: 18px; color: var(--fg-3); text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <span class="name">未连接与首次使用</span>
+  <div class="seg" role="radiogroup" aria-label="场景" id="scene-seg">
+    <button role="radio" data-scene="onb">桌面 · 首次启动</button>
+    <button role="radio" data-scene="desk">桌面 · 跳过后</button>
+    <button role="radio" data-scene="phone">手机</button>
+  </div>
+  <div class="sub" id="desk-ctl">
+    <div class="seg" role="radiogroup" aria-label="本机的 Agent" id="agent-seg">
+      <button role="radio" data-agents="many">装了两个 Agent</button>
+      <button role="radio" data-agents="one">一个</button>
+      <button role="radio" data-agents="none">没有</button>
+    </div>
+    <button class="btn xs ghost" id="replay">从头开始</button>
+  </div>
+  <div class="sub" id="phone-ctl" hidden>
+    <div class="seg" role="radiogroup" aria-label="手机" id="phone-seg"><button role="radio" data-pmode="onb">首次启动</button><button role="radio" data-pmode="skip">跳过后</button></div>
+    <button class="btn xs ghost" id="phone-replay">从头开始</button>
+  </div>
+  <span class="sp"></span>
+  <button class="btn icon-xs ghost" id="theme" aria-label="深浅色"></button>
+</div>
+
+<div class="stage">
+  <section class="scene" id="scene-onb"><div class="onb" id="onb"></div></section>
+  <section class="scene" id="scene-desk">
+    <aside class="sb" id="desk-sb"></aside>
+    <main class="main" id="desk-main"></main>
+  </section>
+  <section class="scene" id="scene-phone">
+    <div class="phones" id="phones"></div>
+  </section>
+</div>
+<div id="layer"></div>
+
+<script>
+/* ---------- icons (lucide) ---------- */
+const P = {
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  kanban: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7"/><path d="M12 7v4"/><path d="M16 7v9"/>',
+  clock: '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  server: '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  left: '<path d="m15 18-6-6 6-6"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  cursor: '<path d="M12 2 3 7v10l9 5 9-5V7z"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  phone: '<rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  compass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>',
+  right: '<path d="m9 18 6-6-6-6"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/>',
+  wifi: '<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  term: '<path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  tree: '<path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/>',
+  shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/>',
+  bell: '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+  drive: '<path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01"/><path d="M10 16h.01"/>',
+  layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>',
+  wand: '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/>',
+  image: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  at: '<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/>',
+  list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+};
+const I = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+const CLAUDE = '<svg class="amark" viewBox="0 0 100 100" fill="var(--agent-claude)" aria-hidden="true"><path d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9-4.7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2-2 .2-3 1-1 8-5.5Z"/></svg>';
+const CODEX = '<svg class="amark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--fg-2)" stroke-width="1.6"/><path d="M8 10l2.5 2L8 14M12.5 14.5H16" fill="none" stroke="var(--fg-2)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+/* ---------- brand mark (apps/web/src/lib/app-icon.ts) ---------- */
+const BODY = 'M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z';
+const TEETH = [
+  ['M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17L9.3 9.2L9.7 6.4Z', 8.9, 7.6],
+  ['M7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68L8.7 11.8L9.1 8.4Z', 8.2, 10.2],
+  ['M6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42L8.2 14.6L8.6 11Z', 7.6, 13],
+];
+let maskSeq = 0;
+const part = (x, y, cls, inner) => `<g transform="translate(${x} ${y})"><g class="${cls}"><g transform="translate(${-x} ${-y})">${inner}</g></g></g>`;
+function mark(draw) {
+  const id = 'm' + (++maskSeq);
+  return `<svg class="mark ${draw ? 'draw' : ''}" viewBox="0.6 -0.2 24 24" aria-hidden="true">
+    <mask id="${id}" maskUnits="userSpaceOnUse" x="-4" y="-4" width="32" height="32"><rect x="-4" y="-4" width="32" height="32" fill="#fff"/>${part(12.5, 8.2, 'p-eye', '<circle cx="12.5" cy="8.2" r="1" fill="#000"/>')}</mask>
+    ${TEETH.map(([d, x, y], n) => part(x, y, `p-tooth n${n + 1}`, `<path class="tooth" d="${d}"/>`)).join('')}
+    <g mask="url(#${id})"><path class="head" pathLength="1" d="${BODY}"/></g>
+  </svg>`;
+}
+
+/* ---------- state ---------- */
+const S = {
+  scene: 'onb', dark: false,
+  agents: 'many', // what the server finds: 'many' | 'one' | 'none'
+  pmode: 'onb',
+};
+const AGENTS = { claude: ['Claude Code', CLAUDE, '已登录'], codex: ['Codex', CODEX, '已登录'] };
+const freshDesk = () => ({ route: 'home', server: 'open', agent: 'pending', project: 'pending', projectName: '', agentName: 'Claude Code', firstDraw: true, settings: null, pulse: false });
+const freshPhone = () => ({ server: 'open', agent: 'pending', project: 'pending', projectName: '', firstDraw: true, sheet: null });
+const freshOnb = () => ({ page: 'welcome', dir: 1, server: 'mac', serverBusy: false, agent: 'claude', pick: null, phone: 'waiting', firstDraw: true });
+S.desk = freshDesk(); S.phone = freshPhone(); S.onb = freshOnb();
+const $ = (s, r = document) => r.querySelector(s);
+const layer = $('#layer');
+const closeLayer = () => { layer.innerHTML = ''; };
+const agentsFound = () => S.agents !== 'none';
+
+/* ---------- sidebar ---------- */
+const NAV = [['home', 'plus', '新会话'], ['search', 'search', '搜索'], ['assistant', 'bot', '个人助理'], ['tasks', 'kanban', '任务看板'], ['automations', 'clock', '自动化'], ['more', 'more', '更多']];
+function sidebar(route, project) {
+  return `<div class="sb-top">${mark(false).replace('<svg', '<svg style="width:20px;height:20px"')}<span class="brand">Riffet</span></div>
+  <nav class="sb-nav">${NAV.map(([id, ic, label]) => `<button class="nav" data-route="${id}" ${route === id ? 'aria-current="page"' : ''}>${I(ic)}<span>${label}</span></button>`).join('')}</nav>
+  <div class="sb-list">${project ? `<div class="sb-sec">${I('folder')}<span class="trunc">${project.name}</span></div>${(project.rows || []).map(r => `<div class="sb-row ${r.sel ? 'sel' : ''}"><span class="t trunc">${r.t}</span>${r.spin ? I('loader', 'spin fg-3') : `<span class="when">${r.when}</span>`}</div>`).join('')}` : ''}</div>
+  <div class="sb-foot"><button class="avatar" data-open="settings" aria-label="个人菜单">${I('user')}</button></div>`;
+}
+
+/* ---------- desk, after skipping: what is left of setup stays where the composer goes ---------- */
+const STEP_NAMES = { server: '服务器', agent: 'Agent', project: '项目' };
+function stepsRow(st, values) {
+  return ['server', 'agent', 'project'].map((k, n) => {
+    const s = st[k];
+    const glyph = s === 'done' ? I('check') : s === 'busy' ? I('loader', 'spin') : '';
+    const label = s === 'done' ? `<span class="v trunc">${values[k]}</span>` : `<span>${STEP_NAMES[k]}</span>`;
+    return `${n ? '<span class="step-sep"></span>' : ''}<span class="step ${s}"><span class="glyph">${glyph}</span>${label}</span>`;
+  }).join('');
+}
+const deskValues = () => ({ server: '这台 Mac', agent: S.desk.agentName, project: S.desk.projectName || '无项目' });
+function deskStepBody() {
+  const d = S.desk;
+  if (d.server === 'open') return `<div class="step-line"><span class="what">这台 Mac 上的服务器没有运行</span><span class="acts"><button class="btn sm ghost" data-act="remote">连接其他服务器…</button><button class="btn sm primary" data-act="start">启动</button></span></div>`;
+  if (d.server === 'busy') return `<div class="step-line"><span class="what fg-3">正在启动</span></div>`;
+  if (d.agent === 'busy') return `<div class="step-line"><span class="what fg-3">正在检查 Agent</span></div>`;
+  if (d.agent === 'open') return `<div class="step-line"><span class="what">没有找到可用的 Agent</span><span class="acts"><button class="btn sm secondary" data-act="recheck">重新检测</button></span></div>
+    <div class="install">
+      <div class="r"><span class="n">${CLAUDE}Claude Code</span><code>npm install -g @anthropic-ai/claude-code</code><button class="btn icon-xs quiet" data-act="copy" aria-label="复制">${I('copy')}</button></div>
+      <div class="r"><span class="n">${CODEX}Codex</span><code>npm install -g @openai/codex</code><button class="btn icon-xs quiet" data-act="copy" aria-label="复制">${I('copy')}</button></div>
+    </div>`;
+  if (d.project === 'open') return `<div class="step-line"><span class="what">Agent 会在所选目录里读写文件</span><span class="acts"><button class="btn sm ghost" data-act="skipdir">跳过</button><button class="btn sm primary" data-act="pick">选择目录…</button></span></div>`;
+  return '';
+}
+function composerHTML(placeholder) {
+  return `<div class="composer swap-in"><textarea rows="1" placeholder="${placeholder}"></textarea>
+    <div class="bar"><button class="plus" aria-label="添加">${I('plus')}</button><button class="capsule">默认</button><span style="flex:1"></span><button class="capsule">${S.desk.agentName === 'Codex' ? CODEX + 'GPT-5.5' : CLAUDE + 'Sonnet 5.5'}</button><button class="send" disabled aria-label="发送">${I('up')}</button></div></div>`;
+}
+function renderDesk() {
+  const d = S.desk, connected = d.server === 'done', ready = d.project === 'done';
+  $('#desk-sb').innerHTML = sidebar(d.route, ready && d.projectName ? { name: d.projectName } : null);
+  const main = $('#desk-main');
+  if (d.route === 'home') {
+    const title = ready ? (d.projectName ? `要在 ${d.projectName} 做什么？` : '要做什么？') : '';
+    main.innerHTML = `<div class="home"><div class="home-col">
+      <div class="home-hero">${mark(d.firstDraw)}${title ? `<h1>${title}</h1>` : ''}</div>
+      <div class="card16" id="desk-card">${ready ? composerHTML('描述要完成的任务') : `<div class="steps">${stepsRow(d, deskValues())}</div><div class="step-body">${deskStepBody()}</div>`}</div>
+    </div></div>`;
+    d.firstDraw = false;
+    if (d.pulse) { d.pulse = false; $('#desk-card').animate([{ boxShadow: 'var(--shadow-composer), 0 0 0 0 var(--focus-ring)' }, { boxShadow: 'var(--shadow-composer), 0 0 0 6px transparent' }], { duration: 700, easing: 'ease-out' }); }
+  } else {
+    const label = NAV.find(n => n[0] === d.route)[2];
+    main.innerHTML = `<div class="page-h"><h1>${label}</h1></div>${connected ? `<div class="ghost-page">（已连接时的${label}页面，此处省略）</div>` :
+      `<div class="empty"><div class="tile">${I('server')}</div><h2>需要连接服务器</h2><button class="btn md secondary" data-act="goconnect">连接</button></div>`}`;
+  }
+  if (d.settings) renderSettings();
+}
+function morph(fn) {
+  const card = $('#desk-card'); const from = card ? card.getBoundingClientRect().height : 0;
+  fn();
+  const next = $('#desk-card'); if (!card || !next) return;
+  const to = next.getBoundingClientRect().height; if (Math.abs(to - from) < 1) return;
+  next.style.height = from + 'px';
+  requestAnimationFrame(() => { next.style.height = to + 'px'; setTimeout(() => { next.style.height = ''; }, 420); });
+}
+const later = (ms, fn) => setTimeout(() => morph(() => { fn(); renderDesk(); }), ms);
+function startServer() {
+  morph(() => { S.desk.server = 'busy'; renderDesk(); });
+  later(1100, () => { S.desk.server = 'done'; S.desk.agent = 'busy'; });
+  later(1900, () => { if (agentsFound()) { S.desk.agent = 'done'; S.desk.project = 'open'; } else S.desk.agent = 'open'; });
+}
+function pickDirectory() {
+  const dirs = [['kiln', 'git'], ['notes', ''], ['riffet-plugins', 'git'], ['sandbox', '']];
+  layer.innerHTML = `<div class="scrim" data-close></div><div class="dialog" role="dialog" aria-label="选择目录">
+    <div class="dh">选择目录</div><button class="btn icon-xs ghost dx" data-close aria-label="关闭">${I('x')}</button>
+    <div class="db"><div class="browser"><div class="crumb"><button class="btn icon-xs ghost" aria-label="上一级">${I('left')}</button>~/workspace</div>
+      <div class="list">${dirs.map(([n, m]) => `<button class="r" data-dir="${n}">${I('folder')}<span class="t">${n}</span><small>${m}</small></button>`).join('')}</div></div></div>
+    <div class="df"><button class="btn md ghost" data-close>取消</button></div></div>`;
+}
+function remoteDialog() {
+  layer.innerHTML = `<div class="scrim" data-close></div><div class="dialog" role="dialog" aria-label="连接服务器">
+    <div class="dh">连接服务器</div><button class="btn icon-xs ghost dx" data-close aria-label="关闭">${I('x')}</button>
+    <div class="db"><label class="field"><span>地址</span><input class="input" placeholder="https://"></label><label class="field"><span>配对码</span><input class="input mono" placeholder="riffet pair"></label></div>
+    <div class="df"><button class="btn md ghost" data-close>取消</button><button class="btn md primary" data-close>连接</button></div></div>`;
+}
+
+/* ---------- settings without a server: local panes work, server panes say so ---------- */
+const SET = [
+  [null, [['profile', 'user', '个人资料', 'server'], ['general', 'globe', '通用设置', 'local']]],
+  ['外观', [['appearance', 'sun', '主题与外观', 'local'], ['type', 'pen', '字体与排版', 'local']]],
+  ['行为', [['keys', 'keyboard', '快捷键', 'local'], ['notify', 'bell', '通知', 'local']]],
+  ['功能', [['assistant', 'bot', '个人助理', 'server'], ['tasks', 'kanban', '任务看板', 'server']]],
+  ['模型', [['agents', 'bot', 'Agent', 'server'], ['providers', 'layers', '模型提供商', 'server']]],
+  ['访问', [['access', 'phone', '连接与访问', 'server'], ['devices', 'phone', '设备管理', 'server']]],
+  ['服务器', [['service', 'server', '服务管理', 'mac'], ['backup', 'drive', '备份与恢复', 'mac']]],
+];
+function settingsPane(id) {
+  const connected = S.desk.server === 'done';
+  const item = SET.flatMap(g => g[1]).find(x => x[0] === id);
+  const head = `<div class="page-h"><h1>${item[2]}</h1></div>`;
+  if (id === 'appearance') return head + `<div class="set-scroll">
+    <div class="sgroup"><div class="h">主题</div><div class="sframe">
+      <div class="srow"><span class="k">外观</span><div class="seg" role="radiogroup"><button role="radio" data-mode="light" aria-checked="${!S.dark}">${I('sun')}浅色</button><button role="radio" data-mode="dark" aria-checked="${S.dark}">${I('moon')}深色</button></div></div>
+      <div class="srow"><span class="k">界面风格</span><span class="v">Riffet</span></div>
+      <div class="srow"><span class="k">配色</span><span class="v">Riffet</span></div></div></div>
+    <div class="sgroup"><div class="h">窗口</div><div class="sframe"><div class="srow"><span class="k">窗口材质</span><span class="v">半透明</span></div><div class="srow"><span class="k">App 图标</span><span class="v">蓝色</span></div></div></div></div>`;
+  if (id === 'service') return head + `<div class="set-scroll"><div class="sgroup"><div class="sframe">
+    <div class="srow"><span class="k">本机服务器</span><span class="v">${connected ? '运行中' : '未运行'}</span>${connected ? '' : '<button class="btn sm secondary" data-act="start-from-settings">启动</button>'}</div></div></div></div>`;
+  if (id === 'backup') return head + `<div class="set-scroll"><div class="sgroup"><div class="sframe">
+    <div class="srow"><span class="k">从备份恢复</span><button class="btn sm secondary">选择备份…</button></div>
+    <div class="srow"><span class="k">立即备份</span>${connected ? '<button class="btn sm secondary">备份</button>' : '<span class="v fg-4">需要连接服务器</span>'}</div></div></div></div>`;
+  if (item[3] === 'server' && !connected) return head + `<div class="empty" style="padding-bottom:64px"><div class="tile">${I('server')}</div><h2>需要连接服务器</h2><button class="btn md secondary" data-act="goconnect">连接</button></div>`;
+  if (item[3] === 'server') return head + `<div class="ghost-page">（已连接时的设置，此处省略）</div>`;
+  return head + `<div class="ghost-page">（本机设置，和现在一样）</div>`;
+}
+function renderSettings() {
+  const sel = S.desk.settings;
+  layer.innerHTML = `<div class="scrim" data-close></div><div class="settings" role="dialog" aria-label="设置">
+    <nav class="set-nav">${SET.map(([g, items]) => `${g ? `<div class="g">${g}</div>` : ''}${items.map(([id, ic, label]) => `<button class="nav" data-set="${id}" ${sel === id ? 'aria-current="page"' : ''}>${I(ic)}<span>${label}</span></button>`).join('')}`).join('')}</nav>
+    <div class="set-body">${settingsPane(sel)}</div>
+    <button class="btn icon-xs ghost" data-close aria-label="关闭" style="position:absolute;top:14px;right:14px">${I('x')}</button></div>`;
+}
+
+function qrSVG() {
+  const n = 25; let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const finder = (x, y) => `<rect x="${x}" y="${y}" width="7" height="7" fill="#111"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3" fill="#111"/>`;
+  let cells = '';
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const inF = (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9);
+    if (!inF && rnd() > .52) cells += `<rect x="${x}" y="${y}" width="1" height="1" fill="#111"/>`;
+  }
+  return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges">${cells}${finder(0, 0)}${finder(n - 7, 0)}${finder(0, n - 7)}</svg>`;
+}
+
+/* ---------- first launch, desktop. A page exists only when it asks for a decision ---------- */
+const onbPages = () => ['welcome', 'server', ...(S.agents === 'one' ? [] : ['agent']), 'project', 'phone'];
+const kbd = '<span class="kbd">↩</span>';
+function renderOnb() {
+  const o = S.onb, pages = onbPages(), at = pages.indexOf(o.page), page = o.page;
+  const where = o.server === 'mac' ? '这台 Mac' : '服务器';
+  const top = `<div class="onb-top"><span class="l">${at > 1 ? `<button class="btn icon-xs ghost" data-oact="back" aria-label="返回">${I('left')}</button>` : ''}</span>
+    <span class="progress">${at ? pages.slice(1).map((_, n) => `<i class="${n < at ? 'on' : ''}"></i>`).join('') : ''}</span>
+    <span class="r"><button class="btn xs quiet" data-oact="skip">跳过</button></span></div>`;
+  const cls = `onb-col ${o.dir < 0 ? 'back' : ''}`;
+  let col = '';
+  if (page === 'welcome') {
+    col = `<div class="onb-col welcome">${mark(o.firstDraw)}<div class="brand">Riffet</div><p class="sub">在电脑上运行编程 Agent，在任何设备上查看和接手</p>
+      <div class="foot"><button class="btn primary" data-oact="next">开始${kbd}</button></div></div>`;
+    o.firstDraw = false;
+  }
+  if (page === 'server') {
+    const choice = (id, ic, t, m) => `<button class="choice" role="radio" aria-checked="${o.server === id}" data-server="${id}"><span class="tile">${I(ic)}</span><span class="b"><b>${t}</b><small>${m}</small></span><span class="radio"></span></button>`;
+    col = `<div class="${cls}"><h1>Agent 在哪台电脑上运行</h1><p class="sub">之后可以在设置里更改</p>
+      <div class="content" role="radiogroup">${choice('mac', 'monitor', '这台 Mac', '使用 App 自带的服务器')}${choice('remote', 'server', '其他服务器', '需要地址和配对码')}
+      ${o.server === 'remote' ? `<div class="remote-fields"><label class="field"><span>地址</span><input class="input" placeholder="https://"></label><label class="field"><span>配对码</span><input class="input mono" placeholder="riffet pair"></label></div>` : ''}</div>
+      <div class="foot"><button class="btn primary" data-oact="server" ${o.serverBusy ? 'disabled' : ''}>${o.serverBusy ? `${I('loader', 'spin')}${o.server === 'mac' ? '正在启动' : '正在连接'}` : `${o.server === 'mac' ? '启动' : '连接'}${kbd}`}</button></div></div>`;
+  }
+  if (page === 'agent' && S.agents === 'many') {
+    const choice = (id) => { const [n, logo, m] = AGENTS[id]; return `<button class="choice" role="radio" aria-checked="${o.agent === id}" data-agent="${id}"><span class="tile">${logo.replace('class="amark"', 'class="amark" style="width:20px;height:20px"')}</span><span class="b"><b>${n}</b><small>${m}</small></span><span class="radio"></span></button>`; };
+    col = `<div class="${cls}"><h1>默认用哪个 Agent</h1><p class="sub">新建会话时可以换</p>
+      <div class="content" role="radiogroup">${choice('claude')}${choice('codex')}</div>
+      <div class="foot"><button class="btn primary" data-oact="next">继续${kbd}</button></div></div>`;
+  }
+  if (page === 'agent' && S.agents === 'none') {
+    const row = (logo, name, cmd) => `<div class="agent">${logo.replace('class="amark"', 'class="amark" style="width:18px;height:18px"')}<span class="b"><b>${name}</b><code>${cmd}</code></span><button class="btn icon-xs quiet" data-act="copy" aria-label="复制">${I('copy')}</button></div>`;
+    col = `<div class="${cls}"><h1>还没有可用的 Agent</h1><p class="sub">Riffet 调用${where}上安装的 CLI，装好任意一个即可</p>
+      <div class="content"><div class="agents">${row(CLAUDE, 'Claude Code', 'npm install -g @anthropic-ai/claude-code')}${row(CODEX, 'Codex', 'npm install -g @openai/codex')}</div></div>
+      <div class="foot"><button class="btn primary" data-oact="recheck">重新检测${kbd}</button></div></div>`;
+  }
+  if (page === 'project') {
+    const dirs = [['kiln', 'git'], ['notes', ''], ['riffet-plugins', 'git'], ['sandbox', '']];
+    col = `<div class="${cls}"><h1>从哪个目录开始</h1><p class="sub">Agent 会在所选目录里读写文件</p>
+      <div class="content"><div class="browser"><div class="crumb"><button class="btn icon-xs ghost" aria-label="上一级">${I('left')}</button>~/workspace</div>
+        <div class="list" role="listbox">${dirs.map(([n, m]) => `<button class="r" role="option" aria-selected="${o.pick === n}" data-pick="${n}">${I('folder')}<span class="t">${n}</span><small>${m}</small></button>`).join('')}</div></div></div>
+      <div class="foot"><button class="btn ghost" data-oact="nodir">先不选</button><button class="btn primary" data-oact="next" ${o.pick ? '' : 'disabled'}>继续${kbd}</button></div></div>`;
+  }
+  if (page === 'phone') {
+    const done = o.phone === 'done';
+    col = `<div class="${cls}"><h1>在手机上接着看</h1><p class="sub">用手机上的 Riffet 扫码，离开电脑也能处理审批</p>
+      <div class="content"><div class="pair"><button class="code" data-oact="scanned" aria-label="二维码">${qrSVG()}</button>
+        ${done ? `<span class="state ok">${I('check')}Pixel 9 已连接</span>` : `<span class="state">${I('loader', 'spin')}等待扫码</span>`}</div>
+        ${done ? '<p class="agent-note">在「技能与工具」里可以让 Agent 操作这台手机</p>' : ''}</div>
+      <div class="foot">${done ? '' : '<button class="btn ghost" data-oact="finish">以后再说</button>'}<button class="btn primary" data-oact="finish">完成${kbd}</button></div></div>`;
+  }
+  $('#onb').classList.remove('leaving');
+  $('#onb').innerHTML = top + `<div class="onb-body">${col}</div>`;
+}
+function onbGo(step) {
+  const o = S.onb, pages = onbPages(), at = pages.indexOf(o.page), next = pages[at + step];
+  if (!next) return;
+  o.dir = step; o.page = next; renderOnb();
+}
+/* Leaving, by finishing or skipping, lands on the main window with whatever is already done. */
+function leaveOnb() {
+  const o = S.onb, d = S.desk, pages = onbPages(), at = pages.indexOf(o.page), finished = o.page === 'phone';
+  const past = (p) => pages.indexOf(p) >= 0 ? at > pages.indexOf(p) || finished : at > pages.indexOf('server');
+  d.firstDraw = false; d.route = 'home';
+  d.server = at > 1 ? 'done' : 'open';
+  d.agent = d.server !== 'done' ? 'pending' : agentsFound() ? 'done' : 'open';
+  d.agentName = AGENTS[S.agents === 'many' ? o.agent : 'claude'][0];
+  d.project = d.agent !== 'done' ? 'pending' : past('project') ? 'done' : 'open';
+  d.projectName = d.project === 'done' ? (o.pick || '') : '';
+  $('#onb').classList.add('leaving');
+  setTimeout(() => {
+    setScene('desk');
+    const sc = $('#scene-desk'); sc.classList.add('entering'); setTimeout(() => sc.classList.remove('entering'), 600);
+  }, 240);
+}
+
+/* ---------- phones ---------- */
+const status = () => `<div class="p-status"><span>9:41</span><span class="sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span></div>`;
+const TABS = [['new', 'plus', '新会话'], ['assistant', 'bot', '助理'], ['tasks', 'list', '任务'], ['settings', 'more', '设置']];
+const tabbar = (cur) => `<nav class="tabbar">${TABS.map(([id, ic, l]) => `<button ${cur === id ? 'aria-current="page"' : ''}>${I(ic)}<span>${l}</span></button>`).join('')}</nav><div class="p-home"></div>`;
+const phoneValues = () => ({ server: 'MacBook Pro', agent: 'Claude Code', project: S.phone.projectName || '无项目' });
+function phoneBody() {
+  const p = S.phone;
+  if (p.server === 'open') return `<div class="step-body"><button class="p-btn primary" data-pact="scan">${I('scan')}扫码配对</button>
+    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.8</small></span><button class="btn secondary" data-pact="lan">连接</button></div></div>`;
+  if (p.server === 'busy') return `<div class="step-body"><div class="what fg-3">在 MacBook Pro 上允许这台手机</div></div>`;
+  if (p.project === 'open') return `<div class="step-body"><div class="what">Agent 会在所选目录里读写文件</div><div style="display:flex;gap:8px"><button class="p-btn secondary" data-pact="pskip" style="flex:1">跳过</button><button class="p-btn primary" data-pact="ppick" style="flex:2">选择项目</button></div></div>`;
+  return '';
+}
+function phoneOnbStrip() {
+  const top = (n) => `<div class="top"><span class="progress">${n ? [1, 2].map(k => `<i class="${k <= n ? 'on' : ''}"></i>`).join('') : ''}</span><button class="btn xs quiet" style="font-size:15px">跳过</button></div>`;
+  const shell = (cap, inner, tab) => `<div class="phone-wrap"><div class="phone">${status()}${inner}${tab || '<div class="p-home"></div>'}</div><span class="phone-cap">${cap}</span></div>`;
+  const welcome = shell('欢迎：标志描画一次', `<div class="p-onb">${top(0)}<div class="pc center">${mark(true)}<div class="brand">Riffet</div><p class="sub">在任何设备上查看和接手<br>电脑上的编程 Agent</p></div>
+    <div class="bottom"><button class="p-btn primary">开始</button></div></div>`);
+  const connect = shell('连接：扫码，或局域网里找到的那一台', `<div class="p-onb">${top(1)}<div class="pc"><h1>连接你的电脑</h1><p class="sub">二维码在电脑上 Riffet 设置的「设备管理」里</p>
+    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.8</small></span><button class="btn secondary">连接</button></div></div>
+    <div class="bottom"><button class="p-btn primary">${I('scan')}扫码配对</button><button class="p-btn ghost">输入地址</button></div></div>`);
+  const notify = shell('通知：审批要靠它', `<div class="p-onb">${top(2)}<div class="pc"><h1>需要你时通知你</h1><p class="sub">Agent 等待审批、提问或完成时</p>
+    <div class="notif"><span class="ic">${mark(false).replace('<svg', '<svg style="width:22px;height:22px;color:#fff"')}</span><span class="b"><b>kiln · 运行命令</b><br><span>pnpm install 等待确认</span></span></div></div>
+    <div class="bottom"><button class="p-btn primary">允许通知</button><button class="p-btn ghost">以后再说</button></div></div>`);
+  const land = shell('落地：电脑上已有的项目直接可用', `<div class="p-main"><div class="p-hero">${mark(false)}<h1>要在 kiln 做什么？</h1></div>
+    <div class="island"><textarea rows="1" placeholder="描述要完成的任务"></textarea><div class="bar"><button class="plus">${I('plus')}</button><button class="capsule">默认</button><span style="flex:1"></span><button class="capsule">${CLAUDE}Sonnet 5.5</button><button class="send" disabled>${I('up')}</button></div></div></div>`, tabbar('new'));
+  return welcome + connect + notify + land;
+}
+function renderPhones() {
+  const strip = S.pmode === 'onb';
+  $('#phones').classList.toggle('strip', strip);
+  if (strip) { $('#phones').innerHTML = phoneOnbStrip(); return; }
+  const p = S.phone, ready = p.project === 'done', connected = p.server === 'done';
+  const title = ready ? (p.projectName ? `要在 ${p.projectName} 做什么？` : '要做什么？') : '';
+  const island = ready ? `<div class="island swap-in"><textarea rows="1" placeholder="描述要完成的任务"></textarea><div class="bar"><button class="plus">${I('plus')}</button><button class="capsule">默认</button><span style="flex:1"></span><button class="capsule">${CLAUDE}Sonnet 5.5</button><button class="send" disabled>${I('up')}</button></div></div>`
+    : `<div class="island" id="p-island"><div class="steps">${stepsRow(p, phoneValues())}</div>${phoneBody()}</div>`;
+  const sheet = p.sheet === 'projects' ? `<div class="sheet-scrim" data-pact="close"></div><div class="sheet"><div class="grab"></div><h3>选择项目</h3>
+    <div>${['kiln', 'riffet-plugins', 'notes'].map(n => `<button class="p-row" data-pproject="${n}" style="width:100%">${I('folder')}<span class="t">${n}</span><span class="v mono" style="font-size:12px">~/workspace/${n}</span></button>`).join('')}</div></div>` : '';
+  const a = `<div class="phone-wrap"><div class="phone">${status()}<div class="p-main"><div class="p-hero">${mark(p.firstDraw)}${title ? `<h1>${title}</h1>` : ''}</div>${island}${sheet}</div>${tabbar('new')}</div>
+    <span class="phone-cap">新会话 · 跳过后停在这里</span></div>`;
+  const b = `<div class="phone-wrap"><div class="phone">${status()}<div class="p-large">任务</div>
+      ${connected ? '<div class="p-empty"><span class="fg-3">（已连接时的任务列表）</span></div>' : `<div class="p-empty"><div class="tile">${I('server')}</div><h2>需要连接服务器</h2><button class="p-btn secondary">连接</button></div>`}
+      ${tabbar('tasks')}</div><span class="phone-cap">需要服务器的页面</span></div>`;
+  const row = (ic, t, v, off) => `<div class="p-row">${I(ic)}<span class="t">${t}</span>${v ? `<span class="v ${off ? 'off' : ''}">${v}</span>` : ''}${I('right')}</div>`;
+  const dim = !connected;
+  const c = `<div class="phone-wrap"><div class="phone grouped">${status()}<div class="p-large">设置</div><div class="p-list">
+      <div class="p-sec">外观</div><div class="p-group">${row('sun', '主题', '跟随系统')}${row('globe', '语言', '简体中文')}${row('bell', '通知', '')}</div>
+      <div class="p-sec">访问</div><div class="p-group">${row('server', '服务器', connected ? 'MacBook Pro' : '未连接', dim)}${row('phone', '设备管理', dim ? '未连接' : '', dim)}</div>
+      <div class="p-sec">模型</div><div class="p-group">${row('bot', 'Agent', dim ? '未连接' : 'Claude Code', dim)}${row('layers', '模型提供商', dim ? '未连接' : '', dim)}</div>
+    </div>${tabbar('settings')}</div><span class="phone-cap">设置：本机部分照常，需要服务器的标出</span></div>`;
+  $('#phones').innerHTML = a + b + c;
+  p.firstDraw = false;
+}
+function phoneMorph(fn) {
+  const el = $('#p-island'); const from = el ? el.getBoundingClientRect().height : 0;
+  fn(); renderPhones();
+  const next = $('#p-island') || $('.phone .island'); if (!el || !next) return;
+  const to = next.getBoundingClientRect().height;
+  next.style.height = from + 'px'; next.style.transition = 'height var(--duration-slow) var(--ease-standard)';
+  requestAnimationFrame(() => { next.style.height = to + 'px'; setTimeout(() => { next.style.height = ''; }, 420); });
+}
+
+/* ---------- wiring ---------- */
+function setScene(s) {
+  S.scene = s; closeLayer();
+  document.querySelectorAll('.scene').forEach(el => el.classList.toggle('on', el.id === 'scene-' + s));
+  document.querySelectorAll('#scene-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.scene === s));
+  $('#desk-ctl').hidden = s !== 'desk' && s !== 'onb'; $('#phone-ctl').hidden = s !== 'phone';
+  if (s === 'onb') renderOnb(); if (s === 'desk') renderDesk(); if (s === 'phone') renderPhones();
+}
+function setTheme(dark) {
+  S.dark = dark; document.documentElement.classList.toggle('dark', dark);
+  $('#theme').innerHTML = I(dark ? 'sun' : 'moon');
+  if (S.desk.settings) renderSettings();
+}
+function syncSegs() {
+  document.querySelectorAll('#agent-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.agents === S.agents));
+  document.querySelectorAll('#phone-seg button').forEach(b => b.setAttribute('aria-checked', b.dataset.pmode === S.pmode));
+}
+function restart() {
+  if (S.scene === 'onb') { S.onb = freshOnb(); return renderOnb(); }
+  S.desk = freshDesk(); closeLayer(); renderDesk();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || S.scene !== 'onb' || e.target.closest('input, textarea')) return;
+  const primary = document.querySelector('#onb .foot .btn.primary:not(:disabled)');
+  if (primary) { e.preventDefault(); primary.click(); }
+});
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button, [data-close], [data-pact]');
+  if (!t) return;
+  const d = S.desk, o = S.onb, ds = t.dataset;
+  if (ds.scene) return setScene(ds.scene);
+  if (ds.pmode) { S.pmode = ds.pmode; syncSegs(); return renderPhones(); }
+  if (ds.agents) {
+    S.agents = ds.agents; syncSegs();
+    if (S.scene === 'onb') { if (o.page === 'agent' && S.agents === 'one') o.page = 'project'; return renderOnb(); }
+    if (d.agent === 'open' && agentsFound()) morph(() => { d.agent = 'done'; d.project = 'open'; renderDesk(); });
+    return;
+  }
+  if (t.id === 'replay') return restart();
+  if (t.id === 'phone-replay') { S.phone = freshPhone(); return renderPhones(); }
+  if (t.id === 'theme') return setTheme(!S.dark);
+  if (ds.mode) return setTheme(ds.mode === 'dark');
+  if ('close' in ds) { d.settings = null; return closeLayer(); }
+  if (ds.server) { o.server = ds.server; return renderOnb(); }
+  if (ds.agent) { o.agent = ds.agent; return renderOnb(); }
+  if (ds.pick) { o.pick = ds.pick; return renderOnb(); }
+  if (ds.oact) switch (ds.oact) {
+    case 'next': return onbGo(1);
+    case 'back': return onbGo(-1);
+    case 'skip': return leaveOnb();
+    case 'server': o.serverBusy = true; renderOnb(); return setTimeout(() => { o.serverBusy = false; onbGo(1); }, 1100);
+    case 'recheck': if (agentsFound()) return onbGo(1); t.innerHTML = `${I('loader', 'spin')}正在检测`; t.disabled = true; return setTimeout(renderOnb, 900);
+    case 'nodir': o.pick = null; return onbGo(1);
+    case 'scanned': o.phone = 'done'; return renderOnb();
+    case 'finish': return leaveOnb();
+  }
+  if (ds.route) { if (ds.route === 'more') return; d.route = ds.route; closeLayer(); if (S.scene !== 'desk') return setScene('desk'); return renderDesk(); }
+  if (ds.open === 'settings') { d.settings = 'appearance'; return renderSettings(); }
+  if (ds.set) { d.settings = ds.set; return renderSettings(); }
+  if (ds.dir) { closeLayer(); return morph(() => { d.project = 'done'; d.projectName = ds.dir; renderDesk(); }); }
+  switch (ds.act) {
+    case 'start': return startServer();
+    case 'start-from-settings': d.settings = null; closeLayer(); d.route = 'home'; renderDesk(); return startServer();
+    case 'remote': return remoteDialog();
+    case 'recheck': if (agentsFound()) morph(() => { d.agent = 'done'; d.project = 'open'; renderDesk(); }); else { morph(() => { d.agent = 'busy'; renderDesk(); }); later(900, () => { d.agent = 'open'; }); } return;
+    case 'copy': t.innerHTML = I('check'); setTimeout(() => { t.innerHTML = I('copy'); }, 1200); return;
+    case 'pick': return pickDirectory();
+    case 'skipdir': return morph(() => { d.project = 'done'; d.projectName = ''; renderDesk(); });
+    case 'goconnect': d.settings = null; closeLayer(); d.route = 'home'; d.pulse = true; return renderDesk();
+  }
+  const p = S.phone;
+  switch (ds.pact) {
+    case 'scan': case 'lan':
+      phoneMorph(() => { p.server = 'busy'; });
+      setTimeout(() => phoneMorph(() => { p.server = 'done'; p.agent = 'done'; p.project = 'open'; }), 1500); return;
+    case 'ppick': p.sheet = 'projects'; return renderPhones();
+    case 'pskip': return phoneMorph(() => { p.project = 'done'; p.projectName = ''; });
+    case 'close': p.sheet = null; return renderPhones();
+  }
+  if (ds.pproject) { p.sheet = null; return phoneMorph(() => { p.project = 'done'; p.projectName = ds.pproject; }); }
+});
+
+/* deep links for screenshots: #onb/<page>, #desk[/agent-missing|project|ready|tasks|settings], #phone[/skip] ; ?agents=one|none ; ?dark */
+(function boot() {
+  const [scene = 'onb', sub = ''] = location.hash.slice(1).split('/');
+  const q = new URLSearchParams(location.search);
+  if (q.get('agents')) S.agents = q.get('agents');
+  if (q.has('dark')) S.dark = true;
+  const d = S.desk;
+  if (scene === 'onb' && sub) { S.onb.page = sub; if (sub === 'remote') { S.onb.page = 'server'; S.onb.server = 'remote'; } if (sub === 'phone-done') { S.onb.page = 'phone'; S.onb.phone = 'done'; } }
+  if (sub === 'agent-missing' && scene === 'desk') { S.agents = 'none'; d.server = 'done'; d.agent = 'open'; }
+  if (sub === 'project' && scene === 'desk') { d.server = 'done'; d.agent = 'done'; d.project = 'open'; }
+  if (sub === 'ready') { d.server = d.agent = d.project = 'done'; d.projectName = 'kiln'; }
+  if (sub === 'tasks') d.route = 'tasks';
+  if (sub === 'settings') d.settings = 'agents';
+  if (scene === 'phone' && sub === 'skip') S.pmode = 'skip';
+  syncSegs(); setTheme(S.dark); setScene(scene);
+})();
+</script>
+</body>
+</html>

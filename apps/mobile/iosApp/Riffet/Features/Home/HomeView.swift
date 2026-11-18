@@ -18,8 +18,10 @@ enum RootTab: String, CaseIterable {
     }
 }
 
+/// The tabs. `workbench` is nil while no server is connected: the same tabs show, the pages that need a
+/// server show `NeedsServerView`, and 新会话 holds the setup card (patterns.md §1.5).
 struct RiffetRootView: View {
-    let workbench: Workbench
+    let workbench: Workbench?
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.verticalSizeClass) private var heightClass
@@ -42,7 +44,7 @@ struct RiffetRootView: View {
             tabRaw = value.rawValue
         })
     }
-    private var waitingCount: Int { workbench.list.sessions.count { $0.state == .waiting } }
+    private var waitingCount: Int { workbench?.list.sessions.count { $0.state == .waiting } ?? 0 }
     /// A window wide and tall enough for 任务 to keep its list beside the conversation: iPad, an
     /// unfolded iPhone Duo. The window decides, not the device, so Split View and Stage Manager
     /// windows follow the iPhone rules once they are narrow, and a phone in landscape stays one column.
@@ -55,9 +57,15 @@ struct RiffetRootView: View {
     var body: some View {
         TabView(selection: tabSelection) {
             NavigationStack(path: $newPath) {
-                NewTaskView(workbench: workbench,
-                            onStart: { newPath.append(.session($0.id, false)) },
-                            onOpenSession: { newPath.append(.session($0, false)) })
+                Group {
+                    if let workbench {
+                        NewTaskView(workbench: workbench,
+                                    onStart: { newPath.append(.session($0.id, false)) },
+                                    onOpenSession: { newPath.append(.session($0, false)) })
+                    } else {
+                        UnconnectedNewTaskView(model: model)
+                    }
+                }
                     .background(TabBarVisibility(hidden: false))
                     .navigationDestination(for: MobileRoute.self) { destination($0) }
             }
@@ -65,7 +73,10 @@ struct RiffetRootView: View {
             .tabItem { Image(systemName: "plus.bubble").environment(\.symbolVariants, .none).accessibilityLabel("新会话") }
             .tag(RootTab.newTask)
             NavigationStack(path: $assistantPath) {
-                AssistantRootView(workbench: workbench, onOpenSession: { assistantPath.append(.session($0, false)) })
+                Group {
+                    if let workbench { AssistantRootView(workbench: workbench, onOpenSession: { assistantPath.append(.session($0, false)) }) }
+                    else { NeedsServerView().navigationTitle(RootTab.assistant.title).navigationBarTitleDisplayMode(.inline).background(TabBarVisibility(hidden: false)) }
+                }
                     .navigationDestination(for: MobileRoute.self) { destination($0) }
             }
             .riffetToastHost()
@@ -75,15 +86,15 @@ struct RiffetRootView: View {
             // root becomes the empty detail, while its path, and the conversation on it, stay mounted
             // through a fold, an unfold or a resize.
             HStack(spacing: 0) {
-                if wide {
+                if wide, workbench != nil {
                     NavigationStack { taskList }
                         .containerRelativeFrame(.horizontal) { width, _ in min(max(width * 0.32, 320), 420) }
                     Divider().ignoresSafeArea()
                 }
                 NavigationStack(path: $taskPath) {
-                    Group { if wide { TaskDetailPlaceholder() } else { taskList } }
+                    Group { if wide, workbench != nil { TaskDetailPlaceholder() } else { taskList } }
                         .background(TabBarVisibility(hidden: false))
-                        .navigationDestination(for: MobileRoute.self) { destination($0, splitRoot: wide && $0 == taskPath.first) }
+                        .navigationDestination(for: MobileRoute.self) { destination($0, splitRoot: wide && workbench != nil && $0 == taskPath.first) }
                 }
             }
             .riffetToastHost()
@@ -97,22 +108,26 @@ struct RiffetRootView: View {
             .tabItem { Image(systemName: "gearshape").environment(\.symbolVariants, .none).accessibilityLabel("设置") }
             .tag(RootTab.settings)
         }
-        .task { consumeNavigation() }
-        .confirmationDialog(deletionTitle, isPresented: $deletionShown, titleVisibility: .visible, presenting: workbench.deletion) { request in
+        .task {
+            consumeNavigation()
+            if workbench == nil || model.landOnNewTask { tabRaw = RootTab.newTask.rawValue; model.landOnNewTask = false }
+        }
+        .environment(\.connectServer, { tabRaw = RootTab.newTask.rawValue })
+        .confirmationDialog(deletionTitle, isPresented: $deletionShown, titleVisibility: .visible, presenting: workbench?.deletion) { request in
             Button(String(localized: "删除", bundle: .riffet), role: .destructive) {
                 deletionConfirmed = true
                 Task {
-                    await workbench.confirmDeletion(request)
-                    if let failure = request.error { RiffetToastCenter.shared.error(failure); workbench.deletion = nil }
-                    else if workbench.deletion === request { deletionConfirmed = false; deletionShown = true }
+                    await workbench?.confirmDeletion(request)
+                    if let failure = request.error { RiffetToastCenter.shared.error(failure); workbench?.deletion = nil }
+                    else if workbench?.deletion === request { deletionConfirmed = false; deletionShown = true }
                 }
             }
         } message: { request in
             Text(deletionSummary(request))
         }
-        .onChange(of: workbench.deletion?.id) { _, id in deletionConfirmed = false; deletionShown = id != nil }
-        .onChange(of: deletionShown) { _, shown in if !shown && !deletionConfirmed { workbench.deletion = nil } }
-        .onChange(of: workbench.removal) { _, removal in
+        .onChange(of: workbench?.deletion?.id) { _, id in deletionConfirmed = false; deletionShown = id != nil }
+        .onChange(of: deletionShown) { _, shown in if !shown && !deletionConfirmed { workbench?.deletion = nil } }
+        .onChange(of: workbench?.removal) { _, removal in
             guard let ids = removal?.ids else { return }
             let gone: (MobileRoute) -> Bool = { if case let .session(id, _) = $0 { ids.contains(id) } else { false } }
             newPath.removeAll(where: gone)
@@ -124,14 +139,14 @@ struct RiffetRootView: View {
         .onChange(of: model.pendingHome) { _, _ in consumeNavigation() }
         // An operation's failure is a toast; a conversation that could not open says so on its own page
         // (`presentsOperationError` leaves that one to it).
-        .onChange(of: workbench.error) { _, error in
+        .onChange(of: workbench?.error) { _, error in
             guard let error, presentsOperationError else { return }
             RiffetToastCenter.shared.error(error)
-            workbench.error = nil
+            workbench?.error = nil
         }
     }
     private var deletionTitle: String {
-        guard let session = workbench.deletion?.session else { return "" }
+        guard let session = workbench?.deletion?.session else { return "" }
         let name = session.title.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.title
         return String(localized: "删除会话「\(name)」？", bundle: .riffet)
     }
@@ -143,8 +158,12 @@ struct RiffetRootView: View {
         if effects.schedules > 0 { parts.append(String(localized: "\(Int(effects.schedules)) 个定时计划继续运行。", bundle: .riffet)) }
         return parts.joined(separator: " ")
     }
-    private var taskList: some View {
-        SessionHomeView(workbench: workbench, scrollToTop: tasksScrollTop, openSessionID: openTaskID) { openTask($0) }
+    @ViewBuilder private var taskList: some View {
+        if let workbench {
+            SessionHomeView(workbench: workbench, scrollToTop: tasksScrollTop, openSessionID: openTaskID) { openTask($0) }
+        } else {
+            NeedsServerView().navigationTitle(RootTab.tasks.title).navigationBarTitleDisplayMode(.inline)
+        }
     }
     /// On a wide window the detail column swaps in place; a narrow one pushes.
     private func openTask(_ route: MobileRoute) {
@@ -158,10 +177,10 @@ struct RiffetRootView: View {
     @ViewBuilder private func destination(_ route: MobileRoute, splitRoot: Bool = false) -> some View {
         switch route {
         case let .session(id, attention):
-            ConversationView(workbench: workbench, sessionID: id, focusApproval: attention).id(id)
+            if let workbench { ConversationView(workbench: workbench, sessionID: id, focusApproval: attention).id(id)
                 .navigationBarBackButtonHidden(splitRoot)
                 // The tab bar leaves a phone's conversation; a wide window keeps its tabs in reach.
-                .background(TabBarVisibility(hidden: !wide))
+                .background(TabBarVisibility(hidden: !wide)) }
         }
     }
     private var stackTop: MobileRoute? {
@@ -173,7 +192,7 @@ struct RiffetRootView: View {
         }
     }
     private var presentsOperationError: Bool {
-        guard workbench.error != nil else { return false }
+        guard let workbench, workbench.error != nil else { return false }
         // Only the current tab's stack top can suppress the toast (its
         // conversation is being replaced anyway); another tab's leftover
         // destination must not hide an error from the page in front.
@@ -183,6 +202,7 @@ struct RiffetRootView: View {
         return true
     }
     private func consumeNavigation() {
+        guard let workbench else { return }
         if model.pendingHome { tabRaw = RootTab.tasks.rawValue; taskPath = []; model.pendingHome = false }
         if let id = model.pendingSessionID {
             // The assistant's conversation is its tab, not a page of 任务.

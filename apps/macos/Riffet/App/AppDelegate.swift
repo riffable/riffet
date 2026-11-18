@@ -34,7 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             AppModel.shared.host.foreground = true
             PluginsStore.shared.appBecameActive()
-            Task { await AppModel.shared.checkService() }
+            Task {
+                await AppModel.shared.checkService()
+                await AppModel.shared.redetectLocalServer()
+            }
         }
     }
 

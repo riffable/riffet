@@ -230,7 +230,7 @@ private fun sectionSearchTarget(id: String?): SettingsSearchTarget? {
 
 /** Material supporting labels or Cupertino trailing values, with the same destination. */
 @Composable
-internal fun SettingsNavigationRow(title: String, summary: String, icon: ImageVector? = null, onClick: () -> Unit) {
+internal fun SettingsNavigationRow(title: String, summary: String, icon: ImageVector? = null, muted: Boolean = false, onClick: () -> Unit) {
     val style = LocalInterfaceStyle.current
     val metrics = style.metrics
     val colors = LocalRiffetColors.current
@@ -248,10 +248,12 @@ internal fun SettingsNavigationRow(title: String, summary: String, icon: ImageVe
                 (measurer.measure(title, textStyle, maxLines = 1).size.width +
                     measurer.measure(summary, textStyle, maxLines = 1).size.width).toDp()
             }
-            val below = summary.isNotEmpty() && needed > maxWidth - leadingInset - metrics.pageInset - metrics.controlHeight
+            val below = !muted && summary.isNotEmpty() && needed > maxWidth - leadingInset - metrics.pageInset - metrics.controlHeight
             riffet.ui.design.GroupRow(
                 title = title, subtitle = summary.takeIf { below },
-                value = summary.takeIf { it.isNotEmpty() && !below },
+                value = summary.takeIf { it.isNotEmpty() && !below && !muted },
+                // A server-backed row while unconnected: the state reads quieter than a value.
+                trailing = if (muted && summary.isNotEmpty()) ({ Text(summary, style = textStyle, color = colors.fg4, maxLines = 1) }) else null,
                 leading = leading, chevron = true, onClick = onClick, modifier = Modifier.settingsSearchAnchor(title),
             )
         }
@@ -387,7 +389,7 @@ private fun appIconLabel(value: AppIcon): String = stringResource(
 )
 
 @Composable
-private fun LanguageSection() {
+internal fun LanguageSection() {
     val current = AppLanguages.current
     SettingsGroup(stringResource(Res.string.settings_language)) {
         Column(Modifier.fillMaxWidth().selectableGroup()) {
@@ -407,7 +409,7 @@ private fun LanguageSection() {
 }
 
 @Composable
-private fun TypographySection() {
+internal fun TypographySection() {
     val metrics = LocalInterfaceStyle.current.metrics
     val display = DisplaySettings.shared
     SettingsGroup(title = stringResource(Res.string.settings_preview)) {
@@ -468,7 +470,7 @@ private fun AppIconTile(icon: AppIcon, size: Dp) {
  * card left each too small to tell apart, so the choice is a list with the colour named beside it.
  */
 @Composable
-private fun AppIconPicker() {
+internal fun AppIconPicker() {
     var current by remember { mutableStateOf(currentAppIcon()) }
     var open by remember { mutableStateOf(false) }
     Box {
@@ -516,7 +518,7 @@ private fun FeatureSwitch(feature: NativeFeature, title: String, description: St
 }
 
 @Composable
-private fun NotificationsSection() {
+internal fun NotificationsSection() {
     val access = rememberNotificationAccess()
     SettingsGroup(stringResource(Res.string.settings_notifications)) {
         FeatureSwitch(NativeFeature.ALERTS, stringResource(Res.string.settings_session_alerts), stringResource(Res.string.settings_session_alerts_desc))
@@ -617,7 +619,7 @@ private fun InteractionSection(controller: SettingsController) {
 
 /** Which tab a launch opens; this device's choice, like the rest of what is stored locally. */
 @Composable
-private fun LaunchTabSection() {
+internal fun LaunchTabSection() {
     val display = DisplaySettings.shared
     val title = stringResource(Res.string.settings_launch_tab)
     SettingsGroup("") {
@@ -636,7 +638,7 @@ private fun LaunchTabSection() {
 }
 
 @Composable
-private fun MotionSection() {
+internal fun MotionSection() {
     val display = DisplaySettings.shared
     val title = stringResource(Res.string.settings_page_animation)
     SettingsGroup(title) {
@@ -659,7 +661,7 @@ private fun MotionSection() {
 }
 
 @Composable
-private fun GesturesSection() {
+internal fun GesturesSection() {
     SettingsGroup(stringResource(Res.string.settings_gestures)) {
         FeatureSwitch(NativeFeature.SWIPE_BACK, stringResource(Res.string.settings_swipe_back))
         FeatureSwitch(NativeFeature.PREDICTIVE_BACK, stringResource(Res.string.settings_predictive_back))
@@ -951,7 +953,7 @@ private fun FilesSettingsSection(controller: SettingsController) {
 }
 
 @Composable
-private fun AppAboutSection() {
+internal fun AppAboutSection() {
     val info = remember { appBuildInfo() }
     SettingsGroup("Riffet") {
         SettingsValueRow(stringResource(Res.string.settings_app_version), info.version)

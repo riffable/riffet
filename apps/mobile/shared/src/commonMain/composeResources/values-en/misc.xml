@@ -308,7 +308,6 @@
 
     <!-- App shell -->
     <string name="app_back">Back</string>
-    <string name="app_connect_pairing">Connect and pair</string>
     <string name="app_operation_failed">Operation failed</string>
     <string name="composer_check_status">Check status</string>
     <string name="composer_continue">Continue conversation</string>

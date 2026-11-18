@@ -419,7 +419,7 @@ struct WindowBackdrop: NSViewRepresentable {
 
 /// A labelled button for dialogs and cards: primary is solid, secondary is a quiet outline.
 struct SolidButtonStyle: ButtonStyle {
-    enum Kind { case primary, secondary, danger }
+    enum Kind { case primary, secondary, danger, quiet }
     var kind: Kind = .secondary
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
@@ -442,6 +442,7 @@ struct SolidButtonStyle: ButtonStyle {
         case .primary: palette.primaryFg
         case .secondary: palette.fg
         case .danger: .white
+        case .quiet: palette.fg2
         }
     }
 
@@ -450,6 +451,7 @@ struct SolidButtonStyle: ButtonStyle {
         case .primary: palette.primary
         case .secondary: palette.bgElevated
         case .danger: palette.danger
+        case .quiet: .clear
         }
     }
 }

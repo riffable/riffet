@@ -469,7 +469,9 @@ fun ProjectHome(
                     label = "homeContent",
                 ) { empty ->
                     if (empty) {
-                        HomeEmptyState(
+                        // Reading the projects (or failing to) keeps its own state; once they are known the
+                        // steps still missing sit in the composer's place.
+                        if (!list.loaded || list.error != null) HomeEmptyState(
                             loaded = list.loaded,
                             error = list.error,
                             canAdd = api != null,
@@ -479,6 +481,16 @@ fun ProjectHome(
                             },
                             onRefresh = { store.refresh() },
                             contentPadding = contentInsets,
+                        ) else riffet.ui.onboarding.HomeSetupPage(
+                            api = api,
+                            projects = list.projects,
+                            contentPadding = contentInsets,
+                            onSelectProject = { picked -> onSelectProject(picked); onChatChange(false) },
+                            onAddDirectory = if (api != null) ({
+                                bindError = null
+                                pickerOpen = true
+                            }) else null,
+                            onSkipProject = if (chatProject != null) ({ onChatChange(true) }) else null,
                         )
                     } else {
                         val (shownChat, shownTarget) = last[0]!!
@@ -794,7 +806,7 @@ private fun HomeToolCard(icon: ImageVector, title: String, onClick: () -> Unit, 
  * none of it recomposes.
  */
 @Composable
-private fun HomeBands(
+internal fun HomeBands(
     viewport: IntState,
     verticalPadding: Dp,
     mark: @Composable () -> Unit,

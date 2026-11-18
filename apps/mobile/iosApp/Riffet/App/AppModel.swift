@@ -22,6 +22,11 @@ final class AppModel {
     var pendingPrompt: String?
     /// The task list, from the summary Live Activity.
     var pendingHome = false
+    /// The first-launch pages (OnboardingView.swift) are showing: decided once at start, never for a device that has a pairing.
+    var onboarding = false
+    /// Leaving the first-launch pages lands on 新会话, whatever tab the last launch left selected.
+    var landOnNewTask = false
+    static let onboardingKey = "riffet.ios.onboarding.completed"
     private var started = false
     /// Network reachability: a path that becomes usable again redials and re-reads at once instead
     /// of waiting out the stream's or the list poll's backoff.
@@ -55,7 +60,16 @@ final class AppModel {
                 install(store: store, url: url)
             }
             await refreshPairedServers()
+            if !UserDefaults.standard.bool(forKey: Self.onboardingKey) {
+                // An upgrade or a restored pairing never sees the welcome, now or after forgetting the server.
+                if workbench == nil && pairedServers.isEmpty { onboarding = true } else { UserDefaults.standard.set(true, forKey: Self.onboardingKey) }
+            }
         } catch { self.error = error.riffetMessage }
+    }
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        landOnNewTask = true
+        onboarding = false
     }
     func pair(address: String, code: String, name: String? = nil, alternates: [String] = []) async -> Bool {
         guard !connectionBusy else { return false }

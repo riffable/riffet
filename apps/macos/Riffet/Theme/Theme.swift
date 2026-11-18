@@ -410,6 +410,10 @@ enum RiffetFont {
     static var label: Font { text(RiffetTextSize.sm) }
     static var caption: Font { text(RiffetTextSize.xs) }
     static var code: Font { mono(12.5) }
+    /// A first-launch page's title: the largest step of the text scale, as the new-session greeting.
+    static var pageTitle: Font { text(RiffetTextSize.x2xl, weight: .medium) }
+    /// The brand name on the welcome page, the one place `.semibold` is for.
+    static var brandTitle: Font { .riffet(size: S(32), weight: .semibold) } // design-rules: allow the wordmark is drawn larger than any text step
     static var codeSmall: Font { mono(RiffetTextSize.xs.size) }
 }
 

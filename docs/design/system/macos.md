@@ -214,7 +214,7 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 |---|---|---|
 | `Button` `primary` | `SolidButtonStyle(kind: .primary)` | 字号 12.5、semibold，改为 `.label`、500 |
 | `Button` `secondary` | `SolidButtonStyle(kind: .secondary)` | 是 `bgElevated` 加描边，改为 7% 墨色浅底、无描边（[决定](../DECISIONS.md) 2026-11-14） |
-| `Button` `ghost` / `quiet` | `SolidButtonStyle(kind: .quiet)`（新增）；行内用 `HoverRowStyle` | 弹窗的取消按钮现在用 `.secondary` |
+| `Button` `ghost` / `quiet` | `SolidButtonStyle(kind: .quiet)`；行内用 `HoverRowStyle` | 弹窗的取消按钮现在用 `.secondary` |
 | `Button` `danger` | `SolidButtonStyle(kind: .danger)` | 是红色实心白字，改为红色浅底红字 |
 | 图标按钮 | `IconButtonStyle` | 默认 26，改为 28 |
 | 胶囊 | `ChipButtonStyle`、`ChipLabel` | |
@@ -232,6 +232,9 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 | `Spinner` | `Spinner` | |
 | `PageScaffold` | `PageScaffold` | 新增 |
 | `SettingsGroup` / `SettingsRow` | `.riffetForm()`、`SettingsRow` | |
+| `EmptyState`（需要连接服务器） | `NeedsServerView`（`Features/Onboarding/`），页面与设置窗格共用 | |
+| 引导页（[模式](patterns.md) §1.5） | `OnboardingColumn`、`OnboardingPrimaryButton`、`ChoiceCard`、`AgentInstallList` | 只在首次启动用；设计规范页还没有样张 |
+| 设置卡片 | `SetupCard`（输入框的外形，`Radius.floating` 与 `.float` 阴影） | 设计规范页还没有样张 |
 
 新组件按 [架构](architecture.md)「改动的顺序」：先写规范，再实现，再迁移调用点，最后删掉旧写法。
 
@@ -254,7 +257,7 @@ Mac 的规范分两处看，内容不重复：
   - 只放组件和它们的状态（默认、悬停、按下、选中、禁用、加载），每个组件旁标出读到的字号、圆角、高度；
   - 顶部三个切换：风格、明暗、字号缩放；
   - 原则和基础不画，链接到文档；
-  - 随第 9 节的迁移逐节加入：每迁完一种组件，加一节。
+  - 随第 9 节的迁移逐节加入：每迁完一种组件，加一节。引导页的栏（`OnboardingColumn`）、主按钮、单选卡片和设置卡片的三步状态（空环、当前环、转圈、勾）是新增的可复用部件，加页时画在这一节；页尚未建，部件已在 §6 登记。
 
 新增一种风格：在 `packages/contracts/src/interface-styles.ts` 加一条，运行 `pnpm gen:styles`，Web 页面会自动出现它的数值、配方和缩样。再在 `apps/web/src/app/design/mac/notes.ts` 的 `useStyleNote` 里补上名称、一句说明、规则文档和规则要点；没有补的风格显示 id 和数值。新增配方取值时，在同一个文件的 `useFamilyNotes` 里补上取值的名称，并在 `StyleMiniature.tsx` 里画出它；没有画的取值按同类里最朴素的画法显示。
 

@@ -30,8 +30,8 @@ struct RiffetApp: App {
         WindowGroup {
             Group {
                 if model.starting { LaunchSplash() }
-                else if let workbench = model.workbench { RiffetRootView(workbench: workbench).id(ObjectIdentifier(workbench)) }
-                else { NavigationStack { ConnectionView(model: model) } }
+                else if model.onboarding { OnboardingView(model: model) }
+                else { RiffetRootView(workbench: model.workbench).id(model.workbench.map { ObjectIdentifier($0) }) }
             }
             .environment(model)
             .environment(themeStore)

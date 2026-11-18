@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- First launch and the unconnected main UI -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_start">Get started</string>
+    <string name="onboarding_brand">Riffet</string>
+    <string name="onboarding_tagline">View and take over the coding agents on your computer, from any device</string>
+    <string name="onboarding_connect_title">Connect your computer</string>
+    <string name="onboarding_connect_hint">The QR code is under Devices in Riffet settings on your computer</string>
+    <string name="onboarding_scan">Scan to pair</string>
+    <string name="onboarding_enter_address">Enter address</string>
+    <string name="onboarding_connect">Connect</string>
+    <string name="onboarding_notify_title">Get notified when needed</string>
+    <string name="onboarding_notify_hint">When an agent waits for approval, asks a question or finishes</string>
+    <string name="onboarding_notify_allow">Allow notifications</string>
+    <string name="onboarding_notify_later">Not now</string>
+    <string name="onboarding_sample_title">kiln · Run command</string>
+    <string name="onboarding_sample_body">pnpm install is waiting for confirmation</string>
+    <string name="setup_server">Server</string>
+    <string name="setup_agent">Agent</string>
+    <string name="setup_project">Project</string>
+    <string name="setup_no_agent">No available agent found</string>
+    <string name="setup_project_hint">The agent reads and writes files in the chosen directory</string>
+    <string name="setup_pick_project">Choose project</string>
+    <string name="needs_server_title">Server connection required</string>
+    <string name="needs_server_state">Not connected</string>
+</resources>

@@ -277,8 +277,8 @@ enum SidebarFilterMenu {
 /// The sidebar footer's server status and personal menu.
 @MainActor
 enum SidebarFooterSupport {
-    /// The list is a saved copy or failed to load.
-    static func unhealthy(_ workbench: Workbench) -> Bool { workbench.list.cachedAt != nil || workbench.list.error != nil }
+    /// The list is a saved copy or failed to load. A window without a server has no list to be unhealthy.
+    static func unhealthy(_ workbench: Workbench) -> Bool { workbench.connected && workbench.list.cachedAt != nil || workbench.list.error != nil }
 
     static func hostName(_ workbench: Workbench) -> String {
         workbench.local ? String(localized: "本机") : (workbench.baseURL.host() ?? String(localized: "远程"))
@@ -357,7 +357,7 @@ enum SidebarFooterSupport {
             settings.toolTip = notice.detail
         }
         menu.addItem(settings)
-        if !workbench.local || unhealthy(workbench) {
+        if workbench.connected, !workbench.local || unhealthy(workbench) {
             menu.addItem(.separator())
             let connection = NSMenu()
             connection.autoenablesItems = false

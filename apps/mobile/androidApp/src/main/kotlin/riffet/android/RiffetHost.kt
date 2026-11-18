@@ -103,6 +103,10 @@ object RiffetHost {
     private val _live = MutableStateFlow(LiveStatus.IDLE)
     val live: StateFlow<LiveStatus> = _live.asStateFlow()
 
+    /** Whether any server is saved on this device; read with the restore, so the first frame already knows. */
+    var hasSavedPairing = true
+        private set
+
     private var storeScope: CoroutineScope? = null
 
     /** Saved replies (收藏) for the open transcript and the sidebar's bookmarks; null until installed. */
@@ -380,6 +384,7 @@ object RiffetHost {
         if (restoreStarted && override == null) return
         restoreStarted = true
         scope.launch {
+            hasSavedPairing = runCatching { connection.pairedServers().isNotEmpty() }.getOrDefault(true)
             try {
                 val legacyServer = tokens.loadServer()
                 val legacyOrigin = tokens.loadOrigin() ?: legacyServer?.let(::serverOrigin)

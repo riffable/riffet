@@ -155,6 +155,11 @@ Kotlin 接口要桥接完成回调，`DeviceTokenStore` 因此由 Kotlin 的 `Se
 | 没有运行中的服务，`~/Library/LaunchAgents/local.riffet.plist` 存在 | 不注册第二个；提示「登录服务未运行」，提供「启动」（`launchctl kickstart`）与「改由 App 托管」 |
 | 没有运行中的服务，也没有登录服务 | 引导用户开启「由 Riffet.app 托管」 |
 
+主窗口在任何一种现场下都是真正的工作台（`AppModel.shell`），服务器的有无只决定它里面的内容：没有服务器时侧栏、新会话页、设置照常显示，
+新会话页在输入框的位置放设置卡片（`SetupCard`：服务器、Agent、项目），其余需要服务器的页面显示 `NeedsServerView`。
+上表里的「提示」「引导」都由设置卡片承担；只有这台 Mac 从未走过引导、没有保存的服务器、也没有在用的本机服务时，才先出现全屏引导
+（`OnboardingView`，本机记一项 `riffet.onboarding.completed`，不写进服务器设置）。
+
 **同一个状态目录只能有一个托管方。** 两个 `KeepAlive` 的 LaunchAgent 抢同一把 `server.lock`，结果是一个不停被
 launchd 拉起又退出。「改由 App 托管」先做 `riffet service uninstall` 的等价动作（`bootout` 加删 plist），再注册
 App 的 agent；反向切换同理。

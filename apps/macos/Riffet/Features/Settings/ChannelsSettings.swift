@@ -26,10 +26,12 @@ struct ChannelsSettings: View {
     @State private var pending: Pending?
 
     var body: some View {
+        if app.workbench == nil { NeedsServerView() } else { form }
+    }
+
+    private var form: some View {
         Form {
-            if app.workbench == nil {
-                Section { SettingsHint("连接服务器后可修改。") }
-            } else if let state = model.state {
+            if let state = model.state {
                 if let id = detailId, let account = state.accounts.first(where: { $0.id == id }) {
                     if showCard { card(account) } else { detail(account, state) }
                 } else {

@@ -20,6 +20,8 @@ struct NewTaskView: View {
     @State private var directories = false
     @AppStorage(NewSessionTab.storageKey) private var tabRaw = NewSessionTab.task.rawValue
     @State private var promptExpanded = false
+    /// 跳过 on the setup card's project step: the composer returns without a project.
+    @State private var setupSkipped = false
     @State private var options: SessionOptionFocus?
     @State private var files = false
     @State private var photos = false
@@ -135,7 +137,7 @@ struct NewTaskView: View {
                                 }
                                 .padding(.horizontal, -RiffetMetrics.pageInset)
                             }
-                            card.riffetTypeBoundary()
+                            cardSlot.riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
                         VStack(alignment: .leading, spacing: 0) {
@@ -268,6 +270,17 @@ struct NewTaskView: View {
         }
     }
 
+    /// The setup card stands in the composer's place while there is no Agent or no project (patterns.md §1.5).
+    private var setupShown: Bool { assistant == nil && !chat && ConnectedSetupCard.needed(workbench, skipped: setupSkipped) }
+    @ViewBuilder private var cardSlot: some View {
+        if setupShown {
+            ConnectedSetupCard(workbench: workbench, pickProject: { writing = false; if workbench.projects.isEmpty { directories = true } else { projects = true } },
+                               skip: { withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { setupSkipped = true } })
+        } else {
+            card
+        }
+    }
+
     /// Input, attachments and the send row in one card.
     private var card: some View {
         @Bindable var draft = draft
@@ -353,7 +366,7 @@ struct NewTaskView: View {
                                   selection: Binding(get: { chatMode }, set: { draft.mode = $0 }))
                         .padding(.horizontal, -RiffetMetrics.pageInset).disabled(locked).transition(.opacity)
                 }
-            } else if assistant == nil {
+            } else if assistant == nil, !setupShown {
                 projectLine.transition(.opacity)
             }
         }

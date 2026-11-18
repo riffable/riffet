@@ -50,9 +50,12 @@ enum ServiceAlert: Equatable {
 final class AppModel {
     static let shared = AppModel()
 
+    /// Where the connection stands. The window shows its shell in every phase but `launching` (and
+    /// `connecting` while a known server is being restored with no shell yet); the phase only decides
+    /// what the shell's server-backed parts say.
     enum Phase: Equatable {
         case launching
-        /// No local server is running; the app offers to start one.
+        /// No local server is running; the new-session page offers to start one.
         case needsServer
         case connecting
         case failed(String)
@@ -64,7 +67,11 @@ final class AppModel {
     let theme = ThemeStore.shared
 
     private(set) var phase: Phase = .launching
-    private(set) var workbench: Workbench?
+    /// The main window's shell: the sidebar, pages and new-session page over the current connection.
+    /// It exists from the first moment the window can draw, with or without a server (`Workbench.connected`).
+    private(set) var shell: Workbench?
+    /// The shell once a server stands behind it; nil before that. What needs a server reads this.
+    var workbench: Workbench? { shell?.connected == true ? shell : nil }
     private(set) var target = ConnectionTarget.load()
     /// The servers paired by address; the Mac's own is not among them.
     private(set) var servers = SavedServers.load()
@@ -73,6 +80,13 @@ final class AppModel {
     @ObservationIgnored private var provisional: Workbench?
     /// Bumped by every connection attempt, so a slower earlier one cannot install over it.
     @ObservationIgnored private var connectAttempt = 0
+
+    /// Whether this Mac has finished or skipped the first-launch guide (a local flag; nothing is sent to a server).
+    static let onboardingKey = "riffet.onboarding.completed"
+    /// The first-launch guide is up. Decided once per launch, at the end of `start()`.
+    private(set) var onboarding = false
+    /// Bumped by the shared empty state's 「连接」; the setup card highlights itself for each.
+    private(set) var setupHighlight = 0
 
     /// Set while the local server is not running or runs another version; the window shows it as a
     /// banner (see `ServiceAlertBanner`) instead of sending the reader back to the setup screen.
@@ -104,11 +118,53 @@ final class AppModel {
             // token are checked behind it (cold start budget: < 500 ms to the cached list).
             if let url = server.recordedBaseURL, host.hasToken(baseUrl: Self.base(url)) {
                 show(base: Self.base(url), local: true)
-                provisional = workbench
+                provisional = shell
             }
             await connectLocal()
         case let .remote(url): await connect(to: url, local: false)
         }
+        decideOnboarding()
+    }
+
+    /// The guide is for a Mac that has never been set up: not finished before, no paired server, and
+    /// no local server or device token already in use (existing users and upgrades skip it).
+    private func decideOnboarding() {
+        guard !onboardingDecided else { return }
+        onboardingDecided = true
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.onboardingKey), servers.isEmpty, target == .local, workbench == nil,
+              server.state.running == nil, !hasServerFootprint else {
+            if !defaults.bool(forKey: Self.onboardingKey) { defaults.set(true, forKey: Self.onboardingKey) }
+            return
+        }
+        if let url = server.recordedBaseURL, host.hasToken(baseUrl: Self.base(url)) {
+            defaults.set(true, forKey: Self.onboardingKey)
+            return
+        }
+        onboarding = true
+    }
+    @ObservationIgnored private var onboardingDecided = false
+
+    /// Signs that this Mac has run a server before. daemon.json alone is not one: a clean stop deletes it.
+    private var hasServerFootprint: Bool {
+        if server.hasLoginService || server.appAgentStatus != .notRegistered { return true }
+        let files = FileManager.default
+        return ["access-token", "devices.json", "owner.json", "daemon.json"].contains {
+            files.fileExists(atPath: server.stateDirectory.appending(path: $0).path)
+        }
+    }
+
+    /// Ends the guide, finished or skipped, and remembers it on this Mac only.
+    func finishOnboarding() {
+        UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        onboarding = false
+    }
+
+    /// Takes the reader to the new-session page, whose setup card pulses once.
+    func showSetup() {
+        WindowRouter.shared.showMain()
+        shell?.showHome()
+        setupHighlight += 1
     }
 
     func connectLocal() async {
@@ -154,6 +210,15 @@ final class AppModel {
     }
 
     // MARK: Local server health
+
+    /// While no server is connected: a server started elsewhere (`riffet start`) is picked up when the app
+    /// comes to the front, before the setup card's 「启动」 could register a second one.
+    func redetectLocalServer() async {
+        guard target == .local, workbench == nil, phase == .needsServer else { return }
+        if case .starting = server.state { return }
+        await server.refresh()
+        if server.state.running != nil { await connectLocal() }
+    }
 
     /// Looks again at the local server: when the app comes to the front and every half minute, only
     /// while this app talks to its own Mac's server.
@@ -327,16 +392,20 @@ final class AppModel {
         Task { await start() }
     }
 
+    /// Drops the connection; the window keeps its shell, now over an empty store.
     func disconnect() {
         provisional = nil
         stopMonitoring()
         serviceAlert = nil
-        workbench?.close()
-        workbench = nil
+        // Already without a server: the shell stays as it is, so a retry does not reset the window.
+        if let shell, !shell.connected { return }
+        shell?.close()
         theme.detach()
         AppearanceStore.shared.detach()
         PluginsStore.shared.detach()
         host.uninstall()
+        shell = Workbench.detached(host: host)
+        NotificationCenterBridge.shared.attach(to: self)
     }
 
     private func connect(to url: URL, local: Bool) async {
@@ -404,9 +473,9 @@ final class AppModel {
             AppearanceStore.shared.attach(api: api, serverKey: base)
             PluginsStore.shared.attach(api: api, serverKey: base)
         }
-        workbench?.close()
+        shell?.close()
         let next = Workbench(store: store, host: host, baseURL: url, local: local)
-        workbench = next
+        shell = next
         if let sessionId { next.open(sessionId: sessionId) }
         phase = .ready
         if local { startMonitoring() } else { stopMonitoring(); serviceAlert = nil }

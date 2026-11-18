@@ -62,6 +62,8 @@ final class Workbench {
     func text(of blobRef: String) async -> String? { try? await store.activityText(blobRef: blobRef) }
     private(set) var backends: [NativeBackendCatalogEntry] = []
     private(set) var backendError: String?
+    /// The first agent list has been read (or failed); until then "no agent" is not yet an answer.
+    private(set) var backendsLoaded = false
     /// The owner's personal info on this server (docs/OWNER.md); nil until first loaded.
     private(set) var owner: OwnerInfo?
     var ownerAvatarURL: URL? { owner.flatMap { api?.ownerAvatarUrl(owner: $0) }.flatMap(URL.init(string:)) }
@@ -294,6 +296,7 @@ final class Workbench {
         owner = info
     }
     func loadBackends() async {
+        defer { backendsLoaded = true }
         do { backends = try await api?.backends() ?? []; backendError = nil }
         catch { backendError = error.riffetMessage }
     }

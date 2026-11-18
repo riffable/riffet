@@ -106,6 +106,8 @@ fun PairingScreen(
     /** Opened because the server rejected this device's token: say so before anything is tried. */
     revoked: Boolean = false,
     initialAddress: String = "",
+    /** Opens on the scanner (where there is a camera); closing it lands on the form. */
+    startWithScan: Boolean = false,
     operationScope: CoroutineScope? = null,
     connectionOperation: MutableState<String?> = remember { mutableStateOf<String?>(null) },
 ) {
@@ -123,7 +125,7 @@ fun PairingScreen(
     var discovering by remember { mutableStateOf(true) }
     val pairing = connectionOperation.value != null
     var error by remember { mutableStateOf<PairingError?>(if (revoked) PairingError.DeviceRevoked else null) }
-    val pages = remember { PageStack(PairingRoute.Form) }
+    val pages = remember { PageStack(PairingRoute.Form).also { if (startWithScan && scanner.isSupported) it.push(PairingRoute.Scan) } }
 
     PageBackHandler(enabled = pairing || onCancel != null && hostedBack == null) { if (!pairing) onCancel?.invoke() }
     PageLeaveGuard { !pairing }

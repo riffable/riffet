@@ -84,7 +84,12 @@ import riffet.ui.theme.RiffetTheme
  */
 class RiffetActivity : RiffetLocalizedActivity() {
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    /** Set by the onboarding's notification page; called once the system answered. */
+    private var notificationAnswered: (() -> Unit)? = null
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        notificationAnswered?.invoke()
+        notificationAnswered = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -155,6 +160,12 @@ class RiffetActivity : RiffetLocalizedActivity() {
                                 writeScope = RiffetHost.writeScope,
                                 drafts = RiffetHost.drafts,
                                 marks = RiffetHost.marks,
+                                hasSavedPairing = RiffetHost.hasSavedPairing,
+                                requestNotifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { answered ->
+                                    notificationsAsked = true
+                                    notificationAnswered = answered
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else null,
                             )
                         }
                     }

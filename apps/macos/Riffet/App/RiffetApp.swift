@@ -131,19 +131,18 @@ struct RootView: View {
 
     var body: some View {
         WindowContentLayout(minimum: CGSize(width: 760, height: 520)) {
-            switch model.phase {
-            case .ready:
-                if let workbench = model.workbench {
-                    WorkbenchView(workbench: workbench)
-                }
-            case .launching, .connecting:
+            // The window is always the workbench shell; a missing server is said inside it (the
+            // new-session page's setup card, `NeedsServerView`). Only the first launch's guide covers
+            // it, and the splash shows while a known server is restored before any shell exists.
+            if model.onboarding {
+                OnboardingView().transition(.opacity)
+            } else if let shell = model.shell {
+                WorkbenchView(workbench: shell)
+            } else {
                 ConnectingView()
-            case .needsServer:
-                ServerSetupView()
-            case let .failed(message):
-                ConnectionFailedView(message: message)
             }
         }
+        .animation(Motion.expressive, value: model.onboarding)
         .onAppear { WindowRouter.shared.register(openWindow, settings: openSettings) }
     }
 }

@@ -5,6 +5,7 @@ import RiffetKit
 struct HomeView: View {
     @Bindable var workbench: Workbench
     @Environment(\.palette) private var palette
+    @Environment(AppModel.self) private var app
     private var composer: ComposerModel { workbench.pageModels.composers.model(for: workbench.homeDraftKey) }
     /// The wire id of the Agent a new task starts on; empty until the defaults are applied.
     @State private var taskBackend = ""
@@ -212,7 +213,20 @@ struct HomeView: View {
 
     /// The pickers, the composer and what it is waiting for. The docked home keeps its pickers in the
     /// option cards, so the chip row is not drawn; the composer below stays the one call site.
+    /// While a server, an Agent or a project is missing, the setup card stands where the composer will be.
+    private var setup: SetupProgress { SetupProgress(model: app, workbench: workbench) }
+    private var setupIncomplete: Bool { !quickChat && !setup.complete }
+
+    @ViewBuilder
     private func composerSection(_ project: Project?, choices: DirectoryChoices, docked: Bool) -> some View {
+        if setupIncomplete {
+            SetupCard(workbench: workbench, progress: setup).transition(.opacity)
+        } else {
+            composerBlock(project, choices: choices, docked: docked).transition(.opacity)
+        }
+    }
+
+    private func composerBlock(_ project: Project?, choices: DirectoryChoices, docked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if !docked {
                 HStack(spacing: Space.xxs) {
@@ -308,6 +322,7 @@ struct HomeView: View {
                     composerSection(project, choices: choices, docked: docked)
                         .padding(.horizontal, docked ? 32 : 0)
                         .frame(maxWidth: docked ? 744 : .infinity, alignment: .leading)
+                        .animation(Motion.expressive, value: setupIncomplete)
                     tail(project, docked: docked)
                 }
                 .frame(maxWidth: docked ? .infinity : 720)
@@ -334,6 +349,7 @@ struct HomeView: View {
                     .foregroundStyle(palette.fg)
                     .frame(minHeight: S(docked ? 30 : 27))
                     .multilineTextAlignment(.center)
+                    .opacity(setupIncomplete ? 0 : 1)
             }
             .frame(maxWidth: .infinity)
             .frame(height: history ? 0 : nil)
@@ -345,7 +361,7 @@ struct HomeView: View {
                     QuickChatHistory(workbench: workbench)
                         .frame(maxWidth: 720)
                         .padding(.horizontal, Column.gutter)
-                } else {
+                } else if !setupIncomplete {
                     DockedOptions(
                         projects: dockedProjects(choices.projects, selected: choices.selected), selected: choices.selected,
                         choices: choices, hostName: SidebarFooterSupport.hostName(workbench), hostSymbol: workbench.local ? "laptopcomputer" : "network",
@@ -369,7 +385,7 @@ struct HomeView: View {
     /// What the native recipes list under the composer; the docked home has it above.
     private func tail(_ project: Project?, docked: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !docked {
+            if !docked, !setupIncomplete {
                 if quickChat {
                     QuickChatHistory(workbench: workbench)
                 } else {

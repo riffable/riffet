@@ -5426,16 +5426,6 @@
         }
       }
     },
-    "Riffet 可以替你托管服务器：登录后自动运行，关闭窗口后 Agent 继续工作。也可以在终端执行 riffet start。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Riffet can host the server for you: it starts automatically after login and Agents keep working after the window closes. You can also run riffet start in a terminal."
-          }
-        }
-      }
-    },
     "Riffet 文档": {
       "localizations": {
         "en": {
@@ -10819,16 +10809,6 @@
         }
       }
     },
-    "已安装登录服务 local.riffet，但它现在没有运行。启动它即可继续使用。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The login service local.riffet is installed but is not running. Start it to continue."
-          }
-        }
-      }
-    },
     "已完成": {
       "localizations": {
         "en": {
@@ -15313,16 +15293,6 @@
         }
       }
     },
-    "本机的 Riffet 服务器没有运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The Riffet server on this Mac isn't running"
-          }
-        }
-      }
-    },
     "材质": {
       "localizations": {
         "en": {
@@ -17002,16 +16972,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hosted and started by Riffet"
-          }
-        }
-      }
-    },
-    "由 Riffet 托管服务器": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Server managed by Riffet"
           }
         }
       }
@@ -19607,16 +19567,6 @@
         }
       }
     },
-    "这个构建没有内置服务器。在终端执行 riffet start 启动服务器后点「重新检测」。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This build has no built-in server. Run riffet start in the terminal, then click “Check again”."
-          }
-        }
-      }
-    },
     "这个构建没有记录源码目录，无法在 App 内构建。\n": {
       "localizations": {
         "en": {
@@ -19849,26 +19799,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connect to a server…"
-          }
-        }
-      }
-    },
-    "连接服务器后可以查看和管理扩展。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View and manage extensions after connecting to the server."
-          }
-        }
-      }
-    },
-    "连接服务器后可修改。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can be changed after connecting to the server."
           }
         }
       }
@@ -23915,6 +23845,326 @@
           "stringUnit": {
             "state": "translated",
             "value": "Find in conversation"
+          }
+        }
+      }
+    },
+    "需要连接服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to a server"
+          }
+        }
+      }
+    },
+    "在电脑上运行编程 Agent，在任何设备上查看和接手": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run coding Agents on your computer, check in and take over from any device"
+          }
+        }
+      }
+    },
+    "Agent 在哪台电脑上运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which computer runs the Agent"
+          }
+        }
+      }
+    },
+    "之后可以在设置里更改": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can change this later in Settings"
+          }
+        }
+      }
+    },
+    "这台 Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac"
+          }
+        }
+      }
+    },
+    "使用 App 自带的服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the server built into the app"
+          }
+        }
+      }
+    },
+    "其他服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another server"
+          }
+        }
+      }
+    },
+    "需要地址和配对码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs an address and a pairing code"
+          }
+        }
+      }
+    },
+    "正在连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting"
+          }
+        }
+      }
+    },
+    "启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start"
+          }
+        }
+      }
+    },
+    "默认用哪个 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which Agent to use by default"
+          }
+        }
+      }
+    },
+    "新建会话时可以换": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can switch it when starting a session"
+          }
+        }
+      }
+    },
+    "还没有可用的 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Agent is available yet"
+          }
+        }
+      }
+    },
+    "Riffet 调用这台 Mac 上安装的 CLI，装好任意一个即可": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riffet runs the CLIs installed on this Mac. Install any one of them."
+          }
+        }
+      }
+    },
+    "Riffet 调用服务器上安装的 CLI，装好任意一个即可": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riffet runs the CLIs installed on the server. Install any one of them."
+          }
+        }
+      }
+    },
+    "可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available"
+          }
+        }
+      }
+    },
+    "未安装": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not installed"
+          }
+        }
+      }
+    },
+    "从哪个目录开始": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which directory to start in"
+          }
+        }
+      }
+    },
+    "Agent 会在所选目录里读写文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Agent reads and writes files in the chosen directory"
+          }
+        }
+      }
+    },
+    "选择目录…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Directory…"
+          }
+        }
+      }
+    },
+    "先不选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not now"
+          }
+        }
+      }
+    },
+    "在手机上接着看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick up on your phone"
+          }
+        }
+      }
+    },
+    "用手机上的 Riffet 扫码，离开电脑也能处理审批": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan with Riffet on your phone to handle approvals away from your computer"
+          }
+        }
+      }
+    },
+    "在「技能与工具」里可以让 Agent 操作这台手机": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can let Agents operate this phone in Skills and Tools"
+          }
+        }
+      }
+    },
+    "%@ 已连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ connected"
+          }
+        }
+      }
+    },
+    "等待扫码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for scan"
+          }
+        }
+      }
+    },
+    "以后再说": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      }
+    },
+    "无项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No project"
+          }
+        }
+      }
+    },
+    "正在检查 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking Agents"
+          }
+        }
+      }
+    },
+    "这台 Mac 上的服务器没有运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server on this Mac is not running"
+          }
+        }
+      }
+    },
+    "连接其他服务器…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to Another Server…"
+          }
+        }
+      }
+    },
+    "没有找到可用的 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No available Agent found"
           }
         }
       }

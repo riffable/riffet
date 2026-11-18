@@ -13,7 +13,7 @@ struct ProfileSettings: View {
         if let workbench = model.workbench {
             ProfileForm(workbench: workbench)
         } else {
-            Form { Section { SettingsHint("连接服务器后可修改。") } }.riffetForm()
+            NeedsServerView()
         }
     }
 }

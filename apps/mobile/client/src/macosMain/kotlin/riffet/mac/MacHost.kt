@@ -153,7 +153,11 @@ class MacHost(private val secrets: SecretStore) {
     var marks: SessionMarks? = null
         private set
 
-    val api: RiffetApi? get() = connection?.apiOrNull()
+    /** True while the installed store belongs to no server: it is empty, never polled, and has no [api]. */
+    var detached: Boolean = false
+        private set
+
+    val api: RiffetApi? get() = if (detached) null else connection?.apiOrNull()
     var terminalAppearance: TerminalAppearance? = null
         set(value) { field = value; api?.terminalAppearance = value }
 
@@ -161,6 +165,7 @@ class MacHost(private val secrets: SecretStore) {
         set(value) {
             if (field == value) return
             field = value
+            if (detached) return
             if (value) {
                 _store.value?.wake()
                 windows.toList().forEach { it.wake() }
@@ -172,6 +177,7 @@ class MacHost(private val secrets: SecretStore) {
 
     /** Starts writing every open transcript to the device, the main store's and each window's. */
     fun flushAll() {
+        if (detached) return
         _store.value?.flush()
         windows.toList().forEach { it.store.flush() }
     }
@@ -194,6 +200,26 @@ class MacHost(private val secrets: SecretStore) {
         } finally {
             pairing.close()
         }
+    }
+
+    /**
+     * An empty store that belongs to no server, for the window that shows before one is connected.
+     * It is never refreshed or polled and nothing is read or written for it; [api] stays null.
+     * [install] replaces it.
+     */
+    fun installDetached(): SessionStore {
+        uninstall()
+        val url = "http://localhost:9"
+        val next = RiffetConnection(ServerTokenStore(secrets, url))
+        connection = next
+        val api = next.connect(url)
+        val child = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + failures)
+        storeScope = child
+        val created = SessionStore(api = api, scope = child)
+        presenter = TimelinePresenter(created, child, withOutputs = true)
+        detached = true
+        _store.value = created
+        return created
     }
 
     /** A fresh connection and store for [baseUrl], replacing whatever was installed. */
@@ -270,6 +296,7 @@ class MacHost(private val secrets: SecretStore) {
         writeAfterClose(finalWrites, previousTimelines)
         connection?.close()
         connection = null
+        detached = false
     }
 
     /**
@@ -289,6 +316,7 @@ class MacHost(private val secrets: SecretStore) {
 
     /** Asks the poll loop for a read now instead of at the end of its interval. */
     fun poke() {
+        if (detached) return
         listsFeed?.kick()
         pokes.trySend(Unit)
     }

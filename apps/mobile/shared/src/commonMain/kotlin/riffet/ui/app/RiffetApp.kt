@@ -14,8 +14,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -115,7 +113,15 @@ import riffet.ui.sessionlist.waitingCount
 import riffet.ui.sessionlist.visibleGroups
 import riffet.ui.settings.OwnerController
 import riffet.ui.settings.SettingsScreen
-import riffet.ui.settings.PairedServersSection
+import riffet.ui.settings.LocalSettingsScreen
+import riffet.ui.onboarding.LocalSetupActions
+import riffet.ui.onboarding.OnboardingFlow
+import riffet.ui.onboarding.OnboardingPage
+import riffet.ui.onboarding.SetupActions
+import riffet.shared.NotificationAccess
+import riffet.shared.rememberNotificationAccess
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableIntStateOf
 import riffet.ui.composer.ComposerDrafts
 import riffet.ui.composer.LocalComposerDrafts
 import riffet.ui.stats.StatsScreen
@@ -196,6 +202,8 @@ class RiffetNavigation {
             else if ((pages.current as? RiffetPage.Terminal)?.target != value) pages.push(RiffetPage.Terminal(value))
         }
     internal var pairingAddress: String? by mutableStateOf(null)
+    /** The pairing page opens on the scanner. */
+    internal var pairingScan: Boolean by mutableStateOf(false)
     internal val connectionOperation = mutableStateOf<String?>(null)
 
     fun resetForServer(skipRestore: Boolean = false) {
@@ -206,6 +214,7 @@ class RiffetNavigation {
         scope = null
         fileTarget = null
         pairingAddress = null
+        pairingScan = false
         restored = skipRestore
         requested = null
         quickChatRequest = null
@@ -229,6 +238,13 @@ class RiffetNavigation {
     private var fallbackBack: (() -> Unit)? = null
 
     val canGoBack: Boolean get() = backDispatcher.canGoBack || pages.canPop || detailsOpen || drawerOpen || session != null
+
+    /** Opens the pairing page, with [address] filled in or straight on the scanner. */
+    internal fun requestPairing(address: String? = null, scan: Boolean = false) {
+        pairingAddress = address
+        pairingScan = scan
+        pairingRequested = true
+    }
 
     fun request(sessionId: String, sequence: Long? = null) { requested = SessionRequest(sessionId, sequence) }
 
@@ -309,7 +325,9 @@ class RiffetNavigation {
 /**
  * The root composable.
  *
- * `store == null` means no working connection exists yet, so the pairing screen is shown. Otherwise
+ * `store == null` means no working connection exists yet: the first launch shows the full-screen
+ * onboarding, and otherwise the tabs run with the server-backed pages replaced by the setup island and the
+ * empty state ([UnconnectedWorkbench]). Otherwise
  * the workbench is always composed — the 新会话 / 任务 / 设置 tabs, with the open session over them —
  * and re-pairing, statistics, downloads and the project panels are drawn over it. Keeping the workbench mounted
  * under them is what lets "back" from Git land on the same scroll position and the same draft.
@@ -326,6 +344,10 @@ fun RiffetApp(
     drafts: ComposerDrafts? = null,
     /** Saved replies (收藏); the Android host makes one, other hosts may leave it null. */
     marks: SessionMarks? = null,
+    /** Asks the system for notifications and calls back once it answered; null where there is nothing to ask. */
+    requestNotifications: ((() -> Unit) -> Unit)? = null,
+    /** Whether any server was ever paired on this device, read before the first frame; true keeps the first-launch onboarding away. */
+    hasSavedPairing: Boolean = true,
 ) {
     val preferences = remember { createAppPreferences() }
     var themeMode by remember { mutableStateOf(preferences.themeMode()) }
@@ -347,14 +369,45 @@ fun RiffetApp(
     val serverPreferences = remember(preferences, origin) { serverPreferences(preferences, origin) }
     val composerDraftsRoot = drafts ?: remember(preferences) { ComposerDrafts(preferences) }
     val composerDrafts = remember(composerDraftsRoot, origin) { composerDraftsRoot.forServer(origin) }
-    val paired: (RiffetApi) -> Unit = { next ->
-        navigation.resetForServer()
-        navigation.restored = true
-        onPaired(next)
-    }
     val disconnected: () -> Unit = {
         navigation.resetForServer()
         onDisconnected()
+    }
+    // First launch: only a device that never finished or skipped it and has no saved pairing sees it.
+    var onboardingStage by rememberSaveable {
+        mutableIntStateOf(if (store != null || hasSavedPairing || preferences.string(ONBOARDING_KEY) != null) ONBOARDING_OFF else OnboardingPage.WELCOME.ordinal)
+    }
+    val notificationsOpen = rememberNotificationAccess() != NotificationAccess.ALLOWED
+    // Decided once at the start: granting it on the page must not drop the page from under the reader.
+    val onboardingNotify = rememberSaveable { requestNotifications != null && notificationsOpen }
+    val finishOnboarding: () -> Unit = {
+        preferences.setString(ONBOARDING_KEY, "1")
+        onboardingStage = ONBOARDING_OFF
+        navigation.tabRestored = true
+        navigation.tab = HomeTab.NEW_SESSION
+    }
+    LaunchedEffect(Unit) {
+        // An existing pairing (an upgrade) never sees it.
+        if ((store != null || hasSavedPairing) && preferences.string(ONBOARDING_KEY) == null) preferences.setString(ONBOARDING_KEY, "1")
+    }
+    val paired: (RiffetApi) -> Unit = { next ->
+        navigation.resetForServer()
+        navigation.restored = true
+        // A pairing that succeeds on the connect page moves straight on, without drawing it again.
+        if (onboardingStage == OnboardingPage.CONNECT.ordinal) {
+            if (onboardingNotify) onboardingStage = OnboardingPage.NOTIFY.ordinal else finishOnboarding()
+        }
+        onPaired(next)
+    }
+    val setupActions = remember(connection, navigation) {
+        SetupActions(
+            connection = connection,
+            busy = navigation.connectionOperation,
+            scan = { navigation.requestPairing(scan = true) },
+            connectTo = { address -> navigation.requestPairing(address) },
+            enterAddress = { navigation.requestPairing() },
+            showSetup = { navigation.tab = HomeTab.NEW_SESSION },
+        )
     }
     // The library cache is per server: the same id can mean a different palette on another host.
     // Read synchronously so a stored custom theme is painted in the first frame.
@@ -432,6 +485,7 @@ fun RiffetApp(
                 LocalComposerDrafts provides composerDrafts,
                 LocalRiffetSnackbar provides snackbar,
                 LocalNativeFeatures provides NativeFeatures.shared,
+                LocalSetupActions provides setupActions,
                 LocalFocusCoordinator provides focusCoordinator,
                 LocalInteractionDrafts provides interactionDrafts,
                 LocalPageBackDispatcher provides navigation.backDispatcher,
@@ -467,20 +521,64 @@ fun RiffetApp(
                         Box(Modifier.matchParentSize().coverSystemBars().riffetMaterialSource(key = origin)) {
                             riffet.ui.theme.AppearanceBackdrop(Modifier.matchParentSize())
                         }
-                        if (store == null) Box(Modifier.fillMaxSize().keyboardPadding()) {
+                        if (onboardingStage >= 0) Box(Modifier.fillMaxSize().keyboardPadding()) {
                             if (navigation.pairingRequested) {
-                                PairingScreen(connection = connection, onPaired = paired, initialAddress = navigation.pairingAddress.orEmpty(), operationScope = scope, connectionOperation = navigation.connectionOperation, onCancel = { navigation.pairingRequested = false })
-                            } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-                                Text(stringResource(Res.string.app_connect_pairing), style = riffet.ui.theme.LocalRiffetTypography.current.title, color = colors.fg, modifier = Modifier.padding(start = 4.dp, top = 16.dp, bottom = 20.dp))
-                                PairedServersSection(connection, paired, { target -> navigation.pairingAddress = target; navigation.pairingRequested = true }, disconnected, scope, navigation.connectionOperation)
+                                PairingScreen(connection = connection, onPaired = paired, initialAddress = navigation.pairingAddress.orEmpty(), startWithScan = navigation.pairingScan, operationScope = scope, connectionOperation = navigation.connectionOperation, onCancel = { navigation.pairingRequested = false })
+                            } else OnboardingFlow(
+                                page = OnboardingPage.entries[onboardingStage],
+                                pages = if (onboardingNotify) OnboardingPage.entries else OnboardingPage.entries.filter { it != OnboardingPage.NOTIFY },
+                                onPage = { onboardingStage = it.ordinal },
+                                onFinish = finishOnboarding,
+                                actions = setupActions,
+                                requestNotifications = requestNotifications,
+                            )
+                        } else if (store == null) {
+                            PageHost(stack = navigation.pages) { page, back ->
+                                Box(Modifier.fillMaxSize().then(if (page == RiffetPage.Workbench) Modifier else Modifier.keyboardPadding())) {
+                                    when (page) {
+                                        RiffetPage.Workbench -> UnconnectedWorkbench(
+                                            navigation = navigation, connection = connection, onPaired = paired, scope = scope,
+                                            settings = {
+                                                LocalSettingsScreen(
+                                                    themeMode = themeMode,
+                                                    onThemeModeChange = onThemeMode,
+                                                    iconPacks = iconPacks,
+                                                    themes = themes,
+                                                    themeId = themeId,
+                                                    onThemeIdChange = { id ->
+                                                        appearanceResources?.select(riffet.ui.theme.AppearanceSlot.PALETTE, "default")
+                                                        onThemeId(id)
+                                                    },
+                                                    onBack = { navigation.tab = HomeTab.NEW_SESSION },
+                                                    connection = connection,
+                                                    onPaired = paired,
+                                                    onRepair = { address -> navigation.requestPairing(address) },
+                                                    onDisconnected = disconnected,
+                                                    operationScope = scope,
+                                                    connectionOperation = navigation.connectionOperation,
+                                                )
+                                            },
+                                        )
+                                        RiffetPage.Pairing -> PairingScreen(
+                                            connection = connection,
+                                            onPaired = paired,
+                                            initialAddress = navigation.pairingAddress.orEmpty(),
+                                            startWithScan = navigation.pairingScan,
+                                            onCancel = back,
+                                            operationScope = scope,
+                                            connectionOperation = navigation.connectionOperation,
+                                        )
+                                        RiffetPage.Downloads -> DownloadsScreen(api = null, projectName = { null }, onBack = back)
+                                        else -> Unit
+                                    }
+                                }
                             }
                         } else {
                             val signedOut by store.unauthenticated.collectAsState()
                             // A rejected token cannot recover by itself; pairing again is the only way on.
                             LaunchedEffect(store, signedOut) {
                                 if (signedOut) {
-                                    navigation.pairingAddress = api?.baseUrl
-                                    navigation.pairingRequested = true
+                                    navigation.requestPairing(api?.baseUrl)
                                 }
                             }
                             PageHost(stack = navigation.pages) { page, back ->
@@ -512,7 +610,7 @@ fun RiffetApp(
                                                 onBack = { navigation.tab = HomeTab.TASKS },
                                                 connection = connection,
                                                 onPaired = paired,
-                                                onRepair = { address -> navigation.pairingAddress = address; navigation.pairingRequested = true },
+                                                onRepair = { address -> navigation.requestPairing(address) },
                                                 onDisconnected = disconnected,
                                                 operationScope = scope,
                                                 connectionOperation = navigation.connectionOperation,
@@ -951,8 +1049,7 @@ internal fun Workbench(
                     },
                     onRepair = { address ->
                         navigation.drawerOpen = false
-                        navigation.pairingAddress = address
-                        navigation.pairingRequested = true
+                        navigation.requestPairing(address)
                     },
                     onFavorite = { favorite ->
                         navigation.drawerOpen = false
@@ -1224,3 +1321,8 @@ private fun serverPreferences(preferences: AppPreferences, origin: String?): App
         override fun setString(key: String, value: String?) = preferences.setString(if (key in serverScopedKeys) prefix + key else key, value)
     }
 }
+
+/** The local flag for the first-launch onboarding: set once it was finished or skipped, or an existing pairing was found. */
+internal const val ONBOARDING_KEY = "onboarding-done"
+private const val ONBOARDING_OFF = -1
+
