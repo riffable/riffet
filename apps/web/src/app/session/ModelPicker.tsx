@@ -226,6 +226,8 @@ export interface ModelProviderChoices {
   agent?: { id: string; label: string; icon: ReactNode };
   /** The provider an agent's column opens on when it is not the one in force (its saved default). */
   preferred?: boolean;
+  /** The model choice id last remembered on this provider (`profileId\0model` or `\u0001…`). */
+  rememberedModelId?: string;
 }
 
 /** The agents of an agent column, in list order, each with its providers. */
@@ -270,36 +272,40 @@ function revealInList(container: HTMLElement | null, item: HTMLElement | null, a
  * Runs inside the portalled popover content: Radix's Portal mounts its DOM after `open` renders,
  * so reading or scrolling the listboxes from `ModelPicker` itself runs before they exist.
  */
-function PickerScrollSync({ listRef, agentsRef, providersRef, activeOptionId, revealKey, columnKey, hasCurrent, manual }: {
+function PickerScrollSync({ listRef, agentsRef, providersRef, activeOptionId, revealKey, columnKey, layoutKey, hasCurrent, manual }: {
   listRef: RefObject<HTMLDivElement | null>;
   agentsRef: RefObject<HTMLDivElement | null>;
   providersRef: RefObject<HTMLDivElement | null>;
   activeOptionId: string | undefined;
   revealKey: string;
   columnKey: string;
+  layoutKey: string;
   hasCurrent: boolean;
   manual: boolean;
 }) {
   const lastReveal = useRef<string | undefined>(undefined);
   const lastColumn = useRef<string | undefined>(undefined);
+  const lastLayout = useRef<string | undefined>(undefined);
   const lastHadCurrent = useRef(false);
   useLayoutEffect(() => {
     const revealChanged = lastReveal.current !== revealKey;
     const loadedCurrent = !manual && hasCurrent && !lastHadCurrent.current;
+    const layoutChanged = lastLayout.current !== layoutKey;
     lastReveal.current = revealKey;
+    lastLayout.current = layoutKey;
     lastHadCurrent.current = hasCurrent;
-    if (lastColumn.current !== columnKey) {
+    if (lastColumn.current !== columnKey || layoutChanged) {
       lastColumn.current = columnKey;
       revealInList(agentsRef.current, agentsRef.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? null, 'nearest');
       revealInList(providersRef.current, providersRef.current?.querySelector<HTMLElement>('[aria-selected="true"], [data-preview="true"]') ?? null, 'nearest');
     }
     const item = activeOptionId ? document.getElementById(activeOptionId) : null;
     revealInList(listRef.current, item, revealChanged || loadedCurrent ? 'center' : 'nearest');
-  }, [listRef, agentsRef, providersRef, activeOptionId, revealKey, columnKey, hasCurrent, manual]);
+  }, [listRef, agentsRef, providersRef, activeOptionId, revealKey, columnKey, layoutKey, hasCurrent, manual]);
   return null;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, leading, loading = false, refreshing = false, error, onRetry }: {
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, loading = false, refreshing = false, error, onRetry }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -348,6 +354,12 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   providerLabel?: string;
   /** A provider other than the one in force was brought up in the column, so its list can be read. */
   onPreviewProvider?: (id: string) => void;
+  /**
+   * When present, clicking an available agent or provider immediately switches to it (and its
+   * remembered model) while keeping the menu open; omitted in live-session menus that must confirm
+   * a model before migrating the conversation.
+   */
+  onSelectProvider?: (id: string) => void;
   /** Before the model's name in the trigger: the agent's mark when the menu also picks the agent. */
   leading?: ReactNode;
 }) {
@@ -501,9 +513,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
    */
   const listId = useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
+  const activeTargetId = previewIsActive ? value : previewProvider?.rememberedModelId;
   const currentIndex = useMemo(
-    () => (query.trim() ? -1 : filtered.findIndex((model) => model.id === value)),
-    [filtered, query, value],
+    () => (query.trim() || !activeTargetId ? -1 : filtered.findIndex((model) => model.id === activeTargetId)),
+    [filtered, query, activeTargetId],
   );
   // Only an opening, a provider switch or a new search moves highlight back to the default slot;
   // a catalog or usage re-render under the reader's arrow keys or pointer must leave it alone.
@@ -621,8 +634,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
     </div>
   );
 
-  // The providers of the agent being started, beside their models. A click only previews one:
-  // picking a model is what commits that provider, so looking around never resets a setting.
+  // Looking around another provider stays a preview unless `onSelectProvider` opts into instant
+  // switching (used by new-session pickers where each provider's last model is remembered).
   const preview = (provider: ModelProviderChoices) => {
     setPreviewProviderId(provider.id);
     setQuery('');
@@ -633,10 +646,24 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const columnClass = 'relative flex shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1 [contain:size]';
   const rowClass = (shown: boolean, muted?: boolean) => cn('flex min-h-11 w-full shrink-0 items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors md:h-8 md:min-h-0 [&_svg]:shrink-0', shown ? 'bg-hover text-fg' : 'text-fg-2', muted && !shown && 'text-fg-4');
   const unusable = (provider: ModelProviderChoices) => Boolean(provider.issue) && !provider.models.length;
+  const selectProvider = (provider: ModelProviderChoices) => {
+    preview(provider);
+    if (onSelectProvider && provider.id !== activeProvider?.id && !unusable(provider)) onSelectProvider(provider.id);
+  };
   const previewGroup = groups.find((group) => group.agent.id === previewProvider?.agent?.id);
   const activeAgentId = activeProvider?.agent?.id;
   /** An agent opens on the provider in force, else its saved default, else its first. */
-  const previewAgent = (group: (typeof groups)[number]) => preview(group.providers.find((provider) => provider.id === activeProvider?.id) ?? group.providers.find((provider) => provider.preferred) ?? group.providers[0]!);
+  const selectAgent = (group: (typeof groups)[number]) => {
+    if (group.agent.id === activeAgentId) {
+      preview(group.providers.find((provider) => provider.id === activeProvider?.id) ?? group.providers.find((provider) => provider.preferred) ?? group.providers[0]!);
+      return;
+    }
+    const target = group.providers.find((provider) => provider.preferred && !unusable(provider))
+      ?? group.providers.find((provider) => !unusable(provider))
+      ?? group.providers.find((provider) => provider.preferred)
+      ?? group.providers[0]!;
+    selectProvider(target);
+  };
   const providerList = !providerColumn ? null : agentColumn ? (
     <>
       <div ref={agentsRef} role="listbox" aria-label="Agents" className={cn(columnClass, 'w-44')}>
@@ -646,7 +673,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
             type="button"
             role="option"
             aria-selected={group.agent.id === activeAgentId}
-            onClick={() => previewAgent(group)}
+            onClick={() => selectAgent(group)}
             className={rowClass(group.agent.id === previewGroup?.agent.id, group.providers.every(unusable))}
           >
             {group.agent.icon}
@@ -665,7 +692,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
               role="option"
               aria-selected={provider.id === activeProvider?.id}
               data-preview={provider.id === previewProvider?.id || undefined}
-              onClick={() => preview(provider)}
+              onClick={() => selectProvider(provider)}
               className={rowClass(provider.id === previewProvider?.id, unusable(provider))}
             >
               <span className="min-w-0 flex-1 truncate">{provider.label}</span>
@@ -685,7 +712,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           role="option"
           aria-selected={provider.id === activeProvider?.id}
           data-preview={provider.id === previewProvider?.id || undefined}
-          onClick={() => preview(provider)}
+          onClick={() => selectProvider(provider)}
           className={rowClass(provider.id === previewProvider?.id)}
         >
           <span className="min-w-0 flex-1 truncate">{provider.label}</span>
@@ -700,19 +727,23 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
    * The popover opens above its trigger, so any change in its height moves its top edge — and the
    * provider row under the pointer with it. Its height is read once it opens and held until it
    * closes: previewing another provider (which hides the parameters and the quota row) or a
-   * parameter that adds a row only resizes the model list inside it.
+   * parameter that adds a row only resizes the model list inside it. When opening below (`side ===
+   * 'bottom'`), `minHeight` holds the floor across provider previews while still letting async
+   * parameters and quota expand the popover down to `max-h` instead of squeezing the lists.
    */
   const [lockedHeight, setLockedHeight] = useState<number>();
+  const footerCount = settingsRows.length + (previewIsActive && accountRow ? 1 : 0);
   useEffect(() => {
     if (!open || !providerColumn) { setLockedHeight(undefined); return; }
+    if (side === 'top' && loading) return;
     // The portal mounts its content a render after `open`, so the content is read on the next
     // frame, found through the list it holds; the frame painted before it is the same height.
     const frame = requestAnimationFrame(() => {
       const height = document.getElementById(listId)?.closest<HTMLElement>('.ui-popover-content')?.offsetHeight;
-      if (height) setLockedHeight(height);
+      if (height) setLockedHeight((previous) => (previewIsActive ? Math.max(previous ?? 0, height) : previous ?? height));
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, providerColumn, listId]);
+  }, [open, providerColumn, listId, side, loading, previewIsActive, footerCount]);
 
   // A mobile settings dialog isolates scrolling; the portalled model list needs its own scope.
   const picker = (
@@ -753,7 +784,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           event.preventDefault();
           contentRef.current?.focus({ preventScroll: true });
         }}
-        style={lockedHeight ? { height: lockedHeight } : undefined}
+        style={lockedHeight ? (side === 'bottom' ? { minHeight: `min(${lockedHeight}px, 64dvh)` } : { height: lockedHeight }) : undefined}
         className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,calc(100vw-24px))]' : 'w-[min(500px,calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
         {/* The failure is the active agent's; another one previewed brings its own note in the list. */}
@@ -793,6 +824,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           activeOptionId={filtered.length ? optionId(active) : undefined}
           revealKey={`${openCycle}|${previewProvider?.id ?? ''}|${query.trim() ? 'q' : ''}`}
           columnKey={`${openCycle}|${previewGroup?.agent.id ?? ''}`}
+          layoutKey={`${footerCount}|${previewIsActive ? 1 : 0}`}
           hasCurrent={currentIndex >= 0}
           manual={manualHighlight}
         />

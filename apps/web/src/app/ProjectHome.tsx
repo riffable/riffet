@@ -143,6 +143,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const savedDefaults = settings.nativeBackendDefaults?.[backendId];
   const defaultProfileId = backend?.profiles.find((entry) => entry.isDefault)?.id;
   const defaults = (profileId ?? defaultProfileId) === (savedDefaults?.profileId ?? defaultProfileId) ? savedDefaults : undefined;
+  const rememberedProfileModel = !assistant && profileId ? savedDefaults?.profileModels?.[profileId] : undefined;
   // New sessions always start in agent mode. Plan and ask remain reachable from the session's own
   // mode picker, where the conversation they apply to is already on screen.
   const mode = capabilities?.modes.find((option) => option.id === 'agent')?.id ?? capabilities?.modes[0]?.id ?? 'agent';
@@ -152,7 +153,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const chatModel = catalogEntry(catalog, preferredChatModel)?.value ?? catalogEntry(catalog, lastChat.model)?.value ?? catalog[0]?.value;
   // A configured chat model still inherits its latest effort/Fast choices; a different model gets its own defaults.
   const chatSelection = chatModel ? catalogSelection(catalog, chatModel, chatModel === lastChat.model ? lastChat.params : {}) : recentModel || preferredChatModel;
-  const defaultModel = (quickChat ? chatSelection : defaults?.model || recentModel || (backendId === LEGACY_DEFAULT_BACKEND_ID && (!profileId || profileId === 'default') ? settings.defaultModel : undefined)) || backend?.defaultModel || '';
+  const defaultModel = (quickChat ? chatSelection : rememberedProfileModel || defaults?.model || recentModel || (backendId === LEGACY_DEFAULT_BACKEND_ID && (!profileId || profileId === 'default') ? settings.defaultModel : undefined)) || backend?.defaultModel || '';
   const defaultApproval = capabilities?.permissions.find((option) => option.id === defaults?.approval)?.id ?? capabilities?.permissions[0]?.id ?? '';
   const [approval, setApproval] = useState(defaultApproval);
   const approvalBaseline = useRef(defaultApproval);
@@ -202,20 +203,43 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const models: Choice[] = useMemo(() => grouped
     ? grouped.flatMap(({ profile, models: list }) => list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name), group: profile.name })))
     : catalog.map((item) => ({ id: item.value, label: cleanLabel(item.name) })), [grouped, catalog]);
+  const rememberedModelName = (targetBackend: NativeBackendId, targetProfile: string | undefined, targetCatalog: ModelInfo[]): string => {
+    const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${targetBackend}${CHOICE_SEPARATOR}${targetProfile ?? ''}`;
+    const previous = choices.current.get(scope);
+    if (previous?.edited) return parseSelection(previous.selection).model;
+    if (assistant) return '';
+    const saved = settings.nativeBackendDefaults?.[targetBackend];
+    const targetEntry = backends.find((entry) => entry.backendId === targetBackend);
+    const targetDefault = targetEntry?.profiles.find((profile) => profile.isDefault)?.id;
+    const isSavedDefault = (targetProfile ?? targetDefault) === (saved?.profileId ?? targetDefault);
+    const raw = (targetProfile ? saved?.profileModels?.[targetProfile] : undefined)
+      || (isSavedDefault ? saved?.model : undefined)
+      || (targetBackend === LEGACY_DEFAULT_BACKEND_ID && (!targetProfile || targetProfile === 'default') ? settings.defaultModel : undefined)
+      || targetEntry?.defaultModel
+      || '';
+    const parsed = parseSelection(raw).model;
+    if (!parsed) return '';
+    return catalogEntry(targetCatalog, parsed)?.value ?? parsed;
+  };
   // The provider column, in configured order, with each provider's models as its read lands.
   // A missing entry is loading rather than empty, so previously loaded providers do not jump.
   const providerChoices = useMemo<ModelProviderChoices[] | undefined>(() => {
     if (!grouped || !backend?.profiles.length) return undefined;
+    const saved = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backend.profiles.find((profile) => profile.isDefault)?.id;
     return backend.profiles.map((profile) => {
       const entry = grouped.find((item) => item.profile.id === profile.id);
+      const list = entry?.models ?? [];
+      const remembered = rememberedModelName(backendId, profile.id, list);
       return {
         id: profile.id,
         label: profile.name,
-        models: entry ? entry.models.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name) })) : [],
+        models: entry ? list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name) })) : [],
         loading: !entry,
+        preferred: profile.id === saved,
+        ...(remembered ? { rememberedModelId: composeChoice(profile.id, remembered) } : {}),
       };
     });
-  }, [grouped, backend]);
+  }, [grouped, backend, backendId, settings.nativeBackendDefaults, settings.defaultModel, assistant]);
   // The grouped list prefixes each id with its provider; usage is read for the active one only.
   const loadModelUsage = useCallback((signal: AbortSignal) => api.backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal)
     .then((usage) => grouped && activeProfileId
@@ -261,11 +285,13 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
       const loading = !list?.length && agentModels.loading(entry.backendId, profile?.id);
       // An agent that lists nothing still starts on its own default model, as picking it alone used to.
       const fallback = entry.available !== false && !loading && !list?.length && (list || issue);
+      const remembered = rememberedModelName(entry.backendId, profile?.id, list ?? []);
       return {
         id,
         label,
         agent,
         preferred: profile?.id === saved,
+        ...(remembered ? { rememberedModelId: otherChoice(entry.backendId, profile?.id, remembered) } : {}),
         models: fallback
           ? [{ id: otherChoice(entry.backendId, profile?.id, ''), label: t`默认模型` }]
           : (list ?? []).map((item) => ({ id: otherChoice(entry.backendId, profile?.id, item.value), label: cleanLabel(item.name) })),
@@ -274,6 +300,38 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
       };
     });
   }) : undefined;
+  /** Switches directly to an available agent or provider and restores its remembered model. */
+  const selectModelProvider = (id: string) => {
+    const other = splitOther(`${id}${OTHER_AGENT}`);
+    const targetBackendId = other ? other.backendId : backendId;
+    const targetProfileId = other ? other.profileId : id;
+    if (targetBackendId === backendId && (targetProfileId ?? activeProfileId) === activeProfileId) return;
+    const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${targetBackendId}${CHOICE_SEPARATOR}${targetProfileId ?? ''}`;
+    const previous = choices.current.get(scope);
+    const saved = assistant ? undefined : settings.nativeBackendDefaults?.[targetBackendId];
+    const targetEntry = backends.find((entry) => entry.backendId === targetBackendId);
+    const targetDefaultProfile = targetEntry?.profiles.find((entry) => entry.isDefault)?.id;
+    const isSavedDefault = !assistant && (targetProfileId ?? targetDefaultProfile) === (saved?.profileId ?? targetDefaultProfile);
+    const raw = previous?.edited
+      ? previous.selection
+      : (!assistant && targetProfileId ? saved?.profileModels?.[targetProfileId] : undefined)
+        || (isSavedDefault ? saved?.model : undefined)
+        || (!assistant && targetBackendId === LEGACY_DEFAULT_BACKEND_ID && (!targetProfileId || targetProfileId === 'default') ? settings.defaultModel : undefined)
+        || (!assistant ? targetEntry?.defaultModel : undefined)
+        || '';
+    const targetCatalog = targetBackendId === backendId && targetProfileId === activeProfileId
+      ? activeCatalog
+      : agentModels.read(targetBackendId, targetProfileId) ?? [];
+    const parsed = parseSelection(raw);
+    const next = raw
+      ? (targetCatalog.length ? pickedSelection(targetCatalog, parsed.model, parsed.params, raw) : raw)
+      : '';
+    if (targetBackendId !== backendId) {
+      onBackendChange(targetBackendId, targetProfileId, previous?.edited || next ? next : undefined);
+      return;
+    }
+    if (targetProfileId) onProfileChange(targetProfileId, next);
+  };
   /** As the menu opens, reads the other agents nothing is known about yet; the rest are read on preview. */
   const loadUnknownAgents = () => {
     for (const source of agentSources ?? []) {
@@ -432,6 +490,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         activeProviderId={providerChoices ? activeProfileId : agentSources ? activeSourceId : undefined}
         modelLeading={agentSources && <><AgentLogo backend={backendId} size={14} className="shrink-0" style={agentMarkStyle(backendId)} /><span className="sr-only">{label(backendId)}</span></>}
         onPreviewModelProvider={(id) => { const other = splitOther(`${id}${OTHER_AGENT}`); if (other && id !== activeSourceId) agentModels.load(other.backendId, other.profileId); }}
+        onSelectModelProvider={selectModelProvider}
         loadModelUsage={loadModelUsage}
         refreshCatalog={quickChat ? onRetryCatalog : () => { loadUnknownAgents(); return onRefreshCatalog?.(); }}
         usageScopeKey={`${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}

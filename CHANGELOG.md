@@ -7,6 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Fixes
 
 - Opening the web model picker scrolls the currently selected model into view (along with the active Agent and provider columns when shown), and keeps the selection in view when switching back to the active provider.
+- In the web new-session model picker, clicking an available Agent or provider switches to it directly and restores its last chosen provider, model, and parameters (instead of staying in preview until a model is clicked); opening the menu while parameters or quota are still loading no longer locks the list to a shorter height.
 - The personal assistant can list built-in and shared Riffet Web themes and available plugin palettes even when a message has no connected tab. Retrying an unsent message from the assistant now identifies the workbench that submits it.
 - Sending a personal assistant message with several Riffet Web tabs open no longer waits behind each tab’s sidebar updates on HTTP/1.1 connections.
 - The personal assistant can read and change the theme after you reload Riffet Web, and an open tab can reconnect after a server restart.
@@ -48,6 +49,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Favorites on the web now filter by type, unlinked status, project, and agent from a contents column (moving to a header menu on narrow screens), switch between grid and list views with search match highlights, and open a reader dialog to read full text, copy code, change highlight colors, edit notes, or relocate unlinked favorites.
 - On the web, the left sidebar is slightly wider by default, and opening another page such as Favorites or Plugins clears the selected state on the previous conversation row.
 - Extensions lists shared `~/.cursor/rules/*.mdc` rules, project `AGENTS.md` and `CLAUDE.md` for Cursor, `.claude/CLAUDE.md` for Claude Code, `AGENTS.override.md` for Codex, and rules for Droid and TRAE CLI, showing each rule's path, when it applies (always on, matching globs or paths, on demand, or overridden by `AGENTS.override.md`), and summary. In the scope menu, the personal assistant now sits right below User configuration.
+
+### Performance
+
+- The server uses less memory while it backfills Claude Code token usage: a long conversation's history is read line by line instead of loaded whole, so peak memory for a 240 MB history drops from about 590 MB to 245 MB. The image library is loaded only when an image is first processed, about 30 MB less at startup.
 
 ## 0.8.0 - 2026-11-17
 
