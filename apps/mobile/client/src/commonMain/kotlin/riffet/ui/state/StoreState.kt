@@ -270,7 +270,7 @@ internal enum class DeliveryPhase { PENDING, UNCERTAIN, REJECTED, ACCEPTED }
 
 internal fun Run.key(): String = commandId.ifBlank { id }
 
-private fun Run.settled(): Boolean =
+internal fun Run.settled(): Boolean =
     native?.delivery == NativeDeliveryState.OBSERVED || state == RunState.COMPLETED || state == RunState.FAILED || state == RunState.CANCELLED
 
 /**

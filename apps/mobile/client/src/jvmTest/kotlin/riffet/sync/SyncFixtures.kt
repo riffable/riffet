@@ -141,9 +141,9 @@ internal fun hello(
     """{"type":"hello","protocol":3,"lane":"main","generation":"$generation","headSeq":$headSeq,"mode":"$mode","session":$SESSION_JSON,""" +
     """"status":{"phase":"$phase"},"interaction":$interaction,"runs":$runs,"activities":[],"outline":{"turnCount":${if (turns == "[]") 0 else 1},"turns":$turns}}"""
 
-internal fun row(key: String, pos: Long, seq: Long, text: String = key, kind: String = "assistant", extra: String = "", runId: String? = null): String =
+internal fun row(key: String, pos: Long, seq: Long, text: String = key, kind: String = "assistant", extra: String = "", runId: String? = null, lastAt: String = "2026-10-25T00:00:0${pos % 10}Z"): String =
     """{"key":"$key","pos":$pos,"turn":"run:r1","seq":$seq,"rev":1,${runId?.let { "\"runId\":\"$it\"," } ?: ""}""" +
-        """"event":{"type":"agent_message_chunk","data":{},"createdAt":"2026-10-25T00:00:0${pos % 10}Z","lastAt":"2026-10-25T00:00:0${pos % 10}Z","sourceIds":["n-$key"]},""" +
+        """"event":{"type":"agent_message_chunk","data":{},"createdAt":"2026-10-25T00:00:0${pos % 10}Z","lastAt":"$lastAt","sourceIds":["n-$key"]},""" +
         """"kind":"$kind","text":"$text"$extra}"""
 
 internal fun userRow(key: String, pos: Long, seq: Long, text: String, runId: String? = null, pending: String? = null): String =
@@ -159,8 +159,8 @@ internal fun reset(generation: String): Pair<String, String> = "reset" to """{"t
 
 internal fun status(phase: String): Pair<String, String> = "status" to """{"type":"status","status":{"phase":"$phase"}}"""
 
-internal fun runJson(id: String, commandId: String, state: String = "running", delivery: String = "observed"): String =
-    """{"id":"$id","sessionId":"s1","commandId":"$commandId","prompt":"hi $id","state":"$state","createdAt":"2026-10-25T00:00:00Z","updatedAt":"2026-10-25T00:00:00Z",""" +
-        """"native":{"input":{"text":"hi","attachmentIds":[],"context":[]},"config":{"mode":"agent"},"fingerprint":"f","delivery":"$delivery","attempt":1,"configRevision":1}}"""
+internal fun runJson(id: String, commandId: String, state: String = "running", delivery: String = "observed", at: String = "2026-10-25T00:00:00Z", intent: String? = null): String =
+    """{"id":"$id","sessionId":"s1","commandId":"$commandId","prompt":"hi $id","state":"$state","createdAt":"$at","updatedAt":"$at",""" +
+        """"native":{${intent?.let { "\"intent\":\"$it\"," } ?: ""}"input":{"text":"hi","attachmentIds":[],"context":[]},"config":{"mode":"agent"},"fingerprint":"f","delivery":"$delivery","attempt":1,"configRevision":1}}"""
 
 internal val ping: Pair<String, String> = "ping" to "{}"

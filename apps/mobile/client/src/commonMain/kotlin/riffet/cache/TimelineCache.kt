@@ -51,6 +51,8 @@ data class TimelineMeta(
     /** When the rows were last confirmed by the server, in epoch milliseconds. */
     val syncedAt: Long,
     val accessedAt: Long,
+    /** An older cache without this flag can vouch for the latest page only with a resume cursor. */
+    val hasAfter: Boolean = lastSeq == null,
 )
 
 /** [sizes] holds each row's wire size (its JSON), read off its log line, so the window need not encode it again. */
@@ -77,6 +79,7 @@ class TimelineSnapshot(
     val synced: Boolean = true,
     /** Wire sizes (each row's JSON) by key, as the window measured them; a row without one is encoded to measure it. */
     internal val sizes: Map<String, Int>? = null,
+    val hasAfter: Boolean = false,
 )
 
 /**
@@ -177,6 +180,7 @@ class TimelineCache(
             generation = snapshot.generation,
             lastSeq = snapshot.lastSeq,
             hasBefore = snapshot.hasBefore || trimmed,
+            hasAfter = snapshot.hasAfter,
             rows = rows.size,
             ops = ops,
             logBytes = logBytes,

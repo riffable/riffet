@@ -28,6 +28,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
+import riffet.cache.CachedTimeline
 import riffet.cache.MAIN_LANE
 import riffet.cache.SyncWindow
 import riffet.cache.TimelineCache
@@ -58,6 +59,7 @@ import riffet.core.TimelineItem
 import riffet.core.pendingUserItem
 import riffet.core.rowRun
 import riffet.core.timelineItem
+import riffet.core.timelineItemTime
 import riffet.core.userRowKey
 import riffet.shared.AppLog
 import riffet.shared.HEARTBEAT
@@ -75,6 +77,7 @@ import riffet.shared.syncChanges
 import riffet.shared.syncStream
 import riffet.shared.syncTimeline
 import riffet.ui.composer.OutboxEntry
+import riffet.ui.timeline.instantMillis
 
 /** The open conversation's turns as hello and `outline` frames report them, oldest first. */
 data class SyncOutlineState(val turnCount: Long, val turns: List<TurnOutlineV3>)
@@ -284,7 +287,7 @@ internal class SessionSync(
         if (core.value.dial != token || main !== lane) return
         lock.withLock {
             withContext(background) {
-                traced("riffet.sync.restore") { lane.rows.restore(stored.meta.generation, stored.meta.lastSeq, stored.meta.hasBefore, stored.rows, stored.sizes) }
+                traced("riffet.sync.restore") { lane.rows.restore(stored) }
             }
         }
         stored.meta.outline?.let { _outline.value = SyncOutlineState(it.turnCount, it.turns) }
@@ -958,17 +961,24 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             }
         }
         expanded.keys.retainAll { key -> window.row(key)?.let { expanded[key]?.seq == it.seq } == true }
-        // Sends the server has no row for yet, under the key its row will have.
+        // Locate each missing send against the same server page, before adding any local rows.
+        val insertions = mutableMapOf<Int, MutableList<TimelineItem>>()
         for (run in runs) {
             val key = userRowKey(run)
-            if (!needsLocalRow(run) || key in covered || run.id in covered) continue
+            if (key in covered || run.id in covered || !needsLocalRow(run)) continue
+            val index = localRowIndex(run, timeline, window) ?: continue
             val previous = items[key]
             val shown = failureShown(run)
             val item = if (previous != null && previous.row == null && previous.run == run &&
                 (previous.item as? TimelineItem.User)?.failureShown == shown) previous.item
             else pendingUserItem(run).copy(failureShown = shown)
-            timeline += item
+            insertions.getOrPut(index) { mutableListOf() }.add(item)
             cached[key] = CachedItem(null, run, item)
+        }
+        for (index in insertions.keys.sortedDescending()) {
+            val group = insertions.getValue(index)
+            if (group.size > 1) group.sortBy { instantMillis(it.event.createdAt) ?: Long.MAX_VALUE }
+            timeline.addAll(index, group)
         }
         items = cached
         if (children != subagents) subagents = children
@@ -994,10 +1004,11 @@ internal class LaneRows(cap: SyncWindow) {
     var caughtUp = false
         private set
 
-    fun restore(generation: String, lastSeq: Long?, hasBefore: Boolean, stored: List<TimelineRow>, sizes: List<Int>? = null) {
-        window.install(generation, stored, hasBefore, sizes = sizes)
+    fun restore(stored: CachedTimeline) {
+        val meta = stored.meta
+        window.install(meta.generation, stored.rows, meta.hasBefore, meta.hasAfter, stored.sizes)
         window.drain()
-        applied = lastSeq?.let { SyncCursor(generation, it) }
+        applied = meta.lastSeq?.let { SyncCursor(meta.generation, it) }
     }
 
     /** True when the hello says the window is already at the head. */
@@ -1078,6 +1089,7 @@ internal class LaneRows(cap: SyncWindow) {
             generation = generation,
             lastSeq = seq,
             hasBefore = window.hasBefore,
+            hasAfter = window.hasAfter,
             rows = window.list,
             changed = changed,
             deleted = deleted,
@@ -1254,20 +1266,37 @@ private fun rowBytes(row: TimelineRow): Int = RiffetJson.instance.encodeToString
 
 /** A user's send that the timeline shows before the server has a row for it: in flight, not settled or dropped. */
 private fun needsLocalRow(run: Run): Boolean {
-    if (run.state == RunState.CANCELLED) return false
-    val delivery = run.native?.delivery
-    if (delivery == NativeDeliveryState.OBSERVED || delivery == NativeDeliveryState.CANCELLED) return false
-    return run.native?.fingerprint == "client-pending" || run.state == RunState.QUEUED || run.state == RunState.RUNNING ||
-        delivery in LOCAL_ROW_DELIVERIES
+    val native = run.native
+    if (native?.delivery == NativeDeliveryState.CANCELLED || native?.nativeMessageId != null) return false
+    // A locally rejected send has no server row; its recovery action stays on the message.
+    if (run.settled()) return run.state == RunState.FAILED && native?.fingerprint == "client-pending"
+    return run.state == RunState.QUEUED || run.state == RunState.RUNNING ||
+        (native?.delivery == NativeDeliveryState.UNCERTAIN && native.queueReleasedAt == null)
 }
 
-private val LOCAL_ROW_DELIVERIES = setOf(
-    NativeDeliveryState.QUEUED,
-    NativeDeliveryState.PREPARING,
-    NativeDeliveryState.DISPATCHING,
-    NativeDeliveryState.INPUT_SENT,
-    NativeDeliveryState.UNCERTAIN,
-)
+/** Server positions order the page. A provisional send can only choose a gap between those rows. */
+private fun localRowIndex(run: Run, page: List<TimelineItem>, window: RowWindow): Int? {
+    val queued = run.native?.intent != "steer" && (run.state == RunState.QUEUED || run.state == RunState.RUNNING)
+    if (queued && window.hasAfter) return null
+    val at = instantMillis(run.createdAt) ?: return page.size.takeUnless { window.hasAfter }
+    // In-flight prompts wait behind the current turn, including output written after they were sent.
+    val start = if (queued) page.indexOfLast { it.event.sequence < PENDING_ROW_POS } + 1 else 0
+    val index = (start until page.size).firstOrNull { i ->
+        (instantMillis(timelineItemTime(page[i])) ?: Long.MIN_VALUE) > at
+    } ?: page.size
+    // A device-only outbox entry has no server row to page back to. Its retry/restore action
+    // must also be reachable on the latest page, even when another device advanced the session.
+    if (!window.hasAfter && run.native?.fingerprint == "client-pending") return index
+    if (!queued && index == 0 && window.hasBefore) {
+        val first = instantMillis(page.firstOrNull()?.event?.createdAt)
+        if (first == null || at < first) return null
+    }
+    if (index == page.size && window.hasAfter) {
+        val last = instantMillis(page.lastOrNull()?.let(::timelineItemTime))
+        if (last == null || at > last) return null
+    }
+    return index
+}
 
 /** [row] with the full content of its blob: the whole row when the blob is one, else its full text. */
 private fun expandedRow(row: TimelineRow, blob: String): TimelineRow? {

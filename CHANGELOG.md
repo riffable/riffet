@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On mobile, paging through a long conversation keeps earlier messages and commands in their original positions, including completed commands such as `/summarize`.
 - With a title model chosen in Settings, it names every conversation, including the ones Cursor, Claude Code, Codex and Droid had already named themselves; a name you set, also with `/rename` in Claude Code, stays. Titles are shorter and more specific, start with what is being done, and keep your own terms such as review or prompt. Conversations the agent already named before this update keep their names.
 - Links in replies carry a light underline on the web, Mac and iPhone, so they stand out in themes whose accent is the text colour, such as Pencil.
 - The "Working" line at the bottom of a conversation shows for the whole turn, also while the agent is only thinking; it used to stay blank until the first tool call or reply.

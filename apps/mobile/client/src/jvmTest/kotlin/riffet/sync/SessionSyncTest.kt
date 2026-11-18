@@ -19,6 +19,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -41,12 +42,15 @@ import riffet.contracts.RiffetJson
 import riffet.core.PENDING_ROW_POS
 import riffet.core.TimelineItem
 import riffet.ui.composer.InMemoryOutboxStore
+import riffet.ui.composer.OutboxEntry
 import riffet.ui.composer.NativeSessionCreationOutbox
 import riffet.ui.state.SERVER_TOO_OLD_REASON
 import riffet.ui.state.SessionStore
 import riffet.ui.state.RiffetConnectionState
 import riffet.ui.state.SessionInteractions
 import riffet.ui.state.StateStore
+import riffet.ui.state.messageRecovery
+import riffet.shared.NativeMessageInput
 import riffet.shared.RiffetApi
 import riffet.shared.installRiffetClient
 
@@ -64,12 +68,12 @@ class SessionSyncTest {
         if (request.path == "/health") json(HEALTH_V3) else route(request)
     }.also { servers += it }
 
-    private fun store(server: FakeServer, cache: TimelineCache? = null): SessionStore {
+    private fun store(server: FakeServer, cache: TimelineCache? = null, outbox: InMemoryOutboxStore = InMemoryOutboxStore()): SessionStore {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default).also { scopes += it }
         return SessionStore(
             api = server.api,
             scope = scope,
-            outboxStore = InMemoryOutboxStore(),
+            outboxStore = outbox,
             creationOutbox = NativeSessionCreationOutbox(InMemoryLocalFiles(), server.api.baseUrl),
             timelineCache = cache,
         )
@@ -249,6 +253,7 @@ class SessionSyncTest {
                 withTimeout(5_000) { store.loadingHistory.first { !it } }
                 store.flush()
                 assertNull(cache.meta("s1")?.lastSeq, "An older window must not resume at the stream's head")
+                assertTrue(assertNotNull(cache.load("s1")).meta.hasAfter)
 
                 store.loadOlder()
                 withTimeout(5_000) { pageEntered.await() }
@@ -260,6 +265,7 @@ class SessionSyncTest {
                 withTimeout(5_000) {
                     while (cache.meta("s1")?.lastSeq != 6L) delay(20)
                 }
+                assertFalse(assertNotNull(cache.load("s1")).meta.hasAfter)
                 assertEquals(listOf("d", "e", "f"), store.timeline.value.map { it.key }, "reopen=$reopen")
                 assertTrue(server.dials().last().query["after"] == null, "Returning to latest needs a new snapshot")
                 assertEquals(2, dials.get(), "reopen=$reopen")
@@ -321,6 +327,41 @@ class SessionSyncTest {
         withTimeout(5_000) { store.serverTooOld.first { it } }
         assertEquals(RiffetConnectionState.Failed(SERVER_TOO_OLD_REASON), withTimeout(5_000) { store.connection.first { it is RiffetConnectionState.Failed } })
         assertEquals(emptyList(), server.v2Calls())
+    }
+
+    @Test
+    fun aCompletedSendOutsideTheSnapshotOnlyAppearsOnItsHistoryPage(): Unit = runBlocking {
+        val outbox = InMemoryOutboxStore().apply {
+            save(OutboxEntry("s1", NativeMessageInput("lost", "retry me"), "2026-10-25T00:00:01.500Z"))
+        }
+        val command = runJson("old", "command", state = "completed", delivery = "input_sent")
+        val pending = runJson("new", "current", state = "running", delivery = "dispatching", at = "2026-10-25T00:00:05Z")
+        val steer = runJson("steer", "guidance", state = "running", delivery = "dispatching", at = "2026-10-25T00:00:03.500Z", intent = "steer")
+        val uncertain = runJson("retry", "unconfirmed", state = "interrupted", delivery = "uncertain", at = "2026-10-25T00:00:02.500Z")
+        val server = serve { request ->
+            when {
+                request.path.endsWith("/sync") -> sseOpen(
+                    hello("g1", runs = "[$command,$pending,$uncertain,$steer]"),
+                    snapshot("g1", 3, row("answer", 3, 3, lastAt = "2026-10-25T00:00:03.800Z"), hasBefore = true),
+                    rows("g1", 4, 4, row("latest", 4, 4)),
+                )
+                request.query["before"] == "3" -> json("""{"generation":"g1","rows":[${userRow("user:command", 1, 1, "/summarize", runId = "old")},${row("compressed", 2, 2, lastAt = "2026-10-25T00:00:02.800Z")}],"hasBefore":false,"hasAfter":true}""")
+                else -> json("{}", 404)
+            }
+        }
+        val cache = TimelineCache(InMemoryLocalFiles(), server.api.baseUrl, window = SyncWindow(rows = 3, bytes = 1_048_576))
+        val store = store(server, cache, outbox)
+        store.select(session)
+        val latest = withTimeout(5_000) { store.timeline.first { items -> items.any { it.key == "latest" } } }
+        assertEquals(listOf("user:lost", "user:guidance", "answer", "latest", "user:current"), latest.map { it.key })
+        val recovered = assertIs<TimelineItem.User>(latest.first())
+        assertTrue(messageRecovery(assertNotNull(recovered.run)).canRetry)
+        store.loadOlder()
+        val history = withTimeout(5_000) { store.timeline.first { items -> items.any { it.key == "compressed" } } }
+        assertEquals(listOf("user:command", "user:lost", "user:unconfirmed", "compressed", "user:guidance", "answer"), history.map { it.key })
+        store.jumpToLatest()
+        val returned = withTimeout(5_000) { store.timeline.first { items -> items.any { it.key == "latest" } } }
+        assertEquals(latest.map { it.key }, returned.map { it.key })
     }
 
     @Test
