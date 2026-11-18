@@ -1,4 +1,4 @@
-import type { TimelineRow } from '@contracts';
+import type { NativeContext, TimelineRow } from '@contracts';
 import type { LaneHeld } from './lane';
 
 /*
@@ -36,6 +36,8 @@ export class SyncCache {
   /** Bumped by `clear` (signing out): a view still open from before may not write its copy back. */
   epoch = 0;
   private memory = new Map<string, CachedLane>();
+  /** The context usage each recent conversation last reported, in this tab only: switching back shows it before the hello. */
+  private contexts = new Map<string, NativeContext | undefined>();
   /** Deleted conversations: no read answers for them and no write, in flight or later, puts them back. */
   private readonly deleted = new Set<string>();
   private lastSavedAt = 0;
@@ -46,6 +48,20 @@ export class SyncCache {
   peek(sessionId: string): LaneHeld | undefined {
     const record = this.memory.get(sessionId);
     return record && !this.deleted.has(sessionId) ? held(record) : undefined;
+  }
+
+  peekContext(sessionId: string): NativeContext | undefined {
+    return this.deleted.has(sessionId) ? undefined : this.contexts.get(sessionId);
+  }
+
+  rememberContext(sessionId: string, context: NativeContext | undefined, epoch = this.epoch): void {
+    if (epoch !== this.epoch || this.deleted.has(sessionId)) return;
+    this.contexts.delete(sessionId);
+    this.contexts.set(sessionId, context);
+    for (const key of this.contexts.keys()) {
+      if (this.contexts.size <= this.limit) break;
+      this.contexts.delete(key);
+    }
   }
 
   async load(sessionId: string): Promise<LaneHeld | undefined> {
@@ -85,17 +101,19 @@ export class SyncCache {
   /** The conversation was deleted on the server: drop its copy and refuse every later one. */
   async forget(sessionId: string): Promise<void> {
     this.deleted.add(sessionId);
+    this.contexts.delete(sessionId);
     await this.drop(sessionId);
   }
 
   /** Frees this tab's copies; the stored ones stay and a later `load` reads them again. */
-  trimMemory(): void { this.memory.clear(); }
+  trimMemory(): void { this.memory.clear(); this.contexts.clear(); }
 
   get memorySize(): number { return this.memory.size; }
 
   async clear(): Promise<void> {
     this.epoch += 1;
     this.memory.clear();
+    this.contexts.clear();
     await this.backend?.clear().catch(() => undefined);
   }
 

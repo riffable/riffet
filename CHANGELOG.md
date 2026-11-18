@@ -34,6 +34,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Switching conversations on the web keeps the page in place: the header, side column and composer stay where they are and only the conversation changes, without the side column and transcript fading in again. The context meter and the running indicator show the last known state right away.
 - Permission modes in the composer toolbar on the web and Mac now show as compact icons with full titles and descriptions in the menu (and in the session options sheet on Android and iPhone), with four selectable icon styles (Shield, Semantic, Gate, and Ring) under Settings › Icons; switching permissions in a Cursor conversation persists across resumes without flashing or showing a false "Working" indicator.
 - Feishu bots now come from the built-in Feishu plugin. Turning it off under Plugins disconnects the bots and keeps them, with their chats and projects, until it is turned back on.
 - Planned tasks above the personal assistant's input box can now be dismissed, and leave the bar as soon as you open one on the board or start it; capability pack shortcut buttons above the input box are hidden.

@@ -18,6 +18,7 @@ import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
+import { useSwitchedIn } from './sessionFrame';
 import { Collapse } from '@/components/ui/collapse';
 import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
 import { rowKeyForMessage, type MessageFocus } from './focus-message';
@@ -835,6 +836,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const historyLoad = suppliedHistoryLoad ?? { state: loaded ? 'ready' : 'loading' };
   const loadView = transcriptLoadView(loaded, historyLoad);
   const showLoading = useLingering(loadView === 'loading', WAIT_GRACE_MS);
+  // A copy held in memory replaces the previous conversation where it stood; one that had to be waited for fades in.
+  const loadedInPlace = useSwitchedIn(loaded);
   if (loaded) {
     if (seen.current?.session !== sessionId) seen.current = { session: sessionId, keys: new Set(timeline.map((item) => item.key)), fresh: new Map(), length: timeline.length };
     else if (timelineVersion > 0) {
@@ -1545,7 +1548,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           role="region"
           aria-label={t`会话记录`}
           aria-busy={running || loadingEarlier || !loaded || undefined}
-          className={cn('mx-auto flex w-full flex-col pb-4', embedded ? 'px-4 pt-4' : 'max-w-(--content-width) px-3 pt-6 sm:px-4 sm:pt-8 md:px-12', loaded && 'animate-in fade-in-0 duration-[var(--duration-slow)]')}>
+          className={cn('mx-auto flex w-full flex-col pb-4', embedded ? 'px-4 pt-4' : 'max-w-(--content-width) px-3 pt-6 sm:px-4 sm:pt-8 md:px-12', loaded && !loadedInPlace && 'animate-in fade-in-0 duration-[var(--duration-slow)]')}>
           {showLoading && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
           <FeedbackNotice scope={sessionId} tone="warning" className="mb-5" message={historyLoad.state === 'error' && (historyLoad.message || t`无法同步最新会话记录。`)}
             action={() => <Button size="xs" variant="secondary" onClick={() => onRetryHistory?.()}><IconRefreshCw /><Trans>重试同步</Trans></Button>}

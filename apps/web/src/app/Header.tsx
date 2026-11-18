@@ -25,6 +25,7 @@ import type { ContextUsage } from './session/model';
 import { TabChromeContext } from './tabs/chrome';
 import { altShortcut } from './tabs/keys';
 import { ExpandSidebarButton } from './ExpandSidebarButton';
+import { useSwitchedIn } from './session/sessionFrame';
 
 /** A session-level command. Desktop lists it in the ⋯ menu; phones list it in the title sheet. */
 export interface HeaderAction {
@@ -197,7 +198,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     <div className="flex shrink-0 items-center justify-self-end gap-0.5">
       {/* Alerts arrive with the session's data; each fades in where it lands instead of popping into the row. */}
       {views && <>{views}<span aria-hidden className="mx-1.5 h-4 w-px shrink-0 bg-line-strong" /></>}
-      {alerts && <div className="contents [&>*]:animate-in [&>*]:fade-in-0 [&>*]:duration-[var(--duration-base)]">{alerts}</div>}
+      {alerts && <HeaderAlerts>{alerts}</HeaderAlerts>}
       {session && (
         <Popover open={infoOpen} onOpenChange={onInfoOpenChange}>
           <Tip label={t`会话信息`} kbd={altShortcut('I')} disabled={infoOpen}>
@@ -346,4 +347,10 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       </Dialog>
     </header>
   );
+}
+
+/** Alerts that come with a conversation replacing another one stand in its place; later ones fade in. */
+function HeaderAlerts({ children }: { children: ReactNode }) {
+  const switchedIn = useSwitchedIn();
+  return <div className={cn('contents', !switchedIn && '[&>*]:animate-in [&>*]:fade-in-0 [&>*]:duration-[var(--duration-base)]')}>{children}</div>;
 }

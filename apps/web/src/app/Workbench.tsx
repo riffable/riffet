@@ -25,6 +25,7 @@ import { Sidebar, type SessionAction } from './Sidebar';
 import { MobileSidebar } from './MobileSidebar';
 import { NativeSession } from './terminal/NativeSession';
 import { AttemptGroupPage } from './session/Attempts';
+import { SessionFrame } from './session/sessionFrame';
 import { SidebarPeekTrigger, useSidebarPeek } from './use-sidebar-peek';
 import { useWorkbenchBootstrap } from './use-workbench-bootstrap';
 import { useGlobalShortcuts } from './use-global-shortcuts';
@@ -578,50 +579,52 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   } else if ((!project && !projectlessTasks) || (selectedSessionId && !project)) {
     content = <NoProjects onAddProject={() => ui.set({ addProjectOpen: true })} header={homeHeader} />;
   } else if (session?.kind === 'native') {
+    // The frame stays across conversations; `SessionFrame` mounts each one afresh under its id.
     content = (
-      <NativeSession
-        key={session.id}
-        session={session}
-        {...(focusMessage?.sessionId === session.id ? { focus: focusMessage.focus } : {})}
-        initialRun={nativeRunSeed?.sessionId === session.id ? nativeRunSeed.run : undefined}
-        terminal={quickChat ? undefined : nativeTerminal}
-        root={quickChat ? undefined : project?.cwd}
-        reopening={startingNativeId === session.id}
-        sendingInitial={false}
-        catalog={nativeCatalog}
-        {...(currentCatalog?.entry.continuations ? { continuations: currentCatalog.entry.continuations } : {})}
-        backendCapabilities={backend?.capabilities}
-        catalogLoading={homeCatalogState.catalogLoading}
-        catalogError={nativeCatalogError}
-        onRetryCatalog={loadCatalog}
-        onReopen={() => void reopenNative(session)}
-        onTerminalChanged={upsertTerminal}
-        onSessionChanged={upsertSession}
-        {...(quickChat ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
-        onError={pushError}
-        notificationsEnabled={settings.notifications === true}
-        enterBehavior={settings.composerEnterBehavior}
-        runningBehavior={settings.composerRunningBehavior}
-        sendLaterEnabled={settings.composerSendLater === true}
-        sessionReferences={sessionReferences}
-        referenceSessions={sessions}
-        referenceProjects={projects}
-        references={quickChat ? NO_REFERENCES : references}
-        onReferencesChange={quickChat ? noReferences : ui.setReferences}
-        // The 个人助理's files are not read through the workspace routes, so a path in its conversation is plain text.
-        {...(isAssistantProject(project) ? {} : { onOpenPath: ui.preview })}
-        onOpenInEditor={openInEditor}
-        renderHeader={renderSessionHeader}
-        onLaunched={openLaunched}
-        backends={quickChat ? [] : backends}
-        findSession={findSession}
-        onOpenSession={openSessionById}
-        onAttemptAdopted={onWorktreeMerged}
-        onOpenAttemptGroup={(group) => nav.openAttemptsGroup(group.id)}
-        {...(sessionView?.sessionId === session.id ? { initialView: sessionView.view } : {})}
-        onViewChange={(view) => nav.set({ sessionView: { sessionId: session.id, view } })}
-        quickChat={quickChat}
-      />
+      <SessionFrame sessionId={session.id}>
+        <NativeSession
+          session={session}
+          {...(focusMessage?.sessionId === session.id ? { focus: focusMessage.focus } : {})}
+          initialRun={nativeRunSeed?.sessionId === session.id ? nativeRunSeed.run : undefined}
+          terminal={quickChat ? undefined : nativeTerminal}
+          root={quickChat ? undefined : project?.cwd}
+          reopening={startingNativeId === session.id}
+          sendingInitial={false}
+          catalog={nativeCatalog}
+          {...(currentCatalog?.entry.continuations ? { continuations: currentCatalog.entry.continuations } : {})}
+          backendCapabilities={backend?.capabilities}
+          catalogLoading={homeCatalogState.catalogLoading}
+          catalogError={nativeCatalogError}
+          onRetryCatalog={loadCatalog}
+          onReopen={() => void reopenNative(session)}
+          onTerminalChanged={upsertTerminal}
+          onSessionChanged={upsertSession}
+          {...(quickChat ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
+          onError={pushError}
+          notificationsEnabled={settings.notifications === true}
+          enterBehavior={settings.composerEnterBehavior}
+          runningBehavior={settings.composerRunningBehavior}
+          sendLaterEnabled={settings.composerSendLater === true}
+          sessionReferences={sessionReferences}
+          referenceSessions={sessions}
+          referenceProjects={projects}
+          references={quickChat ? NO_REFERENCES : references}
+          onReferencesChange={quickChat ? noReferences : ui.setReferences}
+          // The 个人助理's files are not read through the workspace routes, so a path in its conversation is plain text.
+          {...(isAssistantProject(project) ? {} : { onOpenPath: ui.preview })}
+          onOpenInEditor={openInEditor}
+          renderHeader={renderSessionHeader}
+          onLaunched={openLaunched}
+          backends={quickChat ? [] : backends}
+          findSession={findSession}
+          onOpenSession={openSessionById}
+          onAttemptAdopted={onWorktreeMerged}
+          onOpenAttemptGroup={(group) => nav.openAttemptsGroup(group.id)}
+          {...(sessionView?.sessionId === session.id ? { initialView: sessionView.view } : {})}
+          onViewChange={(view) => nav.set({ sessionView: { sessionId: session.id, view } })}
+          quickChat={quickChat}
+        />
+      </SessionFrame>
     );
   } else {
     content = (

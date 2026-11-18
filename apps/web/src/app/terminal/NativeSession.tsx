@@ -946,7 +946,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const headerStatus = archived ? ''
     : connectionNotice === 'failed' || connectionNotice === 'conflict' ? `connection:${connectionNotice}`
     : starting || sendingInitial ? 'starting'
-    : !native.statusKnown ? 'connecting'
+    : !native.statusKnown ? busy ? 'busy' : 'connecting'
     : connectionNotice ? `connection:${connectionNotice}`
     : recognizedInteraction ? 'interaction' : unknownAttention ? 'attention' : busy ? 'busy' : !silentConfigBoot && phase === 'offline' ? 'offline' : '';
   // Opening a session waits on its status for a moment; until that wait has lasted, the header reads

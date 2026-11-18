@@ -277,6 +277,7 @@ export class SessionSync {
           status: frame.status, statusKnown: true, interaction: frame.interaction ?? null, runs: Array.isArray(frame.runs) ? frame.runs : [],
           activities: Array.isArray(frame.activities) ? frame.activities : [], context: frame.context, session: frame.session, outline: this.main.outline,
         });
+        this.options.cache?.rememberContext(this.options.sessionId, frame.context, this.cacheEpoch);
         break;
       case 'status': this.store.set({ status: frame.status, statusKnown: true }); break;
       case 'interaction': this.store.set({ interaction: frame.interaction ?? null }); break;
@@ -284,7 +285,7 @@ export class SessionSync {
       case 'run': this.store.set((state) => ({ runs: upsertRun(state.runs, frame.run) })); break;
       case 'activities': this.store.set({ activities: frame.live }); break;
       case 'outline': this.store.set({ outline: this.main.outline }); break;
-      case 'context': this.store.set({ context: frame.context }); break;
+      case 'context': this.store.set({ context: frame.context }); this.options.cache?.rememberContext(this.options.sessionId, frame.context, this.cacheEpoch); break;
       case 'metrics':
         this.store.set((state) => {
           if (!frame.runId || !frame.run) return { step: frame.metrics };

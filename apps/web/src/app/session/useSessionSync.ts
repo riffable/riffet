@@ -208,8 +208,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   // A layout effect: a copy held in memory is published before the first paint of this conversation.
   useLayoutEffect(() => {
     const seed = seedFor(session.id);
+    const cache = source ? source.cache : browserCache();
     Object.assign(tracking, { sessionId: session.id, initialRun: seed, runsRevision: 0, transcriptKnown: false });
-    store.set((current) => ({ ...blankNativeSession(snapshotWithLocalOutbox(session, [], seed)), timelineVersion: current.timelineVersion + 1, resetVersion: current.resetVersion + 1 }));
+    // The usage last reported stands until the hello answers, so the meter does not leave and come back on a switch.
+    store.set((current) => ({ ...blankNativeSession(snapshotWithLocalOutbox(session, [], seed)), context: cache?.peekContext(session.id), timelineVersion: current.timelineVersion + 1, resetVersion: current.resetVersion + 1 }));
     view.set(blankView());
     let previousPhase: NativeStatus['phase'] | undefined;
     const completions = new TurnCompletionNotifications();
@@ -348,7 +350,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
       }
     };
     const sync = new SessionSync({
-      sessionId: session.id, transport: source?.transport ?? browserTransport, cache: source ? source.cache : browserCache(), visibility: documentVisibility, onControl: control, onClosed: () => { void confirmSessionGone(session.id); },
+      sessionId: session.id, transport: source?.transport ?? browserTransport, cache, visibility: documentVisibility, onControl: control, onClosed: () => { void confirmSessionGone(session.id); },
       onUpserts: (rows) => {
         if (!syncSummaryIdentity()) return;
         writeToolSummaries(rows, subagents, jobs, summarySeq);
