@@ -122,6 +122,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));
         // With the project, so the client knows this is the main conversation before it selects it.
         return main?{...accepted,session:main,project:store.getProject(project.id)}:accepted;});
+      deps.bindWorkbench?.(request,result.session,result.run);
       reply.code(202);dispatch.kick();return result;
     }
     const input=await resolveNativeSessionInput(deps,body,request.headers);

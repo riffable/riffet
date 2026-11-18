@@ -66,6 +66,8 @@ final class ThemeStore {
     private(set) var syncState: SyncState = .idle
 
     var catalog: [ThemeEntry] { Self.builtins + customThemes }
+    var savedThemeId: String? { UserDefaults.standard.string(forKey: Self.key) }
+    var themeIdIsForced: Bool { UserDefaults.standard.objectIsForced(forKey: Self.key) }
     /// What a theme menu lists: built-in, custom, then the plugins' palettes.
     var choices: [ThemeEntry] { catalog + AppearanceStore.shared.paletteChoices.map(\.entry) }
 

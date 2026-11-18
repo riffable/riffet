@@ -40,8 +40,9 @@ const IMMUTABLE_PREFIX = '/api/appearance/assets/';
  * Whether a navigation response may be stored as the offline shell: only a successful same-origin
  * HTML document, since every shell navigation is answered with the same index.html.
  */
-export function isShellResponse(response: { ok: boolean; type?: string; contentType?: string | null }): boolean {
+export function isShellResponse(response: { ok: boolean; type?: string; contentType?: string | null; cacheControl?: string | null }): boolean {
   if (!response.ok || (response.type !== undefined && response.type !== 'basic')) return false;
+  if (response.cacheControl?.split(',').some((directive) => directive.trim().toLowerCase() === 'no-store')) return false;
   return (response.contentType ?? '').toLowerCase().includes('text/html');
 }
 

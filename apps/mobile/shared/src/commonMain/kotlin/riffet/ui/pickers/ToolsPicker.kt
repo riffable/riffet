@@ -225,7 +225,7 @@ internal fun ToolsPickerPage(
                     multiple = true,
                 )
             }
-            if (controllable.isNotEmpty() || stale.isNotEmpty()) SectionLabel(stringResource(Res.string.pickers_tools_phones))
+            if (controllable.isNotEmpty() || stale.isNotEmpty()) SectionLabel(stringResource(Res.string.pickers_tools_devices))
             controllable.forEach { device ->
                 val group = ToolGroups.deviceGroup(device.id)
                 OptionRow(
@@ -241,7 +241,12 @@ internal fun ToolsPickerPage(
                 OptionRow(
                     label = known?.let { stringResource(Res.string.pickers_tools_control, it.name) } ?: stringResource(Res.string.pickers_tools_removed),
                     selected = true,
-                    description = known?.takeIf { !it.online }?.let { stringResource(Res.string.pickers_tools_offline) },
+                    description = when {
+                        known == null -> null
+                        !known.online -> stringResource(Res.string.pickers_tools_offline)
+                        !known.allowControl -> stringResource(Res.string.settings_disabled)
+                        else -> null
+                    },
                     onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), plugins, group, false)) },
                     disabledReason = "".takeUnless { enabled },
                     multiple = true,

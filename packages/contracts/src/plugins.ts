@@ -9,6 +9,21 @@ import type { TaskParamField } from './tasks.js';
 /** Display text by BCP-47 tag, such as `{ 'zh-Hans': '画布', en: 'Canvas' }`. Clients pick one with a fallback chain. */
 export type LocalizedText = Record<string, string>;
 
+/** Match each requested locale by tag, then its language, then prefer Simplified Chinese and English. */
+export function resolveLocalizedText(text: LocalizedText | undefined, locales: readonly string[]): string | undefined {
+  const entries = Object.entries(text ?? {});
+  if (!entries.length) return undefined;
+  const table = new Map(entries.map(([tag, value]) => [tag.toLowerCase(), value]));
+  for (const locale of locales) {
+    const parts = locale.toLowerCase().replaceAll('_', '-').split('-');
+    for (let length = parts.length; length > 0; length -= 1) {
+      const found = table.get(parts.slice(0, length).join('-'));
+      if (found !== undefined) return found;
+    }
+  }
+  return table.get('zh-hans') ?? table.get('en') ?? entries[0]![1];
+}
+
 export const VIEW_LOCATIONS = ['session-view', 'sidebar', 'panel', 'main', 'navigation', 'settings'] as const;
 /**
  * Semantic places a view may live, not pixel positions: the workbench decides sizes and order. `settings` is a

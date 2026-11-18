@@ -1,5 +1,7 @@
 ## Summary
 
+For a workbench feature, note the owner question it answers, the existing or new assistant capability, and which conversations may use it.
+
 ## Checks
 
 - [ ] `pnpm typecheck` and `pnpm test` pass

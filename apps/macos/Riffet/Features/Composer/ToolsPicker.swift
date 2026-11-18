@@ -117,8 +117,8 @@ final class ComposerToolsSlot {
     @ObservationIgnored private var owner: UUID?
 
     func publish(_ entries: (() -> [NativeMenuEntry])?, refresh: (() -> Void)?, owner: UUID) {
-        guard entries != nil || self.owner == owner || self.owner == nil else { return }
-        self.owner = entries == nil ? nil : owner
+        guard refresh != nil || entries != nil || self.owner == owner || self.owner == nil else { return }
+        self.owner = refresh != nil || entries != nil ? owner : nil
         self.entries = entries
         self.refresh = refresh
         if offered != (entries != nil) { offered = entries != nil }
@@ -163,6 +163,11 @@ struct ToolsPicker: View {
     private func switched(_ group: String, on: Bool) -> [String] {
         let kept = groups.filter { id in id != group && (phones.contains { ToolsPickerModel.group($0.id) == id } || pluginGroups.contains { $0.id == id }) }
         return on ? kept + [group] : kept
+    }
+
+    private func deviceStatus(_ device: PublicDevice) -> String? {
+        if !device.online { return String(localized: "离线") }
+        return device.allowControl ? nil : String(localized: "已停用")
     }
     private var loadKey: String { "\(agent)|\(profileId ?? "")|\(projectId ?? "")|\(toggles != nil)" }
 
@@ -209,16 +214,20 @@ struct ToolsPicker: View {
 
     /// Everything the menu rows show: a change republishes them.
     private var publishKey: [String] {
-        phones.map { "\($0.id)|\($0.name)|\($0.online)" } + pluginGroups.map { "\($0.id)|\($0.name)|\($0.off)" } + groups + off + mcpRows + ["|"] + skillRows
-            + [loadKey, "\(model.loadingExtensions)", "\(model.loadFailed)", "\(model.loaded == nil)"]
+        phones.map { "\($0.id)|\($0.name)|\($0.online)|\($0.allowControl)" } + pluginGroups.map { "\($0.id)|\($0.name)|\($0.off)" } + groups + off + mcpRows + ["|"] + skillRows
+            + [loadKey, "\(capabilities.supportsRiffetTools)", "\(model.loadingExtensions)", "\(model.loadFailed)", "\(model.loaded == nil)"]
     }
 
     private func publish(_ slot: ComposerToolsSlot) {
         let loading = toggles != nil && model.loadingExtensions && model.loaded == nil
         let failed = toggles != nil && model.loadFailed
-        guard offered || loading || failed else { slot.publish(nil, refresh: nil, owner: slotOwner); return }
-        let entries = menuEntries(loading: loading, failed: failed)
-        slot.publish({ entries }, refresh: { Task { await reload() } }, owner: slotOwner)
+        let refresh: (() -> Void)? = capabilities.supportsRiffetTools || toggles != nil ? { Task { await reload() } } : nil
+        if offered || loading || failed {
+            let entries = menuEntries(loading: loading, failed: failed)
+            slot.publish({ entries }, refresh: refresh, owner: slotOwner)
+        } else {
+            slot.publish(nil, refresh: refresh, owner: slotOwner)
+        }
     }
 
     private func menuEntries(loading: Bool, failed: Bool) -> [NativeMenuEntry] {
@@ -227,14 +236,12 @@ struct ToolsPicker: View {
             let on = groups.contains(group.id)
             entries.append(.item(group.name, subtitle: group.off ? String(localized: "已停用") : nil, checked: on) { setGroups(switched(group.id, on: !on)) })
         }
-        if !phones.isEmpty { entries.append(.header(String(localized: "手机"))) }
+        if !phones.isEmpty { entries.append(.header(String(localized: "设备"))) }
         for device in phones {
             let group = ToolsPickerModel.group(device.id)
             let on = groups.contains(group)
-            entries.append(.item(String(localized: "控制 \(device.name)"), subtitle: device.online ? nil : String(localized: "离线"), checked: on) {
-                // A phone that is gone is dropped with the change.
-                let kept = groups.filter { id in id != group && phones.contains { ToolsPickerModel.group($0.id) == id } }
-                setGroups(on ? kept : kept + [group])
+            entries.append(.item(String(localized: "控制 \(device.name)"), subtitle: deviceStatus(device), checked: on) {
+                setGroups(switched(group, on: !on))
             })
         }
         if !mcpRows.isEmpty { entries.append(.header("MCP")) }
@@ -282,13 +289,11 @@ struct ToolsPicker: View {
                 ForEach(pluginGroups, id: \.id) { group in
                     row(group.name, on: groups.contains(group.id), trailing: group.off ? String(localized: "已停用") : nil) { on in setGroups(switched(group.id, on: on)) }
                 }
-                if !phones.isEmpty { header("手机") }
+                if !phones.isEmpty { header("设备") }
                 ForEach(phones, id: \.id) { device in
                     let group = ToolsPickerModel.group(device.id)
-                    row(String(localized: "控制 \(device.name)"), on: groups.contains(group), trailing: device.online ? nil : String(localized: "离线")) { on in
-                        // A phone that is gone is dropped with the change.
-                        let kept = groups.filter { id in id != group && phones.contains { ToolsPickerModel.group($0.id) == id } }
-                        setGroups(on ? kept + [group] : kept)
+                    row(String(localized: "控制 \(device.name)"), on: groups.contains(group), trailing: deviceStatus(device)) { on in
+                        setGroups(switched(group, on: on))
                     }
                 }
                 if !mcpRows.isEmpty { header("MCP") }

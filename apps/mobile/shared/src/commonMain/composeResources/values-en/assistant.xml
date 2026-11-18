@@ -21,6 +21,11 @@
     <string name="assistant_trigger_schedule">Schedule %1$s</string>
     <string name="assistant_trigger_release">%1$s releases</string>
     <string name="assistant_trigger_page">%1$s changes</string>
+    <string name="assistant_trigger_task_todo">To do</string>
+    <string name="assistant_trigger_task_doing">In progress</string>
+    <string name="assistant_trigger_task_review">Ready for review</string>
+    <string name="assistant_trigger_task_done">Done</string>
+    <string name="assistant_trigger_task_cancelled">Cancelled</string>
     <string name="assistant_background">Background runs</string>
     <string name="assistant_background_note">Uses the assistant\'s model, billed by usage</string>
     <string name="assistant_supervision">Follow up on tasks</string>

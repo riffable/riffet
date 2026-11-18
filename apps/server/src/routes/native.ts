@@ -61,6 +61,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
       contextReferences.validateSources(session.id,input,request.headers);
       return store.acceptNativeRun(session.id,commandId,input,{model:current.model,mode:current.mode,approval:current.approval},request.body.expectedConfigRevision,undefined,snapshots);
     });
+    deps.bindWorkbench?.(request,current,result);
     reply.code(202);dispatch.kick();return store.getRun(result.id);
     });
   });

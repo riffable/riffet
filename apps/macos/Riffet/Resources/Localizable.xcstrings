@@ -21,12 +21,42 @@
         }
       }
     },
+    "待验收": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready for review"
+          }
+        }
+      }
+    },
     "%lld 个插件": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld plugins"
+          }
+        }
+      }
+    },
+    "允许助理修改本机外观": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow the assistant to change this Mac’s appearance"
+          }
+        }
+      }
+    },
+    "仅在此配对的 Riffet 工作台处于前台时生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies while this paired Riffet workbench is in the foreground."
           }
         }
       }

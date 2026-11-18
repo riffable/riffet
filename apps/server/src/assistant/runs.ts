@@ -113,7 +113,7 @@ export class AssistantRuns {
     const run: AssistantRun = { id: existing?.id ?? randomUUID(), job, key, state: 'queued', brief, ...(subject ? { subject } : {}), createdAt: new Date().toISOString() };
     // A retry keeps the id but not the old conversation: it starts a new one.
     this.write(run);
-    void this.pump();
+    this.deps.store.afterTransaction(committed => { if (committed) void this.pump(); });
     return run;
   }
 

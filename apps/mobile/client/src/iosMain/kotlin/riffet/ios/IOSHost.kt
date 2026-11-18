@@ -22,6 +22,9 @@ import riffet.cache.ListCache
 import riffet.cache.createLocalFiles
 import riffet.cache.createTranscriptIndex
 import riffet.shared.AppLog
+import riffet.shared.DeviceAppearanceOption
+import riffet.shared.DeviceAppearanceSnapshot
+import riffet.shared.ForegroundAppearance
 import riffet.shared.DeviceTokenStore
 import riffet.shared.IssuedDevice
 import riffet.contracts.TerminalAppearance
@@ -53,6 +56,7 @@ class IOSHost {
     }
     private val scope = MainScope() + failures
     internal val tokens = createDeviceTokenStore()
+    internal val appearance = ForegroundAppearance(scope, "ios")
     internal val clientConfig = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "antigravity-agent"))
 
     private val _store = MutableStateFlow<SessionStore?>(null)
@@ -74,6 +78,20 @@ class IOSHost {
         private set
 
     val api: RiffetApi? get() = connection?.apiOrNull()
+    fun configureAppearance(appVersion: String, installationId: String, apply: (String?, String?) -> IOSAppearanceSnapshot?) =
+        appearance.configure(appVersion, installationId) { theme, mode, _ ->
+            apply(theme, mode)?.let { saved ->
+                DeviceAppearanceSnapshot(saved.themeId, saved.mode, saved.themes.map { DeviceAppearanceOption(it.id, it.name) })
+            }
+        }
+
+    fun appearanceForeground(active: Boolean) = appearance.foreground(active)
+
+    @Throws(Exception::class)
+    suspend fun appearanceAllowed(api: RiffetApi): Boolean = appearance.isAllowed(api)
+
+    @Throws(Exception::class)
+    suspend fun setAppearanceAllowed(api: RiffetApi, enabled: Boolean): Boolean = appearance.setAllowed(api, enabled)
     /** A composer's voice input on the current connection; null when not connected. */
     fun dictation(microphone: DictationMicrophone): DictationController? = api?.let { DictationController(it, scope, microphone) }
 
@@ -217,6 +235,7 @@ class IOSHost {
         )
         presenter = TimelinePresenter(created, child)
         _store.value = created
+        appearance.install(api) { !created.unauthenticated.value }
         AppLog.log("app", "store installed for ${api.baseUrl}")
         created.refresh()
         if (foreground) startPoll(created, deferFirstRead = true)
@@ -224,6 +243,7 @@ class IOSHost {
     }
 
     fun uninstall() {
+        appearance.clear()
         poll?.cancel()
         poll = null
         val finalWrite = _store.value?.captureFinalFlush()
@@ -338,6 +358,7 @@ class IOSHost {
         AppLog.log("app", "network restored")
         _store.value?.wake()
         feed?.kick()
+        appearance.kick()
         poke()
     }
 }

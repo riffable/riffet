@@ -33,6 +33,8 @@ export interface AssistantStandingDeps {
   timeZone(): string | undefined;
   /** What background runs left for the main conversation (§7.1): offered at a message, settled when its turn ends. */
   pending?: { offer(): Array<{ text: string; at: number }>; settle(delivered: boolean): void };
+  nativeSettingProof?(runId: string): string | undefined;
+  workbenchProof?(runId: string): string | undefined;
   /** The main conversation is about to be summarized (§7.4). */
   compacting?(sessionId: string): void;
 }
@@ -84,7 +86,7 @@ export class AssistantStanding implements NativeStandingHost {
   }
   private isMain(sessionId: string, project: Project): boolean { return project.mainSessionId === sessionId; }
 
-  context(sessionId: string, moment: StandingMoment): string | undefined {
+  context(sessionId: string, moment: StandingMoment, runId?: string): string | undefined {
     const project = this.project(sessionId);
     if (!project) return undefined;
     const now = new Date();
@@ -92,6 +94,10 @@ export class AssistantStanding implements NativeStandingHost {
     // A background run is one short piece of work: the time is all it needs to be told.
     if (this.isRun(sessionId)) return `<riffet-context>\n${lines.join('\n')}\n</riffet-context>`;
     if (moment === 'prompt') {
+      const proof = runId && this.isMain(sessionId, project) ? this.deps.workbenchProof?.(runId) : undefined;
+      if (proof) lines.push(`This message originated in a verified Riffet Web workbench. For this turn only, workbench and authorized paired-client setting tools take sourceTurn="${proof}". The source identifies the workbench; check what the owner actually meant before changing it. Do not quote or save this value.`);
+      const nativeProof = runId && this.isMain(sessionId, project) ? this.deps.nativeSettingProof?.(runId) : undefined;
+      if (nativeProof) lines.push(`This message came from an authenticated paired client. For an explicitly requested instance or paired-device setting in this turn use sourceTurn="${nativeProof}". This is not a Web workbench target. Do not quote or save this value.`);
       const gap = this.sinceLastMessage(sessionId, now);
       if (gap !== undefined && gap >= GAP_WORTH_SAYING_MS) lines.push(`The previous message in this conversation was ${span(gap)} ago. State you looked up before then may have changed.`);
       const notes = this.isMain(sessionId, project) ? this.deps.pending?.offer() ?? [] : [];
@@ -182,7 +188,7 @@ export function claimMainConversation(store: Store, project: Project, sessionId:
   return session;
 }
 
-function zoneOf(timeZone: string | undefined): string {
+export function zoneOf(timeZone: string | undefined): string {
   if (timeZone) { try { new Intl.DateTimeFormat('en-US', { timeZone }); return timeZone; } catch { /* the server's */ } }
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }

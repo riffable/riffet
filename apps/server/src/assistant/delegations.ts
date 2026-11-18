@@ -1,13 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { ASSISTANT_BUDGET, type AssistantDelegation, type AssistantDelegationTrigger } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type WorkItemEvent } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
 
 /*
  * Delegations (docs/ASSISTANT.md §7.3): what the owner handed the 助理 to follow over time. The server checks each
- * one's trigger itself, without the model, and starts a background run only when it fires: a time, a release, a
- * page that changed. A delegation ends on its date.
+ * one's trigger itself and starts a background run when it fires: a time, a release, a page change or a task status.
  */
 
 const DEFAULT_EVERY_MINUTES = 60;
@@ -20,6 +19,8 @@ const FETCH_TIMEOUT_MS = 20_000;
 const PAYLOAD_CHARS = 12_000;
 
 export interface DelegationFire { delegation: AssistantDelegation; reason: string; payload: string; cursor: string; key: string }
+type TaskStatusTrigger = Extract<AssistantDelegationTrigger, { kind: 'task-status' }>;
+type TaskStatusEvent = Extract<WorkItemEvent, { kind: 'status' }>;
 
 export interface AssistantDelegationsDeps {
   store: Store;
@@ -28,6 +29,11 @@ export interface AssistantDelegationsDeps {
   timeZone(): string;
   /** Starts the run for a trigger that fired; the key makes the same change start one run. */
   fire(fire: DelegationFire): void;
+  taskStatuses: {
+    baseline(reference: string | number): { workItemId: string; taskNumber: number; cursor: string };
+    events(workItemId: string, cursor: string, limit: number): TaskStatusEvent[] | undefined;
+    subscribe(listener: (workItemId: string) => void): () => void;
+  };
   /** A delegation that ended on its date, for the main conversation to mention. */
   expired(delegation: AssistantDelegation): void;
   fetch?: typeof fetch;
@@ -36,6 +42,7 @@ export interface AssistantDelegationsDeps {
 }
 
 interface Row { delegation: AssistantDelegation; nextCheckAt: number }
+const taskStatusKey = (delegationId: string) => `delegation-task-status:${delegationId}:`;
 
 export class AssistantDelegations {
   private readonly db: DatabaseSync;
@@ -79,11 +86,12 @@ export class AssistantDelegations {
     const open = this.db.prepare("SELECT COUNT(*) AS count FROM assistant_delegations WHERE state='active'").get() as { count: number };
     if (open.count >= ASSISTANT_BUDGET.delegations) throw new AppError('TOO_MANY_DELEGATIONS', `At most ${ASSISTANT_BUDGET.delegations} delegations can be open; end one first`, 409);
     const now = new Date();
+    const trigger = this.trigger(input.trigger);
     const delegation: AssistantDelegation = {
       id: randomUUID(),
       goal: text(input.goal, 'goal', 4000, true)!,
       attention: text(input.attention, 'attention', 4000, true)!,
-      trigger: this.trigger(input.trigger),
+      ...trigger,
       until: until(input.until, now),
       state: 'active',
       createdAt: now.toISOString(), updatedAt: now.toISOString(),
@@ -105,12 +113,13 @@ export class AssistantDelegations {
     };
     const trigger = input.trigger !== undefined ? this.trigger(input.trigger) : undefined;
     // A new source has nothing handled yet.
-    if (trigger) { next.trigger = trigger; delete next.cursor; }
-    this.write(next, trigger ? this.firstCheck(next, now) : this.nextCheck(id) ?? this.firstCheck(next, now));
+    if (trigger) { delete next.cursor; Object.assign(next, trigger); }
+    const due = this.nextCheck(id) ?? this.firstCheck(next, now);
+    this.write(next, trigger ? this.firstCheck(next, now) : next.trigger.kind === 'task-status' ? Math.min(due, Date.parse(next.until)) : due);
     return next;
   }
 
-  end(id: string, by: 'owner' | 'assistant' | 'expired'): AssistantDelegation {
+  end(id: string, by: NonNullable<AssistantDelegation['endedReason']>): AssistantDelegation {
     const current = this.get(id);
     if (current.state !== 'active') return current;
     const ended: AssistantDelegation = { ...current, state: 'ended', endedReason: by, updatedAt: new Date().toISOString() };
@@ -118,11 +127,17 @@ export class AssistantDelegations {
     return ended;
   }
 
+  /** A task transition recorded before the deadline still counts if recovery reaches it afterward. */
+  wantsRun(id: string, key: string): boolean {
+    const delegation = this.get(id);
+    return delegation.state === 'active' || (delegation.endedReason === 'expired' && key.startsWith(taskStatusKey(id)));
+  }
+
   private nextCheck(id: string): number | undefined {
     return (this.db.prepare('SELECT next_check_at FROM assistant_delegations WHERE id=?').get(id) as { next_check_at: number } | undefined)?.next_check_at;
   }
 
-  private trigger(raw: unknown): AssistantDelegationTrigger {
+  private trigger(raw: unknown): { trigger: AssistantDelegationTrigger; cursor?: string } {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw invalid('trigger must be an object');
     const value = raw as Record<string, unknown>;
     const every = () => {
@@ -135,24 +150,33 @@ export class AssistantDelegations {
       const cron = text(value.cron, 'cron', 100, true)!;
       const timeZone = value.timeZone === undefined ? undefined : text(value.timeZone, 'timeZone', 64, true);
       try { this.deps.nextCron(cron, new Date(), timeZone ?? this.deps.timeZone()); } catch { throw invalid('cron must be five fields, like "0 9 * * 5"'); }
-      return { kind: 'schedule', cron, ...(timeZone ? { timeZone } : {}) };
+      return { trigger: { kind: 'schedule', cron, ...(timeZone ? { timeZone } : {}) } };
     }
     if (value.kind === 'github-release') {
       const repo = text(value.repo, 'repo', 200, true)!.replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
       if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw invalid('repo must be owner/name');
-      return { kind: 'github-release', repo, ...every() };
+      return { trigger: { kind: 'github-release', repo, ...every() } };
     }
     if (value.kind === 'page') {
       const url = text(value.url, 'url', 2000, true)!;
       let parsed: URL;
       try { parsed = new URL(url); } catch { throw invalid('url must be an http or https address'); }
       if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw invalid('url must be an http or https address');
-      return { kind: 'page', url: parsed.toString(), ...every() };
+      return { trigger: { kind: 'page', url: parsed.toString(), ...every() } };
     }
-    throw invalid('trigger.kind must be schedule, github-release or page');
+    if (value.kind === 'task-status') {
+      const reference = value.task;
+      const task = typeof reference === 'number' && Number.isSafeInteger(reference) && reference > 0 ? reference : text(reference, 'task', 100, true)!;
+      const status = WORK_ITEM_STATUSES.find(candidate => candidate === value.status);
+      if (!status) throw invalid(`status must be one of ${WORK_ITEM_STATUSES.join(', ')}`);
+      const { cursor, ...subject } = this.deps.taskStatuses.baseline(task);
+      return { trigger: { kind: 'task-status', status, ...subject }, cursor };
+    }
+    throw invalid('trigger.kind must be schedule, github-release, page or task-status');
   }
 
   private firstCheck(delegation: AssistantDelegation, now: Date): number {
+    if (delegation.trigger.kind === 'task-status') return Date.parse(delegation.until);
     // A watch looks once at the start, to learn where the source is; that look fires nothing.
     return delegation.trigger.kind === 'schedule' ? this.cronAfter(delegation, now) : now.getTime();
   }
@@ -164,28 +188,90 @@ export class AssistantDelegations {
   // ---- Checking --------------------------------------------------------------------------------
 
   start(): () => void {
+    const unwatch = this.deps.taskStatuses.subscribe(workItemId => this.taskChanged(workItemId));
     this.timer = setInterval(() => { void this.tick(); }, TICK_MS);
     this.timer.unref?.();
-    setImmediate(() => { void this.tick(); });
-    return () => { if (this.timer) clearInterval(this.timer); };
+    const first = setImmediate(() => { void this.tick(new Date(), true); });
+    return () => { clearImmediate(first); unwatch(); if (this.timer) clearInterval(this.timer); };
   }
 
-  async tick(now = new Date()): Promise<void> {
-    const due = this.db.prepare("SELECT json, next_check_at FROM assistant_delegations WHERE state='active' AND next_check_at<=?").all(now.getTime()).map(raw => this.row(raw)!);
+  async tick(now = new Date(), recoverTasks = false): Promise<void> {
+    const due = this.db.prepare(`SELECT json, next_check_at FROM assistant_delegations WHERE state='active'
+      AND (next_check_at<=? OR (? AND json_extract(json,'$.trigger.kind')='task-status'))
+      ORDER BY json_extract(json,'$.trigger.kind')='task-status' DESC`).all(now.getTime(), Number(recoverTasks)).map(raw => this.row(raw)!);
     for (const { delegation } of due) {
       if (this.checking.has(delegation.id)) continue;
       this.checking.add(delegation.id);
-      try { await this.check(delegation, now); } catch (error) { console.warn('[riffet] delegation check failed', delegation.id, error instanceof Error ? error.message : error); } finally { this.checking.delete(delegation.id); }
+      try {
+        const current = this.get(delegation.id);
+        if (current.state === 'active') await this.check(current, now);
+      } catch (error) {
+        this.checkFailed(delegation.id, error, now);
+      } finally { this.checking.delete(delegation.id); }
     }
   }
 
+  private taskChanged(workItemId: string): void {
+    const now = new Date();
+    const watches = this.db.prepare(`SELECT json, next_check_at FROM assistant_delegations WHERE state='active'
+      AND json_extract(json,'$.trigger.kind')='task-status' AND json_extract(json,'$.trigger.workItemId')=?`).all(workItemId);
+    for (const row of watches) {
+      const { delegation } = this.row(row)!;
+      if (delegation.trigger.kind !== 'task-status') continue;
+      try { this.checkTaskStatus(delegation, delegation.trigger, now); } catch (error) { this.checkFailed(delegation.id, error, now); }
+    }
+  }
+
+  private checkFailed(id: string, error: unknown, now: Date): void {
+    // A task awaiting replay is due again even when its deadline is still far away.
+    this.db.prepare(`UPDATE assistant_delegations SET next_check_at=? WHERE id=? AND state='active'
+      AND json_extract(json,'$.trigger.kind')='task-status'`).run(now.getTime(), id);
+    console.warn('[riffet] delegation check failed', id, error instanceof Error ? error.message : error);
+  }
+
+  private checkTaskStatus(delegation: AssistantDelegation, trigger: TaskStatusTrigger, now: Date): void {
+    const events = delegation.cursor && this.deps.taskStatuses.events(trigger.workItemId, delegation.cursor, ASSISTANT_BUDGET.taskStatusEvents);
+    if (!events) { this.end(delegation.id, 'task-deleted'); return; }
+    const deadline = Date.parse(delegation.until);
+    const more = events.length === ASSISTANT_BUDGET.taskStatusEvents;
+    const expired = !more && deadline <= now.getTime();
+    const matches = events.filter(event => event.to === trigger.status && Date.parse(event.at) < deadline);
+    if (!expired && !events.length && this.nextCheck(delegation.id) === deadline) return;
+    const progress = {
+      ...delegation,
+      cursor: events.at(-1)?.id ?? delegation.cursor,
+      lastCheckedAt: now.toISOString(),
+      ...(matches.length ? { lastRunAt: now.toISOString() } : {}),
+    };
+    this.deps.store.transaction(() => {
+      for (const event of matches) {
+        this.deps.fire({
+          delegation,
+          reason: `任务 #${trigger.taskNumber} 进入 ${trigger.status}。`,
+          payload: JSON.stringify({ task: trigger.taskNumber, ...event }),
+          cursor: event.id,
+          key: taskStatusKey(delegation.id) + event.id,
+        });
+      }
+      if (expired) {
+        const ended = { ...progress, state: 'ended', endedReason: 'expired', updatedAt: now.toISOString() } as const;
+        this.write(ended, 0);
+        this.deps.expired(ended);
+      } else this.write(progress, more ? now.getTime() : deadline);
+    });
+  }
+
   private async check(delegation: AssistantDelegation, now: Date): Promise<void> {
+    const trigger = delegation.trigger;
+    if (trigger.kind === 'task-status') {
+      this.checkTaskStatus(delegation, trigger, now);
+      return;
+    }
     if (Date.parse(delegation.until) <= now.getTime()) {
       const ended = this.end(delegation.id, 'expired');
       this.deps.expired(ended);
       return;
     }
-    const trigger = delegation.trigger;
     if (trigger.kind === 'schedule') {
       // The slot is moved on before the run starts, so a restart does not run it twice; the key does the rest.
       const slot = new Date(this.nextCheck(delegation.id) ?? now.getTime());
@@ -194,14 +280,21 @@ export class AssistantDelegations {
       return;
     }
     const next = now.getTime() + (trigger.everyMinutes ?? DEFAULT_EVERY_MINUTES) * 60_000;
+    const currentSource = () => {
+      const current = this.get(delegation.id);
+      if (current.state !== 'active' || current.updatedAt !== delegation.updatedAt || JSON.stringify(current.trigger) !== JSON.stringify(trigger)) return undefined;
+      return current;
+    };
     let seen: { cursor: string; reason: string; payload: string } | undefined;
     try { seen = trigger.kind === 'github-release' ? await this.latestRelease(trigger.repo) : await this.page(trigger.url); } catch (error) {
-      // An unreachable source is looked at again next time; it fires nothing.
-      this.write({ ...delegation, lastCheckedAt: now.toISOString() }, next);
+      // A failed fetch may only reschedule the watch that requested it.
+      const current = currentSource();
+      if (!current) return;
+      this.write({ ...current, lastCheckedAt: now.toISOString() }, next);
       throw error;
     }
-    const current = this.get(delegation.id);
-    if (current.state !== 'active') return;
+    const current = currentSource();
+    if (!current) return;
     if (!seen) { this.write({ ...current, lastCheckedAt: now.toISOString() }, next); return; }
     if (current.cursor === undefined) {
       // The first look learns where the source stands: what was there before the delegation is not news.

@@ -25,8 +25,17 @@ export interface RiffetNotice { id: string; sessionId: string; title?: string; b
 export const DEVICE_PLATFORMS = ['android', 'ios', 'mac'] as const;
 export type DevicePlatform = typeof DEVICE_PLATFORMS[number];
 /** T0 first, then T1. A device reports only those it can serve right now. */
-export const DEVICE_CAPABILITIES = ['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch'] as const;
+export const DEVICE_CAPABILITIES = ['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch', 'riffet.appearance'] as const;
 export type DeviceCapability = typeof DEVICE_CAPABILITIES[number];
+/** One paired client's own local workbench preferences. An empty request reads them. */
+export interface DeviceAppearanceRequest {
+  themeId?: string; mode?: 'system' | 'light' | 'dark'; interfaceStyle?: string;
+}
+export interface DeviceAppearanceResult {
+  themeId: string; mode: 'system' | 'light' | 'dark'; interfaceStyle?: string; activePaletteId?: string;
+  themes: Array<{ id: string; name: string }>;
+  interfaceStyles?: Array<{ id: string; name: string }>;
+}
 /**
  * `PUT /api/devices/me`, sent by the device before it opens its stream and whenever any of it changes.
  * `installationId` is random, made once per app installation: pairing again from the same installation

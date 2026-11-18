@@ -1,4 +1,4 @@
-import type { CommandRunRequest, PluginAction, PluginDescriptor, LocalizedText, ModelSourceDescriptor, NativeBackendId, PluginCommandResult } from '@contracts';
+import { resolveLocalizedText, type CommandRunRequest, type PluginAction, type PluginDescriptor, type LocalizedText, type ModelSourceDescriptor, type NativeBackendId, type PluginCommandResult } from '@contracts';
 import { i18n } from '@lingui/core';
 import { api, request } from './api';
 import { createStore, useStore } from './store';
@@ -78,22 +78,8 @@ export async function refreshPlugins(): Promise<PluginDescriptor[]> {
   return plugins;
 }
 
-/**
- * The text for the first of `locales` the map has: an exact tag, then its language, then Simplified
- * Chinese, then English, then whatever there is. `undefined` when the map is absent or empty.
- */
 export function localizedText(text: LocalizedText | undefined, locales: readonly string[] = [i18n.locale]): string | undefined {
-  const entries = Object.entries(text ?? {});
-  if (!entries.length) return undefined;
-  const table = new Map(entries.map(([tag, value]) => [tag.toLowerCase(), value]));
-  for (const locale of locales) {
-    const tag = locale.toLowerCase().replaceAll('_', '-');
-    for (let length = tag.split('-').length; length > 0; length -= 1) {
-      const found = table.get(tag.split('-').slice(0, length).join('-'));
-      if (found !== undefined) return found;
-    }
-  }
-  return table.get('zh-hans') ?? table.get('en') ?? entries[0]![1];
+  return resolveLocalizedText(text, locales);
 }
 
 /** A plugin's name for the user: its title, else its name, else the id. */

@@ -41,7 +41,7 @@ export class ThemeService {
     return structuredClone(this.load());
   }
 
-  async replaceLibrary(input: ThemeLibraryUpdate): Promise<ThemeLibrary> {
+  async replaceLibrary(input: ThemeLibraryUpdate, beforeWrite?: () => void): Promise<ThemeLibrary> {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('INVALID_THEMES', 'Theme library update must be an object');
     if (typeof input.expectedRevision !== 'string' || !input.expectedRevision) throw new AppError('INVALID_THEMES', 'expectedRevision is required');
     const checked = validateCustomThemes((input as { themes?: unknown }).themes);
@@ -57,6 +57,7 @@ export class ThemeService {
         throw new AppError('THEME_CONFLICT', 'The theme library changed since it was read', 409, { revision: current.revision });
       }
       const library: ThemeLibrary = { version: 1, revision, themes: checked.themes };
+      beforeWrite?.();
       this.write(library);
       return library;
     });

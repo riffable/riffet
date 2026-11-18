@@ -45,7 +45,7 @@ if (added.size && !update) {
 
 // A module is a directory or a top-level file of apps/server/src; `backends/` is three kinds of module.
 const LAYERS = [
-  ['base', ['errors.ts', 'exec.ts', 'version.ts', 'environment.ts', 'compat.ts', 'server-log.ts', 'server-id.ts', 'mdns-name.ts',
+  ['base', ['assistant-capability.ts', 'errors.ts', 'exec.ts', 'version.ts', 'environment.ts', 'compat.ts', 'server-log.ts', 'server-id.ts', 'mdns-name.ts',
     'connection-addresses.ts', 'discovery.ts', 'service-files.ts', 'loop-health.ts', 'pairing.ts', 'auth.ts',
     'clientLogs.ts', 'wal-checkpoint.ts', 'session-identity.ts', 'session-title.ts', 'metrics', 'prompts']],
   ['kernel', ['store.ts', 'journal', 'timeline', 'sync', 'native', 'backends', 'agent-host', 'terminal', 'settings', 'auxiliary']],

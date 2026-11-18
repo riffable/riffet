@@ -105,7 +105,7 @@ data class AssistantMemory(
     val updatedAt: String? = null,
 )
 
-/** What starts a delegation's run: [kind] is `schedule`, `github-release` or `page`. */
+/** What starts a delegation's run: a schedule, a release, a page change, or a task status. */
 @Serializable
 data class AssistantDelegationTrigger(
     val kind: String,
@@ -114,6 +114,9 @@ data class AssistantDelegationTrigger(
     val repo: String? = null,
     val url: String? = null,
     val everyMinutes: Int? = null,
+    val workItemId: String? = null,
+    val taskNumber: Int? = null,
+    val status: String? = null,
 )
 
 /** Something the owner handed the 助理 to follow over time (docs/ASSISTANT.md §7.3). */

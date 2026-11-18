@@ -23,13 +23,14 @@ const STORED_BACKEND_ID_SQL = `COALESCE(json_extract(s.json,'$.backendId'),'${LE
 const STALE_INDEX_FILTER = `json_extract(s.json,'$.kind')='native' AND (x.indexed_at IS NULL AND NOT EXISTS (SELECT 1 FROM message_index m WHERE m.session_id=s.id)
   OR x.indexed_at < COALESCE(json_extract(s.json,'$.lastActivityAt'),''))`;
 /** Narrows a search to a conversation and can hide backends; nothing for a global one. */
-function searchScope(sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false): { clause: string; params: string[] } {
+function searchScope(sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): { clause: string; params: string[] } {
   const hidden = excludedBackendIds?.length ? excludedBackendIds : undefined;
   return {
     clause: (sessionId === undefined ? '' : ' AND s.id=?')
       + (hidden === undefined ? '' : ` AND ${STORED_BACKEND_ID_SQL} NOT IN (${hidden.map(() => '?').join(',')})`)
       + (hidePluginAgents ? ` AND ${STORED_BACKEND_ID_SQL} NOT LIKE '%.%'` : '')
-      + (excludeTaskWorkspaces ? " AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND json_extract(p.json,'$.system')='task-workspace')" : ''),
+      + (excludeTaskWorkspaces ? " AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND json_extract(p.json,'$.system')='task-workspace')" : '')
+      + (assistantHistory ? " AND COALESCE(json_extract(s.json,'$.origin.kind'),'')<>'assistant' AND NOT EXISTS (SELECT 1 FROM projects p WHERE p.id=s.project_id AND json_extract(p.json,'$.system')='quick-chat')" : ''),
     params: [...(sessionId === undefined ? [] : [sessionId]), ...(hidden ?? [])],
   };
 }
@@ -210,6 +211,7 @@ export class Store {
     this.db.exec(`PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), json TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS sessions_waiting_owner ON sessions(id) WHERE json_extract(json,'$.state')='waiting' AND json_extract(json,'$.archivedAt') IS NULL;
       CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), command_id TEXT NOT NULL, json TEXT NOT NULL, UNIQUE(session_id,command_id));
       CREATE INDEX IF NOT EXISTS run_native_unfinished ON runs(session_id, json_extract(json,'$.native.delivery'))
         WHERE json_extract(json,'$.native.delivery') IN ('queued','preparing','dispatching','input_sent','observed','uncertain')
@@ -220,6 +222,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS event_session_seq ON events(session_id,sequence);
       CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, json TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS workbench_document_proofs (digest TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
       -- Searchable message text. Additive and unversioned: a reader that does not know this table
       -- simply ignores it, and one that does fills it when it has a transcript in hand.
       CREATE TABLE IF NOT EXISTS message_index (
@@ -747,6 +750,9 @@ export class Store {
     if (!nativeId && !session.resumePicker) return this.listRuns(sessionId)[0]?.prompt;
     return undefined;
   }
+  waitingSessionIds(): string[] {
+    return (this.sql("SELECT id FROM sessions WHERE json_extract(json,'$.state')='waiting' AND json_extract(json,'$.archivedAt') IS NULL").all() as {id:string}[]).map(row=>row.id);
+  }
   listSessions(): IdentifiedSession[] { return this.allSessions().sort((a,b) => (b.lastActivityAt ?? b.createdAt).localeCompare(a.lastActivityAt ?? a.createdAt)); }
   updateSession(id: string, patch: Partial<Session>): IdentifiedSession {
     return this.transaction(() => {
@@ -971,6 +977,11 @@ export class Store {
     });
   }
   getRun(id: string): IdentifiedRun { const row = this.sql('SELECT json FROM runs WHERE id=?').get(id) as {json: string} | undefined; if (!row) throw new AppError('RUN_NOT_FOUND','Run does not exist',404); return this.run(row.json); }
+  previousRunId(sessionId: string, runId: string): string | undefined {
+    const row = this.sql('SELECT id FROM runs WHERE session_id=? AND rowid < (SELECT rowid FROM runs WHERE session_id=? AND id=?) ORDER BY rowid DESC LIMIT 1')
+      .get(sessionId, sessionId, runId) as { id: string } | undefined;
+    return row?.id;
+  }
   findRunByCommand(sessionId: string, commandId: string): IdentifiedRun | undefined {
     const row = this.sql('SELECT json FROM runs WHERE session_id=? AND command_id=?').get(sessionId, commandId) as {json:string} | undefined;
     return row ? this.run(row.json) : undefined;
@@ -1124,9 +1135,16 @@ export class Store {
     return this.sql(`SELECT kind,text,at FROM message_index WHERE session_id=? AND kind IN (${options.tools ? "'user','assistant','tool'" : "'user','assistant'"}) AND text<>'' ORDER BY at, rowid`).all(sessionId) as Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string }>;
   }
 
+  /** A bounded tail from the search index, without loading earlier rows or tools. */
+  recentIndexedMessages(sessionId: string, limit: number, characters: number): Array<{ role: 'user' | 'assistant'; text: string; at: string }> {
+    const rows = this.sql("SELECT kind AS role,substr(text,1,?) AS text,at FROM message_index WHERE session_id=? AND kind IN ('user','assistant') AND text<>'' ORDER BY at DESC,rowid DESC LIMIT ?")
+      .all(characters, sessionId, limit) as Array<{ role: 'user' | 'assistant'; text: string; at: string }>;
+    return rows.reverse();
+  }
+
   /** Assistant and tool text, newest first. Prompts come from `searchPrompts`, which is complete. [sessionId] narrows it to one conversation; [excludedBackendIds] hides providers before the limit. */
-  searchIndexedMessages(pattern: string, limit: number, sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false): MessageSearchHit[] {
-    const scope = searchScope(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents);
+  searchIndexedMessages(pattern: string, limit: number, sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): MessageSearchHit[] {
+    const scope = searchScope(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents, assistantHistory);
     // The trigram index answers a plain substring of three characters or more; it cannot take an
     // ESCAPE clause, so a query holding a wildcard character keeps the scan. Either way the LIKE
     // on `message_index` decides, which keeps the result exactly what the scan would return.
@@ -1146,8 +1164,8 @@ export class Store {
    * backend, so this covers the whole history without reading any provider — which matters, because
    * reading an arbitrary conversation can start an agent.
    */
-  searchPrompts(pattern: string, limit: number, sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false): MessageSearchHit[] {
-    const scope = searchScope(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents);
+  searchPrompts(pattern: string, limit: number, sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): MessageSearchHit[] {
+    const scope = searchScope(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents, assistantHistory);
     const rows = this.sql(`SELECT r.command_id AS commandId, r.json AS runJson, s.json AS sessionJson
       FROM runs r JOIN sessions s ON s.id = r.session_id
       WHERE json_extract(r.json,'$.prompt') LIKE ? ESCAPE '\\'${scope.clause} ORDER BY r.rowid DESC LIMIT ?`).all(pattern, ...scope.params, limit) as Array<{commandId:string;runJson:string;sessionJson:string}>;
@@ -1259,6 +1277,17 @@ export class Store {
   getSetting<T>(key: string, fallback: T): T { const row=this.sql('SELECT json FROM settings WHERE key=?').get(key) as {json:string}|undefined; return row ? JSON.parse(row.json) : fallback; }
   deleteSetting(key: string): void { this.sql('DELETE FROM settings WHERE key=?').run(key); }
   setSetting(key: string, value: unknown) { this.sql('INSERT INTO settings(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(key,JSON.stringify(value)); }
+  saveWorkbenchDocumentProof(digest: string, expiresAt: number, nowMs: number, limit: number): void {
+    this.transaction(() => {
+      this.sql('DELETE FROM workbench_document_proofs WHERE expires_at<=?').run(nowMs);
+      this.sql('INSERT INTO workbench_document_proofs(digest,expires_at) VALUES(?,?)').run(digest, expiresAt);
+      this.sql('DELETE FROM workbench_document_proofs WHERE rowid IN (SELECT rowid FROM workbench_document_proofs ORDER BY rowid DESC LIMIT -1 OFFSET ?)').run(limit);
+    });
+  }
+  takeWorkbenchDocumentProof(digest: string, nowMs: number): boolean {
+    const row = this.sql('DELETE FROM workbench_document_proofs WHERE digest=? RETURNING expires_at').get(digest) as { expires_at: number } | undefined;
+    return row !== undefined && row.expires_at > nowMs;
+  }
   private interactionReceiptKey(requestId: string): string {
     if (typeof requestId !== 'string' || !requestId || requestId.length > 200 || /[\0\r\n]/.test(requestId)) throw new AppError('INVALID_INTERACTION_REQUEST_ID', 'Interaction request id is invalid');
     return createHash('sha256').update(requestId).digest('hex');

@@ -15284,7 +15284,8 @@
                 "alarm",
                 "screen.observe",
                 "screen.act",
-                "app.launch"
+                "app.launch",
+                "riffet.appearance"
               ],
               "open": true
             }
@@ -15443,7 +15444,8 @@
                 "alarm",
                 "screen.observe",
                 "screen.act",
-                "app.launch"
+                "app.launch",
+                "riffet.appearance"
               ],
               "open": true
             }
@@ -15514,7 +15516,8 @@
               "alarm",
               "screen.observe",
               "screen.act",
-              "app.launch"
+              "app.launch",
+              "riffet.appearance"
             ],
             "open": true
           },

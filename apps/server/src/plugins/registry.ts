@@ -295,7 +295,7 @@ export class PluginRegistry {
     visited.add(manifest.id);
     try {
       if (entry.source !== 'builtin' && this.store.recovery()) return false;
-      const enabled = this.store.item(manifest.id).enablement;
+      const enabled = this.store.enablement(manifest.id);
       if (enabled === 'off' || (enabled === 'auto' && manifest.defaultEnabled === false)) return false;
       return !(manifest.requires ?? []).some(requirement => !requirement.optional && (!this.entries.get(requirement.id) || !this.permitted(this.entries.get(requirement.id)!, new Set(visited))));
     } catch { return false; }
@@ -755,6 +755,54 @@ export class PluginRegistry {
       };
     }));
     return [...loaded, ...rejected];
+  }
+
+  /** Read the committed workbench inventory without asking plugins for their status or opening their files. */
+  async workbenchSettingFields(id: string, offset: number, limit: number) {
+    await this.loading;
+    const entry = this.entries.get(id);
+    if (!entry) throw new AppError('PLUGIN_NOT_FOUND', 'There is no installed plugin with this ID',404);
+    const fields = entry.plugin.manifest.settings ?? [];
+    const page = fields.slice(offset, offset + limit).map(({key,label,kind}) => ({key,label:label.slice(0,160),kind}));
+    return { pluginId:id, section:id, fields:page, total:fields.length, ...(offset + page.length < fields.length ? {nextOffset:offset + page.length} : {}) };
+  }
+
+  async workbenchInventory() {
+    await this.loading;
+    const plugins = [...this.entries.values()].map(entry => {
+      const { manifest } = entry.plugin;
+      const id: string = manifest.id;
+      let enablement: PluginEnablement | 'unknown' = 'unknown';
+      try { enablement = this.store.enablement(id); } catch { /* an unreadable store has no known choice */ }
+      const active = Boolean(entry.active);
+      const available = this.available(entry);
+      const dependency = entry.problem && entry.allowed
+        ? (manifest.requires ?? []).find(requirement => !requirement.optional && !this.entries.get(requirement.id)?.active)
+        : undefined;
+      return {
+        id, name: manifest.name, source: entry.source, enablement, active, enabled: available,
+        labels: Object.values(manifest.title ?? {}),
+        version: entry.version ?? manifest.version,
+        activation: entry.starting ? 'activating' : active ? 'active' : entry.problem ? 'failed' : 'idle',
+        reason: entry.waiting ? 'waiting_for_tasks' : enablement === 'unknown' ? 'configuration_unavailable' : entry.blocked ? 'unsupported_host'
+          : entry.starting ? 'activating' : dependency ? 'dependency_unavailable' : entry.problem ? 'activation_failed'
+            : active ? null : available ? 'not_activated' : entry.evaluated || enablement === 'off' ? 'disabled' : 'not_evaluated',
+        activatedAt: entry.runtime?.activatedAt,
+        health: entry.active?.statusLast?.state,
+        toolGroups: (manifest.contributes?.agentTools ?? []).map(({ id }) => id),
+      };
+    });
+    const ids = new Set<string>(plugins.map(plugin => plugin.id));
+    for (const item of this.rejected) {
+      if (!PLUGIN_ID.test(item.id) || ids.has(item.id) || !item.source) continue;
+      ids.add(item.id);
+      plugins.push({
+        id: item.id, name: item.name || item.id, source: item.source, enablement: 'unknown',
+        labels: [], version: undefined, active: false, enabled: false, activation: 'failed',
+        reason: 'package_rejected', activatedAt: undefined, health: undefined, toolGroups: [],
+      });
+    }
+    return plugins;
   }
 
   async update(id: string, input: unknown): Promise<PluginDescriptor> {
@@ -1387,7 +1435,7 @@ export class PluginRegistry {
     if (this.closed) return undefined;
     const { manifest } = entry.plugin;
     let enablement: PluginEnablement;
-    try { enablement = this.store.item(manifest.id).enablement; this.storeProblem = undefined; }
+    try { enablement = this.store.enablement(manifest.id); this.storeProblem = undefined; }
     catch (error) {
       // Nothing runs on a guess: an `off` the file can no longer say must not become an `auto` that detects on.
       this.storeProblem = describeError(error);
@@ -1676,7 +1724,7 @@ export class PluginRegistry {
       : entry.note ? { state: 'attention', message: entry.note }
       : entry.active ? await this.statusOf(entry.active) : undefined;
     const status = rawStatus?.message ? { ...rawStatus, message: this.journal.redact(manifest.id, rawStatus.message) } : rawStatus;
-    const available = Boolean(entry.active) || (this.isLazy(entry) && this.permitted(entry) && entry.allowed !== false);
+    const available = this.available(entry);
     const declaredSources = entry.plugin.manifest.contributes?.modelSources ?? [];
     // Static metadata survives disablement so a saved profile can still identify its gateway type.
     // These descriptors do not register a usable provider: modelSources() and enabled keep that boundary.
@@ -1725,6 +1773,10 @@ export class PluginRegistry {
       actions: contributions?.actions ? Object.entries(contributions.actions).map(([id, action]) => ({ id, label: action.label, kind: action.kind })) : available ? manifest.contributes?.actions ?? [] : [],
       contributes: { ...(sources?.length ? { modelSources: sources } : {}), ...(publisher ? { sharePublisher: { label: publisher.label, audience: publisher.audience } } : {}) },
     };
+  }
+
+  private available(entry: Entry): boolean {
+    return Boolean(entry.active) || (this.isLazy(entry) && this.permitted(entry) && entry.allowed !== false);
   }
 
   private patch(entry: Entry, input: unknown): { patch: PluginItemPatch; force: boolean } {

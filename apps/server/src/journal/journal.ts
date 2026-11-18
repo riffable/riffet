@@ -653,6 +653,19 @@ export class Journal {
     return this.entitiesBefore(sessionId, Number.MAX_SAFE_INTEGER, limit, includeDrafts);
   }
 
+  /** Newest visible text messages, in transcript order. Oversized payloads use their inline preview. */
+  recentMessages(sessionId: string, limit: number, characters: number): Array<{ role: 'user' | 'assistant'; text: string; at: string }> {
+    const rows = this.sql(`SELECT latest.kind, latest.at, substr(json_extract(latest.payload,'$.data.content.text'),1,?) AS text
+      FROM journal_events first JOIN journal_events latest ON latest.session_id=first.session_id AND latest.seq=(
+        SELECT seq FROM journal_events WHERE session_id=first.session_id AND native_id=first.native_id ORDER BY rev DESC LIMIT 1
+      )
+      WHERE first.session_id=? AND first.rev=1 AND first.kind IN ('user_message_chunk','agent_message_chunk','draft')
+        AND latest.kind IN ('user_message_chunk','agent_message_chunk') AND json_extract(latest.payload,'$.data.content.type')='text'
+        AND trim(json_extract(latest.payload,'$.data.content.text'))<>''
+      ORDER BY first.seq DESC LIMIT ?`).all(characters, sessionId, limit) as Array<{ kind: string; at: string; text: string }>;
+    return rows.reverse().map(row => ({ role: row.kind === 'user_message_chunk' ? 'user' : 'assistant', text: row.text.trim(), at: row.at }));
+  }
+
   /** Whether any visible entity sits before `identity`. */
   hasEntitiesBefore(sessionId: string, identity: number): boolean {
     return this.entitiesBefore(sessionId, identity, 1).length > 0;

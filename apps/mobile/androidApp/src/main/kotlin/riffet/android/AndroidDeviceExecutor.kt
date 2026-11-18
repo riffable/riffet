@@ -42,6 +42,7 @@ import riffet.shared.DevicePermission
 import riffet.shared.RiffetAndroid
 import riffet.shared.RiffetApi
 import riffet.shared.uploadDeviceCallFile
+import riffet.ui.theme.WorkbenchAppearance
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Instant
@@ -55,13 +56,16 @@ import kotlin.coroutines.resume
  * window (clipboard read from the background, photo, link, alarm) goes through [DeviceRequests]: in
  * front it opens at once, otherwise it waits for a tap on a heads-up notification.
  */
-internal class AndroidDeviceExecutor(private val rawContext: Context) : DeviceExecutor {
+internal class AndroidDeviceExecutor(private val rawContext: Context, private val appearance: WorkbenchAppearance) : DeviceExecutor {
     private val context get() = riffet.shared.AppLanguages.localize(rawContext)
     private val screen = ScreenActionGate(context)
 
     /** T1 only while the switch is on: the report sent when it goes off leaves screen control out. */
-    override fun capabilities(): List<String> =
-        DeviceCapabilities.states(context).filter { it.usable }.map { it.id } + if (DeviceControl.allowed.value) screen.capabilities() else emptyList()
+    override fun capabilities(): List<String> = buildList {
+        addAll(DeviceCapabilities.states(context).filter { it.usable }.map { it.id })
+        if (DeviceControl.allowed.value) addAll(screen.capabilities())
+        if (appearance.available) add(DeviceCapability.RIFFET_APPEARANCE)
+    }
 
     override fun screenLocked(): Boolean = screen.locked().also { if (it) DeviceNotices.locked(context) }
 
@@ -78,6 +82,7 @@ internal class AndroidDeviceExecutor(private val rawContext: Context) : DeviceEx
         DeviceCapability.PHOTO -> photo(call, api)
         DeviceCapability.OPEN_URL -> openUrl(call)
         DeviceCapability.ALARM -> alarm(call)
+        DeviceCapability.RIFFET_APPEARANCE -> withContext(Dispatchers.Main.immediate) { appearance.execute(call, api) }
         else -> DeviceCallOutcome.failure(DeviceErrorCode.CAPABILITY_MISSING, "${call.capability} is not supported on Android")
     }
 

@@ -2194,10 +2194,10 @@ export class ClaudeSessionRuntime {
   }
 
   /** What a hook of a standing conversation answers with: context for the model, shown to no one. */
-  private standingReply(event: 'SessionStart' | 'UserPromptSubmit', moment: StandingMoment | undefined): Record<string, unknown> {
+  private standingReply(event: 'SessionStart' | 'UserPromptSubmit', moment: StandingMoment | undefined, runId?: string): Record<string, unknown> {
     if (!moment) return {};
     let context: string | undefined;
-    try { context = this.host.standing?.context(this.session.id, moment); } catch { context = undefined; }
+    try { context = this.host.standing?.context(this.session.id, moment, runId); } catch { context = undefined; }
     return context ? { hookSpecificOutput: { hookEventName: event, additionalContext: context } } : {};
   }
 
@@ -2275,7 +2275,7 @@ export class ClaudeSessionRuntime {
       const claimant = this.claimingSend(prompt, promptId, payload);
       const text = prompt === undefined ? '' : shellPrompt(prompt);
       // A command is not a message to the model, so it carries no context of its own.
-      const told = this.standingReply('UserPromptSubmit', text && !text.startsWith('/') ? 'prompt' : undefined);
+      const told = this.standingReply('UserPromptSubmit', text && !text.startsWith('/') ? 'prompt' : undefined, claimant?.runId);
       // The transcript can announce the turn before its delayed hook names the Riffet input.
       // Ignore duplicate hooks only after giving that input a chance to claim its existing row.
       if (promptId && this.nativeTurn?.turnId === promptId && !claimant) return told;

@@ -21,6 +21,11 @@
     <string name="assistant_trigger_schedule">定时 %1$s</string>
     <string name="assistant_trigger_release">%1$s 发版</string>
     <string name="assistant_trigger_page">%1$s 有变化</string>
+    <string name="assistant_trigger_task_todo">待办</string>
+    <string name="assistant_trigger_task_doing">进行中</string>
+    <string name="assistant_trigger_task_review">待验收</string>
+    <string name="assistant_trigger_task_done">已完成</string>
+    <string name="assistant_trigger_task_cancelled">已取消</string>
     <string name="assistant_background">后台运行</string>
     <string name="assistant_background_note">用个人助理的模型，按用量计费</string>
     <string name="assistant_supervision">跟进任务</string>

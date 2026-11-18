@@ -50,6 +50,12 @@ describe('isShellResponse', () => {
     expect(isShellResponse({ ok: false, type: 'basic', contentType: 'text/html' })).toBe(false);
     expect(isShellResponse({ ok: true, type: 'opaqueredirect', contentType: 'text/html' })).toBe(false);
   });
+
+  it('keeps the offline shell while skipping workbench documents carrying a private proof', () => {
+    const shell = { ok: true, type: 'basic', contentType: 'text/html' };
+    expect(isShellResponse({ ...shell, cacheControl: 'no-cache' })).toBe(true);
+    expect(isShellResponse({ ...shell, cacheControl: 'private, no-store' })).toBe(false);
+  });
 });
 
 describe('appearanceAssetsToKeep', () => {

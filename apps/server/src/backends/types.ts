@@ -221,7 +221,7 @@ export interface NativeStandingHost {
   /** Undefined for a project whose conversations are not standing ones. [session] is the one launching, when there is one. */
   launch(project: Project, session?: Pick<Session, 'origin'>): StandingLaunch | undefined;
   /** Text for the model's context at this moment (the time, what it missed); it is never shown as a message. */
-  context(sessionId: string, moment: StandingMoment): string | undefined;
+  context(sessionId: string, moment: StandingMoment, runId?: string): string | undefined;
   /** The conversation's CLI is about to summarize it on its own. */
   compacting?(sessionId: string): void;
   /**
@@ -662,6 +662,8 @@ export interface NativeBackendDriver {
    * A driver that leaves this out accepts every dialog the screen shows.
    */
   endorsesScreenDialog?(host: NativeBackendHost, session: Session, dialog: NativeInteraction): boolean;
+  /** Evidence of the owning Riffet run, independent of whether the protocol accepts steering. */
+  ownedForegroundTurn?(session: Session): (NativeTurnTarget & { ownerRunId: string }) | undefined;
   status(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): NativeStatus;
   /** Starts an adapter-owned control pump (see `NativeControlMessage`); the core owns its lifetime. */
   subscribe(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, listener: (message: NativeControlMessage) => void): () => void;

@@ -89,7 +89,7 @@ async function handle(message) {
         protocolVersion: SUPPORTED_VERSIONS.includes(requested) ? requested : SUPPORTED_VERSIONS[0],
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'riffet', version: '1' },
-        instructions: 'Riffet tools for this conversation: read saved session references already delivered here, schedule a later wake-up of this same conversation, notify the user, list paired devices, and use the capabilities of the devices this conversation was given (device_* tools).',
+        instructions: 'Use only tools offered to this conversation. The personal assistant can discover read-only workbench capabilities with capability_find and run them with capability_read. Other tools read saved session references already delivered here, schedule a later wake-up of this same conversation, notify the user, list paired devices, and use the capabilities of the devices this conversation was given (device_* tools).',
       });
       return;
     }

@@ -1391,14 +1391,24 @@ export class CodexSessionRuntime implements CodexThreadReader {
     finally { if (this.opening === task) this.opening = undefined; }
   }
 
-  /** The protocol target is exposed only while this connection owns a known active turn. */
-  get steerTarget(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
+  /** Local evidence of a live turn on the attached owner connection. */
+  private foregroundTarget(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
     if (!this.attached || !this.transport?.isOnline || this.bindingScopeMismatch || this.endpointWriteConflict ||
       !this.nativeSessionId || !this.activeTurnId || this.settledTurns.has(this.activeTurnId) ||
       this.status.connection?.state !== 'connected' || this.status.phase !== 'busy' || this.currentInteraction) return undefined;
-    if (!supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)) return undefined;
     const ownerRunId = this.turnRuns.get(this.activeTurnId)?.runId;
     return { nativeSessionId: this.nativeSessionId, turnId: this.activeTurnId, ...(ownerRunId ? { ownerRunId } : {}) };
+  }
+
+  /** Only a mapped Riffet run may authorize a foreground tool. */
+  ownedForegroundTurn(): (NativeTurnTarget & { ownerRunId: string }) | undefined {
+    const target = this.foregroundTarget();
+    return target?.ownerRunId ? { ...target, ownerRunId: target.ownerRunId } : undefined;
+  }
+
+  /** Steering additionally depends on the native protocol version. */
+  get steerTarget(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
+    return supportsSteerVersion(this.transport?.serverUserAgent, this.flavor.id) ? this.foregroundTarget() : undefined;
   }
 
   private assertSteerTarget(target: NativeTurnTarget): void {

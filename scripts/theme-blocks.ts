@@ -1,3 +1,5 @@
+import { DEFAULT_WEB_THEME_ID } from '../packages/contracts/src/theme.js';
+
 /**
  * The stylesheet's theme-block grammar, in one place.
  *
@@ -19,8 +21,8 @@
  * "dark mode", and the attribute means "which palette".
  */
 
-/** The id the `:root` / `.dark` pair is registered under. Mirrors `DEFAULT_THEME_ID` on the web. */
-export const DEFAULT_THEME_ID = 'riffet';
+/** The id the `:root` / `.dark` pair is registered under. */
+export const DEFAULT_THEME_ID = DEFAULT_WEB_THEME_ID;
 
 /**
  * Tokens that are not colour roles. `--shadow-*` is mode-dependent rather than palette-dependent —

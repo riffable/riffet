@@ -333,6 +333,11 @@ T2 后端按顺序接入：
 - **预约**：`lease` 存本机并设 `setExactAndAllowWhileIdle`（未获「闹钟和提醒」授权时退回不精确闹钟，设置页注明），`at` 前 60 秒拉起前台服务并重连；连上后到第一个 `ping` 之前没有重放的预约视为已撤销。重启与更新后（`BOOT_COMPLETED` / `MY_PACKAGE_REPLACED`）重新设定。
 - **通知事件**：`/api/lists/stream` 的 `notice` 由 `RiffetNotifier` 发到「Agent 通知」渠道，点按打开会话；正在看的会话不发。
 
+#### Riffet 外观设置
+
+- 设备报告 `riffet.appearance` 后，已经为本会话授权的在线设备可以接收本机 Riffet 外观请求。空参数读取当前选择和可用选项，写入携带 `themeId`、`mode` 或 `interfaceStyle`。设备只写入本次指定的字段。
+- Android 通过现有本机控制开关和调用去重门禁执行。已配对的 Riffet 界面挂载时提供能力，工作台切换服务器或卸载后旧连接无法改动偏好。设备回读保存值后返回结果。
+
 ### 工具与观察
 
 - 工具粒度参照 mobile-mcp 的批量命令：动作合并进 `device_act` 的 `steps`，工具清单见 §3「协议（R3，T1）」。
@@ -400,3 +405,7 @@ T1 的设备侧规则，全部在手机上判定，不信任 Agent 的任何参�
 | [libadb-android](https://github.com/MuntashirAkon/libadb-android) | Apache-2.0（双授权） | 端上无线调试配对 |
 | [Mobilerun Portal](https://github.com/droidrun/droidrun-portal) | AGPL-3.0 | 只参考接口形态，不复用代码 |
 | [ADBKeyBoard](https://github.com/senzhk/ADBKeyBoard) | GPL-2.0 | 只参考 IME 输入思路，不复用代码 |
+
+## 个人助理读取和修改配对客户端的外观
+
+个人助理主对话的 `device_riffet_appearance` 通过 `riffet.appearance` 能力投递。用户先在该实例配对的目标设备上启用本机控制，再把设备工具组给助理会话。每次调用必须指定设备 ID 并提供本次用户消息的来源。空变更读取目标端支持的主题、明暗和界面风格。写入按该端的可选值校验并回读，只影响目标设备上的 Riffet。离线、授权撤销、切换实例或断开连接时结束本次调用，重新连接不会补做旧的设置命令。[工作台设置](ASSISTANT-CAPABILITIES.md)

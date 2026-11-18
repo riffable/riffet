@@ -7,9 +7,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
@@ -17,6 +19,8 @@ import riffet.contracts.DeviceCall
 import riffet.contracts.DeviceCallOutcome
 import riffet.contracts.DeviceCapability
 import riffet.contracts.DeviceErrorCode
+import riffet.contracts.DeviceLease
+import riffet.contracts.DeviceReport
 import riffet.contracts.RiffetJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -97,4 +101,50 @@ class DeviceGateTest {
         assertEquals(1, executor.runs)
         assertEquals(emptyList(), answers)
     }
+    @Test
+    fun capabilityReportsFollowTheLatestForegroundState() = runTest {
+        val offlineStarted = CompletableDeferred<Unit>()
+        val finishOffline = CompletableDeferred<Unit>()
+        val reports = mutableListOf<List<String>>()
+        val http = HttpClient(MockEngine { request ->
+            val report = RiffetJson.instance.decodeFromString(DeviceReport.serializer(), (request.body as TextContent).text)
+            reports += report.capabilities
+            if (report.capabilities.isEmpty()) {
+                offlineStarted.complete(Unit)
+                finishOffline.await()
+            }
+            respond("""{"id":"device","name":"Riffet","createdAt":"now","online":true}""",
+                headers = headersOf(HttpHeaders.ContentType, "application/json"))
+        }) { installRiffetClient() }
+        try {
+            val on = listOf(DeviceCapability.RIFFET_APPEARANCE)
+            var capabilities = on
+            val deviceApi = RiffetApi(http, "http://localhost", { "wkn_0123456789abcdef_secret" })
+            val executor = object : DeviceExecutor {
+                override fun capabilities() = capabilities
+                override suspend fun execute(call: DeviceCall, api: RiffetApi) = DeviceCallOutcome.success()
+            }
+            val gate = DeviceGate(deviceApi, executor, DeviceCallJournal(MemoryPreferences()), backgroundScope)
+            val leases = object : DeviceLeaseScheduler {
+                override fun schedule(lease: DeviceLease) {}
+                override fun cancel(id: String) {}
+                override fun held() = emptySet<String>()
+            }
+            val channel = DeviceChannel(deviceApi, executor, gate, leases, "android", "test",
+                allowed = { true }, installationId = { "test" })
+            channel.report()
+            capabilities = emptyList()
+            val leaving = launch { channel.reportIfChanged() }
+            offlineStarted.await()
+            capabilities = on
+            val returning = launch(start = CoroutineStart.UNDISPATCHED) { channel.reportIfChanged() }
+            finishOffline.complete(Unit)
+            leaving.join()
+            returning.join()
+            assertEquals(listOf(on, emptyList(), on), reports)
+        } finally {
+            http.close()
+        }
+    }
+
 }

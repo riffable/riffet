@@ -20,6 +20,8 @@ struct ConnectionSettings: View {
     @State private var pairingError: String?
     @State private var networkError: String?
     @State private var pushKey = PushKeyStore()
+    @State private var appearanceAllowed: Bool?
+    @State private var savingAppearance = false
 
     var body: some View {
         Form {
@@ -52,6 +54,17 @@ struct ConnectionSettings: View {
                 }
                 if insecure {
                     SettingsCallout(.warning, message: String(localized: "连接未加密，仅在可信网络中使用。"))
+                }
+                if model.workbench != nil {
+                    SettingsRow("允许助理修改本机外观", detail: "仅在此配对的 Riffet 工作台处于前台时生效。") {
+                        Toggle("允许助理修改本机外观", isOn: Binding(
+                            get: { appearanceAllowed ?? false },
+                            set: { enabled in Task { await setAppearanceAllowed(enabled) } }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(appearanceAllowed == nil || savingAppearance)
+                    }
                 }
                 SettingsRow("设备令牌") {
                     Text(tokenStorage)
@@ -98,6 +111,12 @@ struct ConnectionSettings: View {
         }
         .riffetForm()
         .task { await load() }
+        .task(id: model.workbench.map { ObjectIdentifier($0) }) {
+            appearanceAllowed = nil
+            guard let workbench = model.workbench, let api = workbench.host.api else { return }
+            let allowed = try? await workbench.host.appearanceAllowed(api: api)
+            if model.workbench === workbench { appearanceAllowed = allowed?.boolValue }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .settingsSectionDidShow)) { note in
             guard note.object as? String == SettingsSection.connection.rawValue,
                   Date.now.timeIntervalSince(loadedAt) > 30 else { return }
@@ -380,6 +399,18 @@ struct ConnectionSettings: View {
             self.error = error.riffetMessage
         }
         await pushKey.load(api)
+    }
+
+    private func setAppearanceAllowed(_ enabled: Bool) async {
+        guard !savingAppearance, let workbench = model.workbench, let api = workbench.host.api else { return }
+        savingAppearance = true
+        defer { savingAppearance = false }
+        do {
+            let allowed = try await workbench.host.setAppearanceAllowed(api: api, enabled: enabled)
+            if model.workbench === workbench { appearanceAllowed = allowed.boolValue }
+        } catch {
+            if model.workbench === workbench { self.error = error.riffetMessage }
+        }
     }
 
     private func revoke(_ id: String) async {

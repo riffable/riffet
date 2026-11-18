@@ -31,7 +31,7 @@ struct ThemeSettingsView: View {
 /// Light, dark or the system's, shown in the current theme.
 struct DisplayModeSettingsView: View {
     @Environment(ThemeStore.self) private var themeStore
-    @AppStorage("riffet.ios.appearance") private var appearance = "system"
+    @AppStorage(ThemeStore.modeKey) private var appearance = "system"
     private static let modes: [(id: String, title: LocalizedStringKey)] = [("system", "跟随系统"), ("light", "浅色"), ("dark", "深色")]
 
     var body: some View {

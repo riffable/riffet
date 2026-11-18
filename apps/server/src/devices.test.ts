@@ -222,6 +222,112 @@ describe('device channel',()=>{
   }
   const until=async(check:()=>boolean,ms=3000)=>{const deadline=Date.now()+ms;while(!check()&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));expect(check()).toBe(true);};
 
+  it('lists native appearance in the main assistant before a device grant and checks the grant at each call', async () => {
+    const booted = await bootChannel();
+    const available = vi.spyOn(booted.nativeBackends, 'assertAvailable').mockImplementation(() => undefined);
+    const status = vi.spyOn(booted.nativeBackends, 'status');
+    try {
+      const source = booted.auth.issueDevice('Source Riffet');
+      const target = booted.auth.issueDevice('Target Riffet');
+      const reported = await booted.app.inject({
+        method: 'PUT', url: '/api/devices/me', headers: booted.headers(target.token),
+        payload: { ...REPORT, platform: 'mac', capabilities: ['riffet.appearance'] },
+      });
+      expect(reported.statusCode, reported.body).toBe(200);
+      const connection = await booted.stream(target.token);
+      await until(() => booted.devices.online(target.device.id));
+
+      const project = booted.store.createProject(booted.dir, 'assistant');
+      const main = booted.store.createSession({ projectId: project.id, kind: 'native', backendId: 'codex' });
+      booted.store.updateProject(project.id, { system: 'assistant', mainSessionId: main.id });
+      const rpc = booted.mcp(main.id);
+      const name = 'device_riffet_appearance';
+      expect((await rpc('tools/list')).tools).toEqual(expect.arrayContaining([expect.objectContaining({ name })]));
+
+      const headers = booted.headers(source.token);
+      const sessionUrl = `/api/sessions/${main.id}`;
+      const accepted = await booted.app.inject({
+        method: 'POST', url: `${sessionUrl}/native/send`, headers,
+        payload: { commandId: 'owner-appearance', text: 'Set Target Riffet to dark' },
+      });
+      expect(accepted.statusCode, accepted.body).toBe(202);
+      const run = booted.store.getRun(accepted.json().id);
+      const nativeSessionId = 'native-appearance', turnId = 'turn-appearance';
+      booted.store.updateRun(run.id, { state: 'running', native: { ...run.native!, nativeSessionId, nativeTurnId: turnId } });
+      status.mockReturnValue({ phase: 'busy', activeTurn: { nativeSessionId, turnId, ownerRunId: run.id } });
+      const context = booted.nativeBackends.host.standing?.context(main.id, 'prompt', run.id);
+      const sourceTurn = /sourceTurn="([^"]+)"/.exec(context ?? '')?.[1];
+      expect(sourceTurn).toBeTruthy();
+      const call = (change: Record<string, string> = {}, proof = sourceTurn) => rpc('tools/call', {
+        name, arguments: { device: target.device.id, sourceTurn: proof, ...change },
+      });
+      for (const request of [undefined, { mode: 'dark' }]) {
+        expect((await call(request)).content[0].text).toContain('TOOL_NOT_AVAILABLE');
+      }
+      expect(connection.events.filter(item => item.event === 'call')).toHaveLength(0);
+
+      const select = (toolGroups: string[]) => booted.app.inject({ method: 'PATCH', url: sessionUrl, headers, payload: { toolGroups } });
+      const selection = await select([`device:${target.device.id}`]);
+      expect(selection.statusCode, selection.body).toBe(200);
+      expect((await rpc('tools/list')).tools).toEqual(expect.arrayContaining([expect.objectContaining({ name })]));
+      expect((await call({ mode: 'dark' }, 'another-turn')).content[0].text).toContain('WORKBENCH_UNAVAILABLE');
+
+      const change = { mode: 'dark' };
+      const pending = call(change);
+      await until(() => connection.events.some(item => item.event === 'call'));
+      const delivered = connection.events.find(item => item.event === 'call')!.data;
+      expect(delivered).toMatchObject({ capability: 'riffet.appearance', sessionId: main.id, args: change });
+      expect(JSON.stringify(delivered)).not.toContain(sourceTurn);
+      const current = { themeId: 'paper', mode: 'dark', themes: [{ id: 'paper', name: 'Paper' }] };
+      const confirmed = await booted.app.inject({
+        method: 'POST', url: `/api/devices/me/calls/${delivered.callId}/result`, headers: booted.headers(target.token),
+        payload: { ok: true, result: current },
+      });
+      expect(confirmed.statusCode, confirmed.body).toBe(200);
+      expect((await pending).structuredContent).toMatchObject({ device: target.device.id, scope: 'device', ...current });
+
+      const disabled = await booted.app.inject({
+        method: 'PUT', url: '/api/devices/me', headers: booted.headers(target.token),
+        payload: { ...REPORT, platform: 'mac', capabilities: [], allowControl: false },
+      });
+      expect(disabled.statusCode, disabled.body).toBe(200);
+      expect((await call()).content[0].text).toContain('DEVICE_NOT_ALLOWED');
+
+      const cleared = await select([]);
+      expect(cleared.statusCode, cleared.body).toBe(200);
+      expect((await call({ mode: 'light' })).content[0].text).toContain('TOOL_NOT_AVAILABLE');
+      expect(connection.events.filter(item => item.event === 'call')).toHaveLength(1);
+    } finally {
+      status.mockRestore();
+      available.mockRestore();
+      await booted.close();
+      await rm(booted.dir, { recursive: true, force: true });
+    }
+  });
+
+  it('sends an appearance request only to the selected live connection and never replays it', async () => {
+    const booted = await bootChannel();
+    try {
+      const { device, token } = booted.auth.issueDevice('Phone appearance');
+      await booted.app.inject({
+        method: 'PUT', url: '/api/devices/me', headers: booted.headers(token),
+        payload: { ...REPORT, capabilities: ['riffet.appearance'] },
+      });
+      const change = { sessionId: 'test-appearance', deviceId: device.id, capability: 'riffet.appearance' as const, args: { mode: 'dark' }, timeoutMs: 3_000 };
+      await expect(booted.devices.call(change)).resolves.toMatchObject({ error: { code: 'DEVICE_UNREACHABLE' } });
+      const first = await booted.stream(token);
+      const pending = booted.devices.call(change);
+      await until(() => first.events.some(item => item.event === 'call' && item.data.capability === 'riffet.appearance'));
+      const other = await booted.stream(token);
+      first.close();
+      await expect(pending).resolves.toMatchObject({ status: 'cancelled', error: { code: 'DEVICE_RESULT_UNKNOWN' } });
+      expect(other.events.some(item => item.event === 'call')).toBe(false);
+    } finally {
+      await booted.close();
+      await rm(booted.dir, { recursive: true, force: true });
+    }
+  });
+
   // A device answers only its own calls, once; a call made while it was away waits for it, even across a restart.
   it('isolates devices, replays queued calls on reconnect and after a restart, and keeps the first answer',async()=>{
     let booted=await bootChannel();

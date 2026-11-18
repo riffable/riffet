@@ -108,6 +108,7 @@ export interface SessionTaskSource {
  */
 export class WorkItemService {
   private readonly items: WorkItemStore;
+  private readonly statusListeners = new Set<(workItemId: string) => void>();
 
   private readonly attention: AttentionLog;
   readonly close: () => void;
@@ -121,9 +122,40 @@ export class WorkItemService {
   /** The north star over [from, to) in `timeZone` (docs/TASK-BOARD.md §1). */
   northStar(from: number, to: number, timeZone: string) { return this.attention.report(from, to, timeZone); }
 
+  attentionCandidates(): Iterable<WorkItem> { return this.items.attentionCandidates(); }
   list(): WorkItem[] { return this.items.all(); }
   get(id: string): WorkItem { return this.items.get(id) ?? (() => { throw notFound(); })(); }
   events(id: string): WorkItemEvent[] { this.get(id); return this.items.events(id); }
+
+  /** The task and the boundary after which a new status subscription starts. */
+  taskStatusBaseline(reference: string | number): { workItemId: string; taskNumber: number; cursor: string } {
+    let item: WorkItem | undefined;
+    if (typeof reference === 'number') item = this.items.byNumber(reference);
+    else if (/^#?\d+$/.test(reference)) item = this.items.byNumber(Number(reference.replace(/^#/, '')));
+    else item = this.items.get(reference);
+    const cursor = item && this.items.latestEventId(item.id);
+    if (!item || !cursor) throw notFound();
+    return { workItemId: item.id, taskNumber: item.number, cursor };
+  }
+
+  taskStatusEvents(workItemId: string, cursor: string, limit: number) {
+    return this.items.statusEventsAfter(workItemId, cursor, limit);
+  }
+
+  onStatusChange(listener: (workItemId: string) => void): () => void {
+    this.statusListeners.add(listener);
+    return () => { this.statusListeners.delete(listener); };
+  }
+
+  private notifyStatusChange(workItemId: string): void {
+    if (!this.statusListeners.size) return;
+    this.store.afterTransaction(committed => {
+      if (!committed) return;
+      for (const listener of this.statusListeners) {
+        try { listener(workItemId); } catch { /* the task is already committed */ }
+      }
+    });
+  }
 
   private write<T>(fn: () => T): T {
     return this.store.transaction(() => { const result = fn(); this.store.workItemsChanged(); return result; });
@@ -203,6 +235,7 @@ export class WorkItemService {
 
   private changeStatus(item: WorkItem, to: WorkItemStatus, stamp: string): void {
     this.record(item.id, { kind: 'status', from: item.status, to });
+    this.notifyStatusChange(item.id);
     item.status = to;
     item.statusAt = stamp;
     // Done is the owner's last word on it: its conversations are no longer waiting on anyone.
@@ -218,6 +251,7 @@ export class WorkItemService {
         this.store.updateSession(row.id, { workItemId: undefined });
       }
       this.items.remove(id);
+      this.notifyStatusChange(id);
     });
   }
 

@@ -4,16 +4,58 @@ import tailwindcss from '@tailwindcss/vite';
 import { lingui } from '@lingui/vite-plugin';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { get } from 'node:http';
 import { join, resolve, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { Script } from 'node:vm';
 import { build as esbuild } from 'esbuild';
 import type { BuildInfo } from '../../packages/contracts/src/update';
+import { WORKBENCH_APPEARANCE_BUDGET } from '../../packages/contracts/src/budgets';
 
 /** The public directory, read directly so the precache list does not depend on Vite's copy step. */
 const publicDir = fileURLToPath(new URL('./public', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
+const devBackend = 'http://127.0.0.1:4317';
+
+/** Personalize only Vite's workbench HTML, after its own SPA fallback has resolved the page. */
+function workbenchDocument(): Plugin {
+  return {
+    name: 'riffet-workbench-document',
+    apply: 'serve',
+    configureServer(server) {
+      return () => server.middlewares.use(async (request, response, next) => {
+        if (request.url?.split('?')[0] !== '/index.html' || request.method !== 'GET'
+          || request.headers['sec-fetch-mode'] !== 'navigate' || request.headers['sec-fetch-dest'] !== 'document'
+          || !request.headers.host) return next();
+        try {
+          const proof = await new Promise<string | undefined>((resolve) => {
+            get(`${devBackend}/__riffet/workbench-document-proof`, {
+              headers: { host: request.headers.host, 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' },
+              signal: AbortSignal.timeout(WORKBENCH_APPEARANCE_BUDGET.proofMs),
+            }, (reply) => {
+              const value = reply.headers['x-riffet-workbench-document-proof'];
+              resolve(reply.statusCode === 204 && typeof value === 'string' && /^[\w-]{43}$/.test(value) ? value : undefined);
+              reply.resume();
+            }).once('error', () => resolve(undefined));
+          });
+          if (!proof) return next();
+          const html = await readFile(join(server.config.root, 'index.html'), 'utf8');
+          const document = await server.transformIndexHtml('/index.html', html, request.originalUrl);
+          response.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'private, no-store',
+            'Cross-Origin-Opener-Policy': 'same-origin',
+          });
+          response.end(document.replace(/<head(?:\s[^>]*)?>/i, head => `${head}<meta name="riffet-workbench-proof" content="${proof}">`));
+        } catch (error) {
+          next(error);
+        }
+      });
+    },
+  };
+}
 
 function webBuildInfo(command: string): BuildInfo {
   if (command === 'build') {
@@ -151,7 +193,7 @@ export default defineConfig(({ command, mode }): UserConfig => {
   base: share ? './' : '/',
   publicDir: share ? false : publicDir,
   // Lingui compiles `.po` imports and, natively, only the modules that import its macros.
-  plugins: [react(), lingui({ macroTransform: true, configPath: fileURLToPath(new URL('./lingui.config.ts', import.meta.url)) }), tailwindcss(), bundledPackages(share ? 'share' : 'public'), ...(!share ? [serviceWorkerPrecache()] : [])],
+  plugins: [react(), lingui({ macroTransform: true, configPath: fileURLToPath(new URL('./lingui.config.ts', import.meta.url)) }), tailwindcss(), bundledPackages(share ? 'share' : 'public'), ...(!share ? [serviceWorkerPrecache(), workbenchDocument()] : [])],
   // The code view's highlighting worker loads its grammars on demand, which needs module workers.
   worker: { format: 'es' },
   resolve: {
@@ -168,24 +210,24 @@ export default defineConfig(({ command, mode }): UserConfig => {
     strictPort: true,
     proxy: {
       '/diagram': {
-        target: 'http://127.0.0.1:4317',
+        target: devBackend,
         changeOrigin: false,
       },
       '/content-preview': {
-        target: 'http://127.0.0.1:4317',
+        target: devBackend,
         changeOrigin: false,
       },
       '/mermaid': {
-        target: 'http://127.0.0.1:4317',
+        target: devBackend,
         changeOrigin: false,
       },
       // The sync engine reads the server's protocol version here; unproxied, it would get index.html and call the server outdated.
       '/health': {
-        target: 'http://127.0.0.1:4317',
+        target: devBackend,
         changeOrigin: false,
       },
       '/api': {
-        target: 'http://127.0.0.1:4317',
+        target: devBackend,
         changeOrigin: false,
         ws: true,
       },

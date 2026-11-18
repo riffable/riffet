@@ -2,6 +2,35 @@ import { checkThemeDesign, normalizeThemeDesign, type ThemeDesign } from './them
 import { CODE_THEME_ROLES, type CodeThemePalette, type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf } from './code-theme.js';
 export * from './theme-design.js';
 
+export const DEFAULT_WEB_THEME_ID = 'riffet';
+
+/** Values offered by Web Settings and its MCP command. Stored font sizes can also fall between picker options. */
+export const WEB_DISPLAY_OPTIONS = {
+  textSize: ['small', 'standard', 'large', 'extra-large'],
+  density: ['compact', 'standard', 'relaxed'],
+  terminalFontSize: [11, 12.5, 14, 16],
+  minTerminalFontSize: 8,
+  maxTerminalFontSize: 24,
+  maxHorizontalPadding: 48,
+  maxVerticalPadding: 32,
+} as const;
+
+/** Built-in Web theme names, in the appearance picker's order. Palettes live in the Web stylesheet. */
+export const WEB_BUILTIN_THEMES = [
+  { id: DEFAULT_WEB_THEME_ID, name: 'Riffet' },
+  { id: 'solarized', name: 'Solarized' },
+  { id: 'catppuccin', name: 'Catppuccin' },
+  { id: 'rose-pine', name: 'Rosé Pine' },
+  { id: 'everforest', name: 'Everforest' },
+  { id: 'kiln', name: 'Kiln' },
+  { id: 'ink', name: 'Ink' },
+  { id: 'sepia', name: 'Sepia' },
+  { id: 'moss', name: 'Moss' },
+  { id: 'slate', name: 'Slate' },
+  { id: 'pencil', name: 'Pencil' },
+  { id: 'celadon', name: 'Celadon' },
+] as const;
+
 /**
  * The user-theme contract, shared by the web client, the server and the generator.
  *

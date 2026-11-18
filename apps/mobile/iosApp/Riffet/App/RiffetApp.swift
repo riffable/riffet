@@ -21,10 +21,10 @@ private struct LaunchSplash: View {
 struct RiffetApp: App {
     @UIApplicationDelegateAdaptor(RiffetAppDelegate.self) private var delegate
     @State private var model = AppModel.shared
-    @State private var themeStore = ThemeStore()
+    private var themeStore: ThemeStore { model.themeStore }
     @State private var localization = AppLocalization.shared
     @Environment(\.scenePhase) private var phase
-    @AppStorage("riffet.ios.appearance") private var appearance = "system"
+    @AppStorage(ThemeStore.modeKey) private var appearance = "system"
     init() { RiffetNotifications.shared.install() }
     var body: some Scene {
         WindowGroup {
@@ -47,7 +47,7 @@ struct RiffetApp: App {
             // identity-stable, so nothing else needs to move).
             .onChange(of: themeStore.themeId) { applyChrome() }
             .task { await model.start() }
-            .onChange(of: phase) { _, next in model.scene(next) }
+            .onChange(of: phase, initial: true) { _, next in model.scene(next) }
             .onChange(of: RiffetNotifications.shared.openedSessionID) { _, _ in
                 model.consumeNotification()
             }

@@ -69,6 +69,10 @@ function resolveActiveCodeTheme(selection: string, activeUiId: string, plugin?: 
   return resolveCodeThemeId('auto', plugin ? undefined : activeUiId);
 }
 
+function activeThemeId(themeId: string, plugin = activePluginPalette()): string {
+  return plugin?.key ?? (isCustomThemeId(themeId) && !themeOption(themeId) ? DEFAULT_THEME_ID : themeId);
+}
+
 /**
  * Everything a theme change has to touch, in one place. The browser chrome colour is read back from
  * the applied `--bg` instead of being a hard-coded pair, so a new theme gets a matching toolbar
@@ -80,7 +84,7 @@ function apply(): void {
   const { mode, themeId } = store.get();
   const resolved = resolveMode(mode);
   const plugin = activePluginPalette();
-  const activeUiId = plugin?.key ?? (isCustomThemeId(themeId) && !themeOption(themeId) ? DEFAULT_THEME_ID : themeId);
+  const activeUiId = activeThemeId(themeId, plugin);
   const codeThemeId = resolveActiveCodeTheme(getDisplaySettings().codeTheme, activeUiId, plugin);
   // A plugin palette in effect is painted over the chosen theme; the stored choice stays beneath it.
   applyThemeAppearance(activeUiId, resolved, codeThemeId);
@@ -133,9 +137,12 @@ import.meta.hot?.dispose(() => {
   unsubscribeDisplay();
 });
 
+const storedMode = (mode: ThemeMode) => shareMode || mode !== 'system' ? mode : undefined;
+const storedTheme = (themeId: string) => shareMode || themeId !== DEFAULT_THEME_ID ? themeId : undefined;
+
 export function setThemeMode(next: ThemeMode): void {
   store.set({ mode: next });
-  if (!preview) writeStored(MODE_KEY, shareMode ? next : next === 'system' ? undefined : next);
+  if (!preview) writeStored(MODE_KEY, storedMode(next));
   apply();
 }
 
@@ -143,8 +150,68 @@ export function setThemeId(next: string): void {
   releasePluginPalette();
   const themeId = themeOption(next) ? next : DEFAULT_THEME_ID;
   store.set({ themeId });
-  if (!preview) writeStored(THEME_KEY, shareMode ? themeId : themeId === DEFAULT_THEME_ID ? undefined : themeId);
+  if (!preview) writeStored(THEME_KEY, storedTheme(themeId));
   apply();
+}
+
+export function currentWorkbenchAppearance(): { themeId: string; mode: ThemeMode; activePaletteId?: string } {
+  const { themeId, mode } = store.get();
+  const displayed = activeThemeId(themeId);
+  return { themeId, mode, ...(displayed !== themeId ? { activePaletteId: displayed } : {}) };
+}
+
+function saveWorkbenchPreferences(write: (persist: (key: string, value: string | undefined) => void) => void) {
+  const storage = window.localStorage;
+  const updates: Array<{ key: string; previous: string | null; written: string | null }> = [];
+  const save = (key: string, value: string | null | undefined) => {
+    if (value == null) storage.removeItem(key);
+    else storage.setItem(key, value);
+  };
+  const persist = (key: string, value: string | undefined) => {
+    const previous = storage.getItem(key);
+    save(key, value);
+    updates.push({ key, previous, written: value ?? null });
+    if (storage.getItem(key) !== (value ?? null)) throw new Error('Appearance preference was not saved');
+  };
+  try { write(persist); }
+  catch (error) {
+    for (const { key, previous, written } of updates.reverse()) {
+      if (storage.getItem(key) === written) save(key, previous);
+    }
+    throw error;
+  }
+  return updates;
+}
+
+function applyWorkbenchPreferences() {
+  store.set({ themeId: readThemeId(), mode: readMode() });
+  apply();
+}
+
+/** Writes acknowledged workbench changes and captures the exact saved values for conditional undo. */
+export function workbenchThemePreferences(change: { themeId?: string; mode?: ThemeMode }): (() => boolean) | undefined {
+  if (shareMode) throw new Error('Workbench appearance requires the main application');
+  const before = readThemeId();
+  const updates = saveWorkbenchPreferences(persist => {
+    if (change.themeId !== undefined) persist(THEME_KEY, storedTheme(change.themeId));
+    if (change.mode !== undefined) persist(MODE_KEY, storedMode(change.mode));
+    if (change.themeId !== undefined) releasePluginPalette(persist);
+  });
+  applyWorkbenchPreferences();
+
+  // A plugin palette override may depend on a preset or a package that changed since the command.
+  if (updates.some(({ key }) => key !== THEME_KEY && key !== MODE_KEY)) return undefined;
+  const active = currentWorkbenchAppearance().activePaletteId;
+  return () => {
+    const storage = window.localStorage;
+    if (updates.some(({ key, written }) => storage.getItem(key) !== written)) return false;
+    if (change.themeId !== undefined && (!themeOption(before) || currentWorkbenchAppearance().activePaletteId !== active)) return false;
+    saveWorkbenchPreferences(persist => {
+      for (const { key, previous } of updates) persist(key, previous ?? undefined);
+    });
+    applyWorkbenchPreferences();
+    return true;
+  };
 }
 
 /**

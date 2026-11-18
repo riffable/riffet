@@ -4,9 +4,26 @@
  * may name one the other side does not know yet, which it ignores rather than fail on.
  */
 import { z } from 'zod/v4';
+import { ASSISTANT_QUERY_BUDGET, WORKBENCH_APPEARANCE_BUDGET } from '../budgets.js';
+import { DEVICE_CAPABILITIES } from '../devices.js';
 
 export const DevicePlatformSchema = z.enum(['android', 'ios', 'mac']).meta({ open: true });
-export const DeviceCapabilitySchema = z.enum(['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch']).meta({ open: true });
+export const DeviceCapabilitySchema = z.enum(DEVICE_CAPABILITIES).meta({ open: true });
+
+export const DeviceAppearanceRequestSchema = z.strictObject({
+  themeId: z.string().min(1).max(120).optional(),
+  mode: z.enum(['system', 'light', 'dark']).optional(),
+  interfaceStyle: z.string().min(1).max(120).optional(),
+});
+const AppearanceOption = z.object({ id: z.string().min(1).max(120), name: z.string().min(1).max(120) });
+export const DeviceAppearanceResultSchema = z.object({
+  themeId: z.string().min(1).max(120),
+  mode: z.enum(['system', 'light', 'dark']),
+  interfaceStyle: z.string().min(1).max(120).optional(),
+  activePaletteId: z.string().min(1).max(120).optional(),
+  themes: z.array(AppearanceOption).max(WORKBENCH_APPEARANCE_BUDGET.themes),
+  interfaceStyles: z.array(AppearanceOption).max(ASSISTANT_QUERY_BUDGET.pageItems).optional(),
+});
 
 /** APNs device and Live Activity tokens are hex; the server checks the format (`DeviceChannel.report`). */
 const ApnsTokenSchema = z.string().max(400);

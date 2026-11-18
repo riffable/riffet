@@ -15,6 +15,7 @@ import { errorMessage } from '@/lib/utils';
 import { QuickAction } from '../QuickAction';
 import { Markdown } from '../session/Markdown';
 import { useStores } from '../state/stores';
+import { useStatusLabel } from './parts';
 
 export type AssistantSetupState = ReturnType<typeof useAssistantSetup>;
 
@@ -189,9 +190,11 @@ function InstructionsDialog({ open, value, onClose, onSaved }: { open: boolean; 
 /** What the 助理 follows over time; the owner can end one, and the 助理 makes them (docs/ASSISTANT.md §7.3). */
 export function DelegationsDialog({ open, delegations, onClose, onEnded }: { open: boolean; delegations: AssistantDelegation[] | undefined; onClose: () => void; onEnded: (ended: AssistantDelegation) => void }) {
   const { t } = useLingui();
+  const statusLabel = useStatusLabel();
   const [busy, setBusy] = useState<string>();
   const triggerLabel = (trigger: AssistantDelegationTrigger) => {
     if (trigger.kind === 'schedule') return t`定时 ${trigger.cron}`;
+    if (trigger.kind === 'task-status') return `#${trigger.taskNumber} · ${statusLabel(trigger.status)}`;
     const source = trigger.kind === 'github-release' ? trigger.repo : trigger.url;
     return trigger.kind === 'github-release' ? t`${source} 发版` : t`${source} 有变化`;
   };

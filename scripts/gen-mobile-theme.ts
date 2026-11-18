@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NOT_A_COLOR_ROLE, colorRoleNames, parseStylesheet } from './theme-blocks';
-import { colorToHex, parseColor, THEME_ANSI_KEYS, THEME_ROLES } from '../packages/contracts/src/theme.js';
+import { colorToHex, parseColor, THEME_ANSI_KEYS, THEME_ROLES, WEB_BUILTIN_THEMES } from '../packages/contracts/src/theme.js';
 import { BUILTIN_CODE_THEME_IDS, CODE_THEME_ROLES, DEFAULT_CODE_THEME_ID, UI_THEME_DEFAULT_CODE_THEME } from '../packages/contracts/src/code-theme.js';
 import { BUILTIN_ANSI } from './theme-ansi';
 import { BUILTIN_CODE_THEMES } from './code-themes';
@@ -115,6 +115,12 @@ function assertCodeThemes(): void {
 assertRoleContract();
 assertAnsi();
 assertCodeThemes();
+
+const paletteIds = new Set(themes.map(theme => theme.id));
+const catalogueIds = new Set<string>(WEB_BUILTIN_THEMES.map(theme => theme.id));
+if (paletteIds.size !== WEB_BUILTIN_THEMES.length || catalogueIds.size !== paletteIds.size || [...catalogueIds].some(id => !paletteIds.has(id))) {
+  throw new Error('WEB_BUILTIN_THEMES must name every built-in Web palette exactly once');
+}
 
 /**
  * Refuses to emit a half-defined theme. Compose's `RiffetColors` has one constructor per theme, so a

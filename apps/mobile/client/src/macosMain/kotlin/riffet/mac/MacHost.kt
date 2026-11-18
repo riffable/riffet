@@ -22,7 +22,10 @@ import riffet.cache.createTranscriptIndex
 import riffet.contracts.AgentIds
 import riffet.contracts.LIST_POLL_MS_BACKGROUND
 import riffet.shared.AppLog
+import riffet.shared.DeviceAppearanceSnapshot
+import riffet.shared.DeviceControl
 import riffet.shared.DeviceTokenStore
+import riffet.shared.ForegroundAppearance
 import riffet.shared.IssuedDevice
 import riffet.contracts.TerminalAppearance
 import riffet.shared.TerminalConnection
@@ -129,6 +132,7 @@ class MacHost(private val secrets: SecretStore) {
         AppLog.log("app", "background failure ${error::class.simpleName}: ${error.message}")
     }
     private val scope = MainScope() + failures
+    private val appearance = ForegroundAppearance(scope, "mac")
 
     private val _store = MutableStateFlow<SessionStore?>(null)
     val store: StateFlow<SessionStore?> = _store.asStateFlow()
@@ -158,6 +162,18 @@ class MacHost(private val secrets: SecretStore) {
         private set
 
     val api: RiffetApi? get() = if (detached) null else connection?.apiOrNull()
+
+    fun configureAppearance(appVersion: String, apply: (String?, String?, String?) -> DeviceAppearanceSnapshot?) =
+        appearance.configure(appVersion, DeviceControl.installationId, apply)
+
+    fun appearanceForeground(active: Boolean) = appearance.foreground(active)
+
+    @Throws(Exception::class)
+    suspend fun appearanceAllowed(api: RiffetApi): Boolean = appearance.isAllowed(api)
+
+    @Throws(Exception::class)
+    suspend fun setAppearanceAllowed(api: RiffetApi, enabled: Boolean): Boolean = appearance.setAllowed(api, enabled)
+
     var terminalAppearance: TerminalAppearance? = null
         set(value) { field = value; api?.terminalAppearance = value }
 
@@ -247,6 +263,7 @@ class MacHost(private val secrets: SecretStore) {
         marks = savedMarks
         _store.value = created
         AppLog.log("app", "store installed for $url")
+        appearance.install(api) { connection === next && !created.unauthenticated.value }
         created.refresh()
         // Always connected: the server pushes list changes and the poll below is the fallback.
         val pushed = ListsFeed(api, created, child, onMarks = { savedMarks.poll() })
@@ -277,6 +294,7 @@ class MacHost(private val secrets: SecretStore) {
     }
 
     fun uninstall() {
+        appearance.clear()
         poll?.cancel()
         poll = null
         feed?.cancel()
@@ -317,6 +335,7 @@ class MacHost(private val secrets: SecretStore) {
     /** Asks the poll loop for a read now instead of at the end of its interval. */
     fun poke() {
         if (detached) return
+        appearance.kick()
         listsFeed?.kick()
         pokes.trySend(Unit)
     }

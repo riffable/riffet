@@ -185,9 +185,9 @@
     <string name="pickers_approval_title">权限模式</string>
     <string name="pickers_approval_escalated">当前权限不会逐次确认，Agent 可以直接执行所有命令。</string>
     <string name="pickers_tools_title">技能与工具</string>
-    <string name="pickers_tools_phones">手机</string>
+    <string name="pickers_tools_devices">设备</string>
     <string name="pickers_tools_control">控制 %1$s</string>
-    <string name="pickers_tools_removed">已移除的手机</string>
+    <string name="pickers_tools_removed">已移除的设备</string>
     <string name="pickers_tools_offline">离线</string>
     <string name="pickers_tools_default">默认</string>
     <string name="pickers_tools_count">%1$d 项</string>

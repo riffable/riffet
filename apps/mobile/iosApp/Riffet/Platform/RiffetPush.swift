@@ -177,10 +177,10 @@ final class RiffetPush {
         }
     }
 
-    private static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    static let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
 
     /// Random and kept on the device, so pairing again replaces this device's earlier record.
-    private static let installationId: String = {
+    static let installationId: String = {
         if let saved = UserDefaults.standard.string(forKey: "riffet.ios.installation-id") { return saved }
         let made = UUID().uuidString.lowercased()
         UserDefaults.standard.set(made, forKey: "riffet.ios.installation-id")

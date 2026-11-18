@@ -9,7 +9,7 @@ description: 简报：把任务、会话、提醒汇总成一段话。用户说�
 
 ## 收集
 
-1. `task_list`：等用户回答的、等验收的、进行中的、最近完成的。
+1. 主对话先通过 `capability_find` 和 `capability_read` 查 `workbench.attention`，按事项 ID 去重。用 `task_list` 补充等用户回答的、等验收的、进行中的、最近完成的。
 2. `session_list`：`waiting` 和 `failed` 的会话；需要时用 `session_read` 看它停在哪里。
 3. `list_wakeups`：今天和明天到期的提醒。
 4. 记忆里带日期的承诺和日程（读对应的主题文件）。

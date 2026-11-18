@@ -5056,6 +5056,11 @@ describe('explicit in-flight steering', () => {
       expect(h.fences).toHaveLength(0);
       expect(h.transport!.requestParams.some(entry => entry.method === 'turn/steer')).toBe(false);
       expect(h.transport!.disposed).toBe(false);
+      expect(h.adapter.ownedForegroundTurn(h.session)).toEqual({ nativeSessionId: 'native-thread', turnId: 'turn-1', ownerRunId: 'run-owner' });
+      h.transport!.finishTurn('turn-1', 'completed');
+      expect(h.adapter.ownedForegroundTurn(h.session)).toBeUndefined();
+      h.transport!.emitNativeNotification('turn/started', { threadId: 'native-thread', turn: { id: 'external' } });
+      expect(h.adapter.ownedForegroundTurn(h.session)).toBeUndefined();
     } finally { await h.cleanup(); }
   });
 

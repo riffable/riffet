@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import RiffetKit
 
 extension RiffetRGBA {
     /// Reads the hex colours the theme library stores: `#rrggbb`, or `#rrggbbaa` in CSS byte order.
@@ -49,6 +50,7 @@ struct ThemeEntry: Identifiable, Sendable {
 final class ThemeStore {
     private static let key = "riffet.ios.theme"
     private static let codeThemeKey = "riffet.ios.code-theme"
+    nonisolated static let modeKey = "riffet.ios.appearance"
 
     var themeId: String {
         didSet {
@@ -109,6 +111,33 @@ final class ThemeStore {
 
     var entry: ThemeEntry { Self.builtins.first { $0.id == themeId } ?? Self.builtins[0] }
     var palette: Palette { Palette.builtin(themeId) }
+
+    /// Only native Riffet settings are available through the paired device channel.
+    func applyAppearance(theme: String?, mode: String?) -> IOSAppearanceSnapshot? {
+        if let theme, !Self.builtins.contains(where: { $0.id == theme }) { return nil }
+        let modes = ["system", "light", "dark"]
+        if let mode, !modes.contains(mode) { return nil }
+        let defaults = UserDefaults.standard
+        let previousTheme = themeId
+        let previousThemePreference = defaults.object(forKey: Self.key)
+        let previousModePreference = defaults.object(forKey: Self.modeKey)
+        if let theme { themeId = theme }
+        if let mode { defaults.set(mode, forKey: Self.modeKey) }
+        let storedTheme = defaults.string(forKey: Self.key)
+        let storedMode = defaults.string(forKey: Self.modeKey)
+        if theme.map({ $0 != storedTheme }) == true || mode.map({ $0 != storedMode }) == true {
+            if theme != nil {
+                themeId = previousTheme
+                defaults.set(previousThemePreference, forKey: Self.key)
+            }
+            if mode != nil { defaults.set(previousModePreference, forKey: Self.modeKey) }
+            return nil
+        }
+        return IOSAppearanceSnapshot(
+            themeId: entry.id, mode: storedMode.flatMap { modes.contains($0) ? $0 : nil } ?? "system",
+            themes: Self.builtins.map { IOSAppearanceTheme(id: $0.id, name: $0.name) }
+        )
+    }
 }
 
 /// A resolved palette: each role is a dynamic colour that reads the light or

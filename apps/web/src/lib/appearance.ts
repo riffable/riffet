@@ -241,8 +241,8 @@ async function fetchCatalog(): Promise<void> {
 
 type Slot = 'palette' | 'uiFont' | 'monoFont' | 'background';
 
-function select(selection: AppearanceSelection): void {
-  writeStored(SELECTION_KEY, Object.keys(selection).length ? JSON.stringify(selection) : undefined);
+function select(selection: AppearanceSelection, persist = writeStored): void {
+  persist(SELECTION_KEY, Object.keys(selection).length ? JSON.stringify(selection) : undefined);
   commit({ ...state, selection });
 }
 
@@ -260,9 +260,16 @@ export function selectAppearanceItem(slot: Slot, id: string): void {
  * The user picked a built-in or custom theme: it replaces the plugin palette instead of sitting under it,
  * including one whose plugin is off right now, so turning it back on does not paint over the newer pick.
  */
-export function releasePluginPalette(): void {
-  const { palette, preset } = state.selection;
-  if (palette !== APPEARANCE_DEFAULT && (palette !== undefined || preset !== undefined)) selectAppearanceItem('palette', APPEARANCE_DEFAULT);
+export function releasePluginPalette(persist?: typeof writeStored): void {
+  // An acknowledged command must merge with the saved selection even if a
+  // change from another tab is still waiting for its storage event here.
+  const selection = persist ? parseSelection(window.localStorage.getItem(SELECTION_KEY) ?? '') : state.selection;
+  const { palette, preset } = selection;
+  if (palette !== APPEARANCE_DEFAULT && (palette !== undefined || preset !== undefined)) {
+    select({ ...selection, palette: APPEARANCE_DEFAULT }, persist);
+  } else if (persist) {
+    commit({ ...state, selection });
+  }
 }
 
 // ── Reading ──────────────────────────────────────────────────────────────────

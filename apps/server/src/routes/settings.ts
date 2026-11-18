@@ -9,6 +9,7 @@ import { StorageInspector } from '../storage/inspector.js';
 import { machineReport } from '../doctor.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { LEGACY_DEFAULT_BACKEND_ID } from '../session-identity.js';
+import { validateBackendDefaults } from '../settings/backend-defaults.js';
 import { backendVisibleToClient, preserveInvisibleSettingsForClient, requireBackendVisibleToClient, visibleBackendsForClient } from '../native/client-features.js';
 import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { RouteDeps } from './deps.js';
@@ -55,12 +56,7 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
         const backendId=rawBackend,values=raw as Record<string,unknown>;
         if(!offered.has(backendId)&&sameEntry(values,stored.nativeBackendDefaults?.[backendId]))continue;
         const requestedProfile=values.profileId===undefined?stored.nativeBackendDefaults?.[backendId]?.profileId:requireString(values.profileId,'profileId',200);
-        const profile=nativeBackends.catalog.validateProfile(backendId,requestedProfile);
-        const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,profile.id);
-        if(values.model!==undefined){
-          requireString(values.model,'model',200);
-          if(!capabilities.supportsModelSelection)throw new AppError('NATIVE_MODEL_UNSUPPORTED',`${backendId} does not support model selection`);
-        }
+        const {capabilities}=await validateBackendDefaults(nativeBackends.catalog,backendId,requestedProfile,values.model);
         if(values.mode!==undefined){
           const mode=requireString(values.mode,'mode',100);
           if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===mode):mode!=='agent')throw new AppError('INVALID_MODE',`Choose a mode supported by ${backendId}`);

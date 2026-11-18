@@ -6,7 +6,9 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The personal assistant can list built-in and shared Riffet Web themes and available plugin palettes even when a message has no connected tab. Retrying an unsent message from the assistant now identifies the workbench that submits it.
 - Sending a personal assistant message with several Riffet Web tabs open no longer waits behind each tab’s sidebar updates on HTTP/1.1 connections.
+- The personal assistant can read and change the theme after you reload Riffet Web, and an open tab can reconnect after a server restart.
 - On the web, approval requests and questions appear directly below the last conversation entry, without an empty progress row between them.
 - When a turn finishes, its thinking and tool calls fold into "Processed" even if you had scrolled up during the turn; they stay open only when you opened a tool or thinking item inside that block or have text selected in it.
 - When translating a reply or a selection fails, the translation card stays in place with the reason and a Retry button (and Choose a model when no model is set yet), instead of disappearing into a toast. Closing a card while it is still running stops the request, and changing the target language in the plugin settings translates again on the next click.
@@ -28,7 +30,11 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Ask the personal assistant which tasks need you, why a plugin is unavailable, or what a restart would interrupt. It can watch a task for a status change, adjust supported preferences on an authorized Riffet client and edit a shared custom theme. Changing the default Agent, provider or model requires a separate confirmation from the owner.
+
 - `@` session references work in Cursor, TRAE CLI, Droid, pi and DeepSeek Harness conversations, in addition to Claude Code, Codex and Antigravity.
+- In the personal assistant on Riffet Web, you can ask to change the workbench palette or switch between light, dark and system appearance in the browser that sent the message.
+
 - The terminal’s More actions menu in the web development build can export a layout report with row counts and cursor positions from the browser and tmux.
 - Pairing a phone with the Mac no longer needs a terminal: when the local server only accepts this computer, click "Allow devices on the same network" on the pairing page or in the first-launch guide, or switch it in Settings › Connection at any time. The server restarts once no conversation is running, and browsers on this computer will need to sign in afterwards.
 - The Mac, Android and iPhone apps open their main window without a server: appearance, language, shortcuts and other settings kept on the device work as usual, and pages that need a server say so and take you to connect. The first launch walks you through starting or connecting a server, choosing the default agent and a starting folder, and pairing your phone, full screen and skippable at every step; whatever you skip is finished later from the new-conversation page.

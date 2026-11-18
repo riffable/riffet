@@ -372,31 +372,33 @@ export class BackendCatalog {
    * is why a backend whose executable could not be found still showed up as healthy until a
    * conversation tried to start it.
    */
-  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
+  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<AvailabilityEntry> {
     const key = `${driver.id}:${profile.id}`;
     const cached = this.availability.get(key);
-    if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached.result;
+    if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached;
     // A source in its own process answers `resolve` only from a finished `prepare`; without one the probe would
     // read (and cache) "not ready" for a source that is fine.
     await prepareSource(profile.config).catch(() => undefined);
     const result = await driver.available(this.host, profile)
       .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
-    this.availability.set(key, { result, checkedAt: Date.now() });
+    const entry = { result, checkedAt: Date.now() };
+    this.availability.set(key, entry);
     for (const oldest of this.availability.keys()) {
       if (this.availability.size <= MAX_AVAILABILITY_ENTRIES) break;
       this.availability.delete(oldest);
     }
-    return result;
+    return entry;
   }
 
-  async listBackends(): Promise<NativeBackendCatalogEntry[]> {
+  async listBackends(onAvailability?: (id: NativeBackendId, checkedAt: number) => void): Promise<NativeBackendCatalogEntry[]> {
     const result: NativeBackendCatalogEntry[] = [];
     for (const driver of this.registry.list()) {
       const profiles = this.profiles(driver);
       const profile = profiles.find(item => item.isDefault) ?? profiles[0];
       if (!profile) continue;
       const capabilities = await this.driverCapabilities(driver, profile);
-      const availability = await this.backendAvailability(driver, profile);
+      const { result: availability, checkedAt } = await this.backendAvailability(driver, profile);
+      onAvailability?.(driver.id, checkedAt);
       const reason = availability.reason ? safeBackendReason(availability.reason, profile) : undefined;
       const rawDefaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
       const defaultModel = rawDefaultModel ? driver.normalizeModel?.(rawDefaultModel, profile) ?? rawDefaultModel : undefined;

@@ -18,6 +18,8 @@ interface NativeRunCommandOptions {
   latest: { readonly current: NativeSessionLatest };
 }
 
+type RequestWorkbenchConnection = () => Promise<string | undefined> | undefined;
+
 /**
  * What the reader can do to a conversation's runs: send, steer, interrupt, and settle a send whose
  * outcome is unknown. Every command reads the store when it runs rather than a rendered copy, and
@@ -30,7 +32,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     updateRuns(store, tracking, (current) => mergeRun(current, run));
   }, [session.id, store, tracking]);
 
-  const submitPrompt = useCallback(async (text: string, attachments: Attachment[], references: PromptContextReference[], steerTarget?: NativeTurnTarget & { ownerRunId?: string }, sourceRun?: Run, onStored?: () => boolean) => {
+  const submitPrompt = useCallback(async (text: string, attachments: Attachment[], references: PromptContextReference[], steerTarget?: NativeTurnTarget & { ownerRunId?: string }, sourceRun?: Run, onStored?: () => boolean, requestWorkbenchConnection?: RequestWorkbenchConnection) => {
     const prompt = text.trim();
     if (!prompt || tracking.sendInFlight || store.get().interrupting || store.get().runs.some((run) => run.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown') || tracking.sessionId !== session.id) return false;
     const { connected, status } = store.get();
@@ -51,7 +53,10 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     updateRuns(store, tracking, (current) => mergeRun(current, optimisticRun(session, body, entry.createdAt, false, entry)));
     try {
       if (onStored && !onStored()) throw new HttpError(409, i18n._(msg`草稿无法保存到浏览器，刷新后会丢失`), 'CLIENT_DRAFT_NOT_PERSISTED');
-      const accepted = await submitNativeSendRequest(entry);
+      // Keep the draft/outbox handoff synchronous even when the appearance
+      // channel needs to open a new connection before the POST.
+      const connection = requestWorkbenchConnection && await requestWorkbenchConnection();
+      const accepted = await submitNativeSendRequest(entry, connection);
       removeNativeSendRequest(session.id, body.commandId);
       if (tracking.sessionId === session.id) updateRuns(store, tracking, (current) => mergeRun(settleQueuedSource(current, sourceRun?.id), accepted));
       if (steerTarget && accepted.state === 'failed') {
@@ -114,7 +119,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     return () => { active = false; window.removeEventListener('storage', changed); };
   }, [session.id, store, tracking]);
 
-  const send = useCallback((text: string, attachments: Attachment[], references: PromptContextReference[], onStored?: () => boolean) => submitPrompt(text, attachments, references, undefined, undefined, onStored), [submitPrompt]);
+  const send = useCallback((text: string, attachments: Attachment[], references: PromptContextReference[], onStored?: () => boolean, requestWorkbenchConnection?: RequestWorkbenchConnection) => submitPrompt(text, attachments, references, undefined, undefined, onStored, requestWorkbenchConnection), [submitPrompt]);
 
   const steer = useCallback((text: string, attachments: Attachment[], references: PromptContextReference[], onStored?: () => boolean) => {
     const target = store.get().status.activeTurn;
@@ -165,14 +170,19 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     }
   }, [session, store, tracking, latest, updateRun, hasPendingQueuedSteer]);
 
-  const retryNativeRun = useCallback(async (run: Run) => {
+  const retryNativeRun = useCallback(async (run: Run, requestWorkbenchConnection?: RequestWorkbenchConnection) => {
     if (run.native?.stage !== 'http_unknown' || run.native.delivery !== 'uncertain' || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id) return;
     const entry = listNativeSendRequests(session.id).find((item) => item.body.commandId === run.commandId);
     if (!entry) { latest.current.onError(i18n._(msg`发送记录缺失，无法重试`)); return; }
     if (entry.invalidReason) { latest.current.onError(entry.invalidReason); return; }
     setRunActionPending(store, run.id, true);
     try {
-      const accepted = await submitNativeSendRequest(entry);
+      // The explicit retry can be the first POST the server receives. A duplicate
+      // command returns its original receipt without changing its workbench binding.
+      const connection = requestWorkbenchConnection && !entry.steerTarget && entry.version === undefined && !entry.sourceRunId && !entry.mode
+        ? await requestWorkbenchConnection() : undefined;
+      if (tracking.sessionId !== session.id) return;
+      const accepted = await submitNativeSendRequest(entry, connection);
       removeNativeSendRequest(session.id, entry.body.commandId);
       if (tracking.sessionId === session.id) {
         updateRuns(store, tracking, current => mergeRun(settleQueuedSource(current, entry.sourceRunId), accepted));

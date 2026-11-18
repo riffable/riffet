@@ -236,6 +236,21 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ changes" } }
       }
     },
+    "待验收" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ready for review" } }
+      }
+    },
+    "允许助理修改本机 Riffet 外观" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Let the assistant change Riffet’s appearance on this device" } }
+      }
+    },
+    "仅在 Riffet 连接此服务器并在前台时生效。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Only while Riffet is in the foreground and connected to this server." } }
+      }
+    },
     "清除默认模型" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear default model" } }
@@ -10878,12 +10893,22 @@
         }
       }
     },
-    "已移除的手机" : {
+    "设备" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Removed phone"
+            "value" : "Devices"
+          }
+        }
+      }
+    },
+    "已移除的设备" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removed device"
           }
         }
       }

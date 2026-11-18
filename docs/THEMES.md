@@ -53,7 +53,7 @@
 1. **CSS**：在 `apps/web/src/styles/index.css` 里加一对块，`[data-theme="<id>"]:not(.dark)` 与 `[data-theme="<id>"].dark`，各写满 53 个角色。
    - 建议只从上游抄「页面底色 / 文本阶梯 / 强调色 / 三个状态色」，其余（`--bg-hover`、`--line*`、`*-soft`、`--diff-*`、`--toast`）按默认主题的同一套规则派生：分隔线是前景色加固定 alpha，`-soft` 是状态色加 alpha，diff 行是状态色按比例混进页面。
    - 派生不是硬性要求，但偏离时要想清楚为什么。
-2. **目录**：在 `apps/web/src/lib/themes.ts` 的 `themes` 里加一项，`id` 必须与 CSS 的 `data-theme` 完全一致；借用他人配色时在 `credit` 里写明来源与许可（显示在设置页）。
+2. **目录**：在 `packages/contracts/src/theme.ts` 的 `WEB_BUILTIN_THEMES` 登记 ID 与名称，供 Web 选择器和助理主题目录共用。ID 须与 CSS 的 `data-theme` 一致。在 `apps/web/src/lib/themes.ts` 的 `details` 补说明，借用配色时用 `credit` 注明来源与许可。
 3. **终端**：在 `scripts/theme-ansi.ts` 的 `BUILTIN_ANSI` 里加 16 个槽位。
    - 上游若发布了 ANSI 表（Catppuccin、Solarized），照抄。
    - 上游没有的话，把它发布的 accent 铺到 6 个色相槽上 —— 16 个槽是**终端与外部程序的契约**（`git diff`、`ls` 读的就是它），必须互相可区分，这一点和应用配色不同。

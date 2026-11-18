@@ -225,6 +225,18 @@ private fun triggerLabel(item: AssistantDelegation): String {
     return when (trigger.kind) {
         "schedule" -> stringResource(Res.string.assistant_trigger_schedule, trigger.cron.orEmpty())
         "github-release" -> stringResource(Res.string.assistant_trigger_release, trigger.repo.orEmpty())
+        "task-status" -> {
+            val number = trigger.taskNumber ?: return ""
+            val status = when (trigger.status) {
+                "todo" -> Res.string.assistant_trigger_task_todo
+                "doing" -> Res.string.assistant_trigger_task_doing
+                "review" -> Res.string.assistant_trigger_task_review
+                "done" -> Res.string.assistant_trigger_task_done
+                "cancelled" -> Res.string.assistant_trigger_task_cancelled
+                else -> null
+            }
+            if (status == null) "#$number" else "#$number · ${stringResource(status)}"
+        }
         else -> stringResource(Res.string.assistant_trigger_page, trigger.url.orEmpty())
     }
 }

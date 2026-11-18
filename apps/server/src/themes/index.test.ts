@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CODE_THEME_ROLES, importCodeThemeJson, THEME_ANSI_KEYS, THEME_ROLES, type CodeThemePalette, type CustomCodeSyntax, type CustomTheme, type ThemePalette, type ThemeDesign } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
+import { changeSharedTheme } from './assistant.js';
 import { ThemeService, themeLibraryRevision } from './index.js';
 
 const directories: string[] = [];
@@ -28,6 +29,21 @@ function rejection(action: () => unknown): AppError {
 }
 
 describe('ThemeService', () => {
+  it('edits only the named shared colour, retries idempotently and preserves concurrent library changes', async () => {
+    const { themes } = service();
+    const original = theme();
+    const initial = await themes.replaceLibrary({expectedRevision:themes.getLibrary().revision,themes:[original]});
+    const patch = {sourceTurn:'fixture',themeId:original.id,mode:'dark' as const,role:'accent' as const,color:'#348caa',expectedRevision:initial.revision};
+    await expect(changeSharedTheme(themes, patch, () => { throw new AppError('WORKBENCH_UNAVAILABLE', 'The workbench disconnected'); }))
+      .rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
+    expect(themes.getLibrary().revision).toBe(initial.revision);
+    const saved = await changeSharedTheme(themes, patch);
+    expect(saved.changed).toBe(true);
+    expect(await changeSharedTheme(themes,patch)).toMatchObject({changed:false, revision:saved.revision});
+    await expect(changeSharedTheme(themes,{...patch,role:'fg'})).rejects.toMatchObject({code:'THEME_CONFLICT'});
+    expect(themes.getLibrary().themes[0]).toEqual({...original,palette:{...original.palette,dark:{...original.palette.dark,accent:patch.color}}});
+  });
+
   it('preserves the legacy revision when a theme has no design overrides', () => {
     // Captured before design was added; existing libraries must retain their revision.
     expect(themeLibraryRevision([theme()])).toBe('6be0d9043499d3767f15f3a4c4339e34');

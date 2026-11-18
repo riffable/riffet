@@ -161,6 +161,7 @@ class RiffetActivity : RiffetLocalizedActivity() {
                                 drafts = RiffetHost.drafts,
                                 marks = RiffetHost.marks,
                                 hasSavedPairing = RiffetHost.hasSavedPairing,
+                                deviceAppearance = RiffetDevice.appearance,
                                 requestNotifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { answered ->
                                     notificationsAsked = true
                                     notificationAnswered = answered
@@ -273,11 +274,13 @@ class RiffetActivity : RiffetLocalizedActivity() {
     override fun onStart() {
         super.onStart()
         RiffetAndroid.attachActivity(this)
+        RiffetDevice.capabilitiesChanged()
         RiffetHost.onForeground()
     }
 
     override fun onStop() {
         RiffetAndroid.attachActivity(null)
+        RiffetDevice.capabilitiesChanged()
         RiffetHost.onBackground()
         super.onStop()
     }

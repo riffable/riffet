@@ -23,6 +23,7 @@
 | `TEXT_CACHE_BYTES` | markdown、代码高亮、行排版等文本缓存的总和 |
 | `TERMINAL_KEPT_ROWS` | 客户端终端保留的回滚行数；服务端种子仍带 `TERMINAL_SCROLLBACK_ROWS` |
 | `STREAM_QUEUE_FRAMES`、`STREAM_QUEUE_BYTES` | 流与应用代码之间的帧队列上限，按帧数和字节数 |
+| `WORKBENCH_APPEARANCE_BUDGET` | 工作台外观通道的连接、消息绑定、页面凭据和回执的上限及超时。连接关闭时清除绑定，回合结束后释放其目标 |
 | `LIST_POLL_MS` | 会话列表轮询间隔：推送在线、推送断开、后台 |
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
 | `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、解析后转录缓存上限、事件循环阻塞阈值 |

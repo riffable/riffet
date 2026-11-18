@@ -6,6 +6,7 @@ import RiffetKit
 final class AppModel {
     static let shared = AppModel()
     let host = IOSHost()
+    let themeStore = ThemeStore()
     var workbench: Workbench?
     var starting = true
     var pairing = false
@@ -36,6 +37,13 @@ final class AppModel {
     func start() async {
         guard !started else { return }
         started = true
+        host.configureAppearance(appVersion: RiffetPush.appVersion, installationId: RiffetPush.installationId) { [weak self] theme, mode in
+            MainActor.assumeIsolated {
+                guard let self, UIApplication.shared.applicationState == .active,
+                      let api = self.host.api, self.workbench?.api === api else { return nil }
+                return self.themeStore.applyAppearance(theme: theme, mode: mode)
+            }
+        }
         RiffetNotifications.shared.install()
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let usable = path.status == .satisfied
@@ -227,6 +235,7 @@ final class AppModel {
             workbench.store.forgetSessionStates()
         }
         host.foreground = phase != .background
+        host.appearanceForeground(active: phase == .active)
         MetricsReporter.shared.foreground(phase == .active)
         if phase == .active {
             consumeNotification()

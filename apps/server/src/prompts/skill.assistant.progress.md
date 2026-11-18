@@ -11,7 +11,8 @@ description: 汇报工作进展：用户问「进展如何」「有什么在等�
 
 | 用户问的 | 用什么 |
 |---|---|
-| 交出去的任务做得怎样、有什么等我验收或回答 | `task_list`，需要细节时 `task_get` |
+| 现在有哪些事等我处理 | 主对话通过 `capability_find` 找到 `workbench.attention`，再用 `capability_read` 读取；有下一页时继续查询。返回的独立审批和任务问题分别处理 |
+| 交出去的任务做得怎样 | `task_list`，需要细节时 `task_get` |
 | 现在有哪些会话在跑、哪个停下了、哪个出错了 | `session_list`（可按 `project`、`state` 筛选） |
 | 某个会话具体做了什么 | `session_read`（先用 `session_list` 拿到 id） |
 | 以前讨论过、决定过什么 | `history_search`；查这个对话更早的内容用 `session: "self"` |

@@ -49,13 +49,15 @@ export function deviceGroupIds(session: Pick<Session, 'toolGroups'>): string[] {
 /**
  * The device channel (docs/DEVICES.md §3): who is connected, the persisted call queue and the
  * leases derived from pending wake-ups. A call is written to the settings table before it is sent,
- * so it outlives a restart until its deadline; the device's answer is accepted once per `callId`.
+ * so it outlives a restart until its deadline. Live appearance changes stay with their original
+ * connection. The device's answer is accepted once per `callId`.
  */
 export class DeviceChannel {
   private readonly streams = new Map<string, Set<Writer>>();
   private readonly listeners = new Set<() => void>();
   private readonly waiters = new Map<string, Set<(call: StoredDeviceCall) => void>>();
   private readonly timers = new Map<string, NodeJS.Timeout>();
+  private readonly appearanceWriters = new Map<string, { deviceId: string; writer: Writer }>();
   private readonly offRevoked: () => void;
   /** What conversations did on device screens; written by the MCP service, read by the session route. */
   readonly audit: DeviceAuditLog;
@@ -64,7 +66,11 @@ export class DeviceChannel {
 
   constructor(private readonly deps: DeviceChannelDeps) {
     this.audit = new DeviceAuditLog(deps.store);
-    for (const call of Object.values(this.read())) if (call.status === 'pending') this.arm(call);
+    for (const call of Object.values(this.read())) {
+      if (call.status !== 'pending') continue;
+      if (call.capability === 'riffet.appearance') this.appearanceInterrupted(call.callId);
+      else this.arm(call);
+    }
     // Its streams are already closed; nobody can answer its calls any more.
     this.offRevoked = deps.auth.onDeviceRevoked(id => {
       for (const call of Object.values(this.read())) {
@@ -92,6 +98,7 @@ export class DeviceChannel {
 
   close(): void {
     this.offRevoked();
+    for (const callId of this.appearanceWriters.keys()) this.appearanceInterrupted(callId);
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
   }
@@ -130,6 +137,9 @@ export class DeviceChannel {
     }
     if (body.push !== undefined) report.push = body.push === null ? null : pushRegistration(body.push);
     const info = this.info(this.deps.auth.reportDevice(deviceId, report, features));
+    if (!info.allowControl || !capabilities.includes('riffet.appearance')) {
+      for (const [callId, target] of this.appearanceWriters) if (target.deviceId === deviceId) this.appearanceInterrupted(callId);
+    }
     this.changed();
     return info;
   }
@@ -146,7 +156,9 @@ export class DeviceChannel {
     if (first) this.changed();
     const now = Date.now();
     for (const call of Object.values(this.read()).sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
-      if (call.deviceId === deviceId && call.status === 'pending' && Date.parse(call.deadline) > now) this.deliver(call, [writer]);
+      if (call.deviceId !== deviceId || call.status !== 'pending' || Date.parse(call.deadline) <= now) continue;
+      // An appearance change targeted the connected app at submission. Never replay it into a later foreground.
+      if (call.capability !== 'riffet.appearance') this.deliver(call, [writer]);
     }
     for (const lease of this.leases(deviceId)) writer('lease', lease);
     const ping = setInterval(() => writer('ping', {}), PING_MS);
@@ -156,6 +168,7 @@ export class DeviceChannel {
       const current = this.streams.get(deviceId);
       current?.delete(writer);
       if (current && !current.size) { this.streams.delete(deviceId); this.changed(); }
+      for (const [callId, target] of this.appearanceWriters) if (target.writer === writer) this.appearanceInterrupted(callId);
     };
   }
 
@@ -211,13 +224,21 @@ export class DeviceChannel {
       callId: randomUUID(), sessionId: input.sessionId, capability: input.capability, args: input.args,
       deadline: new Date(created.getTime() + input.timeoutMs).toISOString(), createdAt: created.toISOString(), deviceId: input.deviceId, status: 'pending',
     };
+    const appearance = call.capability === 'riffet.appearance';
+    const writer = appearance ? [...this.streams.get(call.deviceId) ?? []].at(-1) : undefined;
+    if (appearance && (!writer || input.signal?.aborted)) return Promise.resolve({
+      ...call, status: 'cancelled', settledAt: call.createdAt,
+      error: input.signal?.aborted ? { code: 'DEVICE_CALL_CANCELLED', message: 'The call was cancelled' }
+        : { code: 'DEVICE_UNREACHABLE', message: 'The Riffet device is offline' },
+    });
     const settled = new Promise<StoredDeviceCall>(resolve => {
       const listeners = new Set<(call: StoredDeviceCall) => void>([resolve]);
       this.waiters.set(call.callId, listeners);
     });
     this.write({ ...this.read(), [call.callId]: call });
     this.arm(call);
-    this.deliver(call);
+    if (writer) this.appearanceWriters.set(call.callId, { deviceId: call.deviceId, writer });
+    this.deliver(call, writer ? [writer] : undefined);
     if (input.signal) {
       const abort = () => this.settle(call.callId, { status: 'cancelled', error: { code: 'DEVICE_CALL_CANCELLED', message: 'The call was cancelled' } });
       if (input.signal.aborted) abort();
@@ -242,6 +263,12 @@ export class DeviceChannel {
     this.timers.set(call.callId, timer);
   }
 
+  private appearanceInterrupted(callId: string): void {
+    this.settle(callId, { status: 'cancelled', error: {
+      code: 'DEVICE_RESULT_UNKNOWN', message: 'The Riffet device disconnected or became unavailable before confirming the appearance change',
+    } });
+  }
+
   private deliver(call: StoredDeviceCall, writers = [...this.streams.get(call.deviceId) ?? []]): void {
     if (!writers.length) return;
     for (const writer of writers) { try { writer('call', deviceCall(call)); } catch { /* a broken stream closes on its own */ } }
@@ -257,6 +284,7 @@ export class DeviceChannel {
     if (!current || current.status !== 'pending') return current;
     const next: StoredDeviceCall = { ...current, ...patch, settledAt: new Date().toISOString() };
     this.write({ ...all, [callId]: next });
+    this.appearanceWriters.delete(callId);
     clearTimeout(this.timers.get(callId));
     this.timers.delete(callId);
     if (next.status !== 'answered') this.send(next.deviceId, 'cancel', { callId });

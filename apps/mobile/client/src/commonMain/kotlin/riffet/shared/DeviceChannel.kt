@@ -300,6 +300,7 @@ class DeviceChannel(
 ) {
     private var session: DeviceStreamSession? = null
     private var reported: DeviceReport? = null
+    private val reportLock = Mutex()
     private val _self = MutableStateFlow<PublicDevice?>(null)
 
     /** This device as the server last returned it. */
@@ -308,8 +309,9 @@ class DeviceChannel(
     private fun current() = DeviceReport(platform, appVersion, executor.capabilities(), allowed(), installationId())
 
     /** `PUT /api/devices/me`; failures propagate so a dial waits out its backoff instead of opening blind. */
-    suspend fun report() {
-        val next = current()
+    suspend fun report() = reportLock.withLock { sendReport(current()) }
+
+    private suspend fun sendReport(next: DeviceReport) {
         _self.value = api.reportDevice(next)
         reported = next
         afterReport(next)
@@ -317,10 +319,11 @@ class DeviceChannel(
     }
 
     /** Sends the report again if a permission or the switch changed since the last one. */
-    suspend fun reportIfChanged() {
-        if (reported == null || reported == current()) return
+    suspend fun reportIfChanged() = reportLock.withLock {
+        val next = current()
+        if (reported == null || reported == next) return@withLock
         try {
-            report()
+            sendReport(next)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Throwable) {

@@ -185,9 +185,9 @@
     <string name="pickers_approval_title">Permission mode</string>
     <string name="pickers_approval_escalated">This permission does not confirm each time; the Agent can run every command directly.</string>
     <string name="pickers_tools_title">Skills &amp; tools</string>
-    <string name="pickers_tools_phones">Phones</string>
+    <string name="pickers_tools_devices">Devices</string>
     <string name="pickers_tools_control">Control %1$s</string>
-    <string name="pickers_tools_removed">Removed phone</string>
+    <string name="pickers_tools_removed">Removed device</string>
     <string name="pickers_tools_offline">Offline</string>
     <string name="pickers_tools_default">Default</string>
     <string name="pickers_tools_count">%1$d on</string>

@@ -441,7 +441,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // The 助理 is told the time and what it missed with each message, ahead of the owner's text (docs/ASSISTANT.md §5.1),
       // and first what it lacks: the conversation's last turns in a new thread, that the thread was just summarized.
       const moments = standing && !command ? [...runtime.takeStandingMoments(), 'prompt' as const] : [];
-      const context = standingContextItem(moments.map(moment => host.standing?.context(request.session.id, moment)));
+      const context = standingContextItem(moments.map(moment => host.standing?.context(request.session.id, moment, request.runId)));
       const result = await runtime.send({
         runId: request.runId,
         commandId: request.commandId,
@@ -1075,6 +1075,10 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       && dialog.title.replace(/^(?:⚠️?\s*)/, '').trim() === TRAE_COMMAND_PERMISSION) return false;
     if (isKnownBlockingTitle(dialog.title)) return true;
     return Boolean(runtime && (runtime.activeTurnId || runtime.status.phase === 'busy' || runtime.status.phase === 'attention'));
+  }
+
+  ownedForegroundTurn(session: Session) {
+    return this.runtimes.get(session.id)?.ownedForegroundTurn();
   }
 
   status(host: NativeBackendHost, session: Session, profile?: NativeBackendProfileConfig): NativeStatus {

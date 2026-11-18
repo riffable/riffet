@@ -341,7 +341,18 @@ struct AssistantDelegationsView: View {
     }
 
     private func trigger(_ trigger: AssistantDelegationTrigger) -> String {
-        switch trigger.kind {
+        if trigger.kind == "task-status", let number = trigger.taskNumber?.intValue {
+            let status = switch trigger.status {
+            case "todo": String(localized: "待办", bundle: .riffet)
+            case "doing": String(localized: "进行中", bundle: .riffet)
+            case "review": String(localized: "待验收", bundle: .riffet)
+            case "done": String(localized: "已完成", bundle: .riffet)
+            case "cancelled": String(localized: "已取消", bundle: .riffet)
+            default: ""
+            }
+            return status.isEmpty ? "#\(number)" : "#\(number) · \(status)"
+        }
+        return switch trigger.kind {
         case "schedule": String(localized: "定时 \(trigger.cron ?? "")", bundle: .riffet)
         case "github-release": String(localized: "\(trigger.repo ?? "") 发版", bundle: .riffet)
         default: String(localized: "\(trigger.url ?? "") 有变化", bundle: .riffet)

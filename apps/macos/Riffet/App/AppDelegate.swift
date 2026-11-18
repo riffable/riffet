@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.servicesProvider = services
             NSUpdateDynamicServices()
             AppPresence.observeWindows()
+            AppPresence.refreshAppearanceAccess()
             DisplayPreferences.shared.applyAppearance()
             DisplayPreferences.shared.applyIcon()
             QuickPrompt.install()
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidBecomeActive(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppModel.shared.host.foreground = true
+            AppPresence.refreshAppearanceAccess()
             PluginsStore.shared.appBecameActive()
             Task {
                 await AppModel.shared.checkService()
@@ -44,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidResignActive(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppModel.shared.host.foreground = false
+            AppModel.shared.host.appearanceForeground(active: false)
             PluginsStore.shared.appResigned()
         }
     }
@@ -51,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated {
             AppModel.shared.host.flushAll()
+            AppModel.shared.host.appearanceForeground(active: false)
             AppLanguage.relaunchIfRestarting()
         }
     }
@@ -92,20 +96,45 @@ enum AppPresence {
     }
 
     @MainActor
+    static var hasForegroundWorkbench: Bool { foregroundWorkbench() }
+
+    @MainActor
+    private static func foregroundWorkbench(excluding closing: NSWindow? = nil) -> Bool {
+        NSApp.isActive && NSApp.windows.contains {
+            isMain($0) && $0 !== closing && $0.isVisible && !$0.isMiniaturized && $0.isOnActiveSpace
+        }
+    }
+
+    @MainActor
+    static func refreshAppearanceAccess(excluding closing: NSWindow? = nil) {
+        AppModel.shared.host.appearanceForeground(active: foregroundWorkbench(excluding: closing))
+    }
+
+    @MainActor
     static func observeWindows() {
         let center = NotificationCenter.default
         center.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) { note in
             MainActor.assumeIsolated {
-                guard menuBarOnly, let window = note.object as? NSWindow, isMain(window), !mainWindowShown(besides: window) else { return }
-                NSApp.setActivationPolicy(.accessory)
+                guard let window = note.object as? NSWindow, isMain(window) else { return }
+                refreshAppearanceAccess(excluding: window)
+                if menuBarOnly && !mainWindowShown(besides: window) { NSApp.setActivationPolicy(.accessory) }
             }
         }
         center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { note in
             MainActor.assumeIsolated {
-                guard isMain(note.object as? NSWindow), NSApp.activationPolicy() != .regular else { return }
+                guard isMain(note.object as? NSWindow) else { return }
+                refreshAppearanceAccess()
+                guard NSApp.activationPolicy() != .regular else { return }
                 NSApp.setActivationPolicy(.regular)
                 DisplayPreferences.shared.applyIcon()
                 NSApp.activate()
+            }
+        }
+        for name in [NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification, NSWindow.didChangeOcclusionStateNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { note in
+                MainActor.assumeIsolated {
+                    if isMain(note.object as? NSWindow) { refreshAppearanceAccess() }
+                }
             }
         }
     }

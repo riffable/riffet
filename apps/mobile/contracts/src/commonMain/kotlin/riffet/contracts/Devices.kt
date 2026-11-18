@@ -23,6 +23,7 @@ object DeviceCapability {
     const val SCREEN_OBSERVE = "screen.observe"
     const val SCREEN_ACT = "screen.act"
     const val APP_LAUNCH = "app.launch"
+    const val RIFFET_APPEARANCE = "riffet.appearance"
 
     val T0: List<String> = listOf(NOTIFY, CLIPBOARD_READ, CLIPBOARD_WRITE, LOCATION, PHOTO, OPEN_URL, ALARM)
     val T1: List<String> = listOf(SCREEN_OBSERVE, SCREEN_ACT, APP_LAUNCH)

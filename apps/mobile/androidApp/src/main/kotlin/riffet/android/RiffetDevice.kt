@@ -39,6 +39,7 @@ import riffet.shared.reportDevice
 import riffet.ui.state.ListsFeed
 import riffet.ui.state.SessionMarks
 import riffet.ui.state.SessionStore
+import riffet.ui.theme.WorkbenchAppearance
 import java.io.File
 
 /**
@@ -52,7 +53,12 @@ internal object RiffetDevice {
     private val scope = MainScope()
 
     val leases by lazy { AndroidLeaseScheduler(context) }
-    private val executor by lazy { AndroidDeviceExecutor(context) }
+    val appearance = WorkbenchAppearance(::capabilitiesChanged) { api ->
+        RiffetAndroid.currentActivity() != null &&
+            RiffetHost.connection.apiOrNull() === api &&
+            RiffetHost.store.value?.unauthenticated?.value == false
+    }
+    private val executor by lazy { AndroidDeviceExecutor(context, appearance) }
     private val journal by lazy { DeviceCallJournal(createAppPreferences()) }
     val platform by lazy { AndroidDevicePlatform(context) }
 

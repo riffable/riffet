@@ -36,6 +36,10 @@ export class PluginStore {
   // Also used by doctor and tests without createApp; adopt old storage before the first read.
   constructor(private readonly stateDir: string) { migratePluginStorage(stateDir); this.path = join(stateDir, 'plugins.json'); }
 
+  enablement(id: string): PluginEnablement {
+    return (this.read().items[id]?.enablement as PluginEnablement | undefined) ?? 'auto';
+  }
+
   item(id: string): PluginItem {
     const raw = this.read().items[id];
     return {

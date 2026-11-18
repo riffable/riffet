@@ -12,6 +12,7 @@ import { acknowledgeRecoveredCreationDraft, type ComposerProps } from './session
 import { requestSessionDeletion } from './SessionDeletion';
 import type { SessionAction } from './Sidebar';
 import { isAssistantProject } from '@/lib/project-family';
+import { workbenchAppearanceConnection } from '@/lib/workbench-appearance';
 import { NO_PAGE } from './state/navStore';
 import { useStores } from './state/stores';
 import type { UiState, UiStore } from './state/uiStore';
@@ -244,6 +245,12 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
     void loadBootstrap().then(() => nav.openAttemptsGroup(group.id)).catch((error) => toast.error(errorMessage(error, t`无法刷新项目列表`)));
   }, [loadBootstrap, nav, t]);
 
+  const assistantCreationConnection = (body: NativeSessionCreateInput) => {
+    const origin = nav.get();
+    if (body.workItemId || origin.sessionId || origin.projectId !== body.projectId) return;
+    if (isAssistantProject(lists.get().projects.find(item => item.id === body.projectId))) return workbenchAppearanceConnection();
+  };
+
   /** Native creation and first-message acceptance share one idempotent request. */
   /** `projectId` defaults to the selected project. */
   /**
@@ -289,7 +296,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       const navigationRevision = nav.getNavigationRevision();
       const defaultsRevision = settingsStore.revision();
       try {
-        const result = await api.createNativeSession(body);
+        const result = await api.createNativeSession(body, follow ? await assistantCreationConnection(body) : undefined);
         acceptedCreation.current = body;
         if (result.project) lists.upsertProject(result.project);
         // Persist the full accepted selector, including effort, even when the first turn used a catalog default.
@@ -357,7 +364,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       }
       if (body.invalidReason) throw new Error(body.invalidReason);
       let result: NativeSessionCreateResult | undefined;
-      if (retry) result = await api.createNativeSession(body);
+      if (retry) result = await api.createNativeSession(body, await assistantCreationConnection(body));
       else {
         const found = (await api.sessions()).find(item => item.id === body.clientSessionId);
         const run = found ? (await api.runs(found.id, body.initialMessage.commandId)).find(item => item.sessionId === found.id && item.commandId === body.initialMessage.commandId) : undefined;

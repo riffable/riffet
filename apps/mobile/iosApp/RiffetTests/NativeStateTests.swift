@@ -23,6 +23,35 @@ final class ServerAddressTests: XCTestCase {
 }
 
 @MainActor
+final class AppearanceSettingsTests: XCTestCase {
+    func testDeviceAppearanceRejectsUnsupportedValuesBeforeChangingAnything() {
+        let defaults = UserDefaults.standard
+        let themeKey = "riffet.ios.theme"
+        let savedTheme = defaults.object(forKey: themeKey)
+        let savedMode = defaults.object(forKey: ThemeStore.modeKey)
+        let themes = ThemeStore()
+        let originalTheme = themes.themeId
+        defer {
+            themes.themeId = originalTheme
+            defaults.set(savedTheme, forKey: themeKey)
+            defaults.set(savedMode, forKey: ThemeStore.modeKey)
+        }
+
+        XCTAssertNotNil(themes.applyAppearance(theme: "riffet", mode: "dark"))
+        XCTAssertNil(themes.applyAppearance(theme: "unsupported", mode: "light"))
+        XCTAssertNil(themes.applyAppearance(theme: "solarized", mode: "unsupported"))
+        XCTAssertEqual(themes.themeId, "riffet")
+        XCTAssertEqual(defaults.string(forKey: ThemeStore.modeKey), "dark")
+
+        let changed = themes.applyAppearance(theme: "solarized", mode: nil)
+        XCTAssertEqual(changed?.themeId, "solarized")
+        XCTAssertEqual(changed?.mode, "dark")
+        XCTAssertTrue(changed?.themes.contains(where: { $0.id == "solarized" }) ?? false)
+        XCTAssertEqual(ThemeStore().themeId, "solarized")
+    }
+}
+
+@MainActor
 final class DraftPersistenceTests: XCTestCase {
     private var server: String!
     override func setUp() { super.setUp(); server = "test-" + UUID().uuidString }

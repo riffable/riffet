@@ -84,11 +84,7 @@ internal fun AppearancePage(
             ) {
                 val activeId = resources?.palette?.id ?: themeId
                 Spacer(Modifier.height(LocalInterfaceStyle.current.metrics.controlInset))
-                ThemeGallery(themes, activeId) { id ->
-                    onThemeIdChange(id)
-                    // A server-provided palette override would otherwise keep winning over the card just picked.
-                    if (resources?.selection?.palette != null) resources.select(AppearanceSlot.PALETTE, "default")
-                }
+                ThemeGallery(themes, activeId, onThemeIdChange)
                 SettingsFootnote(stringResource(Res.string.settings_theme_footnote))
                 val display = DisplaySettings.shared
                 SettingsGroup("") {

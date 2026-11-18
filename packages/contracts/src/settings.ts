@@ -1,5 +1,6 @@
 import type { NativeBackendId } from './agent-ids.js';
 import type { AssistantJob } from './session.js';
+import type { WorkItemStatus } from './work-items.js';
 
 /** What a message's `{name}` placeholders are filled with. */
 export type TextParams = Record<string, string | number>;
@@ -154,10 +155,11 @@ export type AssistantSettingsUpdate = { [K in keyof AssistantSettings]?: Assista
 export type AssistantDelegationTrigger =
   | { kind: 'schedule'; cron: string; timeZone?: string }
   | { kind: 'github-release'; repo: string; everyMinutes?: number }
-  | { kind: 'page'; url: string; everyMinutes?: number };
+  | { kind: 'page'; url: string; everyMinutes?: number }
+  | { kind: 'task-status'; workItemId: string; taskNumber: number; status: WorkItemStatus };
 /**
  * Something the owner handed the 助理 to follow over time (docs/ASSISTANT.md §7.3). It ends on `until`,
- * or when the owner or the 助理 ends it. `cursor` is what was handled last: a release tag or a page digest.
+ * or when the owner or the 助理 ends it. `cursor` holds a release tag, page digest, or last consumed task event id.
  */
 export interface AssistantDelegation {
   id: string;
@@ -167,7 +169,7 @@ export interface AssistantDelegation {
   trigger: AssistantDelegationTrigger;
   until: string;
   state: 'active' | 'ended';
-  endedReason?: 'expired' | 'owner' | 'assistant';
+  endedReason?: 'expired' | 'owner' | 'assistant' | 'task-deleted';
   cursor?: string;
   lastCheckedAt?: string;
   lastRunAt?: string;

@@ -1,5 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
+import { DEFAULT_WEB_THEME_ID, WEB_BUILTIN_THEMES } from '@contracts';
 
 /**
  * The built-in theme catalogue.
@@ -49,87 +50,59 @@ export function parseThemeMode(raw: string | null | undefined): ThemeMode {
 }
 
 /** The theme every device starts on, and the fallback for any unknown stored value. */
-export const DEFAULT_THEME_ID = 'riffet';
+export const DEFAULT_THEME_ID = DEFAULT_WEB_THEME_ID;
 
-/**
- * Order is the picker's order: Riffet first, then the borrowed palettes roughly by how far each
- * one moves away from it — Solarized stays near a neutral tool surface, Catppuccin and Rosé Pine go
- * soft and warm, Everforest is the only green. Kiln and the reading palettes after it close the
- * list: Riffet's own, sharing one recipe — near-achromatic ink on a low-chroma paper, a deep status
- * trio and a single earthy accent — and differing only in the paper's temperature and that accent.
- *
- * There is deliberately no "GitHub" entry. Riffet's own palette was built by eye from Primer's
- * (its light sidebar differs from Primer's by one unit per channel), so a GitHub theme would have
- * been a second name for the default: same white page, same elevated surfaces, and — because the
- * terminal inherited Primer's ANSI — the same sixteen terminal colours. Diverging it from its own
- * published palette to make it look distinct would have made it not-GitHub.
- */
-export const themes: readonly ThemeDefinition[] = [
-  {
-    id: 'riffet',
-    name: 'Riffet',
+const details: Record<(typeof WEB_BUILTIN_THEMES)[number]['id'], Omit<ThemeDefinition, 'id' | 'name'>> = {
+  riffet: {
     get description() { return i18n._(msg`默认外观：冷中性灰阶配蓝色强调。`); },
   },
-  {
-    id: 'solarized',
-    name: 'Solarized',
+  solarized: {
     get description() { return i18n._(msg`奶油纸底与墨绿黑，为长时间阅读设计。`); },
     credit: 'Ethan Schoonover · MIT',
   },
-  {
-    id: 'catppuccin',
-    name: 'Catppuccin',
+  catppuccin: {
     get description() { return i18n._(msg`柔和的低对比紫调，适合暗光环境。`); },
     credit: 'Catppuccin · MIT',
   },
-  {
-    id: 'rose-pine',
-    name: 'Rosé Pine',
+  'rose-pine': {
     get description() { return i18n._(msg`暖紫玫瑰调，低饱和的纸感配色。`); },
     credit: 'Rosé Pine · MIT',
   },
-  {
-    id: 'everforest',
-    name: 'Everforest',
+  everforest: {
     get description() { return i18n._(msg`低饱和绿色系，暖而沉稳。`); },
     credit: 'sainnhe · MIT',
   },
-  {
-    id: 'kiln',
-    name: 'Kiln',
+  kiln: {
     get description() { return i18n._(msg`暖象牙底与黏土橙。`); },
   },
-  {
-    id: 'ink',
-    name: 'Ink',
+  ink: {
     get description() { return i18n._(msg`中性纸底与墨水蓝。`); },
   },
-  {
-    id: 'sepia',
-    name: 'Sepia',
+  sepia: {
     get description() { return i18n._(msg`旧书纸底与牛血红。`); },
   },
-  {
-    id: 'moss',
-    name: 'Moss',
+  moss: {
     get description() { return i18n._(msg`微绿灰纸底与橄榄苔绿。`); },
   },
-  {
-    id: 'slate',
-    name: 'Slate',
+  slate: {
     get description() { return i18n._(msg`微冷纸底与石板蓝。`); },
   },
-  {
-    id: 'pencil',
-    name: 'Pencil',
+  pencil: {
     get description() { return i18n._(msg`纯中性灰阶，不用彩色强调。`); },
   },
-  {
-    id: 'celadon',
-    name: 'Celadon',
+  celadon: {
     get description() { return i18n._(msg`青瓷纸底与深青。`); },
   },
-];
+};
+
+export const themes: readonly ThemeDefinition[] = WEB_BUILTIN_THEMES.map(theme => {
+  const detail = details[theme.id];
+  return {
+    ...theme,
+    get description() { return detail.description; },
+    ...(detail.credit ? { credit: detail.credit } : {}),
+  };
+});
 
 /**
  * Ids from before a theme was renamed. The palette is unchanged, so a stored id keeps the reader's

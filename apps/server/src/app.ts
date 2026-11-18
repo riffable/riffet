@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
-import { encodingFor, registerWebAssets } from './static-assets.js';
+import { encodingFor, registerWebAssets, WorkbenchDocumentProofs } from './static-assets.js';
 import { registerMathAssets } from './math-assets.js';
 import { registerDiagramAssets } from './diagram-assets.js';
 import { registerContentPreview } from './previews/content.js';
@@ -23,6 +23,9 @@ import { TerminalService } from './terminal/index.js';
 import { TitleService } from './titles/service.js';
 import { WorkspaceService } from './workspace/index.js';
 import { GitService } from './git/index.js';
+import { instanceSettingsRead, instanceSettingCommand } from './settings/assistant.js';
+import { agentDefaultsRead, agentDefaultsCommand } from './settings/assistant-agent-defaults.js';
+import { sharedThemeRead, sharedThemeCommand, webThemeRead } from './themes/assistant.js';
 import { SettingsService } from './settings/index.js';
 import { ThemeService } from './themes/index.js';
 import { migratePluginStorage } from './compat.js';
@@ -68,6 +71,7 @@ import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AssistantRuns } from './assistant/runs.js';
 import { AssistantDelegations } from './assistant/delegations.js';
+import { createAssistantWorkbenchQueries, workbenchReads } from './assistant/workbench-queries.js';
 import { Consolidation } from './assistant/consolidation.js';
 import { nextCronTime, parseCron } from './orchestration/cron.js';
 import { assistantSearch } from './search/assistant-search.js';
@@ -83,7 +87,7 @@ import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerGitRoutes } from './routes/git.js';
 import { registerOrchestrationRoutes } from './routes/orchestration.js';
 import { OrchestrationService } from './orchestration/service.js';
-import { sessionReferenceInputs } from './context-references/input.js';
+import { CONTEXT_LIMITS, sessionReferenceInputs } from './context-references/input.js';
 import { SessionReferenceService } from './context-references/service.js';
 import { SessionCommands } from './orchestration/session-commands.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -98,6 +102,10 @@ import { registerTaskRoutes } from './tasks/routes.js';
 import { isOpen } from './tasks/store.js';
 import { registerCommandRoutes } from './plugins/commands.js';
 import { AppearanceService } from './appearance/index.js';
+import { attentionRead } from './work-items/assistant-tools.js';
+import { CapabilityCatalog } from './riffet-mcp/capability-catalog.js';
+import { WorkbenchAppearance } from './riffet-mcp/workbench-appearance.js';
+import { registerWorkbenchAppearanceRoutes } from './routes/workbench-appearance.js';
 import { registerAppearanceRoutes } from './appearance/routes.js';
 import { OwnerService } from './owner/index.js';
 import { registerOwnerRoutes } from './owner/routes.js';
@@ -194,7 +202,25 @@ export async function createApp(options: AppOptions = {}) {
   // Made below the routes' dependencies, which reach them through these.
   let reclaimerRef:AgentReclaimer|undefined;
   let assistantMainRef:(()=>string|undefined)|undefined;
-  const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
+  const workbenchAppearance=new WorkbenchAppearance(auth);
+  const documentProofs=new WorkbenchDocumentProofs(store);
+  const stopWatchingAppearance=store.onRunChanged(run=>{
+    // A steer introduces another message into an existing turn. Its origin cannot inherit the owner's target.
+    if(run.native?.intent==='steer' && run.native.ownerRunId) workbenchAppearance.release(run.native.ownerRunId);
+    if(run.state!=='running' && run.state!=='queued') workbenchAppearance.release(run.id);
+  });
+  const riffetMcp=new RiffetMcpService({boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
+    const session=store.getSession(sessionId);
+    if(session.archivedAt || session.state==='archived') return undefined;
+    const project=store.getProject(session.projectId);
+    if(project.system!=='assistant' || project.archivedAt || project.mainSessionId!==sessionId || session.origin?.kind==='assistant') return undefined;
+    const turn=nativeBackends.ownedForegroundTurn(sessionId);
+    if(!turn) return undefined;
+    const run=store.getRun(turn.ownerRunId);
+    if(run.sessionId!==sessionId || run.state!=='running' || !run.native || run.native.intent
+      || run.native.nativeSessionId!==turn.nativeSessionId || (run.native.nativeTurnId && run.native.nativeTurnId!==turn.turnId)) return undefined;
+    return run.id;
+  },workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
   // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
   const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   // Warm CLIs a previous process reserved have no page left to renew them.
@@ -212,6 +238,7 @@ export async function createApp(options: AppOptions = {}) {
       notify:(id,notice)=>{notices.add({sessionId:id,...(notice.title?{title:notice.title}:{}),body:notice.body,source:'agent'});},
       saveImage:async(id,image)=>{const attachment=await workspace.upload(store.getProject(store.getSession(id).projectId),{name:image.name,mimeType:image.mimeType,dataBase64:image.data.toString('base64')});return {id:attachment.id,path:attachment.path};},
     }});
+  const appearance=new AppearanceService(plugins);
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source),source=>plugins.modelSourceRole(source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
   const backendRegistry=new NativeBackendRegistry()
@@ -228,9 +255,11 @@ export async function createApp(options: AppOptions = {}) {
   let assistantRuns:AssistantRuns|undefined;
   let consolidation:Consolidation|undefined;
   const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),timeZone:()=>settings.getSettings().assistant?.timeZone,
+    workbenchProof:runId=>workbenchAppearance.proofFor(runId),
+    nativeSettingProof:runId=>workbenchAppearance.nativeProofFor(runId),
     pending:{offer:()=>assistantRuns?.offerPending()??[],settle:delivered=>assistantRuns?.settlePending(delivered)},
     compacting:sessionId=>consolidation?.compacting(sessionId)});
-  const nativeBackends=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
+  const nativeBackends:NativeBackendService=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
     profiles:{get:backendId=>settings.getNativeBackendProfiles(backendId),getConfig:(backendId,profileId)=>settings.getNativeBackendProfileConfig(backendId,profileId)},
     riffetMcp, standing:assistantStanding, prepareContextInput:run=>contextReferences.render(run),
@@ -360,7 +389,21 @@ export async function createApp(options: AppOptions = {}) {
   }));
   workItemsRef=workItems;
   assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:savedDefaultBackendId(saved)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
-    search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[],work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
+    search:assistantSearch,transcript:id=>nativeBackends.contextTranscript(id,CONTEXT_LIMITS.bytes,AbortSignal.timeout(CONTEXT_LIMITS.timeoutMs)),
+    runtimeSessionIds:()=>nativeBackends.runtimeSessionIds(),runtimeStatus:id=>nativeBackends.hasRuntime(id)?nativeBackends.status(id):undefined,backends:onAvailability=>nativeBackends.catalog.listBackends(onAvailability),automations:()=>{
+      if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
+      return orchestrationRef.automations();
+    },work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
+  const workbenchQueries=createAssistantWorkbenchQueries({
+    store,ownerName:()=>owner.get().name,timeZone:()=>settings.getSettings().assistant?.timeZone,
+    nativeStatus:id=>nativeBackends.status(id),pluginSettings:(id,offset,limit)=>plugins.workbenchSettingFields(id,offset,limit),pluginInventory:()=>plugins.workbenchInventory(),
+    pluginToolGroups:session=>riffetMcp.pluginToolGroups(session),restartability:()=>dispatch.restartability(),
+  });
+  riffetMcp.registerCapabilities(new CapabilityCatalog(
+    [...workbenchReads(workbenchQueries), attentionRead(assistantRef), instanceSettingsRead(settings), webThemeRead(themes,()=>appearance.catalog()), sharedThemeRead(themes),
+      agentDefaultsRead(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
+    [instanceSettingCommand(settings), sharedThemeCommand(themes), agentDefaultsCommand(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
+  ));
   let deletionRef:SessionDeletion|undefined;
   const council=new CouncilService({
     db:store.db,
@@ -481,7 +524,11 @@ export async function createApp(options: AppOptions = {}) {
       },
     },
   });
-  const deps:RouteDeps={assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
+  const deps:RouteDeps={bindWorkbench:(request,session,run)=>{
+    if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
+    const project=store.getProject(session.projectId);
+    if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -520,9 +567,10 @@ export async function createApp(options: AppOptions = {}) {
   registerDictationRoutes(app,deps);
   registerTaskRoutes(app,deps);
   registerCommandRoutes(app,deps);
-  registerAppearanceRoutes(app,{appearance:new AppearanceService(plugins)});
+  registerAppearanceRoutes(app,{appearance});
   registerOwnerRoutes(app,deps);
   registerRiffetMcpRoutes(app,deps);
+  registerWorkbenchAppearanceRoutes(app,{auth,workbenchAppearance,documentProofs});
   registerDeviceRoutes(app,deps);
   registerChannelRoutes(app,deps);
   // Background pushes to iOS devices, straight to APNs with the owner's key (docs/DEVICES.md §3「后台推送」).
@@ -540,7 +588,7 @@ export async function createApp(options: AppOptions = {}) {
     try{riffetMcpCredentials.setUrl(`http://${host}:${address.port}`);}catch(error){app.log.warn({err:error},'Riffet MCP credential refresh failed');}
   });
 
-  registerWebAssets(app, options.webRoot);
+  registerWebAssets(app, options.webRoot, documentProofs);
   // The math page and its KaTeX assets: the same engine the web bundle uses, for clients that have
   // no TeX renderer of their own (see `math-assets.ts`).
   registerMathAssets(app);
@@ -579,10 +627,12 @@ export async function createApp(options: AppOptions = {}) {
       const assistant=settings.getSettings().assistant;
       if(run.job==='supervise')return Boolean(run.subject&&supervision?.wanted(run.subject,run.key));
       if(run.job==='consolidate')return assistant?.consolidation!==false;
-      try{return Boolean(run.subject&&assistantDelegationsRef?.get(run.subject).state==='active');}catch{return false;}
+      try{return Boolean(run.subject&&assistantDelegationsRef?.wantsRun(run.subject,run.key));}catch{return false;}
     }});
   runs.mainSession=assistantMain;
   assistantMainRef=assistantMain;
+  const existingMain=assistantMain();
+  if(existingMain && riffetMcp.mainNeedsToolRefresh(existingMain)) reclaimer.restartWhenRested(existingMain);
   // What an agent tells the owner with notify_user, or a wake-up's notice, reaches their phone too; a background run
   // pushes its own, and records whether it went out (docs/ASSISTANT.md §7.1).
   const stopNoticePush=notices.subscribe(notice=>{
@@ -592,6 +642,10 @@ export async function createApp(options: AppOptions = {}) {
   assistantRuns=runs;
   const queue=(job:'supervise'|'consolidate'|'delegation',key:string,brief:Record<string,string|number>,subject?:string)=>{const before=runs.has(key);return runs.enqueue(job,key,brief,subject).state==='queued'&&!before;};
   const delegations=new AssistantDelegations({store,timeZone:ownerZone,nextCron:(cron,after,zone)=>nextCronTime(parseCron(cron),after,zone),
+    taskStatuses:{
+      baseline:reference=>workItems.taskStatusBaseline(reference),
+      events:(id,cursor,limit)=>workItems.taskStatusEvents(id,cursor,limit),
+      subscribe:listener=>workItems.onStatusChange(listener)},
     fire:({delegation,reason,payload,key})=>{queue('delegation',key,{goal:delegation.goal,attention:delegation.attention,trigger:JSON.stringify(delegation.trigger),until:delegation.until,cursor:delegation.cursor??'（还没有）',reason,payload:payload||'（没有附带内容）'},delegation.id);},
     expired:delegation=>runs.addPending(undefined,`委托「${delegation.goal.slice(0,80)}」已到期结束。`),
     changed:()=>store.workItemsChanged()});
@@ -614,6 +668,13 @@ export async function createApp(options: AppOptions = {}) {
     agentLabel:backendId=>(backendId&&isNativeBackendId(backendId)?backendRegistry.get(backendId)?.label:undefined)??backendId??'Agent'});
   assistantWork={
     report:(sessionId,outcome,text)=>runs.report(sessionId,outcome,text,assistantMain()) as {outcome:string},
+    boundWorkItem:sessionId=>{
+      const run=runs.bySession(sessionId);
+      if(run?.job==='supervise') return run.subject;
+      if(run?.job!=='delegation' || typeof run.brief.trigger!=='string') return undefined;
+      try { const trigger=JSON.parse(run.brief.trigger); return trigger?.kind==='task-status' && typeof trigger.workItemId==='string' ? trigger.workItemId : undefined; }
+      catch { return undefined; }
+    },
     supervised:sessionId=>{const run=runs.bySession(sessionId);return run?.job==='supervise'&&run.subject?{workItemId:run.subject,runId:run.id}:undefined;},
     delegations:{list:()=>delegations.list(),create:input=>delegations.create(input),update:(id,input)=>delegations.update(id,input),end:(id,by)=>delegations.end(id,by)},
   };
@@ -642,7 +703,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }

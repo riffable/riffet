@@ -362,13 +362,13 @@ export function listNativeSendRequests(sessionId: string): NativeSendOutboxEntry
 }
 
 /** Replays the persisted action exactly, including after a reload or a lost HTTP response. */
-export function submitNativeSendRequest(entry: NativeSendOutboxEntry): Promise<Run> {
+export function submitNativeSendRequest(entry: NativeSendOutboxEntry, workbenchConnectionId?: string): Promise<Run> {
   if (entry.invalidReason) return Promise.reject(new Error(entry.invalidReason));
   if (entry.steerTarget || entry.version !== undefined || entry.sourceRunId !== undefined) {
     const input = nativeSteerInput(entry);
     return entry.sourceRunId ? api.steerQueuedNativeRun(entry.sessionId, entry.sourceRunId, { commandId: input.commandId, target: input.target }) : api.nativeSteer(entry.sessionId, input);
   }
-  return entry.mode === 'interrupt' ? api.nativeInterruptAndSend(entry.sessionId, entry.body) : api.nativeSend(entry.sessionId, entry.body);
+  return entry.mode === 'interrupt' ? api.nativeInterruptAndSend(entry.sessionId, entry.body) : api.nativeSend(entry.sessionId, entry.body, workbenchConnectionId);
 }
 
 export interface MergeOptions { strategy?: 'merge' | 'squash'; message?: string; commitPending?: string; removeWorktree?: boolean; cleanup?: 'keep' | 'archive' | 'remove' }
@@ -530,6 +530,12 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
+/** The live source of an assistant request stays in the transport, outside the durable outbox. */
+const workbenchPost = (body: unknown, connectionId?: string): RequestInit => ({
+  ...json('POST', body),
+  ...(connectionId ? { headers: { 'X-Riffet-Workbench': connectionId } } : {}),
+});
+
 export const api = {
   contextSnapshot: async (sessionId: string, hash: string, signal?: AbortSignal): Promise<{ version: number; messages: Array<{ role: string; text: string; at?: string; id?: string }> }> => {
     const response = await requestResponse(`/api/sessions/${encodeURIComponent(sessionId)}/blobs/${encodeURIComponent(hash)}`, { signal });
@@ -580,7 +586,7 @@ export const api = {
   reorderFolderFavorites: (ids: string[], projectId?: string) => request<FolderFavoritesResponse>('/api/folder-favorites/order', json('PUT', { ids, ...(projectId ? { projectId } : {}) })),
   deleteFolderFavorite: (id: string) => request<{ ok: true }>(`/api/folder-favorites/${encodeURIComponent(id)}`, json('DELETE')),
   createSession: (body: { projectId: string; kind: 'native'; backendId?: NativeBackendId; backendProfileId?: string; nativeSessionId?: string; title?: string; model?: string; mode?: string; approval?: string; resumePicker?: boolean }) => request<Session>('/api/sessions', json('POST', body)),
-  createNativeSession: ({ draftCleared: _draftCleared, rejected: _rejected, invalidReason, ...body }: NativeSessionCreateInput) => invalidReason ? Promise.reject(new Error(invalidReason)) : requireReferenceProtocol(body.initialMessage).then(() => request<NativeSessionCreateResult>('/api/sessions', json('POST', { ...body, kind: 'native' }))),
+  createNativeSession: ({ draftCleared: _draftCleared, rejected: _rejected, invalidReason, ...body }: NativeSessionCreateInput, workbenchConnectionId?: string) => invalidReason ? Promise.reject(new Error(invalidReason)) : requireReferenceProtocol(body.initialMessage).then(() => request<NativeSessionCreateResult>('/api/sessions', workbenchPost({ ...body, kind: 'native' }, workbenchConnectionId))),
   sessionDeletion: (id: string) => request<SessionDeletionPreview>(`/api/sessions/${encodeURIComponent(id)}/deletion`),
   deleteSession: (id: string, sessionIds: string[]) => request<SessionDeletionReceipt>(`/api/sessions/${encodeURIComponent(id)}`, json('DELETE', { sessionIds })),
   updateSession: (id: string, body: { title?: string; tags?: string[]; archived?: boolean; pinned?: boolean; toolGroups?: ToolGroupId[]; extensionsOff?: string[] }) => request<Session>(`/api/sessions/${encodeURIComponent(id)}`, json('PATCH', body)),
@@ -613,7 +619,7 @@ export const api = {
     return typeof body === 'string' ? body : JSON.stringify(body, null, 2);
   },
   nativeSteer: (id: string, body: NativeSteerInput) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/steer`, json('POST', body))),
-  nativeSend: (id: string, body: NativeMessageInput) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/send`, json('POST', body))),
+  nativeSend: (id: string, body: NativeMessageInput, workbenchConnectionId?: string) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/send`, workbenchPost(body, workbenchConnectionId))),
   /** Confirms a live CLI interrupt and accepts this follow-up before releasing the dispatch queue. */
   nativeInterruptAndSend: (id: string, body: NativeMessageInput) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/interrupt-and-send`, json('POST', body))),
   sendQueuedNativeRunNow: (id: string, runId: string, stop: NativeStopRequest) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/send-now`, json('POST', { stop })),

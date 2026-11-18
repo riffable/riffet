@@ -2,7 +2,7 @@ import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
 import type {
   ModelInfo, NativeActivity, NativeBackendId,
   NativeContext, NativeInteraction, NativeJob, NativeInteractionResponse, NativeInteractionResult, NativeStopRequest, NativeWorkbenchEvent,
-  NativeBackendProfilesResponse, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
+  NativeBackendProfilesResponse, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, NativeTurnTarget, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError, sessionInTerminal } from '../errors.js';
 import type { Store } from '../store.js';
@@ -1133,7 +1133,19 @@ export class NativeBackendService {
   }
 
   /** A driver is bound to the session in this process (`status` has something to read). */
+  runtimeSessionIds(): Iterable<string> { return this.sessionProfiles.keys(); }
   hasRuntime(sessionId: string): boolean { return this.sessionProfiles.has(sessionId); }
+
+  ownedForegroundTurn(sessionId: string): (NativeTurnTarget & { ownerRunId: string }) | undefined {
+    const status = this.status(sessionId);
+    if (status.phase !== 'busy') return undefined;
+    const stored = this.options.store.getSession(sessionId);
+    const session = this.catalog.currentSession(stored);
+    const selected = session !== stored ? this.resolveSync(session) : this.sessionProfiles.get(sessionId);
+    if (selected?.driver.ownedForegroundTurn) return selected.driver.ownedForegroundTurn(session);
+    const turn = status.activeTurn;
+    return turn?.ownerRunId ? { ...turn, ownerRunId: turn.ownerRunId } : undefined;
+  }
 
   status(sessionId: string): NativeStatus {
     const stored = this.options.store.getSession(sessionId);

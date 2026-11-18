@@ -132,6 +132,8 @@ import riffet.ui.theme.LocalRiffetPageMotion
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.ThemeEntry
 import riffet.ui.theme.RiffetTheme
+import riffet.ui.theme.WorkbenchAppearance
+import riffet.ui.theme.applyWorkbenchAppearance
 import riffet.ui.theme.themeCatalog
 import riffet.ui.timeline.TimelineFocusTarget
 import riffet.ui.timeline.RiffetImageAuth
@@ -348,6 +350,7 @@ fun RiffetApp(
     requestNotifications: ((() -> Unit) -> Unit)? = null,
     /** Whether any server was ever paired on this device, read before the first frame; true keeps the first-launch onboarding away. */
     hasSavedPairing: Boolean = true,
+    deviceAppearance: WorkbenchAppearance? = null,
 ) {
     val preferences = remember { createAppPreferences() }
     var themeMode by remember { mutableStateOf(preferences.themeMode()) }
@@ -423,9 +426,19 @@ fun RiffetApp(
     }
     val onThemeId: (String) -> Unit = { id ->
         if (themes.any { it.id == id }) {
+            appearanceResources?.select(riffet.ui.theme.AppearanceSlot.PALETTE, "default")
             preferences.setString(PreferenceKeys.THEME_ID, id)
             themeId = id
         }
+    }
+    val applyAppearance by rememberUpdatedState { arguments: kotlinx.serialization.json.JsonObject ->
+        applyWorkbenchAppearance(arguments, preferences, themes, appearanceResources, onThemeId, onThemeMode)
+    }
+    DisposableEffect(deviceAppearance, api, appearanceResources) {
+        val detach = if (deviceAppearance != null && api != null && appearanceResources != null) {
+            deviceAppearance.bind(api) { arguments -> applyAppearance(arguments) }
+        } else null
+        onDispose { detach?.invoke() }
     }
     val darkTheme = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -545,10 +558,7 @@ fun RiffetApp(
                                                     iconPacks = iconPacks,
                                                     themes = themes,
                                                     themeId = themeId,
-                                                    onThemeIdChange = { id ->
-                                                        appearanceResources?.select(riffet.ui.theme.AppearanceSlot.PALETTE, "default")
-                                                        onThemeId(id)
-                                                    },
+                                                    onThemeIdChange = onThemeId,
                                                     onBack = { navigation.tab = HomeTab.NEW_SESSION },
                                                     connection = connection,
                                                     onPaired = paired,
@@ -603,10 +613,7 @@ fun RiffetApp(
                                                 iconPacks = iconPacks,
                                                 themes = themes,
                                                 themeId = themeId,
-                                                onThemeIdChange = { id ->
-                                                    appearanceResources?.select(riffet.ui.theme.AppearanceSlot.PALETTE, "default")
-                                                    onThemeId(id)
-                                                },
+                                                onThemeIdChange = onThemeId,
                                                 onBack = { navigation.tab = HomeTab.TASKS },
                                                 connection = connection,
                                                 onPaired = paired,

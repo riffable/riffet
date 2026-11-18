@@ -336,8 +336,8 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             if features.addSessionReference != nil {
                 entries.append(.item(String(localized: "引用会话"), symbol: "at") { insertMention() })
             }
+            toolsSlot.refresh?()
             if let tools = toolsSlot.entries {
-                toolsSlot.refresh?()
                 entries += [.separator, .submenu(String(localized: "技能与工具"), symbol: "puzzlepiece.extension", entries: tools())]
             }
             guard entries.count > 1 else { model.pickFiles(upload: upload); return }

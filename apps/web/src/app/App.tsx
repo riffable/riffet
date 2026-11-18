@@ -19,6 +19,7 @@ import { clearCaches } from '@/lib/cache-registry';
 import { clearCachedLists, loadCachedLists } from '@/lib/list-cache';
 import { errorMessage } from '@/lib/utils';
 import { startOverlayNavigation } from '@/lib/overlay-navigation';
+import { connectWorkbenchAppearance, needsWorkbenchDocumentReload } from '@/lib/workbench-appearance';
 
 /**
  * Requested as soon as this module runs, so the workbench chunk downloads while the sign-in status
@@ -172,9 +173,22 @@ export function App() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (state === 'authenticated') return connectWorkbenchAppearance();
+  }, [state]);
+
   const login = async (credential: AuthLogin) => {
     setBusy(true); setError(undefined);
-    try { const status = await api.login(credential); setTokenRequired(status.tokenRequired); setState('authenticated'); }
+    try {
+      const status = await api.login(credential);
+      if (needsWorkbenchDocumentReload()) {
+        setState('checking');
+        window.location.reload();
+      } else {
+        setTokenRequired(status.tokenRequired);
+        setState('authenticated');
+      }
+    }
     catch (reason) { setError(signInError(reason, msg`登录失败`)); }
     finally { setBusy(false); }
   };

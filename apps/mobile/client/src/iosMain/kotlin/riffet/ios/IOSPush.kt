@@ -3,7 +3,6 @@ package riffet.ios
 import kotlinx.coroutines.CancellationException
 import riffet.contracts.DevicePushRegistration
 import riffet.contracts.DevicePushRoute
-import riffet.contracts.DeviceReport
 import riffet.contracts.NativeInteraction
 import riffet.contracts.NativeInteractionResponse
 import riffet.contracts.NativeInteractionResultStatus
@@ -15,8 +14,6 @@ import riffet.shared.health
 import riffet.shared.nativeCurrentInteraction
 import riffet.shared.nativeInteraction
 import riffet.shared.nativeSend
-import riffet.shared.reportDevice
-import riffet.shared.reportDeviceClearingPush
 import riffet.shared.serverOrigin
 import riffet.shared.session
 import riffet.ui.composer.newClientId
@@ -41,8 +38,7 @@ class IOSPush(private val host: IOSHost) {
     @Throws(Exception::class)
     suspend fun report(origin: String, appVersion: String, installationId: String, push: DevicePushRegistration?, clearPush: Boolean): PushReport? =
         withServer(origin) { api ->
-            val report = DeviceReport("ios", appVersion, emptyList(), allowControl = false, installationId = installationId, push = push)
-            val device = if (clearPush) api.reportDeviceClearingPush(report) else api.reportDevice(report)
+            val device = host.appearance.report(api, appVersion, installationId, push, clearPush)
             val health = try { api.health() } catch (cancellation: CancellationException) { throw cancellation } catch (_: Throwable) { null }
             PushReport(device.push, health?.serverId, health?.instanceId)
         }

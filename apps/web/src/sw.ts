@@ -10,6 +10,7 @@ interface InstallEvent {
 }
 interface FetchEvent {
   readonly request: Request;
+  readonly preloadResponse: Promise<Response | undefined>;
   respondWith(response: Promise<Response> | Response): void;
   waitUntil(promise: Promise<unknown>): void;
 }
@@ -23,6 +24,8 @@ interface WorkerScope {
   addEventListener(type: 'fetch', listener: (event: FetchEvent) => void): void;
   skipWaiting(): Promise<void>;
   readonly location: Location;
+  readonly navigator: { onLine: boolean };
+  readonly registration: { navigationPreload?: NavigationPreloadManager };
   readonly clients: { claim(): Promise<void> };
 }
 declare const self: WorkerScope;
@@ -42,6 +45,10 @@ const SHELL_FALLBACK_URL = '/index.html';
 /** How long a navigation waits for the network before the cached shell answers instead. */
 const NAVIGATION_TIMEOUT_MS = 3_000;
 
+function cacheableShell(response: Response): boolean {
+  return isShellResponse({ ok: response.ok, type: response.type, contentType: response.headers.get('content-type'), cacheControl: response.headers.get('cache-control') });
+}
+
 /**
  * The document and the assets a reload needs. Build output under `/assets/` is named after its
  * contents, so a file the previous build already had is copied from its cache rather than fetched
@@ -57,6 +64,11 @@ async function precache(): Promise<void> {
     // One missing file (an optional asset a build did not emit) must not fail the whole install:
     // whatever did arrive is still a usable offline shell.
     try {
+      if (url === SHELL_URL || url === SHELL_FALLBACK_URL) {
+        const response = await fetch(new Request(url, { cache: 'reload' }));
+        if (cacheableShell(response)) await cache.put(url, response);
+        return;
+      }
       if (!url.startsWith('/assets/')) { await cache.add(new Request(url, { cache: 'reload' })); return; }
       for (const old of previous) {
         const kept = await old.match(url);
@@ -73,6 +85,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    await self.registration.navigationPreload?.enable();
     const keys = await caches.keys();
     // An older build's cache holds an older shell. Leaving it behind would let an old document be
     // served after the new worker took over.
@@ -99,7 +112,11 @@ self.addEventListener('message', (event) => {
 /** The cached shell for a navigation, keyed to the request first so an exact hit wins. */
 async function shellFromCache(request: Request): Promise<Response | undefined> {
   const cache = await caches.open(CACHE_NAME);
-  return (await cache.match(request)) ?? (await cache.match(SHELL_URL)) ?? (await cache.match(SHELL_FALLBACK_URL));
+  for (const key of [request, SHELL_URL, SHELL_FALLBACK_URL]) {
+    const response = await cache.match(key);
+    if (response && cacheableShell(response)) return response;
+  }
+  return undefined;
 }
 
 /**
@@ -110,13 +127,18 @@ async function shellFromCache(request: Request): Promise<Response | undefined> {
  */
 async function networkFirst(event: FetchEvent): Promise<Response> {
   const request = event.request;
-  const network = fetch(request).then(async (response) => {
+  // Keep the browser's original navigation. A fetch issued by the worker can arrive
+  // as Sec-Fetch-Dest: empty, which cannot attest that this is the top-level workbench.
+  const network = event.preloadResponse.then(async (preloaded) => {
+    const response = preloaded ?? await fetch(request);
     // Every shell path resolves to the same document, so the newest copy is stored under the shell
     // URL rather than duplicated under each deep link. Anything else (a redirect, a JSON error
     // page) is passed through without replacing it.
-    if (isShellResponse({ ok: response.ok, type: response.type, contentType: response.headers.get('content-type') })) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put(SHELL_URL, response.clone());
+    if (cacheableShell(response)) {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put(SHELL_URL, response.clone());
+      } catch { /* Storage unavailable: the network document still answers. */ }
     }
     return response;
   });
@@ -159,5 +181,11 @@ self.addEventListener('fetch', (event) => {
   // `bypass` means the browser handles the request exactly as if no worker were installed: that is
   // what keeps API traffic, SSE streams and WebSocket upgrades out of the cache.
   if (strategy === 'bypass') return;
+  if (strategy === 'network-first' && !self.registration.navigationPreload) {
+    // Without preload, online navigations must go straight to the server. The installed
+    // shell is still useful when the browser already knows it is offline.
+    if (!self.navigator.onLine) event.respondWith(shellFromCache(request).then(cached => cached ?? fetch(request)));
+    return;
+  }
   event.respondWith(strategy === 'network-first' ? networkFirst(event) : cacheFirst(request, strategy === 'immutable' ? APPEARANCE_CACHE : CACHE_NAME));
 });

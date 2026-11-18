@@ -44,6 +44,20 @@ export const STREAM_QUEUE_FRAMES = 256;
 /** The same queue's ceiling in bytes of frame text: a frame may carry up to 256 KB, so the count alone allows 64 MB. */
 export const STREAM_QUEUE_BYTES = 8 * MIB;
 
+/** Limits for a workbench connection and the expiring, single-use document proofs used to establish it. */
+export const WORKBENCH_APPEARANCE_BUDGET = {
+  connections: 32,
+  bindingsPerConnection: 100,
+  receiptsPerConnection: 32,
+  documentProofs: 256,
+  documentProofMs: 24 * 60 * 60_000,
+  proofMs: 5_000,
+  callMs: 5_000,
+  pingMs: 30_000,
+  receiptBytes: 64 * KIB,
+  themes: 200,
+} as const;
+
 /** Session-list polling, milliseconds: while the lists stream is live, while it is down, and in the background. */
 export const LIST_POLL_MS = { pushed: 30_000, fallback: 5_000, background: 30_000 } as const;
 
@@ -86,9 +100,14 @@ export const ASSISTANT_BUDGET = {
   watchMinMinutes: 15,
   /** Bytes read from a watched page or feed. */
   watchFetchBytes: 512 * KIB,
+  /** Task status events consumed in one pass of a delegation. */
+  taskStatusEvents: 64,
   /** Largest file of its `files/` folder handed out; a bigger one is listed but not served. */
   servedFileBytes: 50 * MIB,
 } as const;
+
+/** Workbench query pages and the owner's window to confirm an instance setting proposal. */
+export const ASSISTANT_QUERY_BUDGET = { pageItems: 50, settingConfirmationMs: 5 * 60_000 } as const;
 
 /** The server's own budgets. */
 export const SERVER_BUDGET = {

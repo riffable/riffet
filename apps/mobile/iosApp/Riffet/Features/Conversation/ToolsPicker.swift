@@ -164,11 +164,15 @@ struct ToolsPickerPage: View {
                     row(String(localized: "控制 \(device.name)", bundle: .riffet), detail: nil, group: group, known: known)
                 }
                 ForEach(stale, id: \.self) { group in
-                    let phone = known.first { kit.deviceGroup(deviceId: $0.id) == group }
-                    row(phone.map { String(localized: "控制 \($0.name)", bundle: .riffet) } ?? String(localized: "已移除的手机", bundle: .riffet),
-                        detail: phone.flatMap { $0.online ? nil : String(localized: "离线", bundle: .riffet) }, group: group, known: known)
+                    let device = known.first { kit.deviceGroup(deviceId: $0.id) == group }
+                    let detail = device.flatMap {
+                        if !$0.online { return String(localized: "离线", bundle: .riffet) }
+                        return $0.allowControl ? nil : String(localized: "已停用", bundle: .riffet)
+                    }
+                    row(device.map { String(localized: "控制 \($0.name)", bundle: .riffet) } ?? String(localized: "已移除的设备", bundle: .riffet),
+                        detail: detail, group: group, known: known)
                 }
-            } header: { Text("手机") } }
+            } header: { Text("设备", bundle: .riffet) } }
             if let extensions { extensionSections(extensions, loaded: reader.loaded ?? extensions.cached()) }
             if let footnote { Section {} footer: { Text(footnote) } }
         }

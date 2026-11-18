@@ -43,6 +43,8 @@ export interface RouteDeps {
   restartAssistant?: () => void;
   /** IM channels: accounts, bound users and chats (docs/design/channels.md). */
   channels: ChannelService;
+  /** The submitting workbench may bind a new foreground turn before dispatch. */
+  bindWorkbench?(request: import('fastify').FastifyRequest, session: Session, run: Run): void;
   stateDir: string;
   /** Tasks (docs/TASK-BOARD.md). */
   workItems: WorkItemService;

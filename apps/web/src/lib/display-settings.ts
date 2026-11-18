@@ -1,9 +1,10 @@
-import { CODE_THEME_AUTO, parseCodeThemeSelection, type CodeThemeSelection } from '@contracts';
+import { CODE_THEME_AUTO, WEB_DISPLAY_OPTIONS, parseCodeThemeSelection, type CodeThemeSelection } from '@contracts';
 import { createStore, useStore } from './store';
 import { readStored, writeStored } from './utils';
 
-export type TextSize = 'small' | 'standard' | 'large' | 'extra-large';
-export type Density = 'compact' | 'standard' | 'relaxed';
+export type TextSize = (typeof WEB_DISPLAY_OPTIONS.textSize)[number];
+export const densities = WEB_DISPLAY_OPTIONS.density;
+export type Density = (typeof densities)[number];
 
 /**
  * Reading comfort, kept on this device only — the same stance the mobile client takes, and the
@@ -27,11 +28,11 @@ const KEY = 'riffet.display';
 
 export const textScales: Record<TextSize, number> = { small: 0.9, standard: 1, large: 1.1, 'extra-large': 1.2 };
 /** The sizes the picker offers; a value read from storage is clamped but not snapped. */
-export const terminalFontSizes = [11, 12.5, 14, 16] as const;
-export const MIN_TERMINAL_FONT_SIZE = 8;
-export const MAX_TERMINAL_FONT_SIZE = 24;
-export const MAX_TERMINAL_PADDING_HORIZONTAL = 48;
-export const MAX_TERMINAL_PADDING_VERTICAL = 32;
+export const terminalFontSizes = WEB_DISPLAY_OPTIONS.terminalFontSize;
+export const MIN_TERMINAL_FONT_SIZE = WEB_DISPLAY_OPTIONS.minTerminalFontSize;
+export const MAX_TERMINAL_FONT_SIZE = WEB_DISPLAY_OPTIONS.maxTerminalFontSize;
+export const MAX_TERMINAL_PADDING_HORIZONTAL = WEB_DISPLAY_OPTIONS.maxHorizontalPadding;
+export const MAX_TERMINAL_PADDING_VERTICAL = WEB_DISPLAY_OPTIONS.maxVerticalPadding;
 export const defaultDisplaySettings: DisplaySettings = {
   textSize: 'standard', density: 'standard', terminalFontSize: 12.5,
   terminalPaddingHorizontal: 24, terminalPaddingVertical: 16,
@@ -83,11 +84,31 @@ function apply(): void {
   root.style.setProperty('--text-scale', String(textScales[settings.textSize]));
 }
 
-export function setDisplaySettings(patch: Partial<DisplaySettings>): void {
-  const settings = parseDisplaySettings(JSON.stringify({ ...store.get(), ...patch }));
-  writeStored(KEY, JSON.stringify(settings));
+function commitDisplaySettings(patch: Partial<DisplaySettings>, persist = writeStored, current = store.get()): DisplaySettings {
+  const settings = parseDisplaySettings(JSON.stringify({ ...current, ...patch }));
+  persist(KEY, JSON.stringify(settings));
   store.set(settings);
   apply();
+  return settings;
+}
+
+export function setDisplaySettings(patch: Partial<DisplaySettings>): void {
+  commitDisplaySettings(patch);
+}
+
+/** An appearance command can acknowledge only the values this browser saved. */
+export function saveWorkbenchDisplaySettings(patch: Partial<DisplaySettings>): DisplaySettings {
+  const storage = window.localStorage;
+  return commitDisplaySettings(patch, (key, value) => {
+    if (value === undefined) throw new Error('Display settings must have a value');
+    storage.setItem(key, value);
+    if (storage.getItem(key) !== value) throw new Error('Display settings were not saved');
+  }, readWorkbenchDisplaySettings());
+}
+
+/** Reads the shared browser value even if this tab has not received its storage event yet. */
+export function readWorkbenchDisplaySettings(): DisplaySettings {
+  return parseDisplaySettings(window.localStorage.getItem(KEY) ?? '');
 }
 
 function onStorage(event: StorageEvent): void {

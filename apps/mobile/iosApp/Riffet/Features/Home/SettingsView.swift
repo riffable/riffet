@@ -181,12 +181,11 @@ struct SettingsView: View {
             SettingsGroup(title: String(localized: "支持", bundle: .riffet), entries: [
                 server(String(localized: "使用统计", bundle: .riffet), "chart.bar") { AnyView(NativeStatsView(workbench: $0)) },
                 SettingsEntry(title: String(localized: "导出日志", bundle: .riffet), icon: "square.and.arrow.up", busy: exporting, kind: .action { Task { await exportLog() } }),
-                SettingsEntry(title: String(localized: "版本", bundle: .riffet), icon: "info.circle", value: appVersion, kind: .plain),
             ]),
         ]
     }
 
-    @AppStorage("riffet.ios.appearance") private var appearanceMode = "system"
+    @AppStorage(ThemeStore.modeKey) private var appearanceMode = "system"
     private var displayModeName: String {
         switch appearanceMode {
         case "light": String(localized: "浅色", bundle: .riffet)
@@ -763,6 +762,8 @@ private struct DevicesView: View {
     @State private var showOlder = false
     @State private var busy = false
     @State private var error: String?
+    @State private var appearanceAllowed = false
+    @State private var savingAppearance = false
 
     /// Unseen this long, a record is folded away: usually one left behind by re-pairing.
     private static let idleInterval: TimeInterval = 7 * 24 * 60 * 60
@@ -774,6 +775,16 @@ private struct DevicesView: View {
         // Two records under one name are told apart by when each was paired.
         let names = Dictionary(grouping: devices, by: \.name).filter { $0.value.count > 1 }.keys
         RiffetList {
+            Section {
+                Toggle(isOn: Binding(get: { appearanceAllowed }, set: { enabled in
+                    Task { await setAppearanceAllowed(enabled) }
+                })) {
+                    Text(String(localized: "允许助理修改本机 Riffet 外观", bundle: .riffet))
+                }
+                .disabled(savingAppearance || currentID == nil)
+            } footer: {
+                Text(String(localized: "仅在 Riffet 连接此服务器并在前台时生效。", bundle: .riffet))
+            }
             RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet)) { Task { await load() } }
             if !recent.isEmpty {
                 Section { ForEach(recent, id: \.id) { row($0, pairedDate: names.contains($0.name)) } }
@@ -805,7 +816,7 @@ private struct DevicesView: View {
                 }
             }
         }
-        .task { await load() }
+        .task { await load(); await readAppearancePermission() }
         .refreshable { await load() }
         .confirmationDialog(target.map { String(localized: "撤销「\($0.name)」的授权？", bundle: .riffet) } ?? "", isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } }), titleVisibility: .visible) {
             Button("撤销授权", role: .destructive) {
@@ -843,6 +854,19 @@ private struct DevicesView: View {
         case "mac": "laptopcomputer"
         default: "globe"
         }
+    }
+
+    private func readAppearancePermission() async {
+        guard let api = workbench.api else { return }
+        appearanceAllowed = (try? await workbench.host.appearanceAllowed(api: api))?.boolValue ?? false
+    }
+
+    private func setAppearanceAllowed(_ enabled: Bool) async {
+        guard !savingAppearance, AppModel.shared.workbench === workbench, let api = workbench.api else { return }
+        savingAppearance = true
+        defer { savingAppearance = false }
+        do { appearanceAllowed = try await workbench.host.setAppearanceAllowed(api: api, enabled: enabled).boolValue }
+        catch { self.error = error.riffetMessage }
     }
 
     private func subtitle(_ device: PublicDevice, pairedDate: Bool) -> String {
