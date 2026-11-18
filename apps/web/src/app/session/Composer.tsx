@@ -32,6 +32,7 @@ import { useDictation } from './useDictation';
 import { holdDocked, HoldToTalkBar, HoldToTalkOverlay, type HoldEnd, type HoldSession } from './HoldToTalk';
 import { useComposerAutosize } from './useComposerAutosize';
 import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
+import { useSwitchSettling } from './sessionFrame';
 import { Collapse } from '@/components/ui/collapse';
 import { shouldForwardWheel } from './composerFullscreenGeometry';
 import { ComposerAttachments } from './ComposerAttachments';
@@ -609,6 +610,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   /** The hold overlay has fully arrived over the composer. */
   const handsFree = dictating && !hold;
   // The draft as the press found it: sentences landing mid-hold must not move the bar from under the finger.
+  const switchSettling = useSwitchSettling();
   const draftEmpty = hold ? hold.emptyDraft : !text;
   const holdInFooter = voice && !draftEmpty;
   const compact = isMobile && variant === 'dock' && !focused && !mobileSettingsOpen && !dragging && !dictating && !voice
@@ -624,9 +626,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * and it is covered by the `prefers-reduced-motion` rule in the stylesheet.
    *
    * Scoped to the dock on mobile, which is the only place the toggle exists: everywhere else it
-   * would fire once on first paint for no reason.
+   * would fire once on first paint for no reason. A composer replacing another conversation's shows
+   * its controls at once (`useSwitchSettling`).
    */
-  const toggleEntrance = isMobile && variant === 'dock' && !compact ? 'animate-in fade-in-0 duration-[var(--duration-base)] ease-[var(--ease-decelerate)]' : undefined;
+  const toggleEntrance = isMobile && variant === 'dock' && !compact ? cn('animate-in fade-in-0 ease-[var(--ease-decelerate)]', switchSettling ? 'duration-0' : 'duration-[var(--duration-base)]') : undefined;
 
   const updateText = (next: string) => {
     textRef.current = next;

@@ -47,6 +47,8 @@ export interface HeaderSlots {
   info?: ReactNode;
   /** Transient status the reader can act on. It sits in the row only while it exists. */
   alerts?: ReactNode;
+  /** Which alerts are showing: a change brings them in afresh (with their entrance), the same ones keep their place. */
+  alertsKey?: string;
   /** A dot on the 会话信息 button: something in it is running. */
   infoBadge?: boolean;
   /** How the conversation is shown (对话 / 终端 / 画布): first in the row's actions, apart from the rest. */
@@ -102,7 +104,7 @@ function ActionMenuItem({ action, onSelect }: { action: HeaderAction; onSelect: 
   );
 }
 
-export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
+export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
   const { t } = useLingui();
   const label = useBackendLabel();
   const stateMeta: Partial<Record<Session['state'], { label: string; tone: 'accent' | 'warning' | 'danger' | 'idle'; pulse?: boolean }>> = {
@@ -198,7 +200,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     <div className="flex shrink-0 items-center justify-self-end gap-0.5">
       {/* Alerts arrive with the session's data; each fades in where it lands instead of popping into the row. */}
       {views && <>{views}<span aria-hidden className="mx-1.5 h-4 w-px shrink-0 bg-line-strong" /></>}
-      {alerts && <HeaderAlerts>{alerts}</HeaderAlerts>}
+      {alerts && <HeaderAlerts key={alertsKey}>{alerts}</HeaderAlerts>}
       {session && (
         <Popover open={infoOpen} onOpenChange={onInfoOpenChange}>
           <Tip label={t`会话信息`} kbd={altShortcut('I')} disabled={infoOpen}>
@@ -349,7 +351,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   );
 }
 
-/** Alerts that come with a conversation replacing another one stand in its place; later ones fade in. */
+/** Alerts that come with a conversation replacing another one stand in place; ones that appear later fade in. Keyed by `alertsKey`, so each set decides when it appears. */
 function HeaderAlerts({ children }: { children: ReactNode }) {
   const switchedIn = useSwitchedIn();
   return <div className={cn('contents', !switchedIn && '[&>*]:animate-in [&>*]:fade-in-0 [&>*]:duration-[var(--duration-base)]')}>{children}</div>;

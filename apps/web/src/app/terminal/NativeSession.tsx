@@ -999,12 +999,15 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const switcher = !quickChat && !mobileViewport && !subagentOpen && views.length > 1;
   const viewsKey = viewIds.join();
   useViewShortcuts(viewIds, changeView, switcher);
+  // A different alert is a new arrival; the same one re-rendering is not.
+  const alertsKey = `${tabbedAlert ? headerStatus : ''}|${runtimeProgressShown ? 'progress' : runtimeNotice ? `${runtimeNotice.tone}:${runtimeNotice.action?.id ?? ''}` : ''}`;
   const header = useMemo(() => renderHeader({
     views: switcher && prefs.placement === 'header' ? <ViewSwitch views={viewsKey.split(',').flatMap((id) => offered.filter((entry) => entry.id === id))} value={view} onChange={changeView} /> : undefined,
     usage: quickChat ? undefined : native.context,
     approval: backendCapabilities?.permissions.find((mode) => mode.id === approval)?.label,
     // Shown in the row only while the route is changing or failing; the route in force is in the ⋯ menu.
     alerts: tabbedAlert ? <>{runtimeAlert()}{statusSlot()}</> : runtimeAlert(),
+    alertsKey,
     infoBadge: runningSubagents > 0 || (native.status.activity?.background ?? 0) > 0 || Boolean(infoNotice),
     info: (
       <ImageSourceContext.Provider value={imageSource}>
@@ -1058,7 +1061,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为自动化…`, onSelect: () => setDialog('automation') },
       ]),
     ],
-  }), [assistant, working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, t]);
+  }), [assistant, working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
   const dialogs = (
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
