@@ -389,8 +389,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       projects={projects.filter((item) => !isQuickChatProject(item))}
       onSelectNoProject={projectlessTasks ? selectNoProject : undefined}
       sessions={sessions}
-      selectedProjectId={selectedProjectId}
-      selectedSessionId={session?.id ?? ''}
+      selectedProjectId={anyPageOpen ? '' : selectedProjectId}
+      selectedSessionId={anyPageOpen ? '' : session?.id ?? ''}
       backend={backend}
       onSelectProject={selectProject}
       onSelectSession={selectFromSidebar}

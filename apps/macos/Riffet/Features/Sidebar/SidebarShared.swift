@@ -48,7 +48,7 @@ extension Workbench {
     /// one, not the conversation's.
     func sidebarRowSelected(_ session: Session) -> Bool {
         sidebar.picked.map { $0 == session.id }
-            ?? (page == nil && !showingHome && selected?.id == session.id)
+            ?? (page == nil && attemptGroupSelection == nil && !showingHome && selected?.id == session.id)
     }
 
     /// The actions of a row's context menu; the sidebar's dialogs take [rename] and [editTags].

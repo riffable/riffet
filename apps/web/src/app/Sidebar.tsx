@@ -319,6 +319,7 @@ export function Sidebar(props: Props) {
   // The 助理 has its own row above and its conversations are not listed (docs/ASSISTANT.md).
   const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, t`未关联项目`), [projects, showArchived, t]);
   const selectedSidebarProjectId = visibleProjects.get(selectedProjectId)?.id;
+  const canStartSession = Boolean(selectedProjectId || props.onSelectNoProject || projects.some((project) => !project.system && !project.archivedAt));
   const groups = useMemo(() => {
     if (layout !== 'project') return [];
     const byProject = new Map<string, Session[]>();
@@ -412,11 +413,11 @@ export function Sidebar(props: Props) {
             the directory itself is chosen there, on the composer (see ProjectHome), so that clicking
             "new session" never intercepts someone who only wanted to reach that page. */}
         {mobile ? (
-          <button type="button" onClick={props.onNewSession} disabled={!selectedProjectId && !props.onSelectNoProject} className={cn(mobileNavRow, 'disabled:opacity-50')}>
+          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(mobileNavRow, 'disabled:opacity-50')}>
             <IconMessageCirclePlus className="size-4 text-fg-2" /><Trans context="workbench-sidebar-new-action">新建会话</Trans>
           </button>
         ) : (
-          <button type="button" onClick={props.onNewSession} disabled={!selectedProjectId && !props.onSelectNoProject} className={cn(navRow, 'disabled:opacity-50')}>
+          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(navRow, 'disabled:opacity-50')}>
             <IconSquarePen className="size-[15px] shrink-0" /><Trans context="workbench-sidebar-new-action">新会话</Trans>
           </button>
         )}

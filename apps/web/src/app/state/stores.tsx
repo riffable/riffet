@@ -13,7 +13,7 @@ import { createWorkItemsStore, type WorkItemsState, type WorkItemsStore } from '
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
 import { pageAddressUrl } from './page-url';
 import { createSettingsStore } from './settingsStore';
-import { createUiStore, paintPaneWidth, type UiState } from './uiStore';
+import { createUiStore, paintPaneWidth, PANEL_DEFAULT, SIDEBAR_DEFAULT, type UiState } from './uiStore';
 import { createTabsStore } from '../tabs/tabsStore';
 import { useStore } from '@/lib/store';
 import type { SessionAction } from '../Sidebar';
@@ -147,8 +147,8 @@ export function WorkbenchEffects() {
   // Before the first paint, which lays the panes out from these variables.
   useLayoutEffect(() => { paintPaneWidth('sidebar', sidebarWidth); }, [sidebarWidth]);
   useLayoutEffect(() => { paintPaneWidth('panel', panelWidth); }, [panelWidth]);
-  useEffect(() => { writeStored(STORAGE_KEYS.sidebarWidth, String(sidebarWidth)); }, [sidebarWidth]);
-  useEffect(() => { writeStored(STORAGE_KEYS.panelWidth, String(panelWidth)); }, [panelWidth]);
+  useEffect(() => { writeStored(STORAGE_KEYS.sidebarWidth, sidebarWidth === SIDEBAR_DEFAULT ? undefined : String(sidebarWidth)); }, [sidebarWidth]);
+  useEffect(() => { writeStored(STORAGE_KEYS.panelWidth, panelWidth === PANEL_DEFAULT ? undefined : String(panelWidth)); }, [panelWidth]);
 
   /**
    * Mirror page destinations; transient dialogs and menus do not participate in the URL. The nav

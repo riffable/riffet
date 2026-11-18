@@ -248,7 +248,7 @@ struct SidebarView: View {
                 if let page = workbench.page { return Self.pageTag(page) }
                 // The assistant's conversation is not a list row: the destination row shows it.
                 if workbench.onAssistantPage { return Self.pageTag(.assistant) }
-                return workbench.showingHome ? nil : workbench.selected?.id
+                return workbench.showingHome || workbench.attemptGroupSelection != nil ? nil : workbench.selected?.id
             },
             set: { id in
                 guard let id else { return }

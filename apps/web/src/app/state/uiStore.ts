@@ -9,7 +9,7 @@ import { STORAGE_KEYS } from './navStore';
 
 export const DOCK_MIN = 160, DOCK_MAX = 560, DOCK_DEFAULT = 280;
 /** The defaults are the widths the layout's breakpoints were drawn for. */
-export const SIDEBAR_MIN = 208, SIDEBAR_MAX = 400, SIDEBAR_DEFAULT = 256;
+export const SIDEBAR_MIN = 208, SIDEBAR_MAX = 400, SIDEBAR_DEFAULT = 280;
 export const PANEL_MIN = 320, PANEL_MAX = 720, PANEL_DEFAULT = 380;
 /** Whatever width was stored, the sidebar never takes more of the window than this. */
 const SIDEBAR_SHARE = 0.4;

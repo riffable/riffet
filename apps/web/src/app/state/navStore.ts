@@ -16,7 +16,7 @@ export const STORAGE_KEYS = {
   session: 'riffet.selectedSessionId',
   sidebar: 'riffet.sidebarCollapsed',
   dock: 'riffet.dockHeight',
-  sidebarWidth: 'riffet.sidebarWidth',
+  sidebarWidth: 'riffet.sidebarWidth.v1',
   panelWidth: 'riffet.panelWidth',
   backend: 'riffet.selectedBackend',
 };

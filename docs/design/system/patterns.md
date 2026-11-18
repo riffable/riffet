@@ -10,7 +10,7 @@
 
 | 区域 | 尺寸 | 来源 |
 |---|---|---|
-| 侧栏 | 208–400，默认 256，上限 40vw；收起后宽度为 0，悬停边缘时浮出 | `state/uiStore.ts` |
+| 侧栏 | 208–400，默认 280，上限 40vw；收起后宽度为 0，悬停边缘时浮出 | `state/uiStore.ts` |
 | 主区 | 浮在 `bg-canvas` 上的卡片，外边距 8，圆角 12（`rounded-xl`），底色 `bg` | `Workbench.tsx` |
 | 侧边面板 | 320–720，默认 380；可停靠、悬浮、全屏 | `uiStore.ts`、`WorkbenchPanels.tsx` |
 | 终端 | 160–560，默认 280，停靠在主区底部 | `terminal/TerminalDock.tsx` |

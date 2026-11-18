@@ -31,6 +31,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - The model menu remembers each provider's last model with its effort and Fast settings: switching back to a provider starts on it, and picking another model keeps effort, Fast and the context window where that model offers them. Quota figures from the last reading show as soon as the menu opens, also after a reload, while a fresh reading loads.
 - Added an initial Collaboration page in the sidebar for running multi-model debates, Prism discussions, and document reviews across configured agents, then sending results into a session or task.
 - Favorites on the web now filter by type, unlinked status, project, and agent from a contents column (moving to a header menu on narrow screens), switch between grid and list views with search match highlights, and open a reader dialog to read full text, copy code, change highlight colors, edit notes, or relocate unlinked favorites.
+- On the web, the left sidebar is slightly wider by default, and opening another page such as Favorites or Plugins clears the selected state on the previous conversation row.
 
 ## 0.8.0 - 2026-11-17
 

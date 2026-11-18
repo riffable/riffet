@@ -84,9 +84,9 @@ function insertNormal(tabs: readonly TabEntry[], normal: readonly TabEntry[], en
   return [...tabs.slice(0, at), entry, ...tabs.slice(at)];
 }
 
-/** Statistics, tasks, marks, design, extensions and attempt pages cover the conversation; the selection underneath stays. */
-export function isPageOpen(state: Pick<NavState, 'statsOpen' | 'tasksOpen' | 'automationsOpen' | 'councilOpen' | 'marksOpen' | 'designOpen' | 'extensionsOpen' | 'attemptsGroupId'>): boolean {
-  return state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.marksOpen || state.designOpen || state.extensionsOpen || Boolean(state.attemptsGroupId);
+/** Statistics, tasks, marks, design, extensions, plugins and attempt pages cover the conversation; the selection underneath stays. */
+export function isPageOpen(state: Pick<NavState, 'pluginsOpen' | 'statsOpen' | 'tasksOpen' | 'automationsOpen' | 'councilOpen' | 'marksOpen' | 'designOpen' | 'extensionsOpen' | 'attemptsGroupId'>): boolean {
+  return state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.marksOpen || state.designOpen || state.extensionsOpen || Boolean(state.attemptsGroupId);
 }
 
 const LAUNCH_WINDOW_MS = 10_000;
@@ -211,8 +211,12 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   // The selection drives the tabs.
   let lastSelected = nav.get().sessionId;
   nav.subscribe(() => {
-    const { sessionId } = nav.get();
-    if (sessionId === lastSelected) return;
+    const state = nav.get();
+    const { sessionId } = state;
+    if (sessionId === lastSelected) {
+      if (sessionId && !isPageOpen(state) && store.get().unread[sessionId]) store.set((current) => ({ unread: withoutUnread(current.unread, [sessionId]) }));
+      return;
+    }
     lastSelected = sessionId;
     detached = '';
     if (!sessionId || store.get().style === 'off') return;
@@ -235,7 +239,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     const { loaded, status, sessions } = lists.get();
     if (!loaded) return;
     const next = new Map<string, { state: Session['state']; pinned: boolean }>();
-    const selected = nav.get().sessionId;
+    const selected = isPageOpen(nav.get()) ? '' : nav.get().sessionId;
     const unread: string[] = [];
     const unpinned: string[] = [];
     const tabbed = new Set(store.get().tabs.map((tab) => tab.sessionId));
@@ -456,7 +460,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     step(delta: 1 | -1) {
       const ordered = orderedIds();
       if (!ordered.length) return;
-      const at = ordered.indexOf(nav.get().sessionId);
+      const at = isPageOpen(nav.get()) ? -1 : ordered.indexOf(nav.get().sessionId);
       const target = at < 0 ? (delta > 0 ? 0 : ordered.length - 1) : (at + delta + ordered.length) % ordered.length;
       activate(ordered[target]!);
     },
