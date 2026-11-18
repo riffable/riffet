@@ -190,26 +190,7 @@ struct StorageSettings: View {
             }
             .controlSize(.small)
         }
-        if let blockers = server.restartBlockers, !blockers.isEmpty || server.restartProblem != nil {
-            if let problem = server.restartProblem {
-                Text(verbatim: problem)
-                    .font(.riffet(size: S(RiffetTextSize.xs.size)))
-                    .foregroundStyle(palette.warning)
-            }
-            ForEach(blockers) { blocker in
-                SettingsRow(blocker.title.isEmpty ? backendLabel(blocker.backendId) : blocker.title) {
-                    Text(verbatim: "\(backendLabel(blocker.backendId)) · \(blocker.reasonLabel)")
-                        .font(.riffet(size: S(RiffetTextSize.xs.size)))
-                        .foregroundStyle(palette.fg3)
-                }
-            }
-            HStack(spacing: Space.sm) {
-                SettingsActionButton("仍然重启", kind: .danger) { server.restartAnyway() }
-                SettingsActionButton("取消") { server.cancelRestart() }
-                Spacer(minLength: 0)
-            }
-            .controlSize(.small)
-        }
+        RestartBlockersView(server: server).controlSize(.small)
         if let last = compaction.last {
             Group {
                 if let failure = last.error {

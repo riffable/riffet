@@ -289,6 +289,7 @@ private struct PhonePage: View {
                     .frame(width: 172, height: 172)
                     .padding(Space.lg)
                     .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+                    if flow.openingNetwork { RestartBlockersView(server: model.server, onboarding: true) }
                     if let error = flow.networkError {
                         Text(verbatim: error).font(RiffetFont.caption).foregroundStyle(palette.danger).multilineTextAlignment(.center)
                     }
@@ -326,6 +327,7 @@ private struct PhonePage: View {
                     OnboardingPrimaryButton(title: "允许同一网络的设备连接", busy: flow.openingNetwork) {
                         Task { await flow.allowNetworkAccess(model: model) }
                     }
+                    .disabled(!flow.openingNetwork && (model.server.restartBlockers != nil || model.server.maintenance?.running == true))
                 }
             } else {
                 OnboardingPrimaryButton(title: "完成") { model.finishOnboarding() }

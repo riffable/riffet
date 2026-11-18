@@ -345,6 +345,9 @@ final class ServerHost {
     /// Why the service last failed to say what blocks the waiting restart; the wait goes on and offers 仍然重启.
     private(set) var restartProblem: String?
     private var restartChoice: RestartChoice?
+    /// The network access a restart in progress is switching to, from the click until the server answers with it:
+    /// the switch stays on screen while the server is not running.
+    private(set) var networkChange: Bool?
     /// Names this attempt's drain on the service, so ending it leaves other holders' drains alone.
     private var drainHolder = UUID().uuidString
     private enum RestartChoice { case now, cancel }
@@ -370,10 +373,23 @@ final class ServerHost {
         switch outcome {
         case .cancelled: return false
         case .ready, .unsupported:
-            if server.manager == .cli { restartCliDaemon(drained: outcome == .ready, network: network); return true }
-            if let network, server.manager == .app { writeAppServerConfig(network: network) }
-            // A restart that did not happen lets the service deliver again.
-            do { try await restart() } catch { _ = try? await serviceCall(server, drain: false); throw error }
+            if server.manager == .cli {
+                // Another run of maintenance holds the shell: nothing restarted, so deliveries resume.
+                guard restartCliDaemon(drained: outcome == .ready, network: network) else {
+                    _ = try? await serviceCall(server, drain: false)
+                    throw HostError.command(String(localized: "另一项服务器操作正在进行"))
+                }
+                return true
+            }
+            let changesConfig = network != nil && server.manager == .app
+            let previousConfig = changesConfig ? appServerConfigSnapshot() : nil
+            if let network, changesConfig { writeAppServerConfig(network: network) }
+            // A restart that did not happen lets the service deliver again and leaves the access as it was.
+            do { try await restart() } catch {
+                if changesConfig { restoreAppServerConfig(previousConfig) }
+                _ = try? await serviceCall(server, drain: false)
+                throw error
+            }
             return true
         }
     }
@@ -389,8 +405,13 @@ final class ServerHost {
     func setNetworkAccess(_ on: Bool) async throws -> Bool {
         guard let server = state.running, canSetNetworkAccess(server.manager) else { return false }
         if server.allowsNetworkDevices == on { return true }
+        // Another change or restart is already waiting; its state is on screen.
+        guard networkChange == nil, restartBlockers == nil else { return false }
+        networkChange = on
+        defer { networkChange = nil }
         guard try await restartWhenIdle(network: on) else { return false }
-        let deadline = ContinuousClock.now + .seconds(90)
+        // A CLI that waits for idle itself (an older service) takes up to its 180 s first.
+        let deadline = ContinuousClock.now + .seconds(server.manager == .cli ? 270 : 90)
         while ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(500))
             await refresh()
@@ -403,7 +424,9 @@ final class ServerHost {
         throw HostError.command(String(localized: "服务器没有按时重启"))
     }
 
-    nonisolated static func isLoopback(_ host: String) -> Bool { ["127.0.0.1", "localhost", "::1"].contains(host) }
+    nonisolated static func isLoopback(_ host: String) -> Bool {
+        ["127.0.0.1", "localhost", "::1"].contains(host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased())
+    }
 
     func restartAnyway() { if restartBlockers != nil { restartChoice = .now } }
 
@@ -517,10 +540,13 @@ final class ServerHost {
 
     /// Restarts a daemon this App does not own, the way its own message says to: `riffet restart`
     /// replays the running daemon's arguments, so host, port and auth survive.
-    /// [drained]: the App already waited (`restartWhenIdle`), so the CLI does not wait again.
-    private func restartCliDaemon(drained: Bool, network: Bool? = nil) {
+    /// [drained]: the App already waited (`restartWhenIdle`), so the CLI does not wait again (`--force`); a
+    /// service that cannot say what blocks a restart leaves the waiting to the CLI, which ends no turn either.
+    /// False when another run of maintenance kept it from starting.
+    @discardableResult
+    private func restartCliDaemon(drained: Bool, network: Bool? = nil) -> Bool {
         let access = network.map { $0 ? " --host 0.0.0.0 --auth" : " --host 127.0.0.1 --no-auth" } ?? ""
-        runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))\(drained ? " --force" : "")\(access)")
+        return runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))\(drained ? " --force" : "")\(access)")
     }
 
     /// Rebuilds the server the daemon runs (`dist/`). The running daemon keeps the code it started
@@ -538,8 +564,9 @@ final class ServerHost {
     /// node, pnpm or `riffet` when a version manager installed them: those `PATH` entries live in
     /// `~/.zshrc`, which only an interactive shell reads. The environment is read once per command,
     /// off the main thread, so a fix to the shell config takes effect on the next click.
-    private func runMaintenance(title: String, script: String) {
-        guard maintenanceProcess == nil, !maintenanceStarting else { return }
+    @discardableResult
+    private func runMaintenance(title: String, script: String) -> Bool {
+        guard maintenanceProcess == nil, !maintenanceStarting else { return false }
         maintenance = ServerMaintenance(title: title)
         maintenanceStarting = true
         Task { [weak self] in
@@ -548,6 +575,7 @@ final class ServerHost {
             self.maintenanceStarting = false
             self.startMaintenance(script: script, environment: environment)
         }
+        return true
     }
 
     private func startMaintenance(script: String, environment: [String: String]?) {
@@ -713,9 +741,18 @@ final class ServerHost {
     /// What the launcher in the bundle reads: the same host, port and auth as the daemon it replaces. Without a
     /// daemon record (it is deleted on a clean stop) the values already in the file stay; [network] replaces the
     /// access choice (on: 0.0.0.0 with the token, off: 127.0.0.1 without).
+    private var appServerConfigURL: URL { stateDirectory.appending(path: "app-server.env") }
+
+    /// The file as it is now (nil: none), to put back when the restart it was written for fails.
+    private func appServerConfigSnapshot() -> Data? { try? Data(contentsOf: appServerConfigURL) }
+
+    private func restoreAppServerConfig(_ snapshot: Data?) {
+        if let snapshot { try? snapshot.write(to: appServerConfigURL, options: .atomic) } else { try? FileManager.default.removeItem(at: appServerConfigURL) }
+    }
+
     private func writeAppServerConfig(network: Bool? = nil) {
         var host = "127.0.0.1", port = "4337", auth = "0"
-        if let text = try? String(contentsOf: stateDirectory.appending(path: "app-server.env"), encoding: .utf8) {
+        if let text = try? String(contentsOf: appServerConfigURL, encoding: .utf8) {
             for line in text.split(separator: "\n") {
                 let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
                 guard parts.count == 2 else { continue }
@@ -730,7 +767,7 @@ final class ServerHost {
         if let args = readDaemonRecord()?.args {
             if let index = args.firstIndex(of: "--host"), index + 1 < args.count { host = args[index + 1] }
             if let index = args.firstIndex(of: "--port"), index + 1 < args.count { port = args[index + 1] }
-            if args.contains("--auth") || !Self.isLoopback(host) { auth = "1" }
+            auth = (args.contains("--auth") || !Self.isLoopback(host)) ? "1" : "0"
         }
         if let network {
             host = network ? "0.0.0.0" : "127.0.0.1"

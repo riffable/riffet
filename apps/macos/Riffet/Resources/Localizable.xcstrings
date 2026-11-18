@@ -131,6 +131,16 @@
         }
       }
     },
+    "另一项服务器操作正在进行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another server task is running"
+          }
+        }
+      }
+    },
     "服务器没有按时重启": {
       "localizations": {
         "en": {

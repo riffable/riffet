@@ -216,7 +216,8 @@ final class OnboardingFlow {
             if next.localOnly {
                 // A phone cannot scan a server that listens on this Mac alone: the local one can be opened to the
                 // network here; any other has nothing to offer.
-                guard model.target == .local, let manager = model.server.state.running?.manager, model.server.canSetNetworkAccess(manager) else {
+                let switching = model.server.networkChange != nil
+                guard model.target == .local, switching || model.server.state.running.map({ model.server.canSetNetworkAccess($0.manager) }) == true else {
                     phoneAvailable = false
                     return
                 }

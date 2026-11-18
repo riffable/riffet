@@ -18,7 +18,7 @@ struct ConnectionSettings: View {
     @State private var pairingQR: NSImage?
     @State private var pairingBusy = false
     @State private var pairingError: String?
-    @State private var networkBusy = false
+    @State private var networkError: String?
     @State private var pushKey = PushKeyStore()
 
     var body: some View {
@@ -34,12 +34,12 @@ struct ConnectionSettings: View {
                         }
                     }
                 }
-                if canSetNetworkAccess, let running = model.server.state.running {
+                if canSetNetworkAccess || model.server.networkChange != nil {
                     SettingsRow("允许同一网络的设备连接", detail: "开启后，这台电脑上的浏览器也需要登录") {
                         HStack(spacing: Space.sm) {
                             if networkBusy { Spinner(size: .small) }
                             Toggle("允许同一网络的设备连接", isOn: Binding(
-                                get: { running.allowsNetworkDevices },
+                                get: { model.server.networkChange ?? model.server.state.running?.allowsNetworkDevices ?? false },
                                 set: { value in Task { await setNetworkAccess(value) } }
                             ))
                             .labelsHidden()
@@ -47,6 +47,8 @@ struct ConnectionSettings: View {
                             .disabled(networkBusy)
                         }
                     }
+                    RestartBlockersView(server: model.server)
+                    SettingsErrorText(message: networkError)
                 }
                 if insecure {
                     SettingsCallout(.warning, message: String(localized: "连接未加密，仅在可信网络中使用。"))
@@ -142,13 +144,20 @@ struct ConnectionSettings: View {
 
     @ViewBuilder
     private var pairingRow: some View {
-        if let pairing, pairing.localOnly, canSetNetworkAccess {
+        if model.server.networkChange != nil {
+            // The code in view belongs to the server being replaced.
+            HStack(spacing: Space.sm) {
+                Spinner(size: .small)
+                Text("正在重启服务器").font(RiffetFont.caption).foregroundStyle(palette.fg3)
+                Spacer(minLength: 0)
+            }
+            RestartBlockersView(server: model.server)
+        } else if let pairing, pairing.localOnly, canSetNetworkAccess {
             HStack(spacing: Space.sm) {
                 SettingsActionButton("允许同一网络的设备连接", kind: .primary) {
                     Task { await setNetworkAccess(true) }
                 }
                 .disabled(networkBusy)
-                if networkBusy { Spinner(size: .small) }
                 Spacer(minLength: 0)
             }
         } else if let pairing {
@@ -212,6 +221,11 @@ struct ConnectionSettings: View {
 
     private var isLocal: Bool { model.target == .local }
 
+    /// A change in progress, here or elsewhere, or other maintenance holding the shell the restart runs in.
+    private var networkBusy: Bool {
+        model.server.networkChange != nil || model.server.restartBlockers != nil || model.server.maintenance?.running == true
+    }
+
     /// The local server only; a login service keeps its address in its plist.
     private var canSetNetworkAccess: Bool {
         guard isLocal, let manager = model.server.state.running?.manager else { return false }
@@ -220,14 +234,12 @@ struct ConnectionSettings: View {
 
     private func setNetworkAccess(_ on: Bool) async {
         guard !networkBusy else { return }
-        networkBusy = true
-        error = nil
-        defer { networkBusy = false }
+        networkError = nil
         let hadCode = pairing != nil
         do {
             guard try await model.server.setNetworkAccess(on) else { return }
         } catch {
-            self.error = error.riffetMessage
+            networkError = error.riffetMessage
             return
         }
         pairing = nil
@@ -487,25 +499,7 @@ struct ServerSettings: View {
                     Spacer(minLength: 0)
                     if busy { Spinner(size: .small) }
                 }
-                if let blockers = server.restartBlockers, !blockers.isEmpty || server.restartProblem != nil {
-                    if let problem = server.restartProblem {
-                        Text(verbatim: problem)
-                            .font(.riffet(size: S(12)))
-                            .foregroundStyle(palette.warning)
-                    }
-                    ForEach(blockers) { blocker in
-                        SettingsRow(blocker.title.isEmpty ? backendLabel(blocker.backendId) : blocker.title) {
-                            Text(verbatim: "\(backendLabel(blocker.backendId)) · \(blocker.reasonLabel)")
-                                .font(.riffet(size: S(12)))
-                                .foregroundStyle(palette.fg3)
-                        }
-                    }
-                    HStack(spacing: Space.sm) {
-                        SettingsActionButton("仍然重启", kind: .danger) { server.restartAnyway() }
-                        SettingsActionButton("取消") { server.cancelRestart() }
-                        Spacer(minLength: 0)
-                    }
-                }
+                RestartBlockersView(server: server)
                 HStack(spacing: Space.sm) {
                     SettingsActionButton("查看日志", symbol: "doc.text.magnifyingglass") {
                         server.openLog()
@@ -842,4 +836,51 @@ struct AboutSettings: View {
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "" }
     private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "" }
+}
+
+/// The conversations a waiting restart is held by, with the ways out: 仍然重启 or 取消. Shown where the restart was asked.
+struct RestartBlockersView: View {
+    let server: ServerHost
+    /// The guide's page, outside a form.
+    var onboarding = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if let blockers = server.restartBlockers, !blockers.isEmpty || server.restartProblem != nil {
+            if onboarding {
+                VStack(spacing: Space.xs) {
+                    if let problem = server.restartProblem {
+                        Text(verbatim: problem).font(RiffetFont.caption).foregroundStyle(palette.warning)
+                    }
+                    ForEach(blockers) { blocker in
+                        Text(verbatim: "\(blocker.title.isEmpty ? backendLabel(blocker.backendId) : blocker.title) · \(blocker.reasonLabel)")
+                            .font(RiffetFont.caption).foregroundStyle(palette.fg3)
+                    }
+                    HStack(spacing: Space.sm) {
+                        Button("取消") { server.cancelRestart() }.buttonStyle(OnboardingButtonStyle(kind: .ghost))
+                        Button("仍然重启") { server.restartAnyway() }.buttonStyle(OnboardingButtonStyle(kind: .primary))
+                    }
+                }
+                .multilineTextAlignment(.center)
+            } else {
+                if let problem = server.restartProblem {
+                    Text(verbatim: problem)
+                        .font(RiffetFont.caption)
+                        .foregroundStyle(palette.warning)
+                }
+                ForEach(blockers) { blocker in
+                    SettingsRow(blocker.title.isEmpty ? backendLabel(blocker.backendId) : blocker.title) {
+                        Text(verbatim: "\(backendLabel(blocker.backendId)) · \(blocker.reasonLabel)")
+                            .font(RiffetFont.caption)
+                            .foregroundStyle(palette.fg3)
+                    }
+                }
+                HStack(spacing: Space.sm) {
+                    SettingsActionButton("仍然重启", kind: .danger) { server.restartAnyway() }
+                    SettingsActionButton("取消") { server.cancelRestart() }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
 }
