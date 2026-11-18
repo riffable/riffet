@@ -21,7 +21,7 @@ export class CursorLiveReceipts {
   private readonly taken = new Set<string>();
   private stop: (() => void) | undefined;
 
-  constructor(private readonly live: Pick<CursorLive, 'read' | 'watch'>) {}
+  constructor(private readonly live: Pick<CursorLive, 'read' | 'watch'>, private readonly onReceipt?: (sessionId: string) => void) {}
 
   expect(entry: Expected): void {
     this.expected.delete(entry.runId);
@@ -46,6 +46,7 @@ export class CursorLiveReceipts {
         type: 'native_input_receipt', nativeId: cursorPromptAlias(step.turn), runId, nativeTurnId: step.turn, createdAt: step.at,
         data: { commandId: entry.commandId, content: { type: 'text', text: entry.text } },
       });
+      this.onReceipt?.(entry.sessionId);
     }
     if (!this.expected.size) this.close();
   }

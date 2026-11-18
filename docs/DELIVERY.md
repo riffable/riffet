@@ -89,6 +89,25 @@
 2. 每次收敛输出一行结构化日志（会话、事实、派生值、观测值）。一次收敛说明有一个推断漏洞：修漏洞的同时保留收敛规则，二者都要有。
 3. 未验证的 CLI 版本不做画面收敛，避免误读未采集过的界面。
 
+### 状态正交分层与因果单调性
+
+会话状态由四条正交轴组成，分别回答不同问题，互不覆盖：
+
+1. **进程与连接（Runtime）**：`offline | starting | ready | conflict | failed`（CLI 或 app-server 是否存活并已建立控制连接）。
+2. **消息投递（Delivery，按 `Run`）**：`submitting → queued → preparing → dispatching → input_sent → observed | uncertain | failed | cancelled`（用户消息是否已送达 CLI）。
+3. **前台主回合（Foreground Turn）**：`idle | busy | compacting | attention | stopping`（主 Agent 当前是否在执行本轮任务）。
+4. **后台委派（Background）**：主回合结束后仍在运行的子 Agent、工作流与后台 shell，独立于前台回合结算。
+
+为避免跨通道（`status`、`run`、`rows`）异步到达时出现「Agent 输出已上屏但状态仍为空闲/已处理」或「气泡仍显示发送中而回答已流式输出」的逆序现象，服务端与四端共同遵守三条**因果单调性（Causal Monotonicity）**不变量：
+
+- **C1（投递与处理的阶段交接）**：真正排队等待前序回合的消息只出现在输入框上方的 `ComposerDock`；已进入正文的 `queued / preparing / dispatching / input_sent`（未收件且无输出）消息处于投递阶段，气泡下方显示「发送中」（或「恢复中」）。一旦收件确认（`observed` / `run.state === 'running'`）或本轮产生输出，气泡下方切回时间戳，同帧由底部 `WorkingIndicator`（「正在处理」）与 `TurnProcess`（「处理中 · Xs」）接管。
+- **C2（状态先于或随同转写发出）**：
+  - 新建会话在 `setNativeSessionId` 绑定原生会话 ID 时立即挂载驱动的实时控制订阅，不留首连空窗；
+  - 各后端运行时（Claude `readTranscript`、Codex `onNotification`、Cursor `refreshParentTranscript` 与 `updateStatus`）在观测到新回合开始或未完结输出时，先推进并广播 `phase: 'busy'`，再唤醒转写拉取；Cursor TUI 尚未绘出底栏（`booting`）但已有流式步骤或未回答提示时，按 `busy` 报告而不被 `starting` 遮蔽。
+- **C3（输出隐含收件与运行）**：
+  - 同一回合内只要已有非用户输出行（`thought`、`tool`、`assistant`）跟随在用户消息之后，即视为 CLI 已收件，气泡下不再显示「发送中」；
+  - 在 `analyzeTimelineTurns` 与客户端 `working` 判定中，已跨过派发边界（`dispatching / input_sent / observed`）或已有同轮输出的未完结 `Run`（含尚未收到 `run_updated` 微任务的 `queued` 状态）直接归入 `activeTurns` 并激活会话工作态，保证 `TurnProcess` 首帧即为「处理中」。
+
 ### 回合结束与更正
 
 - 工具失败、可重试的响应断流、线程级错误和静默时长本身都不证明回合结束。Claude 的 `isApiErrorMessage` 携带 `stop_reason: tool_use` 时仍属于运行中的回合；子 agent 静默时保留运行状态，直到明确结束、停止或宿主退出。

@@ -1171,7 +1171,6 @@ export class ClaudeSessionRuntime {
     const sessionId = this.nativeSessionId;
     const result = await this.transcript.refresh();
     if (this.disposed || sessionId !== this.nativeSessionId) return;
-    if (result.reset || result.events.length || result.subagents.length) this.changes?.emit(this.session.id);
     if (result.reset || result.events.length) this.noteActivity();
     if (!result.reset && result.events.length) {
       for (const event of result.events) {
@@ -1183,8 +1182,10 @@ export class ClaudeSessionRuntime {
       }
     }
     // The records decide the turn. They follow the events they describe, so a Run is seen to start
-    // before it is seen to end, and they are applied before anything below looks at the phase.
+    // before it is seen to end, and they are applied before anything below looks at the phase or wakes
+    // the journal reader, so clients receive the busy status before or with the turn's output rows.
     await this.applyLifecycle(result.lifecycle);
+    if (result.reset || result.events.length || result.subagents.length) this.changes?.emit(this.session.id);
     if ((result.reset || result.events.length || result.lifecycle.replay) && this.host.transcript) {
       this.journalTurn = await this.host.transcript.withSource(this.session.id, (source, w) => source instanceof ClaudeTranscriptSource ? source.activeTurn(w) : undefined);
       this.setStatus(this.status);

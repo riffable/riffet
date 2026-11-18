@@ -243,6 +243,10 @@ msgid "恢复"
 msgstr "Resume"
 
 #: src/app/terminal/NativeSession.tsx
+msgid "恢复中"
+msgstr "Resuming"
+
+#: src/app/terminal/NativeSession.tsx
 msgctxt "terminal-resume-session"
 msgid "恢复会话"
 msgstr "Resume session"
@@ -348,6 +352,10 @@ msgstr "Loading terminal…"
 #: src/app/terminal/NativeSession.tsx
 msgid "正在压缩上下文"
 msgstr "Compacting context"
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在发送"
+msgstr "Sending"
 
 #: src/app/terminal/TerminalView.tsx
 msgid "正在接管"

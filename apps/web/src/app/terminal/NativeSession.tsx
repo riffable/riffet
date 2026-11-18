@@ -478,7 +478,25 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const terminalBound = backendCapabilities?.requiresLiveTerminal === true;
   const live = terminalBound ? terminalLive : phase !== 'offline';
   // Until the stream reports a status, the session list's state answers, so an open does not start idle.
-  const busy = native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling';
+  // Once a run's receipt or same-turn output arrives while the CLI is still starting (or before status
+  // catches up), the turn is causally working so 正在处理 and TurnProcess never lag behind output.
+  const latestUserIndex = native.timeline.findLastIndex((item) => item.kind === 'user');
+  const latestOutputIndex = native.timeline.findLastIndex((item) => item.kind !== 'user' && item.kind !== 'activity');
+  const latestUser = latestUserIndex >= 0 && native.timeline[latestUserIndex]?.kind === 'user' ? native.timeline[latestUserIndex] : undefined;
+  const latestOutput = latestOutputIndex >= 0 ? native.timeline[latestOutputIndex] : undefined;
+  const latestUserRun = latestUser?.run;
+  const preBusyPhase = !native.statusKnown || phase === 'starting' || phase === 'offline';
+  const turnOutputActive = latestOutputIndex > latestUserIndex
+    && Boolean(latestUser && latestOutput && (!latestUser.turn || !latestOutput.turn || latestUser.turn === latestOutput.turn))
+    && Boolean(latestUserRun
+      && (latestUserRun.state === 'running' || latestUserRun.state === 'queued')
+      && !['queued', 'cancelled', 'failed', 'uncertain'].includes(latestUserRun.native?.delivery ?? '')
+      && (preBusyPhase || latestUserRun.state === 'queued' || (phase === 'idle' && !latestUserRun.native?.timings?.busyAt)));
+  const runObservedActive = native.runs.some((run) => !run.native?.queueReleasedAt
+    && (run.state === 'running' || (run.state === 'queued' && (run.native?.delivery === 'observed' || Boolean(run.native?.nativeMessageId || run.native?.timings?.observedAt || run.native?.timings?.providerAcceptedAt))))
+    && (preBusyPhase || (phase === 'idle' && !run.native?.timings?.busyAt)));
+  const causallyBusy = !connectionNotice && (turnOutputActive || runObservedActive);
+  const busy = (native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy;
   const working = busy || (native.statusKnown ? phase === 'attention' : session.state === 'waiting');
   // The main agent is idle while background agents keep going; only then is there something to stop that `working` does not cover.
   const runningSubagents = useRunningSubagentCount(native.subagents);
@@ -542,7 +560,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   }, [session.id, onSessionChanged, onError]);
 
   const timeline = native.timeline;
-  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
+  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
   const timelineRef = useRef(visibleTimeline);
   timelineRef.current = visibleTimeline;
   const stores = useStores();
@@ -1219,7 +1237,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           runActionPending={runActionPending}
           focus={discussionFocus ?? focus}
           progress={native.interrupting || showWorking
-            ? <WorkingIndicator startedAt={native.interrupting ? undefined : workingSince} outputRate={native.interrupting ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : undefined} />
+            ? <WorkingIndicator startedAt={native.interrupting || sendingTurn ? undefined : workingSince} outputRate={native.interrupting || sendingTurn ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : resumingTurn ? t`恢复中` : sendingTurn ? t`正在发送` : undefined} />
             : delegatedAgents + delegatedWorkflows > 0 && visibleTimeline.length > 0
               ? <BackgroundWorkIndicator
                   agents={delegatedAgents}

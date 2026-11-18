@@ -344,11 +344,14 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const carries = finalAnswer === undefined
       ? (item.kind === 'assistant' || item.kind === 'status') && lastTurnEnd(index)
       : item.kind === 'assistant' && finalAnswer === index;
-    const settled = carries && !activeTurns.has(turnKey) && turnKey !== processingTurn;
+    // For a user row, `settled` records that same-turn output already follows it.
+    const settled = item.kind === 'user'
+      ? !lastTurnEnd(index)
+      : carries && !activeTurns.has(turnKey) && turnKey !== processingTurn;
     const answerText = settled && item.kind === 'status' ? answerBefore(index) : undefined;
     // A status row (run_cancelled) already says it stopped; an answer or a prompt left last says it here.
     const stopped = interruptedTurns.has(turnKey) && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user');
-    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: settled ? metricsForTurn(turnKey) : undefined, runId: settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
+    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: carries && settled ? metricsForTurn(turnKey) : undefined, runId: carries && settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
   }
   flushGroup();
   if (rows.length) grouped.push(rows);

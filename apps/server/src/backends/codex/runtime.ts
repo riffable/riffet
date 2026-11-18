@@ -3046,32 +3046,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // journal reader, and never restart the deadline on subsequent items or turns.
     if (threadId === this.nativeSessionId && (method === 'turn/started' || method === 'turn/completed'
       || (method.startsWith('item/') && typeof params.turnId === 'string'))) this.history.beginMaterialization();
-    try { this.feed?.notification(method, params); } catch { /* the journal's reader must not break the live runtime */ }
-    // Streamed text is shown as a draft until `item/completed` commits the item and replaces it, so
-    // the answer is readable while the TUI is still printing it without ever rendering twice.
-    if (method === 'item/agentMessage/delta' || method === 'item/reasoning/textDelta' || method === 'item/reasoning/summaryTextDelta') {
-      // Output means the turn is no longer waiting in a provider queue.
-      if (this.transientNotice) this.showTransientNotice(undefined);
-      this.metering.noteStreamDelta(str(params.turnId), params.delta, method, str(params.itemId));
-      const threadId = this.nativeSessionId ?? 'unknown';
-      const kind = method === 'item/agentMessage/delta' ? 'assistant' : 'thinking';
-      const nativeId = `${threadId}:${params.turnId}:${params.itemId}:${kind}`;
-      const partial = !this.liveCompletedIds.has(nativeId) ? this.events.find(event => event.nativeId === nativeId) : undefined;
-      const text = partial && str(asRecord(partial.data.content)?.text);
-      const noted = this.drafts.note(method, params, threadId, partial && text !== undefined ? { text, sequence: partial.sequence, phase: partial.data.phase } : undefined);
-      if (partial && text !== undefined && noted === partial.nativeId) {
-        this.events.splice(this.events.indexOf(partial), 1);
-        this.seenEvents.delete(partial.nativeId);
-          }
-      return;
-    }
-    if (method === 'thread/tokenUsage/updated') {
-      const tokenUsage = asRecord(params.tokenUsage);
-      const usage = this.usage.turnUsage(str(params.turnId), tokenUsage);
-      if (usage) this.metering.noteTurnUsage(str(params.turnId), usage);
-      void this.usage.applyUsageFrame(tokenUsage, params).catch(() => undefined);
-      return;
-    }
     if (method === 'turn/started') {
       this.threadError = false;
       this.foregroundEndedTurnId = undefined;
@@ -3098,6 +3072,33 @@ export class CodexSessionRuntime implements CodexThreadReader {
         else meter.requestStartAt ??= Date.now();
       }
       this.setStatus({ phase: 'busy', ...(this.status.model ? { model: this.status.model } : {}) });
+      try { this.feed?.notification(method, params); } catch { /* the journal's reader must not break the live runtime */ }
+      return;
+    }
+    try { this.feed?.notification(method, params); } catch { /* the journal's reader must not break the live runtime */ }
+    // Streamed text is shown as a draft until `item/completed` commits the item and replaces it, so
+    // the answer is readable while the TUI is still printing it without ever rendering twice.
+    if (method === 'item/agentMessage/delta' || method === 'item/reasoning/textDelta' || method === 'item/reasoning/summaryTextDelta') {
+      // Output means the turn is no longer waiting in a provider queue.
+      if (this.transientNotice) this.showTransientNotice(undefined);
+      this.metering.noteStreamDelta(str(params.turnId), params.delta, method, str(params.itemId));
+      const threadId = this.nativeSessionId ?? 'unknown';
+      const kind = method === 'item/agentMessage/delta' ? 'assistant' : 'thinking';
+      const nativeId = `${threadId}:${params.turnId}:${params.itemId}:${kind}`;
+      const partial = !this.liveCompletedIds.has(nativeId) ? this.events.find(event => event.nativeId === nativeId) : undefined;
+      const text = partial && str(asRecord(partial.data.content)?.text);
+      const noted = this.drafts.note(method, params, threadId, partial && text !== undefined ? { text, sequence: partial.sequence, phase: partial.data.phase } : undefined);
+      if (partial && text !== undefined && noted === partial.nativeId) {
+        this.events.splice(this.events.indexOf(partial), 1);
+        this.seenEvents.delete(partial.nativeId);
+      }
+      return;
+    }
+    if (method === 'thread/tokenUsage/updated') {
+      const tokenUsage = asRecord(params.tokenUsage);
+      const usage = this.usage.turnUsage(str(params.turnId), tokenUsage);
+      if (usage) this.metering.noteTurnUsage(str(params.turnId), usage);
+      void this.usage.applyUsageFrame(tokenUsage, params).catch(() => undefined);
       return;
     }
     if (method === 'turn/plan/updated') {

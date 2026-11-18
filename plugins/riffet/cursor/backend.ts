@@ -234,7 +234,7 @@ export class CursorBackend implements AgentBackend {
       console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
     });
     runtime.useLaunchPlugin(async session => { await front; return steering.launchArgs(session); });
-    this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage, ...(apiCache ? { apiCache } : {}) };
+    this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live, sessionId => native.notePromptReceived(sessionId)), usage, ...(apiCache ? { apiCache } : {}) };
     this.ensureLiveUsageWatch();
     return this.built;
   }

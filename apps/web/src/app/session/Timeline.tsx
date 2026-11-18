@@ -50,14 +50,14 @@ export const toolIcons: Record<string, typeof IconWrench> = {
  * What a prompt says about its delivery. A turn stopped after the prompt arrived is the turn's
  * outcome, not the prompt's: `stopShown` false leaves 已停止 to the row that ends the turn.
  */
-export function nativeDeliveryLabel(run: Run, stopShown = true): string {
+export function nativeDeliveryLabel(run: Run, stopShown = true, hasTurnOutput = false): string {
   if (!run.native) return '';
   const native = run.native;
-  const received = Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
+  const received = hasTurnOutput || run.state === 'running' || Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
   switch (native.delivery) {
-    case 'queued': return native.stage === 'http_pending' || native.intent === 'steer' ? i18n._(msg`发送中`) : i18n._(msg`排队中`);
-    case 'preparing': return native.stage === 'resuming' ? i18n._(msg`恢复中`) : i18n._(msg`发送中`);
-    case 'dispatching': return i18n._(msg`发送中`);
+    case 'queued': return received ? '' : i18n._(msg`发送中`);
+    case 'preparing': return received ? '' : native.stage === 'resuming' ? i18n._(msg`恢复中`) : i18n._(msg`发送中`);
+    case 'dispatching': return received ? '' : i18n._(msg`发送中`);
     case 'input_sent': return received || run.state === 'completed' ? '' : i18n._(msg`发送中`);
     case 'observed': return '';
     case 'uncertain': return received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`);
@@ -139,9 +139,13 @@ function MessageQuotes({ quotes }: { quotes: string[] }) {
   );
 }
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
+  /** Same-turn agent output already follows this prompt, proving the CLI received it. */
+  hasTurnOutput?: boolean;
+  /** The transcript's bottom `WorkingIndicator` is already showing this prompt's sending/resuming state. */
+  progressShown?: boolean;
   /** Written by another agent, not the reader: the conversation leading a subagent, or a peer agent. */
   from?: 'coordinator' | 'peer';
   text: string;
@@ -166,7 +170,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, from, t
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const taskOutcome = run ? nativeTaskOutcome(run) : undefined;
-  const delivery = run?.native && !taskOutcome && !failureShown ? nativeDeliveryLabel(run, stopShown) : '';
+  const indicatorOwnsSend = progressShown && run?.native?.intent !== 'steer' && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(run?.native?.delivery ?? '');
+  const delivery = run?.native && !taskOutcome && !failureShown && !indicatorOwnsSend ? nativeDeliveryLabel(run, stopShown, hasTurnOutput) : '';
   const rest = useRestReveal();
   // A message that is nothing but a quote stays as it was written: there would be no bubble to hang the chip from.
   const quoted = useMemo(() => { const split = splitQuotes(text); return split.body.trim() ? split : { quotes: [], body: text }; }, [text]);

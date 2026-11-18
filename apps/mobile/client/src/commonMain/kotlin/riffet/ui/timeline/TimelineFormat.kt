@@ -218,14 +218,25 @@ fun formatDurationMs(millis: Long): String = formatElapsed(millis / 1_000L)
  * What a prompt says about its delivery. A turn stopped after the prompt arrived is the turn's
  * outcome, not the prompt's: [stopShown] false leaves 已停止 to the row that ends the turn.
  */
-fun deliveryLabel(run: Run?, stopShown: Boolean = true): String? {
+fun deliveryLabel(run: Run?, stopShown: Boolean = true): String? =
+    deliveryLabel(run, stopShown, hasTurnOutput = false)
+
+fun deliveryLabel(run: Run?, stopShown: Boolean, hasTurnOutput: Boolean): String? {
     val native = run?.native ?: return null
     val recovery = riffet.ui.state.messageRecovery(run)
     if (recovery.needsCheck) return L10n.uiText(if (recovery.taskOutcomeUnknown) "delivery.resultUnknown" else "delivery.unconfirmed")
+    val received = hasTurnOutput
+        || run.state == RunState.RUNNING
+        || native.nativeMessageId != null
+        || native.timings?.get("observedAt") != null
+        || native.timings?.get("providerAcceptedAt") != null
+        || native.delivery == NativeDeliveryState.OBSERVED
+        || native.stage == "provider_failed"
+        || native.stage == "turn_outcome_unknown"
     return when (native.delivery) {
-        NativeDeliveryState.QUEUED -> L10n.uiText(if (native.stage == "http_pending") "delivery.sending" else "delivery.queued")
-        NativeDeliveryState.PREPARING, NativeDeliveryState.DISPATCHING -> L10n.uiText("delivery.sending")
-        NativeDeliveryState.INPUT_SENT -> if (run.state == RunState.COMPLETED) null else L10n.uiText("delivery.sending")
+        NativeDeliveryState.QUEUED -> if (received) null else L10n.uiText("delivery.sending")
+        NativeDeliveryState.PREPARING, NativeDeliveryState.DISPATCHING -> if (received) null else L10n.uiText("delivery.sending")
+        NativeDeliveryState.INPUT_SENT -> if (received || run.state == RunState.COMPLETED) null else L10n.uiText("delivery.sending")
         NativeDeliveryState.OBSERVED -> if (native.intent == "steer") L10n.uiText("delivery.steer.sent") else null
         NativeDeliveryState.UNCERTAIN -> L10n.uiText("delivery.unconfirmed")
         NativeDeliveryState.FAILED -> L10n.uiText(if (native.nativeMessageId != null || native.stage == "provider_failed") "delivery.sentTurnFailed" else "delivery.sendFailed")

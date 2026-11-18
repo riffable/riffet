@@ -1090,12 +1090,21 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   subscribe(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, listener: (message: NativeControlMessage) => void): () => void {
-    if (!session.nativeSessionId) {
-      listener({ type: 'status', status: { phase: 'offline' } });
-      return () => undefined;
-    }
     const subscriptions = this.listenersFor(session.id);
     subscriptions.listeners.add(listener);
+    const cleanup = () => {
+      subscriptions.listeners.delete(listener);
+      subscriptions.unsubscriptions.get(listener)?.();
+      subscriptions.unsubscriptions.delete(listener);
+      if (subscriptions.listeners.size === 0) {
+        this.sessionListeners.delete(session.id);
+        subscriptions.runtime = undefined;
+      }
+    };
+    if (!session.nativeSessionId) {
+      listener({ type: 'status', status: { phase: 'offline' } });
+      return cleanup;
+    }
     const project = host.getProject(session.projectId);
     profile = this.activeProfile(host, host.getSession(session.id), profile);
     const current = this.runtimes.get(session.id);
@@ -1112,15 +1121,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         }
       });
     }
-    return () => {
-      subscriptions.listeners.delete(listener);
-      subscriptions.unsubscriptions.get(listener)?.();
-      subscriptions.unsubscriptions.delete(listener);
-      if (subscriptions.listeners.size === 0) {
-        this.sessionListeners.delete(session.id);
-        subscriptions.runtime = undefined;
-      }
-    };
+    return cleanup;
   }
 
   async dispose(host: NativeBackendHost, sessionId: string): Promise<void> {

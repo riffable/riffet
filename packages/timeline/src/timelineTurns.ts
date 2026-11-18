@@ -99,11 +99,18 @@ function hasAcknowledgedReceipt(item: TimelineItem): boolean {
 }
 
 function isPendingUser(item: TimelineItem): boolean {
-  return item.kind === 'user' && !hasAcknowledgedReceipt(item) && (item.run?.state === 'queued'
-    || item.run?.state === 'cancelled'
+  return item.kind === 'user' && !hasAcknowledgedReceipt(item) && (item.run?.state === 'cancelled'
     || item.run?.native?.delivery === 'queued'
     || item.run?.native?.delivery === 'preparing'
-    || item.run?.native?.delivery === 'cancelled');
+    || item.run?.native?.delivery === 'cancelled'
+    || (item.run?.state === 'queued' && !item.run.native));
+}
+
+function isDispatchedUserRun(run: Run | undefined): boolean {
+  if (!run) return false;
+  const delivery = run.native?.delivery;
+  if (delivery === 'queued' || delivery === 'preparing' || delivery === 'cancelled' || delivery === 'failed' || delivery === 'uncertain') return false;
+  return run.state === 'running' || (run.state === 'queued' && (delivery === 'dispatching' || delivery === 'input_sent' || delivery === 'observed'));
 }
 
 /** A completed Run can still have native output committed after its completion was observed. */
@@ -136,10 +143,7 @@ export function analyzeTimelineTurns(timeline: TimelineItem[], sessionRunning: b
     // An activity sits in a turn without ending it: a compaction note after the answer must not make
     // the answer look like it is followed by more work.
     if (item.kind !== 'activity') lastIndexByTurn.set(turnKey, index);
-    if (item.kind === 'user' && item.run?.state === 'running'
-      && item.run.native?.delivery !== 'queued'
-      && item.run.native?.delivery !== 'preparing'
-      && item.run.native?.delivery !== 'cancelled') activeTurns.add(turnKey);
+    if (item.kind === 'user' && isDispatchedUserRun(item.run)) activeTurns.add(turnKey);
   });
   if (!sessionRunning) {
     activeTurns.clear();
@@ -188,12 +192,13 @@ export function analyzeTimelineTurns(timeline: TimelineItem[], sessionRunning: b
     // "已核对" only dismisses delivery uncertainty; its exact native receipt can still be live.
     // A completed Run needs stronger evidence: same-turn output newer than its completion.
     // Neither rule lets an unsent prompt or an unrelated old turn inherit session activity.
-    if (latestUser?.kind === 'user' && !latestUserIsPending) {
+    if (latestUser?.kind === 'user' && (!latestUserIsPending || (latestOutputIndex > latestUserIndex && turnKeys[latestOutputIndex] === turnKeys[latestUserIndex] && latestUser.run?.state === 'queued' && latestUser.run.native?.delivery !== 'cancelled' && latestUser.run.native?.delivery !== 'failed'))) {
       if (!latestUser.run) {
         activeTurns.add(turnKeys[latestUserIndex]!);
       } else if (latestOutputIndex > latestUserIndex
         && turnKeys[latestOutputIndex] === turnKeys[latestUserIndex]
-        && (hasAcknowledgedReceipt(latestUser)
+        && (latestUser.run.state === 'queued'
+          || hasAcknowledgedReceipt(latestUser)
           || outputFollowsCompletedRun(timeline[latestOutputIndex]!, latestUser.run))) {
         activeTurns.add(turnKeys[latestOutputIndex]!);
       }

@@ -194,6 +194,13 @@ export class NativeBackendService {
         if (session.nativeSessionId === nativeSessionId) return session;
         const updated = options.store.updateSession(id, { nativeSessionId });
         options.store.appendEvent(id, 'session', { session: updated });
+        if (nativeSessionId && (this.watches.has(id) || this.controlReaders.get(id)?.size)) {
+          try {
+            const { driver, profile } = this.resolveSync(updated);
+            this.ensureWatch(updated, driver, profile);
+            this.scheduleWatchRelease(id);
+          } catch { /* the caller's open or send binds the watch */ }
+        }
         return updated;
       },
       emit: (id, message) => this.broadcast(id, message),
@@ -461,6 +468,7 @@ export class NativeBackendService {
           // A start can be reported `starting` by the driver: it is the derived state, not a forced `running`.
           const state = deriveSessionState({ current: current.state, phase: status.phase, runningSubagents: activeSubagents(watch) });
           current = this.options.store.updateSession(current.id, sessionStatePatch(current, state));
+          this.broadcast(current.id, { type: 'status', status });
         }
         this.scheduleWatchRelease(current.id);
         const terminal = opened.terminalId ? await this.options.terminal.get(opened.terminalId).catch(() => undefined) : undefined;
@@ -820,10 +828,13 @@ export class NativeBackendService {
   readJournal(feed: JournalFeed): () => void {
     return feed.subscribe(() => true, batch => {
       const events = batch.items.flatMap(item => 'event' in item ? [item.event] : []);
-      if (!events.length) return;
-      // An activity that changed changes the summary a status carries (see `withJournalActivity`).
+      const turnStarted = batch.lane === 'main' && batch.items.some(item => 'mark' in item && (item.mark.edge === 'started' || item.mark.edge === 'reopened'));
+      if (!events.length && !turnStarted) return;
+      // An activity that changed, or a turn that opened in the journal while the watch was not yet busy, refreshes the status.
       const watch = batch.lane === 'main' ? this.watches.get(batch.sessionId) : undefined;
-      if (watch && listened(watch) && events.some(event => activityOfEvent(event))) {
+      if (watch && listened(watch) && ( events.some(event => activityOfEvent(event))
+        || ((turnStarted || events.some(event => event.type === 'agent_message_chunk' || event.type === 'agent_thought_chunk' || event.type === 'tool_call'))
+          && watch.status?.phase !== 'busy' && watch.status?.phase !== 'attention') )) {
         try { this.publishStatus(batch.sessionId, watch.driver, watch.profile); } catch { /* a status that cannot be read is the driver's own */ }
       }
       const calls = events.filter(event => event.type === 'tool_call' || event.type === 'tool_call_update');
@@ -1053,7 +1064,10 @@ export class NativeBackendService {
       commitDispatchFence,
       ...(options.now && driver.sendsNow ? { now: true } : {}),
     });
-    this.bindProfile(this.options.store.getSession(session.id), driver, profile);
+    const updated = this.options.store.getSession(session.id);
+    this.bindProfile(updated, driver, profile);
+    this.ensureWatch(updated, driver, profile);
+    this.scheduleWatchRelease(session.id);
     return outcome;
   }
 

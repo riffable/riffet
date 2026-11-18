@@ -66,7 +66,7 @@ private val IN_FLIGHT = setOf(NativeDeliveryState.QUEUED, NativeDeliveryState.PR
 
 /** The prompt: right-aligned bubble, attachments, delivery state and time. */
 @Composable
-internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true) {
+internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true, hasTurnOutput: Boolean = false) {
     rememberResourceEnvironment()
     val designMetrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -74,7 +74,7 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true) {
     val type = TimelineTheme.type
     val time = formatDateTime(timelineItemTime(item))
     // A turn stopped after the prompt arrived says so where it ends; only a prompt left with no output says it here.
-    val delivery = if (item.failureShown) null else deliveryLabel(item.run, stopShown)
+    val delivery = if (item.failureShown) null else deliveryLabel(item.run, stopShown, hasTurnOutput)
     val deliveryError = if (item.failureShown) null else deliveryErrorDetails(item.run)
     // While it is on its way the status says enough; the time returns once it has arrived or settled.
     val sending = delivery != null && item.run?.let { run -> run.native?.delivery in IN_FLIGHT && !messageRecovery(run).needsCheck } == true

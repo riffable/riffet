@@ -181,9 +181,33 @@ export class NativeService {
     const activeTurn = this.turnObserver?.activeTurn(this.port.getSession(sessionId));
     const { activeTurn: _previous, ...status } = watch.status;
     const next = { ...status, ...(activeTurn ? { activeTurn } : {}) };
-    if (JSON.stringify(next) === JSON.stringify(watch.status)) return;
-    watch.status = next;
-    watch.emit({ type: 'status', status: watch.status });
+    if (JSON.stringify(next) !== JSON.stringify(watch.status)) {
+      watch.status = next;
+      watch.emit({ type: 'status', status: watch.status });
+    }
+    if (!activeTurn && watch.status.phase === 'busy') void this.tick(watch);
+  }
+
+  /** The live tap saw the CLI send a prompt to the agent server; announce `busy` immediately. */
+  notePromptReceived(sessionId: string): void {
+    const watch = this.watches.get(sessionId);
+    if (!watch || watch.closed) return;
+    watch.paneBusyAt = Date.now();
+    if (watch.status.phase === 'busy' || watch.status.phase === 'attention') return;
+    let session: AgentSessionView;
+    try { session = this.port.getSession(sessionId); } catch { return; }
+    const activeTurn = this.turnObserver?.activeTurn(session);
+    const next: NativeStatus = {
+      ...watch.status,
+      phase: cursorTurns.report(watch, 'busy', 'transcript'),
+      ...(activeTurn ? { activeTurn } : {}),
+      ...(watch.transcript ? { transcript: watch.transcript } : {}),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(watch.status)) {
+      watch.status = next;
+      watch.emit({ type: 'status', status: next });
+    }
+    this.followState(watch, session, next.phase);
   }
 
   subscribe(sessionId: string, listener: Listener): () => void {
@@ -1003,11 +1027,15 @@ export class NativeService {
           const nativeSessionId = session.nativeSessionId;
           const outcomeKnown = Boolean(parsed.phase === 'idle' && turnId && nativeSessionId && watch.chat?.chatId === nativeSessionId
             && this.turnObserver?.recordedOutcome?.(session.id, { nativeSessionId, turnId }));
-          const hiddenTurn = parsed.phase === 'idle' && !currentError && !outcomeKnown && watch.chat !== undefined
-            && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt });
+          const liveStep = nativeSessionId ? this.options.live?.read(nativeSessionId) : undefined;
+          const liveStreaming = Boolean(liveStep && ((!liveStep.sealed && liveStep.parts.length > 0)
+            || (booting && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
+          const hiddenTurn = (parsed.phase === 'idle' || booting) && !currentError && !outcomeKnown
+            && (liveStreaming || (watch.chat !== undefined
+              && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt })));
           let phase: NativeStatus['phase'] = interaction ? 'attention'
             : subview ? subviewPhase({ working: subview.working, previous: watch.status.phase, ...(watch.chat ? { transcript: { awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt } } : {}) })
-            : booting && !stalled ? 'starting' : hiddenTurn ? 'busy' : parsed.phase;
+            : parsed.phase === 'busy' || hiddenTurn ? 'busy' : booting && !stalled ? 'starting' : parsed.phase;
           if (phase !== 'attention' || interaction || booting) watch.unrecognized = undefined;
           else {
             watch.unrecognized ??= { since: Date.now(), logged: false };
@@ -1161,6 +1189,29 @@ export class NativeService {
     watch.transcript = chat.status;
     const batch: ParentTranscriptBatch = { chatId: chat.chatId, generation: chat.generation, events: change?.events ?? [] };
     if (!change) return batch;
+
+    // A store or draft with an unanswered prompt proves a turn is running even before the next
+    // terminal screen capture finishes; announce `busy` before waking the transcript reader.
+    if ((change.reset || change.events.length || (change.draftChanged && chat.draft.length))
+      && (watch.status.phase === 'offline' || watch.status.phase === 'starting')
+      && (chat.awaitingReply() || (change.draftChanged && chat.draft.length > 0))
+      && session.terminalId && !session.archivedAt) {
+      const info = this.port.findTerminal(session.terminalId);
+      if (info && info.state !== 'exited') {
+        const activeTurn = this.turnObserver?.activeTurn(session);
+        const next: NativeStatus = {
+          ...watch.status,
+          phase: cursorTurns.report(watch, 'busy', 'transcript'),
+          ...(activeTurn ? { activeTurn } : {}),
+          ...(watch.transcript ? { transcript: watch.transcript } : {}),
+        };
+        if (JSON.stringify(next) !== JSON.stringify(watch.status)) {
+          watch.status = next;
+          watch.emit({ type: 'status', status: next });
+        }
+        this.followState(watch, session, next.phase);
+      }
+    }
 
     if (change.reset) {
       // Subagents belong to the conversation, not to one reading of its transcript: their stores and

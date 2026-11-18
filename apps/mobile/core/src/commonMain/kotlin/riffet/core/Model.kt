@@ -452,10 +452,27 @@ private fun isPendingUser(item: TimelineItem): Boolean {
     if (hasAcknowledgedReceipt(item)) return false
     val run = item.run ?: return false
     val delivery = run.native?.delivery
-    return run.state == RunState.QUEUED || run.state == RunState.CANCELLED
+    return run.state == RunState.CANCELLED
         || delivery == NativeDeliveryState.QUEUED
         || delivery == NativeDeliveryState.PREPARING
         || delivery == NativeDeliveryState.CANCELLED
+        || (run.state == RunState.QUEUED && run.native == null)
+}
+
+private fun isDispatchedUserRun(run: Run?): Boolean {
+    if (run == null) return false
+    val delivery = run.native?.delivery
+    if (delivery == NativeDeliveryState.QUEUED
+        || delivery == NativeDeliveryState.PREPARING
+        || delivery == NativeDeliveryState.CANCELLED
+        || delivery == NativeDeliveryState.FAILED
+        || delivery == NativeDeliveryState.UNCERTAIN
+    ) return false
+    return run.state == RunState.RUNNING || (run.state == RunState.QUEUED && (
+        delivery == NativeDeliveryState.DISPATCHING
+            || delivery == NativeDeliveryState.INPUT_SENT
+            || delivery == NativeDeliveryState.OBSERVED
+        ))
 }
 
 /** A completed Run can still have native output committed after its completion was observed. */
@@ -485,14 +502,8 @@ fun analyzeTimelineTurns(timeline: List<TimelineItem>, sessionRunning: Boolean, 
     timeline.forEachIndexed { index, item ->
         val turnKey = turnKeys[index]
         if (item !is TimelineItem.Activity) lastIndexByTurn[turnKey] = index
-        if (item is TimelineItem.User && item.run?.state == RunState.RUNNING) {
-            val delivery = item.run.native?.delivery
-            if (delivery != NativeDeliveryState.QUEUED
-                && delivery != NativeDeliveryState.PREPARING
-                && delivery != NativeDeliveryState.CANCELLED
-            ) {
-                activeTurns.add(turnKey)
-            }
+        if (item is TimelineItem.User && isDispatchedUserRun(item.run)) {
+            activeTurns.add(turnKey)
         }
     }
     if (!sessionRunning) {
@@ -548,12 +559,20 @@ fun analyzeTimelineTurns(timeline: List<TimelineItem>, sessionRunning: Boolean, 
         // "已核对" only dismisses delivery uncertainty; its exact native receipt can still be live.
         // A completed Run needs stronger evidence: same-turn output newer than its completion.
         // Neither rule lets an unsent prompt or an unrelated old turn inherit session activity.
-        if (latestUser is TimelineItem.User && !latestUserIsPending) {
+        if (latestUser is TimelineItem.User && (!latestUserIsPending || (
+                latestOutputIndex > latestUserIndex
+                    && turnKeys[latestOutputIndex] == turnKeys[latestUserIndex]
+                    && latestUser.run?.state == RunState.QUEUED
+                    && latestUser.run.native?.delivery != NativeDeliveryState.CANCELLED
+                    && latestUser.run.native?.delivery != NativeDeliveryState.FAILED
+                ))
+        ) {
             if (latestUser.run == null) {
                 activeTurns.add(turnKeys[latestUserIndex])
             } else if (latestOutputIndex > latestUserIndex
                 && turnKeys[latestOutputIndex] == turnKeys[latestUserIndex]
-                && (hasAcknowledgedReceipt(latestUser)
+                && (latestUser.run.state == RunState.QUEUED
+                    || hasAcknowledgedReceipt(latestUser)
                     || outputFollowsCompletedRun(timeline[latestOutputIndex], latestUser.run))
             ) {
                 activeTurns.add(turnKeys[latestOutputIndex])

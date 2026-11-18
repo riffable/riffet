@@ -318,7 +318,8 @@ fun buildTimelineGrouping(
             is TimelineItem.Status -> finalAnswer == null && analysis.lastIndexByTurn[turnKey] == index
             else -> false
         }
-        val settled = carries && turnKey !in activeTurns
+        // For a user row, `settled` records that same-turn output already follows it.
+        val settled = if (item is TimelineItem.User) !endsTurn(index) else carries && turnKey !in activeTurns
         addRow(
             TimelineRow.Single(
                 key = item.key,

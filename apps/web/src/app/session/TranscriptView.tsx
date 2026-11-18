@@ -449,7 +449,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
  * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
  * whose answer actually changed, instead of invalidating the shared context for all of them.
  */
-const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
+const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
   const resources = useTranscriptResources();
   const remembered = useContext(RememberedValues);
@@ -555,7 +555,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   const { item, settled } = row;
   let content: ReactNode = null;
-  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
+  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
   else if (item.kind === 'assistant') {
     const models = resources?.modelInfo
       ? item.event.sourceEvents
@@ -1373,6 +1373,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         suppressHeldFooter={suppressHeldFooter || row.key !== heldFooter}
         latestTurn={latestRows?.includes(row) ?? false}
         footerPinned={row === rowsAll.at(-1)}
+        progressShown={Boolean(progress) && row === rowsAll.at(-1)}
         {...(row.key === heldFooter && progress ? { progress } : {})}
         context={rowContext}
       />

@@ -243,6 +243,10 @@ msgid "恢复"
 msgstr "恢复"
 
 #: src/app/terminal/NativeSession.tsx
+msgid "恢复中"
+msgstr "恢复中"
+
+#: src/app/terminal/NativeSession.tsx
 msgctxt "terminal-resume-session"
 msgid "恢复会话"
 msgstr "恢复会话"
@@ -348,6 +352,10 @@ msgstr "正在加载终端…"
 #: src/app/terminal/NativeSession.tsx
 msgid "正在压缩上下文"
 msgstr "正在压缩上下文"
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在发送"
+msgstr "正在发送"
 
 #: src/app/terminal/TerminalView.tsx
 msgid "正在接管"

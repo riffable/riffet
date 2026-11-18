@@ -778,9 +778,19 @@ class LaneRead {
       if (slice.due && await slice.yield()) return this.abandon();
     }
     if (before.draft) for (let part = 0; part < before.draft.count; part += 1) this.stale.add(`${before.draft.at}:${part}`);
-    // The turn the history now breaks off in ended there (its rows are in the log already); what follows is a turn of its own.
-    const turn = this.state.turn;
-    if (turn && !turn.ended) { turn.ended = true; this.writeEnd({ ...turn }); }
+    // A rewind that cut back before `before.turn` started leaves that turn behind and ends the
+    // earlier turn where the history now breaks off; an in-place rewrite of a tool/assistant blob
+    // inside the current turn keeps `this.state.turn`'s open/ended state intact.
+    if (this.state.turn?.id !== before.turn?.id) {
+      if (before.turn && !before.turn.ended) this.writeEnd({ ...before.turn });
+      const turn = this.state.turn;
+      if (turn && !turn.ended) {
+        turn.ended = true;
+        if (!this.w.turnEndStatus(turn.id)) this.writeEnd({ ...turn });
+      }
+    } else if (this.state.turn && before.turn?.ended) {
+      this.state.turn.ended = true;
+    }
     return true;
   }
 

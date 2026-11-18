@@ -107,8 +107,41 @@ internal data class StoreState(
     )
 
     /** Until the stream reports a status, the session list's state answers, so an open does not start idle. */
-    fun isWorking(): Boolean = status?.let { it.phase == NativeStatusPhase.BUSY || it.phase == NativeStatusPhase.ATTENTION }
-        ?: (selected?.state == SessionState.RUNNING || selected?.state == SessionState.WAITING || selected?.state == SessionState.CANCELLING)
+    fun isWorking(): Boolean {
+        val phaseWorking = status?.let { it.phase == NativeStatusPhase.BUSY || it.phase == NativeStatusPhase.ATTENTION }
+            ?: (selected?.state == SessionState.RUNNING || selected?.state == SessionState.WAITING || selected?.state == SessionState.CANCELLING)
+        if (phaseWorking) return true
+        val phase = status?.phase
+        val connectionFailed = status?.connection?.state == "failed" || status?.connection?.state == "conflict"
+        if (connectionFailed) return false
+        val preBusyPhase = phase == null || phase == NativeStatusPhase.STARTING || phase == NativeStatusPhase.OFFLINE
+        val runObservedActive = runs.any { run ->
+            run.native?.queueReleasedAt == null && (
+                run.state == RunState.RUNNING || (
+                    run.state == RunState.QUEUED && (
+                        run.native?.delivery == NativeDeliveryState.OBSERVED
+                            || run.native?.nativeMessageId != null
+                            || run.native?.timings?.get("observedAt") != null
+                            || run.native?.timings?.get("providerAcceptedAt") != null
+                        )
+                    )
+                ) && (preBusyPhase || (phase == NativeStatusPhase.IDLE && run.native?.timings?.get("busyAt") == null))
+        }
+        if (runObservedActive) return true
+        val latestUserIndex = timeline.indexOfLast { it is TimelineItem.User }
+        val latestOutputIndex = timeline.indexOfLast { it !is TimelineItem.User && it !is TimelineItem.Activity }
+        val latestUser = timeline.getOrNull(latestUserIndex) as? TimelineItem.User
+        val latestOutput = timeline.getOrNull(latestOutputIndex)
+        val latestUserRun = latestUser?.run
+        val delivery = latestUserRun?.native?.delivery
+        val sameTurn = latestUser != null && latestOutput != null
+            && (latestUser.turn == null || latestOutput.turn == null || latestUser.turn == latestOutput.turn)
+        val turnOutputActive = latestOutputIndex > latestUserIndex && sameTurn && latestUserRun != null
+            && (latestUserRun.state == RunState.RUNNING || latestUserRun.state == RunState.QUEUED)
+            && delivery != NativeDeliveryState.QUEUED && delivery != NativeDeliveryState.CANCELLED && delivery != NativeDeliveryState.FAILED && delivery != NativeDeliveryState.UNCERTAIN
+            && (preBusyPhase || latestUserRun.state == RunState.QUEUED || (phase == NativeStatusPhase.IDLE && latestUserRun.native?.timings?.get("busyAt") == null))
+        return turnOutputActive
+    }
 
     /**
      * Unconfirmed sends that still hold the conversation. The server says whether one does (a steer whose

@@ -703,9 +703,9 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     }
     const task = (async () => {
       const nativeSessionId = session.nativeSessionId ?? randomUUID();
-      if (!session.nativeSessionId && start) host.setNativeSessionId(session.id, nativeSessionId);
       const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes, this.observer);
       this.runtimes.set(session.id, runtime);
+      if (!session.nativeSessionId && start) host.setNativeSessionId(session.id, nativeSessionId);
       try {
         await runtime.monitor();
         if (start) await runtime.setStartRequested();

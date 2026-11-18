@@ -700,7 +700,7 @@ private fun TimelineEntryView(
 @Composable
 private fun SingleRow(row: TimelineRow.Single, speed: SpeedTag?) {
     when (val item = row.item) {
-        is TimelineItem.User -> UserRow(item, stopShown = row.stopped)
+        is TimelineItem.User -> UserRow(item, stopShown = row.stopped, hasTurnOutput = row.settled)
         is TimelineItem.Assistant -> AssistantRow(
             item = item,
             settled = row.settled,

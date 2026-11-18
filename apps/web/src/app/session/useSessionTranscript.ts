@@ -111,14 +111,25 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   // Shown for the whole of a running turn, thinking included: the turn header that also says so
   // scrolls away, and an opened thought row has no shimmer, so this line is the one sign that stays
   // in view. A compaction row in the transcript already counts its own time; the line stands down for it.
-  const showWorking = busy && !(compacting && showsRunningCompaction(visibleTimeline));
+  const latestVisibleUser = visibleTimeline.findLast((item): item is Extract<TimelineItem, { kind: 'user' }> => item.kind === 'user');
+  const latestVisibleUserRun = latestVisibleUser?.run;
+  const sendingTurn = !working && Boolean(latestVisibleUserRun?.native
+    && latestVisibleUserRun.native.intent !== 'steer'
+    && !latestVisibleUserRun.native.queueReleasedAt
+    && latestVisibleUserRun.state === 'queued'
+    && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(latestVisibleUserRun.native.delivery)
+    && !latestVisibleUserRun.native.nativeMessageId
+    && !latestVisibleUserRun.native.timings?.observedAt
+    && !latestVisibleUserRun.native.timings?.providerAcceptedAt);
+  const resumingTurn = sendingTurn && latestVisibleUserRun?.native?.delivery === 'preparing' && latestVisibleUserRun.native.stage === 'resuming';
+  const showWorking = (busy || sendingTurn) && !(compacting && showsRunningCompaction(visibleTimeline));
   /**
    * When the turn being worked on was prompted, so the indicator can count from it. A turn a hidden
    * prompt opened (a peer's message, a scheduled wake-up) has no prompt row: it counts from its first
    * row, never from an earlier turn's prompt.
    */
   const workingSince = useMemo(() => {
-    if (!showWorking) return undefined;
+    if (!showWorking || sendingTurn) return undefined;
     const turn = visibleTimeline.findLast(item => item.kind !== 'activity')?.turn;
     let start: TimelineItem | undefined;
     for (let index = visibleTimeline.length - 1; index >= 0; index -= 1) {
@@ -131,6 +142,6 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
     if (!start || (!turn && start.kind !== 'user' && start.kind !== 'task_notification')) return undefined;
     const at = Date.parse(start.event.createdAt);
     return Number.isFinite(at) ? at : undefined;
-  }, [showWorking, visibleTimeline, timelineVersion]);
-  return { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince };
+  }, [showWorking, sendingTurn, visibleTimeline, timelineVersion]);
+  return { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince };
 }

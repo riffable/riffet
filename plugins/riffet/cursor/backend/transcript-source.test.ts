@@ -376,7 +376,12 @@ describe('Cursor transcript source', () => {
     await catchUp(source, writer);
     expect(turnEnds(lanes)).toEqual([]);
 
-    messages.push(call('tests', 'Shell', { command: 'npm test' }), result('tests', 'Shell', 'Passed'), say('The tests passed.'));
+    messages.push(call('tests', 'Shell', { command: 'npm test' }), result('tests', 'Shell', 'Running...'));
+    writeChat(dir, 'chat-1', { messages });
+    await catchUp(source, writer);
+    expect(turnEnds(lanes)).toEqual([]);
+    // Cursor rewrites a tool-result blob in place (such as an inspected image) as the turn continues.
+    messages.splice(messages.length - 1, 1, result('tests', 'Shell', 'Passed'), say('The tests passed.'));
     writeChat(dir, 'chat-1', { messages });
     await source.endTurn(writer, { status: 'completed', at, turnId: 'req-1', expectedRoot: thoughtRoot });
     expect(turnEnds(lanes)).toEqual([]);
@@ -386,6 +391,7 @@ describe('Cursor transcript source', () => {
       ['user_message_chunk', 'req-1'],
       ['agent_thought_chunk', 'req-1'],
       ['tool_call', 'req-1'],
+      ['tool_call_update', 'req-1'],
       ['tool_call_update', 'req-1'],
       ['agent_message_chunk', 'req-1'],
     ]);
