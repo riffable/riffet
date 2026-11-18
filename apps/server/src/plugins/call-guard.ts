@@ -9,6 +9,7 @@ const CALL_LIMITS_MS = {
   'modelSource.prepare': TIMEOUTS.prepare, 'modelSource.catalog': TIMEOUTS.catalog, 'modelSource.usage': 30_000,
   'runtimeHook.prepare': 30_000, 'runtimeHook.recover': 30_000, 'runtimeAttachment.bindNative': 10_000, 'runtimeAttachment.stop': 10_000, 'runtimeAttachment.act': 30_000,
   'sharePublisher.capability': 30_000, 'sharePublisher.deploy': 600_000, 'sharePublisher.find': 60_000, 'sharePublisher.remove': 60_000, 'sharePublisher.verify': 60_000,
+  'speechRecognizer.status': 10_000, 'speechRecognizer.open': 30_000,
 } as const;
 /** Consecutive timeouts of one activation after which its calls are refused for `FAIL_FAST_MS`. */
 const FAIL_FAST_AFTER = 3;
@@ -121,6 +122,9 @@ export class CallGuard {
         capability: timed('sharePublisher.capability'), deploy: timed('sharePublisher.deploy'), find: timed('sharePublisher.find'),
         remove: timed('sharePublisher.remove'), verify: timed('sharePublisher.verify'), publicUrl: sync('sharePublisher.publicUrl'),
       });
+    }
+    if (contributions.speechRecognizer) {
+      replaced.speechRecognizer = intercepting(contributions.speechRecognizer, { status: timed('speechRecognizer.status'), open: timed('speechRecognizer.open') });
     }
     if (contributions.runtimeHooks) {
       replaced.runtimeHooks = contributions.runtimeHooks.map(hook => intercepting(hook, {

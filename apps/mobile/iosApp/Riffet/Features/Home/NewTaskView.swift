@@ -39,6 +39,8 @@ struct NewTaskView: View {
     /// A warm CLI held for this page's choice while it is open; a send hands it to the new conversation.
     @State private var prewarm = PrewarmLease()
     @FocusState private var writing: Bool
+    @State private var voice = ComposerVoice()
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var textSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -230,7 +232,10 @@ struct NewTaskView: View {
         .task(id: contextKey) { await loadCatalog() }
         .onAppear { prewarm.hold(api: workbench.api, body: prewarmBody) }
         .onChange(of: prewarmBody) { _, body in prewarm.hold(api: workbench.api, body: body) }
-        .onDisappear { prewarm.close() }
+        .onDisappear { prewarm.close(); voice.teardown() }
+        .onChange(of: writing) { _, now in if now, voice.mode { voice.setMode(false) } }
+        .onChange(of: voice.mode) { _, on in if on { writing = false } }
+        .onChange(of: scenePhase) { _, phase in voice.scenePhaseChanged(phase) }
         .onChange(of: project?.id, initial: true) { _, id in
             if assistant != nil, let id, draft.projectID != id { draft.projectID = id }
         }
@@ -243,6 +248,9 @@ struct NewTaskView: View {
         .onChange(of: extensionsKey) { _, _ in extensionsOff = [] }
         .readsToolDevices(toolDevices, workbench: workbench, enabled: catalog?.capabilities.supportsRiffetTools == true)
     }
+    private var voiceInput: Bool { workbench.settings?.voiceInput?.recognizer != nil }
+    private var voiceActive: Bool { voice.mode && voiceInput }
+    private var holdInFooter: Bool { voiceActive && !voice.textEmpty(draft) }
     private var locked: Bool { sending || draft.pendingCreationID != nil }
     private var hasAttachments: Bool { !draft.attachments.isEmpty || !draft.pendingFiles.isEmpty || !draft.references.isEmpty }
     private var canStart: Bool {
@@ -264,18 +272,36 @@ struct NewTaskView: View {
     private var card: some View {
         @Bindable var draft = draft
         return VStack(alignment: .leading, spacing: 0) {
-            TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, axis: .vertical)
+            if voiceActive && voice.textEmpty(draft) && !voice.handsFree {
+                // Where the text field would be, its height: the top inset equals the gap above the send button, the
+                // left edge is the text's and the right edge the send button's.
+                holdBar(height: holdBarHeight).padding(.leading, RiffetMetrics.groupInset).padding(.trailing, Self.sendEdge)
+                    .padding(.top, Self.holdTop).padding(.bottom, Self.holdTop - Self.sendInset).disabled(locked)
+            } else {
+            TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
                 .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
                 .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
-                .accessibilityLabel("任务内容").accessibilityIdentifier("newTaskText").disabled(locked)
+                .accessibilityLabel("任务内容").accessibilityIdentifier("newTaskText").disabled(locked || voice.dictating)
                 .onChange(of: draft.text) { _, value in
                     if catalog?.capabilities.supportsSessionReferences == true,
                        value.range(of: #"(?:^|\s)@[^\s@]*$"#, options: .regularExpression) != nil { sessionReferences = true }
                 }
+            }
             if hasAttachments { attachmentChips.padding(.bottom, 4) }
             HStack(spacing: 0) {
+                // Hands-free, the footer is the recording bar: it has its own cancel and done.
+                if let dictation = voice.dictation, voice.handsFree {
+                    DictationBar(state: dictation, cancel: { voice.cancel() }, finish: { voice.finish() }, retry: { voice.retry() })
+                } else {
                 plusMenu
+                if voiceInput { ComposerVoiceToggle(voice: voice, keyboard: { Task { writing = true } }) { name in
+                    Image(systemName: name).riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg)
+                        .frame(width: Self.toolWidth, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                }.disabled(locked) }
+                if holdInFooter {
+                    holdBar(height: RiffetMetrics.sendButton).padding(.horizontal, RiffetMetrics.floatingGap).disabled(locked)
+                } else {
                 // The settings follow the attach button, as on Android; the send button keeps the far edge.
                 RiffetModelLabel(title: NativeConfigurationSummary.shortModel(catalog: catalog, selection: shownModel),
                                  icon: chat ? .symbol("bubble.left") : .agent(backend.name), loading: loadingCatalog, failed: catalogError != nil) { openOptions(chat ? .model : .all) }
@@ -283,13 +309,30 @@ struct NewTaskView: View {
                     .accessibilityLabel(String(localized: "模型：\(NativeConfigurationSummary.configuration(catalog: catalog, profileID: draft.profileID, selection: shownModel))", bundle: .riffet))
                     .accessibilityValue(catalogStatus)
                 Spacer(minLength: 4)
+                }
                 if draft.uploading { ProgressView().controlSize(.small).padding(.trailing, 4) }
-                RiffetSendButton(enabled: canStart) { Task { await start() } }
+                RiffetSendButton(enabled: canStart && !voice.dictating) { Task { await start() } }
                     .accessibilityLabel(sending ? "正在开始" : draft.pendingCreationID == nil ? "开始任务" : "重试创建")
                     .accessibilityIdentifier("startTask")
-            }.padding(.horizontal, 8).padding(.bottom, 6)
+                }
+            }.padding(.leading, Self.toolsLeading).padding(.trailing, Self.toolsTrailing).padding(.bottom, 6)
         }
         .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.composerRadius, style: .continuous))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { voice.hold.composerFrame = $0 }
+    }
+    /// The text field's room (`minHeight` plus its 16 above and 6 below) less the bar's insets.
+    private var holdBarHeight: CGFloat { (compact ? 44 : 112) + 22 - Self.holdTop - (Self.holdTop - Self.sendInset) }
+    /// The footer starts so the plus glyph (17pt, centred in its 40pt slot) sits on the text's left edge; the send
+    /// button's circle sits `sendInset` inside its 44pt slot, and the row ends `toolsTrailing` in.
+    private static let toolWidth: CGFloat = 40
+    private static let toolsLeading: CGFloat = RiffetMetrics.groupInset - (toolWidth - 17) / 2
+    private static let toolsTrailing: CGFloat = 4
+    private static let sendInset: CGFloat = (RiffetMetrics.hitTarget - RiffetMetrics.sendButton) / 2
+    private static let sendEdge: CGFloat = toolsTrailing + sendInset
+    private static let holdTop: CGFloat = 12
+    private func holdBar(height: CGFloat) -> some View {
+        ComposerHoldBar(voice: voice, draft: draft, host: workbench.host, hasContent: !draft.text.isEmpty || hasAttachments,
+                        height: height, unfocus: { writing = false })
     }
     /// 新建任务 / 快速对话 in the navigation bar, where the page title would be.
     private var tabSwitch: some View {
@@ -352,7 +395,7 @@ struct NewTaskView: View {
             }
         } label: {
             Image(systemName: "plus").riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg)
-                .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                .frame(width: Self.toolWidth, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
         }
         .disabled(project == nil || sending || draft.uploading || draft.pendingCreationID != nil).accessibilityLabel("添加")
     }

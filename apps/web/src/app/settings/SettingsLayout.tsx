@@ -15,11 +15,12 @@ export function SettingsRow({ title, description, children }: { title: ReactNode
   );
 }
 
-/** A row that opens a subpage. */
-export function SettingsLinkRow({ title, onClick }: { title: ReactNode; onClick: () => void }) {
+/** A row that opens a subpage. `value` is the state behind it, before the chevron, as a phone's settings show it. */
+export function SettingsLinkRow({ title, value, onClick }: { title: ReactNode; value?: ReactNode; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="-mx-4 flex min-h-12 items-center gap-3 px-4 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus max-md:-mx-3 max-md:px-3">
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{title}</span>
+      {value && <span className="shrink-0 text-sm text-fg-3">{value}</span>}
       <IconChevronRight className="size-4 shrink-0 text-fg-4" />
     </button>
   );

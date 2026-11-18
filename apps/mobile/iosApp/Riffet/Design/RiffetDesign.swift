@@ -473,10 +473,12 @@ struct RiffetContextRing: View {
 }
 
 /// The composer's round send button: accent when there is something to send, a quiet disc when not.
-/// `stop` turns it into the stop control of a running turn.
+/// `stop` turns it into the stop control of a running turn; `symbol` and `busy` make it voice input's done.
 struct RiffetSendButton: View {
     var enabled: Bool
     var stop = false
+    var symbol = "arrow.up"
+    var busy = false
     let action: () -> Void
     @Environment(\.palette) private var palette
     var body: some View {
@@ -486,9 +488,12 @@ struct RiffetSendButton: View {
                     Circle().stroke(palette.danger, lineWidth: 1.5)
                     RoundedRectangle(cornerRadius: 2.5, style: .continuous).fill(palette.danger).frame(width: 11, height: 11)
                 } else {
-                    Circle().fill(enabled ? palette.accent : palette.press)
-                    Image(systemName: "arrow.up").font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(enabled ? Color.white : palette.fg4)
+                    Circle().fill(enabled || busy ? palette.accent : palette.press)
+                    if busy { ProgressView().controlSize(.small).tint(Color.white) }
+                    else {
+                        Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(enabled ? Color.white : palette.fg4)
+                    }
                 }
             }
             .frame(width: RiffetMetrics.sendButton, height: RiffetMetrics.sendButton)

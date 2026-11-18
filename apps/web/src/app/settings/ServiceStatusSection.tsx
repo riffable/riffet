@@ -20,6 +20,7 @@ import { useAnimatedNumber, useReducedMotion } from '../stats/chart-shared';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RouteRank, StatusDonut, TimeSeriesChart } from './ServiceCharts';
 import { SettingsGroup as Group } from './SettingsLayout';
+import { Progress } from '@/components/ui/progress';
 
 const POLL_MS = 5_000;
 /** Ten minutes of 10-second buckets: enough shape for a sparkline without flattening the last spike. */
@@ -33,7 +34,6 @@ const TONE_CHIP: Record<Tone, string> = {
   danger: 'bg-danger-soft text-danger',
 };
 const TONE_TEXT: Record<Tone, string> = { accent: 'text-accent', success: 'text-success', warning: 'text-warning', danger: 'text-danger' };
-const TONE_FILL: Record<Tone, string> = { accent: 'var(--accent)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)' };
 
 const KIND_META: Record<ServiceProcess['kind'], { label: MessageDescriptor | string; icon: typeof IconServer; tone: 'accent' | 'neutral' | 'success'; color: string; order: number }> = {
   server: { label: msg`服务器`, icon: IconServer, tone: 'accent', color: 'var(--chart-1)', order: 0 },
@@ -230,9 +230,7 @@ function Meter({ value, tone, label }: { value: number; tone: Tone; label: React
   const share = Math.max(0, Math.min(1, value));
   return (
     <div className="flex flex-col gap-1">
-      <span className="h-1.5 overflow-hidden rounded-full bg-muted" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share * 100)}>
-        <span className="block h-full rounded-full transition-[width] duration-[var(--duration-medium)] ease-[var(--ease-out-soft)]" style={{ width: `${share * 100}%`, background: TONE_FILL[tone] }} />
-      </span>
+      <Progress role="meter" value={share} tone={tone} label={typeof label === 'string' ? label : ''} />
       <span className="truncate text-2xs tabular-nums text-fg-3">{label}</span>
     </div>
   );

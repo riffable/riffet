@@ -4,6 +4,7 @@ import { IconCircleAlert, IconCircleCheck, IconCopy, IconSmartphone, IconInfo, I
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner } from '@/components/ui/controls';
 import { Collapse } from '@/components/ui/collapse';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Notice } from '@/components/ui/notice';
@@ -85,6 +86,16 @@ export function FeedbackChapter() {
           <Spinner />
           <Spinner className="size-4" />
           <Button disabled><Spinner className="text-current" />{t`保存中`}</Button>
+        </Specimen>
+      </Family>
+      <Family title="Progress">
+        <Specimen name={t`语气`} prop="value · tone · role" note={t`进度用 progressbar，额度与占用用 meter。`} wide>
+          <div className="flex w-full max-w-sm flex-col gap-3">
+            <Progress value={0.42} label={t`下载`} />
+            <Progress value={0.6} tone="neutral" role="meter" label={t`占用`} />
+            <Progress value={0.86} tone="warning" role="meter" label={t`占用`} />
+            <Progress value={0.97} tone="danger" role="meter" label={t`占用`} />
+          </div>
         </Specimen>
       </Family>
       <Family title="Skeleton">

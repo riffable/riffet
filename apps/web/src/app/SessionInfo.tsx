@@ -22,6 +22,7 @@ import type { ContextUsage } from './session/model';
 import { useStores, useWorkItems } from './state/stores';
 import type { AssistantSetupState } from './work-items/AssistantSetup';
 import { useStatusLabel } from './work-items/parts';
+import { Progress } from '@/components/ui/progress';
 
 export interface GitChanges { changes: number; added: number; removed: number }
 
@@ -149,10 +150,10 @@ function ContextValue({ usage }: { usage: ContextUsage }) {
   const { t } = useLingui();
   const limitLabel = usage.limitKind === 'compaction' ? t`自动压缩阈值` : t`上下文长度`;
   const ratio = Math.min(1, Math.max(0, usage.used / usage.size));
-  const color = ratio >= 0.9 ? 'bg-danger' : ratio >= 0.75 ? 'bg-warning' : 'bg-fg-3';
+  const tone = ratio >= 0.9 ? 'danger' : ratio >= 0.75 ? 'warning' : 'neutral';
   return (
     <span className="flex min-w-0 items-center gap-2" title={`${limitLabel} ${compactTokens(usage.size)} tokens`}>
-      <span className="h-1 w-16 shrink-0 overflow-hidden rounded-full bg-muted"><span className={cn('block h-full rounded-full', color)} style={{ width: `${ratio * 100}%` }} /></span>
+      <Progress role="meter" value={ratio} tone={tone} label={limitLabel} className="h-1 w-16 shrink-0" />
       <span className="min-w-0 truncate text-xs tabular-nums text-fg-2">
         {Math.round(ratio * 100)}% · {compactTokens(usage.used)} / {compactTokens(usage.size)}
         {usage.cost && <span className="text-fg-3"> · {usage.cost.currency} {usage.cost.amount.toFixed(2)}</span>}

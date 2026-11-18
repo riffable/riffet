@@ -433,6 +433,10 @@ msgstr "Delete this session?"
 msgid "刷新"
 msgstr "Refresh"
 
+#: src/app/plugins/PluginPageView.tsx
+msgid "剩余 {left}%"
+msgstr "{left}% left"
+
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"

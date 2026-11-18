@@ -4,7 +4,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection } from '../../../../packages/contracts/src/index.js';
+import { PLUGIN_PAGE_EXTRA_KINDS, type PluginPage, type PluginPageButton, type PluginPageExtraKind, type PluginPageItem, type PluginPageOption, type PluginPageSection } from '../../../../packages/contracts/src/index.js';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const malformed = (what: string) => new Error(`the plugin's page has a malformed ${what}`);
@@ -63,6 +63,15 @@ function item(raw: unknown, settings: ReadonlyMap<string, 'text' | 'secret'>, se
       kind: 'row' as const, id: text(raw.id, 200, 'row'), label: label(), value: optionalText(raw.value, 200, 'row'), detail: optionalText(raw.detail, 400, 'row'),
       buttons: raw.buttons === undefined ? undefined : list(raw.buttons, 4, 'row').map(button),
     });
+    case 'meter': {
+      if (typeof raw.percent !== 'number' || !Number.isFinite(raw.percent)) throw malformed('meter');
+      if (raw.sense !== 'quota' && raw.sense !== 'progress') throw malformed('meter');
+      return defined({
+        kind: 'meter' as const, id: text(raw.id, 200, 'meter'), label: label(), percent: Math.min(100, Math.max(0, raw.percent)), sense: raw.sense,
+        value: optionalText(raw.value, 200, 'meter'), detail: optionalText(raw.detail, 400, 'meter'),
+        buttons: raw.buttons === undefined ? undefined : list(raw.buttons, 4, 'meter').map(button),
+      });
+    }
     case 'buttons': return { kind: 'buttons', buttons: list(raw.buttons, 8, 'buttons').map(button) };
     default: throw malformed(`item kind ${String(raw.kind)}`);
   }
@@ -80,6 +89,35 @@ export function checkedPage(raw: unknown, settings: ReadonlyMap<string, 'text' |
   });
   const refreshMs = typeof raw.refreshMs === 'number' && Number.isFinite(raw.refreshMs) ? Math.min(Math.max(Math.round(raw.refreshMs), 500), 60_000) : undefined;
   return defined({ sections, refreshMs });
+}
+
+/**
+ * The page as a client that draws only `kinds` beyond the six every client has reads it (docs/design/system/plugins.md §6.4):
+ * a `meter` it cannot draw becomes a row with its figure as the value.
+ */
+export function pageForClient(page: PluginPage, kinds: ReadonlySet<PluginPageExtraKind>, locale: string | undefined): PluginPage {
+  if (kinds.has('meter')) return page;
+  const zh = (locale ?? '').toLowerCase().startsWith('zh');
+  const figure = (percent: number, sense: 'quota' | 'progress') => {
+    const shown = Math.round(sense === 'quota' ? 100 - percent : percent);
+    return sense === 'progress' ? `${shown}%` : zh ? `剩余 ${shown}%` : `${shown}% left`;
+  };
+  return {
+    ...page,
+    sections: page.sections.map(section => ({
+      ...section,
+      items: section.items.map((entry): PluginPageItem => entry.kind !== 'meter' ? entry : defined({
+        kind: 'row' as const, id: entry.id, label: entry.label, value: entry.value ? `${entry.value} · ${figure(entry.percent, entry.sense)}` : figure(entry.percent, entry.sense),
+        detail: entry.detail, buttons: entry.buttons,
+      })),
+    })),
+  };
+}
+
+/** The extra kinds a client listed in `PLUGIN_PAGE_KINDS_PARAM`; unknown names are ignored. */
+export function clientKinds(raw: unknown): Set<PluginPageExtraKind> {
+  const names = typeof raw === 'string' ? raw.split(',').map(name => name.trim()) : [];
+  return new Set(PLUGIN_PAGE_EXTRA_KINDS.filter(kind => names.includes(kind)));
 }
 
 /** How a page's value is kept in the settings: a toggle as `true`/`false`, a list as a JSON array. `null` clears. */

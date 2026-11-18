@@ -269,6 +269,10 @@ msgstr "下载文件"
 msgid "不选择项目"
 msgstr "不选择项目"
 
+#: src/app/session/DictationBar.tsx
+msgid "与服务器的连接中断"
+msgstr "与服务器的连接中断"
+
 #: src/app/session/Attempts.tsx
 msgid "丢弃"
 msgstr "丢弃"
@@ -618,6 +622,7 @@ msgstr "发送记录缺失，无法重试"
 msgid "发送设置"
 msgstr "发送设置"
 
+#: src/app/session/DictationBar.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/Timeline.tsx
 msgid "取消"
@@ -668,6 +673,10 @@ msgstr "各尝试从目录当前的内容切出独立 Worktree。"
 #: src/app/session/Attempts.tsx
 msgid "同 Agent 比模型"
 msgstr "同 Agent 比模型"
+
+#: src/app/session/DictationBar.tsx
+msgid "同时进行的语音输入过多"
+msgstr "同时进行的语音输入过多"
 
 #: src/app/session/SubagentSession.tsx
 msgid "同步中"
@@ -865,6 +874,10 @@ msgstr "子 Agent 定义"
 #: src/app/session/SubagentSession.tsx
 msgid "子 Agent 正在启动…"
 msgstr "子 Agent 正在启动…"
+
+#: src/app/session/DictationBar.tsx
+msgid "完成"
+msgstr "完成"
 
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
@@ -1177,6 +1190,10 @@ msgstr "把 <0>{0}</0> 合并进原项目。"
 msgid "指令"
 msgstr "指令"
 
+#: src/app/session/HoldToTalk.tsx
+msgid "按住 说话"
+msgstr "按住 说话"
+
 #: src/app/session/Timeline.tsx
 msgid "排队中"
 msgstr "排队中"
@@ -1265,6 +1282,11 @@ msgstr "放大 · {0}滚轮"
 #: src/app/session/SideDiscussion.tsx
 msgid "放大聊天"
 msgstr "放大聊天"
+
+#: src/app/session/DictationBar.tsx
+#: src/app/session/HoldToTalk.tsx
+msgid "放弃"
+msgstr "放弃"
 
 #: src/app/session/Composer.tsx
 msgid "文件"
@@ -1382,6 +1404,10 @@ msgstr "无法开始并行尝试"
 #: src/app/session/nativeRunCommands.ts
 msgid "无法恢复内容，消息已保留"
 msgstr "无法恢复内容，消息已保留"
+
+#: src/app/session/DictationBar.tsx
+msgid "无法打开麦克风"
+msgstr "无法打开麦克风"
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "无法提交交互"
@@ -1544,6 +1570,14 @@ msgstr "权限模式"
 msgid "权限模式：{0}"
 msgstr "权限模式：{0}"
 
+#: src/app/session/HoldToTalk.tsx
+msgid "松开取消"
+msgstr "松开取消"
+
+#: src/app/session/HoldToTalk.tsx
+msgid "松开转文字，上滑取消"
+msgstr "松开转文字，上滑取消"
+
 #: src/app/session/TranscriptView.tsx
 msgid "查看"
 msgstr "查看"
@@ -1666,6 +1700,10 @@ msgstr "没有可用模型"
 #: src/app/session/TranscriptView.tsx
 msgid "没有在会话中找到这条消息，它可能已被删除或改写"
 msgstr "没有在会话中找到这条消息，它可能已被删除或改写"
+
+#: src/app/session/DictationBar.tsx
+msgid "没有找到麦克风"
+msgstr "没有找到麦克风"
 
 #: src/app/session/SubagentSession.tsx
 msgid "没有读到这个子 Agent 的执行记录。"
@@ -1938,6 +1976,10 @@ msgstr "计划"
 msgid "访问网页"
 msgstr "访问网页"
 
+#: src/app/session/DictationBar.tsx
+msgid "识别失败：{message}"
+msgstr "识别失败：{message}"
+
 #: src/app/session/Timeline.tsx
 msgid "诊断信息"
 msgstr "诊断信息"
@@ -1949,6 +1991,19 @@ msgstr "询问用户"
 #: src/app/session/FailureDetails.tsx
 msgid "详情"
 msgstr "详情"
+
+#: src/app/session/DictationBar.tsx
+msgid "语音识别插件未开启"
+msgstr "语音识别插件未开启"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/DictationBar.tsx
+msgid "语音输入"
+msgstr "语音输入"
+
+#: src/app/session/DictationBar.tsx
+msgid "语音输入已关闭"
+msgstr "语音输入已关闭"
 
 #: src/app/session/Activities.tsx
 msgid "请求未完成"
@@ -2085,6 +2140,10 @@ msgstr "还没有输出…"
 msgid "这个子 Agent 没有记录。"
 msgstr "这个子 Agent 没有记录。"
 
+#: src/app/session/DictationBar.tsx
+msgid "这个浏览器无法录音"
+msgstr "这个浏览器无法录音"
+
 #: src/app/session/Attempts.tsx
 msgid "这个项目还没有提交，无法从同一起点切出 Worktree"
 msgstr "这个项目还没有提交，无法从同一起点切出 Worktree"
@@ -2201,6 +2260,8 @@ msgstr "重新读取附件"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
+#: src/app/session/DictationBar.tsx
+#: src/app/session/HoldToTalk.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
 #: src/app/session/ToolsPicker.tsx
@@ -2225,6 +2286,10 @@ msgstr "重试同步"
 #: src/app/session/NativeInteractionCard.tsx
 msgid "重连后提交"
 msgstr "重连后提交"
+
+#: src/app/session/Composer.tsx
+msgid "键盘"
+msgstr "键盘"
 
 #: src/app/session/MessageAttachments.tsx
 #: src/app/session/TranscriptView.tsx
@@ -2299,6 +2364,14 @@ msgstr "题目已更新，请检查状态"
 msgctxt "session-highlight-action"
 msgid "高亮"
 msgstr "高亮"
+
+#: src/app/session/DictationBar.tsx
+msgid "麦克风只能在 HTTPS 地址下使用"
+msgstr "麦克风只能在 HTTPS 地址下使用"
+
+#: src/app/session/DictationBar.tsx
+msgid "麦克风权限被拒绝，需要在浏览器设置里允许"
+msgstr "麦克风权限被拒绝，需要在浏览器设置里允许"
 
 #: src/app/session/marks.tsx
 msgid "黄色"

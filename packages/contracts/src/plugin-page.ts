@@ -40,7 +40,21 @@ export type PluginPageItem =
   | { kind: 'list'; key: string; label: string; values: string[]; placeholder?: string }
   /** Read only: something the plugin knows, with what can be done to it. */
   | { kind: 'row'; id: string; label: string; value?: string; detail?: string; buttons?: PluginPageButton[] }
+  /**
+   * A bounded amount or a progress, drawn with a bar under the label. `percent` is 0–100: of the allowance used when `sense`
+   * is `quota`, done when it is `progress`. `value` replaces the figure the client writes (n%, or 剩余 n%), e.g. `1.2 GB / 5 GB`.
+   * Drawn only by clients that list `meter` in `PLUGIN_PAGE_KINDS_PARAM`; the others get a `row`.
+   */
+  | { kind: 'meter'; id: string; label: string; percent: number; sense: 'quota' | 'progress'; value?: string; detail?: string; buttons?: PluginPageButton[] }
   | { kind: 'buttons'; buttons: PluginPageButton[] };
+
+/**
+ * Kinds a client draws beyond the six every client has (`choice`, `toggle`, `text`, `list`, `row`, `buttons`), sent as this
+ * query parameter of the page's GET and POST, comma separated. The server turns the kinds a client did not list into rows.
+ */
+export const PLUGIN_PAGE_KINDS_PARAM = 'kinds';
+export const PLUGIN_PAGE_EXTRA_KINDS = ['meter'] as const;
+export type PluginPageExtraKind = typeof PLUGIN_PAGE_EXTRA_KINDS[number];
 
 export interface PluginPageSection {
   id: string;

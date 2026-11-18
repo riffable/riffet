@@ -46,6 +46,8 @@
 	<string>在你选择启用时，验证本人后提交操作确认。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>发现并连接同一网络中的 Riffet 服务。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>把语音转成文字输入到消息里。</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UILaunchScreen</key>

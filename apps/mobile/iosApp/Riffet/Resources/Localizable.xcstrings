@@ -10953,6 +10953,31 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Behavior" } }
       }
     },
+    "按住 说话" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hold to talk" } }
+      }
+    },
+    "松开转文字，上滑取消" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Release to insert, slide up to cancel" } }
+      }
+    },
+    "松开取消" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Release to cancel" } }
+      }
+    },
+    "语音输入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice input"
+          }
+        }
+      }
+    },
     "语言" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Language" } }

@@ -23,7 +23,15 @@ struct ConversationComposer: View {
     @State private var configuration: SessionOptionFocus?
     @State private var expandedEditor = false
     @FocusState private var focused: Bool
+    @State private var voice = ComposerVoice()
     @Environment(\.palette) private var palette
+    @Environment(\.scenePhase) private var scenePhase
+    private var voiceInput: Bool { workbench.settings?.voiceInput?.recognizer != nil }
+    private var dictating: Bool { voice.dictating }
+    private var voiceActive: Bool { voice.mode && voiceInput }
+    private var textEmpty: Bool { voice.textEmpty(draft) }
+    private var handsFree: Bool { voice.handsFree }
+    private var holdInFooter: Bool { voiceActive && !textEmpty }
     private var archived: Bool { session.archivedAt != nil }
     private var quickChat: Bool { session.backendId == .chat }
     private var busy: Bool { workbench.sendState.sending || workbench.sendState.interrupting }
@@ -41,7 +49,7 @@ struct ConversationComposer: View {
     }
     private var hasContent: Bool { !draft.text.isEmpty || !draft.attachments.isEmpty || !draft.references.isEmpty || !draft.pendingFiles.isEmpty }
     /// Focused or holding a draft the card grows its footer; otherwise it stays one line.
-    private var expanded: Bool { focused || hasContent }
+    private var expanded: Bool { focused || voice.hasContent(hasContent) || handsFree }
     private var showsStop: Bool {
         supportsInterrupt && (workbench.sendState.interrupting || (workbench.working || workbench.backgroundSubagents > 0) && !draft.canSend)
     }
@@ -79,11 +87,28 @@ struct ConversationComposer: View {
                     .navigationTitle(String(localized: "编辑消息", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("收起") { draft.save(); expandedEditor = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(defaultSendSteers ? "补充到当前任务" : workbench.working ? "加入队列" : "发送") { send(interrupt: false) }.disabled(!acceptsMessages || !draft.canSend || busy).accessibilityLabel(sendLabel) }
+                        ToolbarItem(placement: .confirmationAction) { Button(defaultSendSteers ? "补充到当前任务" : workbench.working ? "加入队列" : "发送") { send(interrupt: false) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating).accessibilityLabel(sendLabel) }
                     }
             }.presentationDetents([.large])
         }
         .onChange(of: draft.text) { _, value in updateMenu(value) }
+        .onChange(of: focused) { _, now in if now, voice.mode { voice.setMode(false) }
+        }
+        .onChange(of: voice.mode) { _, on in if on { focused = false } }
+        .onChange(of: focusRequest) { _, _ in
+            voice.setMode(false)
+            Task { focused = true }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            voice.scenePhaseChanged(phase)
+        }
+        .onDisappear { voice.teardown() }
+    }
+    private var voiceToggle: some View {
+        ComposerVoiceToggle(voice: voice, keyboard: { Task { focused = true } }) { toolGlyph($0) }
+    }
+    private func holdBar(height: CGFloat) -> some View {
+        ComposerHoldBar(voice: voice, draft: draft, host: workbench.host, hasContent: hasContent, height: height, unfocus: { focused = false })
     }
     private var supportsSessionReferences: Bool { catalog?.capabilities.supportsSessionReferences == true }
     /// A quick chat has no project files to cite and no commands or skills; it can still cite sessions.
@@ -106,18 +131,26 @@ struct ConversationComposer: View {
     private var card: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 0) {
-                if !expanded { plusMenu }
-                TextField(placeholder, text: $draft.text, axis: .vertical)
+                if !expanded { plusMenu; if voiceInput { voiceToggle } }
+                if voiceActive && textEmpty && !handsFree {
+                    // Where the draft's text would be: the same left edge, and the right edge the send button keeps. Open,
+                    // the bar's top inset equals its gap above the send button, and the card keeps its height.
+                    holdBar(height: expanded ? RiffetMetrics.hitTarget : RiffetMetrics.sendButton)
+                        .padding(.leading, expanded ? RiffetMetrics.groupInset : 0).padding(.trailing, Self.sendEdge)
+                        .padding(.top, expanded ? RiffetMetrics.groupInset : 0).padding(.bottom, expanded ? RiffetMetrics.groupInset - Self.sendInset : 0)
+                } else {
+                TextField(placeholder, text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
                     .riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1...6).focused($focused)
-                    .onChange(of: focusRequest) { _, _ in focused = true }
                     .padding(.leading, expanded ? 16 : 0).padding(.vertical, expanded ? 14 : 0)
                     .frame(minHeight: RiffetMetrics.hitTarget)
                     .accessibilityIdentifier("messageComposer")
+                    .allowsHitTesting(!dictating)
                     .onKeyPress(.escape) {
                         guard let token = menu else { return .ignored }
                         dismissedMenu = token.key; menu = nil
                         return .handled
                     }
+                }
                 if focused {
                     Button { expandedEditor = true } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right").riffetFont(.caption).foregroundStyle(palette.fg4)
@@ -127,33 +160,52 @@ struct ConversationComposer: View {
                     stopButton
                 }
             }
+            .padding(.leading, expanded ? 0 : Self.toolsLeading).padding(.trailing, expanded ? 0 : Self.toolsTrailing)
             if expanded { footer.transition(.opacity) }
         }
         .riffetComposerSurface()
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { voice.hold.composerFrame = $0 }
     }
     private var footer: some View {
+        Group {
+            if let dictation = voice.dictation, dictating, !voice.hold.session {
+                DictationBar(state: dictation, cancel: { voice.cancel() }, finish: { voice.finish() }, retry: { voice.retry() })
+            } else { tools }
+        }.padding(.leading, Self.toolsLeading).padding(.trailing, Self.toolsTrailing).padding(.bottom, 2)
+    }
+    /// The card's rows line up on the draft's left edge (`groupInset`): the plus glyph is centred in its 40pt slot, so the
+    /// row starts this far in. The send button's circle sits `sendInset` inside its 44pt slot; the row ends `toolsTrailing`
+    /// in, so its right edge is `sendEdge` from the card, and the hold bar ends on the same line.
+    private static let toolsLeading: CGFloat = RiffetMetrics.groupInset - (toolWidth - glyphSize) / 2
+    private static let toolsTrailing: CGFloat = 4
+    private static let sendInset: CGFloat = (RiffetMetrics.hitTarget - RiffetMetrics.sendButton) / 2
+    private static let sendEdge: CGFloat = toolsTrailing + sendInset
+    private static let toolWidth: CGFloat = 40
+    private static let glyphSize: CGFloat = 20
+    private var tools: some View {
         HStack(spacing: 0) {
             plusMenu
-            Spacer(minLength: 8)
-            RiffetModelLabel(title: modelName, context: contextRatio, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
+            if voiceInput { voiceToggle }
+            if holdInFooter { holdBar(height: RiffetMetrics.sendButton).padding(.horizontal, RiffetMetrics.floatingGap) } else { Spacer(minLength: 8) }
+            if !holdInFooter { RiffetModelLabel(title: modelName, context: contextRatio, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
                 .accessibilityLabel(String(localized: "模型：\(modelName)", bundle: .riffet))
                 .accessibilityValue(catalogLoading ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? contextRatio.map { String(localized: "上下文已用 \($0.formatted(.percent.precision(.fractionLength(0))))", bundle: .riffet) } ?? "")
                 .accessibilityHint("查看模型、参数、模式与权限").accessibilityIdentifier("modelPicker")
-                .layoutPriority(1)
+                .layoutPriority(1) }
             if draft.uploading { ProgressView().frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
             else if showsStop { stopButton }
             else {
-                RiffetSendButton(enabled: acceptsMessages && draft.canSend && !busy) { send(interrupt: false) }
+                RiffetSendButton(enabled: acceptsMessages && draft.canSend && !busy && !voice.dictating) { send(interrupt: false) }
                     .accessibilityLabel(sendLabel).accessibilityIdentifier("sendMessage")
                     .contextMenu {
-                        if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!acceptsMessages || !draft.canSend || busy) }
+                        if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating) }
                         if workbench.working && supportsInterrupt {
                             Button("停止当前任务") { Task { await workbench.perform { _ = try await workbench.store.interrupt() } } }.disabled(busy)
-                            Button("停止并发送") { send(interrupt: true) }.disabled(!acceptsMessages || !draft.canSend || busy)
+                            Button("停止并发送") { send(interrupt: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating)
                         }
                     }
             }
-        }.padding(.horizontal, 4).padding(.bottom, 2)
+        }
     }
     private var stopButton: some View {
         Group {
@@ -164,6 +216,11 @@ struct ConversationComposer: View {
             }
         }
         .accessibilityLabel(workbench.sendState.interrupting ? "停止中" : workbench.working ? "停止当前任务" : "停止后台任务").accessibilityIdentifier("stopTask")
+    }
+    /// A footer tool's symbol: the plus and the mic.
+    private func toolGlyph(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: Self.glyphSize)).foregroundStyle(palette.fg)
+            .frame(width: Self.toolWidth, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
     }
     private var plusMenu: some View {
         Menu {
@@ -176,8 +233,7 @@ struct ConversationComposer: View {
             }
             if !quickChat { Button("命令与技能", systemImage: "slash.circle") { insertTrigger("/") } }
         } label: {
-            Image(systemName: "plus").font(.system(size: 20)).foregroundStyle(palette.fg)
-                .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
+            toolGlyph("plus")
         }.disabled(draft.uploading).accessibilityLabel("添加附件、引用或命令")
     }
     @ViewBuilder private var feedback: some View {

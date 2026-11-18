@@ -93,6 +93,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import riffet.ui.composer.ComposerDraft
 import riffet.ui.composer.LocalComposerDrafts
+import riffet.ui.composer.rememberComposerDictation
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -847,6 +848,7 @@ private fun HomeContent(
     val motion = LocalRiffetMotion.current
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
+    val dictation = rememberComposerDictation(store)
     val list by store.list.collectAsState()
     val scope = rememberCoroutineScope()
     val pageActive = LocalPageActive.current
@@ -1098,6 +1100,7 @@ private fun HomeContent(
                         sendEnabled = api != null && text.isNotBlank() && !uploading && !creating && !config.catalogLoading,
                         sendBusy = creating,
                         onSend = ::create,
+                        dictation = dictation,
                         hero = true,
                         heroMinLines = 4,
                         slash = config.slash,

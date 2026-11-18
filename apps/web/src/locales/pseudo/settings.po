@@ -707,6 +707,7 @@ msgstr ""
 msgid "下次启动时释放"
 msgstr ""
 
+#: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "下载"
 msgstr ""
@@ -1662,6 +1663,7 @@ msgid "关闭"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/VoiceInputSection.tsx
 msgctxt "option-off"
 msgid "关闭"
 msgstr ""
@@ -1790,6 +1792,10 @@ msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "再改规范与代码"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "再核对一遍"
 msgstr ""
 
 #. placeholder {0}: timeAgo(device.lastSeenAt)
@@ -2202,6 +2208,10 @@ msgstr ""
 msgid "单项禁用"
 msgstr ""
 
+#: src/app/design/components/FeedbackChapter.tsx
+msgid "占用"
+msgstr ""
+
 #: src/app/settings/StorageSection.tsx
 msgid "占用最多的会话"
 msgstr ""
@@ -2367,6 +2377,10 @@ msgstr ""
 
 #: src/app/settings/SupportSections.tsx
 msgid "发送诊断失败"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "取代工具行"
 msgstr ""
 
 #: src/app/design/foundations/StatesChapter.tsx
@@ -3214,6 +3228,7 @@ msgstr ""
 msgid "安装到当前连接的服务器"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "完成"
 msgstr ""
@@ -3641,6 +3656,10 @@ msgstr ""
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "已保存"
+msgstr ""
+
+#: src/app/settings/VoiceInputSection.tsx
+msgid "已保存，输入新 Key 替换"
 msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -4116,6 +4135,14 @@ msgstr ""
 msgid "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
 msgstr ""
 
+#: src/app/settings/VoiceInputSection.tsx
+msgid "录音会发送到这个地址"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "录音栏"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "形态与尺寸"
 msgstr ""
@@ -4407,6 +4434,10 @@ msgid "把兼容 OpenAI 接口的网关作为模型源。"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
+msgid "把设置页的焦点顺序"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
 msgid "把设置页的焦点顺序修一下"
 msgstr ""
 
@@ -4507,6 +4538,10 @@ msgstr ""
 
 #: src/app/design/android/notes.ts
 msgid "按下降低不透明度，没有 ripple"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "按住 说话"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -5217,6 +5252,10 @@ msgstr ""
 msgid "无法保存编辑器设置"
 msgstr ""
 
+#: src/app/settings/VoiceInputSection.tsx
+msgid "无法保存语音输入设置"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存资源回收设置"
 msgstr ""
@@ -5272,6 +5311,10 @@ msgstr ""
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法安排释放空间"
+msgstr ""
+
+#: src/app/settings/VoiceInputSection.tsx
+msgid "无法开启插件"
 msgstr ""
 
 #: src/app/settings/StorageSection.tsx
@@ -5630,11 +5673,16 @@ msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/VoiceInputSection.tsx
 msgid "服务地址"
 msgstr ""
 
 #: src/app/settings/settingsSections.ts
 msgid "服务管理"
+msgstr ""
+
+#: src/app/settings/VoiceInputSection.tsx
+msgid "未下载模型"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
@@ -5703,6 +5751,10 @@ msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "本机服务器"
+msgstr ""
+
+#: src/app/settings/VoiceInputSection.tsx
+msgid "本机模型"
 msgstr ""
 
 #: src/app/settings/SupportSections.tsx
@@ -5980,6 +6032,7 @@ msgstr ""
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/CardSettings.tsx
 #: src/app/settings/settingsSections.ts
+#: src/app/settings/VoiceInputSection.tsx
 msgid "模型"
 msgstr ""
 
@@ -7441,6 +7494,7 @@ msgid "能用声明描述的，用声明描述。"
 msgstr ""
 
 #: src/app/design/mac/StyleMiniature.tsx
+#: src/app/settings/VoiceInputSection.tsx
 msgid "自动"
 msgstr ""
 
@@ -7840,6 +7894,10 @@ msgstr ""
 msgid "访问"
 msgstr ""
 
+#: src/app/settings/VoiceInputSection.tsx
+msgid "识别方式"
+msgstr ""
+
 #: src/app/settings/settingsSections.ts
 msgid "诊断"
 msgstr ""
@@ -7886,7 +7944,17 @@ msgstr ""
 
 #: src/app/design/android/PhoneMiniature.tsx
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/VoiceInputSection.tsx
 msgid "语言"
+msgstr ""
+
+#: src/app/settings/VoiceInputSection.tsx
+msgid "语音识别服务"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/VoiceInputSection.tsx
+msgid "语音输入"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -8395,6 +8463,10 @@ msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "进度"
+msgstr ""
+
+#: src/app/design/components/FeedbackChapter.tsx
+msgid "进度用 progressbar，额度与占用用 meter。"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx

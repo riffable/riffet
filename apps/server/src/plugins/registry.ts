@@ -3,11 +3,11 @@ import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup,
-  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type TaskProvider,
+  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type SpeechRecognizer, type TaskProvider,
 } from '@riffet/plugin-api';
 import { protocolBackends, sourceProtocols } from '@riffet/plugin-api/kit';
 import { AGENT_PROTOCOL_VERSION, type AgentBackend } from '@riffet/plugin-api/experimental/agent';
-import type { ActionStep, AppearanceDeclarations, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import type { ActionStep, AppearanceDeclarations, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 // The core's only import of the built-in list (`pnpm check:plugins`), so a build can swap it here.
 import { builtinPlugins } from '../../../../plugins/index.js';
@@ -368,9 +368,9 @@ export class PluginRegistry {
 
   // ── The plugin's page and README (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────
 
-  page(id: string, locale: string | undefined): Promise<PluginPageResponse> { return this.pages.page(id, locale); }
+  page(id: string, locale: string | undefined, kinds?: ReadonlySet<PluginPageExtraKind>): Promise<PluginPageResponse> { return this.pages.page(id, locale, kinds); }
 
-  changePage(id: string, input: unknown): Promise<PluginPageResponse> { return this.pages.changePage(id, input); }
+  changePage(id: string, input: unknown, kinds?: ReadonlySet<PluginPageExtraKind>): Promise<PluginPageResponse> { return this.pages.changePage(id, input, kinds); }
 
   readme(id: string, locale: string | undefined): Promise<PluginReadmeResponse> { return this.pages.readme(id, locale); }
 
@@ -405,6 +405,14 @@ export class PluginRegistry {
       return publisher ? [{ owner: entry.plugin.manifest.id, publisher }] : [];
     });
   }
+  /** The recognizer of plugin `pluginId` while it is on, with the signal of the activation that gave it (docs/VOICE.md §3). */
+  speechRecognizer(pluginId: string): { recognizer: SpeechRecognizer; signal: AbortSignal } | undefined {
+    const entry = this.entries.get(pluginId);
+    const recognizer = entry && !entry.waiting ? entry.active?.contributions?.speechRecognizer : undefined;
+    return recognizer && entry?.active ? { recognizer, signal: entry.active.controller.signal } : undefined;
+  }
+  /** Whether plugin `pluginId` is in this build and declares a recognizer, on or off. */
+  declaresSpeechRecognizer(pluginId: string): boolean { return Boolean(this.entries.get(pluginId)?.plugin.manifest.contributes?.speechRecognizer); }
   /** The enabled publisher of plugin `owner`: what an existing share must use, whatever the default is. */
   sharePublisher(owner: string): OwnedSharePublisher | undefined { return this.sharePublishers().find(item => item.owner === owner); }
   /** For a new share: the user's choice while it is enabled, else the first enabled publisher. */
@@ -1593,6 +1601,8 @@ export class PluginRegistry {
       if (!contributions.modelSources?.some(source => source.id === declared.id)) throw new Error('Declared model source is not provided: ' + declared.id);
     }
     if (manifest.contributes?.sharePublisher && !contributions.sharePublisher) throw new Error('Declared share publisher is not provided');
+    if (contributions.speechRecognizer !== undefined && (!manifest.contributes?.speechRecognizer || typeof contributions.speechRecognizer?.open !== 'function' || typeof contributions.speechRecognizer.status !== 'function')) throw new Error('speechRecognizer is not declared in contributes.speechRecognizer or has no open() and status()');
+    if (manifest.contributes?.speechRecognizer && !contributions.speechRecognizer) throw new Error('Declared speech recognizer is not provided');
     // A command is run by its id from the declaration: each handler must be declared by this integration.
     for (const [commandId, handler] of Object.entries(contributions.commands ?? {})) {
       // A command this host left out of the manifest stays unrunnable (`command()` finds no declaration); its handler is not an error.

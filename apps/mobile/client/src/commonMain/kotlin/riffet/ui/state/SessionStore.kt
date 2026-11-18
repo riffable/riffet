@@ -431,6 +431,10 @@ class SessionStore(
 
     fun applySavedSettings(settings: AppSettings) = lists.applySavedSettings(settings)
 
+    /** Voice input for a composer on this server (docs/VOICE.md §7); [scope] runs on the main thread. */
+    fun dictation(scope: CoroutineScope, microphone: riffet.ui.composer.DictationMicrophone): riffet.ui.composer.DictationController =
+        riffet.ui.composer.DictationController(api, scope, microphone)
+
     fun invalidateBackendCatalog() = lists.invalidateBackendCatalog()
 
     /** Loads the project and session lists: the stored copy at once, then the bootstrap endpoint. */

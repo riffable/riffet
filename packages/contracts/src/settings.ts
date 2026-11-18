@@ -85,6 +85,26 @@ export interface AppSettings {
    * 更多 menu. Unset means `DEFAULT_SIDEBAR_PINNED`. Ids a client does not offer are kept and skipped.
    */
   sidebarPinned?: string[];
+  /** 语音输入 (docs/VOICE.md §6), on every device. Unset, or no `recognizer`, means off. */
+  voiceInput?: VoiceInputSettings;
+}
+/**
+ * How dictation is transcribed: `recognizer` is `REMOTE_SPEECH_RECOGNIZER` for the service in `remote`, or the id of a
+ * plugin that declares `contributes.speechRecognizer`. Kept while that plugin is off; dictation then reports why it cannot start.
+ */
+export interface VoiceInputSettings {
+  recognizer?: string;
+  /** A BCP-47 hint such as `zh` or `en`; unset lets the recognizer detect it. */
+  language?: string;
+  remote?: RemoteSpeechSettings;
+}
+/** An OpenAI-format `/v1/audio/transcriptions` service. The key is write-only: clients see `hasApiKey`. */
+export interface RemoteSpeechSettings { baseUrl?: string; model?: string; hasApiKey?: boolean }
+/** Each field given replaces its own; `null` clears it. `remote.apiKey` sets or (with `null`) removes the key. */
+export interface VoiceInputSettingsUpdate {
+  recognizer?: string | null;
+  language?: string | null;
+  remote?: { baseUrl?: string | null; model?: string | null; apiKey?: string | null };
 }
 /**
  * Pages the sidebar reaches, as `AppSettings.sidebarPinned` names them. 新会话 and 搜索内容 are
@@ -225,4 +245,4 @@ export type AuxiliaryModelsUpdate = Partial<Record<AuxiliaryModelPurpose, Auxili
 export type QuickChatSettingsUpdate = Omit<QuickChatSettings, 'presets'> & { presets?: QuickChatPreset[] | null };
 /** Only the uses given change; `null` clears one. */
 export type PluginModelsUpdate = Record<string, AuxiliaryModelRef | null>;
-export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant' | 'workItems'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate; workItems?: WorkItemSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };
+export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant' | 'workItems' | 'voiceInput'> & { cursorCli?: never; voiceInput?: VoiceInputSettingsUpdate; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate; workItems?: WorkItemSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };

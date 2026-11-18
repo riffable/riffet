@@ -80,6 +80,8 @@ object PreferenceKeys {
     const val THEME_ID = "theme-id"
     /** The phones the last new conversation was given; device ids belong to one server, so this key is per server. */
     const val TOOL_GROUPS = "tool-groups-last"
+    /** `voice` while the composer is in voice mode on this device; see [riffet.ui.composer.ComposerVoiceMode]. */
+    const val COMPOSER_INPUT_MODE = "composer-input-mode"
 }
 
 expect fun createAppPreferences(): AppPreferences

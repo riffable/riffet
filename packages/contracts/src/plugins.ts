@@ -192,6 +192,8 @@ export interface PluginDeclarations {
   /** Discovery metadata remains visible while the provider is disabled; it grants no capability. */
   modelSources?: Array<{ id: string; role?: 'source' | 'adapter'; usage?: boolean; title: LocalizedText; protocols?: string[]; backends?: Array<'claude' | 'codex'>; defaultEndpoint?: string; overridable?: Array<'apiEndpoint' | 'apiKey'>; loginAction?: string; hint?: { text: string; command?: string }; hosts?: string[] }>;
   sharePublisher?: { title: LocalizedText };
+  /** A dictation recognizer (docs/VOICE.md §3), offered in 语音输入 settings whether or not the plugin is on. */
+  speechRecognizer?: { title: LocalizedText };
   actions?: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   views?: ViewDeclaration[];
   commands?: CommandDeclaration[];

@@ -113,7 +113,7 @@ import type {
   WorktreeInfo,
   ReleaseNotes,
 } from '@contracts';
-import { API, CLIENT_FEATURES_HEADER, TERMINAL_APPEARANCE_HEADER, TERMINAL_PROTOCOL } from '@contracts';
+import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARANCE_HEADER, TERMINAL_PROTOCOL } from '@contracts';
 import { pageTerminalAppearance } from './terminal-theme';
 import { HttpError } from './errors';
 import { newId } from './utils';
@@ -123,6 +123,9 @@ import { readNativeOutbox, removeNativeOutbox, writeNativeOutbox } from './nativ
  * What this web client can decode. Every request names it in the features header; a stream that
  * cannot set headers (the browser's `EventSource`) carries the same value in its URL instead.
  */
+/** The plugin page's item kinds this client draws beyond the base six (`PluginPageView`). */
+const PAGE_KINDS = `${PLUGIN_PAGE_KINDS_PARAM}=meter`;
+
 export const CLIENT_FEATURES = 'quick-chat,pi-agent,antigravity-agent,projectless-tasks,plugin-agents,session-references-v1';
 
 /** Native browser loads cannot send the feature header used by JSON requests. */
@@ -767,9 +770,9 @@ export const api = {
   updatePlugin: (id: string, update: PluginUpdate) => request<PluginDescriptor>(`/api/integrations/${encodeURIComponent(id)}`, json('PATCH', update)),
   /** The plugin's own page (docs/PLUGIN_ARCHITECTURE.md「插件页」), in `locale`. */
   pluginPage: (id: string, locale: string, signal?: AbortSignal) =>
-    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page?locale=${encodeURIComponent(locale)}`, { signal }),
+    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page?locale=${encodeURIComponent(locale)}&${PAGE_KINDS}`, { signal }),
   changePluginPage: (id: string, change: import('@contracts').PluginPageChange) =>
-    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page`, json('POST', change)),
+    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page?${PAGE_KINDS}`, json('POST', change)),
   pluginReadme: (id: string, locale: string, signal?: AbortSignal) =>
     request<import('@contracts').PluginReadmeResponse>(`/api/integrations/${encodeURIComponent(id)}/readme?locale=${encodeURIComponent(locale)}`, { signal }),
   /** A device flow answers `show-code`; its device code stays on the server behind `flowId`. */

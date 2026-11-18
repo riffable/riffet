@@ -213,6 +213,15 @@ internal object UiText {
         "terminal.paste.disconnected" to "终端未连接",
         "terminal.paste.controlChanged" to "终端控制权已变化，请重新粘贴",
         "terminal.paste.inputChanged" to "输入已变化，请重新粘贴",
+        // Dictation
+        "dictation.failure.denied" to "麦克风权限被拒绝，需要在系统设置里允许",
+        "dictation.failure.noMicrophone" to "没有找到麦克风",
+        "dictation.failure.microphone" to "无法打开麦克风",
+        "dictation.failure.off" to "语音输入已关闭",
+        "dictation.failure.unavailable" to "语音识别插件未开启",
+        "dictation.failure.disconnected" to "与服务器的连接中断",
+        "dictation.failure.busy" to "同时进行的语音输入过多",
+        "dictation.failure.transcription" to "识别失败：{0}",
         "terminal.exited" to "进程已退出，退出码 {0}",
 
         // Session detail
@@ -495,6 +504,15 @@ internal object UiText {
         "terminal.paste.disconnected" to "Terminal is disconnected",
         "terminal.paste.controlChanged" to "Terminal control changed; paste again",
         "terminal.paste.inputChanged" to "Input changed; paste again",
+        // Dictation
+        "dictation.failure.denied" to "Microphone access was denied; allow it in Settings",
+        "dictation.failure.noMicrophone" to "No microphone found",
+        "dictation.failure.microphone" to "Couldn't open the microphone",
+        "dictation.failure.off" to "Voice input is off",
+        "dictation.failure.unavailable" to "The speech recognition plugin is off",
+        "dictation.failure.disconnected" to "Lost the connection to the server",
+        "dictation.failure.busy" to "Too many dictations at once",
+        "dictation.failure.transcription" to "Couldn't transcribe: {0}",
         "terminal.exited" to "Process exited with code {0}",
 
         // Session detail

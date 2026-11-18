@@ -1,8 +1,9 @@
+import { flushSync } from 'react-dom';
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
+import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
 import { isNativeBackendId, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ToolsPickerInMenu } from './ToolsPicker';
@@ -25,6 +26,10 @@ import { clipboardFiles, readUploadData, uploadName } from './image-upload';
 import { classifyEnterGesture, isComposingKey, primaryEnterHint, readEnterKeyBehavior, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
 import { ComposerFullscreen } from './ComposerFullscreen';
 import { SendLaterMenu } from '../automations/SendLater';
+import { useSettings } from '../state/stores';
+import { DictationBar } from './DictationBar';
+import { useDictation } from './useDictation';
+import { holdDocked, HoldToTalkBar, HoldToTalkOverlay, type HoldEnd, type HoldSession } from './HoldToTalk';
 import { useComposerAutosize } from './useComposerAutosize';
 import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { Collapse } from '@/components/ui/collapse';
@@ -557,6 +562,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const referencesRevisionRef = useRef(0);
   const submittingRef = useRef(false);
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
   /*
    * Fullscreen is a desktop affordance: the card already spans a phone's screen, and lifting it out
    * of the column there would cost the dock cards their place above the keyboard. Gating on the
@@ -579,7 +585,31 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<number | undefined>(undefined);
-  const compact = isMobile && variant === 'dock' && !focused && !mobileSettingsOpen && !dragging
+  /** 语音输入 (docs/VOICE.md §7): offered once a recognizer is chosen in settings. */
+  const voiceInput = useSettings((settings) => Boolean(settings.voiceInput?.recognizer));
+  const dictation = useDictation({
+    text: () => textRef.current,
+    selection: () => {
+      const element = textareaRef.current;
+      return element && document.activeElement === element ? { start: element.selectionStart, end: element.selectionEnd } : { start: textRef.current.length, end: textRef.current.length };
+    },
+    replace: (next, caret) => { updateText(next); requestAnimationFrame(() => textareaRef.current?.setSelectionRange(caret, caret)); },
+  });
+  const dictating = dictation.view.phase !== 'idle';
+  /**
+   * On a touch screen the mic toggles a voice mode where holding a bar records (docs/design/system/surfaces.md「语音输入（触屏）」);
+   * a pointer keeps the mic as a button that records until done.
+   */
+  const touchVoice = voiceInput && isMobile && coarsePointer;
+  const [voiceMode, setVoiceModeState] = useState(readVoiceMode);
+  const voice = touchVoice && voiceMode;
+  const [hold, setHold] = useState<HoldSession | null>(null);
+  /** The hold overlay has fully arrived over the composer. */
+  const handsFree = dictating && !hold;
+  // The draft as the press found it: sentences landing mid-hold must not move the bar from under the finger.
+  const draftEmpty = hold ? hold.emptyDraft : !text;
+  const holdInFooter = voice && !draftEmpty;
+  const compact = isMobile && variant === 'dock' && !focused && !mobileSettingsOpen && !dragging && !dictating && !voice
     && !text && !quotes.length && !attachments.length && !references.length && !uploading && !draftAtRisk;
   /**
    * Entrance motion for the controls the compact/full toggle adds.
@@ -1139,6 +1169,33 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * none, the caret returns to the draft rather than `<body>`. Not on a phone, where focusing the
    * draft would raise a keyboard the tap did not ask for.
    */
+  /** Voice and keyboard take turns: entering voice puts the keyboard away, leaving it brings the keyboard back. */
+  const setVoiceMode = (on: boolean, focus = true) => {
+    writeVoiceMode(on);
+    if (on) { setVoiceModeState(true); textareaRef.current?.blur(); return; }
+    // Rendered before focusing, inside the tap, or a phone will not raise its keyboard for a field that was hidden.
+    flushSync(() => setVoiceModeState(false));
+    if (focus) textareaRef.current?.focus();
+  };
+  const holdPress = () => {
+    const anchor = cardRef.current?.getBoundingClientRect();
+    if (!anchor) return;
+    setHold({ anchor, emptyDraft: !textRef.current, docked: holdDocked(anchor), cancelling: false, released: false });
+    void dictation.start();
+  };
+  const holdZone = (cancelling: boolean) => setHold((current) => current && { ...current, cancelling });
+  const holdEnd = (end: HoldEnd) => {
+    if (end === 'tap') { setHold(null); return; }
+    if (end === 'cancel') { dictation.cancel(); setHold(null); return; }
+    setHold((current) => current && { ...current, cancelling: false, released: true });
+    dictation.finish();
+  };
+  // Over once the text has landed, or the recording was dropped or stopped at its longest.
+  useEffect(() => { if (hold && dictation.view.phase === 'idle') setHold(null); }, [hold, dictation.view.phase]);
+  const holdBar = (tall: boolean, className?: string) => (
+    <HoldToTalkBar pressed={Boolean(hold && !hold.released)} disabled={disabled || (dictating && !hold) || Boolean(hold?.released)} busy={Boolean(hold?.released) && dictation.view.phase === 'finishing'} tall={tall} className={className}
+      onPress={holdPress} onZone={holdZone} onEnd={holdEnd} />
+  );
   const refocusDraft = () => requestAnimationFrame(() => {
     const active = document.activeElement;
     if ((!active || active === document.body) && !window.matchMedia(MOBILE_LAYOUT_QUERY).matches) textareaRef.current?.focus({ preventScroll: true });
@@ -1233,11 +1290,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     };
   }, [disabled, projectId, storageKey, props.windowDrop, props.attachmentsAllowed]);
 
-  const canSubmit = Boolean(text.trim()) && !disabled && !props.submitDisabled && !submitting && !uploading;
+  // Not while dictating: the result still to come rewrites the draft, and would bring back what was just sent.
+  const canSubmit = Boolean(text.trim()) && !disabled && !props.submitDisabled && !submitting && !uploading && !dictating;
   const submit = async (later?: Date) => {
     const body = textRef.current;
     const prompt = joinQuotes(quotesRef.current, body);
-    if (!body.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0) return;
+    if (!body.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0 || dictating) return;
     if (later && !props.onSendLater) return;
     const submittedTextRevision = textRevisionRef.current;
     const submittedAttachments = [...attachmentsRef.current];
@@ -1488,6 +1546,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             rows={1}
             value={text}
             disabled={disabled}
+            readOnly={dictating}
             data-composer-input
             aria-label={t`输入消息`}
             aria-describedby={draftAtRisk ? draftWarningId : undefined}
@@ -1498,10 +1557,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             aria-controls={menuOpen ? menuId : undefined}
             aria-activedescendant={menuOpen && highlight < menuLength ? optionId(highlight) : undefined}
             placeholder={composerPlaceholder}
-            className={cn('w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1')}
+            className={cn('w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1', voice && draftEmpty && 'hidden')}
             onChange={(event) => { updateText(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
             onSelect={(event) => syncTrigger(event.currentTarget.value, event.currentTarget.selectionStart)}
-            onFocus={() => window.clearTimeout(mentionBlurTimerRef.current)}
+            onFocus={() => { window.clearTimeout(mentionBlurTimerRef.current); if (voice && !dictating) setVoiceMode(false, false); }}
             onBlur={() => { window.clearTimeout(mentionBlurTimerRef.current); mentionBlurTimerRef.current = window.setTimeout(() => setTrigger(null), 120); }}
             onPaste={(event) => {
               const pasted = clipboardFiles(event.clipboardData);
@@ -1511,6 +1570,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               void ingestFiles(pasted);
             }}
             onKeyDown={(event) => {
+              // While dictating the draft is the recognizer's: Esc cancels and Enter finishes, nothing else edits it.
+              if (dictating) {
+                if (event.key === 'Escape') { event.preventDefault(); dictation.cancel(); }
+                else if (event.key === 'Enter' && dictation.view.phase === 'recording') { event.preventDefault(); dictation.finish(); }
+                return;
+              }
               // Both composition signals once: the legacy one (229) is what some engines report
               // instead of `isComposing`, so checking only the standard flag ships a known IME bug.
               const composing = isComposingKey({ isComposing: event.nativeEvent.isComposing, keyCode: event.keyCode });
@@ -1565,6 +1630,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             }}
           />
 
+          {/* An empty draft in voice mode: the bar stands where the text would be. */}
+          {voice && draftEmpty && <div className="pt-2 max-md:pl-4 max-md:pr-3 md:px-2">{holdBar(true, hero ? 'min-h-[68px]' : undefined)}</div>}
+          <HoldToTalkOverlay session={hold && (!hold.released || dictation.view.phase === 'failed') ? hold : null} view={dictation.view} onRetry={dictation.retry} onDiscard={dictation.cancel} />
+
           {/* What the draft will invoke, read back from the text itself: the token is the reference,
               so removing a chip removes the token, and editing the token out drops the chip. */}
           {!compact && invokedItems.length > 0 && (
@@ -1585,12 +1654,14 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             <FeedbackNotice scope={storageKey ?? props.draftKey ?? draftWarningId} message={draftAtRisk && t`草稿无法保存到浏览器，刷新后会丢失`} recovered={!draftAtRisk}
               className="px-4 pt-1 pb-2" icon={null} noticeClassName={cn('bg-transparent! p-0! text-xs', draftAtRisk ? 'text-warning' : 'text-fg-3')} />
           </div>
-          <div className={cn('flex items-center gap-1', compact ? cn('shrink-0 flex-nowrap py-0.5 pr-1', !running && !props.backgroundCount && 'hidden') : 'flex-wrap px-2 pb-2 pt-1 md:flex-nowrap')}>
+          {handsFree && <DictationBar view={dictation.view} onFinish={dictation.finish} onCancel={() => { dictation.cancel(); refocusDraft(); }} onRetry={dictation.retry} />}
+          <div className={cn('flex items-center gap-1', handsFree && 'hidden', compact ? cn('shrink-0 flex-nowrap py-0.5 pr-1', !running && !props.backgroundCount && 'hidden') : 'flex-wrap pb-2 pt-1 max-md:pl-1.25 max-md:pr-3 md:flex-nowrap md:px-2')}>
             {/* Skills and tools live in the + menu on a pointer device rather than as a button of their
                 own on the row; the phone's settings sheet keeps its own section for them. */}
+            <div className={cn('flex shrink-0 items-center empty:hidden', compact && 'hidden')}>
             {(attachable || toolsInMenu) && <>{attachable && <input ref={fileInputRef} className="sr-only" type="file" multiple tabIndex={-1} disabled={disabled} onChange={(event) => { const replaceKey = reselectUploadKeyRef.current; reselectUploadKeyRef.current = undefined; void ingestFiles(event.target.files, replaceKey); event.target.value = ''; }} />}
             {sessionMentions || toolsInMenu ? <DropdownMenu>
-              <DropdownMenuTrigger aria-label={attachable ? t`添加附件` : t`技能与工具`} disabled={disabled || (uploading && !toolsInMenu)} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
+              <DropdownMenuTrigger aria-label={attachable ? t`添加附件` : t`技能与工具`} disabled={disabled || (uploading && !toolsInMenu)} className={cn('grid h-11 w-10 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start">
                 {attachable && <DropdownMenuItem disabled={uploading} onSelect={() => fileInputRef.current?.click()}><IconPaperclip /><Trans>添加图片或文件</Trans></DropdownMenuItem>}
                 {sessionMentions && (
@@ -1602,10 +1673,24 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 </>}
               </DropdownMenuContent>
             </DropdownMenu> : <Tip label={t`添加图片或文件`}>
-              <button type="button" aria-label={t`添加附件`} disabled={disabled || uploading} onClick={() => fileInputRef.current?.click()} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}>
+              <button type="button" aria-label={t`添加附件`} disabled={disabled || uploading} onClick={() => fileInputRef.current?.click()} className={cn('grid h-11 w-10 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}>
                 <IconPlus className="size-[18px]" />
               </button>
             </Tip>}</>}
+            {touchVoice && !compact && (
+              <button type="button" aria-label={voice ? t`键盘` : t`语音输入`} disabled={disabled} onClick={() => setVoiceMode(!voice)}
+                className={cn('grid h-11 w-10 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50', toggleEntrance)}>
+                {voice ? <IconKeyboard className="size-[18px]" /> : <IconMic className="size-[18px]" />}
+              </button>
+            )}
+            </div>
+            {holdInFooter && holdBar(false, 'flex-1')}
+            {voiceInput && !touchVoice && !compact && <Tip label={t`语音输入`}>
+              <button type="button" aria-label={t`语音输入`} disabled={disabled} onClick={() => void dictation.start()}
+                className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', toggleEntrance)}>
+                <IconMic className="size-[18px]" />
+              </button>
+            </Tip>}
             {props.onSendLater && !compact && <SendLaterMenu disabled={!canSubmit} onPick={(at) => void submit(at)} />}
             <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
               {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
@@ -1630,9 +1715,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 )}
               </div>
               {hasMobileSettings && <>
-                {isMobile && props.usage && !compact && <ContextMeter usage={props.usage} />}
+                {isMobile && props.usage && !compact && !holdInFooter && <ContextMeter usage={props.usage} />}
                 <DialogTrigger asChild>
-                  <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact ? 'hidden' : toggleEntrance)}>
+                  <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact || holdInFooter ? 'hidden' : toggleEntrance)}>
                     {props.mobileSettingsPrefix}
                     <span className="min-w-0 truncate">{settingsSummary}</span>
                     {modelsIssue && <StatusDot tone="warning" />}
@@ -1730,3 +1815,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     </div>
   );
 });
+
+/** Voice mode is this browser's: a phone that switched to it stays there, the desktop is never asked. */
+const VOICE_MODE_KEY = 'riffet.composer.voice-mode';
+function readVoiceMode(): boolean {
+  try { return window.localStorage.getItem(VOICE_MODE_KEY) === '1'; } catch { return false; }
+}
+function writeVoiceMode(on: boolean) {
+  try { if (on) window.localStorage.setItem(VOICE_MODE_KEY, '1'); else window.localStorage.removeItem(VOICE_MODE_KEY); } catch { /* Storage may be unavailable. */ }
+}

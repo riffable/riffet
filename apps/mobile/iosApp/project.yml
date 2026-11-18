@@ -55,6 +55,7 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSCameraUsageDescription: 扫描 Mac 上的配对二维码以连接 Riffet。
         NSLocalNetworkUsageDescription: 发现并连接同一网络中的 Riffet 服务。
+        NSMicrophoneUsageDescription: 把语音转成文字输入到消息里。
         NSBonjourServices: [_riffet._tcp]
         NSFaceIDUsageDescription: 在你选择启用时，验证本人后提交操作确认。
         NSSupportsLiveActivities: YES

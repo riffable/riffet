@@ -41,7 +41,7 @@ private fun lucide(name: String, pathData: String, strokeWidth: Float = 1.25f, f
         )
         .build()
 
-/** Created on first use: a screen touches a handful of these, not all 80. */
+/** Created on first use: a screen touches a handful of these, not all 82. */
 internal object LucideIcons {
     /** lucide `archive`. */
     val Archive: ImageVector by lazy {
@@ -355,6 +355,14 @@ internal object LucideIcons {
         )
     }
 
+    /** lucide `keyboard`. */
+    val Keyboard: ImageVector by lazy {
+        lucide(
+            "Keyboard",
+            "M10 8h.01M12 12h.01M14 8h.01M16 12h.01M18 8h.01M6 8h.01M7 16h10M8 12h.01M4 4H20A2 2 0 0 1 22 6V18A2 2 0 0 1 20 20H4A2 2 0 0 1 2 18V6A2 2 0 0 1 4 4Z",
+        )
+    }
+
     /** lucide `layers`. */
     val Layers: ImageVector by lazy {
         lucide(
@@ -409,6 +417,14 @@ internal object LucideIcons {
             "MessageSquarePlusFilled",
             "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v6M9 10h6",
             strokeWidth = 1.75f,
+        )
+    }
+
+    /** lucide `mic`. */
+    val Mic: ImageVector by lazy {
+        lucide(
+            "Mic",
+            "M12 19v3M19 10v2a7 7 0 0 1-14 0v-2M12 2H12A3 3 0 0 1 15 5V12A3 3 0 0 1 12 15H12A3 3 0 0 1 9 12V5A3 3 0 0 1 12 2Z",
         )
     }
 

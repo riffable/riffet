@@ -29,7 +29,7 @@ export function gatewayModelId(backendId: NativeBackendId, value: string): strin
 }
 
 /** `/v1/<path>` under a base URL configured with or without its version segment. */
-function endpoint(baseUrl: string, path: string): URL {
+export function endpoint(baseUrl: string, path: string): URL {
   const url = new URL(baseUrl);
   const base = url.pathname.replace(/\/+$/, '');
   url.pathname = /\/v\d+$/.test(base) ? `${base}/${path}` : `${base}/v1/${path}`;
@@ -37,7 +37,7 @@ function endpoint(baseUrl: string, path: string): URL {
 }
 
 /** Custom provider credentials and conversation bodies must stay on the configured origin. */
-async function modelRequest(url: URL, init: RequestInit, fetchImpl: typeof fetch = fetch): Promise<Response> {
+export async function modelRequest(url: URL, init: RequestInit, fetchImpl: typeof fetch = fetch): Promise<Response> {
   let target = url;
   for (let redirects = 0; ; redirects++) {
     const response = await fetchImpl(target, { ...init, redirect: 'manual' });

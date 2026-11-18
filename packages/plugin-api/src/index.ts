@@ -122,6 +122,38 @@ export interface Contributions {
   channels?: Record<string, PluginChannelHandler>;
   /** The plugin's own page in its details, declared by the manifest's `contributes.page`. */
   page?: PluginPageProvider;
+  /** Transcribes dictation (docs/VOICE.md §3), declared by the manifest's `contributes.speechRecognizer`. In-process packages only. */
+  speechRecognizer?: SpeechRecognizer;
+}
+
+// ── Speech recognition (docs/VOICE.md §3) ─────────────────────────────────────
+
+/** Whether dictation can start now; `reason` is shown to the user as is, in their language when the plugin can tell. */
+export type SpeechRecognizerStatus = { ready: true; streaming: boolean } | { ready: false; reason: string };
+
+/** One sentence. A `final` segment no longer changes; the last one may still. */
+export interface SpeechSegment { text: string; final: boolean }
+
+export interface SpeechSessionOptions {
+  /** A BCP-47 hint such as `zh`; absent lets the recognizer detect it. */
+  readonly language?: string;
+  /** Aborts when the dictation is cancelled, its connection drops or the plugin is turned off; release the session then. */
+  readonly signal: AbortSignal;
+  /** Every segment so far, each call replacing the last. Only a streaming recognizer calls it. */
+  onPartial(segments: SpeechSegment[]): void;
+}
+
+/** One dictation. Audio arrives as 16 kHz mono PCM16, in order, in frames of up to 100 ms. */
+export interface SpeechSession {
+  append(pcm: Int16Array): void;
+  /** No more audio: resolves with the whole text. An empty string means nothing was said. */
+  finish(): Promise<string>;
+}
+
+export interface SpeechRecognizer {
+  status(): SpeechRecognizerStatus | Promise<SpeechRecognizerStatus>;
+  /** Throw `host.error(...)` when it cannot open; its message reaches the user. */
+  open(options: SpeechSessionOptions): SpeechSession | Promise<SpeechSession>;
 }
 
 // ── The plugin's page (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────────────────

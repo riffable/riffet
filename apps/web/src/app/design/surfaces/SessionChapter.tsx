@@ -16,6 +16,9 @@ import { TurnProcess } from '@/app/session/TurnProcess';
 import { cn } from '@/lib/utils';
 import { Chapter, Frame, Matrix, PaintRevision, Plate, Specimen, useRootValue, Value } from '../specimen';
 import { AttachmentChip, ComposerCard, TriggerMenu } from './ComposerFigure';
+import { DictationBar } from '@/app/session/DictationBar';
+import { HoldBubble, HoldToTalkBar } from '@/app/session/HoldToTalk';
+import type { DictationView } from '@/app/session/useDictation';
 import { Dim, Legend, Line, Mark } from './wire';
 
 /** The reading column's text measure: the cap less the padding at 768 and up (`md:px-12` on both sides). */
@@ -376,6 +379,14 @@ function States() {
   );
 }
 
+const DICTATION_LEVELS_SAMPLE = [0.02, 0.05, 0.12, 0.2, 0.08, 0.15, 0.22, 0.1, 0.04, 0.18, 0.12, 0.06, 0.2, 0.14, 0.09, 0.03];
+/** The recording bar's states, drawn by the real component. */
+const DICTATION_STATES: Array<{ prop: string; view: (text: { live: string }) => DictationView }> = [
+  { prop: 'recording', view: ({ live }) => ({ phase: 'recording', elapsedMs: 7_000, levels: DICTATION_LEVELS_SAMPLE, live, written: '' }) },
+  { prop: 'finishing', view: () => ({ phase: 'finishing', elapsedMs: 12_000, levels: DICTATION_LEVELS_SAMPLE, live: '', written: '' }) },
+  { prop: 'failed', view: () => ({ phase: 'failed', elapsedMs: 0, levels: [], live: '', written: '', failure: { kind: 'server', problem: { code: 'DICTATION_DISCONNECTED', message: '', retryable: true } } }) },
+];
+
 function Composer() {
   const { t } = useLingui();
   return (
@@ -404,6 +415,29 @@ function Composer() {
         <Specimen name="embedded" prop="rounded-xl"><div className="w-full"><ComposerCard shape="embedded" placeholder={t`输入消息…`} /></div></Specimen>
         <Specimen name="compact" prop="running"><div className="w-full"><ComposerCard shape="compact" placeholder={t`输入消息…`} running /></div></Specimen>
       </div>
+      <div className="flex flex-col gap-6">
+        {DICTATION_STATES.map(({ prop, view }) => (
+          <Specimen key={prop} name={t`语音输入`} prop={prop}>
+            <div className="w-full rounded-2xl bg-elevated shadow-composer">
+              <div className="min-h-[52px] px-4 pb-1 pt-3.5 text-base leading-6 text-fg">{t`把设置页的焦点顺序`}</div>
+              <DictationBar view={view({ live: t`再核对一遍` })} onFinish={() => undefined} onCancel={() => undefined} onRetry={() => undefined} />
+            </div>
+          </Specimen>
+        ))}
+        {/* Touch: the hold bar, and the bubble the overlay shows over the dimmed page (normal and in the cancel zone). */}
+        <Specimen name={t`按住 说话`} prop="HoldToTalkBar · HoldBubble">
+          <div className="flex w-full flex-col gap-3">
+            {[false, true].map((cancelling) => (
+              <HoldBubble key={String(cancelling)} cancelling={cancelling}
+                view={{ phase: 'recording', elapsedMs: 7_000, levels: DICTATION_LEVELS_SAMPLE, written: t`把设置页的焦点顺序`, live: t`再核对一遍` }} />
+            ))}
+            <div className="flex gap-3">
+              <HoldToTalkBar pressed={false} onPress={() => undefined} onZone={() => undefined} onEnd={() => undefined} />
+              <HoldToTalkBar pressed onPress={() => undefined} onZone={() => undefined} onEnd={() => undefined} />
+            </div>
+          </div>
+        </Specimen>
+      </div>
       <Matrix rows={[
         { label: t`卡片`, cells: [<Value key="a">bg-elevated · {t`圆角`} 16 · shadow-composer / -focus</Value>] },
         { label: t`文本区`, cells: [<Value key="a">px 16 · text-base / leading-6</Value>] },
@@ -411,6 +445,7 @@ function Composer() {
         { label: t`左侧按钮`, cells: [<Value key="a">28 · {t`图标`} 18</Value>] },
         { label: t`模型`, cells: [<Value key="a">h 28 · rounded-full · text-sm · fg-3</Value>] },
         { label: t`发送`, cells: [<Value key="a">32 · rounded-full · primary</Value>, <Value key="b">{t`禁用 8% 墨色`}</Value>] },
+        { label: t`录音栏`, cells: [<Value key="a">{t`取代工具行`} · gap 8</Value>, <Value key="b">{t`完成`} 32 · primary</Value>] },
       ]} />
     </div>
   );

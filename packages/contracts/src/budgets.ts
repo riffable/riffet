@@ -202,6 +202,24 @@ export const PLUGIN_MARKET_BUDGET = {
   listMs: 15_000,
 } as const;
 
+/** Dictation (docs/VOICE.md §8): one recording, the server's hold on it, and the local recognizer's worker. */
+export const DICTATION_BUDGET = {
+  /** Longest recording; at it the server finishes as if asked. Also what a client keeps of a recording for a retry. */
+  maxDurationMs: 5 * 60_000,
+  /** Largest audio frame, 100 ms of 16 kHz PCM16; a larger one closes the connection. */
+  frameBytes: 3_200,
+  /** Dictation connections one user holds at once. */
+  maxConnectionsPerUser: 2,
+  /** A dictation with no audio for this long is finished. */
+  idleTimeoutMs: 30_000,
+  /** A local recognizer's worker process exits after this long without a dictation. */
+  workerIdleMs: 10 * 60_000,
+  /** One request to a remote transcription service. */
+  remoteTimeoutMs: 60_000,
+  /** From the end of a recording to its text; past it the dictation fails and can be retried. */
+  finishTimeoutMs: 2 * 60_000,
+} as const;
+
 /** The model picker's memory: the provider→model record in settings and what a client keeps to paint at once. */
 export const MODEL_PICKER_BUDGET = {
   /** Providers per agent whose last model the server remembers (`NativeBackendDefaults.profileModels`); the oldest goes first. */

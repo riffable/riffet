@@ -221,6 +221,8 @@ data class AppSettings(
     val workItems: WorkItemSettings? = null,
     /** The model for each plugin-declared use, keyed by use id (`<pluginId>/<name>`). */
     val pluginModels: Map<String, AuxiliaryModelRef>? = null,
+    /** 语音输入; voice input is on when it names a recognizer. */
+    val voiceInput: VoiceInputSettings? = null,
 ) {
     /** The Agent new sessions start on, built-in or a plugin's; null when none was chosen. */
     val defaultAgent: String? get() = defaultAgentId ?: defaultBackendId?.let(AgentIds::wire)

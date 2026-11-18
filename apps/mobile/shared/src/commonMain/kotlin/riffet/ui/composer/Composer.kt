@@ -61,6 +61,16 @@ import androidx.compose.material3.Text
 import riffet.ui.design.RiffetTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import riffet.shared.createAppPreferences
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -318,6 +328,10 @@ fun Composer(
 
     val awaitingSubmission = uncertain.any { it.native?.stage == "http_unknown" }
 
+    val dictation = rememberComposerDictation(store)
+    val noDictation = remember { MutableStateFlow(DictationState()) }
+    val dictationState by (dictation?.state ?: noDictation).collectAsState()
+
     fun submit(enqueue: Boolean = false) {
         val prompt = text.trim()
         if (prompt.isEmpty() || uploading || !connected || awaitingSubmission) return
@@ -343,7 +357,7 @@ fun Composer(
             // The docks above the card too: expanding the todo list or editing a queued message
             // mid-sentence must not close the keyboard.
             .keepsFocusOnTap()
-            .padding(start = maxOf(24.dp, metrics.pageInset), end = maxOf(24.dp, metrics.pageInset),
+            .padding(start = metrics.pageInset, end = metrics.pageInset,
                 top = metrics.controlInset / 2, bottom = maxOf(12.dp, metrics.tabBarBottomInset)),
         verticalArrangement = Arrangement.spacedBy(metrics.controlInset / 3),
     ) {
@@ -405,7 +419,7 @@ fun Composer(
             onStop = if (supportsTargetedStop) ({ scope.launch { store.interrupt() }; Unit }) else null,
             stopping = sendState.interrupting,
             stopEnabled = (working || background > 0) && connected && !busy,
-            sendEnabled = connected && text.isNotBlank() && !uploading && !busy && !awaitingSubmission,
+            sendEnabled = connected && text.isNotBlank() && !uploading && !busy && !awaitingSubmission && !dictationState.active,
             sendBusy = sendState.sending,
             onSend = { submit() },
             onQueue = if (store.prefersSteerWhileRunning()) ({ submit(enqueue = true) }) else null,
@@ -427,6 +441,7 @@ fun Composer(
                 reference.sessionId?.let(open)
             } },
             onRemoveSessionReference = { reference -> references = references - reference },
+            dictation = dictation,
         )
 
         // One block, so the column's gap below the card is paid once, and only while it is open.
@@ -453,6 +468,29 @@ fun Composer(
 /** What sits under the input card: quoted references and the two error lines; [any] is whether there is something to show. */
 private data class ComposerNotices(val references: List<PromptContextReference>, val local: String?, val send: String?) {
     val any: Boolean get() = references.isNotEmpty() || local != null || send != null
+}
+
+/**
+ * A composer's voice input: one controller per composer, offered once voice input is on in settings (docs/VOICE.md §6), and
+ * kept while a dictation is under way even if voice input is turned off meanwhile. Null where this host cannot record.
+ */
+@Composable
+internal fun rememberComposerDictation(store: SessionStore): DictationController? {
+    val scope = rememberCoroutineScope()
+    val microphone = rememberDictationMicrophone()
+    val dictation = remember(store, microphone) { microphone?.let { store.dictation(scope, it) } }
+    DisposableEffect(dictation) { onDispose { dictation?.close() } }
+    val idle = remember { MutableStateFlow(DictationState()) }
+    val state by (dictation?.state ?: idle).collectAsState()
+    val list by store.list.collectAsState()
+    return dictation?.takeIf { list.settings?.voiceInput?.recognizer != null || state.active }
+}
+
+/** Where the composer card sits in its window, written as it is placed and read when a hold begins; not state. */
+private class CardBounds {
+    var coordinates: LayoutCoordinates? = null
+    /** Read once, when a hold begins; layout only keeps the handle. */
+    val rect: Rect get() = coordinates?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero
 }
 
 /**
@@ -506,6 +544,8 @@ internal fun ComposerCard(
     onReferenceSession: ((Session) -> Unit)? = null,
     onOpenSessionReference: ((PromptContextReference) -> Unit)? = null,
     onRemoveSessionReference: ((PromptContextReference) -> Unit)? = null,
+    /** Voice input; null leaves the mic out (voice input is off, or this host cannot record). */
+    dictation: DictationController? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -518,7 +558,21 @@ internal fun ComposerCard(
     val interactionSource = remember { MutableInteractionSource() }
     val scrollState = rememberScrollState()
     var focused by remember { mutableStateOf(false) }
-    val compact = allowCompact && !focused && text.isEmpty() && attachments.isEmpty() && sessionReferences.isEmpty() && !uploading
+    val noDictation = remember { MutableStateFlow(DictationState()) }
+    val dictationState by (dictation?.state ?: noDictation).collectAsState()
+    val dictating = dictationState.active
+    // Voice mode (docs/design/system/surfaces.md「语音输入（触屏）」): hold to talk in place of the keyboard, kept on this device.
+    val preferences = remember { createAppPreferences() }
+    var voiceMode by remember { mutableStateOf(ComposerVoiceMode.isOn(preferences)) }
+    val voice = dictation != null && voiceMode
+    var hold by remember { mutableStateOf<HoldSession?>(null) }
+    val cardBounds = remember { CardBounds() }
+    val haptics = rememberAppHaptics()
+    // The draft as the press found it: sentences landing mid-hold must not move the bar from under the finger.
+    val draftEmpty = hold?.emptyDraft ?: text.isEmpty()
+    val windowHeight = LocalWindowInfo.current.containerSize.height.toFloat()
+    val holdPresence = remember { MutableTransitionState(false) }
+    val compact = allowCompact && !focused && text.isEmpty() && attachments.isEmpty() && sessionReferences.isEmpty() && !uploading && !dictating && !voice
     // The tonal composer's size describes the whole capsule, including its action row.
     // Applying composerMinHeight to the text field alone made an empty hero unnecessarily tall.
     val tonalHero = hero && LocalInterfaceStyle.current.components.composer.tonal
@@ -527,10 +581,60 @@ internal fun ComposerCard(
         .coerceAtLeast(metrics.inputMinHeight)
     val inputMaxHeight = (metrics.composerMaxHeight - footerHeight)
         .coerceAtLeast(inputMinHeight)
+    // The tools are one tight group; the send button's visible disc sits inside its touch target by `sendRing`.
+    val toolWidth = metrics.buttonHeight
+    val sendRing = (metrics.controlHeight - metrics.sendButtonSize) / 2
+    val footerTop = metrics.controlInset / 6
+    val holdBarGap = metrics.controlInset * 2 / 3
     // The caller owns the text; the selection lives here, because the `/` menu reads the caret.
     // A text set from outside (a quote, a cleared draft) puts the caret at its end.
     var field by remember { mutableStateOf(TextFieldValue(text, TextRange(text.length))) }
     val value = if (field.text == text) field else TextFieldValue(text, TextRange(text.length))
+    val changeText by rememberUpdatedState(onTextChange)
+    // What is said goes where the caret was; the caret follows it.
+    val dictationTarget = remember {
+        object : DictationTarget {
+            override fun replaceDraft(text: String, caret: Int) {
+                field = TextFieldValue(text, TextRange(caret.coerceIn(0, text.length)))
+                changeText(text)
+            }
+        }
+    }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    fun setVoice(on: Boolean) {
+        voiceMode = on
+        ComposerVoiceMode.set(preferences, on)
+        if (on) { keyboard?.hide(); focusManager.clearFocus() } else { focusRequester.requestFocus(); keyboard?.show() }
+    }
+    // After a release the overlay is gone and the bar waits for the last sentence; it takes no new hold until the text lands.
+    val holdFinishing = hold?.released == true && dictationState.phase == DictationPhase.Finishing
+    val holdEnabled = !dictating || hold?.released == false
+    val holdPress: () -> Unit = {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        hold = cardBounds.rect.let { HoldSession(it, emptyDraft = text.isEmpty(), docked = holdDocked(it, windowHeight)) }
+        dictation?.start(value.text, value.selection.min, value.selection.max, dictationTarget)
+    }
+    val holdZone: (Boolean) -> Unit = { cancelling ->
+        haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+        hold = hold?.copy(cancelling = cancelling)
+    }
+    val holdEnd: (HoldEnd) -> Unit = { end ->
+        when (end) {
+            // A tap records hands-free: the recording bar takes over the footer.
+            HoldEnd.Tap -> hold = null
+            HoldEnd.Cancel -> { dictation?.cancel(); hold = null }
+            HoldEnd.Finish -> { hold = hold?.copy(cancelling = false, released = true); dictation?.finish() }
+        }
+    }
+    // The hold is over once the text has landed; a failure keeps it until retry or discard.
+    LaunchedEffect(dictationState.phase) {
+        when (dictationState.phase) {
+            DictationPhase.Idle -> hold = null
+            DictationPhase.Failed -> hold = hold?.copy(cancelling = false, released = true)
+            else -> {}
+        }
+    }
     val trigger = if (slash != null && focused && value.selection.collapsed) detectSlashTrigger(value.text, value.selection.start) else null
     val slashGroups = if (slash != null && trigger != null) slash.groupsFor(trigger) else emptyList()
     var referenceHighlight by remember { mutableStateOf(0) }
@@ -579,11 +683,21 @@ internal fun ComposerCard(
             // to blur, so it is the page's solid card (the settings cards' fill), the strongest
             // surface on the page, and the tools under it stay quieter. In a session it floats over
             // the transcript as glass.
+            .onGloballyPositioned { cardBounds.coordinates = it }
             .then(if (hero) Modifier else Modifier.floatingShadow(shape, lifted = focused))
             .clip(shape)
             .then(if (hero) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card), shape)
-                else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating)),
+                else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating))
+            // A draft growing or shrinking by a line (dictated text landing, a sent message clearing it) eases the card's
+            // edge rather than jumping it; the surface and its shadow follow.
+            .animateContentSize(motion.spatial()),
     ) {
+        // The overlay leaves as the finger lifts, in one motion, while the last sentence finishes in the bar; a failure brings it
+        // back. Its popup leaves a zero-size node where it is called: here, inside the card, where nothing spaces it. Called next
+        // to the card, the caller's spaced column gave it a gap, and the page above moved by that gap as the overlay came and went.
+        HoldToTalkOverlay(hold?.takeIf { !it.released || dictationState.phase == DictationPhase.Failed }, dictationState, holdPresence,
+            onRetry = { dictation?.retry() },
+            onDiscard = { dictation?.cancel(); hold = null })
         RiffetMaterialContent {
         Column(if (hero) Modifier else Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
         if (sessionReferences.isNotEmpty()) {
@@ -663,8 +777,11 @@ internal fun ComposerCard(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
             BasicTextField(
                 value = value,
+                // In voice mode the text is read; touching it goes back to the keyboard.
+                readOnly = dictating || voice,
                 minLines = if (hero) heroMinLines else 1,
                 onValueChange = { next ->
                     field = next
@@ -674,19 +791,26 @@ internal fun ComposerCard(
                 cursorBrush = SolidColor(LocalRiffetSurfaces.current.focus),
                 interactionSource = interactionSource,
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .heightIn(min = inputMinHeight, max = inputMaxHeight)
                     .focusRequester(focusRequester)
                     // `hasFocus`: the scroll container below is its own focus group, so the text field
                     // inside it is never the node this observer reports as `isFocused`.
-                    .onFocusChanged { focused = it.hasFocus }
+                    .onFocusChanged {
+                        focused = it.hasFocus
+                        if (it.hasFocus && voice && !dictating) setVoice(false)
+                    }
                     .verticalScroll(scrollState)
                     .onPreviewKeyEvent { event ->
                         // Hardware Enter sends; the soft keyboard's return key is not a key event and
                         // keeps inserting a newline.
                         val plainEnter = event.type == KeyEventType.KeyDown && event.key == Key.Enter &&
                             !event.isShiftPressed && !event.isCtrlPressed && !event.isMetaPressed && !event.isAltPressed
-                        if (event.type == KeyEventType.KeyDown && mention != null && referenceItems.isNotEmpty() && event.key in listOf(Key.DirectionDown, Key.DirectionUp)) {
+                        if (dictating && event.type == KeyEventType.KeyDown && (event.key == Key.Escape || plainEnter)) {
+                            // While dictating, Enter is done and Esc puts the draft back, as on the web.
+                            if (event.key == Key.Escape) dictation?.cancel() else if (dictationState.phase == DictationPhase.Failed) dictation?.retry() else dictation?.finish()
+                            true
+                        } else if (event.type == KeyEventType.KeyDown && mention != null && referenceItems.isNotEmpty() && event.key in listOf(Key.DirectionDown, Key.DirectionUp)) {
                             referenceHighlight = (referenceHighlight + (if (event.key == Key.DirectionDown) 1 else -1) + referenceItems.size) % referenceItems.size
                             true
                         } else if (event.type == KeyEventType.KeyDown && event.key == Key.Escape && mention != null) {
@@ -698,7 +822,7 @@ internal fun ComposerCard(
                             val next = value.text.removeRange(start, value.selection.start)
                             field = TextFieldValue(next, TextRange(start)); onTextChange(next)
                             true
-                        } else if (plainEnter && sendEnabled) {
+                        } else if (plainEnter && sendEnabled && !dictating) {
                             onSend()
                             true
                         } else {
@@ -713,7 +837,7 @@ internal fun ComposerCard(
                     Box(Modifier.heightIn(min = if (hero) 0.dp else inputMinHeight)
                         .padding(horizontal = metrics.inputInset, vertical = metrics.controlInset * 2 / 3),
                         contentAlignment = if (hero) Alignment.TopStart else Alignment.CenterStart) {
-                        if (value.text.isEmpty()) {
+                        if (value.text.isEmpty() && !voice) {
                             Text(text = placeholder, style = typography.input, color = colors.fg3,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -721,6 +845,16 @@ internal fun ComposerCard(
                     }
                 },
             )
+            // An empty draft in voice mode: the bar covers the field, which stays so focus requests still find it. Its edges
+            // are the text's on the left and the send button's on the right, and it sits as far below the card's top as above
+            // the send button, so the card keeps its keyboard-mode height.
+            if (voice && draftEmpty) HoldToTalkBar(
+                pressed = hold?.released == false, finishing = holdFinishing, enabled = holdEnabled, tall = true,
+                onPress = holdPress, onZone = holdZone, onEnd = holdEnd,
+                modifier = Modifier.matchParentSize().padding(start = metrics.inputInset, end = metrics.inputInset,
+                    top = holdBarGap, bottom = (holdBarGap - footerTop - sendRing).coerceAtLeast(0.dp)),
+            )
+            }
             AnimatedVisibility(visible = compact && stoppable && onStop != null, enter = motion.popIn(), exit = motion.popOut()) {
                 Box(Modifier.padding(end = 4.dp)) {
                     RoundAction(
@@ -739,12 +873,22 @@ internal fun ComposerCard(
 
         // The footer opens with the keyboard's own motion instead of appearing in the middle of it.
         AnimatedVisibility(visible = !compact, enter = motion.expandIn(), exit = motion.collapseOut()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = metrics.controlInset * 2 / 3, end = metrics.controlInset * 2 / 3, bottom = metrics.controlInset * 2 / 3, top = metrics.controlInset / 6),
+            // The first tool's glyph starts where the text does, and the send button ends as far from the edge.
+            val footer = Modifier.fillMaxWidth().padding(start = (metrics.inputInset - (toolWidth - metrics.iconSize) / 2).coerceAtLeast(0.dp),
+                end = (metrics.inputInset - sendRing).coerceAtLeast(0.dp), bottom = (metrics.inputInset - sendRing).coerceAtLeast(0.dp), top = footerTop)
+            // Dictating, the bar takes the tools' place (docs/VOICE.md §7).
+            if (dictating && dictation != null && hold == null) DictationBar(
+                state = dictationState,
+                onFinish = dictation::finish,
+                onCancel = dictation::cancel,
+                onRetry = dictation::retry,
+                modifier = footer,
+            ) else Row(
+                modifier = footer,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (onAttach != null) {
-                    IconButton(onClick = onAttach, enabled = !uploading) {
+                    IconButton(onClick = onAttach, enabled = !uploading, modifier = Modifier.width(toolWidth)) {
                         if (uploading) {
                             val uploadingLabel = stringResource(Res.string.composer_uploading)
                             CircularProgressIndicator(Modifier.size(metrics.buttonIconSize).semantics { stateDescription = uploadingLabel },
@@ -752,11 +896,24 @@ internal fun ComposerCard(
                         } else Icon(RiffetIcons.Plus, stringResource(Res.string.composer_add_attachment),
                             tint = colors.fg, modifier = Modifier.size(metrics.iconSize))
                     }
+                    // The voice toggle sits right against the plus: one group of tools.
+                    if (dictation == null) Spacer(Modifier.width(metrics.controlInset * 2 / 3))
+                }
+                if (dictation != null) {
+                    IconButton(onClick = { setVoice(!voice) }, modifier = Modifier.width(toolWidth)) {
+                        Icon(if (voice) RiffetIcons.Keyboard else RiffetIcons.Mic,
+                            stringResource(if (voice) Res.string.composer_keyboard else Res.string.composer_dictation),
+                            tint = colors.fg, modifier = Modifier.size(metrics.iconSize))
+                    }
                     Spacer(Modifier.width(metrics.controlInset * 2 / 3))
                 }
-                // The settings chip takes whatever the send button leaves and truncates only then.
+                // The settings chip takes whatever the send button leaves and truncates only then; with a draft in voice
+                // mode, the hold bar takes its place.
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (settings != null) SettingsChip(settings)
+                    if (voice && !draftEmpty) HoldToTalkBar(
+                        pressed = hold?.released == false, finishing = holdFinishing, enabled = holdEnabled, tall = false,
+                        onPress = holdPress, onZone = holdZone, onEnd = holdEnd,
+                    ) else if (settings != null) SettingsChip(settings)
                 }
                 Spacer(Modifier.width(metrics.controlInset * 2 / 3))
                 // Send and stop trade places with a quick scale and fade, not a cut.
@@ -781,7 +938,7 @@ internal fun ComposerCard(
                             RoundAction(
                                 icon = RiffetIcons.Send,
                                 description = sendDescription ?: if (running) stringResource(Res.string.composer_send_queued) else stringResource(Res.string.composer_send),
-                                enabled = sendEnabled,
+                                enabled = sendEnabled && !dictating,
                                 busy = sendBusy,
                                 background = LocalRiffetSurfaces.current.primaryAction,
                                 tint = LocalRiffetSurfaces.current.primaryActionContent,
@@ -864,7 +1021,7 @@ private fun SettingsChip(settings: ComposerSettings, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun RoundAction(
+internal fun RoundAction(
     icon: ImageVector,
     description: String,
     enabled: Boolean,

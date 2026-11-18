@@ -164,6 +164,12 @@ object RiffetIcons {
     /** A completed step. */
     val Check: ImageVector get() = LucideIcons.Check
 
+    /** Voice input in the composer. */
+    val Mic: ImageVector get() = LucideIcons.Mic
+
+    /** Back to typing from the composer's voice mode. */
+    val Keyboard: ImageVector get() = LucideIcons.Keyboard
+
     val Clock: ImageVector get() = LucideIcons.Clock
 
     /** A project header. */

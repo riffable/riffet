@@ -4,7 +4,7 @@ import {
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
-  KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
+  Keyboard, KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, Mic, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareQuote, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
@@ -61,6 +61,9 @@ export const IconFileCog = icon(FileCog);
 export const IconFilePenLine = icon(FilePenLine);
 export const IconFileText = icon(FileText);
 export const IconLanguages = icon(Languages);
+/** 语音输入 in the composer (docs/VOICE.md §7). */
+export const IconMic = icon(Mic);
+export const IconKeyboard = icon(Keyboard);
 export const IconBookOpen = icon(BookOpen);
 export const IconMessageSquareQuote = icon(MessageSquareQuote);
 export const IconVolume2 = icon(Volume2);

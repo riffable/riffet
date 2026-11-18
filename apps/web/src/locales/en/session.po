@@ -269,6 +269,10 @@ msgstr "Download file"
 msgid "不选择项目"
 msgstr "No project"
 
+#: src/app/session/DictationBar.tsx
+msgid "与服务器的连接中断"
+msgstr "Lost the connection to the server"
+
 #: src/app/session/Attempts.tsx
 msgid "丢弃"
 msgstr "Discard"
@@ -618,6 +622,7 @@ msgstr "The send record is missing, so it can't be retried."
 msgid "发送设置"
 msgstr "Send settings"
 
+#: src/app/session/DictationBar.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/Timeline.tsx
 msgid "取消"
@@ -668,6 +673,10 @@ msgstr "Each attempt gets its own worktree, cut from the directory as it is now.
 #: src/app/session/Attempts.tsx
 msgid "同 Agent 比模型"
 msgstr "Same agent, compare models"
+
+#: src/app/session/DictationBar.tsx
+msgid "同时进行的语音输入过多"
+msgstr "Too many dictations at once"
 
 #: src/app/session/SubagentSession.tsx
 msgid "同步中"
@@ -865,6 +874,10 @@ msgstr "Subagent definitions"
 #: src/app/session/SubagentSession.tsx
 msgid "子 Agent 正在启动…"
 msgstr "Subagent is starting…"
+
+#: src/app/session/DictationBar.tsx
+msgid "完成"
+msgstr "Done"
 
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
@@ -1177,6 +1190,10 @@ msgstr "Merge <0>{0}</0> into the original project."
 msgid "指令"
 msgstr "Instructions"
 
+#: src/app/session/HoldToTalk.tsx
+msgid "按住 说话"
+msgstr "Hold to talk"
+
 #: src/app/session/Timeline.tsx
 msgid "排队中"
 msgstr "Queued"
@@ -1265,6 +1282,11 @@ msgstr "Zoom in · {0}scroll"
 #: src/app/session/SideDiscussion.tsx
 msgid "放大聊天"
 msgstr "Expand chat"
+
+#: src/app/session/DictationBar.tsx
+#: src/app/session/HoldToTalk.tsx
+msgid "放弃"
+msgstr "Discard"
 
 #: src/app/session/Composer.tsx
 msgid "文件"
@@ -1382,6 +1404,10 @@ msgstr "Couldn't start parallel attempts"
 #: src/app/session/nativeRunCommands.ts
 msgid "无法恢复内容，消息已保留"
 msgstr "Couldn't restore the content. The message was kept."
+
+#: src/app/session/DictationBar.tsx
+msgid "无法打开麦克风"
+msgstr "Couldn't open the microphone"
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "无法提交交互"
@@ -1544,6 +1570,14 @@ msgstr "Permission mode"
 msgid "权限模式：{0}"
 msgstr "Permission mode: {0}"
 
+#: src/app/session/HoldToTalk.tsx
+msgid "松开取消"
+msgstr "Release to cancel"
+
+#: src/app/session/HoldToTalk.tsx
+msgid "松开转文字，上滑取消"
+msgstr "Release to insert, slide up to cancel"
+
 #: src/app/session/TranscriptView.tsx
 msgid "查看"
 msgstr "View"
@@ -1666,6 +1700,10 @@ msgstr "No models available"
 #: src/app/session/TranscriptView.tsx
 msgid "没有在会话中找到这条消息，它可能已被删除或改写"
 msgstr "This message wasn't found in the session; it may have been deleted or rewritten"
+
+#: src/app/session/DictationBar.tsx
+msgid "没有找到麦克风"
+msgstr "No microphone found"
 
 #: src/app/session/SubagentSession.tsx
 msgid "没有读到这个子 Agent 的执行记录。"
@@ -1938,6 +1976,10 @@ msgstr "Plan"
 msgid "访问网页"
 msgstr "Browse the web"
 
+#: src/app/session/DictationBar.tsx
+msgid "识别失败：{message}"
+msgstr "Couldn't transcribe: {message}"
+
 #: src/app/session/Timeline.tsx
 msgid "诊断信息"
 msgstr "Diagnostics"
@@ -1949,6 +1991,19 @@ msgstr "Ask the user"
 #: src/app/session/FailureDetails.tsx
 msgid "详情"
 msgstr "Details"
+
+#: src/app/session/DictationBar.tsx
+msgid "语音识别插件未开启"
+msgstr "The speech recognition plugin is off"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/DictationBar.tsx
+msgid "语音输入"
+msgstr "Voice input"
+
+#: src/app/session/DictationBar.tsx
+msgid "语音输入已关闭"
+msgstr "Voice input is off"
 
 #: src/app/session/Activities.tsx
 msgid "请求未完成"
@@ -2085,6 +2140,10 @@ msgstr "No output yet…"
 msgid "这个子 Agent 没有记录。"
 msgstr "No transcript for this subagent."
 
+#: src/app/session/DictationBar.tsx
+msgid "这个浏览器无法录音"
+msgstr "This browser can't record audio"
+
 #: src/app/session/Attempts.tsx
 msgid "这个项目还没有提交，无法从同一起点切出 Worktree"
 msgstr "This project has no commits, so Worktrees can't be cut from the same base"
@@ -2201,6 +2260,8 @@ msgstr "Reload attachment"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
+#: src/app/session/DictationBar.tsx
+#: src/app/session/HoldToTalk.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
 #: src/app/session/ToolsPicker.tsx
@@ -2225,6 +2286,10 @@ msgstr "Retry sync"
 #: src/app/session/NativeInteractionCard.tsx
 msgid "重连后提交"
 msgstr "Submit after reconnecting"
+
+#: src/app/session/Composer.tsx
+msgid "键盘"
+msgstr "Keyboard"
 
 #: src/app/session/MessageAttachments.tsx
 #: src/app/session/TranscriptView.tsx
@@ -2299,6 +2364,14 @@ msgstr "The question was updated. Check the status."
 msgctxt "session-highlight-action"
 msgid "高亮"
 msgstr "Highlight"
+
+#: src/app/session/DictationBar.tsx
+msgid "麦克风只能在 HTTPS 地址下使用"
+msgstr "The microphone only works over HTTPS"
+
+#: src/app/session/DictationBar.tsx
+msgid "麦克风权限被拒绝，需要在浏览器设置里允许"
+msgstr "Microphone access was denied; allow it in the browser's settings"
 
 #: src/app/session/marks.tsx
 msgid "黄色"

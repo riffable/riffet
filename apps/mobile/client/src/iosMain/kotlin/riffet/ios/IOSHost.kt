@@ -36,6 +36,8 @@ import riffet.shared.createDeviceTokenStore
 import riffet.shared.PairingPayload
 import riffet.shared.PairedServer
 import kotlinx.coroutines.runBlocking
+import riffet.ui.composer.DictationController
+import riffet.ui.composer.DictationMicrophone
 import riffet.ui.composer.createIosOutboxStore
 import riffet.ui.state.SessionStore
 import riffet.ui.state.ListPolling
@@ -72,6 +74,9 @@ class IOSHost {
         private set
 
     val api: RiffetApi? get() = connection?.apiOrNull()
+    /** A composer's voice input on the current connection; null when not connected. */
+    fun dictation(microphone: DictationMicrophone): DictationController? = api?.let { DictationController(it, scope, microphone) }
+
     var terminalAppearance: TerminalAppearance? = null
         set(value) { field = value; api?.terminalAppearance = value }
 

@@ -33,6 +33,17 @@
           }
         }
       }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "把语音转成文字输入到消息里。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn speech into text in your message."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

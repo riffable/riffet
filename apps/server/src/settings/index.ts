@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -328,11 +328,13 @@ export class SettingsService {
     const {cursorCli:legacyCursorCli,...rest}=general;
     // Readers always see the presets in effect; only a list someone saved is stored.
     const settings:AppSettings={...rest,quickChat:{...rest.quickChat,presets:rest.quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS.map(preset=>({...preset}))}};
+    // The transcription key never leaves the server: clients see whether one is saved.
+    if(settings.voiceInput?.remote){const {apiKey,...remote}=settings.voiceInput.remote as StoredRemoteSpeech;settings.voiceInput={...settings.voiceInput,remote:{...remote,hasApiKey:Boolean(apiKey)}};}
     return this.cursor.expose(settings,legacyCursorCli);
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -437,6 +439,10 @@ export class SettingsService {
       const workItems = validateWorkItems(values.workItems);
       if (Object.keys(workItems).length) result.workItems = workItems;
     }
+    if (values.voiceInput !== undefined) {
+      const voiceInput = validateVoiceInput(values.voiceInput);
+      if (Object.keys(voiceInput).length) result.voiceInput = voiceInput;
+    }
     if (values.cursorCli !== undefined) result.cursorCli = this.cursor.validate(values.cursorCli);
     return result;
   }
@@ -448,6 +454,11 @@ export class SettingsService {
       return;
     }
     atomicWritePrivateFile(this.settingsPath(),JSON.stringify(next,null,2)+'\n');
+  }
+
+  /** The 语音输入 remote service with its key, for the server's own requests (docs/VOICE.md §6). */
+  remoteSpeech(): { baseUrl?: string; model?: string; apiKey?: string } {
+    return { ...this.readSettings().voiceInput?.remote as StoredRemoteSpeech | undefined };
   }
 
   setSettings(values: unknown): AppSettings {
@@ -482,6 +493,7 @@ export class SettingsService {
       for(const key of Object.keys(merged))if(merged[key]===null)delete merged[key];
       input.workItems=merged;
     }
+    if(input.voiceInput!==undefined)input.voiceInput=mergeVoiceInput(generalCurrent.voiceInput,input.voiceInput);
     // The provider→model record is the server's: rebuilt from what is stored and the pair in this save.
     if(input.nativeBackendDefaults&&typeof input.nativeBackendDefaults==='object'&&!Array.isArray(input.nativeBackendDefaults)){
       input.nativeBackendDefaults=Object.fromEntries(Object.entries(input.nativeBackendDefaults as Record<string,unknown>).map(([backendId,raw])=>[backendId,raw&&typeof raw==='object'&&!Array.isArray(raw)
@@ -618,6 +630,65 @@ function validateQuickChat(raw: unknown): QuickChatSettings {
       seen.add(id);
       return { id, name: name.trim(), prompt: prompt.trim() };
     });
+  }
+  return result;
+}
+
+/** `voiceInput.remote` as settings.json holds it: the key is stored, `hasApiKey` is only what clients read. */
+type StoredRemoteSpeech = Omit<RemoteSpeechSettings, 'hasApiKey'> & { apiKey?: string };
+/** `recognizer`: `remote` or a plugin id; a plugin that is off or gone is kept, and dictation says why it cannot start. */
+const RECOGNIZER_ID = /^[a-z0-9][a-z0-9.-]{0,127}$/;
+
+/** An update applied to what is stored: each field given replaces its own, `null` clears it, an absent key keeps the saved one. */
+function mergeVoiceInput(current: VoiceInputSettings | undefined, raw: unknown): unknown {
+  if (raw === null) return {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+  const given = raw as Record<string, unknown>;
+  const merged: Record<string, unknown> = { ...current, ...given };
+  if (given.remote !== undefined) {
+    if (given.remote === null) delete merged.remote;
+    else if (given.remote && typeof given.remote === 'object' && !Array.isArray(given.remote)) {
+      const remote: Record<string, unknown> = { ...current?.remote, ...given.remote as Record<string, unknown> };
+      for (const key of Object.keys(remote)) if (remote[key] === null) delete remote[key];
+      merged.remote = remote;
+    }
+  }
+  for (const key of Object.keys(merged)) if (merged[key] === null) delete merged[key];
+  return merged;
+}
+
+function validateVoiceInput(raw: unknown): VoiceInputSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'voiceInput must be an object');
+  const values = raw as Record<string, unknown>;
+  if (Object.keys(values).some(key => !['recognizer', 'language', 'remote'].includes(key))) throw new AppError('INVALID_SETTINGS', 'voiceInput contains an unknown field');
+  const result: VoiceInputSettings = {};
+  if (values.recognizer !== undefined) {
+    if (typeof values.recognizer !== 'string' || !RECOGNIZER_ID.test(values.recognizer)) throw new AppError('INVALID_SETTINGS', 'voiceInput.recognizer is invalid');
+    result.recognizer = values.recognizer;
+  }
+  if (values.language !== undefined) {
+    if (typeof values.language !== 'string' || !/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(values.language)) throw new AppError('INVALID_SETTINGS', 'voiceInput.language must be a language tag such as zh or en');
+    result.language = values.language;
+  }
+  if (values.remote !== undefined) {
+    const remote = values.remote;
+    if (!remote || typeof remote !== 'object' || Array.isArray(remote)) throw new AppError('INVALID_SETTINGS', 'voiceInput.remote must be an object');
+    const fields = remote as Record<string, unknown>;
+    // `hasApiKey` is what a client read back; sending it again changes nothing.
+    if (Object.keys(fields).some(key => !['baseUrl', 'model', 'apiKey', 'hasApiKey'].includes(key))) throw new AppError('INVALID_SETTINGS', 'voiceInput.remote contains an unknown field');
+    const stored: StoredRemoteSpeech = {};
+    if (fields.baseUrl !== undefined) {
+      let url: URL | undefined;
+      try { url = typeof fields.baseUrl === 'string' && fields.baseUrl.length <= 2048 ? new URL(fields.baseUrl) : undefined; } catch { url = undefined; }
+      if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) throw new AppError('INVALID_SETTINGS', 'voiceInput.remote.baseUrl must be an http or https address without credentials');
+      stored.baseUrl = fields.baseUrl as string;
+    }
+    if (fields.model !== undefined) {
+      if (typeof fields.model !== 'string' || !fields.model.trim() || fields.model.length > 200 || /[\0\r\n]/.test(fields.model)) throw new AppError('INVALID_SETTINGS', 'voiceInput.remote.model is invalid');
+      stored.model = fields.model.trim();
+    }
+    if (fields.apiKey !== undefined) stored.apiKey = validateApiKey(fields.apiKey, 'voiceInput.remote.apiKey');
+    if (Object.keys(stored).length) result.remote = stored;
   }
   return result;
 }

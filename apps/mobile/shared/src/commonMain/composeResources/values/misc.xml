@@ -148,6 +148,15 @@
     <string name="composer_stop">停止</string>
     <string name="composer_stop_background">停止后台任务</string>
     <string name="composer_add_attachment">添加附件</string>
+    <string name="composer_dictation">语音输入</string>
+    <string name="composer_dictation_cancel">取消</string>
+    <string name="composer_dictation_discard">放弃</string>
+    <string name="composer_dictation_done">完成</string>
+    <string name="composer_dictation_retry">重试</string>
+    <string name="composer_hold_to_talk">按住 说话</string>
+    <string name="composer_hold_hint">松开转文字，上滑取消</string>
+    <string name="composer_hold_release_cancel">松开取消</string>
+    <string name="composer_keyboard">键盘</string>
     <string name="composer_send_settings">发送设置</string>
     <string name="composer_delivery_unconfirmed">暂时无法确认是否已发送</string>
     <string name="composer_delivery_verify">暂时无法确认是否已发送</string>

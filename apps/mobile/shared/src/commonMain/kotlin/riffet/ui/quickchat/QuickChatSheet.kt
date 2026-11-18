@@ -81,6 +81,7 @@ import riffet.ui.composer.ComposerCard
 import riffet.ui.composer.ComposerSettings
 import riffet.ui.composer.attachmentIntakeError
 import riffet.ui.composer.rememberAttachmentPicker
+import riffet.ui.composer.rememberComposerDictation
 import riffet.ui.home.HomeConfig
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.pickers.LocalPickerHost
@@ -143,6 +144,7 @@ fun QuickChatSheet(
     val scope = rememberCoroutineScope()
     val workScope = writeScope ?: scope
     val list by store.list.collectAsState()
+    val dictation = rememberComposerDictation(store)
     // The sheet's transcript has its own selection; opening it must not move the main app's stream.
     val previewStore = remember(api, scope) { SessionStore(api = api, scope = scope) }
     DisposableEffect(previewStore) {
@@ -433,6 +435,7 @@ fun QuickChatSheet(
                         sendEnabled = text.isNotBlank() && !uploading && !creating && !config.catalogLoading,
                         sendBusy = creating,
                         onSend = ::create,
+                        dictation = dictation,
                         hero = true,
                     )
                     Spacer(Modifier.height(8.dp))

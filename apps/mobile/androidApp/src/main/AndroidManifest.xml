@@ -68,6 +68,12 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!--
+      Voice input in the composer (docs/VOICE.md). Asked for the first time the mic button is pressed;
+      the button only shows once voice input is turned on in settings.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
       Paired, not required: a device with no camera can still pair by typing, so the camera must not
       gate installation on Play. (`PackageManager.FEATURE_CAMERA_ANY` is what the scanner checks to
       decide whether to offer the affordance at all.)

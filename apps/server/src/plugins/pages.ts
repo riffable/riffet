@@ -1,9 +1,9 @@
 import type { PluginPageProvider } from '@riffet/plugin-api';
-import type { PluginPage, PluginPageResponse, PluginReadmeResponse } from '../../../../packages/contracts/src/index.js';
+import type { PluginPage, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { bounded, describeError, type Entry } from './entry.js';
 import { builtinPackageRoot } from './package-root.js';
-import { checkedPage, packageReadme, settingValue } from './page.js';
+import { checkedPage, packageReadme, pageForClient, settingValue } from './page.js';
 
 /** What a plugin's page and README need of the registry. */
 export interface PagesPort {
@@ -21,14 +21,14 @@ export class Pages {
   constructor(private readonly port: PagesPort) {}
 
   /** The page as the plugin builds it now. Reading it activates a plugin that waits for a command or a view, as opening a view does. */
-  async page(id: string, locale: string | undefined): Promise<PluginPageResponse> {
+  async page(id: string, locale: string | undefined, kinds: ReadonlySet<PluginPageExtraKind> = new Set()): Promise<PluginPageResponse> {
     await this.port.loading();
     const entry = this.port.require(id);
-    return { page: await this.readPage(entry, await this.pageProvider(entry), locale) };
+    return { page: pageForClient(await this.readPage(entry, await this.pageProvider(entry), locale), kinds, locale) };
   }
 
   /** One change from the page: a setting saved as `update` saves it, or a button. Answers with the page read again. */
-  async changePage(id: string, input: unknown): Promise<PluginPageResponse> {
+  async changePage(id: string, input: unknown, kinds: ReadonlySet<PluginPageExtraKind> = new Set()): Promise<PluginPageResponse> {
     await this.port.loading();
     const entry = this.port.require(id);
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('INVALID_INPUT', 'Expected a page change');
@@ -55,7 +55,7 @@ export class Pages {
     // A change may have turned the plugin off (a setting its detection reads): the page is then not there to read.
     const now = entry.active?.contributions?.page;
     if (!now) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
-    return { page: await this.readPage(entry, now, context.locale), ...(message ? { message } : {}) };
+    return { page: pageForClient(await this.readPage(entry, now, context.locale), kinds, context.locale), ...(message ? { message } : {}) };
   }
 
   /** The README for `locale`: `README.<tag>.md`, else `README.md`, in the package's directory. Never runs the plugin. */

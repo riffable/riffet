@@ -49,6 +49,7 @@ riffet plugin unlink example.echo
 | `agentTools`、`channels`、`page` | `plugins/riffet/browser` | `activate.ts`、`page.ts` |
 | `actions` | `plugins/riffet/browser` | `run` 类操作；`device-flow` 暂无公开参考：没有不绑定某家服务的真实场景 |
 | `status`、`doctorChecks`、`services` | `plugins/riffet/cursor` | `index.ts`；`services` 只有提供方 |
+| `speechRecognizer` | `plugins/riffet/speech-local` | `recognizer.ts`：子进程的所有者与回收；`install.ts`：按需下载、校验后改名（[VOICE.md](VOICE.md) §5） |
 | `sharePublisher` | `official/share-s3` | `publisher.ts`：别名与过期记录如何对应到存储；需要显式信任 |
 | `runtimeHooks` | 暂无（`official/request-recorder` 已写好但未发布：核心目前只在 Codex 系运行时调用运行时钩子，Claude 驱动尚未接入，钩子也拿不到模型源解析后的地址） | — |
 

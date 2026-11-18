@@ -279,6 +279,11 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     const problem = localized(declarations.sharePublisher.title, 'contributes.sharePublisher.title', 80);
     if (problem) return problem;
   }
+  if (declarations.speechRecognizer !== undefined) {
+    if (!isRecord(declarations.speechRecognizer)) return 'contributes.speechRecognizer must be an object';
+    const problem = localized(declarations.speechRecognizer.title, 'contributes.speechRecognizer.title', 80);
+    if (problem) return problem;
+  }
   if (declarations.page !== undefined) {
     if (!isRecord(declarations.page)) return 'contributes.page must be an object';
     if (declarations.page.title !== undefined) { const problem = localized(declarations.page.title, 'contributes.page.title', 40); if (problem) return problem; }
@@ -352,7 +357,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const modelUses = declarations.modelUses?.map(item => pick(item, ['id', 'title', 'fallback']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -417,6 +422,7 @@ const declarationsSchema = z.object({
   modelSources: z.array(modelSourceSchema).max(64).optional(),
   actions: z.array(z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), label: z.string().min(1).max(200), kind: z.enum(['run', 'device-flow']) })).max(64).optional(),
   sharePublisher: z.object({ title: titleSchema }).optional(),
+  speechRecognizer: z.object({ title: titleSchema }).optional(),
   views: z.array(viewSchema).optional(),
   commands: z.array(z.object({ ...contributionSchema, when: conditionSchema.optional(), keybinding: z.string().regex(KEYBINDING).optional(), scope: z.enum(COMMAND_SCOPES).optional(), params: paramsSchema.optional(), menus: z.array(z.enum(COMMAND_MENUS)).min(1).optional(), icon: z.enum(COMMAND_ICONS).optional() }).passthrough()).optional(),
   tasks: z.array(z.object({ ...contributionSchema, projectType: z.string().regex(CONDITION_TOKEN).optional() }).passthrough()).optional(),

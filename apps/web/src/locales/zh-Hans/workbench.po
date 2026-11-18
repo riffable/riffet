@@ -433,6 +433,10 @@ msgstr "删除这个会话？"
 msgid "刷新"
 msgstr "刷新"
 
+#: src/app/plugins/PluginPageView.tsx
+msgid "剩余 {left}%"
+msgstr "剩余 {left}%"
+
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"

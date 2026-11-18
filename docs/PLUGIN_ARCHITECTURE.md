@@ -138,7 +138,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 宿主在服务端校验每次读取：格式不对时整页报错；引用未声明的键时拒绝；密钥条目的值一律去掉，只保留 `set`。`refreshMs` 让客户端在显示期间定时重读，用于下载这类自己会变化的状态。
 
-规范已经确定、尚未实现的扩展（[插件界面](design/system/plugins.md) §6.4、§6.5）：条目 `meter`、`link`（`page`、`view` 或 `url`）；`row` 的 `tone`、`badges`、`time`、`copy`、`ref`（引用项目、会话、任务、提供商或分享，宿主解析名称、检查能否访问）；区块的 `refresh`、`pending`、`error`、`empty`；按钮的 `flow`；读取时带 `path` 打开子页，`PluginPage.title` 是子页的标题。客户端读取页面时带上自己能画的条目种类，服务端把不支持的条目降级成 `row`、去掉不支持的附加项再返回，插件始终按最新的规范构建页面。
+条目 `meter`（有上限的量或进度，带进度条）已实现：客户端读取和修改页面时带 `?kinds=meter`，没带的客户端收到同内容的 `row`。规范已经确定、尚未实现的扩展（[插件界面](design/system/plugins.md) §6.4、§6.5）：条目 `link`（`page`、`view` 或 `url`）；`row` 的 `tone`、`badges`、`time`、`copy`、`ref`（引用项目、会话、任务、提供商或分享，宿主解析名称、检查能否访问）；区块的 `refresh`、`pending`、`error`、`empty`；按钮的 `flow`；读取时带 `path` 打开子页，`PluginPage.title` 是子页的标题。客户端读取页面时带上自己能画的条目种类，服务端把不支持的条目降级成 `row`、去掉不支持的附加项再返回，插件始终按最新的规范构建页面。
 
 接口：`GET /api/integrations/:id/page?locale=` 读取；`POST /api/integrations/:id/page` 带 `{ locale, set: { key, value } }` 或 `{ locale, run: { action, item? } }` 修改，返回重读后的页面和可选的 `message`。插件关闭时返回 409。按需激活的插件（`view`、`command`）在读取页面时激活。
 

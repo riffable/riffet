@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PluginMarketList, PluginsResponse } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
+import { clientKinds } from './page.js';
 import { localRequest } from '../auth.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { MAX_ARCHIVE_BYTES } from '../plugins-host/archive.js';
@@ -53,8 +54,8 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
   app.get<{ Params: { id: string } }>('/api/integrations/:id/logs', async request => ({ logs: await plugins.logs(request.params.id) }));
   app.post<{ Params: { id: string }; Body: unknown }>('/api/integrations/:id/activate', { bodyLimit: 4096 }, async request => plugins.activateView(request.params.id, request.body));
   // The plugin's own page and README (docs/PLUGIN_ARCHITECTURE.md「插件页」).
-  app.get<{ Params: { id: string }; Querystring: { locale?: string } }>('/api/integrations/:id/page', async request => plugins.page(request.params.id, request.query.locale));
-  app.post<{ Params: { id: string }; Body: unknown }>('/api/integrations/:id/page', { bodyLimit: 64 * 1024 }, async request => plugins.changePage(request.params.id, request.body));
+  app.get<{ Params: { id: string }; Querystring: { locale?: string; kinds?: string } }>('/api/integrations/:id/page', async request => plugins.page(request.params.id, request.query.locale, clientKinds(request.query.kinds)));
+  app.post<{ Params: { id: string }; Body: unknown; Querystring: { kinds?: string } }>('/api/integrations/:id/page', { bodyLimit: 64 * 1024 }, async request => plugins.changePage(request.params.id, request.body, clientKinds(request.query.kinds)));
   app.get<{ Params: { id: string }; Querystring: { locale?: string } }>('/api/integrations/:id/readme', async request => plugins.readme(request.params.id, request.query.locale));
   app.post<{ Params: { id: string } }>('/api/integrations/:id/reload', async request => plugins.reload(request.params.id));
 

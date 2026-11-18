@@ -155,6 +155,10 @@
     "info-circle",
     "info"
   ],
+  "Keyboard": [
+    "keyboard",
+    "keyboard"
+  ],
   "Layers": [
     "layers-intersect",
     "layers"
@@ -186,6 +190,10 @@
   "MessageSquarePlusFilled": [
     "message-plus",
     "add_comment"
+  ],
+  "Mic": [
+    "microphone",
+    "mic"
   ],
   "Monitor": [
     "device-desktop",

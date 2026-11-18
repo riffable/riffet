@@ -78,6 +78,7 @@ import { SessionDeletion } from './session-deletion.js';
 import { registerSessionDeletionRoutes } from './routes/session-deletion.js';
 import { registerNativeRoutes } from './routes/native.js';
 import { registerTerminalRoutes } from './routes/terminals.js';
+import { registerDictationRoutes } from './routes/dictation.js';
 import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerGitRoutes } from './routes/git.js';
 import { registerOrchestrationRoutes } from './routes/orchestration.js';
@@ -391,6 +392,7 @@ export async function createApp(options: AppOptions = {}) {
   registerThemeRoutes(app,deps);
   registerExtensionRoutes(app,deps);
   registerPluginRoutes(app,deps);
+  registerDictationRoutes(app,deps);
   registerTaskRoutes(app,deps);
   registerCommandRoutes(app,deps);
   registerAppearanceRoutes(app,{appearance:new AppearanceService(plugins)});

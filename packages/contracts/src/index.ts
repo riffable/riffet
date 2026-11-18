@@ -8,7 +8,7 @@ export * from './sync.js';
 export * from './model-selection.js';
 export * from './owner.js';
 export type * from './plugin-management.js';
-export type * from './plugin-page.js';
+export * from './plugin-page.js';
 export type * from './plugins.js';
 export type * from './plugin-packages.js';
 export type * from './tasks.js';
@@ -24,6 +24,7 @@ export { ASSISTANT_BACKENDS, assistantChoice, isAssistantBackend, workItemAgentC
 
 export * from './protocol.js';
 export * from './devices.js';
+export * from './dictation.js';
 export type * from './session.js';
 export type * from './run.js';
 export * from './terminal.js';

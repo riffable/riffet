@@ -15,6 +15,7 @@ import { useStores } from '../state/stores';
 import { SettingsGroup as Group, SettingsLinkRow } from './SettingsLayout';
 
 import { ProfileSection } from './ProfileSection';
+import { VoiceInputSection } from './VoiceInputSection';
 import { AboutSection, AppIconSection, ConnectionSection, FilesSettingsSection, GeneralSection, InteractionSection, NotificationsSection, ReclaimSection, TerminalSettingsSection, ThemeSection, TypographySection } from './PreferencesSections';
 import { BackupSection, DiagnosticsSection } from './SupportSections';
 import { SharesSection } from '../shares/SharesSection';
@@ -94,6 +95,12 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
     if (!await confirmLeave()) return;
     onOpenChange(false);
     await nav.navigate(() => nav.openPlugins(id.split('/')[0], id));
+  };
+  /** A plugin's own page, where a recognizer's models are installed. */
+  const openPluginDetails = async (id: string) => {
+    if (!await confirmLeave()) return;
+    onOpenChange(false);
+    await nav.navigate(() => nav.openPlugins(id, '', 'page'));
   };
   const openDesign = async () => {
     if (!await confirmLeave()) return;
@@ -230,7 +237,10 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'quickchat' && <Suspense fallback={sectionFallback}><QuickChatSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
             {section === 'assistant' && <Suspense fallback={sectionFallback}><AssistantSettingsSection /></Suspense>}
             {section === 'workitems' && <Suspense fallback={sectionFallback}><WorkItemSettingsSection /></Suspense>}
-            {section === 'interaction' && <InteractionSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
+            {section === 'interaction' && <div className="flex flex-col gap-6">
+              <InteractionSection settings={settings} onSaved={onSettingsChanged} onError={onError} />
+              <VoiceInputSection settings={settings} onSaved={onSettingsChanged} onError={onError} onOpenPlugin={(id) => void openPluginDetails(id)} />
+            </div>}
             {section === 'files' && <FilesSettingsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onDirtyChange={setFilesDirty} onBusyChange={setSectionBusy} />}
             {section === 'connection' && <ConnectionSection onLogout={onLogout} onOpenShares={() => void selectSection('shares')} />}
             {section === 'shares' && <SharesSection />}

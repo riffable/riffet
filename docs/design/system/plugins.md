@@ -195,7 +195,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 - `ref`：`{ kind, id }`，`kind` 取 `project`、`session`、`task`、`provider`、`share`。宿主用这个对象现在的名称代替 `label`（找不到时用插件给的 `label`），并让整行可以点开去这个对象。宿主会检查对象是否存在、当前客户端能否看到它；不满足时，这一行只显示文字。插件只能引用自己已经知道 id 的对象。
 - `buttons`：同原来的写法。
 
-`meter`：`percent` 取 0–100；`sense` 为 `quota` 时，`percent` 表示已用的比例，数值写「剩余 n%」，剩余低于 20% 用 `warning`，用完用 `danger`；为 `progress` 时，`percent` 表示已完成的比例，数值写「n%」，不着色。`value` 可以替换默认数值（「1.2 GB / 5 GB」）；`time` 写重置时间。
+`meter`：带 `id`，可带 `detail` 和与 `row` 相同的 `buttons`（下载时放「取消」）。`percent` 取 0–100；`sense` 为 `quota` 时，`percent` 表示已用的比例，数值写「剩余 n%」，剩余低于 20% 用 `warning`，用完用 `danger`；为 `progress` 时，`percent` 表示已完成的比例，数值写「n%」，不着色。`value` 可以替换默认数值（「1.2 GB / 5 GB」）；`time` 写重置时间。
 
 区块可选的附加项：`refresh`（一个动作名，在组标题右侧画刷新按钮，只重读这一组）、`pending`（数据还没准备好，宿主在组内画 `Spinner`，页面同时要给出 `refreshMs`）、`error`（这一组读取失败的原因，画成 `role="alert"`）、`empty`（这一组没有条目时显示的一句话）。
 
@@ -268,7 +268,8 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 
 ### 6.9 现状
 
-- 以下内容都还没有实现（2026-11-16 写入规范）：§6.2 的「状态」组；§6.3 的所有扩展点区块；§6.4 新增的 `meter`、`link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及按客户端能力降级；§6.5 的子页和筛选。Web（`app/plugins/PluginPageView.tsx`）和 Mac（`Features/Plugins/PluginPageForm.swift`）只画原有的六种条目。
+- 以下内容都还没有实现（2026-11-16 写入规范）：§6.2 的「状态」组；§6.3 的所有扩展点区块；§6.4 新增的 `link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及 `meter` 的 `time`；§6.5 的子页和筛选。
+- `meter` 与按客户端能力降级已实现（2026-11-17）：客户端在读取和修改页面时带 `?kinds=meter`（`PLUGIN_PAGE_KINDS_PARAM`），没带的客户端收到一行 `row`，数值是「n%」或带 `value`。Web（`app/plugins/PluginPageView.tsx`）画 `meter`；Mac（`Features/Plugins/PluginPageForm.swift`）和手机仍只画原有的六种条目。
 - 页签只在插件声明了 `page`、`settings` 或设置视图时出现。`status().message` 只显示在「管理 › 诊断」里。
 - 手机端客户端已有接口（`apps/mobile/client/src/commonMain/kotlin/riffet/shared/RiffetApiPlugins.kt`），但没有绘制，手机上看不到插件页。
 - 浏览器的插件页（`plugins/riffet/browser/page.ts`）用目录名代替项目名，「使用中」写在 `detail` 里，没有数据时用一行 `row` 占位。应分别改成 `ref: project`、`badges` 和区块的 `empty`。

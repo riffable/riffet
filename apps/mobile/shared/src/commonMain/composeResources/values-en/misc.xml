@@ -148,6 +148,15 @@
     <string name="composer_stop">Stop</string>
     <string name="composer_stop_background">Stop background task</string>
     <string name="composer_add_attachment">Add attachment</string>
+    <string name="composer_dictation">Voice input</string>
+    <string name="composer_dictation_cancel">Cancel</string>
+    <string name="composer_dictation_discard">Discard</string>
+    <string name="composer_dictation_done">Done</string>
+    <string name="composer_dictation_retry">Retry</string>
+    <string name="composer_hold_to_talk">Hold to talk</string>
+    <string name="composer_hold_hint">Release to insert, slide up to cancel</string>
+    <string name="composer_hold_release_cancel">Release to cancel</string>
+    <string name="composer_keyboard">Keyboard</string>
     <string name="composer_send_settings">Send settings</string>
     <string name="composer_delivery_unconfirmed">Unable to confirm whether this message was sent</string>
     <string name="composer_delivery_verify">Unable to confirm whether this message was sent</string>

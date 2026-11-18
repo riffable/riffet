@@ -4,6 +4,7 @@ import type { PluginPage, PluginPageButton, PluginPageChange, PluginPageItem } f
 import { IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input, Spinner, Switch } from '@/components/ui/controls';
+import { Progress } from '@/components/ui/progress';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -71,7 +72,7 @@ export function PluginPageView({ pluginId, disabled, onChanged }: { pluginId: st
   </div>;
 }
 
-const itemKey = (item: PluginPageItem, index: number) => item.kind === 'row' ? 'row:' + item.id : item.kind === 'buttons' ? 'buttons:' + index : item.kind + ':' + item.key;
+const itemKey = (item: PluginPageItem, index: number) => item.kind === 'row' || item.kind === 'meter' ? item.kind + ':' + item.id : item.kind === 'buttons' ? 'buttons:' + index : item.kind + ':' + item.key;
 
 function PageButton({ button, locked, press }: { button: PluginPageButton; locked: boolean; press: (button: PluginPageButton) => void }) {
   return <Button type="button" size="xs" variant="secondary" disabled={locked || button.disabled} onClick={() => press(button)}>{button.label}</Button>;
@@ -109,9 +110,31 @@ function PageItem({ item, heading, locked, set, press }: { item: PluginPageItem;
         {item.buttons?.map((button, index) => <PageButton key={index} button={button} locked={locked} press={press} />)}
       </div>
     </SettingsRow>;
+    case 'meter': return <MeterItem item={item} locked={locked} press={press} />;
     case 'buttons': return <div className="flex flex-wrap gap-2 py-3">{item.buttons.map((button, index) => <PageButton key={index} button={button} locked={locked} press={press} />)}</div>;
     default: return null;
   }
+}
+
+/** A row with a bar under it (docs/design/system/plugins.md §6.4): a download under way, or how much of a quota is left. */
+function MeterItem({ item, locked, press }: { item: Extract<PluginPageItem, { kind: 'meter' }>; locked: boolean; press: (button: PluginPageButton) => void }) {
+  const { t } = useLingui();
+  const left = Math.round(100 - item.percent);
+  const figure = item.value ?? (item.sense === 'progress' ? `${Math.round(item.percent)}%` : t`剩余 ${left}%`);
+  const tone = item.sense === 'quota' ? (left <= 0 ? 'danger' : left < 20 ? 'warning' : 'accent') : 'accent';
+  return <div className="flex flex-col gap-2 py-3.5">
+    <div className="flex items-center justify-between gap-6 max-md:flex-col max-md:items-stretch max-md:gap-2">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium text-fg">{item.label}</span>
+        {item.detail && <span className="text-xs text-fg-3">{item.detail}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <span className="text-sm tabular-nums text-fg-2">{figure}</span>
+        {item.buttons?.map((button, index) => <PageButton key={index} button={button} locked={locked} press={press} />)}
+      </div>
+    </div>
+    <Progress value={item.percent / 100} tone={tone} role={item.sense === 'progress' ? 'progressbar' : 'meter'} label={item.label} />
+  </div>;
 }
 
 /** Saved on Enter or when focus leaves, if it changed. */
