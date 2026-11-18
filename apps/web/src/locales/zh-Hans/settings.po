@@ -8405,6 +8405,10 @@ msgstr "还没有模型。拉取或在下方手动添加。"
 msgid "还没有设备"
 msgstr "还没有设备"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "还没有选择要用的模型"
+msgstr "还没有选择要用的模型"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "这个地址没有返回任何模型，可以在下方手动填写模型 ID。"
 msgstr "这个地址没有返回任何模型，可以在下方手动填写模型 ID。"
@@ -8600,6 +8604,10 @@ msgstr "选择控件的选用规则"
 #: src/app/settings/ThemeEditor.tsx
 msgid "选择文件…"
 msgstr "选择文件…"
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "选择模型"
+msgstr "选择模型"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx

@@ -2194,6 +2194,7 @@ msgstr "Choose agent"
 msgid "选择其他目录…"
 msgstr "Choose another folder…"
 
+#: src/app/session/MarkLayer.tsx
 #: src/app/session/messageCommands.tsx
 msgid "选择模型"
 msgstr "Choose a model"
@@ -2258,6 +2259,7 @@ msgstr "Reload attachment"
 #: src/app/session/Attempts.tsx
 #: src/app/session/DictationBar.tsx
 #: src/app/session/HoldToTalk.tsx
+#: src/app/session/messageCommands.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
 #: src/app/session/ToolsPicker.tsx

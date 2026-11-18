@@ -8405,6 +8405,10 @@ msgstr ""
 msgid "还没有设备"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "还没有选择要用的模型"
+msgstr ""
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "这个地址没有返回任何模型，可以在下方手动填写模型 ID。"
 msgstr ""
@@ -8599,6 +8603,10 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "选择文件…"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "选择模型"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx

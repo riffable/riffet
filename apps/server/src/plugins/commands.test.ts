@@ -100,8 +100,10 @@ describe('plugin commands', () => {
   });
 
   it('answers 409 for a plugin that is off, and reports a failing handler or a result it should not pass on', async () => {
-    const { registry, project, call } = await harness();
-    await expect(call('task', { requestId: 'bad-task' })).rejects.toMatchObject({ code: 'COMMAND_FAILED', statusCode: 502 });
+    const { registry, project, call, run } = await harness();
+    await expect(call('task', { requestId: 'bad-task' })).rejects.toMatchObject({ code: 'COMMAND_FAILED', statusCode: 502, params: { message: 'taskId is not a task of this plugin' } });
+    run.mockRejectedValueOnce(new Error('model returned HTTP 429'));
+    await expect(call('global', { requestId: 'boom' })).rejects.toMatchObject({ code: 'COMMAND_FAILED', statusCode: 502, params: { message: 'model returned HTTP 429' } });
     await registry.update('acme.cmd', { enablement: 'off' });
     await expect(call('global', { requestId: 'off', projectId: project.id })).rejects.toMatchObject({ code: 'COMMAND_UNAVAILABLE', statusCode: 409 });
     await expect(registry.update('acme.cmd', { enablement: 'on' })).resolves.toMatchObject({ enabled: true });

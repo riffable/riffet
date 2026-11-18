@@ -140,6 +140,22 @@ export async function completeForPlugin(
   const maxOutputTokens = Math.trunc(request.maxOutputTokens);
   if (!(maxOutputTokens > 0 && maxOutputTokens <= PLUGIN_MAX_OUTPUT_TOKENS)) throw options.error('INVALID_INPUT', `maxOutputTokens must be 1 to ${PLUGIN_MAX_OUTPUT_TOKENS}`, 400);
   const timeoutMs = Math.min(Math.max(1_000, Math.trunc(request.timeoutMs ?? PLUGIN_TIMEOUT_MS.default)), PLUGIN_TIMEOUT_MS.max);
-  const endpoint = await auxiliaryEndpoint(ref, gatewayProfiles, request.signal);
-  return (options.complete ?? complete)({ ...endpoint, system: request.system, content: request.content, maxOutputTokens, timeoutMs, ...(request.signal ? { signal: request.signal } : {}) });
+  let endpoint: Awaited<ReturnType<typeof auxiliaryEndpoint>>;
+  try {
+    endpoint = await auxiliaryEndpoint(ref, gatewayProfiles, request.signal);
+  } catch (error) {
+    if (request.signal?.aborted) throw error;
+    throw options.error('PLUGIN_MODEL_UNAVAILABLE', error instanceof Error && error.message ? error.message : 'The chosen model\'s provider is unavailable', 409);
+  }
+  try {
+    return await (options.complete ?? complete)({ ...endpoint, system: request.system, content: request.content, maxOutputTokens, timeoutMs, ...(request.signal ? { signal: request.signal } : {}) });
+  } catch (error) {
+    if (request.signal?.aborted) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'model output was cut off at the token limit') throw options.error('PLUGIN_MODEL_CUT_OFF', message, 502);
+    if ((error instanceof Error && error.name === 'TimeoutError') || /aborted due to timeout|timed out/i.test(message)) {
+      throw options.error('PLUGIN_MODEL_TIMEOUT', 'The model timed out', 504);
+    }
+    throw error;
+  }
 }

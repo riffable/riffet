@@ -8405,6 +8405,10 @@ msgstr "No models yet. Fetch them or add one manually below."
 msgid "还没有设备"
 msgstr "No devices yet"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "还没有选择要用的模型"
+msgstr "No model is chosen for this yet"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "这个地址没有返回任何模型，可以在下方手动填写模型 ID。"
 msgstr "This address returned no models. You can add model IDs manually below."
@@ -8600,6 +8604,10 @@ msgstr "Rules for choosing a control"
 #: src/app/settings/ThemeEditor.tsx
 msgid "选择文件…"
 msgstr "Choose file…"
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "选择模型"
+msgstr "Choose a model"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx

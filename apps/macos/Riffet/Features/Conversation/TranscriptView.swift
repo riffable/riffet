@@ -79,7 +79,9 @@ struct TranscriptView: View {
                 guard let command = workbench.messageCommandList.first(where: { $0.id == id }) else { return }
                 workbench.pluginCommands.run(command, onAnswer: text, runId: runId, sessionId: session.id, in: workbench)
             },
-            dismissCommandResult: { [workbench] id in workbench.pluginCommands.dismissResult(id) }
+            dismissCommandResult: { [workbench] id in workbench.pluginCommands.dismissResult(id) },
+            retryCommandResult: { [workbench] id in workbench.pluginCommands.retryResult(id, in: workbench) },
+            chooseCommandModel: { [workbench] use in workbench.pluginCommands.openModelSettings(use: use) }
         )
     }
 }

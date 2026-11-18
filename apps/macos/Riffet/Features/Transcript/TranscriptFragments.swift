@@ -32,6 +32,10 @@ enum TranscriptAction {
     case copyText(String)
     /// Closes a command's result under an answer, by its id.
     case dismissCommandResult(String)
+    /// Runs a failed command on an answer again, by its result id.
+    case retryCommandResult(String)
+    /// Opens settings where a command's model is chosen (`use`: Auxiliary models, otherwise Quick chat).
+    case chooseCommandModel(use: Bool)
 }
 
 /// A link to another conversation, carried in a row's text (the lineage row's parent title).

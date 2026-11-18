@@ -117,6 +117,7 @@ final class PluginCommandRunner {
     private(set) var results: [CommandResultSpec] = []
     private(set) var message: Message?
     @ObservationIgnored private var running: Set<String> = []
+    @ObservationIgnored private var resultTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var ticket = 0
 
     func run(_ command: PluginCommand, in workbench: Workbench) {
@@ -148,48 +149,116 @@ final class PluginCommandRunner {
         }
     }
 
-    /// Runs [command] on an answer. The same command on the same answer shows once, and choosing it again while it runs does nothing new.
+    /// Runs [command] on an answer. The same command on the same answer shows once while still valid, and retries when it failed or settings changed.
     func run(_ command: PluginCommand, onAnswer text: String, runId: String?, sessionId: String, in workbench: Workbench) {
-        guard let api = workbench.host.api else { return }
         let match = CommandResultSpec.match(sessionId: sessionId, runId: runId, text: text)
         let id = "\(command.id)\0\(match)"
+        let settingsKey = Self.settingsKey(commandId: command.id, in: workbench)
         if let known = results.first(where: { $0.id == id }) {
-            results.removeAll { $0.id == id }
-            results.append(known)
-            return
+            let isRunning = known.text == nil && known.error == nil
+            if isRunning || (known.text != nil && known.settingsKey == settingsKey) {
+                results.removeAll { $0.id == id }
+                results.append(known)
+                return
+            }
         }
+        startResult(
+            id: id, commandId: command.id, title: command.title, symbol: command.symbol,
+            answerText: text, runId: runId, sessionId: sessionId, match: match, settingsKey: settingsKey, in: workbench
+        )
+    }
+
+    func retryResult(_ id: String, in workbench: Workbench) {
+        guard let existing = results.first(where: { $0.id == id }) else { return }
+        let command = workbench.messageCommandList.first { $0.id == existing.commandId }
+        startResult(
+            id: existing.id, commandId: existing.commandId, title: command?.title ?? existing.title, symbol: command?.symbol ?? existing.symbol,
+            answerText: existing.answerText, runId: existing.runId, sessionId: existing.sessionId, match: existing.match,
+            settingsKey: Self.settingsKey(commandId: existing.commandId, in: workbench), in: workbench
+        )
+    }
+
+    private func startResult(
+        id: String, commandId: String, title: String, symbol: String,
+        answerText: String, runId: String?, sessionId: String, match: String, settingsKey: String, in workbench: Workbench
+    ) {
+        guard let api = workbench.host.api else { return }
+        resultTasks.removeValue(forKey: id)?.cancel()
         // Each run has its own token: a reply or error of a run that was closed, or closed and run again, is ignored.
         let token = UUID()
-        keep(CommandResultSpec(id: id, token: token, sessionId: sessionId, match: match, title: command.title, symbol: command.symbol, text: nil))
-        Task { @MainActor in
+        let spec = CommandResultSpec(
+            id: id, token: token, sessionId: sessionId, match: match, commandId: commandId,
+            answerText: answerText, runId: runId, settingsKey: settingsKey, title: title, symbol: symbol, text: nil
+        )
+        results.removeAll { $0.id == id }
+        keep(spec)
+        resultTasks[id] = Task { @MainActor in
+            defer {
+                if self.results.first(where: { $0.id == id })?.token == token || !self.results.contains(where: { $0.id == id }) {
+                    self.resultTasks.removeValue(forKey: id)
+                }
+            }
             do {
                 let run = try await api.runCommand(
-                    commandId: command.id, requestId: UUID().uuidString.lowercased(), projectId: nil, sessionId: sessionId,
+                    commandId: commandId, requestId: UUID().uuidString.lowercased(), projectId: nil, sessionId: sessionId,
                     values: [:], params: [], confirm: nil,
-                    message: PluginCommandMessage(role: "assistant", text: text, runId: runId), locale: Bundle.main.preferredLocalizations.first
+                    message: PluginCommandMessage(role: "assistant", text: answerText, runId: runId), locale: Bundle.main.preferredLocalizations.first
                 )
-                guard let index = self.results.firstIndex(where: { $0.token == token }) else { return }
+                guard !Task.isCancelled, let index = self.results.firstIndex(where: { $0.token == token }) else { return }
                 if let result = run.result, result.kind == "text", let body = result.text {
                     self.results[index].text = body
-                    self.results[index].title = localizedText(result.title, fallback: command.title)
+                    self.results[index].error = nil
+                    self.results[index].title = localizedText(result.title, fallback: title)
                 } else {
                     self.results.remove(at: index)
                     if let result = run.result { await self.handle(result, context: Context(projectId: nil, sessionId: sessionId), in: workbench) }
                 }
             } catch {
-                guard self.results.contains(where: { $0.token == token }) else { return }
-                self.results.removeAll { $0.token == token }
-                self.show(error.riffetMessage, failed: true, chooseModel: error.riffetCode == "PLUGIN_MODEL_NOT_CHOSEN", chooseUse: error.riffetDetail("use") != nil)
+                guard !Task.isCancelled, let index = self.results.firstIndex(where: { $0.token == token }) else { return }
+                self.results[index].error = Self.commandErrorMessage(error)
+                self.results[index].chooseModel = error.riffetCode == "PLUGIN_MODEL_NOT_CHOSEN"
+                self.results[index].chooseUse = error.riffetDetail("use") != nil
             }
         }
     }
 
-    func dismissResult(_ id: String) { results.removeAll { $0.id == id } }
+    func dismissResult(_ id: String) {
+        resultTasks.removeValue(forKey: id)?.cancel()
+        results.removeAll { $0.id == id }
+    }
+
+    func openModelSettings(use: Bool) {
+        UserDefaults.standard.set((use ? SettingsSection.auxiliaryModels : SettingsSection.quickChat).rawValue, forKey: PreferenceKey.settingsSection)
+        WindowRouter.shared.showSettings()
+    }
+
+    private static func settingsKey(commandId: String, in workbench: Workbench) -> String {
+        let pluginId = String(commandId.split(separator: "/").first ?? "")
+        let locale = Bundle.main.preferredLocalizations.first ?? ""
+        let values = workbench.plugins.first { $0.id == pluginId }?.settings.map { "\($0.key)=\($0.value ?? "")" }.joined(separator: "&") ?? ""
+        return "\(locale)\0\(values)"
+    }
+
+    private static func commandErrorMessage(_ error: Error) -> String {
+        if let http = (error as NSError).userInfo["KotlinException"] as? RiffetHttpException, http.code == "COMMAND_FAILED" {
+            let source = http.params["message"] ?? http.serverMessage
+            let raw = source.replacingOccurrences(of: #"^[A-Za-z0-9._/-]+ failed:\s*"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !raw.isEmpty, raw != "The local service could not complete this operation" { return raw }
+        }
+        return error.riffetMessage
+    }
 
     private func keep(_ spec: CommandResultSpec) {
         results.append(spec)
         let limit = Int(BudgetsKt.PLUGIN_COMMAND_BUDGET_KEPT_RESULTS)
-        if results.count > limit { results.removeFirst(results.count - limit) }
+        if results.count > limit {
+            let overflow = results.count - limit
+            for evicted in results.prefix(overflow) {
+                resultTasks.removeValue(forKey: evicted.id)?.cancel()
+            }
+            results.removeFirst(overflow)
+        }
     }
 
     private func handle(_ result: PluginCommandResult, context: Context, in workbench: Workbench) async {

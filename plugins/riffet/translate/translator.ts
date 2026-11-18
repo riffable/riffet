@@ -53,7 +53,7 @@ export function systemPrompt(target: Language, fallback: Language): string {
 export class Translator {
   /** Insertion order is age: a hit moves its entry to the end. */
   private readonly kept = new Map<string, { text: string; size: number }>();
-  private readonly pending = new Map<string, Promise<string>>();
+  private readonly pending = new Map<string, { promise: Promise<string>; controller: AbortController; waiters: number }>();
   private size = 0;
 
   constructor(private readonly host: PluginHost) {}
@@ -67,28 +67,18 @@ export class Translator {
   }
 
   clear(): void {
+    for (const entry of this.pending.values()) entry.controller.abort();
+    this.pending.clear();
     this.kept.clear();
     this.size = 0;
   }
 
   private async translate(text: string, target: Language, signal: AbortSignal): Promise<string> {
-    const key = createHash('sha256').update(`${target.tag}\0${text}`).digest('hex');
-    const hit = this.kept.get(key);
-    if (hit) { this.kept.delete(key); this.kept.set(key, hit); return hit.text; }
-    const running = this.pending.get(key);
-    if (running) return running;
-    const work = this.call(text, target, signal).finally(() => this.pending.delete(key));
-    this.pending.set(key, work);
-    const result = await work;
-    this.keep(key, result, text.length + result.length);
-    return result;
-  }
-
-  private async call(text: string, target: Language, signal: AbortSignal): Promise<string> {
     const models = this.host.models;
     if (!models) throw this.host.error('COMMAND_UNAVAILABLE', 'This Riffet cannot run a model for plugins', 409);
-    const system = systemPrompt(target, fallbackLanguage(target));
     const parts = pieces(text);
+    if (!parts.length) throw this.host.error('PLUGIN_MODEL_EMPTY_OUTPUT', 'The model returned no translation', 502);
+    const system = systemPrompt(target, fallbackLanguage(target));
     const out: string[] = new Array(parts.length);
     let next = 0;
     // One piece failing fails the message, so the others stop instead of spending calls on it.
@@ -97,19 +87,61 @@ export class Translator {
     const worker = async () => {
       while (next < parts.length) {
         const index = next++;
-        out[index] = (await models.complete({ use: MODEL_USE, system, content: parts[index]!, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: PIECE_TIMEOUT_MS, signal: pieceSignal })).trim();
+        out[index] = await this.translatePiece(models, parts[index]!, target, system, pieceSignal);
       }
     };
     try { await Promise.all(Array.from({ length: Math.min(CONCURRENCY, parts.length) }, worker)); }
     catch (error) { failed.abort(); throw error; }
     const joined = out.join('\n\n').trim();
-    if (!joined) throw this.host.error('COMMAND_FAILED', 'The model returned no translation', 502);
+    if (!joined) throw this.host.error('PLUGIN_MODEL_EMPTY_OUTPUT', 'The model returned no translation', 502);
     return joined;
+  }
+
+  private async translatePiece(models: NonNullable<PluginHost['models']>, part: string, target: Language, system: string, signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted();
+    const key = createHash('sha256').update(`${target.tag}\0${part}`).digest('hex');
+    const hit = this.kept.get(key);
+    if (hit) { this.kept.delete(key); this.kept.set(key, hit); return hit.text; }
+    let entry = this.pending.get(key);
+    if (!entry) {
+      const controller = new AbortController();
+      const promise = models.complete({ use: MODEL_USE, system, content: part, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: PIECE_TIMEOUT_MS, signal: controller.signal })
+        .then(raw => {
+          const text = raw.trim();
+          if (!text) throw this.host.error('PLUGIN_MODEL_EMPTY_OUTPUT', 'The model returned no translation', 502);
+          this.keep(key, text, part.length + text.length);
+          return text;
+        })
+        .finally(() => { if (this.pending.get(key) === entry) this.pending.delete(key); });
+      entry = { promise, controller, waiters: 0 };
+      this.pending.set(key, entry);
+    }
+    entry.waiters += 1;
+    return new Promise<string>((resolve, reject) => {
+      const onAbort = () => {
+        entry.waiters -= 1;
+        if (entry.waiters <= 0) {
+          if (this.pending.get(key) === entry) this.pending.delete(key);
+          entry.controller.abort(signal.reason);
+        }
+        reject(signal.reason ?? new Error('aborted'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      entry.promise.then(
+        value => { signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
+        error => { signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
+      );
+    });
   }
 
   private keep(key: string, text: string, size: number): void {
     const budget = PLUGIN_COMMAND_BUDGET.translationCacheChars;
     if (size > budget) return;
+    const previous = this.kept.get(key);
+    if (previous) {
+      this.kept.delete(key);
+      this.size -= previous.size;
+    }
     this.kept.set(key, { text, size });
     this.size += size;
     for (const [oldest, entry] of this.kept) {

@@ -97,6 +97,10 @@ struct TranscriptActions {
     var runMessageCommand: (String, String, String?) -> Void = { _, _, _ in }
     /// Closes the result of a message command, by its id.
     var dismissCommandResult: (String) -> Void = { _ in }
+    /// Runs a failed message command again, by its result id.
+    var retryCommandResult: (String) -> Void = { _ in }
+    /// Opens model settings for a message command (`use`: Auxiliary models, otherwise Quick chat).
+    var chooseCommandModel: (Bool) -> Void = { _ in }
 }
 
 /// Where the transcript scrolls next: a search hit's event, or a saved reply's message.
@@ -744,7 +748,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         case let .working(spec): speed = "\(spec.step ?? "")|\(spec.since?.timeIntervalSince1970 ?? 0)|\(spec.speed?.label ?? "")|\(spec.stopping)|\(spec.background ?? "")"
         case let .lineage(spec): speed = "lineage|\(spec.forked)|\(spec.agent ?? "")|\(spec.title)|\(spec.parentId)"
         case let .handedOff(spec): speed = "handedOff|\(spec.agent ?? "")|\(spec.successorId)"
-        case let .commandResult(spec): speed = "result|\(spec.title)|\(spec.text?.hashValue ?? 0)"
+        case let .commandResult(spec): speed = "result|\(spec.token)|\(spec.symbol)|\(spec.title)|\(spec.text?.hashValue ?? 0)|\(spec.error?.hashValue ?? 0)|\(spec.chooseModel)|\(spec.chooseUse)"
         case .olderFailed, .olderLoading, .empty, .bottom: break
         }
         return LayoutKey(
@@ -1236,6 +1240,10 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             copyToPasteboard(text)
         case let .dismissCommandResult(id):
             actions.dismissCommandResult(id)
+        case let .retryCommandResult(id):
+            actions.retryCommandResult(id)
+        case let .chooseCommandModel(use):
+            actions.chooseCommandModel(use)
         case .retryHistory:
             actions.retryHistory()
         case let .checkRun(run):

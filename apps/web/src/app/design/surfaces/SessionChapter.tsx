@@ -211,6 +211,7 @@ function Messages() {
         <UserMessage text={joinQuotes([t`已改为回到打开弹窗的按钮，并补上 Esc 的处理。`], t`按 Esc 关闭时也回到这个按钮吗`)} attachments={[]} time={ISO} footerPinned />
         <MessageCommandBlock icon="languages" title={t`译文`} text="Focus went back to the top of the page after the dialog closed. It now returns to the button that opened the dialog, and Esc is handled too." onClose={() => {}} />
         <MessageCommandBlock icon="languages" title={t`翻译`} onClose={() => {}} />
+        <MessageCommandBlock icon="languages" title={t`翻译`} error={t`还没有选择要用的模型`} action={{ label: t`选择模型`, onClick: () => {} }} onRetry={() => {}} onClose={() => {}} />
         <UserMessage text={resuming.prompt} attachments={[]} time={ISO} run={resuming} footerPinned onCancelNativeRun={() => {}} />
         <UserMessage from="coordinator" text={t`Kotlin 字段已经补上，按原来的要求继续做 Mac 部分`} attachments={[]} time={ISO} />
       </Frame>

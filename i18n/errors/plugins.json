@@ -23,9 +23,25 @@
     "zh": "插件配置已被修改，请重新读取后保存",
     "en": "Plugin configuration changed; reload it before saving"
   },
+  "PLUGIN_MODEL_CUT_OFF": {
+    "zh": "模型输出超出长度上限",
+    "en": "The model output exceeded the length limit"
+  },
+  "PLUGIN_MODEL_EMPTY_OUTPUT": {
+    "zh": "模型未返回内容，请重试",
+    "en": "The model returned an empty reply; try again"
+  },
   "PLUGIN_MODEL_NOT_CHOSEN": {
     "zh": "还没有选择要用的模型",
     "en": "No model is chosen for this yet"
+  },
+  "PLUGIN_MODEL_TIMEOUT": {
+    "zh": "模型响应超时，请重试",
+    "en": "The model timed out; try again"
+  },
+  "PLUGIN_MODEL_UNAVAILABLE": {
+    "zh": "所选模型的提供商当前不可用",
+    "en": "The chosen model's provider is unavailable"
   },
   "PLUGIN_TASKS_RUNNING": {
     "zh": "请等待运行中的任务结束后再重载插件",

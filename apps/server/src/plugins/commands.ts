@@ -40,7 +40,7 @@ export interface CommandServiceOptions {
   timeoutMs?: number;
 }
 
-interface Remembered { fingerprint: string; at: number; result: Promise<PluginCommandResult> }
+interface Remembered { fingerprint: string; at: number; result: Promise<PluginCommandResult>; cancel?: () => void; waiters: number }
 
 export class CommandService {
   private readonly remembered = new Map<string, Remembered>();
@@ -53,7 +53,7 @@ export class CommandService {
    * arguments fit `params` (400 `COMMAND_ARGS_INVALID`). The same request id with the same body within ten minutes returns the same
    * result without running the handler again; with another body it is refused (409 `COMMAND_REQUEST_CONFLICT`).
    */
-  async run(pluginId: string, name: string, body: unknown, headers: IncomingHttpHeaders | undefined): Promise<PluginCommandResult> {
+  async run(pluginId: string, name: string, body: unknown, headers: IncomingHttpHeaders | undefined, requestSignal?: AbortSignal): Promise<PluginCommandResult> {
     const commandId = `${pluginId}/${name}`;
     await this.options.registry.ensureContribution?.('command', commandId).catch(() => undefined);
     const { declaration, handler, signal } = this.options.registry.command(pluginId, commandId);
@@ -115,13 +115,42 @@ export class CommandService {
     const known = this.remembered.get(key);
     if (known) {
       if (known.fingerprint !== fingerprint) throw new AppError('COMMAND_REQUEST_CONFLICT', 'This request id was already used for a different command', 409);
-      return known.result;
+      return this.awaitRemembered(key, known, requestSignal);
     }
-    const result = this.execute(commandId, pluginId, handler, signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), ...(message ? { message } : {}), ...(selection ? { selection } : {}), ...(locale ? { locale } : {}), args });
-    this.remembered.set(key, { fingerprint, at: now, result });
+    const callerAbort = new AbortController();
+    const result = this.execute(commandId, pluginId, handler, (message || selection) ? AbortSignal.any([signal, callerAbort.signal]) : signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), ...(message ? { message } : {}), ...(selection ? { selection } : {}), ...(locale ? { locale } : {}), args });
+    const entry: Remembered = {
+      fingerprint,
+      at: now,
+      result,
+      ...(message || selection ? { cancel: () => { if (this.remembered.get(key) === entry) this.remembered.delete(key); callerAbort.abort(); } } : {}),
+      waiters: 0,
+    };
+    this.remembered.set(key, entry);
     // A result on a message or selection can be long and the client keeps it: a repeat while it runs shares the run, a later one runs again.
-    if (message || selection) void result.then(() => undefined, () => undefined).then(() => { if (this.remembered.get(key)?.result === result) this.remembered.delete(key); });
-    return result;
+    if (message || selection) void result.then(() => undefined, () => undefined).then(() => { if (this.remembered.get(key) === entry) this.remembered.delete(key); });
+    return this.awaitRemembered(key, entry, requestSignal);
+  }
+
+  private awaitRemembered(_key: string, entry: Remembered, requestSignal?: AbortSignal): Promise<PluginCommandResult> {
+    if (!requestSignal || !entry.cancel) return entry.result;
+    if (requestSignal.aborted) {
+      if (entry.waiters <= 0) entry.cancel();
+      return Promise.reject(requestSignal.reason ?? new Error('aborted'));
+    }
+    entry.waiters += 1;
+    return new Promise<PluginCommandResult>((resolve, reject) => {
+      const onAbort = () => {
+        entry.waiters -= 1;
+        if (entry.waiters <= 0) entry.cancel?.();
+        reject(requestSignal.reason ?? new Error('aborted'));
+      };
+      requestSignal.addEventListener('abort', onAbort, { once: true });
+      entry.result.then(
+        value => { requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
+        error => { requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
+      );
+    });
   }
 
   private forget(now: number): void {
@@ -148,8 +177,8 @@ export class CommandService {
       return await this.checked(commandId, pluginId, context.projectId, Boolean(context.message || context.selection), outcome);
     } catch (error) {
       if (error instanceof AppError) throw error;
-      const message = `${commandId} failed: ${describe(error)}`;
-      throw new AppError('COMMAND_FAILED', message, 502, undefined, { message });
+      const reason = describe(error);
+      throw new AppError('COMMAND_FAILED', `${commandId} failed: ${reason}`, 502, undefined, { message: reason });
     } finally {
       clearTimeout(timer);
       activation.removeEventListener('abort', stop);
@@ -158,7 +187,7 @@ export class CommandService {
 
   /** The result as the client is told it: only the members this version knows, each checked. Code that is not ours does not get to hand the client anything else. */
   private async checked(commandId: string, pluginId: string, projectId: string | undefined, onText: boolean, outcome: unknown): Promise<PluginCommandResult> {
-    const fail = (why: string) => new AppError('COMMAND_FAILED', `${commandId} returned an invalid result: ${why}`, 502, undefined, { message: `${commandId} returned an invalid result: ${why}` });
+    const fail = (why: string) => new AppError('COMMAND_FAILED', `${commandId} returned an invalid result: ${why}`, 502, undefined, { message: why });
     if (!isRecord(outcome)) throw fail('not an object');
     const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
     if (outcome.kind === 'done') {
@@ -223,5 +252,9 @@ export function registerCommandRoutes(app: FastifyInstance, deps: Pick<RouteDeps
     task: id => tasks.get(id),
   });
   app.post<{ Params: { id: string; name: string }; Body: unknown }>('/api/integrations/:id/commands/:name', { bodyLimit: BODY_LIMIT },
-    async request => commands.run(request.params.id, request.params.name, request.body, request.headers));
+    async (request, reply) => {
+      const controller = new AbortController();
+      reply.raw.once('close', () => { if (!reply.raw.writableFinished) controller.abort(); });
+      return commands.run(request.params.id, request.params.name, request.body, request.headers, controller.signal);
+    });
 }

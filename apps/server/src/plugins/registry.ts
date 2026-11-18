@@ -392,9 +392,13 @@ export class PluginRegistry {
         if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).slice(0, 1000).map(([key, item]) => [key, redact(item, depth + 1)]));
         return value;
       };
+      const message = this.journal.redact(entry.plugin.manifest.id, error instanceof AppError ? error.message : describeError(error));
+      const params = error instanceof AppError
+        ? (redact(error.params) as AppError['params']) ?? (error.statusCode >= 500 && error.code === 'COMMAND_FAILED' ? { message } : undefined)
+        : failureCode === 'COMMAND_FAILED' ? { message } : undefined;
       throw error instanceof AppError
-        ? new AppError(error.code, this.journal.redact(entry.plugin.manifest.id, error.message), error.statusCode, redact(error.details), redact(error.params) as AppError['params'])
-        : new AppError(failureCode, this.journal.redact(entry.plugin.manifest.id, describeError(error)), 502);
+        ? new AppError(error.code, message, error.statusCode, redact(error.details), params)
+        : new AppError(failureCode, message, 502, undefined, params);
     }
   }
 

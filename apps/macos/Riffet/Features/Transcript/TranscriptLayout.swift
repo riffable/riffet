@@ -160,16 +160,23 @@ struct HandedOffSpec: Equatable {
 }
 
 /// What a plugin command run on an answer's ⋯ menu answered, shown as a block under that answer. [text]
-/// is nil while it runs. The runner (`PluginCommandRunner.results`) holds it; rows only draw it.
+/// and [error] are nil while it runs. The runner (`PluginCommandRunner.results`) holds it; rows only draw it.
 struct CommandResultSpec: Equatable, Sendable {
     let id: String
     let token: UUID
     let sessionId: String
     /// Names the answer it was run on (`match`), so the row of that answer finds it again.
     let match: String
+    let commandId: String
+    let answerText: String
+    let runId: String?
+    let settingsKey: String
     var title: String
     let symbol: String
     var text: String?
+    var error: String?
+    var chooseModel = false
+    var chooseUse = false
 
     /// The answer's identity: conversation, run and a hash of its text (the same text of two runs is two answers).
     static func match(sessionId: String, runId: String?, text: String) -> String {
@@ -318,18 +325,31 @@ struct RowBuilder {
             let headerHeight = max(title.size.height, 24)
             fragments.append(Fragment(frame: CGRect(x: x + pad, y: top + pad + (headerHeight - title.size.height) / 2, width: title.size.width, height: title.size.height), kind: .text(title, selectable: false)))
             var edge = x + w - pad
-            let close = ButtonSpec(title: String(localized: "关闭"), action: .dismissCommandResult(spec.id), loading: false, compact: true)
-            let closeSize = buttonSize(close)
-            edge -= closeSize.width
-            fragments.append(Fragment(frame: CGRect(x: edge, y: top + pad + (headerHeight - closeSize.height) / 2, width: closeSize.width, height: closeSize.height), kind: .button(close)))
-            let side = spec.text.map { ButtonSpec(title: String(localized: "复制"), action: .copyText($0), loading: false, compact: true) } ?? ButtonSpec(title: "", action: nil, loading: true)
-            let sideSize = buttonSize(side)
-            edge -= sideSize.width
-            fragments.append(Fragment(frame: CGRect(x: edge, y: top + pad + (headerHeight - sideSize.height) / 2, width: sideSize.width, height: sideSize.height), kind: .button(side)))
+            var actions: [ButtonSpec] = [ButtonSpec(title: String(localized: "关闭"), action: .dismissCommandResult(spec.id), loading: false, compact: true)]
+            if let body = spec.text {
+                actions.append(ButtonSpec(title: String(localized: "复制"), action: .copyText(body), loading: false, compact: true))
+            } else if spec.error != nil {
+                actions.append(ButtonSpec(title: String(localized: "重试"), action: .retryCommandResult(spec.id), loading: false, compact: true))
+                if spec.chooseModel {
+                    actions.append(ButtonSpec(title: String(localized: "选择模型"), action: .chooseCommandModel(use: spec.chooseUse), loading: false, compact: true))
+                }
+            } else {
+                actions.append(ButtonSpec(title: "", action: nil, loading: true))
+            }
+            for item in actions {
+                let size = buttonSize(item)
+                edge -= size.width
+                fragments.append(Fragment(frame: CGRect(x: edge, y: top + pad + (headerHeight - size.height) / 2, width: size.width, height: size.height), kind: .button(item)))
+            }
             var cursor = top + pad + headerHeight
             if let body = spec.text {
                 cursor += 6
                 cursor += markdown(body, x: x + pad, y: cursor, width: w - 2 * pad, muted: false, compact: false)
+            } else if let failure = spec.error {
+                cursor += 6
+                let problem = TextLayout(text.plain(failure, size: 12, color: style.color(\.danger)), width: w - 2 * pad)
+                fragments.append(Fragment(frame: CGRect(x: x + pad, y: cursor, width: problem.size.width, height: problem.size.height), kind: .text(problem, selectable: true)))
+                cursor += problem.size.height
             }
             cursor += pad
             fragments[box].frame = CGRect(x: x, y: top, width: w, height: cursor - top)

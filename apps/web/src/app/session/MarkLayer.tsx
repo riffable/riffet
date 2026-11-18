@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { i18n } from '@lingui/core';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { DiscussionSource, Mark, MarkColor } from '@contracts';
+import type { CommandSelection, DiscussionSource, Mark, MarkColor } from '@contracts';
 import { IconCopy, IconHighlighter, IconImageDown, IconMessagesSquare, IconTextQuote, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/controls';
@@ -30,9 +30,11 @@ interface Selected {
   /** Chosen when it shows, by the room there was: the toolbar keeps its side while the text scrolls. */
   above: boolean;
 }
-/** A plugin command's answer about a selection, beside it; `text` is absent while the command runs. */
+/** A plugin command's answer about a selection, beside it; `text` and `error` are absent while the command runs. */
 interface Card {
-  command: PluginCommand; range: Range; text?: string; title?: string;
+  command: PluginCommand; selection: CommandSelection; range: Range;
+  text?: string; title?: string;
+  error?: string; chooseModel?: 'auxiliary' | 'quickchat';
   /** Chosen when it opens, by the room there was: the card keeps its side while the text scrolls. */
   above: boolean; room: number;
   /** Playing its way out; removed when that ends. */
@@ -189,6 +191,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   const selectionCommands = useSelectionCommands();
   const [card, setCard] = useState<Card>();
   const cardRef = useRef<HTMLElement>(null);
+  const cardAbortRef = useRef<AbortController | undefined>(undefined);
   const toolbarRef = useRef<HTMLDivElement>(null);
   /** Out of the transcript's view the toolbar fades and waits; it shows again when the selection scrolls back. */
   const [toolbarShown, setToolbarShown] = useState(true);
@@ -197,7 +200,12 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
    * scroll with the text natively, on the compositor, instead of being moved after each scroll.
    */
   const [floatHost, setFloatHost] = useState<HTMLDivElement>();
-  const closeCard = () => setCard((current) => (current && !current.closing ? { ...current, closing: true } : current));
+  const closeCard = () => {
+    cardAbortRef.current?.abort();
+    cardAbortRef.current = undefined;
+    setCard((current) => (current && !current.closing ? { ...current, closing: true } : current));
+  };
+  useEffect(() => () => cardAbortRef.current?.abort(), []);
   const marks = useContext(SessionMarksContext);
   const session = useContext(ShareSessionContext);
   const resolved = useRef<Resolved[]>([]);
@@ -269,7 +277,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
       const rect = range.getBoundingClientRect();
       setSelected({ target, text, start, end, range: range.cloneRange(), above: rect.top - scroller.getBoundingClientRect().top > 56 });
       setToolbarShown(true);
-      setCard((current) => (current && !current.closing ? { ...current, closing: true } : current));
+      closeCard();
     };
     /** The toolbar and the card sit inside the transcript; what happens in them is not the reader selecting text. */
     const floating = (event: Event) => event.target instanceof Node && Boolean(toolbarRef.current?.contains(event.target) || cardRef.current?.contains(event.target));
@@ -324,9 +332,10 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   const cardOpen = Boolean(card);
   useEffect(() => {
     if (!cardOpen) return;
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeCard(); };
+    const inModal = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest('[role="dialog"], [role="listbox"], [role="menu"]'));
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !document.querySelector('[role="dialog"]')) closeCard(); };
     // A click, not a press: a finger that scrolls the transcript presses outside too.
-    const outside = (event: MouseEvent) => { if (!(event.target instanceof Node && cardRef.current?.contains(event.target))) closeCard(); };
+    const outside = (event: MouseEvent) => { if (!(event.target instanceof Node && cardRef.current?.contains(event.target)) && !inModal(event.target)) closeCard(); };
     window.addEventListener('keydown', escape);
     document.addEventListener('click', outside, true);
     return () => {
@@ -366,12 +375,34 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     selection.removeAllRanges();
     setSelected(undefined);
   };
+  const executeSelectionCommand = async (command: PluginCommand, range: Range, selectionInput: CommandSelection) => {
+    cardAbortRef.current?.abort();
+    const controller = new AbortController();
+    cardAbortRef.current = controller;
+    const outcome = await selectionCommands.run(command, selectionInput, controller.signal);
+    if (controller.signal.aborted) return;
+    // Closed, or replaced by another, meanwhile: the answer is not wanted.
+    setCard((current) => {
+      if (current?.range !== range || current.closing) return current;
+      if (outcome.kind === 'text') {
+        const { error: _error, chooseModel: _chooseModel, ...rest } = current;
+        return { ...rest, text: outcome.text, ...(outcome.title ? { title: outcome.title } : {}) };
+      }
+      if (outcome.kind === 'failed') {
+        const { text: _text, ...rest } = current;
+        return { ...rest, error: outcome.error, ...(outcome.chooseModel ? { chooseModel: outcome.chooseModel } : { chooseModel: undefined }) };
+      }
+      return { ...current, closing: true };
+    });
+  };
   const runCommand = async (command: PluginCommand) => {
     const selection = document.getSelection();
     if (!selected || !selection?.rangeCount) return;
     const text = (selection.toString() || selected.text.slice(selected.start, selected.end)).trim();
     if (!text) return;
     const range = selection.getRangeAt(0).cloneRange();
+    const runId = selected.target?.anchor.runId;
+    const selectionInput: CommandSelection = { text, ...(runId ? { runId } : {}) };
     // The selection stays painted while the card is open, so the reader still sees what it is about.
     setSelected(undefined);
     const rect = range.getBoundingClientRect();
@@ -379,11 +410,14 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     const roomAbove = rect.top - view.top;
     const roomBelow = view.bottom - rect.bottom;
     const above = roomAbove > roomBelow;
-    setCard({ command, range, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
-    const runId = selected.target?.anchor.runId;
-    const answer = await selectionCommands.run(command, { text, ...(runId ? { runId } : {}) });
-    // Closed, or replaced by another, meanwhile: the answer is not wanted.
-    setCard((current) => current?.range !== range || current.closing ? current : answer ? { ...current, ...answer } : { ...current, closing: true });
+    setCard({ command, range, selection: selectionInput, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
+    await executeSelectionCommand(command, range, selectionInput);
+  };
+  const retryCard = () => {
+    if (!card || card.closing) return;
+    const { command, range, selection: selectionInput, above, room } = card;
+    setCard({ command, range, selection: selectionInput, above, room });
+    void executeSelectionCommand(command, range, selectionInput);
   };
   // Above the selection, or below it when there was no room above.
   const above = selected?.above ?? true;
@@ -431,6 +465,13 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
           icon={card.command.icon}
           title={card.title ?? card.command.title}
           {...(card.text !== undefined ? { text: card.text } : {})}
+          {...(card.error !== undefined ? {
+            error: card.error,
+            onRetry: retryCard,
+            ...(card.chooseModel && selectionCommands.openModelSettings ? {
+              action: { label: t`选择模型`, onClick: () => selectionCommands.openModelSettings!(card.chooseModel!) },
+            } : {}),
+          } : {})}
           onClose={closeCard}
           onAnimationEnd={(event) => { if (card.closing && event.target === event.currentTarget) setCard(undefined); }}
           className={cn(

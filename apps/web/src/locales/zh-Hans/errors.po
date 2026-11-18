@@ -474,8 +474,28 @@ msgstr "插件配置已被修改，请重新读取后保存"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_CUT_OFF"
+msgstr "模型输出超出长度上限"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_EMPTY_OUTPUT"
+msgstr "模型未返回内容，请重试"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_MODEL_NOT_CHOSEN"
 msgstr "还没有选择要用的模型"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_TIMEOUT"
+msgstr "模型响应超时，请重试"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_UNAVAILABLE"
+msgstr "所选模型的提供商当前不可用"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json

@@ -474,8 +474,28 @@ msgstr "Plugin configuration changed; reload it before saving"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_CUT_OFF"
+msgstr "The model output exceeded the length limit"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_EMPTY_OUTPUT"
+msgstr "The model returned an empty reply; try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_MODEL_NOT_CHOSEN"
 msgstr "No model is chosen for this yet"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_TIMEOUT"
+msgstr "The model timed out; try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_UNAVAILABLE"
+msgstr "The chosen model's provider is unavailable"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
