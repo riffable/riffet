@@ -5,10 +5,11 @@ import type { Session, SessionTitleSource } from '@riffet/contracts';
  *
  * A conversation is named after its first human message the moment it is accepted, so it is never
  * "New conversation" while the first turn runs. That name is a stand-in: once a model-written title
- * arrives — Codex's thread name, Claude Code's `ai-title`, Cursor's chat name, or the workbench's
- * own title model — it replaces the first message once and then stays. A provider's weak label (a
- * resume-picker guess, DSH's ~10-character summary cut mid-sentence) only fills a session that has
- * no name at all, and a title the reader typed is final.
+ * arrives it replaces the first message once. A CLI's own name — Codex's thread name, Claude Code's
+ * `ai-title`, Cursor's chat name — is still the CLI's choice, so the workbench's title model, when
+ * the reader configured one, replaces it once more; the title model's answer then stays. A
+ * provider's weak label (a resume-picker guess, DSH's ~10-character summary cut mid-sentence) only
+ * fills a session that has no name at all, and a title the reader typed is final.
  *
  * The rules are pure so the wiring in each backend stays a one-liner and the policy is testable
  * without a store, a CLI, or a transcript.
@@ -116,6 +117,7 @@ function cleanMessageLine(raw: string): string | undefined {
 /** The source flags, named so call sites and tests read the same. */
 export const TITLE_FROM_PROMPT: SessionTitleSource = 'prompt';
 export const TITLE_FROM_PROVIDER: SessionTitleSource = 'provider';
+export const TITLE_FROM_AGENT: SessionTitleSource = 'agent';
 export const TITLE_FROM_GENERATED: SessionTitleSource = 'generated';
 export const TITLE_FROM_USER: SessionTitleSource = 'user';
 
@@ -123,7 +125,7 @@ type TitlePatch = Pick<Session, 'title' | 'titleSource'>;
 
 /** Sources no message-derived rule may replace. */
 function settled(source: SessionTitleSource | undefined): boolean {
-  return source === TITLE_FROM_USER || source === TITLE_FROM_GENERATED || source === TITLE_FROM_PROMPT;
+  return source === TITLE_FROM_USER || source === TITLE_FROM_GENERATED || source === TITLE_FROM_AGENT || source === TITLE_FROM_PROMPT;
 }
 
 /**
@@ -160,7 +162,7 @@ export function acceptedTitlePatch(session: Pick<Session, 'title' | 'titleSource
 export function firstMessageTitlePatch(session: Pick<Session, 'title' | 'titleSource'>, text: string | undefined): TitlePatch | undefined {
   // Older servers promoted the CLI's first-message label to a final generated title. Recover its
   // provenance only with the actual first message; a reader's explicit rename is always final.
-  if (session.titleSource === TITLE_FROM_GENERATED && isPromptTitle(session.title, text)) {
+  if ((session.titleSource === TITLE_FROM_GENERATED || session.titleSource === TITLE_FROM_AGENT) && isPromptTitle(session.title, text)) {
     return { title: titleFromMessage(text)!, titleSource: TITLE_FROM_PROMPT };
   }
   return patchFromMessage(session, text, true);
@@ -240,7 +242,7 @@ export function isPromptTitle(title: string | undefined, message: string | undef
 export function nativeTitlePatch(session: Pick<Session, 'title' | 'titleSource'>, title: string | undefined, message: string | undefined): TitlePatch | undefined {
   if (message === undefined) return providerTitlePatch(session, title);
   if (isPromptTitle(title, message)) return firstMessageTitlePatch(session, message);
-  return generatedTitlePatch(session, title, message);
+  return agentTitlePatch(session, title, message);
 }
 
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
@@ -255,28 +257,44 @@ export function sameScript(title: string, message: string): boolean {
 }
 
 /**
- * The patch that adopts a model-written title, or `undefined`. It upgrades the first-message
- * stand-in (checking it is in the same language), a provider's own label, or a placeholder — once:
- * a conversation that already carries a generated title keeps it, and the reader's title is final.
- * Pass the full first `message` when it is at hand: the stand-in is clipped, and the language may
- * only show after the cut.
+ * The patch that adopts the workbench title model's answer, or `undefined`. It upgrades the
+ * first-message stand-in (checking it is in the same language), a CLI's own name, a provider's
+ * label, or a placeholder — once: a conversation that already carries a generated title keeps it,
+ * and the reader's title is final. Pass the full first `message` when it is at hand: the stand-in
+ * is clipped, and the language may only show after the cut.
  *
- * A provider label is checked for language too, not just the stand-in. Cursor names a Chinese
+ * A name already there is checked for language too, not just the stand-in. Cursor names a Chinese
  * conversation in English, and that is the case worth replacing; but when the model's answer is the
  * one in the wrong language, the CLI's name is the better of the two and stays.
  */
 export function generatedTitlePatch(session: Pick<Session, 'title' | 'titleSource'>, title: string | undefined, message?: string): TitlePatch | undefined {
+  return modelTitlePatch(session, title, message, TITLE_FROM_GENERATED);
+}
+
+/**
+ * The patch that adopts a name the CLI's own model wrote (Codex's thread name, Claude Code's
+ * `ai-title`, Cursor's chat name), or `undefined`. Same rules as `generatedTitlePatch`, except that
+ * it never replaces another CLI name and is marked so the title model may still replace it: a CLI
+ * names a conversation in two or three generic words ("网页设计改进"), and a reader who configured a
+ * title model asked for that model's titles.
+ */
+export function agentTitlePatch(session: Pick<Session, 'title' | 'titleSource'>, title: string | undefined, message?: string): TitlePatch | undefined {
+  if (session.titleSource === TITLE_FROM_AGENT) return undefined;
+  return modelTitlePatch(session, title, message, TITLE_FROM_AGENT);
+}
+
+function modelTitlePatch(session: Pick<Session, 'title' | 'titleSource'>, title: string | undefined, message: string | undefined, source: SessionTitleSource): TitlePatch | undefined {
   if (session.titleSource === TITLE_FROM_USER) return undefined;
-  const recoveredPrompt = session.titleSource === TITLE_FROM_GENERATED && isPromptTitle(session.title, message);
+  const recoveredPrompt = (session.titleSource === TITLE_FROM_GENERATED || session.titleSource === TITLE_FROM_AGENT) && isPromptTitle(session.title, message);
   if (session.titleSource === TITLE_FROM_GENERATED && !recoveredPrompt) return undefined;
   const legacyPrompt = session.titleSource === undefined && message !== undefined && session.title === titleFromMessage(message);
   if (session.titleSource === undefined && !isPlaceholderTitle(session.title) && !legacyPrompt) return undefined;
   const value = cleanGeneratedTitle(title);
   if (!value || isPlaceholderTitle(value)) return undefined;
-  const named = session.titleSource === TITLE_FROM_PROMPT || session.titleSource === TITLE_FROM_PROVIDER || legacyPrompt || recoveredPrompt;
+  const named = session.titleSource === TITLE_FROM_PROMPT || session.titleSource === TITLE_FROM_PROVIDER || session.titleSource === TITLE_FROM_AGENT || legacyPrompt || recoveredPrompt;
   if (named && message !== undefined && !sameScript(value, `${session.title}\n${message}`)) return undefined;
   if (session.titleSource === TITLE_FROM_PROMPT && message === undefined && !sameScript(value, session.title)) return undefined;
-  return { title: value, titleSource: TITLE_FROM_GENERATED };
+  return { title: value, titleSource: source };
 }
 
 /** The first human message in a batch of projected transcript events, if it carries text. */

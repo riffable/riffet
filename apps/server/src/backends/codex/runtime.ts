@@ -3659,8 +3659,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
    */
   async pushTitle(): Promise<void> {
     const session = this.host.getSession(this.session.id);
-    if (session.titleSource !== 'user' && session.titleSource !== 'generated') return;
-    if (session.titleSource === 'generated') {
+    if (session.titleSource !== 'user' && session.titleSource !== 'generated' && session.titleSource !== 'agent') return;
+    if (session.titleSource !== 'user') {
       const message = this.firstTitleMessage();
       if (message === undefined || isPromptTitle(session.title, message)) return;
     }

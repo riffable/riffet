@@ -1,6 +1,6 @@
 import type { AuxiliaryModelRef, Run, Session } from '../../../../packages/contracts/src/index.js';
 import { auxiliaryEndpoint, type GatewayProfiles } from '../auxiliary/models.js';
-import { generatedTitlePatch, isPlaceholderTitle, isPromptTitle, TITLE_FROM_GENERATED, TITLE_FROM_PROMPT, TITLE_FROM_PROVIDER, titleFromMessage } from '../session-title.js';
+import { generatedTitlePatch, isPlaceholderTitle, isPromptTitle, TITLE_FROM_AGENT, TITLE_FROM_GENERATED, TITLE_FROM_PROMPT, TITLE_FROM_PROVIDER, titleFromMessage } from '../session-title.js';
 import type { Store } from '../store.js';
 import { requestTitle, type TitleRequest } from './request.js';
 
@@ -8,10 +8,8 @@ import { requestTitle, type TitleRequest } from './request.js';
  * How long a finished first turn waits before the workbench writes a title itself.
  *
  * Zero: a configured title model can name a conversation as soon as its first answer finishes.
- * The old ten-second hold existed to let Claude Code's `ai-title` land before we
- * paid for a title, but the reader spends those seconds looking at their own first message — and
- * whichever name arrives second is dropped anyway, so the wait only ever decided which one won.
- * Taking it out is what makes the two paths an either/or rather than a race.
+ * The CLI's own name no longer competes with it — the title model replaces that name whichever
+ * arrives first — so there is nothing to wait for.
  */
 const DEFAULT_DELAY_MS = 0;
 
@@ -29,11 +27,11 @@ export interface TitleServiceOptions {
 }
 
 /**
- * A reader's rename and a real model-written title are final. A CLI's first-message fallback is
- * still replaceable, including old rows that mistakenly marked that fallback as generated.
+ * A reader's rename and the title model's answer are final. A CLI's own name and its first-message
+ * fallback are still replaceable, including old rows that mistakenly marked that fallback as generated.
  */
 function replaceable(session: Pick<Session, 'title' | 'titleSource'>, firstPrompt?: string): boolean {
-  if (session.titleSource === TITLE_FROM_PROMPT || session.titleSource === TITLE_FROM_PROVIDER) return true;
+  if (session.titleSource === TITLE_FROM_PROMPT || session.titleSource === TITLE_FROM_PROVIDER || session.titleSource === TITLE_FROM_AGENT) return true;
   if (session.titleSource === TITLE_FROM_GENERATED) return isPromptTitle(session.title, firstPrompt);
   return session.titleSource === undefined
     && (isPlaceholderTitle(session.title) || (firstPrompt !== undefined && session.title === titleFromMessage(firstPrompt)));
@@ -46,12 +44,13 @@ function replaceable(session: Pick<Session, 'title' | 'titleSource'>, firstPromp
 const DEFAULT_BACKFILL_DELAY_MS = 20_000;
 
 /**
- * The workbench's own title writer, for conversations whose CLI offers no title worth keeping:
- * DSH's is a clipped summary, some CLIs name Chinese conversations in English, and Claude Code does
- * not always write one.
+ * The workbench's own title writer. When the reader configured a title model, its titles take
+ * precedence over every CLI's own: Cursor names a conversation in two or three generic words, DSH's
+ * is a clipped summary, some CLIs name Chinese conversations in English, and Claude Code does not
+ * always write one.
  *
  * It runs once per conversation and only while the conversation still carries its first-message
- * stand-in — so a CLI title that arrived in the meantime, or a rename, simply makes it a no-op.
+ * stand-in or a CLI's name — so a rename simply makes it a no-op.
  * Two paths reach it: a first turn completing now, and one backfill pass at startup for the
  * conversations whose first turn finished before a title model was ever configured.
  */

@@ -5,6 +5,7 @@ import { Store } from '../store.js';
 import { scratchKeyOf } from '../journal/journal.js';
 import { listAuxiliaryModels } from '../auxiliary/models.js';
 import type { TitleRequest } from './request.js';
+import { agentTitlePatch } from '../session-title.js';
 import { TitleService } from './service.js';
 
 const stores: Store[] = [];
@@ -72,15 +73,28 @@ describe('TitleService', () => {
     expect(requests[0]?.reply).toBe('TypeError 来自 stats 页面的空数组');
   });
 
-  it('leaves a conversation alone when a CLI title or a rename arrived first', async () => {
+  it('replaces a CLI\'s own name, and a CLI name arriving later does not replace its title', async () => {
     vi.useFakeTimers();
     const { store, session, requests } = setup();
     const run = send(store, session.id, '帮我看一下统计页面');
     complete(store, run.id);
-    store.updateSession(session.id, { title: 'Codex 起的名字', titleSource: 'generated' });
+    store.updateSession(session.id, agentTitlePatch(store.getSession(session.id), '统计页面', '帮我看一下统计页面')!);
+    expect(store.getSession(session.id)).toMatchObject({ title: '统计页面', titleSource: 'agent' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(requests).toHaveLength(1);
+    expect(store.getSession(session.id)).toMatchObject({ title: '优化统计页面样式', titleSource: 'generated' });
+    expect(agentTitlePatch(store.getSession(session.id), '统计页面', '帮我看一下统计页面')).toBeUndefined();
+  });
+
+  it('leaves a conversation alone when a rename arrived first', async () => {
+    vi.useFakeTimers();
+    const { store, session, requests } = setup();
+    const run = send(store, session.id, '帮我看一下统计页面');
+    complete(store, run.id);
+    store.updateSession(session.id, { title: '我的名字', titleSource: 'user' });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(requests).toHaveLength(0);
-    expect(store.getSession(session.id).title).toBe('Codex 起的名字');
+    expect(store.getSession(session.id).title).toBe('我的名字');
   });
 
   it('does not overwrite a rename made while the model was answering', async () => {

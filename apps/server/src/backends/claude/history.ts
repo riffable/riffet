@@ -1195,6 +1195,7 @@ export class ClaudeTranscript {
   private steps: ClaudeStepMeasurement[] = [];
   private userIds = new Set<string>();
   private titleValue: string | undefined;
+  private titleRenamedValue = false;
   private goalValue: SessionGoal | undefined;
   private readonly subagents = new Map<string, ClaudeSubagentState>();
   private subagentScannedAt = 0;
@@ -1226,6 +1227,9 @@ export class ClaudeTranscript {
    * or a desktop client), else the latest `ai-title` row its own model writes after the first turn.
    */
   get title(): string | undefined { return this.titleValue; }
+
+  /** Whether `title` is a `custom-title` row — someone chose it — rather than Claude Code's own `ai-title`. */
+  get titleRenamed(): boolean { return this.titleRenamedValue; }
 
   /** The conversation's `/goal` as its rows leave it. */
   get goal(): SessionGoal | undefined { return this.goalValue; }
@@ -1279,6 +1283,7 @@ export class ClaudeTranscript {
     this.fileGeneration += 1;
     this.loaded = false;
     this.titleValue = undefined;
+    this.titleRenamedValue = false;
     this.goalValue = undefined;
     this.offset = 0;
     this.rows = [];
@@ -1442,6 +1447,7 @@ export class ClaudeTranscript {
       this.steps = progress.meter.steps();
       this.userIds = userIds;
       this.titleValue = progress.customTitle ?? progress.aiTitle;
+      this.titleRenamedValue = progress.customTitle !== undefined;
       this.goalValue = progress.goal;
       this.transcriptState = 'ok';
       this.loaded = true;

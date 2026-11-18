@@ -652,7 +652,7 @@ describe('Codex thread names', () => {
     h.host.firstUserMessage = () => '这个仓库最近在做什么';
     await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
     h.transport!.emitNativeNotification('thread/name/updated', { threadId: 'native-thread', name: '查看仓库近期动态' });
-    expect(h.session).toMatchObject({ title: '查看仓库近期动态', titleSource: 'generated' });
+    expect(h.session).toMatchObject({ title: '查看仓库近期动态', titleSource: 'agent' });
     h.transport!.emitNativeNotification('thread/name/updated', { threadId: 'native-thread', name: '仓库动态' });
     expect(h.session.title).toBe('查看仓库近期动态');
     expect(h.transport!.lastParams('thread/name/set')).toEqual({ threadId: 'native-thread', name: '查看仓库近期动态' });
@@ -670,7 +670,7 @@ describe('Codex thread names', () => {
     expect(h.transport!.lastParams('thread/name/set')).toBeUndefined();
 
     h.transport!.emitNativeNotification('thread/name/updated', { threadId: 'native-thread', name: '排查 riffet Cursor subagent 识别问题' });
-    expect(h.session).toMatchObject({ title: '排查 riffet Cursor subagent 识别问题', titleSource: 'generated' });
+    expect(h.session).toMatchObject({ title: '排查 riffet Cursor subagent 识别问题', titleSource: 'agent' });
     expect(h.transport!.lastParams('thread/name/set')).toBeUndefined();
     await h.adapter.dispose(h.host, h.session.id);
   });
@@ -706,7 +706,7 @@ describe('Codex thread names', () => {
 
     firstMessage = prompt;
     h.transport!.emitNativeNotification('thread/name/updated', { threadId: 'native-thread', name: '排查 riffet Cursor subagent 识别问题' });
-    expect(h.session).toMatchObject({ title: '排查 riffet Cursor subagent 识别问题', titleSource: 'generated' });
+    expect(h.session).toMatchObject({ title: '排查 riffet Cursor subagent 识别问题', titleSource: 'agent' });
     expect(h.transport!.lastParams('thread/name/set')).toBeUndefined();
     await h.adapter.dispose(h.host, h.session.id);
   });

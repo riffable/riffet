@@ -9,12 +9,12 @@ export type SessionState = 'idle' | 'starting' | 'running' | 'waiting' | 'cancel
 /**
  * Where a conversation's title came from, weakest first. `provider` is a CLI's placeholder-grade
  * label (a resume-picker guess, DSH's clipped summary), `prompt` is the first human message,
- * `generated` is a model-written title — the CLI's own (Codex, Claude Code, Cursor) or the
- * workbench's — and `user` is what the reader typed. A title is only ever replaced by a stronger
- * source, and `generated` replaces `prompt` once, so a conversation is named instantly and then
- * upgraded without ever overriding a rename.
+ * `agent` is the CLI's own model-written name (Codex, Claude Code, Cursor), `generated` is the
+ * workbench title model's — or, on rows written before `agent` existed, either — and `user` is what
+ * the reader typed. A title is only ever replaced by a stronger source, so a conversation is named
+ * instantly and then upgraded without ever overriding a rename.
  */
-export type SessionTitleSource = 'prompt' | 'provider' | 'generated' | 'user';
+export type SessionTitleSource = 'prompt' | 'provider' | 'agent' | 'generated' | 'user';
 /**
  * How the native CLI approves tool calls, in the CLI's own vocabulary: `allowlist` asks per call
  * through its allowlist, `auto-review` lets Cursor's classifier run the safe ones, `unrestricted`

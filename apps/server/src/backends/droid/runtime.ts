@@ -12,7 +12,7 @@ import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/inde
 import { AppError } from '../../errors.js';
 import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { estimateTokens } from '../../metrics/tokens.js';
-import { firstHumanMessage, firstMessageTitlePatch, generatedTitlePatch, providerTitlePatch } from '../../session-title.js';
+import { agentTitlePatch, firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import { resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
 import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-selection.js';
@@ -1330,7 +1330,7 @@ export class DroidRuntime {
       }
       case 'session_title_updated':
         if (notification.updateType === 'llm_generated') {
-          this.patchSession(state, generatedTitlePatch(this.host.getSession(state.workbenchSessionId), str(notification.title), state.firstMessage));
+          this.patchSession(state, agentTitlePatch(this.host.getSession(state.workbenchSessionId), str(notification.title), state.firstMessage));
         }
         return;
       case 'settings_updated': {

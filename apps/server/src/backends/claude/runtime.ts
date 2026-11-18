@@ -1201,11 +1201,11 @@ export class ClaudeSessionRuntime {
     // with a Chinese conversation.
     // Both read the session from the store, so they run when the rows moved or what they name from did.
     const humanMessage = this.transcript.firstHumanMessage();
-    const titleInputs = `${humanMessage ?? ''}\u0000${this.transcript.title ?? ''}`;
+    const titleInputs = `${humanMessage ?? ''}\u0000${this.transcript.title ?? ''}\u0000${this.transcript.titleRenamed}`;
     if (result.reset || result.events.length || titleInputs !== this.titleInputs) {
       this.titleInputs = titleInputs;
       if (humanMessage) this.adoption.nameFromMessage(humanMessage);
-      if (this.transcript.title) this.adoption.adoptTranscriptTitle(this.transcript.title, humanMessage);
+      if (this.transcript.title) this.adoption.adoptTranscriptTitle(this.transcript.title, humanMessage, this.transcript.titleRenamed);
     }
     this.adoption.adoptTranscriptGoal(this.transcript.goal);
     for (const frame of result.subagents) if (frame.running !== undefined) this.emit({ type: 'subagent', toolCallId: frame.toolCallId, agentId: frame.agentId, running: frame.running });

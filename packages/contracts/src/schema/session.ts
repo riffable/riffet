@@ -14,7 +14,7 @@ export const SessionStateSchema = z.enum([
   'idle', 'starting', 'running', 'waiting', 'cancelling', 'interrupted', 'failed', 'archived',
 ]);
 /** Kotlin keeps this as a string, so a newer server may add a stronger source. */
-export const SessionTitleSourceSchema = z.enum(['prompt', 'provider', 'generated', 'user']).meta({ open: true });
+export const SessionTitleSourceSchema = z.enum(['prompt', 'provider', 'agent', 'generated', 'user']).meta({ open: true });
 
 export const SessionOriginKindSchema = z.enum(['fork', 'handoff', 'attempt', 'automation', 'template', 'schedule', 'discussion', 'channel', 'assistant']).meta({ open: true });
 

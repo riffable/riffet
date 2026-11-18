@@ -1,5 +1,5 @@
 import type { Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
-import { firstMessageTitlePatch, generatedTitlePatch } from '../../session-title.js';
+import { agentTitlePatch, firstMessageTitlePatch, generatedTitlePatch } from '../../session-title.js';
 import type { NativeBackendHost, NativeControlMessage } from '../types.js';
 import type { ClaudeTranscript } from './history.js';
 
@@ -27,9 +27,13 @@ export class TranscriptAdoption {
     this.deps.emit({ type: 'session', session: this.deps.host.updateSession(this.deps.session().id, { goal }) });
   }
 
-  /** Adopt the title Claude Code recorded in its transcript; it replaces the first message once. */
-  adoptTranscriptTitle(title: string, firstPrompt?: string): void {
-    const patch = generatedTitlePatch(this.deps.host.getSession(this.deps.session().id), title, firstPrompt);
+  /**
+   * Adopt the title Claude Code recorded in its transcript; it replaces the first message once. Its
+   * own `ai-title` stays replaceable by the title model; a `/rename` (`renamed`) is someone's choice
+   * and stays.
+   */
+  adoptTranscriptTitle(title: string, firstPrompt?: string, renamed = false): void {
+    const patch = (renamed ? generatedTitlePatch : agentTitlePatch)(this.deps.host.getSession(this.deps.session().id), title, firstPrompt);
     if (!patch) return;
     this.deps.emit({ type: 'session', session: this.deps.host.updateSession(this.deps.session().id, patch) });
   }
