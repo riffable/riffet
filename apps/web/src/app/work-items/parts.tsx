@@ -14,19 +14,21 @@ export function useStatusLabel(): (status: WorkItemStatus) => string {
   return (status) => ({
     todo: t({ message: '待办', context: 'work-item-status' }),
     doing: t({ message: '进行中', context: 'work-item-status' }),
+    watching: t({ message: '观测中', context: 'work-item-status' }),
     review: t({ message: '待验收', context: 'work-item-status' }),
     done: t({ message: '完成', context: 'work-item-status' }),
-    cancelled: t({ message: '已取消', context: 'work-item-status' }),
+    cancelled: t({ message: '无需关注', context: 'work-item-status' }),
   })[status];
 }
 
 /**
  * A ring that fills as the work advances, each status in its own colour: blue while an agent works,
- * the warning amber while the owner is to review, green once done (docs/TASK-BOARD.md §9).
+ * neutral ink while watching, amber while the owner is to review, green once done, grey slash once dismissed.
  */
 const STATUS_TONE: Record<WorkItemStatus, string> = {
   todo: 'var(--fg-4)',
   doing: 'var(--accent)',
+  watching: 'var(--fg-3)',
   review: 'var(--warning)',
   done: 'var(--success)',
   cancelled: 'var(--fg-4)',
@@ -49,11 +51,12 @@ export function StatusIcon({ status, running, className }: { status: WorkItemSta
         ? <g className="ui-spinner animate-spin" style={{ transformBox: 'view-box', transformOrigin: 'center' }}>{ring('24 10.6')}</g>
         : status !== 'done' && ring(status === 'todo' ? '1.4 2' : undefined)}
       {status === 'doing' && <path d="M7 7V3.6A3.4 3.4 0 0 1 7 10.4Z" fill={tone} />}
+      {status === 'watching' && <circle cx="7" cy="7" r="2" fill={tone} />}
       {status === 'review' && <path d="M7 7V3.6A3.4 3.4 0 1 1 3.6 7Z" fill={tone} />}
       {status === 'done' && (running
         ? <path d={check} fill="none" stroke={tone} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         : <><circle cx="7" cy="7" r="6.1" fill={tone} /><path d={check} fill="none" stroke="var(--bg)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></>)}
-      {status === 'cancelled' && <path d="M4.6 9.4 9.4 4.6" stroke={tone} strokeWidth="1.25" />}
+      {status === 'cancelled' && <path d="M4.6 9.4 9.4 4.6" stroke={tone} strokeWidth="1.25" strokeLinecap="round" />}
     </svg>
   );
 }

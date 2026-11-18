@@ -15,13 +15,27 @@ import type { RouteDeps } from './deps.js';
 /** Tasks (docs/TASK-BOARD.md). The list is served under the work items revision; `/api/lists/stream` carries it as `workItems`. */
 export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const {store,workItems}=deps;
+  const endLinkedDelegation = (delegationId: string | undefined) => {
+    if (!delegationId) return;
+    try { deps.assistantDelegations?.()?.end(delegationId, 'owner'); } catch { /* absent, already ended, or starting */ }
+  };
   app.get('/api/work-items',async(request,reply)=>revisionedList<WorkItemList>(request,reply,store.workItemsRevision,()=>{
     const projects=new Map(store.listProjects().map(project=>[project.id,project]));
     return {items:workItems.list().filter(item=>{const project=item.projectId?projects.get(item.projectId):undefined;return !project||projectVisibleToClient(request.headers,project);})};
   }));
   app.post<{Body:WorkItemCreate}>('/api/work-items',async(request)=>workItems.create(request.body));
-  app.patch<{Params:{id:string};Body:WorkItemPatch}>('/api/work-items/:id',async(request)=>workItems.patch(request.params.id,request.body));
-  app.delete<{Params:{id:string}}>('/api/work-items/:id',async(request,reply)=>{workItems.delete(request.params.id);reply.code(204);});
+  app.patch<{Params:{id:string};Body:WorkItemPatch}>('/api/work-items/:id',async(request)=>{
+    const before=workItems.get(request.params.id);
+    const updated=workItems.patch(request.params.id,request.body);
+    if(before.watch?.delegationId&&before.watch.delegationId!==updated.watch?.delegationId)endLinkedDelegation(before.watch.delegationId);
+    return updated;
+  });
+  app.delete<{Params:{id:string}}>('/api/work-items/:id',async(request,reply)=>{
+    const before=workItems.get(request.params.id);
+    workItems.delete(request.params.id);
+    endLinkedDelegation(before.watch?.delegationId);
+    reply.code(204);
+  });
   app.get<{Params:{id:string}}>('/api/work-items/:id/events',async(request)=>workItems.events(request.params.id));
   app.post<{Params:{id:string};Body:{text?:unknown;id?:unknown}}>('/api/work-items/:id/comments',async(request)=>workItems.addComment(request.params.id,request.body?.text,request.body?.id));
   app.get<{Querystring:{from?:string;to?:string;tz?:string}}>('/api/work-items/north-star',async(request)=>{
@@ -71,7 +85,31 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
   const delegations=()=>deps.assistantDelegations?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})();
   app.get('/api/assistant/runs/usage',async():Promise<AssistantRunUsage>=>(deps.assistantRuns?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})()).usage());
   app.get('/api/assistant/delegations',async():Promise<{delegations:AssistantDelegation[]}>=>({delegations:delegations().list()}));
-  app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>delegations().end(request.params.id,'owner'));
+  app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>{
+    const ended=delegations().end(request.params.id,'owner');
+    for(const item of workItems.list()){
+      if(item.watch?.delegationId===ended.id){
+        const {delegationId:_id,...rest}=item.watch;
+        workItems.patch(item.id,{watch:Object.keys(rest).length?rest:null});
+      }
+    }
+    return ended;
+  });
+  app.post<{Params:{id:string};Body:{goal?:unknown;attention?:unknown;trigger?:unknown;until?:unknown;note?:unknown}}>('/api/work-items/:id/watch-delegation',async(request)=>{
+    const item=workItems.get(request.params.id);
+    const body=request.body??{};
+    const attention=typeof body.attention==='string'&&body.attention.trim()?body.attention.trim():item.watch?.note??item.title;
+    const goal=typeof body.goal==='string'&&body.goal.trim()?body.goal.trim():`#${item.number} ${item.title}`;
+    const delegation=delegations().create({goal,attention,trigger:body.trigger,...(body.until!==undefined?{until:body.until}:{})});
+    const prevDelegation=item.watch?.delegationId;
+    const note=typeof body.note==='string'&&body.note.trim()?body.note.trim():item.watch?.note??attention;
+    const updated=workItems.patch(item.id,{
+      status:'watching',
+      watch:{...(item.watch?.until?{until:item.watch.until}:{}),note,delegationId:delegation.id},
+    });
+    if(prevDelegation&&prevDelegation!==delegation.id)endLinkedDelegation(prevDelegation);
+    return {item:updated,delegation};
+  });
   app.post<{Params:{id:string};Body:Partial<WorkItemRework>}>('/api/work-items/:id/rework',async(request)=>workItems.rework(request.params.id,request.body?.text,request.body?.commandId));
   app.post<{Params:{id:string};Body:SessionWorkItemRequest}>('/api/sessions/:id/work-item',async(request)=>{
     const session=store.getSession(request.params.id);

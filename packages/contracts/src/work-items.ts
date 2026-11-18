@@ -10,8 +10,18 @@ import type { NativeBackendId } from './agent-ids.js';
  */
 
 /** `done` is only ever set by the owner; an agent can at most ask for review. */
-export const WORK_ITEM_STATUSES = ['todo', 'doing', 'review', 'done', 'cancelled'] as const;
+export const WORK_ITEM_STATUSES = ['todo', 'doing', 'watching', 'review', 'done', 'cancelled'] as const;
 export type WorkItemStatus = typeof WORK_ITEM_STATUSES[number];
+
+/** Optional observation settings while a task sits in `watching` (docs/TASK-BOARD.md §4.1). */
+export interface WorkItemWatch {
+  /** ISO timestamp when this watching item should resurface in the inbox; omitted for open-ended manual watching. */
+  until?: string;
+  /** What the owner is waiting on or observing. */
+  note?: string;
+  /** Optional linked AssistantDelegation id for automated monitoring. */
+  delegationId?: string;
+}
 
 /**
  * Who works on it: an agent, or the owner themself. An agent's `profileId` and `model` (with the composer's
@@ -56,6 +66,8 @@ export interface WorkItem {
    * judgment, for the inbox's 推不动. Cleared when the task's conversation runs again or the owner acts.
    */
   stuck?: { note: string; at: string };
+  /** Observation metadata when `status` is `watching`. */
+  watch?: WorkItemWatch;
   /** When `status` last changed. */
   statusAt: string;
   createdAt: string;
@@ -111,11 +123,12 @@ export interface WorkItemCreate {
   title: string;
   description?: string;
   criteria?: string[];
-  status?: Extract<WorkItemStatus, 'todo' | 'doing'>;
+  status?: Extract<WorkItemStatus, 'todo' | 'doing' | 'watching'>;
   assignee?: WorkItemAssignee;
   projectId?: string;
   parentId?: string;
   labels?: string[];
+  watch?: WorkItemWatch;
 }
 
 /** Each field given replaces its own; `null` clears an optional one. Editing `title` stops it following a conversation. */
@@ -128,6 +141,7 @@ export interface WorkItemPatch {
   projectId?: string | null;
   parentId?: string | null;
   labels?: string[];
+  watch?: WorkItemWatch | null;
 }
 
 /** The activity of a work item, oldest first. */
@@ -174,6 +188,7 @@ export interface WorkItemSummary {
   status: WorkItemStatus;
   hasQuestion?: boolean;
   stuck?: boolean;
+  watchUntil?: string;
 }
 
 export function summarizeWorkItem(item: WorkItem): WorkItemSummary {
@@ -183,6 +198,7 @@ export function summarizeWorkItem(item: WorkItem): WorkItemSummary {
     status: item.status,
     ...(item.questions?.length ? { hasQuestion: true } : {}),
     ...(item.stuck ? { stuck: true } : {}),
+    ...(item.status === 'watching' && item.watch?.until ? { watchUntil: item.watch.until } : {}),
   };
 }
 
@@ -194,5 +210,5 @@ export interface SessionWorkItemRequest { workItemId: string | 'new' | null }
 
 export const WORK_ITEM_LIMITS = {
   title: 200, description: 20_000, labels: 10, label: 32, comment: 20_000,
-  criteria: 10, criterion: 500, summary: 20_000, note: 2_000, question: 4_000, options: 6, option: 200,
+  criteria: 10, criterion: 500, summary: 20_000, note: 2_000, watchNote: 500, question: 4_000, options: 6, option: 200,
 } as const;

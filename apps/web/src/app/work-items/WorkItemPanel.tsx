@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { WORK_ITEM_LIMITS, WORK_ITEM_STATUSES, type NativeBackendCatalogEntry, type WorkItem, type WorkItemCommand, type WorkItemEvent, type WorkItemQuestion, type WorkItemStatus, type WorkItemSubmission } from '@contracts';
+import { WORK_ITEM_LIMITS, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type NativeBackendCatalogEntry, type WorkItem, type WorkItemCommand, type WorkItemEvent, type WorkItemQuestion, type WorkItemStatus, type WorkItemSubmission, type WorkItemWatch } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
 import { AgentLogo } from '@/components/AgentLogo';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/controls';
+import { Badge, Input, Select } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
-import { IconArrowUp, IconCheck, IconChevronDown, IconEllipsis, IconListTodo, IconMinus, IconPlay, IconPlus, IconRotateCcw, IconTrash2, IconX } from '@/components/icons';
+import { IconArrowUp, IconCalendarClock, IconCheck, IconChevronDown, IconEllipsis, IconEye, IconListTodo, IconMinus, IconPlay, IconPlus, IconRotateCcw, IconSlash, IconTrash2, IconX } from '@/components/icons';
 import { api } from '@/lib/api';
 import { agentMarkStyle, sessionBackend } from '@/lib/backends';
 import { confirmDialog, promptDialog } from '@/lib/dialogs';
-import { relativeTime } from '@/lib/i18n/format';
+import { formatDateTime, relativeTime } from '@/lib/i18n/format';
 import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
@@ -43,7 +44,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
   const liveLabel = useLiveLabel();
   const assigneeLabel = useAssigneeLabel();
   const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
-  const { item, sessions, title, live } = view;
+  const { item, sessions, title, live, latestFailed, watchDue } = view;
   const update = (patch: Parameters<typeof workItems.update>[1]) => void workItems.update(item.id, patch);
   const children = views.filter((entry) => entry.item.parentId === item.id);
   const parent = item.parentId ? views.find((entry) => entry.item.id === item.parentId) : undefined;
@@ -81,6 +82,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
     try { await api.reworkWorkItem(item.id, { text: reason, commandId: newId() }); }
     catch (error) { toast.error(errorMessage(error, t`无法返工`)); }
   };
+  const closed = item.status === 'done' || item.status === 'cancelled';
 
   return (
     <OverlayScopeContext.Provider value={overlay.scope}>
@@ -99,7 +101,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
               <Tip label={t`更多操作`}><DropdownMenuTrigger asChild><Button size="icon-xs" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></DropdownMenuTrigger></Tip>
               <DropdownMenuContent align="end">
                 {!item.parentId && <DropdownMenuItem onSelect={() => onNewChild(item)}><IconListTodo /><Trans>新建子任务</Trans></DropdownMenuItem>}
-                {item.status !== 'cancelled' && <DropdownMenuItem onSelect={() => update({ status: 'cancelled' })}><IconX /><Trans>取消任务</Trans></DropdownMenuItem>}
+                {item.status !== 'cancelled' && <DropdownMenuItem onSelect={() => update({ status: 'cancelled' })}><IconSlash /><Trans>无需关注</Trans></DropdownMenuItem>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="danger" onSelect={() => void remove()}><IconTrash2 /><Trans>删除…</Trans></DropdownMenuItem>
               </DropdownMenuContent>
@@ -150,13 +152,43 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
             </dd>
           </dl>
 
+          {!live && latestFailed && !closed && sessions[0] && (
+            <Notice
+              tone="neutral"
+              className="mb-4"
+              action={<Button size="xs" variant="secondary" onClick={() => onOpenSession(sessions[0]!.id)}><Trans>打开会话</Trans></Button>}
+            >
+              {sessions[0].error ? t`上次运行失败：${sessions[0].error.split('\n')[0]!}` : t`上次关联会话已失败`}
+            </Notice>
+          )}
+
           {item.questions?.map((question) => <Question key={question.id} item={item} question={question} onOpenSession={onOpenSession} />)}
+
+          {item.status === 'watching' && (
+            <WatchSection
+              key={`watch:${item.id}:${item.watch?.until ?? ''}:${item.watch?.note ?? ''}:${item.watch?.delegationId ?? ''}`}
+              item={item}
+              watchDue={watchDue}
+              onSaveWatch={(watch) => update({ watch })}
+              onAccepted={(next) => workItems.accept(next)}
+            />
+          )}
 
           <Description key={`description:${item.id}:${item.description ?? ''}`} value={item.description ?? ''} onSave={(next) => update({ description: next || null })} />
 
           <Criteria key={`criteria:${item.id}:${(item.criteria ?? []).join('\n')}`} criteria={item.criteria ?? []} submission={item.status === 'review' || item.status === 'done' ? item.submission : undefined} onSave={(next) => update({ criteria: next })} />
 
-          <Actions item={item} hasSessions={sessions.length > 0} starting={starting} onStart={() => void onStart(item)} onDone={() => update({ status: 'done' })} onRework={() => void rework()} />
+          <Actions
+            item={item}
+            hasSessions={sessions.length > 0}
+            starting={starting}
+            onStart={() => void onStart(item)}
+            onWatch={() => update({ status: 'watching' })}
+            onResume={() => update({ status: 'doing' })}
+            onDone={() => update({ status: 'done' })}
+            onDismiss={() => update({ status: 'cancelled' })}
+            onRework={() => void rework()}
+          />
 
           {item.submission && <Delivery submission={item.submission} />}
 
@@ -185,7 +217,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
                 <button key={entry.item.id} type="button" onClick={() => onOpenItem(entry.item.id)} className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-left text-sm outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11">
                   <StatusIcon status={entry.item.status} />
                   <WorkItemNumber number={entry.item.number} />
-                  <span className={cn('min-w-0 flex-1 truncate', entry.item.status === 'done' ? 'text-fg-2' : 'text-fg')}>{entry.title}</span>
+                  <span className={cn('min-w-0 flex-1 truncate', entry.item.status === 'done' || entry.item.status === 'cancelled' ? 'text-fg-2' : 'text-fg')}>{entry.title}</span>
                   <LiveMark live={entry.live} />
                   <AssigneeMark assignee={entry.item.assignee} />
                 </button>
@@ -197,6 +229,192 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
         </div>
       </aside>
     </OverlayScopeContext.Provider>
+  );
+}
+
+/** Tomorrow at 09:00 local time, or N days from now. */
+function snoozePreset(days: number, morning = false): string {
+  const date = new Date(Date.now() + days * 86_400_000);
+  if (morning) date.setHours(9, 0, 0, 0);
+  return date.toISOString();
+}
+
+type DelegationKind = 'page' | 'github-release' | 'schedule';
+
+function WatchSection({ item, watchDue, onSaveWatch, onAccepted }: {
+  item: WorkItem;
+  watchDue: boolean;
+  onSaveWatch: (watch: WorkItemWatch | null) => void;
+  onAccepted: (item: WorkItem) => void;
+}) {
+  const { t } = useLingui();
+  const [note, setNote] = useState(item.watch?.note ?? '');
+  const [delegation, setDelegation] = useState<AssistantDelegation>();
+  const [addingTrack, setAddingTrack] = useState(false);
+  const [kind, setKind] = useState<DelegationKind>('page');
+  const [target, setTarget] = useState('');
+  const [attention, setAttention] = useState(item.watch?.note ?? '');
+  const [savingTrack, setSavingTrack] = useState(false);
+  const [endingTrack, setEndingTrack] = useState(false);
+
+  useEffect(() => {
+    const id = item.watch?.delegationId;
+    if (!id) { setDelegation(undefined); return; }
+    let cancelled = false;
+    api.assistantDelegations().then(({ delegations }) => {
+      if (!cancelled) setDelegation(delegations.find((entry) => entry.id === id));
+    }, () => {});
+    return () => { cancelled = true; };
+  }, [item.watch?.delegationId]);
+
+  const commitWatch = (patch: Omit<Partial<WorkItemWatch>, 'until'> & { until?: string | null }) => {
+    const nextNote = (patch.note !== undefined ? patch.note : note).trim();
+    const nextUntil = patch.until === null ? undefined : (patch.until ?? item.watch?.until);
+    const nextDelegation = patch.delegationId !== undefined ? patch.delegationId : item.watch?.delegationId;
+    const next: WorkItemWatch = {
+      ...(nextUntil ? { until: nextUntil } : {}),
+      ...(nextNote ? { note: nextNote.slice(0, WORK_ITEM_LIMITS.watchNote) } : {}),
+      ...(nextDelegation ? { delegationId: nextDelegation } : {}),
+    };
+    onSaveWatch(Object.keys(next).length ? next : null);
+  };
+
+  const describeTrigger = (trigger: AssistantDelegationTrigger): string => {
+    switch (trigger.kind) {
+      case 'schedule': return t`定时 ${trigger.cron}`;
+      case 'github-release': return t`${trigger.repo} 发版`;
+      case 'page': return t`${trigger.url} 有变化`;
+      case 'task-status': return t`任务 #${trigger.taskNumber} 状态变化`;
+    }
+  };
+
+  const startTracking = async () => {
+    const value = target.trim();
+    const focus = attention.trim() || note.trim() || item.title;
+    if (!value || savingTrack) return;
+    const trigger: AssistantDelegationTrigger = kind === 'github-release'
+      ? { kind: 'github-release', repo: value }
+      : kind === 'schedule'
+        ? { kind: 'schedule', cron: value }
+        : { kind: 'page', url: value };
+    setSavingTrack(true);
+    try {
+      const res = await api.watchWorkItemDelegation(item.id, { attention: focus, trigger, note: note.trim() || focus });
+      onAccepted(res.item);
+      setDelegation(res.delegation);
+      setAddingTrack(false);
+    } catch (error) { toast.error(errorMessage(error, t`无法开启助理追踪`)); }
+    finally { setSavingTrack(false); }
+  };
+
+  const endTracking = async () => {
+    if (!delegation || endingTrack) return;
+    setEndingTrack(true);
+    try {
+      await api.endAssistantDelegation(delegation.id);
+      setDelegation(undefined);
+      const next: WorkItemWatch = {
+        ...(item.watch?.until ? { until: item.watch.until } : {}),
+        ...(note.trim() ? { note: note.trim() } : {}),
+      };
+      onSaveWatch(Object.keys(next).length ? next : null);
+    } catch (error) { toast.error(errorMessage(error, t`无法结束追踪`)); }
+    finally { setEndingTrack(false); }
+  };
+
+  return (
+    <section className="mb-4 rounded-xl bg-subtle p-3 shadow-[inset_0_0_0_1px_var(--line)]">
+      <div className="mb-2 flex items-center gap-2 text-xs text-fg-3">
+        <IconEye className="size-3.5 shrink-0" />
+        <span className="font-medium text-fg-2"><Trans>观测设置</Trans></span>
+        {item.watch?.until && (
+          <span className={cn('ml-auto inline-flex items-center gap-1 tabular-nums', watchDue ? 'text-warning' : 'text-fg-3')}>
+            <IconCalendarClock className="size-3" />
+            {watchDue ? t`已到期` : formatDateTime(item.watch.until)}
+          </span>
+        )}
+      </div>
+
+      <Input
+        aria-label={t`观测备注`}
+        placeholder={t`记录在等什么，或要观测的指标…`}
+        value={note}
+        maxLength={WORK_ITEM_LIMITS.watchNote}
+        onChange={(event) => setNote(event.target.value)}
+        onBlur={() => { if (note.trim() !== (item.watch?.note ?? '')) commitWatch({ note }); }}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing) return;
+          if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
+          if (event.key === 'Escape') { event.stopPropagation(); setNote(item.watch?.note ?? ''); requestAnimationFrame(() => event.currentTarget?.blur()); }
+        }}
+        className="mb-2.5 h-8 bg-bg text-sm"
+      />
+
+      <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs text-fg-3"><Trans>到期提醒</Trans></span>
+        <Button size="xs" variant="secondary" onClick={() => commitWatch({ until: snoozePreset(1, true) })}><Trans>明天 9:00</Trans></Button>
+        <Button size="xs" variant="secondary" onClick={() => commitWatch({ until: snoozePreset(3) })}><Trans>3 天后</Trans></Button>
+        <Button size="xs" variant="secondary" onClick={() => commitWatch({ until: snoozePreset(7) })}><Trans>1 周后</Trans></Button>
+        {item.watch?.until && <Button size="xs" variant="quiet" onClick={() => commitWatch({ until: null })}><Trans>不定时</Trans></Button>}
+      </div>
+
+      {delegation && delegation.state === 'active' ? (
+        <div className="flex items-start gap-2 rounded-lg bg-bg px-2.5 py-2 text-xs shadow-[inset_0_0_0_1px_var(--line)]">
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-fg">{describeTrigger(delegation.trigger)}</div>
+            <div className="mt-0.5 truncate text-fg-3">{delegation.attention}</div>
+          </div>
+          <Button size="xs" variant="quiet" busy={endingTrack} onClick={() => void endTracking()}><Trans>结束追踪</Trans></Button>
+        </div>
+      ) : addingTrack ? (
+        <div className="flex flex-col gap-2 rounded-lg bg-bg p-2.5 shadow-[inset_0_0_0_1px_var(--line)]">
+          <div className="flex items-center gap-2">
+            <Select
+              label={t`追踪方式`}
+              value={kind}
+              onChange={(value) => {
+                const next = value as DelegationKind;
+                setKind(next);
+                setTarget(next === 'schedule' ? '0 9 * * *' : '');
+              }}
+              options={[
+                { value: 'page', label: t`网页变化` },
+                { value: 'github-release', label: t`GitHub 发版` },
+                { value: 'schedule', label: t`定时检查` },
+              ]}
+              className="w-36 shrink-0"
+            />
+            <Input
+              aria-label={t`追踪目标`}
+              placeholder={kind === 'github-release' ? 'owner/repo' : kind === 'schedule' ? '0 9 * * *' : 'https://…'}
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+              className="h-8 min-w-0 flex-1 text-sm"
+            />
+          </div>
+          <Input
+            aria-label={t`关注点`}
+            placeholder={t`满足什么条件时通知你？`}
+            value={attention}
+            onChange={(event) => setAttention(event.target.value)}
+            className="h-8 text-sm"
+          />
+          <div className="flex justify-end gap-1.5">
+            <Button size="xs" variant="ghost" onClick={() => setAddingTrack(false)}><Trans>取消</Trans></Button>
+            <Button size="xs" variant="primary" disabled={!target.trim()} busy={savingTrack} onClick={() => void startTracking()}><Trans>开启追踪</Trans></Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { setAttention(note.trim() || item.title); setAddingTrack(true); }}
+          className="inline-flex h-7 items-center gap-1.5 rounded-md px-1 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg"
+        >
+          <IconPlus className="size-3.5" />
+          <Trans>绑定助理自动追踪</Trans>
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -418,19 +636,38 @@ function CommandLine({ command }: { command: WorkItemCommand }) {
   );
 }
 
-/** 开始 / 完成 / 返工 / 再开一个会话 (docs/TASK-BOARD.md §9). Only the owner marks an item done. */
-function Actions({ item, hasSessions, starting, onStart, onDone, onRework }: { item: WorkItem; hasSessions: boolean; starting: boolean; onStart: () => void; onDone: () => void; onRework: () => void }) {
+/** 开始 / 观测中 / 完成 / 返工 / 无需关注 / 再开一个会话. Only the owner marks an item done. */
+function Actions({ item, hasSessions, starting, onStart, onWatch, onResume, onDone, onDismiss, onRework }: {
+  item: WorkItem;
+  hasSessions: boolean;
+  starting: boolean;
+  onStart: () => void;
+  onWatch: () => void;
+  onResume: () => void;
+  onDone: () => void;
+  onDismiss: () => void;
+  onRework: () => void;
+}) {
   const agent = item.assignee.kind === 'agent';
-  const startable = agent && (item.status === 'todo' || item.status === 'doing' || item.status === 'review');
-  if (!startable && item.status !== 'review') return null;
+  const closed = item.status === 'done' || item.status === 'cancelled';
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2">
       {item.status === 'todo' && agent && <Button size="sm" variant="primary" busy={starting} onClick={onStart}><IconPlay /><Trans>开始</Trans></Button>}
+      {item.status === 'watching' && <Button size="sm" variant="primary" onClick={onResume}><IconPlay /><Trans>恢复进行中</Trans></Button>}
       {item.status === 'review' && <>
         <Button size="sm" variant="primary" onClick={onDone}><IconCheck /><Trans>完成</Trans></Button>
         {hasSessions && <Button size="sm" variant="secondary" onClick={onRework}><IconRotateCcw /><Trans>返工</Trans></Button>}
       </>}
-      {(item.status === 'doing' || item.status === 'review') && agent && <Button size="sm" variant="ghost" busy={starting} onClick={onStart}><IconPlus /><Trans>再开一个会话</Trans></Button>}
+      {item.status === 'doing' && <Button size="sm" variant="secondary" onClick={onDone}><IconCheck /><Trans>完成</Trans></Button>}
+      {item.status === 'watching' && <Button size="sm" variant="secondary" onClick={onDone}><IconCheck /><Trans>完成</Trans></Button>}
+      {!closed && item.status !== 'watching' && (
+        <Button size="sm" variant={item.status === 'doing' ? 'secondary' : 'ghost'} onClick={onWatch}><IconEye /><Trans>观测中</Trans></Button>
+      )}
+      {!closed && <Button size="sm" variant="ghost" onClick={onDismiss}><IconSlash /><Trans>无需关注</Trans></Button>}
+      {closed && <Button size="sm" variant="secondary" onClick={onResume}><IconRotateCcw /><Trans>重新打开</Trans></Button>}
+      {(item.status === 'doing' || item.status === 'review' || item.status === 'watching') && agent && (
+        <Button size="sm" variant="ghost" busy={starting} onClick={onStart}><IconPlus /><Trans>再开一个会话</Trans></Button>
+      )}
     </div>
   );
 }

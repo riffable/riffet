@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   WORK_ITEM_LIMITS, WORK_ITEM_STATUSES,
   type NativeBackendId, type WorkItem, type WorkItemAssignee, type WorkItemCreate, type WorkItemEvent, type WorkItemPatch, type WorkItemQuestion,
-  type WorkItemStatus, type WorkItemSubmission,
+  type WorkItemStatus, type WorkItemSubmission, type WorkItemWatch,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { taskPart, type BriefLanguage } from '../prompts/index.js';
@@ -76,6 +76,23 @@ function clientId(value: unknown, name = 'id'): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'string' || !value || value.length > 100) throw invalid(`${name} must be a string of 1 to 100 characters`);
   return value;
+}
+function watchOf(value: unknown): WorkItemWatch | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid('watch must be an object');
+  const raw = value as { until?: unknown; note?: unknown; delegationId?: unknown };
+  const result: WorkItemWatch = {};
+  if (raw.until !== undefined && raw.until !== null && raw.until !== '') {
+    if (typeof raw.until !== 'string' || !Number.isFinite(Date.parse(raw.until))) throw invalid('watch.until must be an ISO timestamp');
+    result.until = new Date(Date.parse(raw.until)).toISOString();
+  }
+  if (raw.note !== undefined && raw.note !== null && raw.note !== '') {
+    if (typeof raw.note !== 'string' || raw.note.trim().length > WORK_ITEM_LIMITS.watchNote) throw invalid(`watch.note must be at most ${WORK_ITEM_LIMITS.watchNote} characters`);
+    if (raw.note.trim()) result.note = raw.note.trim();
+  }
+  if (raw.delegationId !== undefined && raw.delegationId !== null && raw.delegationId !== '') {
+    result.delegationId = clientId(raw.delegationId, 'watch.delegationId')!;
+  }
+  return Object.keys(result).length ? result : undefined;
 }
 
 /** The conversations side, given by `app.ts`: sending and opening are orchestration's. */
@@ -184,13 +201,14 @@ export class WorkItemService {
   create(input: WorkItemCreate, extra: { source?: WorkItem['source']; titleSessionId?: string; originSessionId?: string } = {}): WorkItem {
     if (!input || typeof input !== 'object') throw invalid('A task is required');
     const id = clientId(input.id) ?? randomUUID();
-    const initial = input.status === undefined ? 'todo' : status(input.status, ['todo', 'doing']);
+    const initial = input.status === undefined ? 'todo' : status(input.status, ['todo', 'doing', 'watching']);
     return this.write(() => {
       const existing = this.items.get(id);
       if (existing) return existing;
       const stamp = now();
       const text = description(input.description);
       const criteria = input.criteria === undefined ? [] : criteriaOf(input.criteria);
+      const watch = initial === 'watching' && input.watch !== undefined ? watchOf(input.watch) : undefined;
       const item: WorkItem = {
         id,
         number: this.items.nextNumber(),
@@ -202,6 +220,7 @@ export class WorkItemService {
         ...(input.projectId !== undefined ? { projectId: this.requireProject(input.projectId) } : {}),
         ...(input.parentId !== undefined ? { parentId: this.requireParent(input.parentId, id) } : {}),
         labels: input.labels === undefined ? [] : labels(input.labels),
+        ...(watch ? { watch } : {}),
         ...(extra.titleSessionId ? { titleSessionId: extra.titleSessionId } : {}),
         source: extra.source ?? 'board',
         statusAt: stamp, createdAt: stamp, updatedAt: stamp,
@@ -226,6 +245,12 @@ export class WorkItemService {
       if (patch.labels !== undefined) next.labels = labels(patch.labels);
       const stamp = now();
       if (patch.status !== undefined && status(patch.status) !== current.status) this.changeStatus(next, patch.status, stamp);
+      if (patch.watch === null) delete next.watch;
+      else if (patch.watch !== undefined) {
+        if (next.status !== 'watching') throw invalid('watch only applies when status is watching');
+        const parsed = watchOf(patch.watch);
+        if (parsed) next.watch = parsed; else delete next.watch;
+      }
       next.updatedAt = stamp;
       delete next.stuck;
       this.items.update(next);
@@ -238,8 +263,9 @@ export class WorkItemService {
     this.notifyStatusChange(item.id);
     item.status = to;
     item.statusAt = stamp;
-    // Done is the owner's last word on it: its conversations are no longer waiting on anyone.
-    if (to === 'done') this.attention.settle(this.sessionsOf(item.id), Date.parse(stamp));
+    if (to !== 'watching') delete item.watch;
+    // Done, closed or intentionally parked in watching means its conversations are no longer waiting on the owner.
+    if (to === 'done' || to === 'cancelled' || to === 'watching') this.attention.settle(this.sessionsOf(item.id), Date.parse(stamp));
   }
 
   delete(id: string): void {
@@ -281,6 +307,7 @@ export class WorkItemService {
     if (item.assignee.kind !== 'agent') throw new AppError('WORK_ITEM_NO_AGENT', 'This task is assigned to the owner', 409);
     if (!item.projectId) throw new AppError('WORK_ITEM_NO_PROJECT', 'Choose a project for this task first', 409);
     if (item.status === 'done') throw new AppError('WORK_ITEM_DONE', 'This task is done', 409);
+    if (item.status === 'cancelled') throw new AppError('WORK_ITEM_CANCELLED', 'This task is closed', 409);
     if (this.starting.has(id) || this.sessionsOf(id).length) throw new AppError('WORK_ITEM_STARTED', 'This task already has a conversation', 409);
     if (!this.messenger) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
     this.starting.add(id);
@@ -302,7 +329,7 @@ export class WorkItemService {
       if (!target) return undefined;
       this.record(target.id, { kind: 'session', sessionId });
       const next: WorkItem = { ...target, updatedAt: now() };
-      if (target.status === 'todo') this.changeStatus(next, 'doing', next.updatedAt);
+      if (target.status === 'todo' || target.status === 'watching') this.changeStatus(next, 'doing', next.updatedAt);
       this.items.update(next);
       return next;
     });
@@ -366,7 +393,7 @@ export class WorkItemService {
       };
       const next: WorkItem = { ...item, submission, updatedAt: stamp };
       this.record(item.id, { kind: 'submit', submission });
-      if (item.status === 'todo' || item.status === 'doing') this.changeStatus(next, 'review', stamp);
+      if (item.status === 'todo' || item.status === 'doing' || item.status === 'watching') this.changeStatus(next, 'review', stamp);
       this.items.update(next);
       return next;
     });

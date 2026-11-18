@@ -148,8 +148,19 @@ export function createWorkItemsStore(
       // The board moves the card now; a refusal puts it back.
       if (before || beforeSummary) {
         store.set((state) => ({
-          ...(before && state.items ? { items: state.items.map((entry) => entry.id === id ? { ...before, ...withoutNulls(body), ...(body.status && body.status !== before.status ? { statusAt: new Date().toISOString() } : {}) } as WorkItem : entry) } : {}),
-          ...(beforeSummary && state.summaries && body.status ? { summaries: state.summaries.map((entry) => entry.id === id ? { ...beforeSummary, status: body.status! } : entry) } : {}),
+          ...(before && state.items ? { items: state.items.map((entry) => {
+            if (entry.id !== id) return entry;
+            const next = { ...before, ...withoutNulls(body), ...(body.status && body.status !== before.status ? { statusAt: new Date().toISOString() } : {}) } as WorkItem;
+            if (next.status !== 'watching') delete next.watch;
+            return next;
+          }) } : {}),
+          ...(beforeSummary && state.summaries && (body.status || body.watch !== undefined) ? { summaries: state.summaries.map((entry) => entry.id === id ? {
+            ...beforeSummary,
+            ...(body.status ? { status: body.status } : {}),
+            watchUntil: (body.status ?? beforeSummary.status) === 'watching'
+              ? (body.watch === null ? undefined : body.watch?.until ?? beforeSummary.watchUntil)
+              : undefined,
+          } : entry) } : {}),
         }));
       }
       try {

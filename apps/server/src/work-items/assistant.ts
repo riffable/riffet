@@ -437,6 +437,7 @@ export class AssistantBoard {
       task: item.number, title: item.title, status: item.status,
       ...(item.projectId ? { project: this.projectName(item.projectId) ?? item.projectId } : {}),
       agent: item.assignee.kind === 'agent' ? item.assignee.backendId : 'owner',
+      ...(item.status === 'watching' && item.watch ? { watch: item.watch } : {}),
       ...(item.questions?.length ? { waitingOnOwner: item.questions.map(question => question.text) } : {}),
       updatedAt: item.updatedAt,
     };
@@ -462,7 +463,7 @@ export class AssistantBoard {
       case 'task_list': {
         const since = Date.now() - RECENT_DONE_MS;
         const items = this.deps.workItems.list()
-          .filter(item => item.status !== 'done' || Date.parse(item.statusAt) >= since)
+          .filter(item => (item.status !== 'done' && item.status !== 'cancelled') || Date.parse(item.statusAt) >= since)
           .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
           .slice(0, LISTED);
         return { tasks: items.map(item => this.summary(item)) };

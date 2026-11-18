@@ -345,9 +345,10 @@ struct AssistantDelegationsView: View {
             let status = switch trigger.status {
             case "todo": String(localized: "待办", bundle: .riffet)
             case "doing": String(localized: "进行中", bundle: .riffet)
+            case "watching": String(localized: "观测中", bundle: .riffet)
             case "review": String(localized: "待验收", bundle: .riffet)
             case "done": String(localized: "已完成", bundle: .riffet)
-            case "cancelled": String(localized: "已取消", bundle: .riffet)
+            case "cancelled": String(localized: "无需关注", bundle: .riffet)
             default: ""
             }
             return status.isEmpty ? "#\(number)" : "#\(number) · \(status)"

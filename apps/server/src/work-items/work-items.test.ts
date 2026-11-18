@@ -285,4 +285,33 @@ describe('work items', () => {
     workItems.clearStuck(id);
     expect(workItems.get(id).stuck).toBeUndefined();
   });
+
+  it('supports watching with snooze/delegation, skips supervision while watching, and settles on cancel', async () => {
+    const { store, call, create, workItems } = await boot();
+    const id = ((await call('POST', '/api/work-items', { id: 'w-watch', title: 'Watch rollout', assignee: { kind: 'agent', backendId: 'cursor' } })).json() as WorkItem).id;
+    expect((await create('s1', 'Watch rollout', 'c-s1', { workItemId: id })).statusCode).toBe(202);
+    const until = new Date(Date.now() + 86_400_000).toISOString();
+    const watched = (await call('PATCH', `/api/work-items/${id}`, { status: 'watching', watch: { until, note: 'Observe canary error rate' } })).json() as WorkItem;
+    expect(watched).toMatchObject({ status: 'watching', watch: { until, note: 'Observe canary error rate' } });
+    // Bootstrap summary carries watchUntil for inbox badge calculations.
+    const bootRes = (await call('GET', '/api/bootstrap')).json() as { workItemSummaries: Array<{ id: string; status: string; watchUntil?: string }> };
+    expect(bootRes.workItemSummaries.find(entry => entry.id === id)).toMatchObject({ status: 'watching', watchUntil: until });
+
+    // Attaching a delegation from the board puts/keeps it in watching and links the delegation.
+    const linked = (await call('POST', `/api/work-items/${id}/watch-delegation`, {
+      attention: 'Alert on new release',
+      trigger: { kind: 'github-release', repo: 'riffet/riffet' },
+    })).json() as { item: WorkItem; delegation: { id: string; state: string } };
+    expect(linked.delegation.state).toBe('active');
+    expect(linked.item.watch?.delegationId).toBe(linked.delegation.id);
+
+    // Leaving watching clears watch metadata and ends the linked delegation.
+    const closed = (await call('PATCH', `/api/work-items/${id}`, { status: 'cancelled' })).json() as WorkItem;
+    expect(closed.status).toBe('cancelled');
+    expect(closed.watch).toBeUndefined();
+    const delegations = (await call('GET', '/api/assistant/delegations')).json() as { delegations: Array<{ id: string; state: string }> };
+    expect(delegations.delegations.find(entry => entry.id === linked.delegation.id)?.state).toBe('ended');
+    // Closed tasks cannot be started.
+    expect((await call('POST', `/api/work-items/${id}/start`)).statusCode).toBe(409);
+  });
 });

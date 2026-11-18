@@ -18,6 +18,16 @@ msgstr "{0} → {1}"
 msgid "{0} 个会话"
 msgstr "{0} conversations"
 
+#. placeholder {0}: trigger.repo
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "{0} 发版"
+msgstr "{0} releases"
+
+#. placeholder {0}: trigger.url
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "{0} 有变化"
+msgstr "{0} changes"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "{abilities} 项"
 msgstr "{abilities}"
@@ -34,9 +44,34 @@ msgstr "{source} releases"
 msgid "{source} 有变化"
 msgstr "{source} changes"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "1 周后"
+msgstr "In 1 week"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "3 天后"
+msgstr "In 3 days"
+
 #: src/app/work-items/NewWorkItemDialog.tsx
 msgid "Agent 交付时逐条说明，由你验收"
 msgstr "The agent reports on each item when it delivers; you accept"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "GitHub 发版"
+msgstr "GitHub release"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "上次会话失败"
+msgstr "Last session failed"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "上次关联会话已失败"
+msgstr "The latest session failed"
+
+#. placeholder {0}: sessions[0].error.split('\n')[0]
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "上次运行失败：{0}"
+msgstr "Last run failed: {0}"
 
 #. placeholder {0}: file.path
 #: src/app/work-items/AssistantSetup.tsx
@@ -44,8 +79,17 @@ msgid "下载 {0}"
 msgstr "Download {0}"
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "不定时"
+msgstr "No deadline"
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
 msgstr "Delivery"
+
+#. placeholder {0}: trigger.taskNumber
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "任务 #{0} 状态变化"
+msgstr "Task #{0} status changes"
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "任务看板"
@@ -72,12 +116,20 @@ msgid "保存为 AGENTS.md，下次启动时生效"
 msgstr "Saved as AGENTS.md. Takes effect on the next start"
 
 #: src/app/work-items/WorkItemsPage.tsx
+msgid "停下待处理"
+msgstr "Idle"
+
+#: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
 msgstr "All projects"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "关于你"
 msgstr "About you"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "关注点"
+msgstr "What to watch for"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关闭"
@@ -120,6 +172,10 @@ msgstr "Delete this task?"
 msgid "到 {0}"
 msgstr "Until {0}"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "到期提醒"
+msgstr "Remind"
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -143,12 +199,9 @@ msgstr "Send answer"
 
 #: src/app/work-items/AssistantSetup.tsx
 #: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "取消"
 msgstr "Cancel"
-
-#: src/app/work-items/WorkItemPanel.tsx
-msgid "取消任务"
-msgstr "Cancel task"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
@@ -193,17 +246,22 @@ msgstr "Completion criteria, one per line"
 
 #. placeholder {0}: trigger.cron
 #: src/app/work-items/AssistantSetup.tsx
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "定时 {0}"
 msgstr "Schedule {0}"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "定时检查"
+msgstr "Schedule"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "已修改"
 msgstr "Edited"
 
-#: src/app/work-items/parts.tsx
-msgctxt "work-item-status"
-msgid "已取消"
-msgstr "Cancelled"
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "已到期"
+msgstr "Due"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgctxt "delegation"
@@ -213,6 +271,10 @@ msgstr "Ended"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "已达成"
 msgstr "Met"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "开启追踪"
+msgstr "Start tracking"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/PlanDock.tsx
@@ -252,6 +314,11 @@ msgstr "Forget “{title}”"
 msgid "忘掉「{title}」？"
 msgstr "Forget “{title}”?"
 
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "恢复进行中"
+msgstr "Resume"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "恢复默认"
 msgstr "Reset to default"
@@ -271,8 +338,21 @@ msgstr "Or write an answer…"
 
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
+msgid "打开会话"
+msgstr "Open conversation"
+
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
 msgid "执行者"
 msgstr "Assignee"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "拖到这里转入观测中"
+msgstr "Drop here to watch"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "持续观测"
+msgstr "Watching"
 
 #. placeholder {0}: event.note
 #: src/app/work-items/WorkItemPanel.tsx
@@ -294,8 +374,24 @@ msgid "提问：{0}"
 msgstr "Asked: {0}"
 
 #: src/app/work-items/WorkItemsPage.tsx
+msgid "搜索任务"
+msgstr "Search tasks"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "搜索任务、#编号…"
+msgstr "Search tasks, #number…"
+
+#: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr "Inbox"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "收起"
+msgstr "Collapse"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "改动 {count} 个文件"
+msgstr "{count} files changed"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "改动的文件"
@@ -331,6 +427,10 @@ msgstr "Couldn’t post the comment"
 msgid "无法发送回答"
 msgstr "Couldn't send the answer"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无法开启助理追踪"
+msgstr "Couldn't start assistant tracking"
+
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
 msgstr "Couldn't start this task"
@@ -338,6 +438,10 @@ msgstr "Couldn't start this task"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法结束"
 msgstr "Couldn't end it"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无法结束追踪"
+msgstr "Couldn't end tracking"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法读取记忆"
@@ -347,10 +451,28 @@ msgstr "Could not read memory"
 msgid "无法返工"
 msgstr "Couldn't send it back"
 
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "无需关注"
+msgstr "No longer needed"
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "无需关注"
+msgstr "No longer needed"
+
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无项目"
 msgstr "No project"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "明天 9:00"
+msgstr "Tomorrow 9:00"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "显示其余 {hiddenDone} 项"
+msgstr "Show {hiddenDone} more"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "更多操作"
@@ -363,6 +485,10 @@ msgstr "New results"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "未达成"
 msgstr "Not met"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "标准 {met}/{total}"
+msgstr "{met}/{total} criteria"
 
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -393,6 +519,14 @@ msgstr "Add label"
 msgid "添加验收标准"
 msgstr "Add a criterion"
 
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "清除筛选"
+msgstr "Clear filter"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "满足什么条件时通知你？"
+msgstr "When should the assistant notify you?"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "状态"
 msgstr "Status"
@@ -422,6 +556,10 @@ msgstr "Remove label {label}"
 msgid "筛选"
 msgstr "Filter"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "绑定助理自动追踪"
+msgstr "Track with assistant"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "结束"
 msgstr "End"
@@ -431,6 +569,10 @@ msgid "结束这项委托？"
 msgstr "End this delegation?"
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "结束追踪"
+msgstr "Stop tracking"
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "结果未知"
 msgstr "Result unknown"
 
@@ -438,9 +580,17 @@ msgstr "Result unknown"
 msgid "编辑描述"
 msgstr "Edit description"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "网页变化"
+msgstr "Page change"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "能力"
 msgstr "Abilities"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "自动追踪"
+msgstr "Tracked"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 msgid "要做什么"
@@ -458,6 +608,28 @@ msgstr "What to change"
 msgid "要新增或修改，直接告诉个人助理"
 msgstr "To add or change one, tell the personal assistant"
 
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "观测中"
+msgstr "Watching"
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "观测中"
+msgstr "Watching"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "观测到期"
+msgstr "Watch due"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "观测备注"
+msgstr "Watch note"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "观测设置"
+msgstr "Watching"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "规则"
 msgstr "Rules"
@@ -465,6 +637,10 @@ msgstr "Rules"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "记下的事"
 msgstr "Notes"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "记录在等什么，或要观测的指标…"
+msgstr "What are you waiting on or watching for…"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "记忆"
@@ -484,9 +660,17 @@ msgstr "Follow-up: {0}"
 msgid "跟进返工：{0}"
 msgstr "Follow-up rework: {0}"
 
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "转入观测"
+msgstr "Watch"
+
 #: src/app/work-items/parts.tsx
 msgid "运行中"
 msgstr "Running"
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "运行中 · 待验收"
+msgstr "Running · In review"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "运行过的命令"
@@ -527,10 +711,22 @@ msgctxt "work-item-status"
 msgid "进行中"
 msgstr "In progress"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "追踪方式"
+msgstr "Trigger"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "追踪目标"
+msgstr "Target"
+
 #. placeholder {0}: command.exitCode
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "退出码 {0}"
 msgstr "Exit code {0}"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "重新打开"
+msgstr "Reopen"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx

@@ -230,6 +230,7 @@ private fun triggerLabel(item: AssistantDelegation): String {
             val status = when (trigger.status) {
                 "todo" -> Res.string.assistant_trigger_task_todo
                 "doing" -> Res.string.assistant_trigger_task_doing
+                "watching" -> Res.string.assistant_trigger_task_watching
                 "review" -> Res.string.assistant_trigger_task_review
                 "done" -> Res.string.assistant_trigger_task_done
                 "cancelled" -> Res.string.assistant_trigger_task_cancelled

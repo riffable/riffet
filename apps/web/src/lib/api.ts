@@ -2,7 +2,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemSummary, SessionWorkItemRequest,
+  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -943,6 +943,8 @@ export const api = {
   addAssistantPack: (id: string) => request<{ packs: AssistantPack[] }>(`/api/assistant/packs/${encodeURIComponent(id)}`, { method: 'PUT' }),
   removeAssistantPack: (id: string) => request<{ packs: AssistantPack[] }>(`/api/assistant/packs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   endAssistantDelegation: (id: string) => request<AssistantDelegation>(`/api/assistant/delegations/${encodeURIComponent(id)}/end`, json('POST', {})),
+  watchWorkItemDelegation: (id: string, body: { goal?: string; attention: string; trigger: AssistantDelegationTrigger; until?: string; note?: string }) =>
+    request<{ item: WorkItem; delegation: AssistantDelegation }>(`/api/work-items/${encodeURIComponent(id)}/watch-delegation`, json('POST', body)),
   /** `null` restores Riffet's own text. */
   saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
   startWorkItem: (id: string) => request<{ item: WorkItem; sessionId: string }>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),

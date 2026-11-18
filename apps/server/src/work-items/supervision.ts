@@ -63,7 +63,7 @@ export class Supervision {
     if (!this.deps.enabled()) return;
     const since = Date.now() - RESTART_LOOKBACK_MS;
     for (const item of this.deps.workItems.list()) {
-      if (item.status === 'done' || item.status === 'cancelled' || this.timers.has(item.id)) continue;
+      if (item.status === 'done' || item.status === 'cancelled' || item.status === 'watching' || this.timers.has(item.id)) continue;
       const sessionId = this.deps.workItems.latestSession(item.id);
       if (!sessionId) continue;
       let session: Session;
@@ -77,7 +77,7 @@ export class Supervision {
     if (!this.deps.enabled()) return false;
     let item: WorkItem;
     try { item = this.deps.workItems.get(id); } catch { return false; }
-    if (item.status === 'done' || item.status === 'cancelled') return false;
+    if (item.status === 'done' || item.status === 'cancelled' || item.status === 'watching') return false;
     const sessionId = this.deps.workItems.latestSession(id);
     if (!sessionId) return false;
     try {
@@ -112,8 +112,8 @@ export class Supervision {
     if (!this.deps.enabled()) return;
     let item: WorkItem;
     try { item = this.deps.workItems.get(id); } catch { return; }
-    // Closed, already waiting on the owner (a question, 推不动), or already being looked at.
-    if (item.status === 'done' || item.status === 'cancelled' || item.questions?.length || item.stuck || this.deps.pending(id)) return;
+    // Closed, parked in watching, already waiting on the owner (a question, 推不动), or already being looked at.
+    if (item.status === 'done' || item.status === 'cancelled' || item.status === 'watching' || item.questions?.length || item.stuck || this.deps.pending(id)) return;
     const sessionId = this.deps.workItems.latestSession(id);
     if (!sessionId) return;
     const session = this.deps.store.getSession(sessionId);
@@ -130,7 +130,7 @@ export class Supervision {
     return {
       number: item.number,
       title: item.title,
-      status: { todo: '待办', doing: '进行中', review: '待验收', done: '完成', cancelled: '已取消' }[item.status],
+      status: { todo: '待办', doing: '进行中', watching: '观测中', review: '待验收', done: '完成', cancelled: '无需关注' }[item.status],
       criteria: item.criteria?.length ? item.criteria.map((line, index) => `${index + 1}. ${line}`).join('\n') : '（没有写验收标准）',
       submission: submission ? `${submission.at.slice(0, 16).replace('T', ' ')}：${clip(submission.summary, 2_000)}（逐条说明和证据用 task_get 看）` : '（还没有交付）',
       sessionId: session.id,
