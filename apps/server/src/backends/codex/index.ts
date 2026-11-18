@@ -29,8 +29,10 @@ import type {
   ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec,
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeDriverCommandObservation, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig,
   NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
-  NativeDriverExtensions, NativeDriverExternal, NativeDriverStored,
+  NativeDriverExtensions, NativeDriverExternal, NativeDriverStored, NativePrewarmRequest, NativePrewarmResult,
 } from '../types.js';
+import { WarmPool } from '@riffet/plugin-api/kit';
+import { sessionWarmKey, startCodexWarm, warmKey, type CodexWarm } from './launch.js';
 import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
@@ -126,6 +128,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private readonly externalScans = new Map<string, { at: number; entries: ExternalSessionEntry[] }>();
   private closing = false;
   private closeTask: Promise<void> | undefined;
+  /** An app-server with a new thread, started for the next new conversation of the project a page shows (`launch.ts`). */
+  private readonly warm: WarmPool<CodexWarm>;
   /** What shell commands changed in the working tree, seen by hooks (`observation.ts`). */
   readonly observation?: CodexObservation;
   readonly commandObservation?: NativeDriverCommandObservation;
@@ -166,6 +170,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     }
     this.id = flavor.id;
     this.label = flavor.label;
+    this.warm = new WarmPool<CodexWarm>({ label: flavor.id, stop: async warm => { warm.mcp?.revoke(); await warm.transport.dispose(); } });
     // TRAE background children outlive the foreground turn independently. Keep observing them,
     // but their activity alone must not hold the parent session/sidebar in running.
     // TRAE CLI signs in with its own account and takes no model source (`traexFlavor.unsupportedProfileSetting`), so it consumes no protocol.
@@ -339,7 +344,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       supportsModeSelection: this.flavor.modes.length > 0,
       supportsPermissionSelection: true,
       supportsTerminal: true,
-      supportsPrewarm: false,
+      // A plugin's sidecar attaches to a process as it is spawned for its conversation, so none is started ahead.
+      supportsPrewarm: !this.runtimeHooks?.runtimeHooks(this.flavor.id).length,
       slashCommands: this.flavor.id === 'codex' ? codexNativeSlashItems() : [],
       inlineSkills: true,
     };
@@ -1126,12 +1132,42 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     await runtime.dispose(host);
   }
 
+  async prewarm(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig, request: Omit<NativePrewarmRequest, 'project' | 'backendProfileId'>): Promise<NativePrewarmResult> {
+    if (this.closing) return { state: 'skipped', reason: 'closing' };
+    if (this.runtimeHooks?.runtimeHooks(this.flavor.id).length) return { state: 'skipped', reason: 'runtime_hooks' };
+    if (this.flavor.unsupportedProfileSetting(profile.config)) return { state: 'skipped', reason: 'profile_unsupported' };
+    const source = modelSourceOf(profile.config);
+    if (source && resolveSource(source, profile.config).reason) return { state: 'skipped', reason: 'model_source_unavailable' };
+    // The tools are known once the thread has its server; until then the key matches no conversation.
+    const key = warmKey(project, profile, this.flavor, request.model, request.approval, '?');
+    return await this.warm.request({ key, ...(request.claimId ? { claimId: request.claimId } : {}), ...(request.renewOnly ? { renewOnly: true } : {}) }, ({ signal, alias, lost }) => startCodexWarm({
+      start: this.startAppServer, flavor: this.flavor, observation: this.observation, riffetMcp: host.riffetMcp,
+      project, profile, model: request.model, approval: request.approval, signal, alias, lost,
+    }));
+  }
+
+  async releasePrewarm(_host: NativeBackendHost, claimId: string): Promise<void> {
+    await this.warm.release(claimId);
+  }
+
+  /** The warm app-server of a conversation that would start the same one; the 助理's threads are started for it alone. */
+  private takeWarm(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<CodexWarm | undefined> {
+    if (this.runtimeHooks?.runtimeHooks(this.flavor.id).length || host.standing?.launch(project, session)) return Promise.resolve(undefined);
+    return this.warm.take(sessionWarmKey(host, session, project, profile, this.flavor), async warm => {
+      // One that exited after it was ready is not handed over: the pool ends it and the conversation starts its own.
+      if (!warm.transport.isOnline) throw new Error(`The warm ${this.label} app-server has exited`);
+      warm.mcp?.adopt(session.id);
+      return warm;
+    });
+  }
+
   async close(host: NativeBackendHost): Promise<void> {
     if (this.closeTask) return await this.closeTask;
     this.closing = true;
     for (const timer of this.profileSwitchTimers.values()) clearTimeout(timer);
     this.profileSwitchTimers.clear();
     this.closeTask = (async () => {
+      await this.warm.close();
       await Promise.allSettled([...this.creating.values()].map(entry => entry.promise));
       const runtimes = [...this.runtimes.values()];
       this.runtimes.clear();
@@ -1203,7 +1239,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       }
       const runtime = new CodexSessionRuntime(host, session, project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
       runtime.attachFeed(this.feedOf(session.id));
-      await runtime.start({ reconnectOnly });
+      await runtime.start({ reconnectOnly, warm: () => this.takeWarm(host, session, project, profile) });
       this.runtimes.set(session.id, runtime);
       await this.bindListeners(session.id, runtime);
       return runtime;

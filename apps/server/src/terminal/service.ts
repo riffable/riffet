@@ -377,6 +377,8 @@ export class TerminalService {
   private readonly stopping = new Set<string>();
   private shuttingDown = false;
 
+  private previousWarmupsEnded?: Promise<void>;
+
   constructor(private readonly store: Store, private readonly options: TerminalServiceOptions) {
     const stateDir = resolve(options.stateDir);
     this.stateDir = stateDir;
@@ -540,6 +542,7 @@ export class TerminalService {
 
   /** The kind is the launch's (`native` unless given); the reservation is a session's terminal once claimed. */
   async createWarmup(project: Project, input: Omit<TerminalCreateInput, 'sessionId' | 'warmup' | 'reuseLive'> & { warmup: TerminalWarmupMetadata }): Promise<WarmupTerminalInfo> {
+    await this.endPreviousWarmupsOnce();
     await this.ready;
     if (this.shuttingDown) throw new AppError('TERMINAL_SERVICE_CLOSED', 'Terminal service is shutting down', 503);
     const currentProject = this.store.getProject(project.id);
@@ -614,6 +617,21 @@ export class TerminalService {
   }
 
   /** Stop only a temporary process carrying the caller's owner token. */
+  /**
+   * Every reservation that exists before this process makes its first was made by an earlier one: a
+   * warm pool ends its own when it closes, and its owner token dies with its process. Ended once, for
+   * every Agent, rather than by each plugin, which would end the others' as well: at start-up (the
+   * service calls this), and before the first reservation in case that comes sooner.
+   */
+  endPreviousWarmupsOnce(): Promise<void> {
+    return this.previousWarmupsEnded ??= this.endPreviousWarmups();
+  }
+
+  private async endPreviousWarmups(): Promise<void> {
+    const previous = this.store.listTerminals().filter(info => info.state !== 'exited' && isWarmupTerminal(info));
+    await Promise.allSettled(previous.map(info => this.stopWarmup(info.id, (info as WarmupTerminalInfo).warmup.ownerToken)));
+  }
+
   async stopWarmup(id: string, ownerToken: string): Promise<boolean> {
     await this.ensureRestored(id);
     return await this.stopRestored(id, ownerToken);

@@ -56,6 +56,7 @@ import { fastServiceTier, listModels, modelBackendVariant, resolveModelSelection
 import { extensionsOffNames } from '../../extensions/toggles.js';
 import { codexStanding, standingProtects, standingThreadConfig, useStandingSkillRoots, type CodexStanding } from './standing.js';
 import { readConfiguredMcpNames } from './extensions.js';
+import { conversationServerOptions, newThreadRequest, spawnConversationServer, type CodexWarm, type ThreadStart } from './launch.js';
 import type { RuntimeAttachment, RuntimeContext } from '@riffet/plugin-api';
 import type { PluginRegistry } from '../../plugins/registry.js';
 import {
@@ -252,6 +253,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** A plugin's sidecar on the native process, such as a routing proxy, with the plugin's id. */
   private attachment?: { owner: string; value: RuntimeAttachment };
   private detachObservation?: () => void;
+  /** The thread a warm app-server was started with, until this conversation opens its first thread. */
+  private warmThread?: CodexWarm;
 
   constructor(
     private readonly host: NativeBackendHost,
@@ -665,25 +668,24 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return true;
   }
 
-  async start(optionsOnly: { reconnectOnly?: boolean } = {}): Promise<void> {
+  /**
+   * `warm` hands over an app-server with a new thread started ahead of this conversation (`launch.ts`);
+   * it is asked only by a conversation that has no thread and no process of its own yet.
+   */
+  async start(optionsOnly: { reconnectOnly?: boolean; warm?: () => Promise<CodexWarm | undefined> } = {}): Promise<void> {
     let runtime: CodexSessionRuntime | undefined;
     const binding = this.session.nativeRuntime;
     const launchChanged = Boolean(binding?.fingerprint && !matchesRuntimeFingerprint(binding.fingerprint, this.project, this.profile, this.flavor));
     this.bindingScopeMismatch = Boolean(binding?.scopeFingerprint && binding.scopeFingerprint !== this.scopeFingerprint);
     const gate = new NotificationGate();
-    const options: CodexAppServerOptions = {
-      executable: executableOf(this.profile, this.flavor),
-      args: [...this.flavor.args(this.profileConfig), ...codexTrustArgs(this.project.cwd), ...await this.observation?.launchArgs(executableOf(this.profile, this.flavor)) ?? []],
-      cwd: this.project.cwd,
-      env: providerEnv(this.profile, this.flavor),
-      credentialDir: credentialDirFor(this.flavor),
-      requiredHumanApproval: this.flavor.id === 'codex',
+    const handlers: Pick<CodexAppServerOptions, 'onNotification' | 'onServerRequest' | 'onExit'> = {
       // A command's completion waits for its PostToolUse record, and everything after it waits behind it.
       onNotification: (method, params) => gate.push(this.observation?.hold(method, params), () => runtime?.onNotification(method, params)),
       onServerRequest: request => runtime?.onServerRequest(request) ?? Promise.reject(new Error(`${this.label} runtime is not ready`)),
       // An exit is taken after a completion held before it, or the completion would land on a runtime that has let go.
       onExit: error => gate.push(undefined, () => runtime?.onExit(error)),
     };
+    const options = await conversationServerOptions(this.project, this.profile, this.flavor, this.observation, handlers);
     runtime = this;
     const threadId = this.nativeSessionId;
     const terminalAddress = threadId && this.terminalId
@@ -746,19 +748,20 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.logRecovery('binding', binding.address, 'connect', 'unreachable', false);
         this.unreachableBinding = binding.address;
       }
-      const shared = this.flavor.terminalTransport(await probeAppServer(options.executable));
+      const warm = !binding && !threadId && !this.terminalId ? await optionsOnly.warm?.() : undefined;
       let spawnedTransport: CodexAppServerClient | undefined;
       try {
-        await this.prepareAttachment();
-        if (this.attachment) options.env = { ...options.env, ...this.attachment.value.launchEnv };
-        try {
-          spawnedTransport = await this.startAppServer({ ...options, listen: shared === 'ws' ? 'ws' : 'unix' });
-        } catch (error) {
-          // A listener whose ownership or token enforcement cannot be proved uses Unix instead.
-          const code = (error as NodeJS.ErrnoException | undefined)?.code;
-          if (code !== 'WS_AUTH_NOT_ENFORCED' && code !== 'WS_UNVERIFIED') throw error;
-          this.terminalUnavailable = true;
-          spawnedTransport = await this.startAppServer({ ...options, listen: 'unix' });
+        if (warm) {
+          warm.attach(handlers);
+          spawnedTransport = warm.transport;
+          this.terminalUnavailable ||= warm.terminalUnavailable;
+          this.warmThread = warm;
+        } else {
+          await this.prepareAttachment();
+          if (this.attachment) options.env = { ...options.env, ...this.attachment.value.launchEnv };
+          const spawned = await spawnConversationServer(this.startAppServer, this.flavor, options);
+          spawnedTransport = spawned.transport;
+          this.terminalUnavailable ||= spawned.terminalUnavailable;
         }
         this.transport = spawnedTransport;
         await this.attachment?.value.bindNative({ address: spawnedTransport.remoteAddress, pid: spawnedTransport.processId });
@@ -913,8 +916,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
           throw error;
         }
       } else {
+        // A warm thread started for the same model and permission is this conversation's first thread.
+        const warm = this.warmThread;
+        this.warmThread = undefined;
         try {
-          const response = await this.startThread(selection, permission);
+          const response = warm && warm.model === requestedModel && warm.approval === permission.id ? warm.thread : await this.startThread(selection, permission);
           thread = response.thread;
           settings = response;
         } catch (error) {
@@ -1086,25 +1092,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private async startThread(selection: NativeModelSelection, permission: ReturnType<typeof permissionOf>): Promise<{ thread: RpcThread } & Record<string, unknown>> {
     const standing = await this.standingThread();
-    const effort = nativeModelEffort(selection);
-    const serviceTier = fastServiceTier(this.flavor, selection.model, nativeModelFast(selection));
-    const backendVariant = modelBackendVariant(this.flavor, selection);
-    const config = {
-      ...(effort && effort !== 'default' ? { model_reasoning_effort: effort } : {}),
-      ...(backendVariant ? { model_backend_variant: backendVariant } : {}),
-      ...this.riffetMcpConfig(),
-      ...await this.extensionsOffConfig(),
-      ...standing?.config,
-    };
-    return await this.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/start', {
-      ...standing?.instructions,
-      cwd: this.project.cwd,
-      model: selection.model || null,
-      ...this.permissionParams(permission, 'sandbox', true),
-      ...(serviceTier ? { serviceTier } : {}),
-      ...(Object.keys(config).length ? { config } : {}),
-      ephemeral: false,
-    });
+    const config = { ...this.riffetMcpConfig(), ...await this.extensionsOffConfig(), ...standing?.config };
+    return await this.requireTransport().request<ThreadStart>('thread/start',
+      newThreadRequest(this.flavor, this.project.cwd, selection, this.permissionParams(permission, 'sandbox', true), config, standing?.instructions));
   }
 
   /**

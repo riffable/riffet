@@ -14,9 +14,12 @@ import { DeferredSteerInputs } from '../shared/deferred-steer.js';
 import { readClaudeShare } from '../shared/share-read.js';
 import { launchSource, modelSourceOf } from '../shared/model-source.js';
 import { materializeNativeInput } from '../attachments.js';
-import type { NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareReadOptions, NativeDriverExtensions, NativeDriverExternal, NativeDriverStored, ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec } from '../types.js';
+import type { NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareReadOptions, NativeDriverExtensions, NativeDriverExternal, NativeDriverStored, ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec, NativePrewarmRequest, NativePrewarmResult } from '../types.js';
 import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import { ClaudeHookBridge } from './hook-bridge.js';
+import { WarmPool } from '@riffet/plugin-api/kit';
+import { warmTerminals } from '../shared/warm-terminals.js';
+import { claudeWarmKey, sessionClaudeWarmKey, startClaudeWarm, stopClaudeWarm, type ClaudeWarm } from './warm.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { claudeHistoryMetrics, claudeUsageRecord, runForClaudeStep } from './metering.js';
 import { ClaudeTranscript, claudePromptKey, findClaudeTranscript, parseRow, mapRow, type MapperState, type ClaudeRow } from './history.js';
@@ -165,6 +168,16 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   private bridgeAttempt = 0;
   private bridgeRetry?: NodeJS.Timeout;
   private closing = false;
+  /** A CLI started for the next new conversation of the project a page shows (`warm.ts`). */
+  private readonly warm = new WarmPool<ClaudeWarm>({
+    label: 'claude',
+    stop: stopClaudeWarm,
+    extend: async (warm, until) => { await warm.terminals.extendReservation(warm.reservation.terminal.id, { ownerToken: warm.reservation.ownerToken, resourceKey: warm.reservation.resourceKey, expiresAt: until }); },
+  });
+  /** Proves this process made a reservation; it dies with the process, and the host ends what it left. */
+  private readonly warmOwner = randomUUID();
+  /** Settings and hooks of taken warm CLIs, kept until each CLI exits. */
+  private readonly takenWarm = new Set<{ overlay: ClaudeWarm['overlay']; end(): void }>();
 
   /** What a shell command changed, seen around it; only a served state directory keeps snapshots. */
   private readonly observer?: WorkspaceObserver;
@@ -283,7 +296,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       backendId, label: this.label, modes: [], permissions: CLAUDE_PERMISSIONS,
       interactionTransport: 'both', supportsResume: true, supportsInterrupt: true,
       supportsSteer: true, supportsHistory: true, supportsModelSelection: true, supportsModeSelection: false,
-      supportsPermissionSelection: true, supportsTerminal: true, supportsPrewarm: false,
+      supportsPermissionSelection: true, supportsTerminal: true, supportsPrewarm: true,
       slashCommands: [
         { name: 'model', description: 'Change the Claude model' },
         { name: 'permissions', description: 'View native permission rules' },
@@ -321,6 +334,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       }
       if (current.nativeSessionId) this.validateNativeSessionId(current.nativeSessionId);
       const resumeRequested = Boolean(current.nativeSessionId) && launchNotice === undefined;
+      if (!current.nativeSessionId) { await this.launchWarm(host, current, project, profile); current = host.getSession(current.id); }
       const nativeSessionId = current.nativeSessionId ?? randomUUID();
       if (!current.nativeSessionId) host.setNativeSessionId(current.id, nativeSessionId);
       const runtime = await this.ensureRuntime(host, { ...current, nativeSessionId }, project, profile, true, resumeRequested, launchNotice);
@@ -596,10 +610,59 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     await runtime.dispose();
   }
 
+  async prewarm(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig, request: Omit<NativePrewarmRequest, 'project' | 'backendProfileId'>): Promise<NativePrewarmResult> {
+    if (this.closing) return { state: 'skipped', reason: 'closing' };
+    // The tools are known once the CLI has its server; until then the key matches no conversation.
+    const key = claudeWarmKey(project, profile, { ...request, tools: '?' });
+    return await this.warm.request({ key, ...(request.claimId ? { claimId: request.claimId } : {}), ...(request.renewOnly ? { renewOnly: true } : {}) }, start => startClaudeWarm({
+      host, bridge: this.bridge, terminals: warmTerminals(host, backendId), ownerToken: this.warmOwner, project, profile,
+      ...(request.model ? { model: request.model } : {}), ...(request.approval ? { approval: request.approval } : {}), ...(request.appearance ? { appearance: request.appearance } : {}), start,
+    }));
+  }
+
+  async releasePrewarm(_host: NativeBackendHost, claimId: string): Promise<void> {
+    await this.warm.release(claimId);
+  }
+
+  /**
+   * A new conversation launches the warm CLI started for it, if there is one. A runtime a reader built for it
+   * before the launch was asked for has launched nothing yet, and gives way.
+   */
+  private async launchWarm(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<boolean> {
+    if (session.nativeSessionId || session.terminalId) return false;
+    await this.creating.get(session.id)?.catch(() => undefined);
+    const idle = this.runtimes.get(session.id);
+    if (idle?.started || idle?.terminalId || !await this.takeWarm(host, session, project, profile)) return false;
+    if (idle && this.runtimes.get(session.id) === idle) { this.runtimes.delete(session.id); await idle.dispose(); }
+    return true;
+  }
+
+  /**
+   * Gives a new conversation the warm CLI started for the same launch: its terminal and session id become the
+   * conversation's (`claimWarmup`), so the runtime built next takes the running CLI over. The 助理's launch is its own.
+   */
+  private async takeWarm(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<boolean> {
+    if (host.standing?.launch(project, session)) return false;
+    const taken = await this.warm.take(sessionClaudeWarmKey(host, session, project, profile), async warm => {
+      // The credential first: once the terminal is claimed the conversation owns the CLI, and nothing may fail after.
+      warm.mcp?.adopt(session.id);
+      await host.terminal.claimWarmup(warm.reservation.terminal.id, { ownerToken: warm.reservation.ownerToken, resourceKey: warm.reservation.resourceKey, sessionId: session.id });
+      const kept = { overlay: warm.overlay, end: () => { stop(); this.takenWarm.delete(kept); warm.held.release(); void warm.overlay.dispose(); } };
+      const stop = host.terminal.observe(warm.reservation.terminal.id, observation => {
+        if (observation.type === 'exit' || (observation.type === 'state' && observation.terminal.state === 'exited')) kept.end();
+      });
+      this.takenWarm.add(kept);
+      return true;
+    });
+    return taken === true;
+  }
+
   async close(): Promise<void> {
     this.closing = true;
     if (this.bridgeRetry) clearTimeout(this.bridgeRetry);
     this.bridgeRetry = undefined;
+    await this.warm.close();
+    for (const kept of [...this.takenWarm]) kept.end();
     const pending = await Promise.allSettled([...this.creating.values()]);
     const active = new Set(this.runtimes.values());
     for (const item of pending) if (item.status === 'fulfilled') active.add(item.value);
@@ -622,6 +685,10 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       await cleared.dispose();
       session = host.getSession(session.id);
       resumeRequested = true;
+    }
+    if (start && !host.getSession(session.id).nativeSessionId && await this.launchWarm(host, host.getSession(session.id), project, profile)) {
+      session = host.getSession(session.id);
+      resumeRequested = false;
     }
     const current = this.runtimes.get(session.id);
     if (current) {

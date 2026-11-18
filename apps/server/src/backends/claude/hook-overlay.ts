@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Project, Session } from '../../../../../packages/contracts/src/index.js';
 import { modelSourceOf } from '../shared/model-source.js';
-import type { NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
+import type { NativeBackendHost, NativeBackendProfileConfig, RiffetMcpServerSpec } from '../types.js';
 import type { ClaudeHookBridge } from './hook-bridge.js';
 import { shellQuote, readStatusLineForward, readOwnerConnection, configDirOf, gatewayBearer, apiKeyHelper, providerEnv } from './launch.js';
 import { selectedFast, gatewayContextEnv } from './models.js';
@@ -55,6 +55,12 @@ export class ClaudeHookOverlay {
     session(): Session;
     isDisposed(): boolean;
     onHook: Parameters<ClaudeHookBridge['register']>[1];
+    /**
+     * A launch ahead of its conversation (a warm one): there is no conversation record to read, so it is
+     * launched as a new conversation from the composer is, with this Riffet MCP server. Its hooks are held by
+     * whoever started it (`ClaudeHookBridge.hold`) and it names its own first id as their owner.
+     */
+    draft?: { riffetMcp?: RiffetMcpServerSpec };
   }) {}
 
   /** Whether this runtime is the destination of its conversation's hooks. */
@@ -67,11 +73,20 @@ export class ClaudeHookOverlay {
     if (this.deps.isDisposed() || this.unregisterHooks) return;
     this.hookUrl = bridge.url;
     this.hookToken = bridge.token;
-    this.unregisterHooks = this.deps.bridge.register(this.deps.nativeSessionId, this.deps.onHook, this.deps.session().id);
+    // A CLI started ahead of the conversation names the id it first ran under as its owner; the conversation keeps
+    // that id (current, or earlier after `/clear`), so every id it has had stands for it.
+    const record = this.deps.host.getSession(this.deps.session().id);
+    const ids = [record.nativeSessionId, ...record.previousNativeSessionIds ?? []].filter((id): id is string => Boolean(id));
+    this.unregisterHooks = this.deps.bridge.register(this.deps.nativeSessionId, this.deps.onHook, [this.deps.session().id, ...ids]);
   }
 
   async ensureHookServer(model: string | undefined): Promise<void> {
-    await this.registerHooks();
+    const draft = this.deps.draft;
+    if (draft) {
+      const bridge = await this.deps.bridge.start();
+      this.hookUrl = bridge.url;
+      this.hookToken = bridge.token;
+    } else await this.registerHooks();
     if (!this.tempDir) {
       this.tempDir = await mkdtemp(join(tmpdir(), 'riffet-claude-'));
       await chmod(this.tempDir, 0o700);
@@ -80,7 +95,7 @@ export class ClaudeHookOverlay {
     // The descriptor is how a CLI finds the server again after it restarts: it is read on every hook.
     const descriptor = this.deps.bridge.descriptorPath ? ` --descriptor ${shellQuote(this.deps.bridge.descriptorPath)}` : '';
     const hookCommand = `${shellQuote(process.execPath)} ${shellQuote(hookScriptPath)}`;
-    const ownerArg = ` --owner ${shellQuote(this.deps.session().id)}`;
+    const ownerArg = ` --owner ${shellQuote(draft ? this.deps.nativeSessionId : this.deps.session().id)}`;
     const hookWith = (timeoutMs: number) => ({ type: 'command', command: `${hookCommand} ${timeoutMs}${descriptor}${ownerArg}`, timeout: Math.ceil(timeoutMs / 1000) });
     const commandHook = hookWith(HOOK_TIMEOUT_MS);
     const interactionHook = hookWith(interactionHookTimeoutMs());
@@ -106,16 +121,17 @@ export class ClaudeHookOverlay {
       ...(gateway && fastMode === true ? { CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK: '1' } : {}),
     };
     // Riffet tools (docs/DEVICES.md §2) reach this launch through a file of its own, never `~/.claude.json`.
-    const riffetMcp = this.deps.host.riffetMcp?.server(this.deps.session().id);
+    const riffetMcp = draft ? draft.riffetMcp : this.deps.host.riffetMcp?.server(this.deps.session().id);
     if (riffetMcp) {
       this.mcpConfigFile = join(this.tempDir!, 'mcp.json');
       await writeFile(this.mcpConfigFile, `${JSON.stringify({ mcpServers: { [riffetMcp.name]: { type: 'stdio', command: riffetMcp.command, args: riffetMcp.args } } })}\n`, { mode: 0o600 });
     } else this.mcpConfigFile = undefined;
     // Extensions this conversation switched off (docs/EXTENSIONS.md): read from the session record, so a change applies at the next launch like its tool groups.
-    const standing = this.deps.host.standing?.launch(this.deps.project, this.deps.host.getSession(this.deps.session().id));
+    const record = draft ? undefined : this.deps.host.getSession(this.deps.session().id);
+    const standing = record && this.deps.host.standing?.launch(this.deps.project, record);
     // Left out with the rest of the reader's settings, their sign-in is carried here; the profile's own still wins.
     const owner = standing ? await readOwnerConnection(configDirOf(this.deps.profile()), this.deps.project.cwd) : { settings: {} };
-    const extensionsOff = this.deps.host.getSession(this.deps.session().id).extensionsOff;
+    const extensionsOff = record?.extensionsOff;
     // A standing conversation's skills are the ones in its directory. The CLI's own (code review, plugin authoring…)
     // are for coding work: `disableBundledSkills` drops them, and `plugin-authoring`, which comes with a built-in
     // plugin that switch leaves in place, is turned off by name.

@@ -9,6 +9,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Scanning a pairing QR works when the Mac has several network addresses and the phone can reach only some of them, such as Wi-Fi that keeps wireless devices apart while the wired address answers: the QR carries every address and the phone pairs at the first that answers. Android also falls back to these addresses later if the one it uses stops answering.
 - Sending a message to an agent no longer waits seconds for the undo checkpoint in a project with many uncommitted changes: about 0.3 s for a hundred changed files, from 3.5 s.
 - Cursor with an API gateway starts in about a second instead of 10–30: the queries the CLI makes before its prompt are answered from the server's memory and refreshed behind it, so a change to models or plugins shows one start later.
+- Cursor: a slow-starting CLI no longer shows "the CLI has not shown its prompt bar" after 15 seconds, and a message sent while the warm CLI is still starting waits for it instead of starting a second one. A CLI waiting for login says so right away.
 - Cursor: a first message with several lines, or one ending in `;`, no longer fails with "Native terminal launch command is invalid" when no warm CLI is ready.
 - A conversation that failed while its first message was sending shows the error once, not twice.
 - An agent that fails at startup (a wrong model, an invalid key) before Riffet has attached to its terminal now shows as failed with its reason, instead of going idle with no explanation.
@@ -16,6 +17,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- New Codex and Claude Code conversations start sooner: while the new-conversation page is open, the agent is started ahead of your first message, as Cursor already was. The first reply comes about 1.5–3 s sooner from Codex and about 0.6 s sooner from Claude Code. One started but not used ends when you leave the page.
 - The model menu remembers each provider's last model with its effort and Fast settings: switching back to a provider starts on it, and picking another model keeps effort, Fast and the context window where that model offers them. Quota figures from the last reading show as soon as the menu opens, also after a reload, while a fresh reading loads.
 
 ## 0.8.0 - 2026-11-17

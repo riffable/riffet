@@ -1,4 +1,4 @@
-import { readTerminalAppearance, recordTerminalAppearance } from '../terminal/appearance.js';
+import { recordTerminalAppearance } from '../terminal/appearance.js';
 import { createHash } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
@@ -12,6 +12,15 @@ import { defaultBackendForClient, requireBackendVisibleToClient } from '../nativ
 import { savedDefaultBackendId } from '../session-identity.js';
 import { configureNative as configureNativeSession, type NativeConfigurePatch } from '../native/configure.js';
 import type { RouteDeps, NativeMessageBody } from './deps.js';
+import { memoryPressure, type MemoryPressure } from '../native/agent-processes.js';
+import { resolveNativeSessionInput } from '../native/session-input.js';
+
+/** The memory pressure a prewarm is admitted under, read at most every few seconds: every open page asks every 30 s. */
+let pressureRead: { at: number; level: Promise<MemoryPressure> } | undefined;
+function prewarmPressure(): Promise<MemoryPressure> {
+  if (!pressureRead || Date.now() - pressureRead.at > 5_000) pressureRead = { at: Date.now(), level: memoryPressure().catch((): MemoryPressure => 'normal') };
+  return pressureRead.level;
+}
 
 /** Largest blob served in one response; bigger ones were never meant for a client to fetch whole. */
 const BLOB_RESPONSE_LIMIT=16*1024*1024;
@@ -177,14 +186,22 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if(skipped)return skipped;
     await assertTaskWorkspaceAvailable(project);
     const claimId=body.claimId===undefined?undefined:requireString(body.claimId,'claimId',100);
-    const prewarm=(renewOnly:boolean)=>nativeBackends.catalog.prewarm(backendId,{project,...(body.backendProfileId?{backendProfileId:body.backendProfileId}:{}),appearance:readTerminalAppearance(request.headers),model:body.model,mode:body.mode??'agent',...(body.approval!==undefined?{approval:requireString(body.approval,'approval',100)}:{}),...(claimId?{claimId}:{}),...(renewOnly?{renewOnly:true}:{})});
+    // Resolved as the composer's new conversation would be (saved defaults, normalized model, appearance), so the
+    // conversation the page sends matches the warm one exactly; a choice it would refuse starts nothing.
+    let input:Awaited<ReturnType<typeof resolveNativeSessionInput>>;
+    try{input=await resolveNativeSessionInput({store,settings,nativeBackends},{projectId:project.id,backendId,...(body.backendProfileId!==undefined?{backendProfileId:body.backendProfileId}:{}),...(body.model!==undefined?{model:body.model}:{}),...(body.mode!==undefined?{mode:body.mode}:{}),...(body.approval!==undefined?{approval:body.approval}:{})},request.headers,project);}
+    catch(error){if(error instanceof AppError)return {state:'skipped',reason:error.code.toLowerCase()};throw error;}
+    const prewarm=(renewOnly:boolean)=>nativeBackends.catalog.prewarm(backendId,{project,backendProfileId:input.backendProfileId,...(input.terminalAppearance?{appearance:input.terminalAppearance}:{}),...(input.model?{model:input.model}:{}),mode:input.mode,...(input.approval!==undefined?{approval:input.approval}:{}),...(claimId?{claimId}:{}),...(renewOnly?{renewOnly:true}:{})});
     // A workspace a restore or merge holds gets no new warm CLI; the page holding one keeps it renewed.
     // Conversations at work in it do not hold one back: a warm CLI changes no file, and it starts beside them as a new conversation would.
     let release:()=>void;
     try{release=dispatch.holdWorkspaceForPrewarm(project.id);}
     catch(error){if(error instanceof AppError&&error.code==='PROJECT_BUSY')return claimId?prewarm(true):{state:'skipped',reason:'workspace_busy'};throw error;}
+    // Under memory pressure nothing new is started ahead of need; one already held is cheaper kept than started again.
+    const pressed=await prewarmPressure()!=='normal';
+    if(pressed&&!claimId){release();return {state:'skipped',reason:'memory_pressure'};}
     // The backend answers for itself: `skipped` with why when it keeps no warm CLI or not for this profile.
-    try{return await prewarm(false);}
+    try{return await prewarm(pressed);}
     finally{release();}
   });
   // The page that asked for a warm CLI closed or chose another Agent; one a new session has claimed is kept.

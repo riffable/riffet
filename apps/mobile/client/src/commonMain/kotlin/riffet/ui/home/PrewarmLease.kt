@@ -8,6 +8,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import riffet.contracts.PREWARM_BUDGET_RENEW_MS
+import riffet.contracts.PREWARM_BUDGET_START_DELAY_MS
 import riffet.shared.PrewarmBody
 import riffet.shared.PrewarmReleaseBody
 import riffet.shared.RiffetApi
@@ -17,7 +19,7 @@ import riffet.shared.releasePrewarm
 /**
  * Holds a warm CLI for the new-task page's choice, as the web page does (`ProjectHome.tsx`). A CLI takes
  * seconds to start, longer than most first messages take to write. While the page shows an Agent that
- * keeps one (only Cursor does), it is asked for when the page opens, renewed while the page stays open,
+ * keeps one (`supportsPrewarm`), it is asked for when the page opens, renewed while the page stays open,
  * and released when the page closes or the choice changes; a send hands it to the new conversation
  * instead. The server ends one whose page vanished on its own, after its lease runs out.
  *
@@ -61,7 +63,7 @@ class PrewarmLease {
         this.api = api
         if (api == null || body == null) return
         job = scope.launch {
-            delay(START_DELAY_MS)
+            delay(PREWARM_BUDGET_START_DELAY_MS.toLong())
             while (isActive) {
                 // A renewal names the page's warm CLI: it never takes the one slot from another page.
                 val next = runCatching { api.prewarm(body.copy(claimId = claimId)) }.getOrNull()?.claimId
@@ -69,7 +71,7 @@ class PrewarmLease {
                     if (handOffPending) { handedOff = next; handOffPending = false }
                     claimId = next
                 }
-                delay(RENEW_MS)
+                delay(PREWARM_BUDGET_RENEW_MS.toLong())
             }
         }
     }
@@ -83,12 +85,5 @@ class PrewarmLease {
         claimId = null
         if (id == null || body == null || api == null || id == handedOff) return
         scope.launch { runCatching { api.releasePrewarm(PrewarmReleaseBody(claimId = id, backendId = body.backendId, agentId = body.agentId)) } }
-    }
-
-    private companion object {
-        /** A page passed through on the way elsewhere asks for nothing. */
-        const val START_DELAY_MS = 700L
-        /** Within the server's lease on a warm CLI (`warmLeaseMs`). */
-        const val RENEW_MS = 30_000L
     }
 }

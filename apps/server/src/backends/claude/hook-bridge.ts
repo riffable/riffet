@@ -50,6 +50,8 @@ export class ClaudeHookBridge {
   private readonly routes = new Map<string, ClaudeHookRoute>();
   /** The Claude session each Riffet conversation's runtime is registered under, for hooks of a session it has not taken up yet. */
   private readonly owners = new Map<string, string>();
+  /** The SessionStart of a CLI started ahead of its conversation (`hold`), for the runtime that registers it. */
+  private readonly held = new Map<string, Record<string, unknown>>();
   private readonly server = new NativeHookServer((payload, deliveryId, signal) => this.dispatch(payload, deliveryId, signal));
   private starting?: Promise<{ url: string; token: string }>;
   private heartbeat?: NodeJS.Timeout;
@@ -117,13 +119,48 @@ export class ClaudeHookBridge {
     return write;
   }
 
-  /** Routes one conversation to its runtime. A newer registration for the id replaces the older. */
-  register(sessionId: string, route: ClaudeHookRoute, owner?: string): () => void {
+  /**
+   * Routes one conversation to its runtime. A newer registration for the id replaces the older. `owner` is what
+   * the conversation's CLIs name as their owner: its own id, and for a CLI started ahead of it (`hold`) the id that
+   * CLI first ran under, which the conversation keeps among its ids.
+   */
+  register(sessionId: string, route: ClaudeHookRoute, owner?: string | readonly string[]): () => void {
+    const owners = owner === undefined ? [] : typeof owner === 'string' ? [owner] : owner;
     this.routes.set(sessionId, route);
-    if (owner) this.owners.set(owner, sessionId);
+    for (const name of owners) this.owners.set(name, sessionId);
+    // A CLI started ahead of its conversation announced itself before this runtime existed: the runtime learns
+    // its transcript from that announcement, so it is handed over, after the registration that took it.
+    const announced = this.held.get(sessionId);
+    if (announced) {
+      this.held.delete(sessionId);
+      setImmediate(() => { if (this.routes.get(sessionId) === route) void route(announced, randomUUID(), new AbortController().signal).catch(() => undefined); });
+    }
     return () => {
       if (this.routes.get(sessionId) === route) this.routes.delete(sessionId);
-      if (owner && this.owners.get(owner) === sessionId) this.owners.delete(owner);
+      for (const name of owners) if (this.owners.get(name) === sessionId) this.owners.delete(name);
+    };
+  }
+
+  /**
+   * Takes the hooks of a CLI started before its conversation exists (a warm one) and answers them with
+   * nothing; its SessionStart is kept for the runtime that registers the id later. `started` settles at
+   * that SessionStart. Such a CLI names its own first id as its owner (`ClaudeHookOverlay`'s draft).
+   */
+  hold(nativeSessionId: string): { started: Promise<void>; release(): void } {
+    let started!: () => void;
+    const announced = new Promise<void>(resolve => { started = resolve; });
+    const route: ClaudeHookRoute = async payload => {
+      if (payload.hook_event_name === 'SessionStart' && payload.session_id === nativeSessionId) { this.held.set(nativeSessionId, payload); started(); }
+      return {};
+    };
+    this.routes.set(nativeSessionId, route);
+    return {
+      started: announced,
+      release: () => {
+        if (this.routes.get(nativeSessionId) !== route) return;
+        this.routes.delete(nativeSessionId);
+        this.held.delete(nativeSessionId);
+      },
     };
   }
 
@@ -188,6 +225,7 @@ export class ClaudeHookBridge {
     this.heartbeat = undefined;
     this.routes.clear();
     this.owners.clear();
+    this.held.clear();
     await this.writing;
     // Only the owner removes the file: a successor that already replaced it keeps its own.
     const path = this.descriptorPath;

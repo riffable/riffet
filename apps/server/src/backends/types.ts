@@ -242,6 +242,14 @@ export interface NativeRiffetMcpHost {
   server(sessionId: string): RiffetMcpServerSpec | undefined;
   /** A runtime can require its native per-call identity in addition to the shim's session credential. */
   bind?(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void;
+  /**
+   * The server for a CLI started ahead of a new conversation in the project (a warm one), bound to the
+   * conversation that takes it with `adopt`; `revoke` when none does. Its tools are a new conversation's
+   * by default: a warm CLI is taken only by a conversation whose `signature` is the same.
+   */
+  provisional?(projectId: string): { server: RiffetMcpServerSpec; signature: string; adopt(sessionId: string): void; revoke(): void } | undefined;
+  /** What decides the conversation's tool list; undefined when it gets no server. */
+  signature?(sessionId: string): string | undefined;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AgentToolGroup } from '@riffet/plugin-api';
 import sharp from 'sharp';
 import type { DeviceCapability, Session, RiffetWakeup, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
@@ -11,7 +11,7 @@ import { parseTriggers } from '../orchestration/automation.js';
 import type { OrchestrationService } from '../orchestration/service.js';
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
-import type { RiffetMcpCredentials } from './credentials.js';
+import { isProvisionalOwner, type RiffetMcpCredentials } from './credentials.js';
 import { deviceGroupIds, type DeviceChannel, type StoredDeviceCall } from './devices.js';
 import type { NoticeLog } from './notices.js';
 import { isScreenDevice, SCREEN_ERRORS, SCREEN_HELP_TOOL, SCREEN_TOOLS, screenHelp, stoppedLine } from './screen.js';
@@ -319,7 +319,9 @@ export interface TaskReports {
 /** What the 助理's tools do (the work items side, given by `app.ts`). */
 export interface AssistantTools { call(name: string, args: Record<string, unknown>, context: { sessionId: string }): Promise<Record<string, unknown>> }
 
-export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; assistant?: () => AssistantTools | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined }
+export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; assistant?: () => AssistantTools | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined;
+  /** Whether a conversation started from the composer is given a task (`workItems.composerSessions`). */
+  composerTasks?: () => boolean }
 
 const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...ASSISTANT_TOOLS, ...DELEGATION_TOOLS, ...RUN_TOOLS, ...SUPERVISE_TOOLS].map(tool => tool.name));
 
@@ -330,6 +332,8 @@ const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...ASSISTANT_TOOLS, ...DELE
  */
 export class RiffetMcpService implements NativeRiffetMcpHost {
   private readonly bindings = new Map<string, (metadata: Record<string, unknown>) => Promise<void>>();
+  /** Provisional credentials not yet adopted, by owner: the project whose new conversation they list tools for. */
+  private readonly drafts = new Map<string, string>();
   constructor(private readonly deps: RiffetMcpDeps) {}
 
   bind(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void {
@@ -340,14 +344,55 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   }
 
   server(sessionId: string): RiffetMcpServerSpec | undefined {
+    return this.served(sessionId) ? { name: RIFFET_MCP_NAME, ...this.deps.credentials.command(sessionId) } : undefined;
+  }
+
+  /** The conversation, when it gets a server: not archived, not a quick chat. Issues nothing. */
+  private served(sessionId: string): Session | undefined {
     let session: Session;
     try { session = this.deps.store.getSession(sessionId); } catch { return undefined; }
-    if (session.archivedAt || session.backendId === 'chat') return undefined;
-    return { name: RIFFET_MCP_NAME, ...this.deps.credentials.command(sessionId) };
+    return session.archivedAt || session.backendId === 'chat' ? undefined : session;
   }
 
   /** Called when a conversation is archived. */
   revoke(sessionId: string): void { this.bindings.delete(sessionId); this.deps.credentials.revoke(sessionId); }
+
+  /**
+   * The server for a CLI started ahead of a new conversation in `projectId` (a warm one). It lists the
+   * tools a new conversation there has by default and runs none until `adopt` binds it to the
+   * conversation that takes the CLI; `signature` tells whether that conversation's tools are the same.
+   */
+  provisional(projectId: string): { server: RiffetMcpServerSpec; signature: string; adopt(sessionId: string): void; revoke(): void } | undefined {
+    const draft = this.draftOf(projectId);
+    if (!draft) return undefined;
+    const { owner, ...command } = this.deps.credentials.provisional();
+    this.drafts.set(owner, projectId);
+    return {
+      server: { name: RIFFET_MCP_NAME, ...command },
+      signature: this.signatureOf(draft),
+      adopt: sessionId => { this.drafts.delete(owner); this.deps.credentials.adopt(owner, sessionId); },
+      revoke: () => { if (this.drafts.delete(owner)) this.deps.credentials.revoke(owner); },
+    };
+  }
+
+  /** What a CLI's tool list is decided by, for matching it to one started ahead (`provisional`); undefined when it gets none. */
+  signature(sessionId: string): string | undefined {
+    const session = this.served(sessionId);
+    return session ? this.signatureOf(session) : undefined;
+  }
+
+  private signatureOf(session: Session): string {
+    return createHash('sha256').update(JSON.stringify(this.tools(session))).digest('hex');
+  }
+
+  /** A new conversation from the project's composer before anything is chosen for it: no tool groups, and a task when every such conversation gets one. */
+  private draftOf(projectId: string): Session | undefined {
+    let project;
+    try { project = this.deps.store.getProject(projectId); } catch { return undefined; }
+    if (project.archivedAt) return undefined;
+    const task = this.deps.composerTasks?.() === true && project.system !== 'quick-chat' && project.system !== 'assistant';
+    return { id: 'draft', projectId, kind: 'native', title: '', state: 'idle', ...(task ? { workItemId: 'draft' } : {}), createdAt: new Date(0).toISOString(), updatedAt: new Date(0).toISOString() } as unknown as Session;
+  }
 
   /** The snapshot's devices that are still paired; a revoked device's group is dropped. */
   private devicesOf(session: Session): string[] {
@@ -403,6 +448,12 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   /** One JSON-RPC method the shim forwards, for the conversation its credential names. `signal` ends when the shim's request does. */
   async handle(authorization: string | undefined, method: unknown, params: unknown, signal?: AbortSignal): Promise<unknown> {
     const sessionId = this.deps.credentials.authenticate(authorization);
+    if (isProvisionalOwner(sessionId)) {
+      // Started ahead of its conversation: it may list what a new one has, and do nothing yet.
+      const draft = this.drafts.has(sessionId) ? this.draftOf(this.drafts.get(sessionId)!) : undefined;
+      if (method === 'tools/list' && draft) return { tools: this.tools(draft) };
+      throw new AppError('RIFFET_MCP_NOT_BOUND', 'This conversation has not started yet', 409);
+    }
     let session = this.deps.store.getSession(sessionId);
     if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
     if (method === 'tools/list') return { tools: this.tools(session) };

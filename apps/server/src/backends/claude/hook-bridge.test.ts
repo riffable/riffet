@@ -37,6 +37,28 @@ describe('Claude hook bridge for a conversation with no runtime', () => {
     expect(await dispatch({ session_id: 'after', hook_event_name: 'SessionStart', riffet_owner: 'conversation' })).toEqual({});
   });
 
+  it('hands a warm CLI\'s SessionStart to the conversation that takes it, and its later sessions too', async () => {
+    const bridge = new ClaudeHookBridge();
+    const dispatch = dispatchOf(bridge);
+    const held = bridge.hold('warm');
+    const start = { session_id: 'warm', hook_event_name: 'SessionStart', transcript_path: '/t/warm.jsonl', riffet_owner: 'warm' };
+    // Before a conversation takes it, its hooks are answered with nothing.
+    expect(await dispatch(start)).toEqual({});
+    await held.started;
+    const seen: unknown[] = [];
+    const unregister = bridge.register('warm', async payload => { seen.push(payload); return { routed: payload.session_id }; }, ['conversation', 'warm']);
+    await expect.poll(() => seen).toEqual([start]);
+    // Its owner is its own first id: a session it moves to (`/clear`) still reaches the conversation.
+    expect(await dispatch({ session_id: 'after', hook_event_name: 'SessionStart', riffet_owner: 'warm' })).toEqual({ routed: 'after' });
+    // Releasing the hold after the conversation registered leaves the conversation's route alone.
+    held.release();
+    expect(await dispatch({ session_id: 'warm', hook_event_name: 'Stop' })).toEqual({ routed: 'warm' });
+    // The conversation goes on under the new id, keeping the first among its ids; a second `/clear` still finds it.
+    unregister();
+    bridge.register('after', async payload => ({ moved: payload.session_id }), ['conversation', 'after', 'warm']);
+    expect(await dispatch({ session_id: 'later', hook_event_name: 'SessionStart', riffet_owner: 'warm' })).toEqual({ moved: 'later' });
+  });
+
   it('publishes its descriptor again when it is started after a close', async () => {
     const stateDir = await mkdtemp(join(tmpdir(), 'claude-bridge-'));
     const bridge = new ClaudeHookBridge({ stateDir });

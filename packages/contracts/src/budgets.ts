@@ -103,6 +103,27 @@ export const SERVER_BUDGET = {
 } as const;
 
 /**
+ * A warm Agent resource held for a new session's first message (`WarmPool` in the plugin kit,
+ * docs/PLUGIN_ARCHITECTURE.md「预热」). One per Agent; a page asks for it, renews it and releases it.
+ */
+export const PREWARM_BUDGET = {
+  /** A page asks this long after it shows the choice, so a page passed through starts nothing. */
+  startDelayMs: 700,
+  /** How often an open page renews it. */
+  renewMs: 30_000,
+  /** Unrenewed this long, it ends: three renewals missed. */
+  leaseMs: 90_000,
+  /** A start not ready by then fails. */
+  readyTimeoutMs: 60_000,
+  /** After a failed start, the same configuration is not tried again for this long. */
+  failureBackoffMs: 5_000,
+  /** A session waits at most this long for one still starting, then starts its own. */
+  takeWaitMs: 15_000,
+  /** A pane that is starting is read at most this often, and only after it printed. */
+  screenReadMs: 120,
+} as const;
+
+/**
  * The Cursor API front's answers to cursor-agent's startup queries (`plugins/riffet/cursor/backend/api-cache.ts`).
  * Memory only, dropped when the backend closes; past either cap the least recently used goes.
  */

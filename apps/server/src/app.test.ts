@@ -1951,6 +1951,23 @@ describe('Riffet MCP tools', () => {
   const credentialOf = async (file: string) => (JSON.parse(await readFile(file, 'utf8')) as { credential: string }).credential;
 
   // Every conversation gets Riffet's own tools; a credential must open nothing but its own conversation.
+  it('lists a warm CLI the tools of the conversation the composer then opens, so the conversation can take it', async () => {
+    const { app, cookie, csrf, projectDir, store, dispatch, riffetMcp, settings } = await boot({}, undefined, undefined, true);
+    await dispatch.close();
+    const project = store.createProject(projectDir, 'warm tools');
+    const create = (id: string) => app.inject({ method: 'POST', url: '/api/sessions', headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf },
+      payload: { kind: 'native', projectId: project.id, clientSessionId: id, initialMessage: { commandId: `${id}-first`, text: 'hello' } } });
+    const warm = () => { const provisional = riffetMcp.provisional(project.id)!; provisional.revoke(); return provisional.signature; };
+    expect((await create('plain')).statusCode).toBe(202);
+    expect(riffetMcp.signature('plain')).toBe(warm());
+    // With every composer conversation opening a task, the task tools are on both sides.
+    settings.setSettings({ workItems: { composerSessions: true } });
+    expect((await create('tasked')).statusCode).toBe(202);
+    expect(store.getSession('tasked').workItemId).toBeDefined();
+    expect(riffetMcp.signature('tasked')).toBe(warm());
+    expect(warm()).not.toBe(riffetMcp.signature('plain'));
+  });
+
   it('gives every conversation the base tools and scopes each credential to its own conversation', async () => {
     const { app, cookie, csrf, projectDir, store, dispatch, riffetMcp, call } = await boot({}, undefined, undefined, true);
     await dispatch.close();

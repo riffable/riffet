@@ -278,8 +278,8 @@ export class CursorBackend implements AgentBackend {
 
   /**
    * Builds the runtime as soon as the plugin is registered, as the server did at its start before Cursor was a plugin: the
-   * sweep that corrects sessions left running by an earlier process, and the reaping of warm CLIs it left behind, must
-   * not wait for the first request to arrive.
+   * sweep that corrects sessions left running by an earlier process must not wait for the first request to arrive. Warm
+   * CLIs an earlier process left are the host's to end (`TerminalService.endPreviousWarmupsOnce`).
    */
   start(host: AgentHost, profile: AgentProfile): void { this.parts(host, profile); }
 

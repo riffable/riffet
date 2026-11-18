@@ -99,8 +99,19 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - 登录状态：`AgentAvailability.needsLogin` 表示已安装但未登录，`/api/backends` 的条目带 `needsLogin`，客户端对任何后端显示同一个提示，不读 Agent 专有的能力报告。机器的 tmux 与 Tailscale 状态不属于某个 Agent：`GET /api/system/machine` 返回 `MachineReport`（`tmux`、`tailscale`、`warnings`、`checkedAt`），Agent 插件关闭时照常回答。
 
 - 不可用：后端未注册（插件关闭或不在构建里）时，新会话、启动和上述转发返回 503 `NATIVE_BACKEND_UNAVAILABLE`，`details` 带 `backendId`，原因已知时带 `reason`；已排队的发送在派发时失败并写明原因；会话列表、历史和 journal 照常可读，原生进程与终端不被终止，后端回来后接着用。项目配置在没有后端保存它们时：列表为空，读、写、创建都是同一个 503（原因是哪个插件关着）。预热对关闭或不预热的后端先于工作区检查答 `skipped`/`backend_unsupported`。
-- 启动与等待：服务启动时插件可能还在评估或激活（`refreshWithin` 只等 1.5 秒），此时它声明的 Agent 记为“将到”（`PluginRegistry.agentBackendPending`，激活本身受 30 秒超时约束，未评估的受 45 秒启动宽限约束），派发器不处理这个后端的排队发送，既不失败也不丢；激活失败或超时后按原因照常失败。`AgentBackend.start(host, profile)` 在后端注册后由核心调用一次（每次激活一次），用来启动无人使用时也要运行的东西（Cursor 的状态巡检与残留预热进程回收）。
+- 启动与等待：服务启动时插件可能还在评估或激活（`refreshWithin` 只等 1.5 秒），此时它声明的 Agent 记为“将到”（`PluginRegistry.agentBackendPending`，激活本身受 30 秒超时约束，未评估的受 45 秒启动宽限约束），派发器不处理这个后端的排队发送，既不失败也不丢；激活失败或超时后按原因照常失败。`AgentBackend.start(host, profile)` 在后端注册后由核心调用一次（每次激活一次），用来启动无人使用时也要运行的东西（Cursor 的状态巡检）。
 - 重新启用与撤销：后端被撤回时 `watchControl` 的读者（同步流、派发器）留在原处，后端回来时 `attachBackend` 把它们接到新驱动；插件的激活被释放（含 `dispose`）后，交给它的 `AgentHost` 被撤销，之后每次调用都得 `AGENT_HOST_REVOKED`，上一次激活遗留的定时器写不进任何东西。`host.stats.saveRunMetrics`、`isRunCancelled`、`recordUsage` 只认本 Agent 会话的 run，`readAttachment` 只认正在投递的输入里的附件，其余得 403 `AGENT_SESSION_FOREIGN`。
+
+### 预热
+
+新会话页显示一个 `supportsPrewarm` 的 Agent 时，为它的下一条新会话先起好进程，发送时交给新会话。Cursor 和 Claude Code 是预留终端里的 CLI，Codex 是已经建好新线程的 app-server。
+
+- 分工：`WarmPool`（`@riffet/plugin-api/kit`）决定何时起、留多久、何时结束、交给谁；Agent 只提供怎么起（就绪才返回，被中止时收拾自己起的东西）、怎么结束、会话怎么接手。终端类的用 `reserveWarmTerminal`（预留终端，按输出驱动读屏判断就绪）和 `terminalWarmOptions`；核心内置的 Agent 经 `backends/shared/warm-terminals.ts` 拿到同样形状的预留终端。
+- 请求：页面在显示选择 `PREWARM_BUDGET.startDelayMs` 后请求，每 `renewMs` 续租，关闭或改选时释放（`POST /api/native/prewarm`、`/release`）。同一页面的续租带 `claimId`，不会抢走别的页面的；内存紧张或工作区在恢复时只续租不新起（`memory_pressure`、`renew_only`）。
+- 匹配：每个 Agent 至多一个，按键交出。键是 Agent 对一次启动的身份：项目、档案、模型、权限、终端配色，加上 Riffet MCP 的工具签名（`NativeRiffetMcpHost.signature`）和关掉的扩展。预热时会话还不存在，Riffet MCP 用临时凭据（`provisional`），工具按该项目从输入框新建的会话算；接手时凭据转给会话（`adopt`），文件路径不变，CLI 不用重启。Agent 解析后的键（规范化的模型名、实际工具签名）用 `alias` 补上。键不同的会话不拿，留给它的页面；还在启动的同键资源，会话最多等 `takeWaitMs`，过了就自己起。
+- 结束：未续租满 `leaseMs`、释放、被别的配置替换、启动失败或 `readyTimeoutMs` 内未就绪即结束；失败的键退避 `failureBackoffMs`，期间答 `skipped` 和原因。空闲时进程自己退出的，Agent 调 `lost()`（`reserveWarmTerminal` 已代为观察），池立即放掉并按失败退避；接手失败也结束它，会话照常自己起。服务关闭时池结束自己的；上一个进程留下的预留终端由 `TerminalService.endPreviousWarmupsOnce` 在服务启动时统一结束，Agent 不各自清理。
+- 接手：终端类经 `claimWarmup` 把终端和启动时的会话 id 记到会话上，runtime 按接管现成 CLI 的路径接手。Claude Code 的 hook 在接手前由 `ClaudeHookBridge.hold` 收着，SessionStart 交给之后注册这个 id 的 runtime（转录文件从它得知）；预热 CLI 的 hook owner 是它自己的首个会话 id；runtime 注册时把会话用过的每个 id（当前的和 `previousNativeSessionIds`）都登记为 owner，所以多次 `/clear` 后、服务重启并重新打开会话后，仍回到这个会话（与普通启动的 CLI 一样）。Codex 的 runtime 在既无线程也无进程时取预热的 app-server，首个线程就用预热建好的那个，模型或权限在此期间变了就另建。Codex 在首轮之前不写 rollout，没被用掉的线程不留记录。
+- 统计：`WarmPool.stats()`（hits、misses、mismatched、ready、failed、skipped、wasted、readyMs）。会话来取时池里有一个、但键不同，记为 mismatched 并在服务日志写一行 `prewarm: a new session did not match the warm one`，带两边的键：偶尔出现是页面刚改了选择，持续出现就是两边算键的方式偏了，预热不再起作用。
 
 ## Agent 身份
 

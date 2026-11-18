@@ -489,6 +489,28 @@ function hooksOf(owner: string, ...hooks: NativeRuntimeHook[]): ConstructorParam
   return { runtimeHooks: backendId => hooks.filter(hook => hook.backendId === backendId).map(hook => ({ owner: owner as `${string}.${string}`, hook })) };
 }
 
+describe('prewarm', () => {
+  it('hands the warm app-server and its thread to the next new conversation, starting neither again', async () => {
+    const h = makeHarness();
+    const ask = () => h.adapter.prewarm!(h.host, h.project, h.profile, { approval: 'on-request' }).then(result => result.state);
+    expect(await ask()).toBe('preparing');
+    await expect.poll(ask).toBe('ready');
+    const warm = h.transport!;
+    await h.send('cmd-warm');
+    expect(h.factoryCalls).toHaveLength(1);
+    expect(h.transport).toBe(warm);
+    expect(warm.requestParams.filter(request => request.method === 'thread/start')).toHaveLength(1);
+    expect(warm.lastParams('turn/start')).toBeDefined();
+  });
+
+  it('leaves the warm thread to its page for a conversation with another permission', async () => {
+    const h = makeHarness();
+    await expect.poll(() => h.adapter.prewarm!(h.host, h.project, h.profile, { approval: 'danger-full-access' }).then(result => result.state)).toBe('ready');
+    await h.send('cmd-own');
+    expect(h.factoryCalls).toHaveLength(2);
+  });
+});
+
 describe('native runtime attachments', () => {
   it('keeps one native writer across sidecar actions and recovers its attachment, saved under either field, after a restart', async () => {
     let onChange: (() => void) | undefined;

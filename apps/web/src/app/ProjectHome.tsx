@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconSquareTerminal, IconTerminal } from '@/components/icons';
-import type { AppSettings, Attachment, AttemptGroup, ModelInfo, NativeBackendCatalogEntry, NativeBackendId, NativeBackendProfile, Session, ToolGroupId } from '@contracts';
+import { PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
 import { Spinner, StatusDot } from '@/components/ui/controls';
@@ -48,7 +48,6 @@ const composeChoice = (profileId: string, model: string) => `${profileId}${CHOIC
 const NO_TOOL_GROUPS: ToolGroupId[] = [];
 const NO_EXTENSIONS_OFF: string[] = [];
 /** Within the server's lease on a warm CLI, also when a hidden tab runs its timers once a minute. */
-const PREWARM_RENEW_MS = 30_000;
 /** A send made before the page's first warm-up answered: the answer is the conversation's to claim. */
 const PENDING_HANDOFF = '\u0000pending';
 
@@ -313,7 +312,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   }, [capabilities, defaultApproval]);
 
   // A CLI takes seconds to start, longer than most first messages take to write. While this page
-  // shows an Agent that keeps one (only Cursor does), a warm CLI is held for it: asked for when the
+  // shows an Agent that keeps one (`supportsPrewarm`), a warm CLI is held for it: asked for when the
   // page opens, renewed while it stays open, and released when the page closes or another Agent or
   // setting is chosen. A sent message hands it to the new conversation instead.
   const prewarmClaims = useRef<{ current?: string; handedOff?: string }>({});
@@ -339,8 +338,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
       if (closed) release(result.claimId);
       else if (result.claimId) claimId = claims.current = result.claimId;
     }).catch(() => undefined);
-    const start = window.setTimeout(warm, 700);
-    const renew = window.setInterval(warm, PREWARM_RENEW_MS);
+    const start = window.setTimeout(warm, PREWARM_BUDGET.startDelayMs);
+    const renew = window.setInterval(warm, PREWARM_BUDGET.renewMs);
     const leave = () => release();
     window.addEventListener('pagehide', leave);
     return () => {

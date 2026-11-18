@@ -935,7 +935,7 @@ private fun HomeContent(
         }
     }
 
-    // While the page shows an Agent that keeps a warm CLI (only Cursor does), one is held for its choice;
+    // While the page shows an Agent that keeps a warm CLI (`supportsPrewarm`), one is held for its choice;
     // leaving the page or choosing otherwise releases it, and a send hands it to the new conversation.
     val prewarm = remember { PrewarmLease() }
     val prewarmBody = if (pageActive && !chat && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(

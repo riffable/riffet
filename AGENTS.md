@@ -80,6 +80,7 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 ## 服务端
 
 - 按层组织，导入只能指向下层（[架构](docs/guide/architecture.md)「服务端分层」）。`pnpm check:layers` 会拦下新增的越层导入；需要上层的东西时由 `app.ts` 传进来，或者把公共部分下沉。
+- 预热的进程只交给启动配置与预热键完全一致的新会话，不一致时静默冷启动，没有报错（[插件架构](docs/PLUGIN_ARCHITECTURE.md)「预热」）。页面的请求一律经 `resolveNativeSessionInput` 解析，会话一侧读存储的会话；给会话加了影响启动或工具列表的字段，要同时加进各 Agent 的键（Cursor `resourceKey`、Codex `warmKey`、Claude `claudeWarmKey`），影响 Riffet MCP 工具的还要让 `RiffetMcpService.draftOf` 跟上。服务日志里持续出现 `prewarm: a new session did not match` 就是键算偏了。
 
 ## 测试与验证
 

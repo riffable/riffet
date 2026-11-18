@@ -113,6 +113,10 @@
   - 关闭时同时结束自己的 tmux 服务（`TerminalService` 的 `ephemeral`）；
   - vitest 跑完后，`tests/global-teardown.ts` 按同样的规则结束测试留下的 tmux 服务。
 
+**预热进程**
+
+为下一条新会话提前起的 CLI 或 app-server（`WarmPool`，docs/PLUGIN_ARCHITECTURE.md「预热」）不属于任何会话，不进上面的巡检，由池自己回收：每个 Agent 至多一个，页面不再续租满 `PREWARM_BUDGET.leaseMs`、页面释放、换了配置、启动失败、`readyTimeoutMs` 内没就绪，或空闲时自己退出，都立即结束；内存压力下不新起。服务关闭时池结束自己的；上一个服务进程留下的预留终端在服务启动时统一结束（`TerminalService.endPreviousWarmupsOnce`），预热的 app-server 没有会话绑定，按上面的所有者规则扫除。被会话接手后，它就是那个会话的进程。
+
 **最后使用时间**
 
 - 每个会话进程有一个 `lastUsedAt`，持久化在状态目录的 `agent-usage.json`，服务重启后保留。以下三种情况算作使用：

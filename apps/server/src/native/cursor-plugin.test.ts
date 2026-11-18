@@ -83,7 +83,7 @@ describe('Cursor as the official plugin', () => {
     // A backend that is off, or keeps no warm CLI, answers a prewarm before the workspace is looked at, as it always did.
     const busy = store.createSession({ projectId: project.id, kind: 'native', backendId: 'claude', mode: 'agent' });
     store.updateSession(busy.id, { state: 'running' });
-    for (const backendId of ['cursor', 'claude']) {
+    for (const backendId of ['cursor', 'droid']) {
       const skipped = await call('POST', '/api/native/prewarm', { projectId: project.id, backendId, model: 'auto', mode: 'agent' });
       expect([backendId, skipped.statusCode, skipped.json()]).toEqual([backendId, 200, { state: 'skipped', reason: 'backend_unsupported' }]);
     }

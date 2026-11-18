@@ -191,9 +191,11 @@ export async function createApp(options: AppOptions = {}) {
   // Made below the routes' dependencies, which reach them through these.
   let reclaimerRef:AgentReclaimer|undefined;
   let assistantMainRef:(()=>string|undefined)|undefined;
-  const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins});
+  const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
   // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
   const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
+  // Warm CLIs a previous process reserved have no page left to renew them.
+  void terminal.endPreviousWarmupsOnce().catch(error=>console.warn('[riffet] warm terminals of an earlier process were not ended',error));
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;

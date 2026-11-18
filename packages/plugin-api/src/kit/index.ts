@@ -28,4 +28,5 @@ export * from './tokens.js';
 export * from './tool-images.js';
 export * from './turn-metrics.js';
 export * from './turn-tracker.js';
+export * from './warm-pool.js';
 export * from './workspace.js';
