@@ -14,10 +14,12 @@ import riffet.core.LineDiff
 import riffet.core.TimelineItem
 import riffet.core.ToolLocation
 import riffet.core.activeToolStates
+import riffet.core.isCommandTitle
 import riffet.core.lineDiff
 import riffet.i18n.L10n
 import riffet.core.stripRoot
 import riffet.core.toolDiffStats
+import riffet.core.toolFoldedDetail
 import riffet.core.toolKind
 import riffet.core.toolView
 
@@ -217,8 +219,7 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
     val active = status in activeToolStates || status == "running" || status == "stopping"
     val running = active && (liveStatus != null || !stale)
     val failed = status == "failed"
-    val primaryPath = view.locations.firstOrNull()?.path
-    val isCommand = view.command != null && view.title == view.command
+    val isCommand = isCommandTitle(view.title, view.command)
     val subagent = item.event.data["subagent"] as? JsonObject
     fun meaningful(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }?.takeUnless {
         it.lowercase().filterNot { char -> char == '-' || char == '_' || char.isWhitespace() } in setOf("generalpurpose", "subagent")
@@ -236,8 +237,7 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
     val detail = when {
         view.kind == "agent" -> subagentType?.takeIf { it != title }
         isCommand -> null
-        primaryPath != null && !view.title.contains(primaryPath.substringAfterLast('/')) -> primaryPath
-        else -> null
+        else -> toolFoldedDetail(view)
     }
     val diffPaths = view.contents
         .filter { text(it["type"]) == "diff" }

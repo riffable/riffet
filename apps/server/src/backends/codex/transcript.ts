@@ -1,4 +1,5 @@
 import type { NativeContext, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
+import { describeCommandActions } from '../../../../../packages/timeline/src/toolTitle.js';
 import { toolImageContent } from '../shared/tool-images.js';
 import type { RpcTurn, RpcItem } from './types.js';
 import { firstLine, str, finiteToken, asRecord, asArray } from './util.js';
@@ -122,34 +123,16 @@ function commandToolCall(item: RpcItem): { name: string; kind: string; title: st
   if (item.type !== 'commandExecution') return undefined;
   const actions = asArray<unknown>(item.commandActions).map(action => asRecord(action) ?? {});
   const command = commandForActions(item, actions);
-  const kinds = actions.map(action => action.type === 'read' ? 'read' : action.type === 'search' || action.type === 'listFiles' ? 'search' : 'execute');
-  const kind = kinds.length && kinds.every(value => value === kinds[0]) ? kinds[0]! : kinds.length ? 'other' : 'execute';
-  const labels = actions.map(action => {
-    const path = str(action.path);
-    switch (action.type) {
-      case 'read': return `Read ${path ?? str(action.name) ?? 'file'}`;
-      case 'search': return ['Search', str(action.query), path ? `in ${path}` : undefined].filter(Boolean).join(' ');
-      case 'listFiles': return ['List files', path].filter(Boolean).join(' ');
-      default: return 'Run command';
-    }
-  });
-  // Long compound calls still name every action category, including execution after reads/searches.
-  const counts = new Map<string, number>();
-  for (const action of actions) {
-    const label = action.type === 'read' ? 'file read' : action.type === 'search' ? 'search'
-      : action.type === 'listFiles' ? 'file listing' : 'command';
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  const summary = [...counts].map(([label, count]) => `${count} ${label}${count === 1 ? '' : label === 'search' ? 'es' : 's'}`);
-  const title = kind === 'execute' ? command ?? 'Command' : (labels.length <= 3 ? labels : summary).join(' · ');
+  const described = describeCommandActions(actions);
+  const kind = described?.kind ?? 'execute';
+  const name = described?.name ?? 'Command';
+  const title = described?.title ?? command ?? 'Command';
   const paths = new Set(actions.flatMap(action => {
     const path = str(action.path);
     return path ? [path] : [];
   }));
   return {
-    name: actions.length === 1 && actions[0]?.type === 'listFiles' ? 'List files'
-      : kind === 'read' ? 'Read' : kind === 'search' ? 'Search' : kind === 'execute' ? 'Command' : 'Commands',
-    kind, title,
+    name, kind, title,
     input: {
       ...(command ? { command } : {}),
       ...(str(item.command) && item.command !== command ? { originalCommand: item.command } : {}),

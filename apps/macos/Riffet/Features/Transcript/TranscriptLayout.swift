@@ -847,8 +847,8 @@ struct RowBuilder {
               let verbRange = Range(match.range(at: 1), in: title), let objectRange = Range(match.range(at: 2), in: title) else { return nil }
         let verb = String(title[verbRange])
         let named = String(title[objectRange])
-        let path = pathActions.contains(verb)
-        if path, let location = presentation.locations.first?.path, location.split(separator: "/").last.map(String.init) == named {
+        let path = pathActions.contains(verb) && !named.contains(", ")
+        if path, presentation.locations.count == 1, let location = presentation.locations.first?.path, location.split(separator: "/").last.map(String.init) == named {
             return (verb, location, path)
         }
         return (verb, named, path)

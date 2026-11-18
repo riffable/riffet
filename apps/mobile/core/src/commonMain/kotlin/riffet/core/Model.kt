@@ -652,14 +652,163 @@ fun stripRoot(text: String, root: String?): String {
 }
 
 private val CD_PREFIX = Regex("^cd \\.? ?&& ")
+private val LINE_CONTINUATION = Regex("\\\\\\r?\\n[ \\t]*")
+private val PATH_SLASHER = Regex("[\\\\/]")
+private val BARE_TOOL_TITLES = Regex("^(?:bash|shell|sh|zsh|script|terminal|run command|command|execute)$", RegexOption.IGNORE_CASE)
+
+fun commandHeadline(command: String): String {
+    val joined = command.replace(LINE_CONTINUATION, " ")
+    val lines = joined.lineSequence().map { cleanLabel(it) }.filter { it.isNotEmpty() }.toList()
+    return lines.firstOrNull { !it.startsWith("#") } ?: lines.firstOrNull() ?: cleanLabel(command)
+}
+
+fun isCommandTitle(title: String, command: String?): Boolean {
+    if (command == null) return false
+    val normalized = cleanLabel(title.replace(CD_PREFIX, ""))
+    return normalized == cleanLabel(command) || normalized == commandHeadline(command)
+}
+
+fun toolFoldedDetail(view: ToolView): String? {
+    val actions = records((view.rawInput as? JsonObject)?.get("commandActions"))
+    val path = if (view.locations.size == 1 && actions.size <= 1) view.locations[0].path else null
+    if (path != null && path != "." && path != "./" && !view.title.contains(path.substringAfterLast('/'))) {
+        return path
+    }
+    val command = view.command
+    if (command != null && BARE_TOOL_TITLES.matches(view.title.trim())) {
+        return commandHeadline(command)
+    }
+    return null
+}
+
+private fun shortFileLabels(paths: List<String>): List<String> {
+    val split = paths.map { path -> path.split(PATH_SLASHER).filter { it.isNotEmpty() } }
+    val baseCounts = HashMap<String, Int>()
+    for (parts in split) {
+        val base = parts.lastOrNull().orEmpty()
+        baseCounts[base] = (baseCounts[base] ?: 0) + 1
+    }
+    return split.mapIndexed { index, parts ->
+        val fallback = paths[index]
+        val base = parts.lastOrNull() ?: return@mapIndexed fallback
+        if ((baseCounts[base] ?: 0) <= 1 || parts.size <= 1) base
+        else parts.takeLast(2).joinToString("/")
+    }
+}
+
+private fun formatTargetList(items: List<String>, limit: Int = 3): String =
+    if (items.size <= limit) items.joinToString(", ")
+    else "${items.take(limit).joinToString(", ")} +${items.size - limit}"
+
+private data class DescribedCommandActions(val kind: String, val title: String?)
+
+private fun describeCommandActions(actions: List<JsonObject>, root: String? = null): DescribedCommandActions? {
+    if (actions.isEmpty()) return null
+    val kinds = actions.map { action ->
+        when (str(action["type"])) {
+            "read" -> "read"
+            "search", "listFiles" -> "search"
+            else -> "execute"
+        }
+    }
+    val allSame = kinds.all { it == kinds[0] }
+    val hasExecute = "execute" in kinds
+    val kind = if (allSame || !hasExecute) kinds[0] else "other"
+    if (kind == "execute") return DescribedCommandActions(kind = kind, title = null)
+
+    val groupOrder = ArrayList<String>()
+    for (action in actions) {
+        val type = when (val raw = str(action["type"])) {
+            "read", "search", "listFiles" -> raw
+            else -> "unknown"
+        }
+        if (type !in groupOrder) groupOrder += type
+    }
+
+    if (groupOrder.size > 3) {
+        val counts = LinkedHashMap<String, Int>()
+        for (action in actions) {
+            val label = when (str(action["type"])) {
+                "read" -> "file read"
+                "search" -> "search"
+                "listFiles" -> "file listing"
+                else -> "command"
+            }
+            counts[label] = (counts[label] ?: 0) + 1
+        }
+        val summary = counts.map { (label, count) ->
+            "$count $label${if (count == 1) "" else if (label == "search") "es" else "s"}"
+        }.joinToString(" · ")
+        return DescribedCommandActions(kind = kind, title = summary)
+    }
+
+    val singleGroup = groupOrder.size == 1
+    val segments = groupOrder.map { group ->
+        val members = actions.filter { action ->
+            val type = when (val raw = str(action["type"])) {
+                "read", "search", "listFiles" -> raw
+                else -> "unknown"
+            }
+            type == group
+        }
+        when (group) {
+            "read" -> {
+                val targets = members.mapNotNull { action ->
+                    (str(action["path"]) ?: str(action["name"]))?.let { stripRoot(it, root) }?.takeIf { it.isNotEmpty() }
+                }.distinct()
+                when {
+                    targets.isEmpty() -> "Read file"
+                    singleGroup && targets.size == 1 -> "Read ${targets[0]}"
+                    else -> "Read ${formatTargetList(shortFileLabels(targets))}"
+                }
+            }
+            "listFiles" -> {
+                val targets = members.mapNotNull { action ->
+                    str(action["path"])?.let { stripRoot(it, root) }?.takeIf { it.isNotEmpty() }
+                }.distinct()
+                when {
+                    targets.isEmpty() -> "List files"
+                    singleGroup && targets.size == 1 -> "List files ${targets[0]}"
+                    else -> "List files ${formatTargetList(shortFileLabels(targets))}"
+                }
+            }
+            "search" -> {
+                val rawPaths = members.map { action ->
+                    str(action["path"])?.let { stripRoot(it, root) }.orEmpty()
+                }
+                val nonEmptyPaths = rawPaths.filter { it.isNotEmpty() }.distinct()
+                val shortPaths = if (singleGroup && members.size == 1) rawPaths else {
+                    val labels = shortFileLabels(nonEmptyPaths)
+                    val map = nonEmptyPaths.zip(labels).toMap()
+                    rawPaths.map { path -> if (path.isNotEmpty()) map[path] ?: path else "" }
+                }
+                val specs = members.mapIndexedNotNull { index, action ->
+                    val query = str(action["query"])
+                    val path = shortPaths[index].takeIf { it.isNotEmpty() }?.let { "in $it" }
+                    listOfNotNull(query, path).joinToString(" ").takeIf { it.isNotEmpty() }
+                }.distinct()
+                if (specs.isEmpty()) "Search" else "Search ${formatTargetList(specs)}"
+            }
+            else -> if (members.size == 1) "Run command" else "${members.size} commands"
+        }
+    }
+    return DescribedCommandActions(kind = kind, title = segments.joinToString(" · "))
+}
 
 /** A display category, including the child metadata retained by older Task rows. */
 fun toolKind(event: WorkbenchEvent): String {
     val data = event.data
     val input = (data["rawInput"] ?: data["input"]) as? JsonObject
-    return if (data["subagent"] is JsonObject ||
-        (str(data["kind"]) == "think" && !str(input?.get("subagent_type")).isNullOrEmpty())) "agent"
-    else str(data["kind"]) ?: "other"
+    if (data["subagent"] is JsonObject ||
+        (str(data["kind"]) == "think" && !str(input?.get("subagent_type")).isNullOrEmpty())
+    ) return "agent"
+    val kind = str(data["kind"])
+    if (kind == null || kind == "other") {
+        val actions = records(input?.get("commandActions"))
+        val described = describeCommandActions(actions)
+        if (described != null) return described.kind
+    }
+    return kind ?: "other"
 }
 
 fun toolView(event: WorkbenchEvent, root: String? = null): ToolView {
@@ -669,16 +818,12 @@ fun toolView(event: WorkbenchEvent, root: String? = null): ToolView {
     val rawCommand = str(input?.get("command"))
         ?: (input?.get("command") as? JsonArray)?.joinToString(" ") { jsString(it) }
     val command = rawCommand?.let { stripRoot(it, root).replace(CD_PREFIX, "") }
-    val title = stripRoot(
-        cleanLabel(str(data["title"]) ?: str(data["toolName"]) ?: str(data["name"]) ?: UiText.text("core.tool.call")),
-        root,
-    ).replace(Regex("^`([^`]*)`$"), "$1")
+    val described = describeCommandActions(records(input?.get("commandActions")), root)
+    val rawTitle = described?.title ?: str(data["title"]) ?: str(data["toolName"]) ?: str(data["name"]) ?: UiText.text("core.tool.call")
+    val title = stripRoot(cleanLabel(rawTitle), root).replace(Regex("^`([^`]*)`$"), "$1")
     return ToolView(
         id = str(data["toolCallId"]) ?: event.sequence.toString(),
-        // `cleanLabel` collapses the title's whitespace, so a multi-line command (a heredoc, say)
-        // never compared equal to its own title: the row then showed the command twice — the
-        // collapsed title and the raw command as the trailing detail — before the body repeated it.
-        title = if (command != null && cleanLabel(title.replace(CD_PREFIX, "")) == cleanLabel(command)) command else title,
+        title = if (command != null && isCommandTitle(title, command)) commandHeadline(command) else title,
         kind = toolKind(event),
         status = str(data["status"]) ?: str(data["state"]) ?: "completed",
         locations = records(data["locations"]).mapNotNull { location ->

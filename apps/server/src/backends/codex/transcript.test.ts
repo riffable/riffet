@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
+import { toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle.js';
 import { projectCompletedTool, projectStartedTool, projectToolItem } from './transcript.js';
 import type { RpcItem } from './types.js';
 
@@ -73,9 +74,41 @@ describe('Codex command action projection', () => {
       { type: 'read', command: payload, name: 'README.md', path: '/repo/README.md' },
     ] }));
     expect(call?.data).toMatchObject({
-      kind: 'read', title: 'Read /repo/SKILL.md · Read /repo/README.md',
+      kind: 'read', title: 'Read SKILL.md, README.md',
       locations: [{ path: '/repo/SKILL.md' }, { path: '/repo/README.md' }], rawInput: { command: payload },
     });
+  });
+
+  it('deduplicates repeated reads of one file and disambiguates colliding basenames', () => {
+    const sameFile = project(commandItem({ commandActions: [
+      { type: 'read', command: "sed -n '1,50p' /repo/app.ts", path: '/repo/app.ts' },
+      { type: 'read', command: "sed -n '51,100p' /repo/app.ts", path: '/repo/app.ts' },
+      { type: 'read', command: "sed -n '101,150p' /repo/app.ts", path: '/repo/app.ts' },
+      { type: 'read', command: "sed -n '151,200p' /repo/app.ts", path: '/repo/app.ts' },
+    ] }));
+    expect(sameFile[0]?.data).toMatchObject({
+      kind: 'read', title: 'Read /repo/app.ts', locations: [{ path: '/repo/app.ts' }],
+    });
+    const colliding = project(commandItem({ commandActions: [
+      { type: 'read', command: 'cat claude/index.ts', path: 'apps/server/src/backends/claude/index.ts' },
+      { type: 'read', command: 'cat codex/index.ts', path: 'apps/server/src/backends/codex/index.ts' },
+    ] }));
+    expect(colliding[0]?.data).toMatchObject({
+      kind: 'read', title: 'Read claude/index.ts, codex/index.ts',
+    });
+    const pureExplore = project(commandItem({ commandActions: [
+      { type: 'search', command: 'rg getRun run.ts', query: 'getRun', path: 'packages/contracts/src/run.ts' },
+      { type: 'search', command: 'rg BUDGET index.ts', query: 'BUDGET', path: 'packages/contracts/src/index.ts' },
+      { type: 'read', command: 'cat docs/ASSISTANT.md', path: 'docs/ASSISTANT.md' },
+    ] }));
+    expect(pureExplore[0]?.data).toMatchObject({
+      kind: 'search', title: 'Search getRun in run.ts, BUDGET in index.ts · Read ASSISTANT.md',
+    });
+    const heredoc = "python3 - <<'PY'\nfrom pathlib import Path\ndef edit(path, a, b):\n  pass\nPY";
+    expect(toolTitleOf({ title: heredoc, rawInput: { command: heredoc } }, 'Tool')).toEqual({
+      title: "python3 - <<'PY'", command: heredoc,
+    });
+    expect(toolDataKind({ kind: 'other', rawInput: pureExplore[0]!.data.rawInput })).toBe('search');
   });
 
   it('summarizes mixed actions while retaining the complete shell payload and all locations', () => {

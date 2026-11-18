@@ -2,7 +2,7 @@ import type { NativeActivity, WorkbenchEvent } from '@contracts';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
 import { isRecord, records, str } from '@/lib/utils';
-import { stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
+import { isCommandTitle, stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
 import { toolFoldedDetail } from '../../../../../packages/timeline/src/findText';
 import { lineDiff } from './lineDiff';
 import { contentDiffStats } from '../../../../../packages/timeline/src/lineDiff';
@@ -34,7 +34,7 @@ export interface ToolView {
 /** Lines added and removed across every diff a tool returned, whatever the tool. */
 export const toolDiffStats = (view: ToolView) => contentDiffStats(view.contents, (before, after) => lineDiff(before, after, 0));
 
-export { stripRoot };
+export { isCommandTitle, stripRoot };
 
 /** A display category, including the child metadata retained by older Task rows. */
 export function toolKind(event: WorkbenchEvent): string {
@@ -92,18 +92,24 @@ const pathActions = new Set(['Read', 'List files', 'Edit', 'Write', 'MultiEdit',
  * A title naming the file by basename takes the location's path, which says where it lives.
  * Compound titles (`Read a · Search b`) stay whole.
  */
+function singleLocationPath(view: ToolView): string | undefined {
+  if (view.locations.length !== 1) return undefined;
+  const actions = isRecord(view.rawInput) ? records(view.rawInput.commandActions) : [];
+  return actions.length <= 1 ? view.locations[0]?.path : undefined;
+}
+
 export function toolAction(view: ToolView): { verb: string; object: string; path: boolean } | undefined {
   if (view.title.includes(' · ')) return undefined;
   const match = actionTitle.exec(view.title);
   if (!match) return undefined;
   const verb = match[1]!;
   const named = match[2]!;
-  const location = view.locations[0]?.path;
-  const path = pathActions.has(verb);
+  const location = singleLocationPath(view);
+  const path = pathActions.has(verb) && !named.includes(', ');
   return { verb, object: path && location && location.split('/').at(-1) === named ? location : named, path };
 }
 
 /** What a folded tool row shows beside its title; see `toolFoldedDetail`. */
 export function toolDetail(view: ToolView): string | undefined {
-  return toolFoldedDetail(view.title, view.command, view.locations[0]?.path);
+  return toolFoldedDetail(view.title, view.command, singleLocationPath(view));
 }

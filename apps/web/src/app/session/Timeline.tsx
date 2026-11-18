@@ -25,7 +25,7 @@ import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
 import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
-import { activeToolStates, currentToolActivity, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
+import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
 import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
 import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, tokensPerSecond } from './speed';
@@ -733,7 +733,7 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   const Icon = toolIcons[view.kind] ?? IconWrench;
   // Compare whitespace-normalized: a multi-line command's title is collapsed, so an exact string
   // compare would leave the collapsed title AND the raw command in the row — the same text twice.
-  const isCommand = Boolean(view.command) && cleanLabel(view.title) === cleanLabel(view.command!);
+  const isCommand = isCommandTitle(view.title, view.command);
   const detail = agentCall ? specificSubagentLabel(str(subagent?.type) ?? subagentTranscript?.subagentType) : toolDetail(view);
   const title = agentCall
     ? specificSubagentLabel(str(subagent?.description))
@@ -749,7 +749,7 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   const backgroundTask = activity?.kind === 'background_task';
   const taskTitle = backgroundTask ? activity.title || title : title;
   const taskView = backgroundTask && !view.command && activity.task?.command ? { ...view, command: activity.task.command } : view;
-  const taskIsCommand = backgroundTask ? Boolean(taskView.command && cleanLabel(taskTitle) === cleanLabel(taskView.command)) : isCommand;
+  const taskIsCommand = backgroundTask ? isCommandTitle(taskTitle, taskView.command) : isCommand;
   const activityStopping = activity?.status === 'stopping' || Boolean(activity && controls?.stopping.has(activity.id));
   const stats = useMemo(() => toolDiffStats(view), [view]);
   const images = failed ? [] : view.contents.flatMap(entry => isRecord(entry.content) && entry.content.type === 'image' ? [entry.content] : []);

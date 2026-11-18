@@ -42,8 +42,10 @@ import riffet.contracts.NativeJobStatus
 import riffet.core.TimelineItem
 import riffet.core.ToolView
 import riffet.core.activeToolStates
+import riffet.core.isCommandTitle
 import riffet.core.stripRoot
 import riffet.core.toolDiffStats
+import riffet.core.toolFoldedDetail
 import riffet.core.toolView
 import riffet.ui.icons.RiffetIcons
 import riffet_mobile.shared.generated.resources.*
@@ -218,8 +220,7 @@ private fun RegularToolRow(
     val stopping = running && (activityState?.stopping == true || liveStatus == "stopping")
     val stoppable = activity?.takeIf { activityState?.canStop == true && actions != null }
 
-    val primaryPath = view.locations.firstOrNull()?.path
-    val isCommand = view.command != null && view.title == view.command
+    val isCommand = isCommandTitle(view.title, view.command)
     fun meaningful(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }?.takeUnless {
         it.lowercase().filterNot { char -> char == '-' || char == '_' || char.isWhitespace() } in setOf("generalpurpose", "subagent")
     }
@@ -241,8 +242,7 @@ private fun RegularToolRow(
     val detail = when {
         view.kind == "agent" -> subagentType?.takeIf { it != title }
         isCommand -> null
-        primaryPath != null && !view.title.contains(primaryPath.substringAfterLast('/')) -> primaryPath
-        else -> null
+        else -> toolFoldedDetail(view)
     }
 
     // A call's title is set like its command, monospaced whole; only a delegation's and a background
