@@ -126,6 +126,7 @@ it('filters managed marks before pagination and makes them visible after promoti
   const {store,marks}=open();
   try {
     const ordinary=store.createProject('/tmp/ordinary-mark','ordinary');
+    const unused=store.createProject('/tmp/empty-mark','empty');
     const managed=store.updateProject(store.createProject('/tmp/managed-mark','managed').id,{system:'task-workspace'});
     for(const [id,projectId] of [['a-visible',ordinary.id],['z-hidden',managed.id]]) {
       const session=store.createSession({projectId:projectId!,kind:'native',backendId:'codex'});
@@ -133,7 +134,10 @@ it('filters managed marks before pagination and makes them visible after promoti
     }
     expect(marks.list({},1,true)).toMatchObject({total:1,marks:[{id:'a-visible'}]});
     expect(marks.list({},50,false).total).toBe(2);
+    expect(marks.facets(true)).toEqual({projectIds:[ordinary.id],backendIds:['codex']});
+    expect(marks.facets(false).projectIds).not.toContain(unused.id);
     store.promoteTaskWorkspace(managed.id,'Saved');
     expect(marks.list({},50,true).total).toBe(2);
+    expect(marks.facets(true).projectIds).toEqual(expect.arrayContaining([ordinary.id,managed.id]));
   }finally{store.close();}
 });

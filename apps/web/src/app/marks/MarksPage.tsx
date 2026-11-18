@@ -1,297 +1,428 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { i18n } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { API, type Mark, type MarkListQuery } from '@contracts';
-import { IconBookmark, IconCheck, IconCircleAlert, IconCopy, IconFileText, IconImage, IconImageDown, IconPencilLine, IconRefreshCw, IconSearch, IconSquareCheck, IconTrash2 } from '@/components/icons';
+import { API, type Mark, type MarkColor, type MarkFacets, type MarkListQuery, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
+import {
+  IconBookmark,
+  IconCheck,
+  IconCircleAlert,
+  IconCopy,
+  IconCornerUpRight,
+  IconFileText,
+  IconImage,
+  IconRefreshCw,
+  IconSearch,
+  IconSquareCheck,
+  IconTrash2,
+} from '@/components/icons';
+import { AgentLogo } from '@/components/AgentLogo';
 import { Button } from '@/components/ui/button';
+import { Badge, EmptyState, Segmented, Spinner } from '@/components/ui/controls';
+import { RowActions } from '@/components/ui/list-row';
 import { SearchField } from '@/components/ui/search-field';
-import { Badge, EmptyState, Select, Spinner, Textarea, UnderlineTabs } from '@/components/ui/controls';
+import { TileGrid } from '@/components/ui/tile';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
+import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
 import { confirmDialog } from '@/lib/dialogs';
 import { copyWithToast } from '@/lib/files';
-import { formatDate } from '@/lib/i18n/format';
-import { useLocale } from '@/lib/i18n';
 import { dismissToast, toast, useToasts, type ToastAction } from '@/lib/toast';
 import { cn, errorMessage, formatDateTime, newId, readSession, timeAgo, writeSession } from '@/lib/utils';
-import { ImageViewer } from '../session/ImageViewer';
-import { Markdown } from '../session/Markdown';
-import { markSwatch } from '../session/marks';
-import { useMarks, useStores } from '../state/stores';
-import { WAIT_GRACE_MS, useLingering } from '../session/sessionLayout';
-import { ShareImageDialog, type ShareSource } from './ShareImage';
-import { isComposingKey } from '../session/composerKeyboard';
 import { PageScaffold } from '../PageScaffold';
+import { markSwatch } from '../session/marks';
+import { WAIT_GRACE_MS, useLingering } from '../session/sessionLayout';
+import { useMarks, useStores } from '../state/stores';
+import { MarkDetailDialog } from './MarkDetailDialog';
+import { MarksAside, MarksScopeMenu } from './MarksNav';
+import { ShareImageDialog, type ShareSource } from './ShareImage';
+import {
+  HighlightedText,
+  markBorderClass,
+  markCopyText,
+  markPreviewText,
+  type MarkTab,
+  type MarkViewMode,
+} from './marksHelpers';
 
 const PAGE = 30;
 /** The server's largest page; a re-read of a longer list starts over from its first this many. */
 const MAX_PAGE = 200;
 const SEARCH_DEBOUNCE_MS = 250;
 
-/** One row of the filter: a kind of mark, or only those whose message can no longer be found. */
-type Tab = 'all' | 'message' | 'span' | 'asset' | 'orphaned';
 interface Loaded { key: string; marks: Mark[]; nextCursor?: string; total: number }
 
-/** The filters and scroll position, kept for this tab so coming back finds the list as it was left. */
 const VIEW_KEY = 'riffet.marks.view';
-const TABS: readonly Tab[] = ['all', 'message', 'span', 'asset', 'orphaned'];
-interface View { text: string; projectId: string; tab: Tab; scrollTop: number }
+const TABS: readonly MarkTab[] = ['all', 'message', 'span', 'image', 'file', 'orphaned'];
+const VIEW_MODES: readonly MarkViewMode[] = ['grid', 'list'];
+
+interface View {
+  text: string;
+  projectId: string;
+  backendId: NativeBackendId | '';
+  tab: MarkTab;
+  viewMode: MarkViewMode;
+  scrollTop: number;
+}
+
 function readView(): View {
   const value = readSession(VIEW_KEY) as Partial<View> | null | undefined;
   return {
     text: typeof value?.text === 'string' ? value.text : '',
     projectId: typeof value?.projectId === 'string' ? value.projectId : '',
-    tab: TABS.includes(value?.tab as Tab) ? value!.tab! : 'all',
+    backendId: typeof value?.backendId === 'string' ? (value.backendId as NativeBackendId) : '',
+    tab: TABS.includes(value?.tab as MarkTab) ? value!.tab! : 'all',
+    viewMode: VIEW_MODES.includes(value?.viewMode as MarkViewMode) ? value!.viewMode! : 'grid',
     scrollTop: typeof value?.scrollTop === 'number' ? value.scrollTop : 0,
   };
 }
 
-/** How much of a saved answer a card renders before it fades out. */
-const EXCERPT_CHARS = 1200;
-const quoteClass = { yellow: 'mark-quote-yellow', green: 'mark-quote-green', blue: 'mark-quote-blue', red: 'mark-quote-red' } as const;
-
-/**
- * The start of a saved answer, cut at a paragraph so the Markdown still parses as written; a code
- * fence the cut leaves open is closed. `cut` says whether there was more.
- */
-function markdownExcerpt(text: string): { source: string; cut: boolean } {
-  const trimmed = text.trim();
-  if (trimmed.length <= EXCERPT_CHARS) return { source: trimmed, cut: false };
-  const head = trimmed.slice(0, EXCERPT_CHARS);
-  const paragraph = head.lastIndexOf('\n\n');
-  let source = head.slice(0, paragraph > EXCERPT_CHARS / 3 ? paragraph : Math.max(head.lastIndexOf('\n'), EXCERPT_CHARS / 2));
-  if ((source.match(/^\s*```/gm)?.length ?? 0) % 2 === 1) source += '\n```';
-  return { source, cut: true };
+function MarkKindGlyph({ mark }: { mark: Mark }) {
+  const color = mark.color ?? 'yellow';
+  if (mark.kind === 'span') return <span aria-hidden className={cn('size-2 shrink-0 rounded-full', markSwatch[color])} />;
+  if (mark.kind === 'image') return <IconImage aria-hidden className="size-3.5 shrink-0 text-fg-3" />;
+  if (mark.kind === 'file') return <IconFileText aria-hidden className="size-3.5 shrink-0 text-fg-3" />;
+  return <IconBookmark aria-hidden className="size-3.5 shrink-0 text-fg-3" />;
 }
 
-/** 今天, 昨天, or the date: what the list is grouped under. */
-function dayLabel(value: string): string {
-  const at = new Date(value);
-  if (Number.isNaN(at.getTime())) return i18n._(msg`更早`);
-  const today = new Date();
-  const days = Math.round((new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime()) / 86_400_000);
-  if (days === 0) return i18n._(msg`今天`);
-  if (days === 1) return i18n._(msg`昨天`);
-  const date = formatDate(at, { month: 'long', day: 'numeric', weekday: days < 7 ? 'long' : undefined, ...(at.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
-  return date;
-}
-
-/** Whether the element [ref] is attached to is clipped: its content is taller than its box. */
-function useOverflow<T extends HTMLElement>() {
-  const [element, ref] = useState<T | null>(null);
-  const [value, setValue] = useState(false);
-  useEffect(() => {
-    if (!element) return;
-    const check = () => setValue(element.scrollHeight > element.clientHeight + 1);
-    const observer = new ResizeObserver(check);
-    observer.observe(element);
-    if (element.firstElementChild) observer.observe(element.firstElementChild);
-    check();
-    return () => observer.disconnect();
-  }, [element]);
-  return { ref, value };
-}
-
-/** A note being written in place. Saved on blur or ⌘↵; Escape keeps the old one. */
-function NoteEditor({ mark, onSave, onDone }: { mark: Mark; onSave: (note: string | null) => void; onDone: () => void }) {
-  const { t } = useLingui();
-  const [draft, setDraft] = useState(mark.note ?? '');
-  const save = () => { const next = draft.trim(); onDone(); if (next !== (mark.note ?? '')) onSave(next || null); };
+function SelectCircle({ chosen }: { chosen: boolean }) {
   return (
-    <Textarea
-      autoFocus
-      value={draft}
-      rows={2}
-      placeholder={t`写点什么，方便以后找到它…`}
-      aria-label={t`备注`}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={save}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => {
-        if (isComposingKey(event.nativeEvent)) return;
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onDone(); }
-        else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save(); }
-      }}
-      className="min-h-16 resize-none rounded-lg bg-subtle py-2 text-sm leading-6"
-    />
+    <span
+      aria-hidden
+      className={cn(
+        'grid size-4 shrink-0 place-items-center rounded-full border transition-colors',
+        chosen ? 'border-primary bg-primary text-primary-fg' : 'border-line-strong bg-bg',
+      )}
+    >
+      {chosen && <IconCheck className="size-3" />}
+    </span>
   );
 }
 
-/**
- * One saved reply as a card: where it came from, the words themselves (a highlight in its own
- * colour, an answer as rendered Markdown that fades out), and the note. Its actions take the
- * timestamp's place on hover, so nothing moves under the pointer.
- */
-/** A saved picture: the server's copy, which opens in the lightbox; the card around it leads back to where it was shown. */
-function SavedImage({ mark }: { mark: Mark }) {
-  const { t } = useLingui();
-  const src = `${API.marks}/${encodeURIComponent(mark.id)}/asset`;
-  const name = mark.asset?.name ?? t({ message: '图片', context: 'marks-image-name' });
-  return (
-    <div className="flex flex-col gap-1.5" onClick={(event) => event.stopPropagation()}>
-      <ImageViewer src={src} name={name}>
-        <button type="button" aria-label={t`查看大图`} className="block w-fit max-w-full cursor-zoom-in overflow-hidden rounded-lg border border-line bg-subtle">
-          <img src={src} alt={name} loading="lazy" className="max-h-72 max-w-full object-contain" />
-        </button>
-      </ImageViewer>
-      {mark.asset?.path && <span className="truncate text-xs text-fg-4" title={mark.asset.path}>{mark.asset.path}</span>}
-    </div>
-  );
-}
-
-/** A saved file: what it is, where it lives, and what the agent did to it. */
-function SavedFile({ mark }: { mark: Mark }) {
+function FileSummary({ mark }: { mark: Mark }) {
   const asset = mark.asset;
   const directory = asset?.path?.slice(0, Math.max(0, asset.path.length - asset.name.length)).replace(/\/$/, '');
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg bg-subtle px-3 py-2.5">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-elevated text-fg-3"><IconFileText className="size-4" /></span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-mono text-sm text-fg">{asset?.name}</span>
-        {directory && <span className="truncate text-xs text-fg-4" title={asset?.path}>{directory}</span>}
-      </span>
+    <div className="flex min-w-0 items-center gap-2.5 rounded-lg bg-subtle px-3 py-2">
+      <IconFileText aria-hidden className="size-4 shrink-0 text-fg-3" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-mono text-xs font-medium text-fg">{asset?.name}</span>
+        {directory && <span className="truncate font-mono text-2xs text-fg-3">{directory}</span>}
+      </div>
       {asset?.detail && (
-        <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-fg-4">
-          {asset.detail.split(' ').map((part) => <span key={part} className={part.startsWith('+') ? 'text-success' : part.startsWith('−') ? 'text-danger' : undefined}>{part}</span>)}
+        <span className="flex shrink-0 items-center gap-1 font-mono text-2xs tabular-nums text-fg-3">
+          {asset.detail.split(' ').map((part, index) => (
+            <span key={index} className={part.startsWith('+') ? 'text-success' : part.startsWith('−') ? 'text-danger' : undefined}>
+              {part}
+            </span>
+          ))}
         </span>
       )}
     </div>
   );
 }
 
-function MarkCard({ mark, projectName, selecting, chosen, onChoose, onOpen, onOpenFile, onNote, onDelete }: {
-  mark: Mark; projectName: string; selecting: boolean; chosen: boolean;
-  onChoose: (chosen: boolean) => void; onOpen: () => void; onOpenFile: () => void; onNote: (note: string | null) => void; onDelete: () => void;
+function MarkTile({
+  mark,
+  query,
+  projectName,
+  backendLabel,
+  selecting,
+  chosen,
+  onActivate,
+  onOpenSession,
+  onOpenFile,
+}: {
+  mark: Mark;
+  query: string;
+  projectName: string;
+  backendLabel?: string;
+  selecting: boolean;
+  chosen: boolean;
+  onActivate: () => void;
+  onOpenSession: () => void;
+  onOpenFile: () => void;
 }) {
   const { t } = useLingui();
-  const [editing, setEditing] = useState(false);
-  const [sharing, setSharing] = useState(false);
   const color = mark.color ?? 'yellow';
   const orphaned = mark.state === 'orphaned';
-  const span = mark.kind === 'span';
-  const share = useMemo<ShareSource | undefined>(() => mark.kind === 'message' || mark.kind === 'span' ? {
-    kind: mark.kind,
-    text: mark.kind === 'span' ? mark.quote?.exact ?? '' : mark.snapshot.text,
-    ...(mark.kind === 'span' ? { color: mark.color ?? 'yellow' } : {}),
-    ...(mark.note ? { note: mark.note } : {}),
-    title: mark.snapshot.sessionTitle || t`未命名会话`,
-    ...(mark.backendId ? { backendId: mark.backendId } : {}),
-    projectName,
-    at: mark.snapshot.at,
-    ...(mark.kind === 'message' ? { prompt: () => api.markPrompt(mark.id).then((result) => result.text) } : {}),
-  } : undefined, [mark, projectName, t]);
-  const excerpt = useMemo(() => mark.kind === 'message' ? markdownExcerpt(mark.snapshot.text) : undefined, [mark.kind, mark.snapshot.text]);
-  const overflows = useOverflow<HTMLDivElement>();
-  const activate = () => { if (selecting) onChoose(!chosen); else onOpen(); };
-  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
-  return (
-    <li>
-      <article
-        role="button"
-        tabIndex={0}
-        aria-label={selecting ? t`选择这条收藏` : t`打开原会话`}
-        aria-pressed={selecting ? chosen : undefined}
-        onClick={activate}
-        onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); activate(); } }}
-        className={cn(
-          'group relative flex cursor-pointer flex-col gap-3 rounded-xl border bg-elevated px-5 py-4 outline-none transition-[border-color,box-shadow] duration-150 ease-out max-md:px-4',
-          'hover:border-line-strong hover:shadow-soft focus-visible:ring-2 focus-visible:ring-accent/40',
-          chosen ? 'border-accent ring-1 ring-accent' : 'border-line',
-        )}
-      >
-        <header className="flex h-6 min-w-0 items-center gap-2 text-xs">
-          {selecting && (
-            <span aria-hidden className={cn('grid size-4 shrink-0 place-items-center rounded-full border transition-colors', chosen ? 'border-accent bg-accent text-accent-fg' : 'border-line-strong')}>
-              {chosen && <IconCheck className="size-3" />}
-            </span>
-          )}
-          {span ? <span aria-hidden className={cn('size-2 shrink-0 rounded-full', markSwatch[color])} />
-            : mark.kind === 'image' ? <IconImage aria-hidden className="size-3.5 shrink-0 text-fg-3" />
-            : mark.kind === 'file' ? <IconFileText aria-hidden className="size-3.5 shrink-0 text-fg-3" />
-            : <IconBookmark aria-hidden className="size-3.5 shrink-0 text-fg-3" />}
-          <span className="min-w-0 truncate font-medium text-fg-2">{mark.snapshot.sessionTitle || t`未命名会话`}</span>
-          <span className="shrink-0 truncate text-fg-4 max-sm:hidden">{projectName}</span>
-          {orphaned && <Badge tone="warning" className="shrink-0"><Trans>原文已找不到</Trans></Badge>}
-          <span className="relative ml-auto flex h-6 shrink-0 items-center justify-end">
-            <time dateTime={mark.createdAt} title={formatDateTime(mark.createdAt)} className={cn('tabular-nums text-fg-4 transition-opacity duration-150', !selecting && 'group-hover:opacity-0 group-focus-within:opacity-0')}>{timeAgo(mark.createdAt)}</time>
-            {!selecting && (
-              <span className="absolute right-0 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100" onClick={stop}>
-                <Tip label={mark.note ? t`编辑备注` : t`添加备注`}><Button size="icon-sm" variant="quiet" className="size-6" aria-label={mark.note ? t`编辑备注` : t`添加备注`} onClick={() => setEditing(true)}><IconPencilLine className="size-3.5" /></Button></Tip>
-                {mark.kind === 'file' && mark.asset?.path && <Tip label={t`打开文件`}><Button size="icon-sm" variant="quiet" className="size-6" aria-label={t`打开文件`} onClick={onOpenFile}><IconFileText className="size-3.5" /></Button></Tip>}
-                {share && <Tip label={t`导出图片`}><Button size="icon-sm" variant="quiet" className="size-6" aria-label={t`导出图片`} onClick={() => setSharing(true)}><IconImageDown className="size-3.5" /></Button></Tip>}
-                {mark.kind !== 'image' && <Tip label={mark.kind === 'file' ? t`复制路径` : t`复制内容`}><Button size="icon-sm" variant="quiet" className="size-6" aria-label={mark.kind === 'file' ? t`复制路径` : t`复制内容`} onClick={() => void copyWithToast(mark.quote?.exact ?? mark.asset?.path ?? mark.snapshot.text)}><IconCopy className="size-3.5" /></Button></Tip>}
-                <Tip label={t({ message: '删除', context: 'marks-delete-action' })}><Button size="icon-sm" variant="quiet" className="size-6 hover:text-danger" aria-label={t`删除收藏`} onClick={onDelete}><IconTrash2 className="size-3.5" /></Button></Tip>
-              </span>
-            )}
-          </span>
-        </header>
+  const preview = useMemo(() => markPreviewText(mark, query), [mark, query]);
+  const title = mark.snapshot.sessionTitle || t`未命名会话`;
 
-        {mark.kind === 'image' ? <SavedImage mark={mark} />
-        : mark.kind === 'file' ? <SavedFile mark={mark} />
-        : span ? (
-          <p className={cn('line-clamp-6 text-(length:--text-h3) leading-7 text-fg', orphaned && 'text-fg-2')}>
-            <span className={cn('rounded-xs px-0.5 py-px box-decoration-clone', quoteClass[color])}>{mark.quote?.exact.trim()}</span>
+  return (
+    <article
+      className={cn(
+        'group/row relative flex min-h-44 min-w-0 flex-col gap-2.5 rounded-xl border bg-elevated p-4 transition-colors',
+        'hover:border-line-strong has-[[data-mark-open]:focus-visible]:ring-2 has-[[data-mark-open]:focus-visible]:ring-focus',
+        chosen ? 'border-primary bg-subtle' : 'border-line',
+      )}
+    >
+      <header className="flex min-w-0 items-center gap-2 text-xs">
+        {selecting ? <SelectCircle chosen={chosen} /> : <MarkKindGlyph mark={mark} />}
+        <button
+          type="button"
+          data-mark-open
+          aria-haspopup={selecting ? undefined : 'dialog'}
+          aria-pressed={selecting ? chosen : undefined}
+          onClick={onActivate}
+          className="min-w-0 flex-1 truncate text-left font-medium text-fg-2 outline-none after:absolute after:inset-0 after:rounded-xl"
+        >
+          <HighlightedText text={title} query={query} />
+        </button>
+        {orphaned && <Badge tone="warning" className="shrink-0"><Trans>失联</Trans></Badge>}
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-2">
+        {mark.kind === 'image' ? (
+          <div className="h-28 w-full overflow-hidden rounded-lg border border-line bg-subtle">
+            <img
+              src={`${API.marks}/${encodeURIComponent(mark.id)}/asset`}
+              alt={mark.asset?.name ?? t({ message: '图片', context: 'marks-image-name' })}
+              loading="lazy"
+              className="h-full w-full object-contain"
+            />
+          </div>
+        ) : mark.kind === 'file' ? (
+          <FileSummary mark={mark} />
+        ) : mark.kind === 'span' ? (
+          <p className={cn('line-clamp-4 border-l-2 pl-3 text-sm leading-relaxed text-fg', markBorderClass[color], orphaned && 'text-fg-2')}>
+            <HighlightedText text={preview} query={query} />
           </p>
         ) : (
-          <div ref={overflows.ref} className={cn('relative max-h-60 overflow-hidden', (excerpt?.cut || overflows.value) && 'mark-fade', orphaned && 'opacity-80')}>
-            <Markdown text={excerpt?.source ?? ''} className="mark-preview pointer-events-none select-none" />
-          </div>
+          <p className={cn('line-clamp-4 text-sm leading-relaxed text-fg-2', orphaned && 'opacity-80')}>
+            <HighlightedText text={preview} query={query} />
+          </p>
         )}
 
-        {editing
-          ? <NoteEditor mark={mark} onSave={onNote} onDone={() => setEditing(false)} />
-          : mark.note && (
-            <button type="button" onClick={(event) => { stop(event); if (!selecting) setEditing(true); }} className="flex w-full items-start gap-2 rounded-lg bg-subtle px-3 py-2 text-left text-sm leading-6 text-fg-2 transition-colors hover:bg-hover" title={t`编辑备注`}>
-              <IconPencilLine aria-hidden className="mt-1 size-3.5 shrink-0 text-fg-4" />
-              <span className="min-w-0 whitespace-pre-wrap break-words">{mark.note}</span>
-            </button>
+        {mark.note && (
+          <p className="mt-auto truncate border-l-2 border-line-strong pl-2 text-xs text-fg-3">
+            <HighlightedText text={mark.note} query={query} />
+          </p>
+        )}
+      </div>
+
+      <footer className="mt-auto flex min-h-6 items-center gap-2 text-xs text-fg-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 truncate">
+          <span className="truncate">{projectName}</span>
+          {mark.backendId && (
+            <span className="inline-flex shrink-0 items-center" aria-label={backendLabel}>
+              <AgentLogo backend={mark.backendId} size={12} style={agentMarkStyle(mark.backendId)} />
+            </span>
           )}
-      </article>
-      {/* Beside the card, not in it: the dialog's clicks would bubble to the card and open the conversation. */}
-      {share && <ShareImageDialog source={share} open={sharing} onOpenChange={setSharing} />}
+          <span aria-hidden className="text-fg-4">·</span>
+          <time dateTime={mark.createdAt} title={formatDateTime(mark.createdAt)} className="shrink-0 tabular-nums text-fg-4">
+            {timeAgo(mark.createdAt)}
+          </time>
+        </div>
+
+        {!selecting && (
+          <RowActions className="relative gap-0.5" onClick={(event) => event.stopPropagation()}>
+            {mark.kind === 'file' && mark.asset?.path && (
+              <Tip label={t`打开文件`}>
+                <Button size="icon-xs" variant="quiet" aria-label={t`打开文件`} onClick={onOpenFile}>
+                  <IconFileText />
+                </Button>
+              </Tip>
+            )}
+            {mark.kind !== 'image' && (
+              <Tip label={mark.kind === 'file' ? t`复制路径` : t`复制内容`}>
+                <Button
+                  size="icon-xs"
+                  variant="quiet"
+                  aria-label={mark.kind === 'file' ? t`复制路径` : t`复制内容`}
+                  onClick={() => void copyWithToast(markCopyText(mark))}
+                >
+                  <IconCopy />
+                </Button>
+              </Tip>
+            )}
+            <Tip label={t`前往原会话`}>
+              <Button size="icon-xs" variant="quiet" aria-label={t`前往原会话`} onClick={onOpenSession}>
+                <IconCornerUpRight />
+              </Button>
+            </Tip>
+          </RowActions>
+        )}
+      </footer>
+    </article>
+  );
+}
+
+function MarkListRow({
+  mark,
+  query,
+  projectName,
+  backendLabel,
+  selecting,
+  chosen,
+  onActivate,
+  onOpenSession,
+  onOpenFile,
+}: {
+  mark: Mark;
+  query: string;
+  projectName: string;
+  backendLabel?: string;
+  selecting: boolean;
+  chosen: boolean;
+  onActivate: () => void;
+  onOpenSession: () => void;
+  onOpenFile: () => void;
+}) {
+  const { t } = useLingui();
+  const color = mark.color ?? 'yellow';
+  const orphaned = mark.state === 'orphaned';
+  const preview = useMemo(() => markPreviewText(mark, query), [mark, query]);
+  const title = mark.snapshot.sessionTitle || t`未命名会话`;
+
+  return (
+    <li
+      className={cn(
+        'group/row relative flex min-w-0 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-hover max-md:px-3',
+        'has-[[data-mark-open]:focus-visible]:ring-2 has-[[data-mark-open]:focus-visible]:ring-inset has-[[data-mark-open]:focus-visible]:ring-focus',
+        chosen && 'bg-subtle',
+      )}
+    >
+      {selecting ? (
+        <SelectCircle chosen={chosen} />
+      ) : mark.kind === 'span' ? (
+        <span aria-hidden className={cn('w-0.5 self-stretch rounded-full', markSwatch[color])} />
+      ) : (
+        <span className="grid size-4 shrink-0 place-items-center">
+          <MarkKindGlyph mark={mark} />
+        </span>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            data-mark-open
+            aria-haspopup={selecting ? undefined : 'dialog'}
+            aria-pressed={selecting ? chosen : undefined}
+            onClick={onActivate}
+            className="min-w-0 flex-1 truncate text-left text-sm text-fg outline-none after:absolute after:inset-0"
+          >
+            <HighlightedText text={preview || title} query={query} />
+          </button>
+          {orphaned && <Badge tone="warning" className="shrink-0"><Trans>失联</Trans></Badge>}
+        </div>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-fg-3">
+          <span className="truncate"><HighlightedText text={title} query={query} /></span>
+          {mark.note && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="truncate text-fg-3"><HighlightedText text={mark.note} query={query} /></span>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 text-xs text-fg-3">
+        <span className="hidden max-w-28 truncate sm:inline">{projectName}</span>
+        {mark.backendId && (
+          <span className="hidden items-center sm:inline-flex" aria-label={backendLabel}>
+            <AgentLogo backend={mark.backendId} size={13} style={agentMarkStyle(mark.backendId)} />
+          </span>
+        )}
+        <time dateTime={mark.createdAt} title={formatDateTime(mark.createdAt)} className="w-14 text-right tabular-nums text-fg-4 max-sm:w-auto">
+          {timeAgo(mark.createdAt)}
+        </time>
+
+        {!selecting && (
+          <RowActions className="relative gap-0.5" onClick={(event) => event.stopPropagation()}>
+            {mark.kind === 'file' && mark.asset?.path && (
+              <Tip label={t`打开文件`}>
+                <Button size="icon-xs" variant="quiet" aria-label={t`打开文件`} onClick={onOpenFile}>
+                  <IconFileText />
+                </Button>
+              </Tip>
+            )}
+            {mark.kind !== 'image' && (
+              <Tip label={mark.kind === 'file' ? t`复制路径` : t`复制内容`}>
+                <Button
+                  size="icon-xs"
+                  variant="quiet"
+                  aria-label={mark.kind === 'file' ? t`复制路径` : t`复制内容`}
+                  onClick={() => void copyWithToast(markCopyText(mark))}
+                >
+                  <IconCopy />
+                </Button>
+              </Tip>
+            )}
+            <Tip label={t`前往原会话`}>
+              <Button size="icon-xs" variant="quiet" aria-label={t`前往原会话`} onClick={onOpenSession}>
+                <IconCornerUpRight />
+              </Button>
+            </Tip>
+          </RowActions>
+        )}
+      </div>
     </li>
   );
 }
 
 /**
- * 收藏: every saved reply and highlight across conversations, newest first. The server filters and
- * pages; the list re-reads (conditionally) whenever a mark changes anywhere, here or pushed.
+ * 收藏夹: cross-conversation saved replies, highlights, images and files.
+ * Scope navigation sits in the left `aside` (collapsing to a title-bar menu below `lg`),
+ * the board shows dense cards or compact rows, and clicking any item opens its full reader dialog.
  */
-export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, onOpenMark, onOpenMarkFile }: {
+export function MarksPage({
+  projects,
+  backends = [],
+  sidebarCollapsed,
+  onClose,
+  onOpenSidebar,
+  onExpandSidebar,
+  onOpenMark,
+  onOpenMarkFile,
+}: {
   projects: ProjectRecord[];
+  backends?: NativeBackendCatalogEntry[];
   sidebarCollapsed: boolean;
   onClose: () => void;
   onOpenSidebar: () => void;
   onExpandSidebar: () => void;
   onOpenMark: (id: string) => void;
-  /** Opens a saved file's conversation with the file in its preview. */
   onOpenMarkFile: (mark: Mark) => void;
 }) {
   const { t } = useLingui();
-  // `dayLabel` reads the active catalog directly, so the groups must rebuild on a switch.
-  const locale = useLocale();
+  const labelOf = useBackendLabel();
   const { marks: store } = useStores();
   const revision = useMarks((state) => state.revision);
   const [saved] = useState(readView);
   const [text, setText] = useState(saved.text);
   const [q, setQ] = useState(() => saved.text.trim());
-  const [projectId, setProjectId] = useState(() => projects.some((item) => item.id === saved.projectId && !item.archivedAt) ? saved.projectId : '');
-  const [tab, setTab] = useState<Tab>(saved.tab);
+  const [projectId, setProjectId] = useState(() =>
+    projects.some((item) => item.id === saved.projectId && !item.archivedAt) ? saved.projectId : '',
+  );
+  const [backendId, setBackendId] = useState<NativeBackendId | ''>(() =>
+    backends.some((item) => item.backendId === saved.backendId) ? saved.backendId : '',
+  );
+  const [tab, setTab] = useState<MarkTab>(saved.tab);
+  const [viewMode, setViewMode] = useState<MarkViewMode>(saved.viewMode);
   const [loaded, setLoaded] = useState<Loaded>();
   const [error, setError] = useState('');
   const [loadingMore, setLoadingMore] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
+  const [activeId, setActiveId] = useState<string>();
+  const [shareMark, setShareMark] = useState<Mark>();
+  const [locating, setLocating] = useState(false);
+  const [facets, setFacets] = useState<MarkFacets>();
+
   const loadedRef = useRef(loaded);
   loadedRef.current = loaded;
-  /** The query, page size and ETag the list on screen was read with. */
   const held = useRef<{ key: string; limit: number; etag?: string }>(undefined);
+  const facetsEtag = useRef<string>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const view = useRef(saved);
   const restore = useRef(saved.scrollTop);
-  useEffect(() => { view.current = { ...view.current, text, projectId, tab }; writeSession(VIEW_KEY, view.current); }, [text, projectId, tab]);
+
+  useEffect(() => {
+    view.current = { ...view.current, text, projectId, backendId, tab, viewMode };
+    writeSession(VIEW_KEY, view.current);
+  }, [text, projectId, backendId, tab, viewMode]);
+
   useEffect(() => {
     const save = () => writeSession(VIEW_KEY, view.current);
     window.addEventListener('pagehide', save);
@@ -304,14 +435,16 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
   }, [text]);
 
   const query = useMemo<MarkListQuery>(() => ({
-    ...(projectId ? { projectId } : {}), ...(tab === 'message' || tab === 'span' ? { kind: tab } : tab === 'asset' ? { kind: ['image' as const, 'file' as const] } : {}), ...(tab === 'orphaned' ? { state: 'orphaned' as const } : {}), ...(q ? { q } : {}),
-  }), [projectId, tab, q]);
+    ...(projectId ? { projectId } : {}),
+    ...(backendId ? { backendId } : {}),
+    ...(tab === 'message' || tab === 'span' || tab === 'image' || tab === 'file' ? { kind: tab } : {}),
+    ...(tab === 'orphaned' ? { state: 'orphaned' as const } : {}),
+    ...(q ? { q } : {}),
+  }), [projectId, backendId, tab, q]);
   const key = JSON.stringify(query);
-  /** The last list stays up while a new query loads, rather than swapping for a spinner on every filter. */
   const stale = loaded?.key !== key;
   const current = stale && error ? undefined : loaded;
 
-  // A new query starts from its first page; a change to the marks re-reads as many as are shown.
   useEffect(() => {
     const controller = new AbortController();
     const same = held.current?.key === key;
@@ -322,11 +455,22 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
       held.current = { key, limit, ...(result.etag ? { etag: result.etag } : {}) };
       setLoaded({ key, ...result.data });
       setError('');
-    }).catch((reason) => { if (!controller.signal.aborted) setError(errorMessage(reason, t`无法加载收藏`)); });
+    }).catch((reason) => {
+      if (!controller.signal.aborted) setError(errorMessage(reason, t`无法加载收藏`));
+    });
     return () => controller.abort();
-    // `key` stands for `query`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, revision]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.markFacets(facetsEtag.current, controller.signal).then((result) => {
+      if (controller.signal.aborted || result.unchanged) return;
+      facetsEtag.current = result.etag;
+      setFacets(result.data);
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [revision]);
 
   const loadMore = useCallback(async () => {
     const shown = loadedRef.current;
@@ -337,42 +481,76 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
       if (result.unchanged || loadedRef.current !== shown) return;
       const seen = new Set(shown.marks.map((mark) => mark.id));
       const marks = [...shown.marks, ...result.data.marks.filter((mark) => !seen.has(mark.id))];
-      // The held ETag was for the shorter list; the next re-read fetches the longer one in full.
       held.current = { key, limit: marks.length };
       setLoaded({ key, marks, total: result.data.total, ...(result.data.nextCursor ? { nextCursor: result.data.nextCursor } : {}) });
-    } catch (reason) { toast.error(errorMessage(reason, t`无法加载更多收藏`)); }
-    finally { setLoadingMore(false); }
+    } catch (reason) {
+      toast.error(errorMessage(reason, t`无法加载更多收藏`));
+    } finally {
+      setLoadingMore(false);
+    }
   }, [key, query, loadingMore, t]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel || !current?.nextCursor) return;
-    const observer = new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) void loadMore(); }, { root: scrollRef.current, rootMargin: '400px 0px' });
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries.some((entry) => entry.isIntersecting)) void loadMore(); },
+      { root: scrollRef.current, rootMargin: '400px 0px' },
+    );
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [current?.nextCursor, loadMore]);
 
-  const projectName = useCallback((id: string) => projects.find((item) => item.id === id)?.name ?? t`已移除的项目`, [projects, t]);
+  const projectName = useCallback(
+    (id: string) => projects.find((item) => item.id === id)?.name ?? t`已移除的项目`,
+    [projects, t],
+  );
+
   const patchShown = (update: (marks: Mark[]) => Mark[]) => setLoaded((shown) => {
     if (!shown) return shown;
     const marks = update(shown.marks);
     return { ...shown, marks, total: shown.total - (shown.marks.length - marks.length) };
   });
 
+  const patchMark = (updated: Mark) => setLoaded((shown) =>
+    shown && { ...shown, marks: shown.marks.map((item) => item.id === updated.id ? updated : item) },
+  );
+
   const saveNote = async (mark: Mark, note: string | null) => {
     const updated = await store.update(mark.id, { note });
-    if (updated) setLoaded((shown) => shown && { ...shown, marks: shown.marks.map((item) => item.id === updated.id ? updated : item) });
+    if (updated) patchMark(updated);
   };
-  /**
-   * Image marks whose 撤销 is still on screen: only hidden, since deleting one deletes the server's
-   * copy of the picture and nothing could re-create it. Each is deleted once its toast goes away.
-   */
+
+  const saveColor = async (mark: Mark, color: MarkColor) => {
+    if (mark.color === color) return;
+    const updated = await store.update(mark.id, { color });
+    if (updated) patchMark(updated);
+  };
+
+  const locateMark = async (mark: Mark) => {
+    if (locating) return;
+    setLocating(true);
+    try {
+      const result = await api.locateMark(mark.id);
+      patchMark(result.mark);
+      if (result.found) {
+        store.set((state) => ({ revision: state.revision + 1 }));
+        toast.success(t`已重新定位到原会话`);
+      } else {
+        toast.info(t`仍未找到原文`);
+      }
+    } catch (reason) {
+      toast.error(errorMessage(reason, t`无法定位这条收藏`));
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const pending = useRef(new Map<string, ToastAction>());
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
   const unhide = (id: string) => setHidden((set) => { const next = new Set(set); next.delete(id); return next; });
   const commit = useCallback((id: string) => {
     if (!pending.current.delete(id)) return;
-    // A refused delete puts the card back; a done one is dropped by the next read.
     void store.remove([id]).then((removed) => { if (!removed) unhide(id); });
   }, [store]);
   const toasts = useToasts();
@@ -381,8 +559,7 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
     toastsRef.current = toasts;
     for (const [id, action] of pending.current) if (!toasts.some((item) => item.action === action && !item.leaving)) commit(id);
   }, [toasts, commit]);
-  // Unloading runs no effect cleanup, so a reload or a closed tab sends what is waiting on its own.
-  // A page kept for Back comes back with those deletes sent, so their 撤销 goes with them.
+
   useEffect(() => {
     const unloading = () => {
       if (!pending.current.size) return;
@@ -396,7 +573,7 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
     window.addEventListener('pagehide', unloading);
     return () => window.removeEventListener('pagehide', unloading);
   }, []);
-  // Leaving the page takes the 撤销 with it: what is waiting is deleted now.
+
   useEffect(() => () => {
     for (const [id, action] of pending.current) {
       const item = toastsRef.current.find((entry) => entry.action === action);
@@ -404,8 +581,9 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
       commit(id);
     }
   }, [commit]);
-  /** One mark goes at once, with 撤销 re-creating it from what the list still holds; an image waits for its toast instead. */
+
   const removeOne = async (mark: Mark) => {
+    if (activeId === mark.id) setActiveId(undefined);
     if (mark.kind === 'image') {
       const action: ToastAction = { label: t`撤销`, onClick: () => { if (pending.current.delete(mark.id)) unhide(mark.id); } };
       pending.current.set(mark.id, action);
@@ -413,55 +591,172 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
       toast.success(t`已删除收藏`, { action });
       return;
     }
+    const snapshot = loadedRef.current;
     patchShown((marks) => marks.filter((item) => item.id !== mark.id));
-    if (!await store.remove([mark.id])) return;
-    const asset = mark.asset && { name: mark.asset.name, ...(mark.asset.path ? { path: mark.asset.path } : {}), ...(mark.asset.mimeType ? { mimeType: mark.asset.mimeType } : {}), ...(mark.asset.detail ? { detail: mark.asset.detail } : {}) };
-    toast.success(t`已删除收藏`, { action: { label: t`撤销`, onClick: () => void store.create({
-      id: newId(), sessionId: mark.sessionId, kind: mark.kind, anchor: mark.anchor,
-      ...(mark.quote ? { quote: mark.quote } : {}), ...(asset ? { asset } : {}), snapshot: { text: mark.snapshot.text, at: mark.snapshot.at },
-      ...(mark.note ? { note: mark.note } : {}), ...(mark.color ? { color: mark.color } : {}),
-    }) } });
+    if (!await store.remove([mark.id])) {
+      if (snapshot) setLoaded(snapshot);
+      return;
+    }
+    const asset = mark.asset && {
+      name: mark.asset.name,
+      ...(mark.asset.path ? { path: mark.asset.path } : {}),
+      ...(mark.asset.mimeType ? { mimeType: mark.asset.mimeType } : {}),
+      ...(mark.asset.detail ? { detail: mark.asset.detail } : {}),
+    };
+    toast.success(t`已删除收藏`, {
+      action: {
+        label: t`撤销`,
+        onClick: () => void store.create({
+          id: newId(),
+          sessionId: mark.sessionId,
+          kind: mark.kind,
+          anchor: mark.anchor,
+          ...(mark.quote ? { quote: mark.quote } : {}),
+          ...(asset ? { asset } : {}),
+          snapshot: { text: mark.snapshot.text, at: mark.snapshot.at },
+          ...(mark.note ? { note: mark.note } : {}),
+          ...(mark.color ? { color: mark.color } : {}),
+        }),
+      },
+    });
   };
+
   const removeChosen = async () => {
     const ids = [...chosen];
-    if (!ids.length || !await confirmDialog({ title: t`删除 ${ids.length} 条收藏？`, description: t`删除后无法恢复。`, confirmLabel: t({ message: '删除', context: 'marks-delete-action' }), destructive: true })) return;
+    if (!ids.length || !await confirmDialog({
+      title: t`删除 ${ids.length} 条收藏？`,
+      description: t`删除后无法恢复。`,
+      confirmLabel: t({ message: '删除', context: 'marks-delete-action' }),
+      destructive: true,
+    })) return;
+    const snapshot = loadedRef.current;
     patchShown((marks) => marks.filter((item) => !chosen.has(item.id)));
     setChosen(new Set());
     setSelecting(false);
     if (await store.remove(ids)) toast.success(t`已删除 ${ids.length} 条收藏`);
+    else if (snapshot) setLoaded(snapshot);
   };
-  const filtered = Boolean(q || projectId || tab !== 'all');
+
+  const filtered = Boolean(q || projectId || backendId || tab !== 'all');
   const shown = useMemo(() => current?.marks.filter((mark) => !hidden.has(mark.id)), [current?.marks, hidden]);
   const waiting = useLingering(stale && !current?.marks.length && !error, WAIT_GRACE_MS);
   const total = current && shown ? current.total - (current.marks.length - shown.length) : 0;
-  /** Consecutive marks of one day under one heading; the list is newest first, so a day never splits. */
-  const days = useMemo(() => {
-    const groups: Array<{ label: string; marks: Mark[] }> = [];
-    for (const mark of shown ?? []) {
-      const label = dayLabel(mark.createdAt);
-      if (groups.at(-1)?.label === label) groups.at(-1)!.marks.push(mark);
-      else groups.push({ label, marks: [mark] });
-    }
-    return groups;
-  }, [shown, locale]);
+  const activeMark = useMemo(() => shown?.find((mark) => mark.id === activeId), [shown, activeId]);
+  const shareSource = useMemo<ShareSource | undefined>(() => {
+    if (!shareMark || (shareMark.kind !== 'message' && shareMark.kind !== 'span')) return undefined;
+    return {
+      kind: shareMark.kind,
+      text: shareMark.kind === 'span' ? shareMark.quote?.exact ?? '' : shareMark.snapshot.text,
+      ...(shareMark.kind === 'span' ? { color: shareMark.color ?? 'yellow' } : {}),
+      ...(shareMark.note ? { note: shareMark.note } : {}),
+      title: shareMark.snapshot.sessionTitle || t`未命名会话`,
+      ...(shareMark.backendId ? { backendId: shareMark.backendId } : {}),
+      projectName: projectName(shareMark.projectId),
+      at: shareMark.snapshot.at,
+      ...(shareMark.kind === 'message' ? { prompt: () => api.markPrompt(shareMark.id).then((result) => result.text) } : {}),
+    };
+  }, [shareMark, projectName, t]);
+
   useLayoutEffect(() => {
     if (!current || !restore.current) return;
     scrollRef.current?.scrollTo({ top: restore.current });
     restore.current = 0;
   }, [current]);
-  const liveProjects = projects.filter((item) => !item.archivedAt && item.system !== 'quick-chat');
+
+  const liveProjects = useMemo(
+    () => projects.filter((item) => !item.archivedAt && item.system !== 'quick-chat'),
+    [projects],
+  );
+
+  const visibleProjects = useMemo(() => {
+    const ids = new Set(facets ? facets.projectIds : (loaded?.marks ?? []).map((mark) => mark.projectId));
+    return liveProjects.filter((item) => ids.has(item.id) || item.id === projectId);
+  }, [facets, loaded?.marks, liveProjects, projectId]);
+
+  const visibleBackends = useMemo(() => {
+    const ids = new Set(facets ? facets.backendIds : (loaded?.marks ?? []).map((mark) => mark.backendId).filter((id): id is NativeBackendId => Boolean(id)));
+    return backends.filter((item) => ids.has(item.backendId) || item.backendId === backendId);
+  }, [facets, loaded?.marks, backends, backendId]);
+
+  const navProps = {
+    tab,
+    projectId,
+    backendId,
+    projects: visibleProjects,
+    backends: visibleBackends,
+    onTab: setTab,
+    onProject: setProjectId,
+    onBackend: setBackendId,
+  };
+
+  const tabLabels: Record<MarkTab, string> = {
+    all: t`全部收藏`,
+    message: t({ message: '回复', context: 'marks-replies-tab' }),
+    span: t({ message: '高亮', context: 'marks-highlights-tab' }),
+    image: t({ message: '图片', context: 'marks-images-tab' }),
+    file: t({ message: '文件', context: 'marks-files-tab' }),
+    orphaned: t`找不到原文`,
+  };
+  const scopeTitle = [
+    projectId ? projectName(projectId) : undefined,
+    tabLabels[tab],
+    backendId ? labelOf(backendId) : undefined,
+  ].filter(Boolean).join(' · ');
+
+  const toggleChoice = (id: string) => setChosen((set) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  const clearFilters = () => {
+    setText('');
+    setQ('');
+    setProjectId('');
+    setBackendId('');
+    setTab('all');
+  };
+
   return (
     <PageScaffold
       title={<Trans>收藏夹</Trans>}
+      meta={<MarksScopeMenu {...navProps} />}
       actions={selecting ? (
         <>
-          <Button size="sm" variant="danger-ghost" className="max-md:size-11 max-md:px-0" aria-label={chosen.size ? t`删除 ${chosen.size} 条收藏` : t`删除收藏`} disabled={!chosen.size} onClick={() => void removeChosen()}><IconTrash2 /><span className="max-md:hidden">{chosen.size ? t`删除 ${chosen.size} 条` : t({ message: '删除', context: 'marks-delete-action' })}</span></Button>
-          <Button size="sm" variant="quiet" onClick={() => { setSelecting(false); setChosen(new Set()); }}><Trans context="marks-done-action">完成</Trans></Button>
+          <Button
+            size="sm"
+            variant="danger-ghost"
+            className="max-md:size-11 max-md:px-0"
+            aria-label={chosen.size ? t`删除 ${chosen.size} 条收藏` : t`删除收藏`}
+            disabled={!chosen.size}
+            onClick={() => void removeChosen()}
+          >
+            <IconTrash2 />
+            <span className="max-md:hidden">
+              {chosen.size ? t`删除 ${chosen.size} 条` : t({ message: '删除', context: 'marks-delete-action' })}
+            </span>
+          </Button>
+          <Button size="sm" variant="quiet" onClick={() => { setSelecting(false); setChosen(new Set()); }}>
+            <Trans context="marks-done-action">完成</Trans>
+          </Button>
         </>
       ) : (
-        <Button size="sm" variant="quiet" className="max-md:size-11 max-md:px-0" aria-label={t`选择收藏`} disabled={!shown?.length} onClick={() => setSelecting(true)}><IconSquareCheck /><span className="max-md:hidden"><Trans>选择</Trans></span></Button>
+        <Button
+          size="sm"
+          variant="quiet"
+          className="max-md:size-11 max-md:px-0"
+          aria-label={t`选择收藏`}
+          disabled={!shown?.length}
+          onClick={() => setSelecting(true)}
+        >
+          <IconSquareCheck />
+          <span className="max-md:hidden"><Trans>选择</Trans></span>
+        </Button>
       )}
-      columnClassName="flex flex-col"
+      column="board"
+      columnClassName="flex flex-col gap-5"
+      aside={<MarksAside {...navProps} />}
       scrollRef={scrollRef}
       onScroll={(event) => { view.current = { ...view.current, scrollTop: event.currentTarget.scrollTop }; }}
       scrollerProps={{ 'aria-busy': stale && !error }}
@@ -470,49 +765,124 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
       onOpenSidebar={onOpenSidebar}
       onExpandSidebar={onExpandSidebar}
     >
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <SearchField size="lg" value={text} onChange={setText} placeholder={t`搜索收藏的内容、备注或会话`} aria-label={t`搜索收藏`} className="min-w-52 flex-1" />
-          <Select label={t`按项目筛选`} value={projectId} onChange={setProjectId} className="h-9 w-40 max-md:w-full"
-            options={[{ value: '', label: t`全部项目` }, ...liveProjects.map((item) => ({ value: item.id, label: item.name }))]} />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        <div className="flex min-w-0 flex-1 items-baseline gap-2">
+          <h2 className="truncate text-base font-medium text-fg">{scopeTitle}</h2>
+          {current && !stale && (
+            <span className="shrink-0 text-xs tabular-nums text-fg-4">
+              <Trans>{total} 条</Trans>
+            </span>
+          )}
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <UnderlineTabs<Tab> className="-ml-2 h-10 overflow-x-auto [scrollbar-width:none] max-md:-ml-3" value={tab} onChange={setTab} ariaLabel={t`筛选收藏`} options={[{ value: 'all', label: t`全部` }, { value: 'message', label: t({ message: '回复', context: 'marks-replies-tab' }) }, { value: 'span', label: t({ message: '高亮', context: 'marks-highlights-tab' }) }, { value: 'asset', label: t`图片与文件` }, { value: 'orphaned', label: t`找不到原文` }]} />
-          {current && !stale && <span className="shrink-0 text-xs tabular-nums text-fg-4"><Trans>{total} 条</Trans></span>}
+        <div className="flex items-center gap-2 max-md:w-full">
+          <SearchField
+            size="md"
+            value={text}
+            onChange={setText}
+            placeholder={t`搜索收藏的内容、备注或会话`}
+            aria-label={t`搜索收藏`}
+            className="w-60 max-md:min-w-0 max-md:flex-1"
+          />
+          <Segmented<MarkViewMode>
+            size="sm"
+            ariaLabel={t`视图方式`}
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: 'grid', label: t({ message: '网格', context: 'marks-view-mode' }) },
+              { value: 'list', label: t({ message: '清单', context: 'marks-view-mode' }) },
+            ]}
+          />
         </div>
       </div>
 
       {waiting && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
+
       {!current && error && (
         <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载收藏`} description={error}>
-          <Button size="sm" onClick={() => store.set((state) => ({ revision: state.revision + 1 }))}><IconRefreshCw /><Trans>重试</Trans></Button>
+          <Button size="sm" onClick={() => store.set((state) => ({ revision: state.revision + 1 }))}>
+            <IconRefreshCw />
+            <Trans>重试</Trans>
+          </Button>
         </EmptyState>
       )}
-      {shown && !shown.length && !stale && (filtered
-        ? <EmptyState className="py-24" icon={<IconSearch />} title={t`没有符合条件的收藏`} />
-        : <EmptyState className="py-24" icon={<IconBookmark />} title={t`还没有收藏`} description={t`在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。`} />)}
-      {days.map((day) => (
-        <section key={day.label} className="mt-8 first-of-type:mt-7">
-          <h2 className="sticky top-0 z-10 -mx-1 mb-3 bg-bg/90 px-1 py-1.5 text-xs font-medium text-fg-3 backdrop-blur">{day.label}</h2>
-          <ul className="flex flex-col gap-3">
-            {day.marks.map((mark) => (
-              <MarkCard
-                key={mark.id}
-                mark={mark}
-                projectName={projectName(mark.projectId)}
-                selecting={selecting}
-                chosen={chosen.has(mark.id)}
-                onChoose={(next) => setChosen((set) => { const copy = new Set(set); if (next) copy.add(mark.id); else copy.delete(mark.id); return copy; })}
-                onOpen={() => onOpenMark(mark.id)}
-                onOpenFile={() => onOpenMarkFile(mark)}
-                onNote={(note) => void saveNote(mark, note)}
-                onDelete={() => void removeOne(mark)}
-              />
-            ))}
-          </ul>
-        </section>
+
+      {shown && !shown.length && !stale && (filtered ? (
+        <EmptyState className="py-24" icon={<IconSearch />} title={t`没有符合条件的收藏`}>
+          <Button size="sm" variant="secondary" onClick={clearFilters}><Trans>清空筛选</Trans></Button>
+        </EmptyState>
+      ) : (
+        <EmptyState
+          className="py-24"
+          icon={<IconBookmark />}
+          title={t`还没有收藏`}
+          description={t`在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。`}
+        />
       ))}
-      {current?.nextCursor && !stale && <div ref={sentinelRef} className="flex justify-center py-6">{loadingMore && <Spinner className="size-4" />}</div>}
+
+      {shown && shown.length > 0 && (viewMode === 'grid' ? (
+        <TileGrid>
+          {shown.map((mark) => (
+            <MarkTile
+              key={mark.id}
+              mark={mark}
+              query={q}
+              projectName={projectName(mark.projectId)}
+              backendLabel={mark.backendId ? labelOf(mark.backendId) : undefined}
+              selecting={selecting}
+              chosen={chosen.has(mark.id)}
+              onActivate={() => selecting ? toggleChoice(mark.id) : setActiveId(mark.id)}
+              onOpenSession={() => onOpenMark(mark.id)}
+              onOpenFile={() => onOpenMarkFile(mark)}
+            />
+          ))}
+        </TileGrid>
+      ) : (
+        <ul className="flex flex-col overflow-hidden rounded-xl border border-line bg-elevated [&>*+*]:edge-t">
+          {shown.map((mark) => (
+            <MarkListRow
+              key={mark.id}
+              mark={mark}
+              query={q}
+              projectName={projectName(mark.projectId)}
+              backendLabel={mark.backendId ? labelOf(mark.backendId) : undefined}
+              selecting={selecting}
+              chosen={chosen.has(mark.id)}
+              onActivate={() => selecting ? toggleChoice(mark.id) : setActiveId(mark.id)}
+              onOpenSession={() => onOpenMark(mark.id)}
+              onOpenFile={() => onOpenMarkFile(mark)}
+            />
+          ))}
+        </ul>
+      ))}
+
+      {current?.nextCursor && !stale && (
+        <div ref={sentinelRef} className="flex justify-center py-6">
+          {loadingMore && <Spinner className="size-4" />}
+        </div>
+      )}
+
+      <MarkDetailDialog
+        mark={activeMark}
+        projectName={activeMark ? projectName(activeMark.projectId) : ''}
+        locating={locating}
+        onOpenChange={(open) => { if (!open) setActiveId(undefined); }}
+        onOpen={() => { if (activeMark) onOpenMark(activeMark.id); }}
+        onOpenFile={() => { if (activeMark) onOpenMarkFile(activeMark); }}
+        onShare={() => { if (activeMark) { setActiveId(undefined); setShareMark(activeMark); } }}
+        onLocate={() => { if (activeMark) void locateMark(activeMark); }}
+        onNote={(note) => { if (activeMark) void saveNote(activeMark, note); }}
+        onColor={(color) => { if (activeMark) void saveColor(activeMark, color); }}
+        onDelete={() => { if (activeMark) void removeOne(activeMark); }}
+      />
+
+      {shareSource && (
+        <ShareImageDialog
+          source={shareSource}
+          open={Boolean(shareSource)}
+          onOpenChange={(open) => { if (!open) setShareMark(undefined); }}
+        />
+      )}
     </PageScaffold>
   );
 }

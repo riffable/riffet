@@ -28,6 +28,8 @@ export function registerMarkRoutes(app: FastifyInstance, deps: RouteDeps): void 
   };
   app.get<{Querystring:{[K in keyof MarkListQuery]?:string}}>(API.marks,async(request,reply)=>
     revisionedList(request,reply,store.marksRevision,()=>marks.list(request.query,request.query.limit===undefined?50:pageSize(request.query.limit),!clientSupportsFeature(request.headers,'projectless-tasks'))));
+  app.get(`${API.marks}/facets`,async(request,reply)=>
+    revisionedList(request,reply,store.marksRevision,()=>marks.facets(!clientSupportsFeature(request.headers,'projectless-tasks'))));
   // A saved image arrives inline, base64: room for the largest one plus its JSON.
   app.post<{Body:unknown}>(API.marks,{bodyLimit:Math.ceil(MAX_ASSET_BYTES*4/3)+64*1024},async(request)=>marks.create(request.body));
   /** A saved image's kept copy. A mark's image never changes, so it caches for good. */

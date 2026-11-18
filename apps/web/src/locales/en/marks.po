@@ -20,8 +20,8 @@ msgid "仅整条回复可用"
 msgstr "Only for whole replies"
 
 #: src/app/marks/MarksPage.tsx
-msgid "今天"
-msgstr "Today"
+msgid "仍未找到原文"
+msgstr "Source still unavailable"
 
 #: src/app/marks/ShareImage.tsx
 msgid "会话标题、Agent、项目与日期"
@@ -31,18 +31,27 @@ msgstr "Session title, Agent, project, and date"
 msgid "保存 PNG"
 msgstr "Save PNG"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarksNav.tsx
 msgid "全部"
 msgstr "All"
 
+#: src/app/marks/MarksNav.tsx
+msgid "全部 Agent"
+msgstr "All Agents"
+
 #: src/app/marks/MarksPage.tsx
+msgid "全部收藏"
+msgstr "All favorites"
+
+#: src/app/marks/MarksNav.tsx
 msgid "全部项目"
 msgstr "All projects"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "写点什么，方便以后找到它…"
 msgstr "Add a note to find this later…"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-delete-action"
 msgid "删除"
@@ -71,32 +80,44 @@ msgstr "This can't be undone."
 msgid "删除收藏"
 msgstr "Delete favorite"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
-msgid "原文已找不到"
-msgstr "Original not found"
+msgid "前往原会话"
+msgstr "Go to session"
 
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "原会话已删除或原文发生偏移，此处保留完整快照。"
+msgstr "The original session was deleted or moved; the saved snapshot is kept here."
+
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-replies-tab"
 msgid "回复"
 msgstr "Replies"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-image-name"
 msgid "图片"
 msgstr "Image"
 
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
-msgid "图片与文件"
-msgstr "Images & files"
+msgctxt "marks-images-tab"
+msgid "图片"
+msgstr "Images"
 
 #: src/app/marks/MarksPage.tsx
 msgid "在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。"
 msgstr "Favorite a reply from its menu, or select text to highlight. Favorites keep the original text and images."
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "备注"
 msgstr "Note"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "复制内容"
 msgstr "Copy content"
@@ -105,9 +126,14 @@ msgstr "Copy content"
 msgid "复制图片"
 msgstr "Copy image"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "复制路径"
 msgstr "Copy path"
+
+#: src/app/marks/MarksPage.tsx
+msgid "失联"
+msgstr "Unlinked"
 
 #: src/app/marks/ShareImage.tsx
 msgid "字体"
@@ -130,7 +156,7 @@ msgstr "Width"
 msgid "宽版"
 msgstr "Wide"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/ShareImage.tsx
 msgid "导出图片"
 msgstr "Export image"
@@ -152,14 +178,15 @@ msgstr "Image copied"
 msgid "已移除的项目"
 msgstr "Removed project"
 
+#: src/app/marks/MarksPage.tsx
+msgid "已重新定位到原会话"
+msgstr "Relocated in original session"
+
 #: src/app/marks/ShareImage.tsx
 msgid "当前连接不支持复制图片，请改用保存"
 msgstr "Copying images isn't available on this connection. Save instead."
 
-#: src/app/marks/MarksPage.tsx
-msgid "打开原会话"
-msgstr "Open original session"
-
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "打开文件"
 msgstr "Open file"
@@ -168,6 +195,7 @@ msgstr "Open file"
 msgid "批注"
 msgstr "Note"
 
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "找不到原文"
 msgstr "Source unavailable"
@@ -175,10 +203,6 @@ msgstr "Source unavailable"
 #: src/app/marks/ShareImage.tsx
 msgid "找不到对应的提问"
 msgstr "No prompt found"
-
-#: src/app/marks/MarksPage.tsx
-msgid "按项目筛选"
-msgstr "Filter by project"
 
 #: src/app/marks/ShareImage.tsx
 msgid "提问"
@@ -208,6 +232,13 @@ msgstr "Favorites"
 msgid "收藏时写的备注"
 msgstr "The note you added when saving"
 
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-files-tab"
+msgid "文件"
+msgstr "Files"
+
 #: src/app/marks/MarksPage.tsx
 msgid "无法加载收藏"
 msgstr "Couldn't load favorites"
@@ -220,13 +251,13 @@ msgstr "Couldn't load more favorites"
 msgid "无法复制图片"
 msgstr "Couldn't copy image"
 
+#: src/app/marks/MarksPage.tsx
+msgid "无法定位这条收藏"
+msgstr "Couldn't locate this favorite"
+
 #: src/app/marks/ShareImage.tsx
 msgid "无法生成图片"
 msgstr "Couldn't create image"
-
-#: src/app/marks/MarksPage.tsx
-msgid "昨天"
-msgstr "Yesterday"
 
 #: src/app/marks/ShareImage.tsx
 msgid "显示批注"
@@ -240,15 +271,12 @@ msgstr "Show prompt"
 msgid "显示来源"
 msgstr "Show source"
 
-#: src/app/marks/MarksPage.tsx
-msgid "更早"
-msgstr "Earlier"
-
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "未命名会话"
 msgstr "Untitled session"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "查看大图"
 msgstr "View full size"
 
@@ -265,14 +293,23 @@ msgid "没有符合条件的收藏"
 msgstr "No matching favorites"
 
 #: src/app/marks/MarksPage.tsx
-msgid "添加备注"
-msgstr "Add note"
+msgctxt "marks-view-mode"
+msgid "清单"
+msgstr "List"
+
+#: src/app/marks/MarksPage.tsx
+msgid "清空筛选"
+msgstr "Clear filters"
+
+#: src/app/marks/MarksPage.tsx
+msgid "视图方式"
+msgstr "View"
 
 #: src/app/marks/ShareImage.tsx
 msgid "竖版"
 msgstr "Narrow"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarksNav.tsx
 msgid "筛选收藏"
 msgstr "Filter favorites"
 
@@ -281,8 +318,9 @@ msgid "纸白"
 msgstr "Paper"
 
 #: src/app/marks/MarksPage.tsx
-msgid "编辑备注"
-msgstr "Edit note"
+msgctxt "marks-view-mode"
+msgid "网格"
+msgstr "Grid"
 
 #: src/app/marks/ShareImage.tsx
 msgid "自动"
@@ -313,18 +351,28 @@ msgstr "Select"
 msgid "选择收藏"
 msgstr "Select favorites"
 
-#: src/app/marks/MarksPage.tsx
-msgid "选择这条收藏"
-msgstr "Select this favorite"
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "重新定位"
+msgstr "Relocate"
 
 #: src/app/marks/MarksPage.tsx
 msgid "重试"
 msgstr "Retry"
 
+#: src/app/marks/MarksNav.tsx
+msgid "项目"
+msgstr "Project"
+
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-highlights-tab"
 msgid "高亮"
 msgstr "Highlights"
+
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "高亮颜色"
+msgstr "Highlight color"
 
 #: src/app/marks/ShareImage.tsx
 msgid "黑体"

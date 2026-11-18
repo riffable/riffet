@@ -4905,10 +4905,6 @@ msgstr "收到第一条消息"
 msgid "收藏"
 msgstr "收藏"
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务"
-msgstr "收藏、任务"
-
 #: src/app/design/components/InputsChapter.tsx
 msgid "收藏夹"
 msgstr "收藏夹"
@@ -7882,8 +7878,8 @@ msgid "设计规范"
 msgstr "设计规范"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范、插件；扩展管理用 PageHeader 自建"
-msgstr "设计规范、插件；扩展管理用 PageHeader 自建"
+msgid "设计规范、插件、收藏；扩展管理用 PageHeader 自建"
+msgstr "设计规范、插件、收藏；扩展管理用 PageHeader 自建"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "设计规范页的组、文档和代码目录一一对应。"

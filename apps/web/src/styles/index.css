@@ -3254,32 +3254,14 @@ html[data-density='relaxed'] {
 .mark-swatch-green { background-color: rgb(34 197 94); }
 .mark-swatch-blue { background-color: rgb(59 130 246); }
 .mark-swatch-red { background-color: rgb(239 68 68); }
-.mark-quote-yellow { background-color: rgb(250 204 21 / 0.3); }
-.mark-quote-green { background-color: rgb(34 197 94 / 0.22); }
-.mark-quote-blue { background-color: rgb(59 130 246 / 0.22); }
-.mark-quote-red { background-color: rgb(239 68 68 / 0.2); }
-/* A saved answer on the 收藏 page: the transcript's Markdown one step smaller, headings brought down to body size. */
-.md.mark-preview {
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  color: var(--fg-2);
-}
-.md.mark-preview p { margin-bottom: 8px; }
-.md.mark-preview h1,
-.md.mark-preview h2,
-.md.mark-preview h3,
-.md.mark-preview h4,
-.md.mark-preview h5,
-.md.mark-preview h6 {
-  margin: 14px 0 4px;
-  font-size: var(--text-base);
-  line-height: 1.6;
-}
-.md.mark-preview pre { max-height: 9rem; overflow: hidden; }
-.md.mark-preview :is(h1, h2, h3, h4, h5, h6, p, ul, ol, pre, blockquote):first-child { margin-top: 0; }
-/* The preview is not interactive: a code block keeps its language label but not its buttons. */
-.md.mark-preview button { display: none; }
-.mark-fade { mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent); }
+.mark-border-yellow { border-color: rgb(202 138 4); }
+.mark-border-green { border-color: rgb(34 197 94); }
+.mark-border-blue { border-color: rgb(59 130 246); }
+.mark-border-red { border-color: rgb(239 68 68); }
+.mark-quote-yellow { background-color: rgb(250 204 21 / 0.13); }
+.mark-quote-green { background-color: rgb(34 197 94 / 0.11); }
+.mark-quote-blue { background-color: rgb(59 130 246 / 0.11); }
+.mark-quote-red { background-color: rgb(239 68 68 / 0.11); }
 
 /*
  * 导出图片 (docs/MARKS.md §6.1): a saved reply typeset as a card, shared with the Mac app measure for

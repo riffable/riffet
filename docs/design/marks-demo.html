@@ -1,0 +1,1869 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 收藏夹改版对比原型（方案 1 vs 方案 2）</title>
+<style>
+/*
+ * Interactive comparison prototype for MarksPage (/marks), following Riffet design tokens
+ * (apps/web/src/styles/index.css, docs/design/riffet-style.md, docs/design/system/patterns.md).
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sidebar: #f7f8fa;
+  --bg-subtle: #f5f6f8;
+  --bg-muted: #eef0f3;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055);
+  --bg-active: rgb(35 45 70 / 0.09);
+  --fg: #2a2c2e;
+  --fg-2: #50555d;
+  --fg-3: #60666e;
+  --fg-4: #9aa0a9;
+  --line: rgb(15 23 42 / 0.08);
+  --line-soft: rgb(15 23 42 / 0.055);
+  --line-strong: rgb(15 23 42 / 0.14);
+  --primary: #15171a;
+  --primary-hover: #34373d;
+  --primary-fg: #ffffff;
+  --accent: #3867f0;
+  --accent-soft: rgb(56 103 240 / 0.1);
+  --success: #1f9d55;
+  --warning: #c77f06;
+  --warning-soft: rgb(245 158 11 / 0.12);
+  --danger: #e0454b;
+  --danger-soft: rgb(224 69 75 / 0.08);
+  --diff-add: #01a241;
+  --diff-del: #ba2723;
+  --mark-yellow: #c9951a;
+  --mark-yellow-bg: rgb(234 179 8 / 0.12);
+  --mark-green: #2f9658;
+  --mark-green-bg: rgb(34 197 94 / 0.10);
+  --mark-blue: #356cd0;
+  --mark-blue-bg: rgb(59 130 246 / 0.10);
+  --mark-red: #d04e46;
+  --mark-red-bg: rgb(239 68 68 / 0.10);
+  --agent-claude: #d97757;
+  --agent-codex: #10a37f;
+  --agent-cursor: #3d4451;
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 12px 32px -10px rgb(15 23 42 / 0.18), 0 2px 6px -2px rgb(15 23 42 / 0.06);
+  --scrim: rgb(0 0 0 / 0.25);
+  --canvas: var(--bg-sidebar);
+  --focus-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, "PingFang SC", monospace;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #141416;
+  --bg-sidebar: #1a1a1d;
+  --bg-subtle: #1d1d20;
+  --bg-muted: #27272b;
+  --bg-elevated: #1f1f22;
+  --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --fg: #d2d4d7;
+  --fg-2: #b6bac1;
+  --fg-3: #9da2aa;
+  --fg-4: #686d76;
+  --line: rgb(255 255 255 / 0.075);
+  --line-soft: rgb(255 255 255 / 0.05);
+  --line-strong: rgb(255 255 255 / 0.13);
+  --primary: #eceef1;
+  --primary-hover: #d3d6db;
+  --primary-fg: #141416;
+  --accent: #5b8cff;
+  --accent-soft: rgb(91 140 255 / 0.15);
+  --success: #3fb96f;
+  --warning: #e5a13a;
+  --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c;
+  --danger-soft: rgb(240 103 108 / 0.13);
+  --diff-add: #41c977;
+  --diff-del: #fa423e;
+  --mark-yellow: #e2b341;
+  --mark-yellow-bg: rgb(250 204 21 / 0.14);
+  --mark-green: #5dc283;
+  --mark-green-bg: rgb(34 197 94 / 0.13);
+  --mark-blue: #6fa0f2;
+  --mark-blue-bg: rgb(59 130 246 / 0.14);
+  --mark-red: #ec7c73;
+  --mark-red-bg: rgb(239 68 68 / 0.14);
+  --agent-claude: #e8916f;
+  --agent-codex: #34c79e;
+  --agent-cursor: #a5adba;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.2);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 18px 44px -12px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--canvas);
+  color: var(--fg);
+  font: 13px/20px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+svg.i * { vector-effect: non-scaling-stroke; }
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Demo Control Strip (outside app frame) ---------- */
+.demo-strip {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--line);
+  z-index: 40;
+}
+.demo-title { font-size: 12px; font-weight: 500; color: var(--fg-3); display: flex; align-items: center; gap: 8px; }
+.demo-title b { color: var(--fg); font-weight: 600; }
+.demo-sep { width: 1px; height: 16px; background: var(--line); }
+.demo-spacer { flex: 1; }
+.demo-hint { font-size: 12px; color: var(--fg-3); }
+
+/* ---------- Shared UI Primitives ---------- */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--bg-muted);
+  border: 0.5px solid var(--line);
+}
+.seg button {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+.seg button:hover { color: var(--fg-2); }
+.seg button[aria-selected="true"] {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: 0 0 0 0.5px var(--line-strong), var(--shadow-soft);
+}
+.dark .seg button[aria-selected="true"] { background: var(--bg-active); }
+.seg.xs button { height: 22px; padding: 0 8px; }
+
+.btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease), scale 120ms var(--ease);
+}
+.btn:active { scale: 0.97; }
+.btn.xs { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 7px; }
+.btn.icon-sm { width: 28px; padding: 0; }
+.btn.icon-xs { width: 24px; height: 24px; padding: 0; border-radius: 7px; }
+.btn.primary { background: var(--primary); color: var(--primary-fg); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.secondary { background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--fg); }
+.btn.secondary:hover { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+.btn.quiet { color: var(--fg-3); }
+.btn.quiet:hover { background: var(--bg-hover); color: var(--fg); }
+.btn.danger-ghost { color: var(--danger); }
+.btn.danger-ghost:hover { background: var(--danger-soft); }
+.btn svg.i { width: 14px; height: 14px; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--bg-muted);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.badge.warn { background: var(--warning-soft); color: var(--warning); }
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-wrap svg.i {
+  position: absolute;
+  left: 10px;
+  width: 14px;
+  height: 14px;
+  color: var(--fg-4);
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 28px 0 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12.5px;
+  color: var(--fg);
+  outline: none;
+  transition: border-color 140ms var(--ease);
+}
+.search-input:focus { border-color: var(--line-strong); }
+.search-input::placeholder { color: var(--fg-4); }
+.search-clear {
+  position: absolute;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: var(--fg-4);
+}
+.search-clear:hover { background: var(--bg-hover); color: var(--fg-2); }
+
+/* ---------- Workbench Shell ---------- */
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+}
+.workbench {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  background: var(--canvas);
+  transition: max-width 200ms var(--ease);
+}
+.workbench.narrow {
+  max-width: 390px;
+  margin: 12px auto;
+  border-radius: 22px;
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+/* App Sidebar (simplified for context) */
+.app-sidebar {
+  width: 232px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+  gap: 2px;
+  user-select: none;
+}
+.workbench.narrow .app-sidebar { display: none; }
+.nav-item {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.nav-item svg.i { width: 17px; height: 17px; color: currentColor; }
+.nav-item:hover { background: var(--bg-hover); color: var(--fg); }
+.nav-item.active { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.nav-section { padding: 14px 10px 4px; font-size: 11px; font-weight: 500; color: var(--fg-4); }
+.sidebar-session {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+.sidebar-session:hover { background: var(--bg-hover); color: var(--fg-2); }
+
+/* Main Card */
+.main-card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 8px 8px 8px 0;
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.workbench.narrow .main-card { margin: 0; border-radius: 0; border: 0; }
+
+/* Page Header */
+.page-header {
+  height: 50px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.page-header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--fg); }
+.header-meta { font-size: 12px; color: var(--fg-4); }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+/* ---------- Color Dot / Agent Dot / Mark Kind ---------- */
+.c-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.c-dot.yellow { background: var(--mark-yellow); }
+.c-dot.green { background: var(--mark-green); }
+.c-dot.blue { background: var(--mark-blue); }
+.c-dot.red { background: var(--mark-red); }
+.agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+.agent-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.agent-dot.claude { background: var(--agent-claude); }
+.agent-dot.codex { background: var(--agent-codex); }
+.agent-dot.cursor { background: var(--agent-cursor); }
+
+mark.hit {
+  background: var(--mark-yellow-bg);
+  color: var(--fg);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+/* =========================================================================
+   OPTION 1: Split Master-Detail Reader
+   ========================================================================= */
+.opt1-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.opt1-list-pane {
+  width: 372px;
+  flex: none;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+.workbench.narrow .opt1-list-pane { width: 100%; border-right: 0; }
+.workbench.narrow .opt1-list-pane.hidden-mobile { display: none; }
+
+.opt1-filters {
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.filter-pills::-webkit-scrollbar { display: none; }
+.fpill {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+.fpill:hover { background: var(--bg-hover); color: var(--fg-2); }
+.fpill[aria-pressed="true"] {
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 500;
+}
+.fpill .cnt { font-size: 11px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+.fpill[aria-pressed="true"] .cnt { color: var(--fg-3); }
+
+.opt1-subfilter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.mini-select {
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+  font-size: 11.5px;
+  color: var(--fg-2);
+  outline: none;
+}
+.color-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cfilter-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+}
+.cfilter-btn:hover { background: var(--bg-hover); }
+.cfilter-btn[aria-pressed="true"] { border-color: var(--fg-3); background: var(--bg-active); }
+
+.opt1-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.m-row {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background-color 120ms var(--ease);
+  border: 1px solid transparent;
+}
+.m-row:hover { background: var(--bg-hover); }
+.m-row[aria-selected="true"] {
+  background: var(--bg-active);
+  border-color: var(--line);
+}
+.m-row-accent {
+  width: 2.5px;
+  border-radius: 2px;
+  flex: none;
+  margin: 2px 0;
+  background: var(--line-strong);
+}
+.m-row-accent.yellow { background: var(--mark-yellow); }
+.m-row-accent.green { background: var(--mark-green); }
+.m-row-accent.blue { background: var(--mark-blue); }
+.m-row-accent.red { background: var(--mark-red); }
+.m-row-accent.message { background: var(--fg-3); }
+.m-row-accent.image, .m-row-accent.file { background: var(--fg-4); }
+
+.m-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.m-row-top { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg-3); }
+.m-row-title { font-weight: 500; color: var(--fg-2); }
+.m-row[aria-selected="true"] .m-row-title { color: var(--fg); }
+.m-row-snippet {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--fg-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.m-row-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--fg-4);
+}
+.m-row-note-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--fg-3);
+}
+.m-row-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  flex: none;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+}
+.m-row-check.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-fg);
+}
+
+/* Right Detail Reader (Option 1) */
+.opt1-reader {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.workbench.narrow .opt1-reader { display: none; }
+.workbench.narrow .opt1-reader.open-mobile { display: flex; width: 100%; }
+
+.reader-inner {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.workbench.narrow .reader-inner { padding: 16px 16px 48px; }
+
+.reader-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.reader-meta-col { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.reader-session { font-size: 15px; font-weight: 500; color: var(--fg); line-height: 22px; }
+.reader-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-3); }
+.reader-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: none; }
+
+.notice-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: var(--warning-soft);
+  color: var(--fg);
+  font-size: 12.5px;
+}
+.notice-bar svg.i { color: var(--warning); }
+
+/* Paper-ink quote presentation */
+.quote-reader {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.quote-context {
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--fg-3);
+}
+.quote-exact {
+  position: relative;
+  padding: 12px 16px;
+  border-radius: 0 10px 10px 0;
+  border-left: 3px solid var(--mark-yellow);
+  background: var(--mark-yellow-bg);
+  font-size: 14.5px;
+  line-height: 24px;
+  color: var(--fg);
+  user-select: text;
+}
+.quote-exact.green { border-left-color: var(--mark-green); background: var(--mark-green-bg); }
+.quote-exact.blue { border-left-color: var(--mark-blue); background: var(--mark-blue-bg); }
+.quote-exact.red { border-left-color: var(--mark-red); background: var(--mark-red-bg); }
+
+/* Reader full markdown */
+.md-full {
+  font-size: 14px;
+  line-height: 23px;
+  color: var(--fg);
+  user-select: text;
+}
+.md-full h3 { margin: 18px 0 6px; font-size: 15px; font-weight: 500; color: var(--fg); }
+.md-full h3:first-child { margin-top: 0; }
+.md-full p { margin: 0 0 10px; }
+.md-full ul { margin: 6px 0 12px; padding-left: 18px; }
+.md-full li { margin-bottom: 4px; }
+.md-full code.inline {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--fg-2);
+}
+.code-block {
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+.code-head {
+  height: 30px;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.code-pre {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--fg);
+  user-select: text;
+}
+
+/* Color & Note block in reader */
+.reader-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.section-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.swatch-btn:hover { background: var(--bg-hover); }
+.swatch-btn[aria-pressed="true"] {
+  border-color: var(--fg-3);
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 500;
+}
+.note-box {
+  width: 100%;
+  min-height: 68px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--fg);
+  resize: vertical;
+  outline: none;
+}
+.note-box:focus { border-color: var(--line-strong); background: var(--bg); }
+
+/* =========================================================================
+   OPTION 2: Aside Scope Tree + Board Grid / List + Content Dialog
+   ========================================================================= */
+.opt2-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.opt2-aside {
+  width: 224px;
+  flex: none;
+  overflow-y: auto;
+  padding: 24px 12px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.workbench.narrow .opt2-aside { display: none; }
+.aside-group { display: flex; flex-direction: column; gap: 1px; }
+.aside-title {
+  padding: 4px 10px 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-4);
+}
+.aside-row {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.aside-row svg.i { width: 15px; height: 15px; color: var(--fg-3); }
+.aside-row:hover { background: var(--bg-hover); color: var(--fg); }
+.aside-row.selected { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.aside-row.selected svg.i { color: var(--fg); }
+.aside-row .cnt { margin-left: auto; font-size: 11.5px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+
+.opt2-scroller {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.opt2-board {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 28px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.workbench.narrow .opt2-board { padding: 14px 16px 48px; gap: 12px; }
+
+.board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.board-head h2 { margin: 0; font-size: 16px; font-weight: 500; color: var(--fg); }
+.board-count { font-size: 12px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+.board-tools { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Tile Grid (Option 2) */
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 1180px) { .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.workbench.narrow .tile-grid { grid-template-columns: 1fr; }
+
+.mark-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  cursor: pointer;
+  min-height: 174px;
+  transition: border-color 140ms var(--ease), background-color 140ms var(--ease);
+}
+.mark-tile:hover { border-color: var(--line-strong); }
+.mark-tile.chosen { border-color: var(--primary); background: var(--bg-subtle); }
+
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.tile-head svg.i { width: 14px; height: 14px; flex: none; }
+.tile-session { font-weight: 500; color: var(--fg-2); }
+
+.tile-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tile-quote {
+  padding-left: 10px;
+  border-left: 2.5px solid var(--mark-yellow);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile-quote.green { border-left-color: var(--mark-green); }
+.tile-quote.blue { border-left-color: var(--mark-blue); }
+.tile-quote.red { border-left-color: var(--mark-red); }
+
+.tile-excerpt {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--fg-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tile-excerpt b { color: var(--fg); font-weight: 500; }
+
+.tile-note {
+  padding-left: 8px;
+  border-left: 1.5px solid var(--line-strong);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+  font-size: 11.5px;
+  color: var(--fg-4);
+}
+.tile-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 130ms var(--ease);
+}
+.mark-tile:hover .tile-actions, .mark-tile:focus-within .tile-actions { opacity: 1; }
+
+/* Compact List Mode (Option 2) */
+.compact-table {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.compact-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease);
+}
+.compact-row:last-child { border-bottom: 0; }
+.compact-row:hover { background: var(--bg-hover); }
+.compact-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.compact-line1 { display: flex; align-items: center; gap: 8px; }
+.compact-preview { font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-sub { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--fg-3); }
+.compact-meta { display: flex; align-items: center; gap: 12px; flex: none; font-size: 12px; color: var(--fg-4); }
+.workbench.narrow .compact-meta { display: none; }
+
+/* Dialog (Option 2 Reader Modal) */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(1.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 70;
+}
+.dialog-card {
+  width: min(768px, 100%);
+  max-height: min(86dvh, 780px);
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dialog-head {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.dialog-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* File & Image clean representations */
+.file-row-clean {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+}
+.img-thumb-box {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  opacity: 0;
+  pointer-events: none;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--bg-popover);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  font-size: 12.5px;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  z-index: 90;
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="demo-strip">
+  <div class="demo-title">
+    <b>收藏夹优化对比</b>
+    <span class="demo-sep"></span>
+    <span>可点击切换方案、搜索、改高亮颜色、写备注与键盘 ↑↓ 浏览</span>
+  </div>
+  <div class="seg" role="tablist" aria-label="设计方案切换">
+    <button id="mode-1" role="tab" aria-selected="true" onclick="setMode('opt1')">方案 1 · 双栏阅读器</button>
+    <button id="mode-2" role="tab" aria-selected="false" onclick="setMode('opt2')">方案 2 · 目录 + 网格/清单</button>
+  </div>
+  <div class="demo-spacer"></div>
+  <button id="btn-narrow" class="btn xs secondary" onclick="toggleNarrow()">桌面宽屏</button>
+  <button id="btn-theme" class="btn xs secondary" onclick="toggleTheme()">深色模式</button>
+</div>
+
+<div class="stage">
+  <div id="workbench" class="workbench">
+    <!-- App Sidebar (context) -->
+    <aside class="app-sidebar">
+      <div class="nav-item"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>新会话</span></div>
+      <div class="nav-item"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>搜索内容</span></div>
+      <div class="nav-item"><svg class="i" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/></svg><span>个人助理</span></div>
+      <div class="nav-item"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></svg><span>任务看板</span></div>
+      <div class="nav-item active"><svg class="i" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg><span>收藏夹</span></div>
+      <div class="nav-item"><svg class="i" viewBox="0 0 24 24"><path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z"/></svg><span>插件</span></div>
+
+      <div class="nav-section">riffet</div>
+      <div class="sidebar-session">WebSocket 断线重连设计</div>
+      <div class="sidebar-session">SSE ETag 条件轮询</div>
+      <div class="sidebar-session">PluginPage 卡片网格改版</div>
+      <div class="nav-section">agent-kit</div>
+      <div class="sidebar-session">MCP 工具上下文压缩</div>
+    </aside>
+
+    <!-- Main Surface -->
+    <main class="main-card">
+      <header class="page-header">
+        <button id="mobile-back" class="btn icon-sm quiet" hidden onclick="closeMobileReader()" aria-label="返回列表">
+          <svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <h1>收藏夹</h1>
+        <span id="header-count" class="header-meta tnum"></span>
+        <div class="header-actions" id="header-actions"></div>
+      </header>
+
+      <!-- OPTION 1 CONTAINER -->
+      <section id="opt1-view" class="opt1-wrap">
+        <div id="opt1-list-pane" class="opt1-list-pane">
+          <div class="opt1-filters">
+            <div class="search-wrap">
+              <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="q1" class="search-input" placeholder="搜索内容、备注、文件名或会话（试试搜 ETag）" oninput="setQuery(this.value)" />
+              <button class="search-clear" id="q1-clear" hidden onclick="setQuery('')" aria-label="清除搜索">×</button>
+            </div>
+            <div class="filter-pills" id="opt1-kind-pills"></div>
+            <div class="opt1-subfilter">
+              <div style="display:flex;gap:6px;align-items:center">
+                <select id="proj1" class="mini-select" aria-label="项目" onchange="setProject(this.value)"></select>
+                <button id="noted1" class="fpill" aria-pressed="false" onclick="toggleNoted()">有备注</button>
+              </div>
+              <div class="color-filter" id="color1"></div>
+            </div>
+          </div>
+          <div id="opt1-list" class="opt1-list" role="listbox" aria-label="收藏列表"></div>
+        </div>
+        <div id="opt1-reader" class="opt1-reader"></div>
+      </section>
+
+      <!-- OPTION 2 CONTAINER -->
+      <section id="opt2-view" class="opt2-wrap" hidden>
+        <nav class="opt2-aside" id="opt2-aside" aria-label="收藏筛选"></nav>
+        <div class="opt2-scroller">
+          <div class="opt2-board">
+            <div class="board-head">
+              <h2 id="opt2-scope-title">全部收藏</h2>
+              <span id="opt2-scope-count" class="board-count"></span>
+              <div class="board-tools">
+                <div class="search-wrap" style="width:240px">
+                  <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <input id="q2" class="search-input" placeholder="搜索收藏（试试搜 ETag）" oninput="setQuery(this.value)" />
+                  <button class="search-clear" id="q2-clear" hidden onclick="setQuery('')" aria-label="清除搜索">×</button>
+                </div>
+                <div class="seg xs" role="tablist" aria-label="视图方式">
+                  <button id="v-grid" role="tab" aria-selected="true" onclick="setOpt2View('grid')">网格</button>
+                  <button id="v-list" role="tab" aria-selected="false" onclick="setOpt2View('list')">清单</button>
+                </div>
+              </div>
+            </div>
+            <div id="opt2-content"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- Option 2 Reader Dialog -->
+<div id="dialog-backdrop" class="dialog-backdrop" hidden onclick="if(event.target===this) closeDialog()">
+  <div class="dialog-card" role="dialog" aria-modal="true" aria-label="收藏详情">
+    <div id="dialog-inner" style="display:flex;flex-direction:column;min-height:0;flex:1"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+const PROJECTS = [
+  { id: 'riffet', name: 'riffet' },
+  { id: 'agent-kit', name: 'agent-kit' },
+  { id: 'gateway-proxy', name: 'gateway-proxy' },
+];
+
+const AGENTS = {
+  claude: { name: 'Claude Code', cls: 'claude' },
+  codex: { name: 'Codex', cls: 'codex' },
+  cursor: { name: 'Cursor', cls: 'cursor' },
+};
+
+const COLOR_LABELS = { yellow: '黄色', green: '绿色', blue: '蓝色', red: '红色' };
+
+const INITIAL_MARKS = [
+  {
+    id: 'm1',
+    kind: 'message',
+    projectId: 'riffet',
+    backendId: 'claude',
+    sessionTitle: 'WebSocket 断线重连与状态同步',
+    time: '今天 13:42',
+    state: 'ok',
+    note: '核心重连策略 + 后面第 3 段有 ETag 对齐说明',
+    plainText: '建议把重连退避与列表修订号校验拆成两层，避免弱网抖动时反复全量拉取。1. 退避策略采用带抖动的指数退避（300ms 起步，上限 15s），切回前台立刻重置计时器。2. 重连成功后不要直接重拉全量会话，先比对 lists stream 推送的 revision，再带 ETag 做条件请求。3. 如果服务端返回 304 Not Modified，直接复用本地缓存并恢复订阅。',
+    blocks: [
+      { type: 'h', text: '重连与状态同步分层建议' },
+      { type: 'p', text: '建议把重连退避与列表修订号校验拆成两层，避免弱网抖动时反复全量拉取：' },
+      { type: 'ul', items: [
+        '采用带 Full Jitter 的指数退避（300ms 起步，上限 15s），页面 visibilitychange 回到前台时立刻探测。',
+        '单次重连在 250ms 防抖窗口内只触发一次条件请求，避免多个 store 同时惊群。',
+      ]},
+      { type: 'code', lang: 'ts', code: `export function nextBackoff(attempt: number): number {\n  const base = Math.min(15_000, 300 * 2 ** Math.min(attempt, 6));\n  return Math.round(base * (0.5 + Math.random() * 0.5));\n}` },
+      { type: 'h', text: '与 ETag 修订号对齐' },
+      { type: 'p', text: '重连后先核对服务端 lists stream 下发的最新 revision，并附带上次缓存的 ETag。若服务端返回 304，则无需重绘列表，直接恢复增量订阅即可。' },
+    ],
+  },
+  {
+    id: 'm2',
+    kind: 'span',
+    color: 'yellow',
+    projectId: 'riffet',
+    backendId: 'codex',
+    sessionTitle: 'SSE ETag 条件轮询与多端同步',
+    time: '今天 11:15',
+    state: 'ok',
+    note: '多端同步不变量，改 store 时先看这句',
+    prefix: '……收藏变更不触发会话列表重读，而是由 ',
+    exact: 'lists stream 只负责通知各域的 revision 变化，客户端收到新修订号后带 ETag 条件拉取，从而保证多端最终一致且不阻塞主通道。',
+    suffix: ' 这样可以彻底避免单次收藏操作引起侧栏整体闪烁……',
+  },
+  {
+    id: 'm3',
+    kind: 'span',
+    color: 'blue',
+    projectId: 'riffet',
+    backendId: 'cursor',
+    sessionTitle: '正文高亮选区与 DOM 不变性',
+    time: '昨天 19:20',
+    state: 'ok',
+    note: '',
+    prefix: '相比包裹 <mark> 标签破坏 React 节点树，',
+    exact: 'CSS Custom Highlight API 把 Range 注册到 CSS.highlights，完全不改动 Markdown 渲染出的 DOM，流式输出结束后即可稳定锚定。',
+    suffix: ' 若文本因渲染微调产生偏移，则退回 TextQuoteSelector 的 prefix/suffix 匹配。',
+  },
+  {
+    id: 'm4',
+    kind: 'image',
+    projectId: 'riffet',
+    backendId: 'claude',
+    sessionTitle: 'SQLite WAL 读写并发时序排查',
+    time: '昨天 16:04',
+    state: 'ok',
+    note: 'checkpoint 阻塞写事务的链路图',
+    asset: {
+      name: 'wal-checkpoint-timeline.png',
+      path: '.riffet/artifacts/wal-checkpoint-timeline.png',
+      size: '1420 × 760 · 184 KB',
+    },
+  },
+  {
+    id: 'm5',
+    kind: 'file',
+    projectId: 'riffet',
+    backendId: 'cursor',
+    sessionTitle: 'Marks 接口契约扩展',
+    time: '11月16日',
+    state: 'ok',
+    note: '包含 MarkListQuery 的 backendId 与 kind 数组过滤',
+    asset: {
+      name: 'marks.ts',
+      path: 'packages/contracts/src/marks.ts',
+      add: 42,
+      del: 8,
+    },
+  },
+  {
+    id: 'm6',
+    kind: 'span',
+    color: 'red',
+    projectId: 'gateway-proxy',
+    backendId: 'claude',
+    sessionTitle: '旧版鉴权中间件兼容路径排查',
+    time: '11月14日',
+    state: 'orphaned',
+    note: '原会话已归档删除，保留这条风险备注',
+    prefix: '当上游网关未透传 x-forwarded-host 时，',
+    exact: '回退到固定白名单校验比直接信任 Host 头更安全，否则在多租户反代环境下会出现签名校验绕过。',
+    suffix: ' 建议在下个版本把旧兼容开关下线……',
+  },
+  {
+    id: 'm7',
+    kind: 'message',
+    projectId: 'agent-kit',
+    backendId: 'codex',
+    sessionTitle: 'MCP 工具上下文窗口裁剪策略',
+    time: '11月12日',
+    state: 'ok',
+    note: '',
+    plainText: '大型工具输出（超过 8KB）建议只保留首尾摘要与结构化索引键，完整内容落盘到临时 artifact 路径，由模型按需读取特定行范围。这通常能把长会话第 10 轮后的 token 消耗压低 45% 以上。',
+    blocks: [
+      { type: 'p', text: '大型工具输出（超过 8KB）建议只保留首尾摘要与结构化索引键，完整内容落盘到临时 artifact 路径，由模型按需读取特定行范围。' },
+      { type: 'p', text: '这通常能把长会话第 10 轮后的 token 消耗压低 45% 以上，同时避免 ETag 或日志全文把关键指令挤出注意力窗口。' },
+    ],
+  },
+  {
+    id: 'm8',
+    kind: 'span',
+    color: 'green',
+    projectId: 'agent-kit',
+    backendId: 'claude',
+    sessionTitle: '预热进程键一致性规范',
+    time: '11月10日',
+    state: 'ok',
+    note: '每次新增会话启动字段必查',
+    prefix: '预热进程只交给启动配置与预热键完全一致的新会话：',
+    exact: '凡是影响启动参数或 MCP 工具列表的字段，必须同步计入 Claude / Codex / Cursor 各自 warmKey 与 RiffetMcpService.draftOf。',
+    suffix: ' 不一致时会静默回退到冷启动。',
+  },
+];
+
+let state = {
+  mode: 'opt1',      // 'opt1' | 'opt2'
+  opt2View: 'grid',  // 'grid' | 'list'
+  dark: false,
+  narrow: false,
+  q: '',
+  kind: 'all',       // 'all' | 'message' | 'span' | 'image' | 'file' | 'orphaned'
+  projectId: '',
+  color: '',
+  notedOnly: false,
+  backendId: '',
+  selectedId: 'm1',
+  dialogId: null,
+  selecting: false,
+  chosen: new Set(),
+  mobileReaderOpen: false,
+  marks: structuredClone(INITIAL_MARKS),
+};
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function projectName(id) {
+  return PROJECTS.find(p => p.id === id)?.name ?? '未知项目';
+}
+
+function kindLabel(k) {
+  return { message: '回复', span: '高亮', image: '图片', file: '文件' }[k] ?? k;
+}
+
+function markSearchText(m) {
+  return [m.sessionTitle, m.note, m.exact, m.plainText, m.asset?.name, m.asset?.path, projectName(m.projectId)].filter(Boolean).join(' ');
+}
+
+function highlightMatch(text, q) {
+  if (!q) return esc(text);
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx < 0) return esc(text);
+  const before = text.slice(0, idx);
+  const hit = text.slice(idx, idx + q.length);
+  const after = text.slice(idx + q.length);
+  return `${esc(before)}<mark class="hit">${esc(hit)}</mark>${esc(after)}`;
+}
+
+/** Smart snippet: if search matches later in plainText or note, jump right to the hit context! */
+function getSnippetHtml(m, q) {
+  const base = m.kind === 'span' ? m.exact : m.kind === 'file' ? m.asset.path : m.kind === 'image' ? (m.note || m.asset.name) : m.plainText;
+  if (!q) return esc(base);
+  const ql = q.toLowerCase();
+  const idx = base.toLowerCase().indexOf(ql);
+  if (idx >= 0) {
+    const start = Math.max(0, idx - 26);
+    const slice = (start > 0 ? '…' : '') + base.slice(start, idx + 110);
+    return highlightMatch(slice, q);
+  }
+  if (m.note && m.note.toLowerCase().includes(ql)) {
+    return `<span style="color:var(--fg-3)">备注命中：</span>${highlightMatch(m.note, q)}`;
+  }
+  return highlightMatch(base, q);
+}
+
+function filteredMarks() {
+  const q = state.q.trim().toLowerCase();
+  return state.marks.filter(m => {
+    if (state.kind === 'orphaned') { if (m.state !== 'orphaned') return false; }
+    else if (state.kind !== 'all' && m.kind !== state.kind) return false;
+    if (state.projectId && m.projectId !== state.projectId) return false;
+    if (state.color && m.color !== state.color) return false;
+    if (state.notedOnly && !m.note.trim()) return false;
+    if (state.backendId && m.backendId !== state.backendId) return false;
+    if (q && !markSearchText(m).toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.innerHTML = `<svg class="i" style="color:var(--success)" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>${esc(msg)}</span>`;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function iconForKind(kind) {
+  if (kind === 'image') return `<svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`;
+  if (kind === 'file') return `<svg class="i" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>`;
+  if (kind === 'span') return `<svg class="i" viewBox="0 0 24 24"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg>`;
+  return `<svg class="i" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>`;
+}
+
+function renderSvgDiagram() {
+  return `
+  <svg viewBox="0 0 560 220" width="100%" style="display:block;max-height:240px;background:var(--bg-subtle)">
+    <g font-family="var(--font-sans)" font-size="11" fill="var(--fg-3)">
+      <line x1="60" y1="54" x2="520" y2="54" stroke="var(--line)" />
+      <line x1="60" y1="114" x2="520" y2="114" stroke="var(--line)" />
+      <line x1="60" y1="174" x2="520" y2="174" stroke="var(--line)" />
+      <text x="16" y="58" fill="var(--fg-2)" font-weight="500">Writer</text>
+      <text x="16" y="118" fill="var(--fg-2)" font-weight="500">WAL</text>
+      <text x="16" y="178" fill="var(--fg-2)" font-weight="500">Reader</text>
+      <rect x="90" y="38" width="110" height="32" rx="6" fill="var(--bg-elevated)" stroke="var(--line-strong)"/>
+      <text x="145" y="58" text-anchor="middle" fill="var(--fg)">BEGIN IMMEDIATE</text>
+      <rect x="230" y="98" width="136" height="32" rx="6" fill="var(--accent-soft)" stroke="var(--accent)"/>
+      <text x="298" y="118" text-anchor="middle" fill="var(--fg)">PASSIVE Checkpoint</text>
+      <rect x="396" y="158" width="104" height="32" rx="6" fill="var(--bg-elevated)" stroke="var(--line-strong)"/>
+      <text x="448" y="178" text-anchor="middle" fill="var(--fg)">Snapshot Read</text>
+      <path d="M200 54 L230 114" stroke="var(--warning)" stroke-width="1.5" stroke-dasharray="3 3" fill="none"/>
+      <path d="M366 114 L396 174" stroke="var(--success)" stroke-width="1.5" fill="none"/>
+    </g>
+  </svg>`;
+}
+
+function renderReaderContent(m, { inDialog = false } = {}) {
+  if (!m) {
+    return `<div style="flex:1;display:grid;place-items:center;color:var(--fg-3);padding:48px">选择左侧任意一条收藏查看完整内容与备注</div>`;
+  }
+  const agent = AGENTS[m.backendId];
+  const orphanedBanner = m.state === 'orphaned' ? `
+    <div class="notice-bar">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      <span style="flex:1">原会话已删除或原文发生偏移，此处保留完整快照。</span>
+      <button class="btn xs secondary" onclick="showToast('尝试重新定位：原会话已不存在')">重新定位</button>
+    </div>` : '';
+
+  let bodyHtml = '';
+  if (m.kind === 'span') {
+    bodyHtml = `
+      <div class="quote-reader">
+        <div class="quote-context">${esc(m.prefix)}</div>
+        <div class="quote-exact ${m.color}">${esc(m.exact)}</div>
+        <div class="quote-context">${esc(m.suffix)}</div>
+      </div>`;
+  } else if (m.kind === 'message') {
+    bodyHtml = `<div class="md-full">` + m.blocks.map(b => {
+      if (b.type === 'h') return `<h3>${esc(b.text)}</h3>`;
+      if (b.type === 'p') return `<p>${esc(b.text)}</p>`;
+      if (b.type === 'ul') return `<ul>${b.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`;
+      if (b.type === 'code') return `
+        <div class="code-block">
+          <div class="code-head">
+            <span class="mono">${esc(b.lang)}</span>
+            <button class="btn xs quiet" onclick="copyCodeBlock('${m.id}')">复制代码</button>
+          </div>
+          <pre class="code-pre"><code>${esc(b.code)}</code></pre>
+        </div>`;
+      return '';
+    }).join('') + `</div>`;
+  } else if (m.kind === 'image') {
+    bodyHtml = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="img-thumb-box">${renderSvgDiagram()}</div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--fg-3)">
+          <span class="mono">${esc(m.asset.path)}</span>
+          <span class="tnum">${esc(m.asset.size)}</span>
+        </div>
+      </div>`;
+  } else if (m.kind === 'file') {
+    bodyHtml = `
+      <div class="file-row-clean">
+        ${iconForKind('file')}
+        <div style="flex:1;min-width:0">
+          <div class="mono" style="font-size:13px;font-weight:500;color:var(--fg)">${esc(m.asset.name)}</div>
+          <div class="mono trunc" style="font-size:11.5px;color:var(--fg-3)">${esc(m.asset.path)}</div>
+        </div>
+        <span class="mono tnum" style="font-size:12px">
+          <span style="color:var(--diff-add)">+${m.asset.add}</span>
+          <span style="color:var(--diff-del);margin-left:6px">−${m.asset.del}</span>
+        </span>
+      </div>`;
+  }
+
+  const colorSection = m.kind === 'span' ? `
+    <div class="reader-section">
+      <div class="section-label"><span>高亮颜色</span></div>
+      <div class="color-picker-row">
+        ${['yellow','green','blue','red'].map(c => `
+          <button class="swatch-btn" aria-pressed="${m.color === c}" onclick="changeColor('${m.id}', '${c}')">
+            <span class="c-dot ${c}"></span>${COLOR_LABELS[c]}
+          </button>`).join('')}
+      </div>
+    </div>` : '';
+
+  const noteSection = `
+    <div class="reader-section">
+      <div class="section-label">
+        <span>备注（可直接编辑，自动保存）</span>
+        <span style="font-size:11px;color:var(--fg-4)">⌘↵ 或失焦保存</span>
+      </div>
+      <textarea class="note-box" placeholder="写点什么，方便日后检索或导出图片时附带批注…" onblur="saveNote('${m.id}', this.value)" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key==='Enter'){this.blur();}">${esc(m.note)}</textarea>
+    </div>`;
+
+  const topbar = `
+    <div class="${inDialog ? 'dialog-head' : 'reader-topbar'}">
+      <div class="reader-meta-col" style="flex:1">
+        <div class="reader-session">${esc(m.sessionTitle)}</div>
+        <div class="reader-sub">
+          <span class="badge">${kindLabel(m.kind)}</span>
+          <span>${esc(projectName(m.projectId))}</span>
+          <span class="agent-pill"><span class="agent-dot ${agent.cls}"></span>${agent.name}</span>
+          <span class="tnum">${esc(m.time)}</span>
+        </div>
+      </div>
+      <div class="reader-actions">
+        ${m.kind !== 'image' ? `<button class="btn xs secondary" onclick="copyMark('${m.id}')">复制</button>` : ''}
+        ${(m.kind === 'message' || m.kind === 'span') ? `<button class="btn xs secondary" onclick="showToast('打开导出图片排版弹窗')">导出图片</button>` : ''}
+        <button class="btn xs danger-ghost" onclick="deleteMark('${m.id}')">删除</button>
+        ${!inDialog ? `<button class="btn xs primary" onclick="locateMark('${m.id}')">前往原会话 ↗</button>` : `<button class="btn icon-xs quiet" onclick="closeDialog()" aria-label="关闭">✕</button>`}
+      </div>
+    </div>`;
+
+  if (inDialog) {
+    return `
+      ${topbar}
+      <div class="dialog-body">
+        ${orphanedBanner}
+        ${bodyHtml}
+        ${colorSection}
+        ${noteSection}
+      </div>
+      <div class="dialog-foot">
+        <span style="font-size:12px;color:var(--fg-4)">内容可直接划词复制，代码块可单独复制</span>
+        <button class="btn primary" onclick="locateMark('${m.id}')">前往原会话 ↗</button>
+      </div>`;
+  }
+
+  return `
+    <div class="reader-inner">
+      ${topbar}
+      ${orphanedBanner}
+      ${bodyHtml}
+      ${colorSection}
+      ${noteSection}
+    </div>`;
+}
+
+function render() {
+  document.documentElement.classList.toggle('dark', state.dark);
+  document.getElementById('workbench').classList.toggle('narrow', state.narrow);
+  document.getElementById('btn-theme').textContent = state.dark ? '浅色模式' : '深色模式';
+  document.getElementById('btn-narrow').textContent = state.narrow ? '切换桌面宽屏' : '模拟手机窄屏';
+
+  document.getElementById('mode-1').setAttribute('aria-selected', state.mode === 'opt1');
+  document.getElementById('mode-2').setAttribute('aria-selected', state.mode === 'opt2');
+  document.getElementById('opt1-view').hidden = state.mode !== 'opt1';
+  document.getElementById('opt2-view').hidden = state.mode !== 'opt2';
+
+  const list = filteredMarks();
+  document.getElementById('header-count').textContent = `${list.length} 条`;
+
+  // Header actions
+  const headerActions = document.getElementById('header-actions');
+  if (state.selecting) {
+    headerActions.innerHTML = `
+      <button class="btn xs danger-ghost" ${state.chosen.size ? '' : 'disabled'} onclick="deleteChosen()">删除 ${state.chosen.size || ''} 条</button>
+      <button class="btn xs quiet" onclick="toggleSelecting(false)">完成</button>`;
+  } else {
+    headerActions.innerHTML = `
+      <button class="btn xs quiet" onclick="toggleSelecting(true)">批量选择</button>`;
+  }
+
+  document.getElementById('mobile-back').hidden = !(state.narrow && state.mode === 'opt1' && state.mobileReaderOpen);
+
+  // Keep search inputs synced
+  const q1 = document.getElementById('q1');
+  const q2 = document.getElementById('q2');
+  if (q1.value !== state.q) q1.value = state.q;
+  if (q2.value !== state.q) q2.value = state.q;
+  document.getElementById('q1-clear').hidden = !state.q;
+  document.getElementById('q2-clear').hidden = !state.q;
+
+  if (state.mode === 'opt1') renderOpt1(list);
+  else renderOpt2(list);
+
+  // Dialog for Option 2
+  const backdrop = document.getElementById('dialog-backdrop');
+  if (state.dialogId) {
+    const target = state.marks.find(m => m.id === state.dialogId);
+    if (target) {
+      backdrop.hidden = false;
+      document.getElementById('dialog-inner').innerHTML = renderReaderContent(target, { inDialog: true });
+    } else {
+      state.dialogId = null;
+      backdrop.hidden = true;
+    }
+  } else {
+    backdrop.hidden = true;
+  }
+}
+
+function renderOpt1(list) {
+  const counts = {
+    all: state.marks.length,
+    message: state.marks.filter(m => m.kind === 'message').length,
+    span: state.marks.filter(m => m.kind === 'span').length,
+    image: state.marks.filter(m => m.kind === 'image').length,
+    file: state.marks.filter(m => m.kind === 'file').length,
+    orphaned: state.marks.filter(m => m.state === 'orphaned').length,
+  };
+  const kindDefs = [
+    ['all', '全部'], ['message', '回复'], ['span', '高亮'], ['image', '图片'], ['file', '文件'], ['orphaned', '失联'],
+  ];
+  document.getElementById('opt1-kind-pills').innerHTML = kindDefs.map(([k, label]) => `
+    <button class="fpill" aria-pressed="${state.kind === k}" onclick="setKind('${k}')">
+      <span>${label}</span><span class="cnt">${counts[k]}</span>
+    </button>`).join('');
+
+  document.getElementById('proj1').innerHTML =
+    `<option value="">全部项目</option>` +
+    PROJECTS.map(p => `<option value="${p.id}" ${state.projectId === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+
+  document.getElementById('noted1').setAttribute('aria-pressed', state.notedOnly);
+
+  document.getElementById('color1').innerHTML = ['yellow','green','blue','red'].map(c => `
+    <button class="cfilter-btn" aria-pressed="${state.color === c}" title="${COLOR_LABELS[c]}" onclick="toggleColorFilter('${c}')">
+      <span class="c-dot ${c}"></span>
+    </button>`).join('');
+
+  if (!list.some(m => m.id === state.selectedId)) state.selectedId = list[0]?.id ?? null;
+
+  const listEl = document.getElementById('opt1-list');
+  if (!list.length) {
+    listEl.innerHTML = `<div style="padding:48px 16px;text-align:center;color:var(--fg-3)">没有符合条件的收藏<br><button class="btn xs secondary" style="margin-top:10px" onclick="resetFilters()">清空筛选</button></div>`;
+  } else {
+    listEl.innerHTML = list.map(m => {
+      const selected = state.selectedId === m.id;
+      const checked = state.chosen.has(m.id);
+      const accentCls = m.kind === 'span' ? m.color : m.kind;
+      const agent = AGENTS[m.backendId];
+      return `
+        <div class="m-row" role="option" aria-selected="${selected}" onclick="onRowClick('${m.id}')">
+          ${state.selecting ? `<span class="m-row-check ${checked ? 'checked' : ''}">${checked ? '✓' : ''}</span>` : `<span class="m-row-accent ${accentCls}"></span>`}
+          <div class="m-row-body">
+            <div class="m-row-top">
+              <span class="m-row-title trunc">${esc(m.sessionTitle)}</span>
+              ${m.state === 'orphaned' ? `<span class="badge warn">失联</span>` : ''}
+            </div>
+            <div class="m-row-snippet">${getSnippetHtml(m, state.q.trim())}</div>
+            <div class="m-row-foot">
+              <span>${esc(projectName(m.projectId))}</span>
+              <span>·</span>
+              <span class="agent-pill"><span class="agent-dot ${agent.cls}"></span>${agent.name}</span>
+              ${m.note ? `<span class="m-row-note-tag">· 备注</span>` : ''}
+              <span style="margin-left:auto" class="tnum">${esc(m.time)}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  const listPane = document.getElementById('opt1-list-pane');
+  const readerPane = document.getElementById('opt1-reader');
+  listPane.classList.toggle('hidden-mobile', state.narrow && state.mobileReaderOpen);
+  readerPane.classList.toggle('open-mobile', state.narrow && state.mobileReaderOpen);
+
+  const activeMark = list.find(m => m.id === state.selectedId) ?? null;
+  readerPane.innerHTML = renderReaderContent(activeMark);
+}
+
+function renderOpt2(list) {
+  const cnt = (fn) => state.marks.filter(fn).length;
+  const aside = document.getElementById('opt2-aside');
+  aside.innerHTML = `
+    <div class="aside-group">
+      <button class="aside-row ${state.kind === 'all' && !state.notedOnly ? 'selected' : ''}" onclick="state.notedOnly=false;setKind('all')">
+        ${iconForKind('message')}<span>全部收藏</span><span class="cnt">${state.marks.length}</span>
+      </button>
+      <button class="aside-row ${state.kind === 'message' ? 'selected' : ''}" onclick="setKind('message')">
+        ${iconForKind('message')}<span>回复</span><span class="cnt">${cnt(m=>m.kind==='message')}</span>
+      </button>
+      <button class="aside-row ${state.kind === 'span' ? 'selected' : ''}" onclick="setKind('span')">
+        ${iconForKind('span')}<span>高亮</span><span class="cnt">${cnt(m=>m.kind==='span')}</span>
+      </button>
+      <button class="aside-row ${state.kind === 'image' ? 'selected' : ''}" onclick="setKind('image')">
+        ${iconForKind('image')}<span>图片</span><span class="cnt">${cnt(m=>m.kind==='image')}</span>
+      </button>
+      <button class="aside-row ${state.kind === 'file' ? 'selected' : ''}" onclick="setKind('file')">
+        ${iconForKind('file')}<span>文件</span><span class="cnt">${cnt(m=>m.kind==='file')}</span>
+      </button>
+      <button class="aside-row ${state.kind === 'orphaned' ? 'selected' : ''}" onclick="setKind('orphaned')">
+        <svg class="i" style="color:var(--warning)" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+        <span>找不到原文</span><span class="cnt">${cnt(m=>m.state==='orphaned')}</span>
+      </button>
+    </div>
+
+    <div class="aside-group">
+      <div class="aside-title">属性与颜色</div>
+      <button class="aside-row ${state.notedOnly ? 'selected' : ''}" onclick="toggleNoted()">
+        <svg class="i" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>
+        <span>有备注</span><span class="cnt">${cnt(m=>Boolean(m.note.trim()))}</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 10px">
+        ${['yellow','green','blue','red'].map(c => `
+          <button class="cfilter-btn" aria-pressed="${state.color === c}" title="仅看${COLOR_LABELS[c]}高亮" onclick="toggleColorFilter('${c}')">
+            <span class="c-dot ${c}"></span>
+          </button>`).join('')}
+        ${state.color ? `<button class="btn xs quiet" style="margin-left:auto" onclick="state.color='';render()">清除</button>` : ''}
+      </div>
+    </div>
+
+    <div class="aside-group">
+      <div class="aside-title">项目</div>
+      <button class="aside-row ${state.projectId === '' ? 'selected' : ''}" onclick="setProject('')">
+        <span>全部项目</span><span class="cnt">${state.marks.length}</span>
+      </button>
+      ${PROJECTS.map(p => `
+        <button class="aside-row ${state.projectId === p.id ? 'selected' : ''}" onclick="setProject('${p.id}')">
+          <span class="trunc">${esc(p.name)}</span><span class="cnt">${cnt(m=>m.projectId===p.id)}</span>
+        </button>`).join('')}
+    </div>
+
+    <div class="aside-group">
+      <div class="aside-title">Agent</div>
+      ${Object.entries(AGENTS).map(([id, info]) => `
+        <button class="aside-row ${state.backendId === id ? 'selected' : ''}" onclick="toggleBackend('${id}')">
+          <span class="agent-dot ${info.cls}"></span><span>${info.name}</span><span class="cnt">${cnt(m=>m.backendId===id)}</span>
+        </button>`).join('')}
+    </div>`;
+
+  const scopeNames = { all: '全部收藏', message: '回复', span: '高亮', image: '图片', file: '文件', orphaned: '找不到原文' };
+  document.getElementById('opt2-scope-title').textContent = (state.projectId ? projectName(state.projectId) + ' · ' : '') + scopeNames[state.kind];
+  document.getElementById('opt2-scope-count').textContent = `${list.length} 条`;
+  document.getElementById('v-grid').setAttribute('aria-selected', state.opt2View === 'grid');
+  document.getElementById('v-list').setAttribute('aria-selected', state.opt2View === 'list');
+
+  const container = document.getElementById('opt2-content');
+  if (!list.length) {
+    container.innerHTML = `<div style="padding:72px 16px;text-align:center;color:var(--fg-3)">没有符合条件的收藏<br><button class="btn xs secondary" style="margin-top:10px" onclick="resetFilters()">清空筛选</button></div>`;
+    return;
+  }
+
+  if (state.opt2View === 'grid') {
+    container.innerHTML = `<div class="tile-grid">` + list.map(m => {
+      const agent = AGENTS[m.backendId];
+      const chosen = state.chosen.has(m.id);
+      let body = '';
+      if (m.kind === 'span') {
+        body = `<div class="tile-quote ${m.color}">${getSnippetHtml(m, state.q.trim())}</div>`;
+      } else if (m.kind === 'message') {
+        body = `<div class="tile-excerpt">${getSnippetHtml(m, state.q.trim())}</div>`;
+      } else if (m.kind === 'image') {
+        body = `<div class="img-thumb-box" style="height:88px">${renderSvgDiagram()}</div>`;
+      } else if (m.kind === 'file') {
+        body = `
+          <div class="file-row-clean">
+            ${iconForKind('file')}
+            <div style="flex:1;min-width:0">
+              <div class="mono trunc" style="font-size:12.5px;color:var(--fg)">${esc(m.asset.name)}</div>
+              <div class="mono trunc" style="font-size:11px;color:var(--fg-4)">${esc(m.asset.path)}</div>
+            </div>
+            <span class="mono tnum" style="font-size:11px"><span style="color:var(--diff-add)">+${m.asset.add}</span> <span style="color:var(--diff-del)">−${m.asset.del}</span></span>
+          </div>`;
+      }
+      return `
+        <article class="mark-tile ${chosen ? 'chosen' : ''}" onclick="onTileClick('${m.id}')">
+          <div class="tile-head">
+            ${state.selecting ? `<span class="m-row-check ${chosen ? 'checked' : ''}" style="margin:0">${chosen ? '✓' : ''}</span>` : iconForKind(m.kind)}
+            <span class="tile-session trunc">${esc(m.sessionTitle)}</span>
+            ${m.state === 'orphaned' ? `<span class="badge warn">失联</span>` : ''}
+          </div>
+          <div class="tile-body">
+            ${body}
+            ${m.note ? `<div class="tile-note">${highlightMatch(m.note, state.q.trim())}</div>` : ''}
+          </div>
+          <div class="tile-foot">
+            <span>${esc(projectName(m.projectId))}</span>
+            <span class="agent-pill"><span class="agent-dot ${agent.cls}"></span>${agent.name}</span>
+            <span class="tnum">${esc(m.time)}</span>
+            ${!state.selecting ? `
+              <span class="tile-actions" onclick="event.stopPropagation()">
+                ${m.kind !== 'image' ? `<button class="btn icon-xs quiet" title="复制" onclick="copyMark('${m.id}')"><svg class="i" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>` : ''}
+                <button class="btn icon-xs quiet" title="前往原会话" onclick="locateMark('${m.id}')"><svg class="i" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              </span>` : ''}
+          </div>
+        </article>`;
+    }).join('') + `</div>`;
+  } else {
+    container.innerHTML = `<div class="compact-table">` + list.map(m => {
+      const agent = AGENTS[m.backendId];
+      const chosen = state.chosen.has(m.id);
+      return `
+        <div class="compact-row" onclick="onTileClick('${m.id}')">
+          ${state.selecting ? `<span class="m-row-check ${chosen ? 'checked' : ''}" style="margin:0">${chosen ? '✓' : ''}</span>` : `<span class="m-row-accent ${m.kind === 'span' ? m.color : m.kind}" style="height:28px;margin:0"></span>`}
+          <div class="compact-main">
+            <div class="compact-line1">
+              <span class="compact-preview">${getSnippetHtml(m, state.q.trim())}</span>
+              ${m.state === 'orphaned' ? `<span class="badge warn">失联</span>` : ''}
+            </div>
+            <div class="compact-sub">
+              <span>${esc(m.sessionTitle)}</span>
+              ${m.note ? `<span>· 备注：${highlightMatch(m.note, state.q.trim())}</span>` : ''}
+            </div>
+          </div>
+          <div class="compact-meta">
+            <span>${esc(projectName(m.projectId))}</span>
+            <span class="agent-pill"><span class="agent-dot ${agent.cls}"></span>${agent.name}</span>
+            <span class="tnum" style="width:68px;text-align:right">${esc(m.time)}</span>
+          </div>
+        </div>`;
+    }).join('') + `</div>`;
+  }
+}
+
+/* ---------- Actions ---------- */
+function setMode(m) { state.mode = m; state.mobileReaderOpen = false; render(); }
+function setOpt2View(v) { state.opt2View = v; render(); }
+function toggleTheme() { state.dark = !state.dark; render(); }
+function toggleNarrow() { state.narrow = !state.narrow; state.mobileReaderOpen = false; render(); }
+function setQuery(q) { state.q = q; render(); }
+function setKind(k) { state.kind = k; render(); }
+function setProject(id) { state.projectId = id; render(); }
+function toggleNoted() { state.notedOnly = !state.notedOnly; render(); }
+function toggleColorFilter(c) { state.color = state.color === c ? '' : c; render(); }
+function toggleBackend(b) { state.backendId = state.backendId === b ? '' : b; render(); }
+function resetFilters() { state.q = ''; state.kind = 'all'; state.projectId = ''; state.color = ''; state.notedOnly = false; state.backendId = ''; render(); }
+function toggleSelecting(on) { state.selecting = on; state.chosen.clear(); render(); }
+function closeMobileReader() { state.mobileReaderOpen = false; render(); }
+function closeDialog() { state.dialogId = null; render(); }
+
+function onRowClick(id) {
+  if (state.selecting) {
+    if (state.chosen.has(id)) state.chosen.delete(id); else state.chosen.add(id);
+    render();
+    return;
+  }
+  state.selectedId = id;
+  if (state.narrow) state.mobileReaderOpen = true;
+  render();
+}
+
+function onTileClick(id) {
+  if (state.selecting) {
+    if (state.chosen.has(id)) state.chosen.delete(id); else state.chosen.add(id);
+    render();
+    return;
+  }
+  state.dialogId = id;
+  render();
+}
+
+function changeColor(id, color) {
+  const m = state.marks.find(x => x.id === id);
+  if (!m) return;
+  m.color = color;
+  render();
+  showToast(`已改为${COLOR_LABELS[color]}高亮`);
+}
+
+function saveNote(id, value) {
+  const m = state.marks.find(x => x.id === id);
+  if (!m) return;
+  const next = value.trim();
+  if (next === m.note) return;
+  m.note = next;
+  // Defer re-render past any concurrent mousedown -> click on another list row.
+  setTimeout(() => render(), 0);
+  showToast(next ? '已保存备注' : '已清除备注');
+}
+
+function locateMark(id) {
+  const m = state.marks.find(x => x.id === id);
+  if (m) showToast(`定位到原会话：${m.sessionTitle}`);
+}
+
+function copyCodeBlock(id) {
+  const m = state.marks.find(x => x.id === id);
+  const code = m?.blocks?.find(b => b.type === 'code')?.code;
+  if (code) copyText(code, '已复制代码片段');
+}
+
+function copyText(text, msg) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+  showToast(msg || '已复制到剪贴板');
+}
+
+function copyMark(id) {
+  const m = state.marks.find(x => x.id === id);
+  if (!m) return;
+  const text = m.kind === 'span' ? m.exact : m.kind === 'file' ? m.asset.path : m.plainText;
+  copyText(text, m.kind === 'file' ? '已复制文件路径' : '已复制内容');
+}
+
+function deleteMark(id) {
+  state.marks = state.marks.filter(x => x.id !== id);
+  if (state.dialogId === id) state.dialogId = null;
+  state.mobileReaderOpen = false;
+  render();
+  showToast('已删除收藏');
+}
+
+function deleteChosen() {
+  const n = state.chosen.size;
+  state.marks = state.marks.filter(x => !state.chosen.has(x.id));
+  state.chosen.clear();
+  state.selecting = false;
+  render();
+  showToast(`已删除 ${n} 条收藏`);
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.dialogId) { closeDialog(); return; }
+  if (state.mode !== 'opt1' || state.dialogId) return;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const list = filteredMarks();
+  if (!list.length) return;
+  e.preventDefault();
+  const idx = list.findIndex(m => m.id === state.selectedId);
+  const nextIdx = e.key === 'ArrowDown' ? Math.min(list.length - 1, idx + 1) : Math.max(0, idx - 1);
+  state.selectedId = list[nextIdx].id;
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

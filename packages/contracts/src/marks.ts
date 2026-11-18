@@ -84,3 +84,5 @@ export type MarkLocation =
   | { found: false; mark: Mark };
 /** `GET /api/marks/:id/prompt`: the user message that led to the marked answer; `text` is absent when it is not known. */
 export interface MarkPrompt { text?: string }
+/** Distinct projects and agents that currently have at least one saved reply. */
+export interface MarkFacets { projectIds: string[]; backendIds: NativeBackendId[] }

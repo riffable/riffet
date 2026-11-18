@@ -502,6 +502,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     content = (
       <MarksPage
         projects={projects}
+        backends={backends}
         sidebarCollapsed={desktop && sidebarCollapsed}
         onClose={() => nav.set({ marksOpen: false })}
         onOpenSidebar={openMobileSidebar}

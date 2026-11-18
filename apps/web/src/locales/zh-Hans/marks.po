@@ -20,8 +20,8 @@ msgid "仅整条回复可用"
 msgstr "仅整条回复可用"
 
 #: src/app/marks/MarksPage.tsx
-msgid "今天"
-msgstr "今天"
+msgid "仍未找到原文"
+msgstr "仍未找到原文"
 
 #: src/app/marks/ShareImage.tsx
 msgid "会话标题、Agent、项目与日期"
@@ -31,18 +31,27 @@ msgstr "会话标题、Agent、项目与日期"
 msgid "保存 PNG"
 msgstr "保存 PNG"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarksNav.tsx
 msgid "全部"
 msgstr "全部"
 
+#: src/app/marks/MarksNav.tsx
+msgid "全部 Agent"
+msgstr "全部 Agent"
+
 #: src/app/marks/MarksPage.tsx
+msgid "全部收藏"
+msgstr "全部收藏"
+
+#: src/app/marks/MarksNav.tsx
 msgid "全部项目"
 msgstr "全部项目"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "写点什么，方便以后找到它…"
 msgstr "写点什么，方便以后找到它…"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-delete-action"
 msgid "删除"
@@ -71,32 +80,44 @@ msgstr "删除后无法恢复。"
 msgid "删除收藏"
 msgstr "删除收藏"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
-msgid "原文已找不到"
-msgstr "原文已找不到"
+msgid "前往原会话"
+msgstr "前往原会话"
 
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "原会话已删除或原文发生偏移，此处保留完整快照。"
+msgstr "原会话已删除或原文发生偏移，此处保留完整快照。"
+
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-replies-tab"
 msgid "回复"
 msgstr "回复"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-image-name"
 msgid "图片"
 msgstr "图片"
 
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
-msgid "图片与文件"
-msgstr "图片与文件"
+msgctxt "marks-images-tab"
+msgid "图片"
+msgstr "图片"
 
 #: src/app/marks/MarksPage.tsx
 msgid "在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。"
 msgstr "在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "备注"
 msgstr "备注"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "复制内容"
 msgstr "复制内容"
@@ -105,9 +126,14 @@ msgstr "复制内容"
 msgid "复制图片"
 msgstr "复制图片"
 
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "复制路径"
 msgstr "复制路径"
+
+#: src/app/marks/MarksPage.tsx
+msgid "失联"
+msgstr "失联"
 
 #: src/app/marks/ShareImage.tsx
 msgid "字体"
@@ -130,7 +156,7 @@ msgstr "宽度"
 msgid "宽版"
 msgstr "宽版"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/ShareImage.tsx
 msgid "导出图片"
 msgstr "导出图片"
@@ -152,14 +178,15 @@ msgstr "已复制图片"
 msgid "已移除的项目"
 msgstr "已移除的项目"
 
+#: src/app/marks/MarksPage.tsx
+msgid "已重新定位到原会话"
+msgstr "已重新定位到原会话"
+
 #: src/app/marks/ShareImage.tsx
 msgid "当前连接不支持复制图片，请改用保存"
 msgstr "当前连接不支持复制图片，请改用保存"
 
-#: src/app/marks/MarksPage.tsx
-msgid "打开原会话"
-msgstr "打开原会话"
-
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "打开文件"
 msgstr "打开文件"
@@ -168,6 +195,7 @@ msgstr "打开文件"
 msgid "批注"
 msgstr "批注"
 
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "找不到原文"
 msgstr "找不到原文"
@@ -175,10 +203,6 @@ msgstr "找不到原文"
 #: src/app/marks/ShareImage.tsx
 msgid "找不到对应的提问"
 msgstr "找不到对应的提问"
-
-#: src/app/marks/MarksPage.tsx
-msgid "按项目筛选"
-msgstr "按项目筛选"
 
 #: src/app/marks/ShareImage.tsx
 msgid "提问"
@@ -208,6 +232,13 @@ msgstr "收藏夹"
 msgid "收藏时写的备注"
 msgstr "收藏时写的备注"
 
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-files-tab"
+msgid "文件"
+msgstr "文件"
+
 #: src/app/marks/MarksPage.tsx
 msgid "无法加载收藏"
 msgstr "无法加载收藏"
@@ -220,13 +251,13 @@ msgstr "无法加载更多收藏"
 msgid "无法复制图片"
 msgstr "无法复制图片"
 
+#: src/app/marks/MarksPage.tsx
+msgid "无法定位这条收藏"
+msgstr "无法定位这条收藏"
+
 #: src/app/marks/ShareImage.tsx
 msgid "无法生成图片"
 msgstr "无法生成图片"
-
-#: src/app/marks/MarksPage.tsx
-msgid "昨天"
-msgstr "昨天"
 
 #: src/app/marks/ShareImage.tsx
 msgid "显示批注"
@@ -240,15 +271,12 @@ msgstr "显示提问"
 msgid "显示来源"
 msgstr "显示来源"
 
-#: src/app/marks/MarksPage.tsx
-msgid "更早"
-msgstr "更早"
-
+#: src/app/marks/MarkDetailDialog.tsx
 #: src/app/marks/MarksPage.tsx
 msgid "未命名会话"
 msgstr "未命名会话"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarkDetailDialog.tsx
 msgid "查看大图"
 msgstr "查看大图"
 
@@ -265,14 +293,23 @@ msgid "没有符合条件的收藏"
 msgstr "没有符合条件的收藏"
 
 #: src/app/marks/MarksPage.tsx
-msgid "添加备注"
-msgstr "添加备注"
+msgctxt "marks-view-mode"
+msgid "清单"
+msgstr "清单"
+
+#: src/app/marks/MarksPage.tsx
+msgid "清空筛选"
+msgstr "清空筛选"
+
+#: src/app/marks/MarksPage.tsx
+msgid "视图方式"
+msgstr "视图方式"
 
 #: src/app/marks/ShareImage.tsx
 msgid "竖版"
 msgstr "竖版"
 
-#: src/app/marks/MarksPage.tsx
+#: src/app/marks/MarksNav.tsx
 msgid "筛选收藏"
 msgstr "筛选收藏"
 
@@ -281,8 +318,9 @@ msgid "纸白"
 msgstr "纸白"
 
 #: src/app/marks/MarksPage.tsx
-msgid "编辑备注"
-msgstr "编辑备注"
+msgctxt "marks-view-mode"
+msgid "网格"
+msgstr "网格"
 
 #: src/app/marks/ShareImage.tsx
 msgid "自动"
@@ -313,18 +351,28 @@ msgstr "选择"
 msgid "选择收藏"
 msgstr "选择收藏"
 
-#: src/app/marks/MarksPage.tsx
-msgid "选择这条收藏"
-msgstr "选择这条收藏"
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "重新定位"
+msgstr "重新定位"
 
 #: src/app/marks/MarksPage.tsx
 msgid "重试"
 msgstr "重试"
 
+#: src/app/marks/MarksNav.tsx
+msgid "项目"
+msgstr "项目"
+
+#: src/app/marks/MarkDetailDialog.tsx
+#: src/app/marks/MarksNav.tsx
 #: src/app/marks/MarksPage.tsx
 msgctxt "marks-highlights-tab"
 msgid "高亮"
 msgstr "高亮"
+
+#: src/app/marks/MarkDetailDialog.tsx
+msgid "高亮颜色"
+msgstr "高亮颜色"
 
 #: src/app/marks/ShareImage.tsx
 msgid "黑体"

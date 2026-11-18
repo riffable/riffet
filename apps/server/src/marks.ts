@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StatementSync } from 'node:sqlite';
-import type { Mark, MarkAnchor, MarkAsset, MarkColor, MarkKind, MarkListPage, MarkListQuery, MarkLocation, MarkPrompt, MarkQuote, Session, WorkbenchEvent } from '../../../packages/contracts/src/index.js';
+import type { Mark, MarkAnchor, MarkAsset, MarkColor, MarkFacets, MarkKind, MarkListPage, MarkListQuery, MarkLocation, MarkPrompt, MarkQuote, NativeBackendId, Session, WorkbenchEvent } from '../../../packages/contracts/src/index.js';
 import { AppError, requireString } from './errors.js';
 import { isNativeBackendId } from './backends/registry.js';
 import { likePattern, MAX_INDEXED_TEXT } from './search/messages.js';
@@ -294,6 +294,17 @@ export class MarkStore {
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY m.created_at DESC, m.id DESC LIMIT ?`).all(...params, limit + 1) as unknown as MarkRow[];
     const marks = rows.slice(0, limit).map(row => this.read(row));
     return { marks, ...(rows.length > limit ? { nextCursor: encodeCursor(marks.at(-1)!) } : {}), total };
+  }
+
+  /** Distinct project and agent ids that actually hold at least one mark. */
+  facets(excludeTaskWorkspaces = false): MarkFacets {
+    const where = excludeTaskWorkspaces ? "WHERE m.project_id NOT IN (SELECT id FROM projects WHERE json_extract(json,'$.system')='task-workspace')" : '';
+    const projectRows = this.sql(`SELECT DISTINCT m.project_id AS projectId FROM marks m ${where}`).all() as Array<{ projectId: string }>;
+    const backendRows = this.sql(`SELECT DISTINCT json_extract(m.json,'$.backendId') AS backendId FROM marks m ${where}`).all() as Array<{ backendId: string | null }>;
+    return {
+      projectIds: projectRows.map(row => row.projectId),
+      backendIds: backendRows.map(row => row.backendId).filter((id): id is NativeBackendId => typeof id === 'string' && isNativeBackendId(id)),
+    };
   }
 
   /**

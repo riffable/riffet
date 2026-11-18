@@ -4905,10 +4905,6 @@ msgstr ""
 msgid "收藏"
 msgstr ""
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务"
-msgstr ""
-
 #: src/app/design/components/InputsChapter.tsx
 msgid "收藏夹"
 msgstr ""
@@ -7882,7 +7878,7 @@ msgid "设计规范"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范、插件；扩展管理用 PageHeader 自建"
+msgid "设计规范、插件、收藏；扩展管理用 PageHeader 自建"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx

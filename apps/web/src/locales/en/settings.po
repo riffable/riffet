@@ -4905,10 +4905,6 @@ msgstr "First message received"
 msgid "收藏"
 msgstr "Favorite"
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "收藏、任务"
-msgstr "Favorites, tasks"
-
 #: src/app/design/components/InputsChapter.tsx
 msgid "收藏夹"
 msgstr "Favorites"
@@ -7882,8 +7878,8 @@ msgid "设计规范"
 msgstr "Design system"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设计规范、插件；扩展管理用 PageHeader 自建"
-msgstr "Design system, plugins; extension management is built with PageHeader"
+msgid "设计规范、插件、收藏；扩展管理用 PageHeader 自建"
+msgstr "Design system, Plugins, Favorites; Extensions builds its own with PageHeader"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "设计规范页的组、文档和代码目录一一对应。"

@@ -58,6 +58,7 @@ import type {
   LaunchTarget,
   Mark,
   MarkCreateRequest,
+  MarkFacets,
   MarkListPage,
   MarkListQuery,
   MarkLocation,
@@ -911,6 +912,7 @@ export const api = {
     }
     return requestList<MarkListPage>(`${API.marks}?${params}`, etag, signal);
   },
+  markFacets: (etag?: string, signal?: AbortSignal) => requestList<MarkFacets>(`${API.marks}/facets`, etag, signal),
   /** 任务 (docs/TASK-BOARD.md). Read conditionally under the work items revision, like 收藏. */
   workItems: (etag?: string, signal?: AbortSignal) => requestList<WorkItemList>('/api/work-items', etag, signal),
   /** Idempotent on the client-generated `id`. */

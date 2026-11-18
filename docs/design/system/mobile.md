@@ -372,6 +372,5 @@ Web 在窄屏（`MOBILE_LAYOUT_QUERY`：宽度 < 768，或触屏且高度 ≤ 50
 |---|---|---|
 | Android、iPhone 的会话详情 | 仍是 §2.7 的两排操作条加删除卡片；手机 Web 已按 §10.4 收紧，是否跟进再定 | — |
 | 扩展管理 `app/extensions/ExtensionsPage.tsx` | Agent 与配置范围是两个整宽下拉框，应是一行范围胶囊（§2.1） | 2 |
-| 收藏夹 `app/marks/MarksPage.tsx` | 项目范围是整宽下拉框，应是范围胶囊 | 2 |
 | 设置子页、新建任务弹窗、Git 面板 | 未按本文盘点 | — |
 

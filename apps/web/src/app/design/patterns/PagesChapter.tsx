@@ -166,7 +166,7 @@ function PageTypes() {
           <span className="h-[18%] rounded-lg bg-fg/[0.06] shadow-[inset_0_0_0_1px_var(--line-strong)]" />
         </div>
       </PageType>
-      <PageType name={t`文档页`} scaffold={'PageScaffold column="document"'} uses={t`收藏、任务`}>
+      <PageType name={t`文档页`} scaffold={'PageScaffold column="document"'} uses={t`自动化`}>
         <SketchHeader title={14} />
         <div className={body} style={{ width: share(768) }}><Rows /></div>
       </PageType>
@@ -177,7 +177,7 @@ function PageTypes() {
           <span className="col-span-2 h-[34%] rounded-md bg-fg/[0.06]" /><span className="h-[34%] rounded-md bg-fg/[0.06]" />
         </div>
       </PageType>
-      <PageType name={t`目录加正文`} scaffold={'PageScaffold aside={…}'} uses={t`设计规范、插件；扩展管理用 PageHeader 自建`}>
+      <PageType name={t`目录加正文`} scaffold={'PageScaffold aside={…}'} uses={t`设计规范、插件、收藏；扩展管理用 PageHeader 自建`}>
         <SketchHeader title={14} />
         <div className="flex min-h-0 flex-1">
           <div className="flex flex-col gap-[6%] bg-sidebar px-[1.5%] pt-[4%] edge-r" style={{ width: share(224) }}>{[70, 50, 62, 44].map((w, index) => <Bar key={index} w={w} />)}</div>
