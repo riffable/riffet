@@ -44,7 +44,7 @@ export function localFileLink(href: string): { path: string; line?: number } | u
 const EXTENSIONLESS_FILES = /^(?:Makefile|Dockerfile|Containerfile|Justfile|Procfile|Gemfile|Rakefile|Brewfile|LICENSE|NOTICE|CODEOWNERS)$/;
 /** Extensions a bare name (no folder) needs before it counts: `console.log` and `process.env` are code. */
 const BARE_FILE_EXTENSIONS = new Set([
-  'ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'json', 'jsonl', 'md', 'mdx', 'css', 'scss', 'html', 'vue', 'svelte',
+  'ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs', 'json', 'jsonl', 'md', 'mdx', 'mdc', 'css', 'scss', 'html', 'vue', 'svelte',
   'yml', 'yaml', 'toml', 'ini', 'xml', 'kt', 'kts', 'gradle', 'swift', 'm', 'mm', 'h', 'c', 'cc', 'cpp', 'hpp', 'go', 'rs', 'py',
   'rb', 'java', 'sh', 'bash', 'zsh', 'sql', 'txt', 'csv', 'lock', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'proto',
 ]);

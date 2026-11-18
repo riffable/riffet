@@ -185,12 +185,13 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
   const [frame, observed] = useInView<HTMLDivElement>();
   const cited = useMemo(() => citation(info), [info]);
   const language = useMemo(() => (cited ? languageForPath(cited.path) : languageForFence(info)), [cited, info]);
-  const mathFence = /^(?:math|latex|tex)$/i.test(info);
+  const fenceToken = info.trim().toLowerCase().split(/[\s:,]/, 1)[0] ?? '';
+  const mathFence = !cited && /^(?:math|latex|tex)$/i.test(fenceToken);
   const mathModules = useMath(mathFence);
   const math = useMemo(() => (mathFence && mathModules ? mathFenceHtml(mathModules.katex, code) : undefined), [mathFence, mathModules, code]);
-  const diagram = /^(?:mermaid|mmd|dot|graphviz|gv|plantuml|puml|uml|wsd|d2|vega|vega-lite|vegalite|vl)$/i.test(info.trim());
-  const markup = /^(?:html?|svg)$/i.test(info.trim());
-  const renderable = diagram || markup || /^(?:md|markdown|mdx)$/i.test(info.trim());
+  const diagram = !cited && /^(?:mermaid|mmd|dot|graphviz|gv|plantuml|puml|uml|wsd|d2|vega|vega-lite|vegalite|vl)$/i.test(fenceToken);
+  const markup = !cited && /^(?:html?|svg)$/i.test(fenceToken);
+  const renderable = diagram || markup || language === 'markdown' || (!cited && /^(?:md|markdown|mdx|mdc)$/i.test(fenceToken));
   const preview = printing ? diagram : previewOverride ?? diagram;
   const previewing = preview && !(open && (diagram || markup));
   const previewKey = previewing && (diagram || markup) ? `${info}\u0000${code.length}:${digest(code)}` : undefined;
@@ -265,10 +266,10 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
       </div>
       {previewing && diagram ? (
         <Suspense fallback={printing ? <div data-print-pending>{source}</div> : source}>
-          {inView ? <MermaidDiagram code={code} language={info.toLowerCase()} fallback={source} /> : source}
+          {inView ? <MermaidDiagram code={code} language={fenceToken} fallback={source} /> : source}
         </Suspense>
       ) : previewing && markup ? (
-        <ContentFence code={code} language={info.toLowerCase()} active={inView} />
+        <ContentFence code={code} language={fenceToken} active={inView} />
       ) : previewing ? (
         <div className={CODE_PADDING}>
           <Markdown text={code} resourceComponents={resourceComponents} streaming={open} />

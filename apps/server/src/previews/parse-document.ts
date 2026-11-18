@@ -12,6 +12,7 @@ import katex from 'katex';
 import { randomUUID } from 'node:crypto';
 import { DOMParser, type Node as XmlNode, type Element as XmlElement } from '@xmldom/xmldom';
 import type { OfficeContentNode, SupportedFileType } from 'officeparser';
+import { parse as parseYaml } from 'yaml';
 import { escapeHtml } from './document.js';
 import { decodePreviewText, extensionOf } from './formats.js';
 import { structuredTree } from './parse-structured.js';
@@ -136,11 +137,41 @@ function markdownHtml(source: string, dark: boolean, images: ImageReference[]): 
   }));
 }
 
+function formatFrontmatterValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value) && value.every(item => item === null || ['string', 'number', 'boolean'].includes(typeof item))) {
+    return value.map(item => String(item ?? '')).join(', ');
+  }
+  return JSON.stringify(value);
+}
+
+function splitMarkdownFrontmatter(source: string): { metadata?: [string, string][]; body: string } {
+  const match = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source);
+  if (!match) {
+    const empty = /^\uFEFF?---\r?\n---(?:\r?\n|$)/.exec(source);
+    return empty ? { body: source.slice(empty[0].length) } : { body: source };
+  }
+  try {
+    const parsed = parseYaml(match[1]!);
+    if (parsed === null && !match[1]!.trim()) return { body: source.slice(match[0].length) };
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { body: source };
+    const metadata = Object.entries(parsed as Record<string, unknown>).map(([key, value]): [string, string] => [key, formatFrontmatterValue(value)]);
+    return { ...(metadata.length ? { metadata } : {}), body: source.slice(match[0].length) };
+  } catch {
+    return { body: source };
+  }
+}
+
 export function markdownPreview({ data, theme }: PreviewParseInput): PreviewFragment {
   const text = decodePreviewText(data);
   if (text === undefined) throw new Error('无法读取 Markdown 文本编码');
+  const { metadata, body } = splitMarkdownFrontmatter(text);
+  const frontmatter = metadata?.length
+    ? `<table class="frontmatter"><tbody>${metadata.map(([key, value]) => `<tr><td><code>${escapeHtml(key)}</code></td><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody></table>`
+    : '';
   const images: ImageReference[] = [];
-  return { body: `<main class="document">${markdownHtml(text, theme.dark, images)}</main>`, images };
+  return { body: `<main class="document">${frontmatter}${markdownHtml(body, theme.dark, images)}</main>`, images };
 }
 
 export async function officePreview({ data, name }: PreviewParseInput): Promise<PreviewFragment> {

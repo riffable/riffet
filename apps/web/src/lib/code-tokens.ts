@@ -13,7 +13,7 @@ const BY_EXTENSION: Record<string, string> = {
   html: 'html', htm: 'html', svg: 'xml', plist: 'xml', css: 'css', scss: 'scss', less: 'less', vue: 'vue', svelte: 'svelte',
   sh: 'shellscript', bash: 'shellscript', zsh: 'shellscript', py: 'python', go: 'go', rs: 'rust', swift: 'swift',
   c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp', m: 'objective-c', mm: 'objective-cpp',
-  cs: 'csharp', rb: 'ruby', php: 'php', dart: 'dart', scala: 'scala', lua: 'lua', sql: 'sql', md: 'markdown', markdown: 'markdown',
+  cs: 'csharp', rb: 'ruby', php: 'php', dart: 'dart', scala: 'scala', lua: 'lua', sql: 'sql', md: 'markdown', markdown: 'markdown', mdown: 'markdown', mkd: 'markdown', mdx: 'markdown', mdc: 'markdown',
   graphql: 'graphql', gql: 'graphql', diff: 'diff', patch: 'diff', cmake: 'cmake', mk: 'makefile',
 };
 const BY_NAME: Record<string, string> = { dockerfile: 'dockerfile', makefile: 'makefile', 'cmakelists.txt': 'cmake', gnumakefile: 'makefile' };

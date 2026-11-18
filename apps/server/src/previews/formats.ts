@@ -5,7 +5,7 @@ export type PreviewKind = 'markdown' | 'html' | 'image' | 'pdf' | 'document' | '
 
 const formats: Record<string, PreviewKind> = {};
 for (const [kind, extensions] of Object.entries({
-  markdown: 'md markdown mdown mkd mdx', html: 'html htm xhtml',
+  markdown: 'md markdown mdown mkd mdx mdc', html: 'html htm xhtml',
   image: 'svg ico tif tiff heic heif', pdf: 'pdf',
   document: 'docx docm dotx odt ott rtf epub tex latex ltx',
   presentation: 'pptx pptm ppsx potx odp otp odg otg',

@@ -2,7 +2,7 @@ import type { FileEntry } from '@contracts';
 import { IconFile, IconFileCode2, IconFolder, IconImage } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
-const codeExt = /\.(tsx?|jsx?|mjs|cjs|py|go|rs|java|kt|kts|gradle|swift|c|cc|cpp|h|hpp|m|mm|rb|php|cs|dart|vue|svelte|json|ya?ml|toml|xml|sh|css|scss|html|sql|md|proto)$/i;
+const codeExt = /\.(tsx?|jsx?|mjs|cjs|py|go|rs|java|kt|kts|gradle|swift|c|cc|cpp|h|hpp|m|mm|rb|php|cs|dart|vue|svelte|json|ya?ml|toml|xml|sh|css|scss|html|sql|md|mdx|mdc|proto)$/i;
 const imageExt = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i;
 
 export function FileIcon({ entry, className }: { entry: Pick<FileEntry, 'kind' | 'name'>; className?: string }) {

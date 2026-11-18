@@ -582,6 +582,14 @@ describe('app route surface after ACP removal', () => {
     await writeFile(join(projectDir, 'utf16.md'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('# 中文', 'utf16le')]));
     const metadata = await call('GET', `/api/projects/${project.id}/file?path=utf16.md`);
     expect(metadata.json()).toMatchObject({ binary: false, content: '# 中文', render: { kind: 'markdown' } });
+    await writeFile(join(projectDir, 'rule.mdc'), '---\ndescription: Rule note\nalwaysApply: true\n---\n\n# Rule Title\n');
+    const mdcMeta = await call('GET', `/api/projects/${project.id}/file?path=rule.mdc`);
+    expect(mdcMeta.json()).toMatchObject({ binary: false, render: { kind: 'markdown' } });
+    const mdcRendered = await call('GET', `/api/projects/${project.id}/file/raw?path=rule.mdc&render=preview`);
+    expect(mdcRendered.statusCode, mdcRendered.body).toBe(200);
+    expect(mdcRendered.body).toContain('Rule note');
+    expect(mdcRendered.body).toContain('<h1>Rule Title</h1>');
+    expect(mdcRendered.body).not.toContain('<h2>description:');
     const rendered = await call('GET', `/api/projects/${project.id}/file/raw?path=data.csv&render=preview&scheme=dark&color=%23ededed`);
     expect(rendered.statusCode).toBe(200);
     expect(rendered.headers['content-type']).toContain('text/html');

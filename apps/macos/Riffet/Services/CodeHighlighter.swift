@@ -157,7 +157,7 @@ final class CodeHighlighter: @unchecked Sendable {
         "sh": "bash", "bash": "bash", "zsh": "bash",
         "css": "css", "scss": "scss", "less": "less",
         "html": "markup", "htm": "markup", "xml": "markup", "svg": "markup", "vue": "markup", "svelte": "markup",
-        "sql": "sql", "md": "markdown", "markdown": "markdown", "py": "python", "go": "go", "rs": "rust",
+        "sql": "sql", "md": "markdown", "markdown": "markdown", "mdown": "markdown", "mkd": "markdown", "mdx": "markdown", "mdc": "markdown", "py": "python", "go": "go", "rs": "rust",
         "java": "java", "kt": "kotlin", "kts": "kotlin", "swift": "swift",
         "c": "c", "h": "c", "cc": "cpp", "cpp": "cpp", "cxx": "cpp", "hpp": "cpp", "hh": "cpp", "hxx": "cpp",
         "rb": "ruby", "php": "php", "cs": "csharp",
@@ -184,7 +184,7 @@ final class CodeHighlighter: @unchecked Sendable {
         "nginx": "nginx", "apache": "apacheconf", "apacheconf": "apacheconf",
         "diff": "diff", "patch": "diff", "regex": "regex", "regexp": "regex",
         "html": "markup", "htm": "markup", "xml": "markup", "svg": "markup", "vue": "markup", "svelte": "markup",
-        "css": "css", "scss": "scss", "less": "less", "md": "markdown", "markdown": "markdown", "sql": "sql",
+        "css": "css", "scss": "scss", "less": "less", "md": "markdown", "markdown": "markdown", "mdx": "markdown", "mdc": "markdown", "sql": "sql",
     ]
 
     static func language(forPath path: String) -> String? {

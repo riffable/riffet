@@ -16,6 +16,6 @@ export function usePreviewTheme(): string {
 
 /** The server remains authoritative about which file bytes can be rendered. */
 export function mayPreviewFile(name: string, mimeType?: string): boolean {
-  return /\.(?:md|markdown|mdown|mkd|mdx|html?|xhtml|svg|ico|tiff?|heic|heif|pdf|docx?|docm|dotx?|odt|ott|rtf|tex|latex|ltx|xlsx?|xlsm|xlsb|xltx?|xltm|ods|ots|numbers|pages|pptx?|pptm|ppsx?|potx?|odp|otp|odg|otg|key|csv|tsv|json|jsonl|ndjson|ya?ml|xml|toml|ipynb|mmd|mermaid|dot|gv|puml|plantuml|wsd|d2|vega|vl|mp3|m4a|aac|ogg|oga|opus|wav|flac|mp4|webm|mov|m4v|ogv|zip|jar|war|apk|ipa|tar|tgz|gz|gzip|sqlite3?|db3?|glb|gltf|obj|stl|ply|epub|ttf|otf|woff2?)$/i.test(name)
+  return /\.(?:md|markdown|mdown|mkd|mdx|mdc|html?|xhtml|svg|ico|tiff?|heic|heif|pdf|docx?|docm|dotx?|odt|ott|rtf|tex|latex|ltx|xlsx?|xlsm|xlsb|xltx?|xltm|ods|ots|numbers|pages|pptx?|pptm|ppsx?|potx?|odp|otp|odg|otg|key|csv|tsv|json|jsonl|ndjson|ya?ml|xml|toml|ipynb|mmd|mermaid|dot|gv|puml|plantuml|wsd|d2|vega|vl|mp3|m4a|aac|ogg|oga|opus|wav|flac|mp4|webm|mov|m4v|ogv|zip|jar|war|apk|ipa|tar|tgz|gz|gzip|sqlite3?|db3?|glb|gltf|obj|stl|ply|epub|ttf|otf|woff2?)$/i.test(name)
     || /^(?:audio\/|video\/|application\/(?:pdf|json|xml|epub\+zip)|text\/)/i.test(mimeType ?? '');
 }

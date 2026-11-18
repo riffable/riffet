@@ -51,6 +51,10 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   sql: 'sql',
   md: 'markdown',
   markdown: 'markdown',
+  mdown: 'markdown',
+  mkd: 'markdown',
+  mdx: 'markdown',
+  mdc: 'markdown',
   py: 'python',
   go: 'go',
   rs: 'rust',
@@ -169,7 +173,7 @@ const LANGUAGE_BY_FENCE: Record<string, string> = {
   regex: 'regex', regexp: 'regex',
   html: 'markup', htm: 'markup', xml: 'markup', svg: 'markup', vue: 'markup', svelte: 'markup',
   css: 'css', scss: 'scss', less: 'less',
-  md: 'markdown', markdown: 'markdown',
+  md: 'markdown', markdown: 'markdown', mdx: 'markdown', mdc: 'markdown',
   sql: 'sql',
 };
 
