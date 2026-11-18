@@ -2,7 +2,7 @@ import type { TimelineRow } from '../../contracts/src/index.js';
 import type { TimelineItem } from './model.js';
 import { relaxUnderscoreEmphasis } from './cjkEmphasis.js';
 import { visibleText } from './markdownSource.js';
-import { commandHeadline, stripRoot, toolDataKind, toolTitleOf } from './toolTitle.js';
+import { commandHeadline, diffTargetSummary, stripRoot, toolDataKind, toolTitleOf } from './toolTitle.js';
 import { isRecord, records, str } from './values.js';
 
 /*
@@ -46,8 +46,10 @@ const bareToolTitles = /^(?:bash|shell|sh|zsh|script|terminal|run command|comman
  * names the call's target — and so is a command whose title is only the tool's name. The project
  * root itself (`.`) says nothing.
  */
-export function toolFoldedDetail(title: string, command: string | undefined, path: string | undefined): string | undefined {
+export function toolFoldedDetail(title: string, command: string | undefined, path: string | undefined, contents?: readonly Record<string, unknown>[], root?: string): string | undefined {
   if (path && path !== '.' && path !== './' && !title.includes(path.split('/').at(-1) ?? path)) return path;
+  const diffFiles = contents?.length ? diffTargetSummary(title, contents, root) : undefined;
+  if (diffFiles) return diffFiles;
   if (command && bareToolTitles.test(title.trim())) return commandHeadline(command);
   return undefined;
 }
@@ -80,7 +82,7 @@ export function findableText(item: TimelineItem | TimelineRow, root?: string): s
       const actions = isRecord(input) ? records(input.commandActions) : [];
       const locations = records(data.locations);
       const location = locations.length === 1 && actions.length <= 1 ? str(locations[0]?.path) : undefined;
-      parts = [title, subagent ? str(subagent.type) : toolFoldedDetail(title, command, location && stripRoot(location, root))];
+      parts = [title, subagent ? str(subagent.type) : toolFoldedDetail(title, command, location && stripRoot(location, root), records(data.content), root)];
       break;
     }
     case 'plan': parts = item.entries.map((entry) => String(entry.content ?? entry.title ?? '')); break;

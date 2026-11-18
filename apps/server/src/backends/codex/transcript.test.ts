@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
+import { toolFoldedDetail } from '../../../../../packages/timeline/src/findText.js';
 import { toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle.js';
 import { projectCompletedTool, projectStartedTool, projectToolItem } from './transcript.js';
 import type { RpcItem } from './types.js';
@@ -108,7 +109,16 @@ describe('Codex command action projection', () => {
     expect(toolTitleOf({ title: heredoc, rawInput: { command: heredoc } }, 'Tool')).toEqual({
       title: "python3 - <<'PY'", command: heredoc,
     });
+    expect(toolFoldedDetail("python3 - <<'PY'", heredoc, undefined, [
+      { type: 'diff', path: '/repo/CHANGELOG.md' },
+      { type: 'diff', path: '/repo/CHANGELOG.zh-CN.md' },
+    ], '/repo')).toBe('CHANGELOG.md, CHANGELOG.zh-CN.md');
     expect(toolDataKind({ kind: 'other', rawInput: pureExplore[0]!.data.rawInput })).toBe('search');
+    const noMatchSearch = project(commandItem({
+      status: 'failed', exitCode: 1,
+      commandActions: [{ type: 'search', command: 'rg missing apps', query: 'missing', path: 'apps' }],
+    }));
+    expect(noMatchSearch[1]?.data).toMatchObject({ status: 'completed', exitCode: 1 });
   });
 
   it('summarizes mixed actions while retaining the complete shell payload and all locations', () => {

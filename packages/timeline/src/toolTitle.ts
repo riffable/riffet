@@ -68,9 +68,17 @@ export function shortFileLabels(paths: readonly string[]): string[] {
   });
 }
 
-function formatTargetList(items: readonly string[], limit = 3): string {
+export function formatTargetList(items: readonly string[], limit = 3): string {
   if (items.length <= limit) return items.join(', ');
   return `${items.slice(0, limit).join(', ')} +${items.length - limit}`;
+}
+
+/** Distinct file paths from a tool's `diff` content blocks, shortened for a folded row's detail. */
+export function diffTargetSummary(title: string, contents: readonly Record<string, unknown>[], root?: string): string | undefined {
+  const paths = uniqueStrings(contents.flatMap(item => item.type === 'diff' && str(item.path) ? [stripRoot(str(item.path)!, root)] : []));
+  if (!paths.length) return undefined;
+  if (paths.some(path => title.includes(path.split('/').at(-1) ?? path))) return undefined;
+  return formatTargetList(shortFileLabels(paths));
 }
 
 export type CommandActionKind = 'read' | 'search' | 'execute' | 'other';

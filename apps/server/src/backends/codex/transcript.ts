@@ -213,8 +213,10 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
   });
   if (status === 'in_progress') return [call];
   const mcpContent = item.type === 'mcpToolCall' ? mcpResultContent(item.result) : [];
+  // POSIX grep/rg exit code 1 means "no lines matched", not a failed tool invocation.
+  const finalStatus = status === 'failed' && kind === 'search' && item.exitCode === 1 ? 'completed' : status;
   const resultData: Record<string, unknown> = {
-    toolCallId, status,
+    toolCallId, status: finalStatus,
     ...(imagePath ? { content: [toolImageContent({ path: imagePath })] } : {}),
     ...(mcpContent.length ? { content: mcpContent } : {}),
     ...(item.type === 'commandExecution' && str(item.aggregatedOutput) ? { content: [{ type: 'content', content: { type: 'text', text: item.aggregatedOutput } }] } : {}),

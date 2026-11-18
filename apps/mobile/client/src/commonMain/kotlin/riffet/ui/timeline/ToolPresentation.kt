@@ -236,8 +236,8 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
     // a truncated command beside it is neither readable nor needed to tell rows apart.
     val detail = when {
         view.kind == "agent" -> subagentType?.takeIf { it != title }
-        isCommand -> null
-        else -> toolFoldedDetail(view)
+        isCommand -> toolFoldedDetail(view, root)
+        else -> toolFoldedDetail(view, root)
     }
     val diffPaths = view.contents
         .filter { text(it["type"]) == "diff" }

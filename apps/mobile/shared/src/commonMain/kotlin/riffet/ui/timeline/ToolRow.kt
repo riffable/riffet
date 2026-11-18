@@ -241,8 +241,8 @@ private fun RegularToolRow(
     // a truncated command beside it is neither readable nor needed to tell rows apart.
     val detail = when {
         view.kind == "agent" -> subagentType?.takeIf { it != title }
-        isCommand -> null
-        else -> toolFoldedDetail(view)
+        isCommand -> toolFoldedDetail(view, root)
+        else -> toolFoldedDetail(view, root)
     }
 
     // A call's title is set like its command, monospaced whole; only a delegation's and a background

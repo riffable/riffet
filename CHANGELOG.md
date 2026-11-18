@@ -23,7 +23,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - A conversation that failed while its first message was sending shows the error once, not twice.
 - An agent that fails at startup (a wrong model, an invalid key) before Riffet has attached to its terminal now shows as failed with its reason, instead of going idle with no explanation.
 - A failed conversation's mark on its sidebar row or tab (the red dot, "出错" on the Mac, "Failed" and the avatar mark on phones) clears once you have opened it.
-- Codex tool call rows combine repeated file reads and searches into one action with short file names (such as `Read service.ts, runtime.ts, app.ts`), keep the search or file icon when a command only reads and searches, and show only the first line of multi-line shell commands and heredocs while folded.
+- Codex tool call rows combine repeated file reads and searches into one action with short file names (such as `Read service.ts, runtime.ts, app.ts`), keep the search or file icon when a command only reads and searches, show only the first line of multi-line shell commands and heredocs while folded, list modified file names beside commands that changed files, and no longer mark searches with no matches (`exit 1`) as failed.
 
 ### Workbench
 

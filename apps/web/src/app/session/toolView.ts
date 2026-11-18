@@ -45,11 +45,15 @@ export function toolView(event: WorkbenchEvent, root?: string): ToolView {
   const data = event.data;
   const rawInput = data.rawInput ?? data.input;
   const { title, command } = toolTitleOf(data, i18n._(msg`工具调用`), root);
+  const kind = toolKind(event);
+  const rawStatus = str(data.status) ?? str(data.state) ?? 'completed';
+  // POSIX grep/rg exit code 1 means "no lines matched", not an execution error.
+  const status = rawStatus === 'failed' && kind === 'search' && data.exitCode === 1 ? 'completed' : rawStatus;
   return {
     id: str(data.toolCallId) ?? String(event.sequence),
     title,
-    kind: toolKind(event),
-    status: str(data.status) ?? str(data.state) ?? 'completed',
+    kind,
+    status,
     locations: records(data.locations).flatMap((location) => str(location.path) ? [{ path: stripRoot(str(location.path)!, root), ...(typeof location.line === 'number' ? { line: location.line } : {}) }] : []),
     ...(command ? { command } : {}),
     contents: records(data.content),
@@ -110,6 +114,6 @@ export function toolAction(view: ToolView): { verb: string; object: string; path
 }
 
 /** What a folded tool row shows beside its title; see `toolFoldedDetail`. */
-export function toolDetail(view: ToolView): string | undefined {
-  return toolFoldedDetail(view.title, view.command, singleLocationPath(view));
+export function toolDetail(view: ToolView, root?: string): string | undefined {
+  return toolFoldedDetail(view.title, view.command, singleLocationPath(view), view.contents, root);
 }

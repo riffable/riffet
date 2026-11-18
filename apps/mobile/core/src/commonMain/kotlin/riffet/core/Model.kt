@@ -668,11 +668,17 @@ fun isCommandTitle(title: String, command: String?): Boolean {
     return normalized == cleanLabel(command) || normalized == commandHeadline(command)
 }
 
-fun toolFoldedDetail(view: ToolView): String? {
+fun toolFoldedDetail(view: ToolView, root: String? = null): String? {
     val actions = records((view.rawInput as? JsonObject)?.get("commandActions"))
     val path = if (view.locations.size == 1 && actions.size <= 1) view.locations[0].path else null
     if (path != null && path != "." && path != "./" && !view.title.contains(path.substringAfterLast('/'))) {
         return path
+    }
+    val diffPaths = view.contents.mapNotNull { item ->
+        if (str(item["type"]) == "diff") str(item["path"])?.let { stripRoot(it, root) }?.takeIf { it.isNotEmpty() } else null
+    }.distinct()
+    if (diffPaths.isNotEmpty() && diffPaths.none { view.title.contains(it.substringAfterLast('/')) }) {
+        return formatTargetList(shortFileLabels(diffPaths))
     }
     val command = view.command
     if (command != null && BARE_TOOL_TITLES.matches(view.title.trim())) {
@@ -821,11 +827,14 @@ fun toolView(event: WorkbenchEvent, root: String? = null): ToolView {
     val described = describeCommandActions(records(input?.get("commandActions")), root)
     val rawTitle = described?.title ?: str(data["title"]) ?: str(data["toolName"]) ?: str(data["name"]) ?: UiText.text("core.tool.call")
     val title = stripRoot(cleanLabel(rawTitle), root).replace(Regex("^`([^`]*)`$"), "$1")
+    val kind = toolKind(event)
+    val rawStatus = str(data["status"]) ?: str(data["state"]) ?: "completed"
+    val status = if (rawStatus == "failed" && kind == "search" && finiteNumber(data["exitCode"])?.toInt() == 1) "completed" else rawStatus
     return ToolView(
         id = str(data["toolCallId"]) ?: event.sequence.toString(),
         title = if (command != null && isCommandTitle(title, command)) commandHeadline(command) else title,
-        kind = toolKind(event),
-        status = str(data["status"]) ?: str(data["state"]) ?: "completed",
+        kind = kind,
+        status = status,
         locations = records(data["locations"]).mapNotNull { location ->
             val path = str(location["path"]) ?: return@mapNotNull null
             ToolLocation(path = stripRoot(path, root), line = finiteNumber(location["line"])?.toLong())

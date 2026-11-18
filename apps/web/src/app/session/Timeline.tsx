@@ -734,7 +734,7 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   // Compare whitespace-normalized: a multi-line command's title is collapsed, so an exact string
   // compare would leave the collapsed title AND the raw command in the row — the same text twice.
   const isCommand = isCommandTitle(view.title, view.command);
-  const detail = agentCall ? specificSubagentLabel(str(subagent?.type) ?? subagentTranscript?.subagentType) : toolDetail(view);
+  const detail = agentCall ? specificSubagentLabel(str(subagent?.type) ?? subagentTranscript?.subagentType) : toolDetail(view, root);
   const title = agentCall
     ? specificSubagentLabel(str(subagent?.description))
       || specificSubagentLabel(progress?.title)
