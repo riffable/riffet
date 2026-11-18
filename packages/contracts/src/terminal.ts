@@ -8,6 +8,13 @@ export interface TerminalInfo {
   createdAt: string; exitCode?: number;
   appearance?: TerminalAppearance;
 }
+/** The live grid's dimensions and one-based row positions. Blank cells do not count as content. */
+export interface TerminalGridDiagnostics {
+  cols: number;
+  rows: number;
+  cursorRow: number;
+  lastContentRow: number | null;
+}
 /**
  * Terminal socket protocol 3 (docs/TERMINAL.md): `output` is the pane's own output and a
  * `snapshot` seeds one emulator with the pane's scrollback, screen, cursor and modes, so a

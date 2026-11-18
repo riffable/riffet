@@ -189,6 +189,10 @@ msgid "导出为 PDF…"
 msgstr ""
 
 #: src/app/terminal/TerminalView.tsx
+msgid "导出终端布局诊断"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
 msgid "左"
 msgstr ""
 

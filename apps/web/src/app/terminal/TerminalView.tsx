@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconCornerDownLeft, IconEllipsis, IconHand, IconOctagonX, IconRefreshCw, IconUnlock, IconX } from '@/components/icons';
+import { IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconCornerDownLeft, IconDownload, IconEllipsis, IconHand, IconOctagonX, IconRefreshCw, IconUnlock, IconX } from '@/components/icons';
 import { Terminal, type IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -19,10 +19,11 @@ import { pageTerminalAppearance, terminalFont, terminalTheme } from '@/lib/termi
 import { customThemeAnsi } from '@/lib/theme-library';
 import { useTheme } from '@/lib/theme';
 import { useDisplaySettings } from '@/lib/display-settings';
-import { cn, errorMessage } from '@/lib/utils';
+import { cn, downloadJson, errorMessage } from '@/lib/utils';
 import { clipboardFiles, readUploadData, uploadName } from '../session/image-upload';
 import { attachmentMimeType, planIntake } from '../session/composerAttachmentIntake';
 import { attachSmoothScroll } from './smooth-scroll';
+import { readTerminalGrid } from './grid-diagnostics';
 
 type ClientMessage =
   | { type: 'claim'; clientId: string; takeover?: boolean }
@@ -584,6 +585,25 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
     termRef.current?.scrollToBottom();
     setAtBottom(true);
   };
+  const exportGridDiagnostics = async () => {
+    const term = termRef.current;
+    if (!term) return;
+    // Sample before the round trip. fit() would resize the very grid we want to inspect.
+    const sampledAt = new Date().toISOString();
+    const browser = {
+      ...readTerminalGrid(term),
+      containerCapacity: fitRef.current?.proposeDimensions() ?? null,
+      containerHeightPx: hostRef.current?.clientHeight ?? null,
+      rowsScrolledBack: term.buffer.active.baseY - term.buffer.active.viewportY,
+      hasControl: controlRef.current,
+      lastRequestedSize: lastResizeRef.current ?? null,
+      lastReportedSize: remoteSizeRef.current,
+    };
+    const tmux = await api.terminalGridDiagnostics(terminal.id).catch((error: unknown) => ({
+      unavailable: true, httpStatus: error instanceof HttpError ? error.status : null,
+    }));
+    downloadJson('riffet-terminal-grid.json', { sampledAt, receivedAt: new Date().toISOString(), browser, tmux });
+  };
 
   const tone = connection === 'connected' ? 'success' : connection === 'closed' ? 'idle' : 'warning';
   const connectionLabel = { connecting: t`连接中`, connected: t`已连接`, reconnecting: t`重连中`, closed: t`已退出` }[connection];
@@ -626,6 +646,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
                   ? <DropdownMenuItem onSelect={release}><IconUnlock />{t`释放控制权`}</DropdownMenuItem>
                   : <DropdownMenuItem onSelect={() => claim(Boolean(terminal.ownerId))}><IconHand />{terminal.ownerId ? t`接管` : t`获取控制权`}</DropdownMenuItem>}
                 <DropdownMenuItem disabled={terminal.state === 'exited'} onSelect={() => { retryCount.current = 0; socketRef.current?.close(); }}><IconRefreshCw />{t`重新连接`}</DropdownMenuItem>
+                {import.meta.env.DEV && <DropdownMenuItem onSelect={() => void exportGridDiagnostics()}><IconDownload />{t`导出终端布局诊断`}</DropdownMenuItem>}
                 {terminal.state === 'running' && <DropdownMenuItem onSelect={() => void interrupt()}><IconOctagonX />{t`中断进程 (SIGINT)`}</DropdownMenuItem>}
                 {onClose && <DropdownMenuItem onSelect={() => onClose(terminal)}><IconX />{t`关闭终端`}</DropdownMenuItem>}
               </DropdownMenuContent>

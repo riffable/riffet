@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { readFile, readlink, realpath } from 'node:fs/promises';
 import { constants as osConstants, homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type Session, type TerminalAppearance, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
+import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type Session, type TerminalAppearance, type TerminalGridDiagnostics, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
 import { normalizeWarmup } from '../session-identity.js';
 import { terminalEnvironment } from '../environment.js';
 import { AppError, requireString } from '../errors.js';
@@ -874,6 +874,26 @@ export class TerminalService {
   /** Keys go through the control stream, in order and without forking tmux per keystroke. */
   private writeToPane(runtime: TerminalRuntime, bytes: Buffer): void {
     for (const line of sendKeysLines(runtime.pane, bytes)) void runtime.control.request(line).catch(() => undefined);
+  }
+
+  /** Sample geometry and physical screen rows together without attaching a viewer or changing the pane. */
+  async gridDiagnostics(id: string): Promise<TerminalGridDiagnostics> {
+    const info = this.store.getTerminal(id);
+    if (isWarmupTerminal(info)) throw new AppError('TERMINAL_NOT_FOUND', 'Terminal not found', 404);
+    if (info.state === 'exited') throw new AppError('TERMINAL_NOT_RUNNING', 'This terminal is not running', 409);
+    const name = terminalName(id);
+    const output = await this.runTmux([
+      'display-message', '-p', '-t', name, '#{pane_width} #{pane_height} #{cursor_y}',
+      ';', 'capture-pane', '-p', '-t', name,
+    ], 5000, undefined, HISTORY_CAPTURE_BYTES);
+    const [geometry = '', ...screenRows] = output.replace(/\n$/, '').split('\n');
+    const [cols, rows, cursorY] = geometry.trim().split(' ').map(Number);
+    if (cols === undefined || !Number.isInteger(cols) || cols < 1 || !rows || screenRows.length !== rows
+      || cursorY === undefined || !Number.isInteger(cursorY) || cursorY < 0 || cursorY >= rows) {
+      throw new AppError('TMUX_COMMAND_FAILED', 'tmux could not complete the terminal operation', 503);
+    }
+    const lastContentRow = screenRows.findLastIndex(line => line.trim()) + 1;
+    return { cols, rows, cursorRow: cursorY + 1, lastContentRow: lastContentRow || null };
   }
 
   /**

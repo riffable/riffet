@@ -55,6 +55,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
   });
   app.post<{Params:{id:string};Body:{clientId:string;takeover?:boolean}}>('/api/terminals/:id/claim',async(request)=>terminal.claim(request.params.id,requireString(request.body?.clientId,'clientId',200),Boolean(request.body.takeover)));
   app.get<{Params:{id:string};Querystring:{known?:string;mode?:string}}>('/api/terminals/:id/history',async(request)=>terminal.history(request.params.id,typeof request.query.known==='string'?request.query.known:undefined,request.query.mode==='tail'));
+  app.get<{Params:{id:string}}>('/api/terminals/:id/diagnostics',async(request)=>terminal.gridDiagnostics(request.params.id));
   app.post<{Params:{id:string}}>('/api/terminals/:id/interrupt',async(request)=>{await terminal.interrupt(request.params.id);return terminal.get(request.params.id);});
   app.delete<{Params:{id:string}}>('/api/terminals/:id',async(request)=>{
     const current=await terminal.get(request.params.id);
