@@ -17,6 +17,18 @@ msgid "主题"
 msgstr "Theme"
 
 #: src/share/main.tsx
+msgid "仅含对话正文"
+msgstr "Messages only"
+
+#: src/share/main.tsx
+msgid "代码高亮"
+msgstr "Code highlighting"
+
+#: src/share/main.tsx
+msgid "会话信息"
+msgstr "Session info"
+
+#: src/share/main.tsx
 msgid "会话数据不可用"
 msgstr "Session data unavailable"
 
@@ -42,13 +54,33 @@ msgid "原主题"
 msgstr "Original theme"
 
 #: src/share/main.tsx
+msgid "只读会话快照"
+msgstr "Read-only session snapshot"
+
+#: src/share/main.tsx
 msgctxt "share-image-name"
 msgid "图片"
 msgstr "Image"
 
 #: src/share/main.tsx
+msgid "在 GitHub 上查看 Riffet"
+msgstr "View Riffet on GitHub"
+
+#: src/share/main.tsx
 msgid "外观"
 msgstr "Appearance"
+
+#: src/share/main.tsx
+msgid "大"
+msgstr "Large"
+
+#: src/share/main.tsx
+msgid "导出为 PDF"
+msgstr "Export as PDF"
+
+#: src/share/main.tsx
+msgid "小"
+msgstr "Small"
 
 #: src/share/main.tsx
 msgid "已选"
@@ -59,6 +91,10 @@ msgid "打印资源加载超时，请重新加载预览"
 msgstr "Print resources timed out. Reload the preview."
 
 #: src/share/main.tsx
+msgid "文字大小"
+msgstr "Text size"
+
+#: src/share/main.tsx
 msgid "无法加载预览"
 msgstr "Couldn't load preview"
 
@@ -67,12 +103,32 @@ msgid "明暗"
 msgstr "Color mode"
 
 #: src/share/main.tsx
+msgid "极简墨色"
+msgstr "Monochrome"
+
+#: src/share/main.tsx
+msgid "标准"
+msgstr "Standard"
+
+#: src/share/main.tsx
 msgid "浅色"
 msgstr "Light"
 
 #: src/share/main.tsx
 msgid "深色"
 msgstr "Dark"
+
+#: src/share/main.tsx
+msgid "特大"
+msgstr "Extra large"
+
+#: src/share/main.tsx
+msgid "语言"
+msgstr "Language"
+
+#: src/share/main.tsx
+msgid "跟随界面主题"
+msgstr "Follow theme"
 
 #: src/share/main.tsx
 msgid "跟随系统"

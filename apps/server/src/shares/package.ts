@@ -36,13 +36,19 @@ const imageExtensions: Record<string, string> = {
 };
 
 interface MarkdownNode {
-  type: string; url?: string; lang?: string; alt?: string; identifier?: string;
+  type: string; url?: string; lang?: string; value?: string; alt?: string; identifier?: string;
   children?: MarkdownNode[]; position?: { start: { offset?: number }; end: { offset?: number } };
 }
 interface MarkdownImage { start: number; end: number; source: string; alt: string; definition?: string }
 
+function isMarkdownFence(lang: string): boolean {
+  const token = lang.trim().toLowerCase().split(/[\s:,]/, 1)[0] ?? '';
+  if (/^(?:md|markdown|mdown|mkd|mdx|mdc)$/.test(token)) return true;
+  return /^\d+:\d+:.+\.(?:md|markdown|mdown|mkd|mdx|mdc)$/i.test(lang.trim());
+}
+
 /** Use the same Markdown parser as the UI, including reference images and fenced code. */
-function markdownReferences(text: string): { images: MarkdownImage[]; languages: string[]; visualizations: VisualizationReference[] } {
+function markdownReferences(text: string, depth = 0): { images: MarkdownImage[]; languages: string[]; visualizations: VisualizationReference[] } {
   const images: MarkdownImage[] = [], languages: string[] = [];
   const visualizations: VisualizationReference[] = [];
   const collect = () => (tree: MarkdownNode) => {
@@ -54,7 +60,15 @@ function markdownReferences(text: string): { images: MarkdownImage[]; languages:
     for (const node of nodes) {
       const visualization = node.type === 'link' ? visualizationReferenceFromHref(node.url) : undefined;
       if (visualization) visualizations.push(visualization);
-      if (node.type === 'code' && node.lang) languages.push(node.lang.toLowerCase());
+      if (node.type === 'code' && node.lang) {
+        const lang = node.lang.toLowerCase();
+        languages.push(lang);
+        if (depth < 2 && node.value && isMarkdownFence(node.lang)) {
+          const nested = markdownReferences(node.value, depth + 1);
+          languages.push(...nested.languages);
+          visualizations.push(...nested.visualizations);
+        }
+      }
       const source = node.type === 'image' ? node.url : node.type === 'imageReference' ? definitions.get(node.identifier) : undefined;
       const start = node.position?.start.offset, end = node.position?.end.offset;
       if (source && start !== undefined && end !== undefined) images.push({ start, end, source, alt: node.alt ?? '' });
@@ -391,8 +405,24 @@ export async function buildSharePackage(options: SharePackageOptions): Promise<{
   }
   options.onProgress?.({ stage: 'finalizing' });
   snapshot.warnings = [...warnings];
+  const eventText = (event: ShareSnapshot['events'][number]): string => {
+    const content = event.data.content as { text?: unknown } | undefined;
+    const raw = typeof content?.text === 'string' ? content.text : typeof event.data.text === 'string' ? event.data.text : '';
+    return raw.replace(/\s+/g, ' ').trim();
+  };
+  const descriptionText = snapshot.events
+    .filter(event => {
+      const kind = typeof event.data.sessionUpdate === 'string' ? event.data.sessionUpdate : event.type;
+      return kind === 'user_message_chunk' || kind === 'agent_message_chunk';
+    })
+    .map(eventText)
+    .find(Boolean);
+  const description = (descriptionText || snapshot.title).slice(0, 160) || 'Riffet';
+  const pageTitle = `${snapshot.title} · Riffet`;
+  index = index.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(pageTitle)}</title>`);
+  const shareMeta = `<meta name="description" content="${escapeHtml(description)}"><meta property="og:type" content="article"><meta property="og:title" content="${escapeHtml(pageTitle)}"><meta property="og:description" content="${escapeHtml(description)}"><meta name="twitter:card" content="summary">`;
   const appearanceMeta = `<meta name="riffet-share-appearance" content="${escapeHtml(JSON.stringify(snapshot.appearance ?? { themeId: 'riffet', mode: 'system' }))}">`;
-  index = index.replace(/<head(?:\s[^>]*)?>/i, match => `${match}${appearanceMeta}`);
+  index = index.replace(/<head(?:\s[^>]*)?>/i, match => `${match}${shareMeta}${appearanceMeta}`);
   const data = JSON.stringify(snapshot);
   const hash = digest(JSON.stringify([...files].sort()) + index + data);
   const dataUrl = `./data/session-${hash}.json`;

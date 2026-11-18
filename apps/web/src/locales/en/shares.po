@@ -77,6 +77,14 @@ msgid "分享轮数"
 msgstr "Number of turns"
 
 #: src/app/shares/ShareDialog.tsx
+msgid "分享链接已创建"
+msgstr "Share link created"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享链接已更新"
+msgstr "Share link updated"
+
+#: src/app/shares/ShareDialog.tsx
 msgid "分享预览"
 msgstr "Share preview"
 

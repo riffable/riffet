@@ -17,6 +17,15 @@ export function BrandMark(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/** Monochrome GitHub Octicon mark, inheriting `currentColor` from its parent. */
+export function GitHubMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M12 1.27a11 11 0 0 0-3.48 21.46c.55.09.73-.24.73-.53v-1.85c-3.03.66-3.67-1.45-3.67-1.45-.5-1.26-1.21-1.6-1.21-1.6-.99-.68.07-.67.07-.67 1.09.08 1.67 1.13 1.67 1.13.97 1.66 2.54 1.18 3.16.9.1-.7.38-1.18.69-1.45-2.42-.27-4.96-1.21-4.96-5.38 0-1.19.42-2.16 1.12-2.92-.11-.28-.49-1.39.11-2.89 0 0 .92-.29 3 1.12a10.4 10.4 0 0 1 5.46 0c2.08-1.41 3-1.12 3-1.12.6 1.5.22 2.61.11 2.89.7.76 1.12 1.73 1.12 2.92 0 4.18-2.55 5.1-4.98 5.37.39.34.74 1.01.74 2.04v3.02c0 .29.19.63.74.52A11 11 0 0 0 12 1.27Z" />
+    </svg>
+  );
+}
+
 /** The app icon as a picker shows it: the mark on the dark tile, the mane in `accent`. */
 export function AppIconTile({ accent, ...props }: SVGProps<SVGSVGElement> & { accent: string }) {
   return (

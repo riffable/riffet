@@ -163,8 +163,35 @@ html[data-riffet-print] #root {
 @media print {
   html[data-riffet-print],
   html[data-riffet-print] body,
-  html[data-riffet-print] #root {
+  html[data-riffet-print] #root,
+  html:has(.share-session),
+  html:has(.share-session) body,
+  html:has(.share-session) #root {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
     background: transparent;
+  }
+
+  .share-session,
+  .share-session [data-transcript-scroll],
+  .share-session .share-session-scroll,
+  .share-session .share-session-content {
+    display: block;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .share-session-actions,
+  .share-session [data-chapter-navigation],
+  .share-session [data-content-width-handle],
+  .share-session [role="search"],
+  .share-session [data-transcript-scroll] ~ nav,
+  .share-session [data-transcript-scroll] ~ button,
+  .share-session .md-code-head button,
+  .share-session [data-slot="message-meta"] button {
+    display: none !important;
   }
 
   .share-print {

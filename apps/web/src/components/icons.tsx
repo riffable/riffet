@@ -6,7 +6,7 @@ import {
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   Keyboard, KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, Mic, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareQuote, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
-  Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
+  Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Printer, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, TextQuote, SquareKanban, List, Inbox, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Volume2, Workflow, WrapText, Wrench, Zap,
@@ -117,6 +117,7 @@ export const IconPinOff = icon(PinOff);
 export const IconPause = filled(Pause);
 export const IconPlay = filled(Play);
 export const IconPlus = icon(Plus);
+export const IconPrinter = icon(Printer);
 /** Plugins. Blocks that fit together read cleaner at 16-18px than the jigsaw outline. */
 export const IconPuzzle = icon(Blocks);
 export const IconRepeat = icon(Repeat);

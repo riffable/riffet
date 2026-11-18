@@ -17,6 +17,18 @@ msgid "主题"
 msgstr "主题"
 
 #: src/share/main.tsx
+msgid "仅含对话正文"
+msgstr "仅含对话正文"
+
+#: src/share/main.tsx
+msgid "代码高亮"
+msgstr "代码高亮"
+
+#: src/share/main.tsx
+msgid "会话信息"
+msgstr "会话信息"
+
+#: src/share/main.tsx
 msgid "会话数据不可用"
 msgstr "会话数据不可用"
 
@@ -42,13 +54,33 @@ msgid "原主题"
 msgstr "原主题"
 
 #: src/share/main.tsx
+msgid "只读会话快照"
+msgstr "只读会话快照"
+
+#: src/share/main.tsx
 msgctxt "share-image-name"
 msgid "图片"
 msgstr "图片"
 
 #: src/share/main.tsx
+msgid "在 GitHub 上查看 Riffet"
+msgstr "在 GitHub 上查看 Riffet"
+
+#: src/share/main.tsx
 msgid "外观"
 msgstr "外观"
+
+#: src/share/main.tsx
+msgid "大"
+msgstr "大"
+
+#: src/share/main.tsx
+msgid "导出为 PDF"
+msgstr "导出为 PDF"
+
+#: src/share/main.tsx
+msgid "小"
+msgstr "小"
 
 #: src/share/main.tsx
 msgid "已选"
@@ -59,6 +91,10 @@ msgid "打印资源加载超时，请重新加载预览"
 msgstr "打印资源加载超时，请重新加载预览"
 
 #: src/share/main.tsx
+msgid "文字大小"
+msgstr "文字大小"
+
+#: src/share/main.tsx
 msgid "无法加载预览"
 msgstr "无法加载预览"
 
@@ -67,12 +103,32 @@ msgid "明暗"
 msgstr "明暗"
 
 #: src/share/main.tsx
+msgid "极简墨色"
+msgstr "极简墨色"
+
+#: src/share/main.tsx
+msgid "标准"
+msgstr "标准"
+
+#: src/share/main.tsx
 msgid "浅色"
 msgstr "浅色"
 
 #: src/share/main.tsx
 msgid "深色"
 msgstr "深色"
+
+#: src/share/main.tsx
+msgid "特大"
+msgstr "特大"
+
+#: src/share/main.tsx
+msgid "语言"
+msgstr "语言"
+
+#: src/share/main.tsx
+msgid "跟随界面主题"
+msgstr "跟随界面主题"
 
 #: src/share/main.tsx
 msgid "跟随系统"

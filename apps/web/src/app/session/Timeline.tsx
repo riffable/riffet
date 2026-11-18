@@ -225,8 +225,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, from, t
  * [mark] makes an answer markable: its body carries the ids a highlight is resolved against
  * (see `MarkLayer`), and its actions offer 收藏回复.
  */
-export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false, stopped = false }: {
-  text: string; showActions: boolean; stopped?: boolean; streaming?: boolean; time?: string; metrics?: RunMetrics; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget;
+export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false, stopped = false }: {
+  text: string; showActions: boolean; stopped?: boolean; streaming?: boolean; time?: string; modelLabel?: string; metrics?: RunMetrics; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget;
   footerPinned?: boolean;
   chapters?: boolean;
   /**
@@ -243,16 +243,16 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
     // the surrounding whitespace without moving the prose or the next row.
     <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
-      <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters && !resources ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters && !resources} /></div>
-      <MessageFooter text={text} showActions={showActions} time={time} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} pluginItems={!resources} />
+      <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters} /></div>
+      <MessageFooter text={text} showActions={showActions} time={time} modelLabel={modelLabel} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} pluginItems={!resources} />
       {showActions && !resources && <MessageCommandResults text={text} {...(runId ? { runId } : {})} />}
     </div>
   );
 });
 
 /** The same turn actions and timestamp belong under an answer or the result that ended it. */
-export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false, pluginItems = false }: {
-  text?: string; showActions: boolean; time?: string; footerPinned?: boolean; pluginItems?: boolean;
+export function MessageFooter({ text, showActions, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false, pluginItems = false }: {
+  text?: string; showActions: boolean; time?: string; modelLabel?: string; footerPinned?: boolean; pluginItems?: boolean;
   /** The answer ends a stopped turn: 已停止 leads the time and keeps the line on screen. */
   stopped?: boolean; metrics?: RunMetrics;
   runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; progress?: ReactNode;
@@ -268,6 +268,7 @@ export function MessageFooter({ text, showActions, time, footerPinned, metrics, 
     <MarkedIndicator target={mark} />
     {stopped && <span role="status" className="shrink-0 px-1 text-2xs text-fg-3">{t`已停止`}</span>}
     {time && <time dateTime={time} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
+    {modelLabel && <span className="shrink-0 px-1 text-2xs text-fg-3">{modelLabel}</span>}
     {time && metrics && rate !== undefined && (
       <span className={cn('shrink-0 px-1 text-2xs tabular-nums', metrics.tokens === 'provider' ? 'text-fg-3' : 'text-fg-4')}>
         {metrics.tokens === 'provider' ? '' : '~'}{formatTokensPerSecond(rate)} tok/s

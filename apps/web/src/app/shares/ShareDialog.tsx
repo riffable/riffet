@@ -9,6 +9,7 @@ import { Select, Segmented, Spinner, Switch } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { copyWithToast } from '@/lib/files';
 import { confirmDialog } from '@/lib/dialogs';
+import { toast } from '@/lib/toast';
 import { errorMessage, formatDateTime } from '@/lib/utils';
 import { shareCapabilityMessage, shares } from '@/lib/shares';
 import { useNow } from '@/lib/use-now';
@@ -74,6 +75,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
   const statusRevision = useRef(0);
   const actionBusy = useRef(false);
   const actionAbort = useRef<AbortController | undefined>(undefined);
+  const publishIntent = useRef<'create' | 'update' | undefined>(undefined);
   const previewFrame = useRef<HTMLIFrameElement>(null);
   const printFrame = useRef<HTMLIFrameElement>(null);
   const printLoaded = pdf ? previewLoaded : printStatus === 'ready';
@@ -92,6 +94,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
     const controller = new AbortController();
     setChecking(true); setShare(undefined); setDraft(undefined); setPreviewLoaded(false); setPreviewFailed(false); setPrintStatus('loading'); setError(''); setBusy(false); setProgress(undefined); setStartedAt(Date.now());
     actionBusy.current = false;
+    publishIntent.current = undefined;
     setStatus(undefined);
     if (pdf) {
       setChecking(false); setShare(null);
@@ -138,6 +141,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
         if (!current || readRevision !== statusRevision.current) return;
         setStatus(previous => previous?.share && value.share && value.share.updatedAt < previous.share.updatedAt ? previous : value);
         setShare(previous => previous && value.share && value.share.updatedAt < previous.updatedAt ? previous : value.share);
+        reportPublishOutcome(value.share);
       }).catch(reason => {
         if (current && readRevision === statusRevision.current) setError(errorMessage(reason, t`无法读取分享状态`));
       }).finally(() => { reading = false; });
@@ -193,15 +197,25 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
       if (generation !== epoch.current || controller.signal.aborted || pdf || !refreshStatus) return;
       const readRevision = ++statusRevision.current;
       const value = await shares.status(sessionId, fresh, controller.signal);
-      if (generation === epoch.current && readRevision === statusRevision.current) { setStatus(value); setShare(value.share); }
+      if (generation === epoch.current && readRevision === statusRevision.current) { setStatus(value); setShare(value.share); reportPublishOutcome(value.share); }
     }
-    catch (reason) { if (generation === epoch.current && !controller.signal.aborted) { setError(errorMessage(reason, pdf ? t`PDF 导出失败` : t`分享操作失败`)); void syncThemeLibrary(); } }
+    catch (reason) { if (generation === epoch.current && !controller.signal.aborted) { publishIntent.current = undefined; setError(errorMessage(reason, pdf ? t`PDF 导出失败` : t`分享操作失败`)); void syncThemeLibrary(); } }
     finally { if (generation === epoch.current) { if (fresh) setChecking(false); setBusy(false); setProgress(undefined); actionBusy.current = false; actionAbort.current = undefined; } }
   };
   const cancel = () => {
     epoch.current += 1; statusRevision.current += 1;
     actionAbort.current?.abort(); actionAbort.current = undefined; actionBusy.current = false;
+    publishIntent.current = undefined;
     setBusy(false); setProgress(undefined);
+  };
+  const reportPublishOutcome = (next: SessionShare | null | undefined) => {
+    const intent = publishIntent.current;
+    if (!intent || !next) return;
+    if (next.operation === 'publishing') return;
+    publishIntent.current = undefined;
+    if (!next.operation && next.state === 'published' && next.url) {
+      toast.success(intent === 'update' ? t`分享链接已更新` : t`分享链接已创建`);
+    }
   };
   const publisher = capability?.publisher;
   const audience = publisher?.audience;
@@ -225,8 +239,9 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
   });
   const publish = () => draft && execute(async () => {
     const generation = epoch.current;
+    publishIntent.current = published ? 'update' : 'create';
     const result = await shares.publish(sessionId, draft.id, expiryDays);
-    if (generation === epoch.current) { setShare(result); setDraft(undefined); }
+    if (generation === epoch.current) { setShare(result); setDraft(undefined); reportPublishOutcome(result); }
   });
   const print = () => execute(async signal => {
     const generation = epoch.current;

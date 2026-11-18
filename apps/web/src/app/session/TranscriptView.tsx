@@ -28,7 +28,7 @@ import { useEarlierHistory, type EarlierLoad } from './useEarlierHistory';
 import { findQuote, rangeAt } from './textQuote';
 import { markedTurns, markTargetOf, MarkSourceContext, SessionMarksContext } from './marks';
 import { MarkLayer } from './MarkLayer';
-import { useTranscriptResources } from './transcriptResources';
+import { shareModelKey, shareModelLabel, useTranscriptResources } from './transcriptResources';
 import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
 import { activeToolStates, currentToolActivity, toolKind, toolRunSummary } from './toolView';
@@ -419,6 +419,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
  */
 const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
+  const resources = useTranscriptResources();
   const attach = useCallback((element: HTMLElement | null) => measure(row.key, element), [measure, row.key]);
   // Both explicit choices survive virtual unmounting; undefined means automatic folding.
   const [processChoice, rememberProcessChoice] = useRemembered<boolean | undefined>('process', undefined);
@@ -521,7 +522,16 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   const { item, settled } = row;
   let content: ReactNode = null;
   if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
-  else if (item.kind === 'assistant') content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
+  else if (item.kind === 'assistant') {
+    const models = resources?.modelInfo
+      ? item.event.sourceEvents
+          .map((source) => ('nativeId' in source && typeof source.nativeId === 'string' && Object.hasOwn(resources.modelInfo!, source.nativeId) ? resources.modelInfo![source.nativeId] : undefined))
+          .filter((info): info is NonNullable<typeof info> => Boolean(info))
+      : [];
+    const showModels = models.length > 0 && (!resources?.commonModelKey || models.some((info) => shareModelKey(info) !== resources.commonModelKey));
+    const modelLabel = showModels ? [...new Map(models.map((info) => [shareModelKey(info), shareModelLabel(info)])).values()].join(' / ') : undefined;
+    content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
+  }
   else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} />;
   else if (item.kind === 'activity') content = <ActivityRow item={item} />;
   else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}
@@ -1539,7 +1549,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         onReset={resetContentWidth}
       />}
 
-      {!embedded && !resources && <ChapterNavigation scrollRef={scrollRef} columnRef={contentRef} onNavigate={navigateToChapter} scope={`${sessionId}:${resetVersion}`} />}
+      {!embedded && <ChapterNavigation scrollRef={scrollRef} columnRef={contentRef} onNavigate={navigateToChapter} scope={`${sessionId}:${resetVersion}`} />}
 
       <div role="status" className="sr-only">{announcement.text && <span key={announcement.seq}>{announcement.text}</span>}</div>
       {!resources && <MarkLayer scrollRef={scrollRef} onDiscuss={onDiscuss} onQuote={onQuote} />}
