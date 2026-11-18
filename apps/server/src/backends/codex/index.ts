@@ -319,7 +319,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     // test steering by writing to a user's live turn; unrecognized or older builds stay disabled.
     const supportsSteer = supportsSteerVersion((await probeAppServer(executableOf(profile, this.flavor))).version, this.flavor.id);
     return {
-      supportsSessionReferences: this.flavor.id === 'codex',
+      supportsSessionReferences: true,
       backendId: this.id,
       label: this.label,
       modes: this.flavor.modes,

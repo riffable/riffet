@@ -326,6 +326,7 @@ export class CursorBackend implements AgentBackend {
       supportsHistory: true, supportsModelSelection: true, supportsModeSelection: true,
       supportsPermissionSelection: true, supportsTerminal: true, requiresLiveTerminal: true, supportsPrewarm: true,
       supportsSteer: steers,
+      supportsSessionReferences: true,
       // cursor-agent takes a positional [prompt...], so a brand-new session's first message can
       // ride on the launch argv instead of being pasted into a TUI that is still booting.
       supportsInitialPromptArgs: true,
@@ -429,7 +430,7 @@ export class CursorBackend implements AgentBackend {
     const { steering, profile } = this.parts(host, request.context.profile);
     if (!await probeCursorHookSteer(profile)) throw new AppError('STEER_REJECTED', 'This Cursor CLI version has not been verified for safe steering', 409);
     if (request.input.attachmentIds.length) throw new AppError('STEER_REJECTED', 'Cursor steering does not support attachments; send a text steer message', 409);
-    const commands = slashTokens(request.input.text);
+    const commands = slashTokens(request.sourceText ?? request.input.text);
     const { text } = await materializeNativeInput(attachments(host), request.input);
     if (!text.trim() || text.length > 6000 || commands.length) {
       throw new AppError('STEER_REJECTED', 'Cursor steering supports at most 6000 characters of text; use a new message for CLI commands and skills', 409);

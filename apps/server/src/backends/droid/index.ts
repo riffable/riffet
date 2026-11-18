@@ -77,6 +77,7 @@ export class DroidBackendAdapter implements NativeBackendDriver {
       supportsPermissionSelection: true,
       supportsTerminal: false,
       supportsPrewarm: false,
+      supportsSessionReferences: true,
       slashCommands: [],
       inlineSkills: true,
     };

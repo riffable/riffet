@@ -96,6 +96,7 @@ export class PiBackendAdapter implements NativeBackendDriver {
       supportsPermissionSelection: false,
       supportsTerminal: false,
       supportsPrewarm: false,
+      supportsSessionReferences: true,
       slashCommands: [],
       inlineSkills: false,
     };
