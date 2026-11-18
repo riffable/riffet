@@ -94,7 +94,7 @@ function TaskPlaceRow({ workItemId, onNavigate }: { workItemId: string; onNaviga
   const { t } = useLingui();
   const { workItems, nav } = useStores();
   const statusLabel = useStatusLabel();
-  const item = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId));
+  const item = useWorkItems((state) => state.summaries?.find((entry) => entry.id === workItemId));
   if (!item) return null;
   // Through `navigate`, as the sidebar's entry goes: a draft's discard guard still asks first.
   const open = () => { onNavigate(); void nav.navigate(() => { workItems.reveal(item.id); nav.openPage('tasks'); }); };
@@ -106,7 +106,7 @@ function TaskFact({ workItemId, onNavigate }: { workItemId: string; onNavigate: 
   const { t } = useLingui();
   const { workItems, nav } = useStores();
   const statusLabel = useStatusLabel();
-  const item = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId));
+  const item = useWorkItems((state) => state.summaries?.find((entry) => entry.id === workItemId));
   if (!item) return null;
   const open = () => { onNavigate(); void nav.navigate(() => { workItems.reveal(item.id); nav.openPage('tasks'); }); };
   return <>

@@ -156,7 +156,7 @@ export interface Session {
  */
 export interface SessionListDelta { revision: number; full?: true; sessions: Session[]; removed?: string[] }
 /** Each list's revision when `GET /api/bootstrap` read it; the starting point for the reads that follow. */
-export interface ListRevisions { sessions: number; terminals: number; projects: number }
+export interface ListRevisions { sessions: number; terminals: number; projects: number; workItems?: number }
 export type SessionGoalStatus = 'active' | 'paused' | 'blocked' | 'usage_limited' | 'budget_limited' | 'complete';
 /** A completion condition the agent keeps working toward (Claude Code `/goal`, Codex thread goals, DSH goals). */
 export interface SessionGoal {

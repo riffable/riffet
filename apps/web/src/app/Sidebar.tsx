@@ -172,7 +172,7 @@ function TaskStatusSub({ workItemId }: { workItemId: string }) {
   const { t } = useLingui();
   const { workItems } = useStores();
   const statusLabel = useStatusLabel();
-  const status = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId)?.status);
+  const status = useWorkItems((state) => state.summaries?.find((entry) => entry.id === workItemId)?.status);
   if (!status) return null;
   return (
     <MenuSub icon={<StatusIcon status={status} className="size-4" />} label={t`修改状态`} value={statusLabel(status)}>
@@ -210,8 +210,9 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   const deleting = useDeletionLoading(session.id);
   const backend = sessionBackend(session);
   const label = useBackendLabel()(backend);
-  // Without the item (not loaded, or deleted) the title stands alone.
-  const taskStatus = useWorkItems((state) => session.workItemId ? state.items?.find((entry) => entry.id === session.workItemId)?.status : undefined);
+  // Without the item (deleted) the title stands alone; before summaries arrive from a legacy server, reserve the icon slot so the title does not jump.
+  const summariesLoaded = useWorkItems((state) => state.summaries !== undefined);
+  const taskStatus = useWorkItems((state) => session.workItemId ? state.summaries?.find((entry) => entry.id === session.workItemId)?.status : undefined);
   return (
     <ListRow
       title={`${label} · ${session.title}`}
@@ -262,7 +263,9 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       </span>
       </>}
     >
-      {taskStatus && <StatusIcon status={taskStatus} running={session.state === 'running' || session.state === 'starting'} className="-mt-0.5 mr-1.5 inline-block align-middle" />}
+      {taskStatus
+        ? <StatusIcon status={taskStatus} running={session.state === 'running' || session.state === 'starting'} className="-mt-0.5 mr-1.5 inline-block align-middle" />
+        : session.workItemId && !summariesLoaded && <span aria-hidden="true" className="-mt-0.5 mr-1.5 inline-block size-3.5 align-middle" />}
       {session.title}
     </ListRow>
   );

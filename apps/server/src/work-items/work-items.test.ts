@@ -109,9 +109,12 @@ describe('work items', () => {
     const etag = String(first.headers.etag);
     expect((await call('GET', '/api/work-items', undefined, { 'if-none-match': etag })).statusCode).toBe(304);
     const before = store.workItemsRevision;
-    await call('POST', '/api/work-items', { title: 'One' });
+    const created = (await call('POST', '/api/work-items', { title: 'One' })).json() as WorkItem;
     expect(store.workItemsRevision).toBeGreaterThan(before);
     expect((await call('GET', '/api/work-items', undefined, { 'if-none-match': etag })).statusCode).toBe(200);
+    const bootRes = (await call('GET', '/api/bootstrap')).json() as { workItemSummaries: unknown[]; revisions: { workItems: number } };
+    expect(bootRes.revisions.workItems).toBe(store.workItemsRevision);
+    expect(bootRes.workItemSummaries).toEqual([{ id: created.id, number: created.number, status: created.status }]);
   });
 
   it('takes a submission with evidence read from the conversation, and sends an answer once', async () => {

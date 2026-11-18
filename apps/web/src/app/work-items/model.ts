@@ -1,4 +1,4 @@
-import { isDoneUnseen, isRunningSession, needsYou, type Session, type WorkItem, type WorkItemQuestion, type WorkItemStatus } from '@contracts';
+import { isDoneUnseen, isRunningSession, needsYou, type Session, type WorkItem, type WorkItemQuestion, type WorkItemStatus, type WorkItemSummary } from '@contracts';
 import { sessionActivityAt } from '@/lib/session-order';
 
 /**
@@ -69,6 +69,24 @@ export function viewWorkItems(items: readonly WorkItem[], sessions: readonly Ses
       inInbox: !closed && (live === 'waiting' || live === 'failed' || item.status === 'review' || Boolean(item.stuck)),
     };
   });
+}
+
+export function countWorkItemInbox(summaries: readonly WorkItemSummary[], sessions: readonly Session[]): number {
+  const byItem = new Map<string, Session[]>();
+  for (const session of sessions) {
+    if (!session.workItemId) continue;
+    const list = byItem.get(session.workItemId);
+    if (list) list.push(session); else byItem.set(session.workItemId, [session]);
+  }
+  let count = 0;
+  for (const item of summaries) {
+    if (item.status === 'done' || item.status === 'cancelled') continue;
+    if (item.status === 'review' || item.stuck || item.hasQuestion) { count += 1; continue; }
+    const own = (byItem.get(item.id) ?? []).sort((a, b) => sessionActivityAt(b).localeCompare(sessionActivityAt(a)));
+    const live = liveOf(own).live;
+    if (live === 'waiting' || live === 'failed') count += 1;
+  }
+  return count;
 }
 
 /** Within a column: waiting first, then failed, running, new results, then the most recently changed. */

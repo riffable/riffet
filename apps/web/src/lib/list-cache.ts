@@ -1,3 +1,4 @@
+import { WORK_ITEM_STATUSES, type WorkItemSummary } from '@contracts';
 import type { Bootstrap } from './api';
 import { isSessionDeleted } from './session-deletion';
 import { isActiveSession, sessionActivityAt } from './session-order';
@@ -34,11 +35,20 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw) as { bootstrap?: Partial<Bootstrap>; savedAt?: unknown };
-    const { projects, sessions, terminals, settings, protocol, owner } = parsed?.bootstrap ?? {};
+    const { projects, sessions, terminals, settings, protocol, owner, workItemSummaries } = parsed?.bootstrap ?? {};
     if (!Array.isArray(projects) || !Array.isArray(sessions) || !Array.isArray(terminals)) return undefined;
     if (!settings || typeof settings !== 'object') return undefined;
+    const validSummaries = Array.isArray(workItemSummaries)
+      ? workItemSummaries.filter((item): item is WorkItemSummary =>
+        Boolean(item) && typeof item === 'object' && typeof item.id === 'string' && typeof item.number === 'number' && WORK_ITEM_STATUSES.includes(item.status))
+      : undefined;
     return {
-      bootstrap: { projects, sessions, terminals, settings, csrfToken: '', ...(owner && typeof owner === 'object' && typeof owner.revision === 'number' ? { owner } : {}), ...(protocol && Array.isArray(protocol.features) ? { protocol } : {}) },
+      bootstrap: {
+        projects, sessions, terminals, settings, csrfToken: '',
+        ...(owner && typeof owner === 'object' && typeof owner.revision === 'number' ? { owner } : {}),
+        ...(protocol && Array.isArray(protocol.features) ? { protocol } : {}),
+        ...(validSummaries ? { workItemSummaries: validSummaries } : {}),
+      },
       savedAt: typeof parsed?.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0,
     };
   } catch { return undefined; }
@@ -58,16 +68,28 @@ export function loadCachedLists(): CachedLists | undefined {
   return lists;
 }
 
-/** The part of the lists the copy keeps: all projects, the pinned and running sessions, the newest others, and their terminals. */
+/** The part of the lists the copy keeps: all projects, the pinned and running sessions, the newest others, their terminals, and open or session-linked work item summaries. */
 export function boundedLists(bootstrap: Bootstrap): Bootstrap {
   const live = bootstrap.sessions.filter((item) => !isSessionDeleted(item.id));
-  if (live.length <= KEPT_SESSIONS && live.length === bootstrap.sessions.length) return bootstrap;
-  const must = live.filter((item) => item.pinnedAt || isActiveSession(item));
-  const rest = live.filter((item) => !item.pinnedAt && !isActiveSession(item)).sort((a, b) => Date.parse(sessionActivityAt(b)) - Date.parse(sessionActivityAt(a))).slice(0, KEPT_SESSIONS);
-  const keep = new Set([...must, ...rest].map((item) => item.id));
-  const sessions = live.filter((item) => keep.has(item.id));
-  const terminalIds = new Set(sessions.map((item) => item.terminalId));
-  return { ...bootstrap, sessions, terminals: bootstrap.terminals.filter((item) => terminalIds.has(item.id)) };
+  const keepSessions = live.length <= KEPT_SESSIONS && live.length === bootstrap.sessions.length
+    ? live
+    : (() => {
+        const must = live.filter((item) => item.pinnedAt || isActiveSession(item));
+        const rest = live.filter((item) => !item.pinnedAt && !isActiveSession(item)).sort((a, b) => Date.parse(sessionActivityAt(b)) - Date.parse(sessionActivityAt(a))).slice(0, KEPT_SESSIONS);
+        const keep = new Set([...must, ...rest].map((item) => item.id));
+        return live.filter((item) => keep.has(item.id));
+      })();
+  const terminalIds = new Set(keepSessions.map((item) => item.terminalId));
+  const sessionWorkItemIds = new Set(keepSessions.map((item) => item.workItemId).filter((id): id is string => Boolean(id)));
+  const workItemSummaries = bootstrap.workItemSummaries?.filter(
+    (item) => (item.status !== 'done' && item.status !== 'cancelled') || sessionWorkItemIds.has(item.id),
+  );
+  return {
+    ...bootstrap,
+    sessions: keepSessions,
+    terminals: bootstrap.terminals.filter((item) => terminalIds.has(item.id)),
+    ...(workItemSummaries !== undefined ? { workItemSummaries } : {}),
+  };
 }
 
 const withoutSavedAt = (text: string): string => text.slice(0, text.lastIndexOf(',"savedAt"'));

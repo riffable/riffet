@@ -170,7 +170,7 @@ data class Bootstrap(
 )
 
 @Serializable
-data class ListRevisions(val sessions: Long, val terminals: Long, val projects: Long)
+data class ListRevisions(val sessions: Long, val terminals: Long, val projects: Long, val workItems: Long? = null)
 
 /** `GET /api/sessions?since=`: the sessions changed after that revision, or the whole list when [full]. */
 @Serializable

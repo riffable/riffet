@@ -9,7 +9,7 @@ import { replacePageUrl } from '@/lib/overlay-navigation';
 import { createCatalogStore, type CatalogState } from './catalogStore';
 import { createListsStore, type ListsState } from './listsStore';
 import { createMarksStore, type MarksState } from './marksStore';
-import { createWorkItemsStore, type WorkItemsState } from './workItemsStore';
+import { createWorkItemsStore, type WorkItemsState, type WorkItemsStore } from './workItemsStore';
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
 import { pageAddressUrl } from './page-url';
 import { createSettingsStore } from './settingsStore';
@@ -43,9 +43,20 @@ export function createWorkbenchStores() {
   });
   const nav = createNavStore(cached);
   const ui = createUiStore();
-  const lists = createListsStore({ settings, selectedSessionId: () => nav.get().sessionId, handlers });
+  let workItemsRef: WorkItemsStore | undefined;
+  const lists = createListsStore({
+    settings,
+    selectedSessionId: () => nav.get().sessionId,
+    handlers,
+    workItems: {
+      ticket: () => workItemsRef?.ticket() ?? 0,
+      absorb: (summaries, revision, requestedTicket) => workItemsRef?.absorbBootstrap(summaries, revision, requestedTicket),
+      summaries: () => workItemsRef?.get().summaries,
+    },
+  });
   const marks = createMarksStore(lists);
-  const workItems = createWorkItemsStore(lists);
+  const workItems = createWorkItemsStore(lists, cached?.workItemSummaries, () => lists.refreshCache());
+  workItemsRef = workItems;
   const tabs = createTabsStore({ lists, nav, ui, handlers });
   return { handlers, catalog, settings, nav, ui, lists, marks, workItems, tabs };
 }
@@ -79,10 +90,8 @@ export const useSettings = <S,>(selector: (settings: AppSettings) => S): S => us
  * the workbench does not re-render for them.
  */
 export function WorkbenchEffects() {
-  const { lists, nav, ui, tabs, workItems } = useStores();
+  const { lists, nav, ui, tabs } = useStores();
   const loaded = useStore(lists, (state) => state.loaded);
-  // The sidebar counts the inbox, so the list is read once the workbench has loaded, not when the page opens.
-  useEffect(() => { if (loaded) workItems.start(); }, [loaded, workItems]);
   // A conversation the server deleted (here or on another device) leaves the tabs, the selection and the lists.
   useEffect(() => {
     return onSessionsDeleted((ids) => { tabs.retire(ids); lists.removeSessions(ids); });

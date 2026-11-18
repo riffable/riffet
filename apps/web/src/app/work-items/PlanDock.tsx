@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
@@ -15,6 +15,7 @@ export function PlanDock() {
   const { t } = useLingui();
   const { workItems, nav } = useStores();
   const items = useWorkItems((state) => state.items);
+  useEffect(() => { workItems.ensureLoaded(); }, [workItems]);
   const planned = useMemo(() => items?.filter((item) => item.source === 'assistant' && item.status === 'todo'), [items]);
   const projects = useLists((state) => state.projects);
   const [starting, setStarting] = useState<string>();

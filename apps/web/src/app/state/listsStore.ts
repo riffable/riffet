@@ -1,6 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { OwnerInfo, Session, SessionListDelta, TaskEvent, TerminalInfo } from '@contracts';
+import type { OwnerInfo, Session, SessionListDelta, TaskEvent, TerminalInfo, WorkItemSummary } from '@contracts';
 import { api, etagRevision, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { loadCachedLists, refreshCachedLists, saveCachedLists } from '@/lib/list-cache';
 import { reconcileById, sameRecord } from '@/lib/reconcile';
@@ -47,6 +47,12 @@ export interface ListsDeps {
   selectedSessionId: () => string;
   /** Late-bound by the workbench, which owns the selection rules. */
   handlers: { selectSession: (session: Session) => void; reload: () => void };
+  /** Shell work-item summaries hydrated from bootstrap and saved alongside the list cache. */
+  workItems?: {
+    ticket: () => number;
+    absorb: (summaries: WorkItemSummary[] | undefined, revision: number | undefined, requestedTicket: number) => void;
+    summaries: () => WorkItemSummary[] | undefined;
+  };
 }
 
 /**
@@ -156,6 +162,7 @@ export function createListsStore(deps: ListsDeps) {
      */
     async load(): Promise<Bootstrap> {
       const requestedRevision = deps.settings.revision();
+      const requestedWorkItemsTicket = deps.workItems?.ticket() ?? 0;
       const requestedProjectsGeneration = ++projectsGeneration;
       revision += 1;
       const pending = api.bootstrap();
@@ -166,6 +173,7 @@ export function createListsStore(deps: ListsDeps) {
         revision += 1;
         terminalsGeneration += 1;
         const next = { ...data, settings: deps.settings.absorb(data.settings, requestedRevision) };
+        deps.workItems?.absorb(data.workItemSummaries, data.revisions?.workItems, requestedWorkItemsTicket);
         saveCachedLists(next);
         // The reads that follow start where these lists stand; an older server names no revisions, so they start over.
         etags.sessions = data.revisions ? `W/"${data.revisions.sessions}"` : undefined;
@@ -231,12 +239,28 @@ export function createListsStore(deps: ListsDeps) {
     /** A failed load keeps whatever lists are on screen and labels them as offline. */
     fail(message: string) { store.set({ bootError: message, status: 'offline' }); },
 
+    /** Updates the local list copy after an out-of-band shell change (e.g. a work-item status change). */
+    refreshCache() {
+      const { projects, sessions, terminals, owner, loaded } = store.get();
+      if (!loaded) return;
+      const workItemSummaries = deps.workItems?.summaries();
+      refreshCachedLists({
+        projects, sessions, terminals,
+        ...(workItemSummaries !== undefined ? { workItemSummaries } : {}),
+        ...(owner ? { owner } : {}),
+        settings: deps.settings.current(),
+        csrfToken: '',
+        protocol: negotiatedProtocol,
+      });
+    },
+
     /** Takes deleted conversations out of the lists and of the copy the next visit paints from. */
     removeSessions(ids: readonly string[]) {
       const gone = new Set(ids);
       mutate((current) => current.sessions.some((item) => gone.has(item.id)) ? { sessions: current.sessions.filter((item) => !gone.has(item.id)) } : current);
       const { projects, sessions, terminals, owner, loaded } = store.get();
-      if (loaded) refreshCachedLists({ projects, sessions, terminals, ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+      const workItemSummaries = deps.workItems?.summaries();
+      if (loaded) refreshCachedLists({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
     },
     upsertSession(updated: Session) {
       // A late write for a deleted conversation (a stream frame, a slow response) must not bring it back.
@@ -290,7 +314,8 @@ export function createListsStore(deps: ListsDeps) {
         window.clearTimeout(saveTimer);
         saveTimer = window.setTimeout(() => {
           const { projects, sessions, terminals, owner } = store.get();
-          refreshCachedLists({ projects, sessions, terminals, ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+          const workItemSummaries = deps.workItems?.summaries();
+          refreshCachedLists({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
         }, SAVE_DEBOUNCE_MS);
       };
       let wantedProjectsVersion: number | undefined, requestedProjectsVersion: number | undefined;
@@ -447,17 +472,16 @@ export function createListsStore(deps: ListsDeps) {
           if (parsed && typeof (parsed as { projects?: unknown }).projects === 'number') projectsRevision = (parsed as { projects: number }).projects;
           if (parsed && typeof (parsed as { terminals?: unknown }).terminals === 'number') terminalsRevision = (parsed as { terminals: number }).terminals;
         } catch { /* legacy payload */ }
-        // Before the list check: a mark change pushes without moving the lists' revision.
-        announce({ ...(marksRevision === undefined ? {} : { marks: marksRevision }), ...(favoritesRevision === undefined ? {} : { favorites: favoritesRevision }), ...(workItemsRevision === undefined ? {} : { workItems: workItemsRevision }) });
         if (projectsRevision !== undefined) { wantedProjectsVersion = projectsRevision; refreshProjects(); }
         const readMoved = () => {
+          // Compare against what the bootstrap in flight just delivered, not the cached copy on screen.
+          announce({ ...(marksRevision === undefined ? {} : { marks: marksRevision }), ...(favoritesRevision === undefined ? {} : { favorites: favoritesRevision }), ...(workItemsRevision === undefined ? {} : { workItems: workItemsRevision }) });
           const sessions = pushedRevision === undefined || pushedRevision !== etagRevision(etags.sessions);
           // An older server moves terminals with the session revision.
           const terminalsPushed = terminalsRevision ?? pushedRevision;
           const terminals = terminalsPushed === undefined || terminalsPushed !== etagRevision(etags.terminals);
           if (sessions || terminals) poll({ sessions, terminals });
         };
-        // Compared with what the bootstrap in flight is about to hold, not with the cached copy on screen.
         if (pendingBootstrap) void pendingBootstrap.then(readMoved, readMoved); else readMoved();
       };
       const task = (event: Event) => {

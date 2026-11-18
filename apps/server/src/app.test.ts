@@ -935,8 +935,8 @@ describe('app route surface after ACP removal', () => {
     const kept = store.createSession({ projectId, kind: 'native', title: 'Kept' });
     const renamed = store.createSession({ projectId, kind: 'native', title: 'Before' });
     const deleted = store.createSession({ projectId, kind: 'native', title: 'Deleted' });
-    const { revisions } = (await call('GET', '/api/bootstrap')).json() as { revisions: { sessions: number; terminals: number; projects: number } };
-    expect(revisions).toEqual({ sessions: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision });
+    const { revisions } = (await call('GET', '/api/bootstrap')).json() as { revisions: { sessions: number; terminals: number; projects: number; workItems: number } };
+    expect(revisions).toEqual({ sessions: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision, workItems: store.workItemsRevision });
     expect((await call('GET', `/api/sessions?since=${revisions.sessions}`)).json()).toEqual({ revision: revisions.sessions, sessions: [] });
     // A terminal or project change moves only its own list.
     store.saveTerminal({ id: 't-delta', projectId, state: 'exited', epoch: 0, createdAt: new Date().toISOString() } as never);

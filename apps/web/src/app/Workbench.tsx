@@ -34,7 +34,7 @@ import { useProjectActions } from './use-project-actions';
 import { useTerminalActions } from './use-terminal-actions';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
 import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
-import { viewWorkItems } from './work-items/model';
+import { countWorkItemInbox } from './work-items/model';
 import { NO_PAGE, STORAGE_KEYS, type NavPage } from './state/navStore';
 import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sidebarMaxWidth } from './state/uiStore';
 import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
@@ -103,7 +103,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const tasksOpen = useNav((state) => state.tasksOpen);
   const automationsOpen = useNav((state) => state.automationsOpen);
   const councilOpen = useNav((state) => state.councilOpen);
-  const workItemList = useWorkItems((state) => state.items);
+  const workItemSummaries = useWorkItems((state) => state.summaries);
   const workItemsSupported = useWorkItems((state) => state.supported);
   const extensionsOpen = useNav((state) => state.extensionsOpen);
   const extensionsMounted = useNav((state) => state.extensionsMounted);
@@ -295,7 +295,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [loaded, assistantMain, selectedProjectId, selectedSessionId, nav]);
   const onAssistantMain = Boolean(assistantMain && session?.id === assistantMain.id);
   useEffect(() => { if (onAssistantMain) settingsStore.syncAssistantTimeZone(); }, [onAssistantMain, settings.assistant?.timeZone]);
-  const inboxCount = useMemo(() => workItemList ? viewWorkItems(workItemList, sessions).filter((entry) => entry.inInbox).length : 0, [workItemList, sessions]);
+  const inboxCount = useMemo(() => workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0, [workItemSummaries, sessions]);
   /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
   const startWorkItem = async (item: WorkItem): Promise<boolean> => {
     if (item.assignee.kind !== 'agent') return false;

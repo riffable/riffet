@@ -40,6 +40,7 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
   const { t } = useLingui();
   const { workItems } = useStores();
   const items = useWorkItems((state) => state.items);
+  useEffect(() => { workItems.ensureLoaded(); }, [workItems]);
   const statusLabel = useStatusLabel();
   const assigneeLabel = useAssigneeLabel();
   const [chosenView, setView] = useState<View>(() => readStored(VIEW_KEY) === 'list' ? 'list' : 'board');

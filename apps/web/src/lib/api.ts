@@ -2,7 +2,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
+  AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -158,6 +158,8 @@ export interface Bootstrap {
   projects: ProjectRecord[];
   sessions: Session[];
   terminals: TerminalInfo[];
+  /** Lightweight shell summary of work items; absent from an older server. */
+  workItemSummaries?: WorkItemSummary[];
   /** Where each list stood when read (`list-delta`); absent from an older server. */
   revisions?: ListRevisions;
   settings: AppSettings;

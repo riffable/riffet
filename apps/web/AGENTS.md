@@ -52,3 +52,4 @@
 
 - 快捷键登记在 `src/app/hostShortcuts.ts`，插件快捷键和标签页按键都从这里派生。
 - 插件能用的组件和样式在 `packages/plugin-web`；给它加的 UiKit 成员设为可选，SDK 在旧宿主上要能退回。基础样式由 `pnpm gen:plugin-style` 生成，Mac 用的那份也会一起生成。
+- 侧栏、导航栏、标签栏和会话信息等首屏壳层依赖的状态，统一随 `/api/bootstrap`（轻量摘要）和 `list-cache.ts` 同步水合，不在 `WorkbenchEffects` 里用 `useEffect(loaded)` 串行拉取，避免刷新首帧缺图标后再跳出来。

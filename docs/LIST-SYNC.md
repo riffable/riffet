@@ -25,7 +25,7 @@ ETag 为 `W/"<修订>"`，`If-None-Match` 命中回 304。
 ## 接口
 
 ```
-GET /api/bootstrap               → {…, revisions: {sessions, terminals, projects}}
+GET /api/bootstrap               → {…, workItemSummaries, revisions: {sessions, terminals, projects, workItems}}
 GET /api/sessions                → Session[]（全量，不变）
 GET /api/sessions?since=<修订>    → SessionListDelta
 GET /api/lists/stream            SSE；连上立即发一帧 changed，之后去抖 250 ms 发送
@@ -49,7 +49,7 @@ GET /api/lists/stream            SSE；连上立即发一帧 changed，之后去
 
 各端持有每类数据最后应用的修订。
 
-1. 冷启动：先画本地缓存，再读 bootstrap，用它的 `revisions` 作为起点。
+1. 冷启动：先画本地缓存，再读 bootstrap，用它的 `revisions` 作为起点。凡是工作台壳层（侧栏、导航、会话信息）首屏直接渲染的状态，都需要把轻量摘要和对应修订放进 `bootstrap` 与本地缓存，重详情按需拉取，不在挂载后的副作用里串行补拉首屏视觉状态。
 2. 收到 `changed`：逐类比较，只读修订不同的那一类。会话用 `since=<已持有修订>`，终端和项目用条件读。连上时的那一帧补上断线期间的变化，不再无条件重读。
 3. 合并增量：按 id 替换；本地已有更新的副本（`updatedAt` 更大，来自打开会话的流）时保留本地；删除 `removed` 中的 id；再按 `lastActivityAt ?? createdAt` 倒序，与全量的顺序一致。
 4. 读取被本地写入打断而丢弃时，立即再读一次，不等下一次推送。

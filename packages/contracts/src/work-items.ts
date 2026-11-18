@@ -167,6 +167,25 @@ export interface NorthStarReport { since?: string; days: NorthStarDay[] }
 /** `GET /api/work-items/:id/brief`: the first message of a conversation that starts this item. */
 export interface WorkItemBrief { text: string }
 
+/** Lightweight shell projection of a work item, carried by `/api/bootstrap` and local cache. */
+export interface WorkItemSummary {
+  id: string;
+  number: number;
+  status: WorkItemStatus;
+  hasQuestion?: boolean;
+  stuck?: boolean;
+}
+
+export function summarizeWorkItem(item: WorkItem): WorkItemSummary {
+  return {
+    id: item.id,
+    number: item.number,
+    status: item.status,
+    ...(item.questions?.length ? { hasQuestion: true } : {}),
+    ...(item.stuck ? { stuck: true } : {}),
+  };
+}
+
 /** `GET /api/work-items`, served under the work items revision (an ETag); `/api/lists/stream` pushes it as `workItems`. */
 export interface WorkItemList { items: WorkItem[] }
 

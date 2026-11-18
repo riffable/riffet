@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import type { Bootstrap } from './api';
-import { parseCachedLists,serializeCachedLists } from './list-cache';
+import { boundedLists, parseCachedLists,serializeCachedLists } from './list-cache';
 
 const bootstrap = (overrides: Partial<Bootstrap> = {}): Bootstrap => ({
   projects: [{ id: 'project-1' }],
@@ -29,5 +29,22 @@ describe('list cache', () => {
     expect(parseCachedLists('{not json')).toBeUndefined();
     expect(parseCachedLists('')).toBeUndefined();
     expect(parseCachedLists('null')).toBeUndefined();
+  });
+
+  it('keeps open and session-linked work item summaries across reloads', () => {
+    const data = bootstrap({
+      sessions: [{ id: 'session-1', workItemId: 'w-done-linked' }] as Bootstrap['sessions'],
+      workItemSummaries: [
+        { id: 'w-doing', number: 1, status: 'doing' },
+        { id: 'w-done-linked', number: 2, status: 'done' },
+        { id: 'w-done-orphan', number: 3, status: 'done' },
+      ],
+    });
+    const bounded = boundedLists(data);
+    expect(bounded.workItemSummaries).toEqual([
+      { id: 'w-doing', number: 1, status: 'doing' },
+      { id: 'w-done-linked', number: 2, status: 'done' },
+    ]);
+    expect(parseCachedLists(serializeCachedLists(bounded, 1))?.bootstrap.workItemSummaries).toEqual(bounded.workItemSummaries);
   });
 });
