@@ -56,7 +56,7 @@ export interface CursorTranscriptOptions {
   /** The chat the session follows now; undefined until the CLI has made one. */
   chatId(): string | undefined;
   /** A live CLI owns its last turn. After exit, a recorded outcome takes precedence over the lost connection. */
-  tailState?(chatId: string, turnId: string): 'live' | 'exited' | AgentTurnStatus | undefined;
+  tailState?(chatId: string, turnId: string): 'live' | 'exited' | CursorTurnResult | undefined;
   /** Where change signals come from; without it `watch` never wakes. */
   signals?(listener: CursorTranscriptSignals): () => void;
   /** Stamped on events; the journal does not keep it. */
@@ -201,16 +201,28 @@ interface ReadOptions {
   slice: Slice;
 }
 
+export interface CursorTurnResult { status: AgentTurnStatus; at?: string; error?: string }
+
 /** `endTurn`: how the turn the store leaves open ends, and which one it is when the caller knows. */
-interface TurnEnd { status: AgentTurnStatus; at: string; turnId?: string; expectedRoot?: string; stillCurrent?: () => boolean }
+interface TurnEnd extends CursorTurnResult { at: string; turnId?: string; expectedRoot?: string; stillCurrent?: () => boolean }
+
+function turnResult(w: AgentLaneWriter | undefined, id: string): CursorTurnResult | undefined {
+  if (w?.turnEnd) return w.turnEnd(id);
+  const status = w?.turnEndStatus(id);
+  return status ? { status } : undefined;
+}
 
 /** A stop hook may arrive after the next prompt already bounded this exact turn. */
 function correctInferredEnd(w: AgentLaneWriter, id: string, end: TurnEnd): boolean {
-  const previous = w.turnEndStatus(id);
-  if (previous === end.status) return true;
-  if (end.expectedRoot || (previous !== 'completed' && previous !== 'interrupted')) return false;
+  const previous = turnResult(w, id);
+  if (previous?.status === end.status) {
+    // A stop hook can confirm failure before the pane shows its reason.
+    if (previous.status === 'failed' && previous.at && !previous.error && end.error) w.turnEnded(id, 'failed', previous.at, end.error);
+    return true;
+  }
+  if (end.expectedRoot || (previous?.status !== 'completed' && previous?.status !== 'interrupted')) return false;
   w.turnReopened(id, end.at);
-  w.turnEnded(id, end.status, end.at);
+  w.turnEnded(id, end.status, end.at, end.error);
   return true;
 }
 
@@ -336,8 +348,8 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
   async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
 
   /** Drain the CLI's checkpoint before the hook or settled idle observation ends its turn (G6). */
-  endTurn(w: AgentLaneWriter, status: AgentTurnStatus, at: string, turnId?: string, expectedRoot?: string, stillCurrent?: () => boolean): Promise<boolean> {
-    return this.readServing(w, { status, at, turnId, expectedRoot, stillCurrent });
+  endTurn(w: AgentLaneWriter, end: TurnEnd): Promise<boolean> {
+    return this.readServing(w, end);
   }
 
   /** Reads everything on disk into the log that serves the lane (G6), then ends its open turn if asked to. */
@@ -507,7 +519,7 @@ class LaneRead {
     const turn = this.state.turn;
     if (!turn || turn.ended || !this.state.live || this.state.n !== this.state.len) return;
     // Promotion drops the scratch log. Carry the outcome it served into the full history first.
-    let outcome = this.w.scratch?.turnEndStatus(turn.id);
+    let outcome = turnResult(this.w.scratch, turn.id);
     if (!outcome) {
       if (ending && (!ending.turnId || ending.turnId === turn.id || ending.turnId === this.mapper.turnId)) return;
       const state = this.options.depth === 0 ? this.source.tailState(this.view.chatId, this.mapper.turnId ?? turn.id) : undefined;
@@ -515,9 +527,9 @@ class LaneRead {
         turn.attached = true;
         return;
       }
-      if (state === 'exited' && turn.attached) outcome = 'interrupted';
+      if (state === 'exited' && turn.attached) outcome = { status: 'interrupted' };
       else if (state && state !== 'exited') outcome = state;
-      else if (this.historyAnswered && !this.state.draft && !turn.attached) outcome = 'completed';
+      else if (this.historyAnswered && !this.state.draft && !turn.attached) outcome = { status: 'completed' };
     }
     if (!outcome) return;
     if (this.state.draft && !this.state.draft.prompt) this.dropDraft();
@@ -604,7 +616,7 @@ class LaneRead {
 
   /** {@link CursorTranscriptSource.endTurn}, once the store has been read. */
   end(end: TurnEnd): boolean {
-    const { status, at, turnId, expectedRoot, stillCurrent } = end;
+    const { status, turnId, expectedRoot, stillCurrent } = end;
     if (this.abandoned || (stillCurrent && !stillCurrent())) return false;
     const turn = this.state.turn;
     if (expectedRoot) {
@@ -618,7 +630,7 @@ class LaneRead {
     const prompt = this.state.draft?.prompt;
     if (prompt && (turnId ? turnId === prompt : !turn || turn.ended)) {
       this.source.dismissLive(this.view.chatId);
-      this.dropDraft(status, at);
+      this.dropDraft(end);
       this.flush();
       return true;
     }
@@ -636,7 +648,7 @@ class LaneRead {
       this.flush();
     }
     turn.ended = true;
-    this.writeEnd({ ...turn, at }, status);
+    this.writeEnd(turn, end);
     this.flush();
     return true;
   }
@@ -841,9 +853,9 @@ class LaneRead {
     };
   }
 
-  private writeEnd(turn: TurnState, status: AgentTurnStatus = this.w.scratch?.turnEndStatus(turn.id) ?? (turn.owes ? 'interrupted' : 'completed')): void {
-    const at = turn.at || new Date().toISOString();
-    this.w.turnEnded(turn.id, status, at);
+  private writeEnd(turn: TurnState, result = turnResult(this.w.scratch, turn.id)): void {
+    const at = result?.at || turn.at || new Date().toISOString();
+    this.w.turnEnded(turn.id, result?.status ?? (turn.owes ? 'interrupted' : 'completed'), at, result?.error);
     // A compaction the CLI reported that no archive completed will not finish now; a late archive still can.
     const parsed = Date.parse(at);
     this.w.activities.settleWhere(activity => activity.kind === 'compaction', 'unknown', new Date(Number.isNaN(parsed) ? Date.now() : parsed));
@@ -909,22 +921,22 @@ class LaneRead {
   }
 
   /** The drafts of the step in flight go. */
-  private dropDraft(status?: AgentTurnStatus, at?: string): void {
+  private dropDraft(result?: CursorTurnResult): void {
     const draft = this.state.draft;
     if (!draft) return;
     for (let part = 0; part < draft.count; part += 1) this.retire.push(`${draft.at}:${part}`);
-    this.endLivePrompt(status, at);
+    this.endLivePrompt(result);
     delete this.state.draft;
   }
 
   /** A turn only a live step's prompt opened ends with its drafts: the store never recorded it. */
-  private endLivePrompt(status: AgentTurnStatus = 'interrupted', at = new Date().toISOString()): void {
+  private endLivePrompt(result?: CursorTurnResult): void {
     const turnId = this.state.draft?.prompt;
     if (!turnId) return;
     this.retire.push(`${this.state.draft!.at - 1}:0`);
     delete this.state.draft!.prompt;
     this.state.liveEnded = [...(this.state.liveEnded ?? []).filter(id => id !== turnId), turnId].slice(-RECENT_TURNS);
-    this.w.turnEnded(turnId, status, at);
+    this.w.turnEnded(turnId, result?.status ?? 'interrupted', result?.at ?? new Date().toISOString(), result?.error);
   }
 
   // ---- activities and subagents --------------------------------------------------------------

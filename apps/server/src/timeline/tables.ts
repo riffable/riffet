@@ -186,6 +186,14 @@ export class TimelineTables {
       .map(row => ({ ...(row.run_id !== null ? { runId: row.run_id } : {}), payload: row.payload }));
   }
 
+  /** The errors of frozen rows synthesized from turn ends. */
+  failuresBefore(sessionId: string, lane: SyncLane, pos: number): Array<{ turnId: string; error: string | null; blobRef: string | null }> {
+    return this.sql(`SELECT json_extract(payload, '$.event.nativeTurnId') AS turnId, json_extract(payload, '$.event.data.error') AS error,
+      json_extract(payload, '$.truncated.blobRef') AS blobRef
+      FROM timeline_rows WHERE session_id=? AND lane=? AND key>='event:meta:turn:' AND key<'event:meta:turn;' AND kind='status' AND deleted=0 AND pos<?`)
+      .all(sessionId, lane, pos) as Array<{ turnId: string; error: string | null; blobRef: string | null }>;
+  }
+
   /** The user and assistant rows of one turn, in order, as sent. */
   textRows(sessionId: string, lane: SyncLane, turn: string, from: number, to: number): TimelineRow[] {
     return (this.sql("SELECT seq,rev,payload FROM timeline_rows WHERE session_id=? AND lane=? AND pos>=? AND pos<=? AND turn=? AND kind IN ('user','assistant') AND deleted=0 ORDER BY pos, key").all(sessionId, lane, from, to, turn) as Array<{ seq: number; rev: number; payload: string }>)

@@ -6,7 +6,7 @@ import { basename } from 'node:path';
 import { sourceProtocols } from '@riffet/plugin-api/kit';
 import type { NativeBackendId, NativeInteractionResult, NativeStatus, NativeWorkbenchEvent, Project, Run, Session, TerminalInfo } from '../../../../packages/contracts/src/index.js';
 import { NativeInteractions } from '../agent-host/interactions.js';
-import { AppError } from '../errors.js';
+import { AppError, UNSPECIFIED_NATIVE_RUN_FAILURE } from '../errors.js';
 import type { LaneWriter, TranscriptSource } from '../journal/ingest.js';
 import { backendIdOf } from '../session-identity.js';
 import { fetchGatewayModels } from './shared/gateway-models.js';
@@ -78,7 +78,7 @@ const runRef = (run: Run): AgentRunRef => ({
   ...(run.native?.nativeSessionId ? { nativeSessionId: run.native.nativeSessionId } : {}),
   ...(run.native?.nativeTurnId ? { nativeTurnId: run.native.nativeTurnId } : {}),
   ...(run.native?.nativeMessageId ? { nativeMessageId: run.native.nativeMessageId } : {}),
-  ...(run.error !== undefined ? { error: run.error } : {}),
+  ...(run.error !== undefined && run.error !== UNSPECIFIED_NATIVE_RUN_FAILURE ? { error: run.error } : {}),
   ...(run.native?.stage ? { stage: run.native.stage } : {}),
   ...(run.native?.renderedText !== undefined ? { renderedText: run.native.renderedText } : {}),
   ...(run.native?.input ? { inputText: run.native.input.text } : {}),

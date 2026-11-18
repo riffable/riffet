@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto';
 import type { NativeActivity, NativeJob, NativeWorkbenchEvent, Run, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { PENDING_ROW_POS, SYNC_BUDGET, type SyncLane, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { buildTimeline, IncrementalTimeline } from '../../../../packages/timeline/src/buildTimeline.js';
+import { nativeTaskOutcome } from '../../../../packages/timeline/src/failures.js';
 import type { TimelineItem } from '../../../../packages/timeline/src/model.js';
 import { appendProjectedEvents, projectEvents, projectionIndexes, type ProjectedEvent } from '../../../../packages/timeline/src/projectEvents.js';
 import { isRunRow, pendingOf, POS_STEP, rowContent, rowPlaces, type RowContent, type RowPlace } from '../../../../packages/timeline/src/rows.js';
+import { UNSPECIFIED_NATIVE_RUN_FAILURE } from '../errors.js';
 import { activityOfEvent, isLiveActivity } from '../journal/activity.js';
 import { hasTurnEnded, servingKey, subagentMetaId, turnMetaId, type TurnEndStatus } from '../journal/ingest.js';
 import { DRAFT_KIND, META_PREFIX, TOMBSTONE_KIND, type Journal, type JournalRow } from '../journal/journal.js';
@@ -25,7 +27,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 10;
+export const FOLD_VERSION = 11;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -150,6 +152,7 @@ export class LaneFold {
   private frozenTools: Map<string, Array<{ key: string; run?: string; pos: number }>> | undefined;
   private runs: Run[] = [];
   private runSigs = new Map<string, string>();
+  private runFailures = new Map<string, string>();
   private jobs = new Map<string, NativeJob>();
   private chatId: string | undefined;
   /** Changes made since the last `take`, for subscribers. */
@@ -165,7 +168,9 @@ export class LaneFold {
   static open(ctx: FoldContext, sessionId: string, lane: SyncLane, inputs: FoldInputs, limit = Number.POSITIVE_INFINITY): { fold: LaneFold; reset?: ResetReason; caughtUp: boolean } {
     const fold = new LaneFold(ctx, sessionId, lane);
     const reset = fold.attach();
-    fold.setInputs(inputs);
+    fold.setInputs(inputs, true);
+    const failureCut = fold.frozenFailureCut();
+    if (failureCut < fold.windowStart) fold.windowStart = ctx.tables.cutAtOrBefore(sessionId, lane, failureCut) ?? 1;
     const caughtUp = fold.loadFrom(fold.windowStart, fold.journalSeq, Math.max(fold.journalSeq, fold.windowStart - 1) + limit);
     fold.foldAndPersist();
     return { fold, caughtUp, ...(reset ? { reset } : {}) };
@@ -188,19 +193,26 @@ export class LaneFold {
   // ---- inputs ------------------------------------------------------------------------------
 
   /** New runs, jobs or chat; a run change that reaches into a folded turn unfreezes it. */
-  setInputs(inputs: FoldInputs): void {
+  setInputs(inputs: FoldInputs, opening = false): void {
+    const chatChanged = this.chatId !== inputs.chatId;
     this.chatId = inputs.chatId;
     for (const job of inputs.jobs) this.setJob(job);
     const runs = timelineRuns(inputs.runs);
     const sigs = new Map(runs.map(run => [run.id, runSignature(run)]));
     const changed = [...new Set([...sigs.keys(), ...this.runSigs.keys()])].filter(id => sigs.get(id) !== this.runSigs.get(id));
     this.runSigs = sigs;
-    if (!changed.length && runs.length === this.runs.length) return;
+    if (!chatChanged && !changed.length && runs.length === this.runs.length) return;
+    const previous = this.runs;
     this.runs = runs;
-    let target = Number.POSITIVE_INFINITY;
+    const previousFailures = this.runFailures;
+    this.runFailures = this.boundRunFailures();
+    const failureChanges = [...new Set([...previousFailures.keys(), ...this.runFailures.keys()])]
+      .filter(turnId => previousFailures.get(turnId) !== this.runFailures.get(turnId));
+    if (failureChanges.length) this.reproject = true;
+    let target = opening ? Number.POSITIVE_INFINITY : this.earliestFrozenFailure(failureChanges);
     for (const id of changed) {
       if (!this.seed.echoedRuns.has(id) && !this.seed.seenRunIds.has(id)) continue;
-      const run = runs.find(candidate => candidate.id === id) ?? this.runsById(id);
+      const run = this.runsById(id) ?? previous.find(candidate => candidate.id === id);
       const state = run ? this.ctx.tables.rowState(this.sessionId, this.lane, `user:${run.commandId || run.id}`) : undefined;
       target = Math.min(target, state ? identityOfPos(state.pos) : 1);
     }
@@ -209,7 +221,69 @@ export class LaneFold {
 
   private runsById(id: string): Run | undefined { return this.runs.find(run => run.id === id); }
 
-  setChat(chatId: string | undefined): void { this.chatId = chatId; }
+  setChat(chatId: string | undefined): void {
+    if (this.chatId !== chatId) this.setInputs({ chatId, runs: this.runs, jobs: [] });
+  }
+
+  /** Run errors are a fallback only for a confirmed failure of the same native chat and turn. */
+  private boundRunFailures(): Map<string, string> {
+    const seen = new Set<string>();
+    const failures = new Map<string, string>();
+    for (const run of this.runs) {
+      const native = run.native;
+      const turnId = native?.nativeTurnId;
+      if (!turnId || native.intent === 'steer' || !this.chatId || (native.nativeSessionId ?? native.cursorSessionId) !== this.chatId) continue;
+      if (seen.has(turnId)) failures.delete(turnId);
+      else if (run.state === 'failed' && nativeTaskOutcome(run) === 'failed' && run.error && run.error !== UNSPECIFIED_NATIVE_RUN_FAILURE) failures.set(turnId, run.error);
+      seen.add(turnId);
+    }
+    return failures;
+  }
+
+  /** Compare persisted derived rows with the exact Run error, including updates made while the lane was cold. */
+  private frozenFailureCut(): number {
+    if (this.lane !== 'main' || this.windowStart === 1) return Number.POSITIVE_INFINITY;
+    const stale = new Set(this.runFailures.keys());
+    for (const cached of this.ctx.tables.failuresBefore(this.sessionId, this.lane, this.windowStart * POS_STEP)) {
+      const { turnId } = cached;
+      stale.delete(turnId);
+      const error = this.runFailures.get(turnId);
+      let saved = cached.error ?? undefined;
+      if (saved === error && !cached.blobRef) continue;
+      if (cached.blobRef) {
+        const full = this.ctx.journal.getBlob(cached.blobRef);
+        if (full) saved = str((JSON.parse(full.toString('utf8')) as RowContent).event.data.error);
+      }
+      if (saved === error) continue;
+      // A recorded error takes precedence over the Run. Read the legacy event only on a mismatch.
+      if (saved) {
+        const end = this.ctx.journal.entity(this.key, turnMetaId(turnId, 'ended'));
+        if (str((end?.payload as { error?: unknown } | undefined)?.error)) continue;
+        let legacy: string | undefined;
+        for (const row of this.ctx.journal.turnEntitiesNewestFirst(this.key, turnId, 'run_failed')) {
+          legacy = str((row.payload as WorkbenchEvent).data?.error);
+          if (legacy) break;
+        }
+        if (legacy === saved) continue;
+      }
+      stale.add(turnId);
+    }
+    return this.earliestFrozenFailure(stale);
+  }
+
+  private earliestFrozenFailure(turnIds: Iterable<string>): number {
+    if (this.windowStart === 1) return Number.POSITIVE_INFINITY;
+    let target = Number.POSITIVE_INFINITY;
+    for (const turnId of turnIds) {
+      const started = this.ctx.journal.locate(this.key, turnMetaId(turnId, 'started'));
+      if (started && started.identity < this.windowStart) {
+        const ended = this.ctx.journal.entity(this.key, turnMetaId(turnId, 'ended'));
+        const payload = ended?.payload as { status?: unknown; error?: unknown } | undefined;
+        if (ended?.kind === 'meta.turn_ended' && payload?.status === 'failed' && !str(payload.error)) target = Math.min(target, started.identity);
+      }
+    }
+    return target;
+  }
 
   setJob(job: NativeJob): void {
     if (this.jobs.get(job.toolCallId) === job) return;
@@ -447,6 +521,10 @@ export class LaneFold {
       if (row.seq > since) frozen.push({ identity, row });
       return;
     }
+    if (row.kind === 'run_failed' && row.turnId && row.seq > since) {
+      const started = this.ctx.journal.locate(this.key, turnMetaId(row.turnId, 'started'));
+      if (started && started.identity < this.windowStart) frozen.push({ identity: started.identity, row });
+    }
     const draft = row.kind === DRAFT_KIND;
     // A draft chunk emptied once its entity committed (`compactDrafts`) says nothing; the committed version does.
     const payload = row.payload as { type?: unknown; data?: unknown } | undefined;
@@ -638,11 +716,12 @@ export class LaneFold {
 
   /** End metadata owns a native turn's failure; command outcomes remain available for settlement. */
   private eventsWithTurnFailures(): WorkbenchEvent[] {
-    const legacy = new Map<string, WorkbenchEvent>();
+    const legacy = new Map<string, string>();
     const contentEnds = new Map<string, number>();
     for (const event of this.events) {
       const turnId = (event as Partial<NativeWorkbenchEvent>).nativeTurnId;
-      if (event.type === 'run_failed' && turnId) legacy.set(turnId, event);
+      const reason = event.type === 'run_failed' ? str(event.data.error) : undefined;
+      if (turnId && reason) legacy.set(turnId, reason);
       if (turnId && !event.type.startsWith('run_')) contentEnds.set(turnId, Math.max(contentEnds.get(turnId) ?? 0, event.sequence));
     }
     const events = this.events.filter(event => {
@@ -655,9 +734,7 @@ export class LaneFold {
     });
     for (const [turnId, meta] of this.turnMetas) {
       if (meta.status !== 'failed' || meta.endIdentity === undefined || meta.endIdentity < this.windowStart) continue;
-      const previous = legacy.get(turnId);
-      const error = meta.error ?? str(previous?.data.error);
-      if (!error && !previous) continue;
+      const error = meta.error ?? legacy.get(turnId) ?? this.runFailures.get(turnId);
       events.push({
         // Reopening retains the first end identity. Put the failure after any newer content of
         // its own turn, beyond that event's run-row slots and before the next journal entity.

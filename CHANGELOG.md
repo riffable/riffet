@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- When a Cursor turn fails after running tools, the conversation shows the error once after that work. The error stays visible when the process is folded, including in earlier conversations.
 - Cursor conversations keep showing the current turn as running while the agent thinks, and keep subsequent tool calls and replies in that turn.
 - Scanning a pairing QR works when the Mac has several network addresses and the phone can reach only some of them, such as Wi-Fi that keeps wireless devices apart while the wired address answers: the QR carries every address and the phone pairs at the first that answers. Android also falls back to these addresses later if the one it uses stops answering.
 - Sending a message to an agent no longer waits for the undo checkpoint: the checkpoint is saved while the message goes out, where each message in a project with many uncommitted changes used to wait 0.3–3.5 s. Files the turn changed before the checkpoint finished are listed when undoing the turn, which is then refused rather than restoring the wrong content.

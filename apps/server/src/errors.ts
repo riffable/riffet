@@ -3,6 +3,9 @@ import { AppError } from '../../../packages/plugin-api/src/kit/errors.js';
 
 export { AppError, requireString } from '../../../packages/plugin-api/src/kit/errors.js';
 
+/** Stored on a failed Run when the provider reported only its status. */
+export const UNSPECIFIED_NATIVE_RUN_FAILURE = 'Native backend reported that this run failed.';
+
 /**
  * Validates one input body against its contract schema. The caller
  * names the error code the route has always answered with, so schema validation does not rename an

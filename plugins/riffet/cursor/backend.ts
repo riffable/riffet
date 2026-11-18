@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } from '@contracts';
-import { AppError, estimatedTokens, materializeNativeInput, queryDirectory, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
+import { AppError, estimatedTokens, materializeNativeInput, queryDirectory, redactSensitiveText, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
   type AgentControlMessage, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
@@ -550,8 +550,12 @@ export class CursorBackend implements AgentBackend {
         const observed = steering.recordedOutcome(sessionId, { nativeSessionId: chatId, turnId });
         if (observed) return observed;
         const run = port.runsOfTurn(sessionId, chatId, turnId).find(run => run.intent !== 'steer');
-        if (run?.state === 'failed' || run?.state === 'completed' || run?.state === 'cancelled') return run.state;
-        if (run?.state === 'interrupted') return run.stage === 'provider_cancelled' ? 'cancelled' : 'interrupted';
+        if (run?.state === 'failed') {
+          const error = run.error && redactSensitiveText(redactCursorOutput(launch, run.error));
+          return { status: 'failed', ...(error ? { error } : {}) };
+        }
+        if (run?.state === 'completed' || run?.state === 'cancelled') return { status: run.state };
+        if (run?.state === 'interrupted') return { status: run.stage === 'provider_cancelled' ? 'cancelled' : 'interrupted' };
         return terminal?.state === 'exited' ? 'exited' : undefined;
       },
       ...(host.workspaceChanges ? { observedChanges: (toolCallId: string) => host.workspaceChanges?.changes(sessionId, toolCallId) } : {}),

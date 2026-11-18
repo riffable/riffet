@@ -559,6 +559,16 @@ export class Journal {
     return first ? this.entity(sessionId, first.native_id) : undefined;
   }
 
+  /** Current entities of one kind in a turn, newest transcript position first. */
+  *turnEntitiesNewestFirst(sessionId: string, turnId: string, kind: string): Generator<JournalRow> {
+    const rows = this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest FROM journal_events e
+      WHERE e.session_id=? AND e.turn_id=? AND e.kind=?
+        AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
+      ORDER BY (SELECT seq FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id AND rev=1) DESC`)
+      .iterate(sessionId, turnId, kind);
+    for (const raw of rows) yield this.rowOf(raw as unknown as RawRow);
+  }
+
   /** Just where an entity sits and what version it is at, without reading its payload. */
   locate(sessionId: string, nativeId: string): { identity: number; rev: number; seq: number; kind: string; digest: string; turnId?: string } | undefined {
     const latest = this.sql('SELECT seq,rev,kind,digest,turn_id FROM journal_events WHERE session_id=? AND native_id=? ORDER BY rev DESC LIMIT 1').get(sessionId, nativeId) as { seq: number; rev: number; kind: string; digest: string; turn_id: string | null } | undefined;

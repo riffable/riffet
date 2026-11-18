@@ -8,7 +8,7 @@ import { samePromptText } from '../../../../packages/contracts/src/prompt-match.
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
 import type { NativeBackendTraits, NativeDispatchBinding } from '../backends/types.js';
-import { AppError } from '../errors.js';
+import { AppError, UNSPECIFIED_NATIVE_RUN_FAILURE } from '../errors.js';
 import { backendIdOf } from '../session-identity.js';
 import { isAgentTerminal } from '../terminal/kinds.js';
 import { launchArgAccepted } from '../terminal/launch-args.js';
@@ -891,7 +891,7 @@ export class NativeDispatcher {
               timings: { ...current.native.timings, observedAt: current.native.timings?.observedAt ?? now(), completedAt: now() },
             }, { state: 'completed', error: undefined });
           } else if (event.type === 'run_failed') {
-            const error = typeof event.data.error === 'string' ? event.data.error.slice(0, 1000) : 'Native backend reported that this run failed.';
+            const error = typeof event.data.error === 'string' ? event.data.error.slice(0, 1000) : UNSPECIFIED_NATIVE_RUN_FAILURE;
             this.store.transitionNativeRun(current.id, [current.native.delivery], {
               delivery: 'failed', stage: 'provider_failed', ...(nativeMessageId ? { nativeMessageId } : {}),
               timings: { ...current.native.timings, completedAt: now() },
@@ -1102,6 +1102,12 @@ export class NativeDispatcher {
           || correction.type === 'run_failed' && run.state === 'failed' && native.stage === 'provider_failed'
           || correction.type === 'run_cancelled' && run.state === 'interrupted' && native.stage === 'provider_cancelled';
         if (matches && run.error === correction.error) continue;
+        // A newer journal revision can supply the diagnostic after the provider already stopped.
+        if (matches && correction.type === 'run_failed' && correction.error
+          && (!run.error || run.error === UNSPECIFIED_NATIVE_RUN_FAILURE)) {
+          this.store.transitionNativeRun(run.id, ['failed'], {}, { error: redactSensitiveText(correction.error).slice(0, 1000) });
+          continue;
+        }
         // A newer end can refine a provider cancellation; failures and completions require an
         // explicit retraction first. Ordinary late activity is never evidence to reopen a turn.
         // User stops and released tracking remain final even if the provider retracts its end.

@@ -397,7 +397,7 @@ const expected: Record<string, Brief[]> = {
     { kind: 'status', key: 'event:4', turn: 'run:run-2', pos: 4608, runId: 'run-2', text: '已停止 · 超时', tone: 'muted' },
     { kind: 'user', key: 'user:cmd-run-3', turn: 'run:run-3', pos: 5632, runId: 'run-3', text: 'last try' },
     { kind: 'status', key: 'event:6', turn: 'run:run-3', pos: 6656, runId: 'run-3', text: '已中断', tone: 'muted' },
-    { kind: 'status', key: 'event:7', turn: 'run:run-3', pos: 7680, runId: 'run-3', text: '运行失败', tone: 'danger' },
+    { kind: 'status', key: 'event:7', turn: 'run:run-3', pos: 7680, runId: 'run-3', text: '任务失败', tone: 'danger' },
   ],
   '原生回合结局：结果未确认与已停止的消息仍可见，发送前取消的不出现，已完成回合的迟到输出仍算进行中': [
     { kind: 'user', key: 'user:cmd-run-a', turn: 'run:run-a', pos: 1536, runId: 'run-a', text: 'deploy' },

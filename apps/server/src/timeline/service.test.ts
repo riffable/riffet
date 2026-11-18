@@ -357,6 +357,70 @@ describe('timeline service', () => {
     env.close();
   });
 
+  it('projects a bare failed end after its tools and recovers the exact owner Run error after reopening', async () => {
+    let env = open(undefined, { stepRows: 1 });
+    const owner = nativeRun('owner', 'running', 'run the tool', {
+      nativeSessionId: 'chat-1', nativeTurnId: 't1', nativeMessageId: 'u1',
+    });
+    env.setRun(owner);
+    commit(env, user('u1', 't1', owner.prompt), tool('k1', 't1', 'call-1', 'completed'));
+    const endedAt = stamp(++tick);
+    env.writer.turnEnded('t1', 'failed', endedAt);
+    await env.ready();
+    const bare = env.all().find(row => row.kind === 'status');
+    expect(bare).toMatchObject({ kind: 'status', tone: 'danger', text: '任务失败', turn: 'run:owner' });
+    const storedBare = env.db.prepare('SELECT payload,digest,bytes FROM timeline_rows WHERE session_id=? AND key=?')
+      .get(S, bare!.key) as { payload: string; digest: string; bytes: number };
+
+    const error = 'Network Error\nThe model provider did not respond.';
+    const failed = { ...owner, state: 'failed' as const, error, native: { ...owner.native!, delivery: 'failed' as const, stage: 'provider_failed' as const } };
+    env.setRun(failed);
+    await env.ready();
+    const rows = env.all().filter(row => row.turn === 'run:owner');
+    expect(rows.map(row => row.kind)).toEqual(['user', 'tool', 'status']);
+    expect(rows.at(-1)).toMatchObject({ key: bare!.key, pos: bare!.pos, text: 'Network Error', detail: error, event: { data: { error }, nativeTurnId: 't1' } });
+    turn(env, 2);
+    await env.ready();
+
+    // A steering Run and an older chat cannot supply this native turn's error.
+    env.setRun({ ...nativeRun('steer', 'failed', 'keep working', { ...failed.native, nativeMessageId: 'steer-message', intent: 'steer', ownerRunId: owner.id }), error: 'steering failed' });
+    env.setRun({ ...nativeRun('other-chat', 'failed', 'old question', { ...failed.native, nativeMessageId: 'old-message', nativeSessionId: 'chat-0' }), error: 'other chat failed' });
+    env.setRun({ ...nativeRun('unsent', 'failed', 'could not send', { nativeSessionId: 'chat-1', delivery: 'failed' }), error: 'send failed' });
+    await env.ready();
+    expect(env.all().filter(row => row.kind === 'status')).toEqual([expect.objectContaining({ key: bare!.key, detail: error })]);
+
+    // A previously folded cache omitted this row altogether. Reopening derives it from the Run.
+    env.db.prepare('DELETE FROM timeline_rows WHERE key=?').run(bare!.key);
+    env.db.prepare("UPDATE timeline_heads SET generation='old-fold',fold_version=10 WHERE session_id=? AND lane='main'").run(S);
+    env.close();
+    env = open(undefined, { stepRows: 1 });
+    env.runs.push(failed);
+    await env.ready();
+    const replayed = env.all().filter(row => row.turn === 'run:owner');
+    expect(replayed.map(row => row.kind)).toEqual(['user', 'tool', 'status']);
+    expect(replayed.at(-1)).toMatchObject({ key: bare!.key, pos: bare!.pos, detail: error });
+    env.close();
+
+    // Restore a current-generation cache whose frozen failure was written before the Run error.
+    env = open();
+    env.db.prepare('UPDATE timeline_rows SET payload=?,digest=?,bytes=? WHERE session_id=? AND key=?')
+      .run(storedBare.payload, storedBare.digest, storedBare.bytes, S, bare!.key);
+    env.runs.push(failed);
+    await env.ready();
+    expect(env.all().filter(row => row.kind === 'status')).toEqual([expect.objectContaining({ key: bare!.key, pos: bare!.pos, detail: error })]);
+    // A later journal failure takes precedence over the Run without duplicating or moving the row.
+    commit(env, ev('late-provider-failure', 'run_failed', { error: 'More specific provider failure' }, 't1'), ev('bare-command-end', 'run_failed', {}, 't1'));
+    const legacyHead = await env.ready();
+    expect(env.all().filter(row => row.kind === 'status')).toEqual([expect.objectContaining({ key: bare!.key, pos: bare!.pos, text: 'More specific provider failure' })]);
+    env.close();
+
+    env = open();
+    env.runs.push(failed);
+    expect(await env.ready()).toEqual(legacyHead);
+    expect(env.ranges[0]).toBeGreaterThan(env.journal.locate(S, turnMetaId('t1', 'started'))!.identity);
+    env.close();
+  });
+
   it('folds a long log a bounded step per turn of the event loop, to the same rows, and resumes a fold cut short by a restart', async () => {
     const path = join(dir, 'state.db');
     let env = open(path, { stepRows: 7 });
@@ -677,7 +741,7 @@ describe('timeline service', () => {
     await env.ready('sub:task-1');
     await env.ready();
     const resumed = env.all().find(row => row.key === 'tool:task-1');
-    expect(resumed).toMatchObject({ subagent: { turnId: 'c2', status: 'running', startedAt: resumedAt, running: true, rows: 4 } });
+    expect(resumed).toMatchObject({ subagent: { turnId: 'c2', status: 'running', startedAt: resumedAt, running: true, rows: 5 } });
     expect(resumed).toMatchObject({ activity: { id: 'claude:agent-7', status: 'failed', endedAt: failedAt } }); // The link retains the actual activity; a wake must not invent a live one.
     child.turnEnded('c2', 'completed', stamp(++tick));
     await env.ready('sub:task-1');

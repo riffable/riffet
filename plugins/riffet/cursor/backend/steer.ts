@@ -1,16 +1,16 @@
 import { isAbsolute, resolve } from 'node:path';
 import type { NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Run } from '@contracts';
-import { AppError, DeferredSteerInputs, NativeHookServer, type SteerBinding, type SteerHost } from '@riffet/plugin-api/kit';
+import { AppError, DeferredSteerInputs, NativeHookServer, redactSensitiveText, type SteerBinding, type SteerHost } from '@riffet/plugin-api/kit';
 import {
-  type AgentDispatchBinding, type AgentHost, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentTurnStatus,
+  type AgentDispatchBinding, type AgentHost, type AgentRunRef, type AgentSendRequest, type AgentSessionView,
 } from '@riffet/plugin-api/experimental/agent';
-import type { CursorLaunchProfile } from '../cli-driver.js';
+import { redactCursorOutput, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { NativeService, SettledCursorTurn } from '../native/service.js';
 import { chatStorePath } from '../native/chat-store.js';
 import { resolveShellCall } from './shell-observation.js';
 import { probeCursorHookSteer, writeCursorHookPlugin } from './launch-plugin.js';
-import { CursorTranscriptSource } from './transcript-source.js';
+import { CursorTranscriptSource, type CursorTurnResult } from './transcript-source.js';
 
 /** The tools whose hooks name a file they change: the CLI reports every edit, a replacement included, as `Write`. */
 const EDIT_TOOLS = new Set(['Write', 'Delete', 'StrReplace', 'Edit', 'MultiEdit']);
@@ -21,9 +21,9 @@ interface Entry {
   active?: ActiveGeneration;
   retired: Set<string>;
   /** Run outcomes already published, including hooks whose journal read has yet to land. */
-  ended: Map<string, { type: TurnOutcome; at: string }>;
+  ended: Map<string, TurnOutcome>;
   /** The last verified idle root and the read currently checking one. */
-  answered?: string;
+  answered?: { key: string; hasError: boolean };
   settling?: true;
 }
 /**
@@ -31,8 +31,8 @@ interface Entry {
  * cut short; the journal reads the store after this long, so that step stays in the turn it belongs to.
  */
 const TRANSCRIPT_END_DELAY_MS = 3_000;
-const TURN_END_STATUS = { run_completed: 'completed', run_failed: 'failed', run_cancelled: 'cancelled' } as const satisfies Record<string, AgentTurnStatus>;
-type TurnOutcome = keyof typeof TURN_END_STATUS;
+const TURN_OUTCOME_EVENT = { completed: 'run_completed', failed: 'run_failed', cancelled: 'run_cancelled' } as const;
+type TurnOutcome = CursorTurnResult & { status: keyof typeof TURN_OUTCOME_EVENT; at: string };
 const sameTarget = (left: NativeTurnTarget | undefined, right: NativeTurnTarget) => left?.nativeSessionId === right.nativeSessionId && left.turnId === right.turnId;
 const turnKey = (target: NativeTurnTarget) => JSON.stringify([target.nativeSessionId, target.turnId]);
 
@@ -90,7 +90,7 @@ export class CursorSteerBridge {
     };
     native.useTurnObserver({
       activeTurn: session => this.activeTurn(session),
-      recordedOutcome: (sessionId, target) => this.recordedOutcome(sessionId, target),
+      recordedOutcome: (sessionId, target) => this.recordedOutcome(sessionId, target)?.status,
       transcript: (session, events) => { for (const receipt of this.receiptEvents(session, events)) host.emitEvent(session.id, receipt); },
       offline: session => this.reject(session.id, 'Cursor connection is no longer writable'),
       answered: (session, target, stillIdle) => { void this.answered(session, target, stillIdle).catch(() => undefined); },
@@ -135,9 +135,8 @@ export class CursorSteerBridge {
     return { nativeSessionId: active.nativeSessionId, turnId: active.turnId, ...(owner ? { ownerRunId: owner.id } : {}) };
   }
 
-  recordedOutcome(sessionId: string, target: NativeTurnTarget): AgentTurnStatus | undefined {
-    const outcome = this.entries.get(sessionId)?.ended.get(turnKey(target));
-    return outcome && TURN_END_STATUS[outcome.type];
+  recordedOutcome(sessionId: string, target: NativeTurnTarget): TurnOutcome | undefined {
+    return this.entries.get(sessionId)?.ended.get(turnKey(target));
   }
 
   /** The run the turn belongs to: the one that is not a steer. Read from the host's records at the call. */
@@ -215,7 +214,8 @@ export class CursorSteerBridge {
       if (signal.aborted || current.archivedAt || current.nativeSessionId !== nativeSessionId) return {};
       const interruptedTool = event === 'postToolUseFailure' && payload.is_interrupt === true;
       if (event === 'stop' || event === 'sessionEnd' || interruptedTool) {
-        this.end(entry, session.id, target, !interruptedTool && payload.status === 'completed' ? 'run_completed' : payload.status === 'error' ? 'run_failed' : 'run_cancelled');
+        const status = !interruptedTool && payload.status === 'completed' ? 'completed' : payload.status === 'error' ? 'failed' : 'cancelled';
+        this.end(entry, session.id, target, { status, at: new Date().toISOString() });
         return {};
       }
       if (entry.retired.has(turnId)) return {};
@@ -240,7 +240,7 @@ export class CursorSteerBridge {
           // over. Until then the hook names no turn this chat is running: it must neither end the turn nor take its inputs.
           const previous = this.native.turnState(session.id, entry.active);
           if (previous === 'open') return {};
-          if (previous === 'answered') this.end(entry, session.id, entry.active, 'run_completed');
+          if (previous === 'answered') this.end(entry, session.id, entry.active, { status: 'completed', at: new Date().toISOString() });
           else this.reject(session.id, 'Cursor started another generation');
         }
         entry.active = { ...target, terminalId: terminal.id, epoch: terminal.epoch };
@@ -308,7 +308,7 @@ export class CursorSteerBridge {
     const key = target && turnKey(target);
     const recorded = key ? entry.ended.get(key) : undefined;
     const settled = JSON.stringify([answer.nativeSessionId, answer.rootId, answer.turnId]);
-    if (entry.answered === settled || entry.settling) return;
+    if (entry.settling || (entry.answered?.key === settled && (!answer.error || entry.answered.hasError))) return;
     // A Stop can arrive during this read. Let it provide the outcome before this snapshot retries.
     const stillCurrent = () => !this.closed && this.entries.get(session.id) === entry && entry.active === active
       && (!key || entry.ended.get(key) === recorded) && stillIdle();
@@ -316,40 +316,46 @@ export class CursorSteerBridge {
     const owner = target && this.owner(session.id, target);
     // A restarted bridge may be looking at a turn whose outcome was already persisted by the dispatcher.
     const interrupted = owner?.state === 'cancelled' || owner?.state === 'interrupted' && owner.stage !== 'turn_outcome_unknown';
-    const type: TurnOutcome = recorded?.type ?? (interrupted ? 'run_cancelled' : answer.error || owner?.state === 'failed' ? 'run_failed' : 'run_completed');
-    const at = recorded?.at ?? new Date().toISOString();
+    const status = recorded?.status ?? (interrupted ? 'cancelled' : answer.error || owner?.state === 'failed' ? 'failed' : 'completed');
+    // A Stop can contain just the status. Its Run's generic fallback must not hide a later pane error.
+    const reason = status === 'failed' ? answer.error ?? (!recorded ? owner?.error : undefined) : undefined;
+    const error = recorded?.error ?? (reason ? redactSensitiveText(redactCursorOutput(this.profile, reason)).slice(0, 1000) : undefined);
+    const outcome: TurnOutcome = { status, at: recorded?.at ?? new Date().toISOString(), ...(error ? { error } : {}) };
     entry.settling = true;
     try {
-      const ended = await this.endTranscript(session.id, answer, TURN_END_STATUS[type], at, stillCurrent);
+      const ended = await this.endTranscript(session.id, answer, outcome, stillCurrent);
       if (!ended || !stillCurrent()) return;
-      entry.answered = settled;
-      if (!recorded && target && (active || owner?.state === 'running')) {
-        this.end(entry, session.id, target, type, { journalEnded: true, error: type === 'run_failed' ? answer.error : undefined });
+      entry.answered = { key: settled, hasError: Boolean(answer.error || error) };
+      if (recorded && key && error !== recorded.error) {
+        entry.ended.set(key, outcome);
+      } else if (!recorded && target && (active || owner?.state === 'running')) {
+        this.end(entry, session.id, target, outcome, true);
       }
     } finally {
       entry.settling = undefined;
     }
   }
 
-  private end(entry: Entry, sessionId: string, target: NativeTurnTarget, type: TurnOutcome, settled?: { journalEnded: true; error?: string }): void {
+  private end(entry: Entry, sessionId: string, target: NativeTurnTarget, outcome: TurnOutcome, journalEnded = false): void {
     const { nativeSessionId, turnId } = target;
     const key = turnKey(target);
     if (entry.ended.has(key)) return;
-    const at = new Date().toISOString();
-    entry.ended.set(key, { type, at });
+    entry.ended.set(key, outcome);
     if (entry.ended.size > 256) entry.ended.delete(entry.ended.keys().next().value!);
     this.retire(entry, turnId);
     if (sameTarget(entry.active, target)) entry.active = undefined;
-    entry.inputs.finish(target, { type });
+    const type = TURN_OUTCOME_EVENT[outcome.status];
+    const { at, error } = outcome;
+    entry.inputs.finish(target, { type, ...(error ? { error } : {}) });
     const owner = this.owner(sessionId, target);
     this.host.emitEvent(sessionId, {
       ...(owner ? { runId: owner.id } : {}), nativeTurnId: turnId,
       nativeId: `cursor:${nativeSessionId}:${turnId}:terminal`, type,
       data: { sessionUpdate: type, ...(owner ? { commandId: owner.commandId, nativeMessageId: owner.nativeMessageId } : {}), nativeSessionId, nativeTurnId: turnId,
-        ...(settled?.error ? { error: settled.error } : {}) }, createdAt: at,
+        ...(error ? { error } : {}) }, createdAt: at,
     });
-    if (!settled) setTimeout(() => {
-      void this.endTranscript(sessionId, target, TURN_END_STATUS[type], at);
+    if (!journalEnded) setTimeout(() => {
+      void this.endTranscript(sessionId, target, entry.ended.get(key) ?? outcome);
     }, TRANSCRIPT_END_DELAY_MS).unref();
     if (!entry.active) this.onTurnEnded?.(sessionId);
     this.native.notifyTurnChanged(sessionId);
@@ -357,7 +363,7 @@ export class CursorSteerBridge {
 
   /** Recheck the native chat and any idle observation when the journal is ready to write. */
   private endTranscript(sessionId: string, target: { nativeSessionId: string; turnId?: string; rootId?: string },
-    status: AgentTurnStatus, at: string, stillIdle?: () => boolean): Promise<boolean | undefined> {
+    outcome: TurnOutcome, stillIdle?: () => boolean): Promise<boolean | undefined> {
     const stillCurrent = () => {
       if (this.closed || (stillIdle && !stillIdle())) return false;
       const session = this.port.getSession(sessionId);
@@ -365,7 +371,7 @@ export class CursorSteerBridge {
     };
     return this.host.transcript.withSource(sessionId, (source, w) => {
       if (source instanceof CursorTranscriptSource && stillCurrent()) {
-        return source.endTurn(w, status, at, target.turnId, target.rootId, stillCurrent);
+        return source.endTurn(w, { ...outcome, turnId: target.turnId, expectedRoot: target.rootId, stillCurrent });
       }
     }).catch(() => undefined);
   }

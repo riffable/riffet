@@ -215,9 +215,16 @@ export class FakeLaneWriter implements AgentLaneWriter {
   }
 
   turnEndStatus(turnId: string): AgentTurnStatus | undefined {
+    return this.turnEnd(turnId)?.status;
+  }
+
+  turnEnd(turnId: string): { status: AgentTurnStatus; at: string; error?: string } | undefined {
     const ended = this.entity(turnMetaId(turnId, 'ended'));
-    const status = ended?.kind === TURN_ENDED ? (ended.payload as { status?: unknown }).status : undefined;
-    return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted' ? status : undefined;
+    if (ended?.kind !== TURN_ENDED) return undefined;
+    const { status, error } = ended.payload as { status?: unknown; error?: unknown };
+    if (status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted') {
+      return { status, at: ended.at, ...(typeof error === 'string' ? { error } : {}) };
+    }
   }
 
   turnReopened(turnId: string, at: string, cursor?: string): void {

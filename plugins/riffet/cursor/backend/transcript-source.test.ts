@@ -323,9 +323,9 @@ describe('Cursor transcript source', () => {
     // Interrupted: the CLI commits the call it cut short, and its hook says the turn is over before anything reads it.
     messages.push(result('t1-shell', 'Shell', 'Aborted'));
     writeChat(dir, 'chat-1', { messages });
-    await source().endTurn(writer, 'cancelled', '2026-10-25T08:00:00.000Z', 'another-turn');
+    await source().endTurn(writer, { status: 'cancelled', at: '2026-10-25T08:00:00.000Z', turnId: 'another-turn' });
     expect(turnEnds(lanes)).toEqual([]);
-    await source().endTurn(writer, 'cancelled', '2026-10-25T08:00:00.000Z', 'req-1');
+    await source().endTurn(writer, { status: 'cancelled', at: '2026-10-25T08:00:00.000Z', turnId: 'req-1' });
     expect(turnEnds(lanes)).toEqual([['req-1', 'cancelled']]);
     const rows = rowsOf(lanes);
     expect(rows.findIndex(row => row.kind === 'tool_call_update')).toBeLessThan(rows.findIndex(row => row.kind === 'meta.turn_ended'));
@@ -334,8 +334,8 @@ describe('Cursor transcript source', () => {
 
     // The hook again, a restarted service, a replay from the cursor: nothing new.
     const ended = snapshot(lanes);
-    await source().endTurn(writer, 'cancelled', '2026-10-25T08:00:01.000Z', 'req-1');
-    await source().endTurn(writer, 'completed', '2026-10-25T08:00:01.000Z');
+    await source().endTurn(writer, { status: 'cancelled', at: '2026-10-25T08:00:01.000Z', turnId: 'req-1' });
+    await source().endTurn(writer, { status: 'completed', at: '2026-10-25T08:00:01.000Z' });
     await catchUp(source(), writer);
     assertUnchanged(ended, snapshot(lanes), 'ending an ended turn and reading on');
 
@@ -346,7 +346,7 @@ describe('Cursor transcript source', () => {
     await catchUp(resumed, writer);
     const continuation = rowsOf(lanes).findLast(row => row.kind === 'agent_message_chunk')!.turnId!;
     expect(continuation).not.toBe('req-1');
-    expect(await resumed.endTurn(writer, 'completed', '2026-10-25T08:01:00.000Z', 'req-1')).toBe(true);
+    expect(await resumed.endTurn(writer, { status: 'completed', at: '2026-10-25T08:01:00.000Z', turnId: 'req-1' })).toBe(true);
     expect(writer.turnEndStatus(continuation)).toBe('completed');
     expect(writer.turnEndStatus('req-1')).toBe('cancelled');
     messages.push(ask('go on', 'req-2'), say('Done.'));
@@ -378,9 +378,9 @@ describe('Cursor transcript source', () => {
 
     messages.push(call('tests', 'Shell', { command: 'npm test' }), result('tests', 'Shell', 'Passed'), say('The tests passed.'));
     writeChat(dir, 'chat-1', { messages });
-    await source.endTurn(writer, 'completed', at, 'req-1', thoughtRoot);
+    await source.endTurn(writer, { status: 'completed', at, turnId: 'req-1', expectedRoot: thoughtRoot });
     expect(turnEnds(lanes)).toEqual([]);
-    await source.endTurn(writer, 'completed', at, 'req-1');
+    await source.endTurn(writer, { status: 'completed', at, turnId: 'req-1' });
     const rows = rowsOf(lanes);
     expect(rows.filter(row => !row.kind.startsWith('meta.')).map(row => [row.kind, row.turnId])).toEqual([
       ['user_message_chunk', 'req-1'],
@@ -394,14 +394,14 @@ describe('Cursor transcript source', () => {
     messages.push(ask('check again', 'req-2'), thought);
     const nextRoot = writeChat(dir, 'chat-1', { messages });
     await catchUp(source, writer);
-    await source.endTurn(writer, 'completed', at, 'req-1');
+    await source.endTurn(writer, { status: 'completed', at, turnId: 'req-1' });
     expect(turnEnds(lanes)).toEqual([['req-1', 'completed']]);
     // Another model step starts after the idle observation, before either its text or checkpoint lands.
     live = { turn: 'req-2', at, step: 'retry', prompt: 'check again', sealed: false, parts: [] };
-    expect(await source.endTurn(writer, 'completed', at, 'req-2', nextRoot)).toBe(false);
+    expect(await source.endTurn(writer, { status: 'completed', at, turnId: 'req-2', expectedRoot: nextRoot })).toBe(false);
     expect(writer.turnEndStatus('req-2')).toBeUndefined();
     live = undefined;
-    await source.endTurn(writer, 'completed', at, 'req-2', nextRoot);
+    await source.endTurn(writer, { status: 'completed', at, turnId: 'req-2', expectedRoot: nextRoot });
     expect(turnEnds(lanes)).toEqual([['req-1', 'completed'], ['req-2', 'completed']]);
     checkSession(lanes);
   });
@@ -422,7 +422,7 @@ describe('Cursor transcript source', () => {
     const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
     dirs.push(dir);
     const messages = [...SYSTEM, ask('check the files', 'req-1'), say('Checked.'), ask('build it', 'req-2'), say('The build failed.')];
-    writeChat(dir, 'chat-1', { messages });
+    const root = writeChat(dir, 'chat-1', { messages });
     const { lanes, writer } = openLanes();
     const source = () => new CursorTranscriptSource({
       chatsDir: () => dir, chatId: () => 'chat-1', tailState: () => 'live', limits: { stepMessages: 2 },
@@ -430,13 +430,18 @@ describe('Cursor transcript source', () => {
     await pullLane(source(), writer, new AbortController().signal);
     expect(writer.scratch).toBeDefined();
     expect(writer.scratch?.turnEndStatus('req-2')).toBeUndefined();
-    await source().endTurn(writer, 'failed', '2026-11-18T06:48:08.000Z', 'req-2');
-    expect(writer.scratch?.turnEndStatus('req-2')).toBe('failed');
+    const at = '2026-11-18T06:48:08.000Z';
+    const error = 'Network Error: Unable to connect to the model provider';
+    await source().endTurn(writer, { status: 'failed', at, turnId: 'req-2' });
+    // Stop reported just the outcome. The settled footer supplies its reason later.
+    await source().endTurn(writer, { status: 'failed', at: '2026-11-18T06:48:13.000Z', turnId: 'req-2', expectedRoot: root, error });
+    expect(writer.scratch?.turnEnd('req-2')).toEqual({ status: 'failed', at, error });
 
     const restarted = FakeLaneWriter.open(lanes);
     await catchUp(source(), restarted);
     expect(restarted.scratch).toBeUndefined();
     expect(turnEnds(lanes)).toEqual([['req-1', 'completed'], ['req-2', 'failed']]);
+    expect(restarted.turnEnd('req-2')).toEqual({ status: 'failed', at, error });
     checkSession(lanes);
   });
 

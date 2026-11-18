@@ -367,7 +367,7 @@ function eventRow(event: ProjectedEvent, index: number, context: TimelineContext
         if (pass.turnFailures.has(failure)) return undefined;
         claim(pass, pass.turnFailures, failure, index);
       }
-      const { message, detail } = describeFailure(str(event.data.error) ?? '运行失败');
+      const { message, detail } = describeFailure(str(event.data.error) ?? '任务失败');
       return reuse({ kind: 'status', key, tone: 'danger', text: message, ...(detail ? { detail } : {}), event });
     }
     case 'run_cancelled':

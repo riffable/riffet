@@ -57,6 +57,7 @@ export interface LaneWriter {
   turnEnded(turnId: string, status: TurnEndStatus, at: string, error?: string): void;
   /** The current valid end, if the transcript has not retracted it. */
   turnEndStatus(turnId: string): TurnEndStatus | undefined;
+  turnEnd(turnId: string): { status: TurnEndStatus; at: string; error?: string } | undefined;
   /** The committed event being corrected, including its original position and payload. */
   event(nativeId: string): NativeWorkbenchEvent | undefined;
   /** Whether a failed end is the exact diagnostic being reclassified, not a later real failure. */
@@ -115,16 +116,18 @@ const SUBAGENT = 'meta.subagent';
 export const turnMetaId = (turnId: string, edge: 'started' | 'ended'): string => `meta:turn:${turnId}:${edge}`;
 export const subagentMetaId = (toolCallId: string): string => `meta:subagent:${toolCallId}`;
 
-function turnEndStatus(journal: Journal, key: string, turnId: string): TurnEndStatus | undefined {
+function readTurnEnd(journal: Journal, key: string, turnId: string): ReturnType<LaneWriter['turnEnd']> {
   const ended = journal.entity(key, turnMetaId(turnId, 'ended'));
   if (ended?.kind !== TURN_ENDED) return undefined;
-  const status = (ended.payload as { status?: unknown } | undefined)?.status;
-  return status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted' ? status : undefined;
+  const payload = ended.payload as { status?: unknown; error?: unknown } | undefined;
+  const status = payload?.status;
+  if (status !== 'completed' && status !== 'failed' && status !== 'cancelled' && status !== 'interrupted') return undefined;
+  return { status, at: ended.at, ...(typeof payload?.error === 'string' ? { error: payload.error } : {}) };
 }
 
 /** An end-marker tombstone still has an identity, but no longer ends its turn. */
 export function hasTurnEnded(journal: Journal, key: string, turnId: string): boolean {
-  return turnEndStatus(journal, key, turnId) !== undefined;
+  return readTurnEnd(journal, key, turnId) !== undefined;
 }
 
 /** The log a reader serves for a lane: its scratch window while one is open, else the lane's own. */
@@ -279,7 +282,11 @@ export class JournalLaneWriter implements LaneWriter {
   }
 
   turnEndStatus(turnId: string): TurnEndStatus | undefined {
-    return turnEndStatus(this.journal, this.key, turnId);
+    return this.turnEnd(turnId)?.status;
+  }
+
+  turnEnd(turnId: string) {
+    return readTurnEnd(this.journal, this.key, turnId);
   }
 
   event(nativeId: string): NativeWorkbenchEvent | undefined {
@@ -289,9 +296,8 @@ export class JournalLaneWriter implements LaneWriter {
   }
 
   turnFailedAt(turnId: string, at: string, error: string): boolean {
-    const row = this.journal.entity(this.key, turnMetaId(turnId, 'ended'));
-    const payload = row?.payload as { status?: string; error?: string } | undefined;
-    return row?.kind === TURN_ENDED && row.at === at && payload?.status === 'failed' && payload.error === error;
+    const end = this.turnEnd(turnId);
+    return end?.status === 'failed' && end.at === at && end.error === error;
   }
 
   transaction(task: () => void): void {

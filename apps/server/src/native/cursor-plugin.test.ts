@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -244,6 +244,56 @@ const agentId = '00000000-0000-4000-8000-000000000001';
 const chatsOf = (configDir: string, cwd: string) => join(configDir, 'chats', createHash('md5').update(cwd).digest('hex'));
 
 describe('Cursor chat stores through the core journal', () => {
+  it.skipIf(!tmux).each([false, true])('keeps a provider error after completed tools across a server restart (status-only stop first: %s)', async stopFirst => {
+    const first = await boot(undefined, { chats: true });
+    const error = 'Network Error connecting to the model provider';
+    // The test CLI displays its error only after the host has observed the completed tool.
+    appendFileSync(first.executable, `
+require('node:fs').watch(process.cwd(), (_, name) => {
+  if (name === 'failed') process.stdout.write('\\x1b[2J\\x1b[H  → Add a follow-up\\n\\n  Auto · 0% context\\n  ' + process.cwd() + ' · main\\n  Error: ' + ${JSON.stringify(error)} + '\\n');
+});
+`);
+    const id = '55555555-5555-4555-8555-555555555555';
+    const prompt = 'inspect the project';
+    const sent = await first.call('POST', '/api/sessions', { projectId: first.project.id, backendId: 'cursor', model: 'auto', kind: 'native', clientSessionId: id,
+      initialMessage: { commandId: 'inspect', text: prompt, attachmentIds: [], context: [] } });
+    expect(sent.statusCode).toBe(202);
+    await vi.waitFor(() => expect(first.store.findRunByCommand(id, 'inspect')?.native?.delivery).toBe('input_sent'), { timeout: 15_000 });
+    const chatId = first.store.getSession(id).nativeSessionId!;
+    const turnId = 'request-inspect';
+    writeChat(chatsOf(first.configDir, first.projectDir), chatId, [...SYSTEM, ask(prompt, turnId), ...shell('inspect-tool')]);
+    const release = first.ingest.follow(id);
+    const page = (services: typeof first) => services.timeline.page(id, 'main', { from: 0 }).rows;
+    await vi.waitFor(async () => {
+      await first.timeline.ready(id, 'main');
+      expect(page(first).some(row => row.kind === 'tool' && row.event.data.status === 'completed')).toBe(true);
+      expect(first.store.findRunByCommand(id, 'inspect')?.native?.nativeTurnId).toBe(turnId);
+    }, { timeout: 15_000 });
+    const end = () => first.store.journal.entity(id, `meta:turn:${turnId}:ended`);
+    if (stopFirst) {
+      const bridge = JSON.parse(readFileSync(join(first.stateDir, 'cursor-hook', 'bridge.json'), 'utf8'));
+      const response = await fetch(`${bridge.url}/hook`, { method: 'POST', headers: { authorization: `Bearer ${bridge.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ deliveryId: crypto.randomUUID(), payload: { hook_event_name: 'stop', conversation_id: chatId, generation_id: turnId, status: 'error' } }) });
+      expect(response.ok).toBe(true);
+      await vi.waitFor(() => expect(end()?.payload).toEqual({ turnId, status: 'failed' }), { timeout: 10_000 });
+    }
+    writeFileSync(join(first.projectDir, 'failed'), '');
+    await vi.waitFor(() => expect(first.store.findRunByCommand(id, 'inspect')).toMatchObject({ state: 'failed', error }), { timeout: 15_000 });
+    expect(end()?.payload).toMatchObject({ status: 'failed', error });
+    await first.timeline.ready(id, 'main');
+    const last = page(first).at(-1);
+    expect(last).toMatchObject({ kind: 'status', text: error, tone: 'danger' });
+    release();
+    await first.app.close();
+
+    const second = await boot('/nonexistent/cursor-agent', { directory: first.directory, chats: true });
+    await second.timeline.ready(id, 'main');
+    const rows = page(second);
+    const tool = rows.find(row => row.kind === 'tool')!;
+    expect(rows.filter(row => row.kind === 'status')).toEqual([expect.objectContaining({ turn: tool.turn, text: error, tone: 'danger' })]);
+    expect(rows.at(-1)?.key).toBe(last?.key);
+  }, 60_000);
+
   it('holds the ingest contract for the plugin source of a long store', async () => {
     const { store, nativeBackends, project, configDir, projectDir } = await boot('/nonexistent/cursor-agent', { chats: true });
     const dir = chatsOf(configDir, projectDir);

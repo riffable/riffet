@@ -38,7 +38,7 @@ async function fixture() {
   const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
   const bridge = new CursorSteerBridge(host, port, native, stateDir, {} as never);
   const source = new CursorTranscriptSource({ chatId: () => session().nativeSessionId, chatsDir: () => stateDir });
-  const endTurn = vi.spyOn(source, 'endTurn').mockImplementation(async (_w, _status, _at, _turn, _root, stillCurrent) => stillCurrent?.() ?? true);
+  const endTurn = vi.spyOn(source, 'endTurn').mockImplementation(async (_w, { stillCurrent }) => stillCurrent?.() ?? true);
   vi.spyOn(host.transcript, 'withSource').mockImplementation(async (_id, task) => task(source, undefined as never));
   cleanup.push(() => bridge.close());
   bridge.bind('s');
@@ -252,12 +252,21 @@ describe('Cursor strict tool-boundary steering', () => {
     expect(f.events().filter(event => event.type === 'run_completed').map(event => event.runId)).toEqual([undefined, 'owner']);
   });
 
+  it('settles the journal and run with the same provider failure', async () => {
+    const f = await fixture();
+    const error = 'Network Error: Unable to connect to the model provider';
+    await f.hook('preToolUse');
+    await f.answer('generation', 'chat', error);
+    expect(f.events()).toMatchObject([{ type: 'run_failed', nativeTurnId: 'generation', data: { error } }]);
+    expect(f.endTurn.mock.calls[0]?.[1]).toMatchObject({ status: 'failed', turnId: 'generation', error, at: f.events()[0]!.createdAt });
+  });
+
   it.each([['error', 'run_failed'], ['aborted', 'run_cancelled']])('keeps a %s Stop that arrives while idle completion is reading', async (status, eventType) => {
     const f = await fixture();
     await f.hook('preToolUse');
     let resume!: () => void;
     const gate = new Promise<void>(resolve => { resume = resolve; });
-    f.endTurn.mockImplementationOnce(async (_w, _status, _at, _turn, _root, stillCurrent) => {
+    f.endTurn.mockImplementationOnce(async (_w, { stillCurrent }) => {
       await gate;
       return stillCurrent?.() ?? true;
     });
@@ -267,7 +276,7 @@ describe('Cursor strict tool-boundary steering', () => {
     await answer;
     await f.answer('generation');
     expect(f.events().map(event => event.type)).toEqual([eventType]);
-    expect(f.endTurn.mock.calls.map(([, result]) => result)).toEqual(['completed', status === 'error' ? 'failed' : 'cancelled']);
+    expect(f.endTurn.mock.calls.map(([, result]) => result.status)).toEqual(['completed', status === 'error' ? 'failed' : 'cancelled']);
   });
 
   it('retries a Stop whose first journal read found no store, then applies it once to each new idle root', async () => {
@@ -276,19 +285,21 @@ describe('Cursor strict tool-boundary steering', () => {
     try {
       f.endTurn.mockResolvedValueOnce(false);
       await f.hook('stop', { status: 'error' });
-      expect(f.bridge.recordedOutcome('s', { nativeSessionId: 'chat', turnId: 'generation' })).toBe('failed');
+      Object.assign(f.runs[0]!, { state: 'failed', error: 'Native backend reported that this run failed.' });
+      expect(f.bridge.recordedOutcome('s', { nativeSessionId: 'chat', turnId: 'generation' })?.status).toBe('failed');
       expect(f.bridge.recordedOutcome('s', { nativeSessionId: 'other-chat', turnId: 'generation' })).toBeUndefined();
       await vi.advanceTimersByTimeAsync(3000);
       expect(f.endTurn).toHaveBeenCalledTimes(1);
-      const [, , hookAt] = f.endTurn.mock.calls[0]!;
+      const hookAt = f.endTurn.mock.calls[0]![1].at;
 
       await f.answer('generation');
       await f.answer('generation', 'chat', 'gateway timeout');
       await f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation', rootId: 'later-root' }, () => true);
-      expect(f.endTurn.mock.calls.map(([, status, at, id, root]) => [status, at, id, root])).toEqual([
-        ['failed', hookAt, 'generation', undefined],
-        ['failed', hookAt, 'generation', 'root-of-generation'],
-        ['failed', hookAt, 'generation', 'later-root'],
+      expect(f.endTurn.mock.calls.map(([, { status, at, turnId, expectedRoot, error }]) => [status, at, turnId, expectedRoot, error])).toEqual([
+        ['failed', hookAt, 'generation', undefined, undefined],
+        ['failed', hookAt, 'generation', 'root-of-generation', undefined],
+        ['failed', hookAt, 'generation', 'root-of-generation', 'gateway timeout'],
+        ['failed', hookAt, 'generation', 'later-root', 'gateway timeout'],
       ]);
       expect(f.events().map(event => event.type)).toEqual(['run_failed']);
     } finally {

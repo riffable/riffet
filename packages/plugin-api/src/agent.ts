@@ -299,6 +299,8 @@ export interface AgentLaneWriter {
   /** After the source has read what is on disk. `error` is what the Agent said of a failed turn, for whoever settles its run. */
   turnEnded(turnId: string, status: AgentTurnStatus, at: string, error?: string): void;
   turnEndStatus(turnId: string): AgentTurnStatus | undefined;
+  /** The last effective end with its original time and diagnostic, including on a scratch lane. */
+  turnEnd?(turnId: string): { status: AgentTurnStatus; at: string; error?: string } | undefined;
   /** Retracts an end when the transcript resumes or corrects the turn; `cursor` checkpoints the reread. */
   turnReopened(turnId: string, at: string, cursor?: string): void;
   readonly activities: AgentActivityLedger;
