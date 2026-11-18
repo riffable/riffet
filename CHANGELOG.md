@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Links in replies carry a light underline on the web, Mac and iPhone, so they stand out in themes whose accent is the text colour, such as Pencil.
 - The "Working" line at the bottom of a conversation shows for the whole turn, also while the agent is only thinking; it used to stay blank until the first tool call or reply.
 - When a Cursor turn fails after running tools, the conversation shows the error once after that work. The error stays visible when the process is folded, including in earlier conversations.
 - Cursor conversations keep showing the current turn as running while the agent thinks, and keep subsequent tool calls and replies in that turn.

@@ -203,7 +203,7 @@ struct TranscriptText {
                 } else {
                     attributes[.foregroundColor] = style.color(style.link)
                     attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-                    attributes[.underlineColor] = style.link == \.accent ? style.color(\.accent, 0.6) : style.color(\.fg3)
+                    attributes[.underlineColor] = style.color(\.lineStrong)
                 }
             }
             // The web pads inline code by 5px; a no-break space each side cannot wrap away from it.

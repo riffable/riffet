@@ -48,7 +48,7 @@
 
 - **层级靠字号和颜色，不靠加粗**：标题与 `strong` 都是 500，PingFang 的 600 在这个字号下发黑。标题只有三档放大，h4 起回到正文字号。
 - 行高 26 是长文阅读的行高，比界面的 `base`（14 / 22）松，保持 2px 整数倍。旁白（`.md-muted`）与正文同一字阶与段距，只在颜色上降为 `fg-2`，避免一轮里出现两种字号；展开的思考（`.md-thought`）取 13 / 20、`fg-3`，与折叠时的标题同一档。
-- 链接用强调色、不加下划线，悬停时加下划线（偏移 3）。指向项目内文件的行内代码是按钮：虚线下划线是唯一的暗示，悬停变强调色。
+- 正文里可点的文字都有下划线：链接用强调色加 1px 实线下划线（`line-strong`，偏移 3，与文件引用的虚线同色），悬停时下划线变强调色；强调色接近墨色的主题（Pencil）里，下划线是唯一的暗示。指向项目内文件的行内代码是按钮：正文色加虚线下划线，悬停变强调色。
 - 提示块（`[!NOTE]` 等）只改左线与首词颜色：强调、`warning`、`danger`。
 - 宽表格保持自然宽度、横向滚动；滚动条悬停或聚焦时才显示，聚焦时轮廓同焦点环。表格内换行在词间，代码不换行，约 8 个汉字以内的单元格整格不换行（避免标签列被长内容挤成一字一行）；保留 GFM 列对齐并使用等宽数字（`tabular-nums`）。
 - 仅转换安全的无属性内联标签：`<br>` / `<br/>` 转为真实换行（包括表格单元格内），配对的 `<kbd>`、`<sup>`、`<sub>` 按对应语义渲染；其余原始 HTML 与未闭合标签按文本转义显示。
@@ -60,6 +60,7 @@
 
 - Mac 与 iPhone（`MarkdownModel.swift`）的 `<kbd>` 按行内代码绘制，暂未做成按键胶囊。
 - Mac（`TranscriptViews.swift` 的 `TableBlockView`）、iPhone（`ConversationMarkdown.swift`）与 Android（`TranscriptMarkdownTable.kt`）的表格仍有外框和表头底色，还没改成只有行间横线。
+- Android（`riffet/ui/timeline/MarkdownRender.kt`）的链接只有强调色、没有下划线：Compose 的 `SpanStyle` 画不出与文字不同色的下划线，满色下划线又太重。
 - Android（`riffet/ui/timeline/MarkdownRender.kt`）目前仅将 `<br>` / `<br/>` 转为换行，暂不支持 `<kbd>`、`<sup>`、`<sub>` 的语义渲染。
 
 ### 1.3 消息

@@ -1732,11 +1732,15 @@ html.dark {
 }
 .md a {
   color: var(--accent);
-  text-decoration: none;
+  /* Colour alone is no affordance where the theme's accent is the ink (Pencil). The rule is the
+   * file mention's hairline, solid instead of dashed. */
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 .md a:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration-color: var(--accent);
 }
 .md ul,
 .md ol {

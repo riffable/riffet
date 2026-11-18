@@ -312,7 +312,7 @@ struct ConversationInlineText: View {
         return ready
     }
     var body: some View {
-        let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), code: UIColor(palette.press))
+        let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), linkLine: palette.uiColor(\.lineStrong), code: UIColor(palette.press))
         ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, alignment: alignment, open: { openURL($0) }, quote: quote)
             .task(id: key) {
                     guard !formulas.isEmpty else { return }
@@ -329,7 +329,7 @@ struct ConversationInlineText: View {
 }
 
 struct ConversationParagraph: UIViewRepresentable {
-    struct Colors: Equatable { let text: UIColor; let link: UIColor; let code: UIColor }
+    struct Colors: Equatable { let text: UIColor; let link: UIColor; let linkLine: UIColor; let code: UIColor }
     let source: AttributedString
     let images: [String: ConversationInlineMathRenderer.Rendered]
     let fontSize: Double
@@ -354,7 +354,7 @@ struct ConversationParagraph: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.open = open
         context.coordinator.quote = quote
-        if view.tintColor != colors.link { view.tintColor = colors.link; view.linkTextAttributes = [.foregroundColor: colors.link] }
+        if view.tintColor != colors.link || view.linkTextAttributes[.underlineColor] as? UIColor != colors.linkLine { view.tintColor = colors.link; view.linkTextAttributes = [.foregroundColor: colors.link, .underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: colors.linkLine] }
         context.coordinator.configure(self)
         context.coordinator.publish(to: view, width: view.bounds.width > 0 ? view.bounds.width : 320)
         context.coordinator.probe = context.environment.conversationFindProbe

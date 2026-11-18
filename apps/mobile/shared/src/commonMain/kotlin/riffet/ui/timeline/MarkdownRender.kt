@@ -504,8 +504,9 @@ private fun markdownTypography(
     ordered = base.copy(color = colors.fg3),
     bullet = base.copy(color = colors.fg3),
     list = base,
-    // The web's `.md a`: accent, no underline (it underlines only on hover). Colour is the
-    // affordance; an underline under every file citation turned a list of them into a wall of rules.
+    // The web's `.md a` is accent with a `line-strong` underline. Compose draws an underline only in the
+    // text's own colour, and a full-strength one under every file citation is a wall of rules, so
+    // this stays colour-only (docs/design/system/surfaces.md §1.2「现状」).
     textLink = TextLinkStyles(style = SpanStyle(color = colors.accent)),
     // `.md table { font-size: 13px; line-height: 20px }`.
     table = prose.table,
