@@ -416,16 +416,255 @@ struct AppIconTile: View {
     }
 }
 
+enum PermissionIconStyle: String, CaseIterable, Identifiable {
+    case shield, semantic, gate, ring
+    static let storageKey = "riffet.permission-icons"
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .shield: String(localized: "盾牌", bundle: .riffet)
+        case .semantic: String(localized: "语义", bundle: .riffet)
+        case .gate: String(localized: "门禁", bundle: .riffet)
+        case .ring: String(localized: "圆环", bundle: .riffet)
+        }
+    }
+}
+
+enum PermissionTier: String, CaseIterable, Identifiable {
+    case read, ask, `default`, workspace, auto, deny, full
+    var id: String { rawValue }
+    static func of(_ mode: String) -> PermissionTier {
+        switch mode {
+        case "read-only", "plan": .read
+        case "allowlist", "manual", "off", "request-review": .ask
+        case "default", "strict", "low": .default
+        case "acceptEdits", "on-request", "workspace-write", "proceed-in-sandbox", "medium": .workspace
+        case "auto-review", "auto": .auto
+        case "dontAsk": .deny
+        case "unrestricted", "bypassPermissions", "danger-full-access", "always-proceed", "high", "never": .full
+        default: .default
+        }
+    }
+}
+
+enum PermissionIconGlyphs {
+    struct Shape {
+        var stroke = Path()
+        var dashed = Path()
+        var fills: [CGRect] = []
+    }
+
+    private static var shieldOutline: Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 12, y: 2.3))
+        p.addCurve(to: CGPoint(x: 19, y: 5), control1: CGPoint(x: 14.2, y: 3.8), control2: CGPoint(x: 17, y: 5))
+        p.addQuadCurve(to: CGPoint(x: 20, y: 6), control: CGPoint(x: 20, y: 5))
+        p.addLine(to: CGPoint(x: 20, y: 13))
+        p.addCurve(to: CGPoint(x: 12, y: 22), control1: CGPoint(x: 20, y: 18), control2: CGPoint(x: 16.5, y: 20.5))
+        p.addCurve(to: CGPoint(x: 4, y: 13), control1: CGPoint(x: 7.5, y: 20.5), control2: CGPoint(x: 4, y: 18))
+        p.addLine(to: CGPoint(x: 4, y: 6))
+        p.addQuadCurve(to: CGPoint(x: 5, y: 5), control: CGPoint(x: 4, y: 5))
+        p.addCurve(to: CGPoint(x: 12, y: 2.3), control1: CGPoint(x: 7, y: 5), control2: CGPoint(x: 9.8, y: 3.8))
+        p.closeSubpath()
+        return p
+    }
+
+    private static var gateOpen: Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 8.5, y: 4))
+        p.addLine(to: CGPoint(x: 6.5, y: 4))
+        p.addQuadCurve(to: CGPoint(x: 4, y: 6.5), control: CGPoint(x: 4, y: 4))
+        p.addLine(to: CGPoint(x: 4, y: 17.5))
+        p.addQuadCurve(to: CGPoint(x: 6.5, y: 20), control: CGPoint(x: 4, y: 20))
+        p.addLine(to: CGPoint(x: 8.5, y: 20))
+        p.move(to: CGPoint(x: 15.5, y: 4))
+        p.addLine(to: CGPoint(x: 17.5, y: 4))
+        p.addQuadCurve(to: CGPoint(x: 20, y: 6.5), control: CGPoint(x: 20, y: 4))
+        p.addLine(to: CGPoint(x: 20, y: 17.5))
+        p.addQuadCurve(to: CGPoint(x: 17.5, y: 20), control: CGPoint(x: 20, y: 20))
+        p.addLine(to: CGPoint(x: 15.5, y: 20))
+        return p
+    }
+
+    private static func addInner(_ tier: PermissionTier, cy: CGFloat, to shape: inout Shape) {
+        switch tier {
+        case .read:
+            shape.stroke.move(to: CGPoint(x: 8.25, y: cy))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 15.75, y: cy), control: CGPoint(x: 12, y: cy - 3))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 8.25, y: cy), control: CGPoint(x: 12, y: cy + 3))
+            shape.stroke.closeSubpath()
+            shape.fills.append(CGRect(x: 11.1, y: cy - 0.9, width: 1.8, height: 1.8))
+        case .ask:
+            shape.stroke.move(to: CGPoint(x: 9.85, y: cy - 1.5))
+            shape.stroke.addCurve(to: CGPoint(x: 11.9, y: cy - 3.3), control1: CGPoint(x: 9.85, y: cy - 2.65), control2: CGPoint(x: 10.75, y: cy - 3.3))
+            shape.stroke.addCurve(to: CGPoint(x: 13.9, y: cy - 1.65), control1: CGPoint(x: 13.05, y: cy - 3.3), control2: CGPoint(x: 13.9, y: cy - 2.65))
+            shape.stroke.addCurve(to: CGPoint(x: 12.55, y: cy + 0.15), control1: CGPoint(x: 13.9, y: cy - 0.7), control2: CGPoint(x: 13.25, y: cy - 0.25))
+            shape.stroke.addCurve(to: CGPoint(x: 12, y: cy + 1.2), control1: CGPoint(x: 12.15, y: cy + 0.4), control2: CGPoint(x: 12, y: cy + 0.7))
+            shape.fills.append(CGRect(x: 11.2, y: cy + 2.3, width: 1.6, height: 1.6))
+        case .default:
+            shape.stroke.move(to: CGPoint(x: 9.1, y: cy))
+            shape.stroke.addLine(to: CGPoint(x: 11, y: cy + 1.9))
+            shape.stroke.addLine(to: CGPoint(x: 14.9, y: cy - 2))
+        case .workspace:
+            shape.stroke.move(to: CGPoint(x: 10.3, y: cy - 1.9))
+            shape.stroke.addLine(to: CGPoint(x: 8.4, y: cy))
+            shape.stroke.addLine(to: CGPoint(x: 10.3, y: cy + 1.9))
+            shape.stroke.move(to: CGPoint(x: 13.7, y: cy - 1.9))
+            shape.stroke.addLine(to: CGPoint(x: 15.6, y: cy))
+            shape.stroke.addLine(to: CGPoint(x: 13.7, y: cy + 1.9))
+        case .auto:
+            let r: CGFloat = 3.6
+            shape.stroke.move(to: CGPoint(x: 12, y: cy - r))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 12 + r, y: cy), control: CGPoint(x: 12, y: cy))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 12, y: cy + r), control: CGPoint(x: 12, y: cy))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 12 - r, y: cy), control: CGPoint(x: 12, y: cy))
+            shape.stroke.addQuadCurve(to: CGPoint(x: 12, y: cy - r), control: CGPoint(x: 12, y: cy))
+            shape.stroke.closeSubpath()
+        case .deny:
+            shape.stroke.move(to: CGPoint(x: 9.8, y: cy - 2.2))
+            shape.stroke.addLine(to: CGPoint(x: 14.2, y: cy + 2.2))
+            shape.stroke.move(to: CGPoint(x: 14.2, y: cy - 2.2))
+            shape.stroke.addLine(to: CGPoint(x: 9.8, y: cy + 2.2))
+        case .full:
+            shape.stroke.move(to: CGPoint(x: 12.5, y: cy - 3.6))
+            shape.stroke.addLine(to: CGPoint(x: 9.6, y: cy + 0.2))
+            shape.stroke.addLine(to: CGPoint(x: 14.4, y: cy + 0.2))
+            shape.stroke.addLine(to: CGPoint(x: 11.5, y: cy + 3.6))
+        }
+    }
+
+    static func shape(for tier: PermissionTier, style: PermissionIconStyle) -> Shape {
+        var out = Shape()
+        switch style {
+        case .shield:
+            out.stroke.addPath(shieldOutline)
+            addInner(tier, cy: 11.4, to: &out)
+        case .semantic:
+            switch tier {
+            case .read:
+                out.stroke.move(to: CGPoint(x: 2.2, y: 12))
+                out.stroke.addQuadCurve(to: CGPoint(x: 21.8, y: 12), control: CGPoint(x: 12, y: 4.2))
+                out.stroke.addQuadCurve(to: CGPoint(x: 2.2, y: 12), control: CGPoint(x: 12, y: 19.8))
+                out.stroke.closeSubpath()
+                out.stroke.addEllipse(in: CGRect(x: 9, y: 9, width: 6, height: 6))
+            case .ask:
+                out.stroke.addArc(
+                    center: CGPoint(x: 12, y: 12),
+                    radius: 9,
+                    startAngle: .radians(atan2(8.0, -4.1)),
+                    endAngle: .radians(atan2(4.1, -8.0)),
+                    clockwise: true
+                )
+                out.stroke.addLine(to: CGPoint(x: 2, y: 22))
+                out.stroke.closeSubpath()
+                addInner(.ask, cy: 12, to: &out)
+            case .default:
+                out.stroke.addPath(shieldOutline)
+                addInner(.default, cy: 11.4, to: &out)
+            case .workspace:
+                out.stroke.move(to: CGPoint(x: 8, y: 8))
+                out.stroke.addLine(to: CGPoint(x: 4, y: 12))
+                out.stroke.addLine(to: CGPoint(x: 8, y: 16))
+                out.stroke.move(to: CGPoint(x: 16, y: 8))
+                out.stroke.addLine(to: CGPoint(x: 20, y: 12))
+                out.stroke.addLine(to: CGPoint(x: 16, y: 16))
+                out.stroke.move(to: CGPoint(x: 13.5, y: 6))
+                out.stroke.addLine(to: CGPoint(x: 10.5, y: 18))
+            case .auto:
+                out.stroke.move(to: CGPoint(x: 12, y: 3))
+                out.stroke.addQuadCurve(to: CGPoint(x: 21, y: 12), control: CGPoint(x: 12, y: 12))
+                out.stroke.addQuadCurve(to: CGPoint(x: 12, y: 21), control: CGPoint(x: 12, y: 12))
+                out.stroke.addQuadCurve(to: CGPoint(x: 3, y: 12), control: CGPoint(x: 12, y: 12))
+                out.stroke.addQuadCurve(to: CGPoint(x: 12, y: 3), control: CGPoint(x: 12, y: 12))
+                out.stroke.closeSubpath()
+                out.stroke.move(to: CGPoint(x: 19, y: 4))
+                out.stroke.addLine(to: CGPoint(x: 19, y: 7))
+                out.stroke.move(to: CGPoint(x: 17.5, y: 5.5))
+                out.stroke.addLine(to: CGPoint(x: 20.5, y: 5.5))
+            case .deny:
+                out.stroke.addEllipse(in: CGRect(x: 3, y: 3, width: 18, height: 18))
+                out.stroke.move(to: CGPoint(x: 5.64, y: 5.64))
+                out.stroke.addLine(to: CGPoint(x: 18.36, y: 18.36))
+            case .full:
+                out.stroke.move(to: CGPoint(x: 13, y: 3))
+                out.stroke.addLine(to: CGPoint(x: 5, y: 13.5))
+                out.stroke.addLine(to: CGPoint(x: 11.5, y: 13.5))
+                out.stroke.addLine(to: CGPoint(x: 11, y: 21))
+                out.stroke.addLine(to: CGPoint(x: 19, y: 10.5))
+                out.stroke.addLine(to: CGPoint(x: 12.5, y: 10.5))
+                out.stroke.closeSubpath()
+            }
+        case .gate:
+            if tier == .ask || tier == .auto || tier == .full {
+                out.stroke.addPath(gateOpen)
+            } else {
+                out.stroke.addRoundedRect(in: CGRect(x: 4, y: 4, width: 16, height: 16), cornerSize: CGSize(width: 3.5, height: 3.5))
+            }
+            addInner(tier, cy: 12, to: &out)
+        case .ring:
+            let circle = CGRect(x: 3, y: 3, width: 18, height: 18)
+            if tier == .auto {
+                out.dashed.addEllipse(in: circle)
+            } else {
+                out.stroke.addEllipse(in: circle)
+            }
+            addInner(tier, cy: 12, to: &out)
+        }
+        return out
+    }
+}
+
+struct PermissionIconView: View {
+    let tier: PermissionTier
+    var style: PermissionIconStyle? = nil
+    var size: CGFloat = 18
+    var color: Color? = nil
+    @AppStorage(PermissionIconStyle.storageKey) private var storedStyle = PermissionIconStyle.shield.rawValue
+
+    init(tier: PermissionTier, style: PermissionIconStyle? = nil, size: CGFloat = 18, color: Color? = nil) {
+        self.tier = tier
+        self.style = style
+        self.size = size
+        self.color = color
+    }
+
+    init(mode: String, style: PermissionIconStyle? = nil, size: CGFloat = 18, color: Color? = nil) {
+        self.init(tier: .of(mode), style: style, size: size, color: color)
+    }
+
+    var body: some View {
+        let resolved = style ?? PermissionIconStyle(rawValue: storedStyle) ?? .shield
+        let shape = PermissionIconGlyphs.shape(for: tier, style: resolved)
+        Canvas { context, canvasSize in
+            let scale = canvasSize.width / 24
+            let strokeWidth = 1.25 / scale
+            context.transform = CGAffineTransform(scaleX: scale, y: scale)
+            let shading: GraphicsContext.Shading = color.map { .color($0) } ?? .foreground
+            context.stroke(shape.stroke, with: shading, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round))
+            if !shape.dashed.isEmpty {
+                context.stroke(shape.dashed, with: shading, style: StrokeStyle(lineWidth: strokeWidth, lineCap: .round, lineJoin: .round, dash: [3.5, 2.5]))
+            }
+            for rect in shape.fills {
+                context.fill(Path(ellipseIn: rect), with: shading)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
 struct AppIconPicker: View {
     @Binding var selection: AppIconVariant
     @State private var switching = false
     @State private var error: String?
+    @AppStorage(PermissionIconStyle.storageKey) private var permissionStyle = PermissionIconStyle.shield.rawValue
     @Environment(\.palette) private var palette
 
     private let tileSize: CGFloat = 64
     private let ringGap: CGFloat = 5
 
     var body: some View {
+        let activeStyle = PermissionIconStyle(rawValue: permissionStyle) ?? .shield
         RiffetForm {
             Section {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 20) {
@@ -448,10 +687,24 @@ struct AppIconPicker: View {
                 }
                 .padding(.vertical, 12)
                 .disabled(switching)
+            } header: {
+                Text(String(localized: "应用图标", bundle: .riffet))
             }
             RiffetNotice.section(.error, error)
+            Section {
+                ForEach(PermissionIconStyle.allCases) { style in
+                    SettingsCheckRow(
+                        title: style.title,
+                        selected: activeStyle == style
+                    ) {
+                        permissionStyle = style.rawValue
+                    }
+                }
+            } header: {
+                Text(String(localized: "权限图标", bundle: .riffet))
+            }
         }
-        .navigationTitle(String(localized: "应用图标", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "图标", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
 
     private func select(_ variant: AppIconVariant) async {

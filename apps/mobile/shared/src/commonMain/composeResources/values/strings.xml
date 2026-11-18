@@ -47,6 +47,11 @@
     <string name="settings_theme_footnote">切换主题不会改变「跟随系统」；自定义主题在 Web 或 macOS 上编辑，会同步到这里。</string>
     <string name="settings_app_icon">应用图标</string>
     <string name="settings_app_icon_footnote">桌面上固定的图标可能需要重新添加。</string>
+    <string name="settings_permission_icons">权限图标</string>
+    <string name="settings_permission_icons_shield">盾牌</string>
+    <string name="settings_permission_icons_semantic">语义</string>
+    <string name="settings_permission_icons_gate">门禁</string>
+    <string name="settings_permission_icons_ring">圆环</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_session_spacing">消息间距</string>
     <string name="settings_local_only_footnote">保存在本机，与服务器上的设置无关。</string>

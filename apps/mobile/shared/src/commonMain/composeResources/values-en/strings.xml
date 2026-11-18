@@ -47,6 +47,11 @@
     <string name="settings_theme_footnote">Changing the theme does not change Follow system; custom themes edited on the web or macOS sync here.</string>
     <string name="settings_app_icon">App icon</string>
     <string name="settings_app_icon_footnote">Icons pinned to the home screen may need to be added again.</string>
+    <string name="settings_permission_icons">Permission icons</string>
+    <string name="settings_permission_icons_shield">Shield</string>
+    <string name="settings_permission_icons_semantic">Semantic</string>
+    <string name="settings_permission_icons_gate">Gate</string>
+    <string name="settings_permission_icons_ring">Ring</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_session_spacing">Message spacing</string>
     <string name="settings_local_only_footnote">Stored on this device, independent of the settings on the server.</string>

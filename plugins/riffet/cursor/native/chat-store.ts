@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { NativeContext } from '@contracts';
@@ -54,6 +54,57 @@ export function workspaceChatsDir(configDir: string, cwd: string): string {
 
 export function chatStorePath(configDir: string, cwd: string, chatId: string): string {
   return join(workspaceChatsDir(configDir, cwd), chatId, 'store.db');
+}
+
+/**
+ * Keeps the chat store's persisted approval metadata in step with an explicit launch/restart choice.
+ *
+ * `cursor-agent --resume <chatId>` has no `--allowlist` flag: without `--force` or `--auto-review`
+ * it reads `approvalMode` and `isRunEverything` straight out of `store.db` (`meta` row `0`), and if
+ * `cli-config.json` has `approvalMode: "unrestricted"` its startup `wantsAutoRun` check also forces
+ * `Run Everything` back on over `--auto-review` and `allowlist`.
+ */
+export function writeChatApproval(configDir: string | undefined, cwd: string, chatId: string | undefined, approval: string | undefined): void {
+  if (!configDir || !approval) return;
+  if (approval !== 'unrestricted') {
+    let configPath = join(configDir, 'cli-config.json');
+    let temporary: string | undefined;
+    try {
+      if (existsSync(configPath)) {
+        if (lstatSync(configPath).isSymbolicLink()) configPath = realpathSync(configPath);
+        const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.approvalMode === 'unrestricted') {
+          parsed.approvalMode = 'allowlist';
+          temporary = `${configPath}.${randomBytes(8).toString('hex')}.tmp`;
+          writeFileSync(temporary, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+          renameSync(temporary, configPath);
+          temporary = undefined;
+        }
+      }
+    } catch { /* best-effort */ }
+    finally { if (temporary) { try { unlinkSync(temporary); } catch { /* ignore */ } } }
+  }
+  if (!chatId) return;
+  const path = chatStorePath(configDir, cwd, chatId);
+  if (!existsSync(path)) return;
+  let db: DatabaseSync | undefined;
+  try {
+    db = new DatabaseSync(path, { timeout: 2000 });
+    const row = db.prepare("SELECT value FROM meta WHERE key='0'").get() as { value?: string } | undefined;
+    if (!row?.value) return;
+    const isHex = /^[0-9a-f]+$/i.test(row.value);
+    const text = isHex ? Buffer.from(row.value, 'hex').toString('utf8') : row.value;
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+    const isRunEverything = approval === 'unrestricted';
+    if (parsed.approvalMode === approval && parsed.isRunEverything === isRunEverything) return;
+    parsed.approvalMode = approval;
+    parsed.isRunEverything = isRunEverything;
+    const serialized = JSON.stringify(parsed);
+    const nextValue = isHex ? Buffer.from(serialized, 'utf8').toString('hex') : serialized;
+    db.prepare("UPDATE meta SET value=? WHERE key='0'").run(nextValue);
+  } catch { /* best-effort; launch flags still carry the mode */ }
+  finally { try { db?.close(); } catch { /* ignore */ } }
 }
 
 type Field = [number, number | Uint8Array];

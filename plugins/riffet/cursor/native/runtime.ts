@@ -7,6 +7,7 @@ import { cursorAgentAdapter } from '../cli-adapter.js';
 import { cursorConfigDirectory, cursorLaunchSpec, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { CursorLive } from './live.js';
+import { writeChatApproval } from './chat-store.js';
 import { cursorLoginPrompt, parseScreen } from './screen.js';
 
 export interface NativeRuntimeConfig {
@@ -233,6 +234,7 @@ export class NativeRuntimeManager {
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     })];
     if (options.initialPrompt) await runBeforeSpawn(options.beforeSpawn);
+    writeChatApproval(cursorConfigDirectory(this.options.profile ?? this.options.cliPath), project.cwd, chatId, session.approval);
     const launchStarted = this.now();
     const info = await this.port.terminals.launch(session.id, {
       ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [...(chatId ? ['--resume', chatId] : []), ...args], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),

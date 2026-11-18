@@ -147,7 +147,7 @@ struct SettingsView: View {
             SettingsEntry(title: String(localized: "代码高亮", bundle: .riffet), icon: "chevron.left.forwardslash.chevron.right", value: codeThemeName, kind: .link { AnyView(CodeThemeSettingsView()) }),
         ]
         if UIApplication.shared.supportsAlternateIcons {
-            appearance.append(SettingsEntry(title: String(localized: "应用图标", bundle: .riffet), icon: "app", value: AppIconVariant.current.name, kind: .link { AnyView(AppIconSetting()) }))
+            appearance.append(SettingsEntry(title: String(localized: "图标", bundle: .riffet), icon: "app", value: AppIconVariant.current.name, kind: .link { AnyView(AppIconSetting()) }))
         }
         return [
             SettingsGroup(title: "", entries: [

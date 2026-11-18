@@ -11554,6 +11554,36 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove" } }
       }
+    },
+    "图标" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Icons" } }
+      }
+    },
+    "权限图标" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Permission icons" } }
+      }
+    },
+    "盾牌" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shield" } }
+      }
+    },
+    "语义" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Semantic" } }
+      }
+    },
+    "门禁" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Gate" } }
+      }
+    },
+    "圆环" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ring" } }
+      }
     }
   },
   "version" : "1.0"

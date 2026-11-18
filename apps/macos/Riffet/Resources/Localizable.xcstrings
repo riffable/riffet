@@ -9451,6 +9451,16 @@
         }
       }
     },
+    "在插件中启用飞书后可添加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on the Feishu plugin to add one"
+          }
+        }
+      }
+    },
     "在新窗口中打开": {
       "localizations": {
         "en": {
@@ -21324,12 +21334,12 @@
         }
       }
     },
-    "Dock 中的应用图标": {
+    "Dock 中的应用图标与权限图标": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The app icon in the Dock"
+            "value": "App icon in the Dock and permission icons"
           }
         }
       }
@@ -24245,6 +24255,106 @@
           "stringUnit": {
             "state": "translated",
             "value": "No available Agent found"
+          }
+        }
+      }
+    },
+    "权限图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permission icons"
+          }
+        }
+      }
+    },
+    "盾牌": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shield"
+          }
+        }
+      }
+    },
+    "语义": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semantic"
+          }
+        }
+      }
+    },
+    "门禁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gate"
+          }
+        }
+      }
+    },
+    "圆环": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ring"
+          }
+        }
+      }
+    },
+    "只读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read-only"
+          }
+        }
+      }
+    },
+    "每次询问": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask each time"
+          }
+        }
+      }
+    },
+    "工作区": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
+          }
+        }
+      }
+    },
+    "自动审查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-review"
+          }
+        }
+      }
+    },
+    "全部放行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run everything"
           }
         }
       }

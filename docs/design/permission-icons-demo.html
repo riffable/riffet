@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 权限模式图标方案对比与混搭 Demo</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --bg-sidebar: #f7f8fa; --bg-subtle: #f5f6f8; --bg-muted: #eef0f3;
+  --bg-elevated: #ffffff; --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055); --bg-active: rgb(35 45 70 / 0.09);
+  --fg: #2a2c2e; --fg-2: #50555d; --fg-3: #60666e; --fg-4: #9aa0a9;
+  --line: rgb(15 23 42 / 0.08); --line-strong: rgb(15 23 42 / 0.13);
+  --primary: #15171a; --primary-fg: #ffffff;
+  --accent: #3867f0; --warning: #c77f06; --warning-soft: rgb(245 158 11 / 0.12); --danger: #e0454b;
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416; --bg-sidebar: #1a1a1d; --bg-subtle: #1d1d20; --bg-muted: #27272b;
+  --bg-elevated: #1f1f22; --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06); --bg-active: rgb(255 255 255 / 0.1);
+  --fg: #d2d4d7; --fg-2: #b6bac1; --fg-3: #9da2aa; --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075); --line-strong: rgb(255 255 255 / 0.12);
+  --primary: #eceef1; --primary-fg: #141416;
+  --accent: #5b8cff; --warning: #e5a13a; --warning-soft: rgb(229 161 58 / 0.15); --danger: #f0676c;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.18);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg-sidebar); color: var(--fg); font: 400 13px/20px var(--font-sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+svg.g { fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.g * { vector-effect: non-scaling-stroke; }
+
+.topbar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 20px; background: var(--bg-sidebar); border-bottom: 1px solid var(--line); }
+.topbar .title { font-weight: 500; font-size: 14px; }
+.topbar .sp { flex: 1; }
+.seg { display: inline-flex; padding: 2px; border-radius: 10px; background: var(--bg-muted); box-shadow: inset 0 0 0 .5px var(--line); }
+.seg button { height: 26px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.seg button[aria-selected="true"] { color: var(--fg); background: var(--bg-elevated); box-shadow: var(--shadow-soft); }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; display: flex; flex-direction: column; gap: 28px; }
+.sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sec-head h2 { margin: 0; font-size: 15px; font-weight: 500; }
+.sec-head p { margin: 0; font-size: 12px; color: var(--fg-3); }
+
+/* Stage: Live Composer + Menu */
+.stage-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .stage-grid { grid-template-columns: 1fr; } }
+.card { background: var(--bg); border-radius: 16px; box-shadow: 0 0 0 1px var(--line); padding: 20px; }
+
+.composer { background: var(--bg-elevated); border-radius: 16px; box-shadow: var(--shadow-composer); display: flex; flex-direction: column; }
+.composer-input { min-height: 60px; padding: 14px 16px 6px; font-size: 14px; line-height: 22px; color: var(--fg-4); }
+.composer-bar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; }
+.icon-btn { position: relative; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--fg-3); transition: background-color 120ms, color 120ms; }
+.icon-btn:hover, .icon-btn[data-open="true"] { background: var(--bg-hover); color: var(--fg); }
+.icon-btn.warn { color: var(--warning); }
+.icon-btn.warn:hover, .icon-btn.warn[data-open="true"] { color: var(--warning); background: var(--warning-soft); }
+.icon-btn svg.g { width: 18px; height: 18px; }
+.tip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #18181b; color: #fafafa; font-size: 11px; line-height: 16px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 120ms; z-index: 30; }
+.icon-btn:hover .tip { opacity: 1; }
+.model-pill { margin-left: auto; height: 28px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); }
+.model-pill:hover { background: var(--bg-hover); color: var(--fg); }
+.send-btn { width: 32px; height: 32px; border-radius: 999px; background: var(--primary); color: var(--primary-fg); display: grid; place-items: center; }
+
+.menu-preview { background: var(--bg-popover); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 4px; width: 100%; max-width: 352px; }
+.menu-note { padding: 6px 8px 4px; font-size: 12px; color: var(--fg-3); }
+.menu-label { padding: 6px 8px 4px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.menu-item { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 8px 30px 8px 8px; border-radius: 8px; text-align: left; position: relative; transition: background-color 120ms; }
+.menu-item:hover { background: var(--bg-hover); }
+.menu-item[aria-checked="true"] { background: var(--bg-subtle); }
+.menu-item .mi-icon { margin-top: 2px; color: var(--fg-3); }
+.menu-item.warn .mi-icon, .menu-item.warn .mi-title { color: var(--warning); }
+.menu-item .mi-icon svg.g { width: 16px; height: 16px; }
+.menu-item .mi-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.menu-item .mi-title { font-size: 13px; font-weight: 500; line-height: 18px; color: var(--fg); display: flex; align-items: center; gap: 6px; }
+.menu-item .mi-id { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--fg-4); }
+.menu-item .mi-desc { font-size: 12px; line-height: 16px; color: var(--fg-3); }
+.menu-item .mi-check { position: absolute; right: 8px; top: 10px; color: var(--fg); }
+
+/* Matrix table */
+.matrix { width: 100%; border-collapse: collapse; background: var(--bg); border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); }
+.matrix th, .matrix td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.matrix th { font-size: 12px; font-weight: 500; color: var(--fg-3); background: var(--bg-subtle); }
+.matrix tr:last-child td { border-bottom: 0; }
+.tier-name { font-weight: 500; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.tier-ids { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+.tier-desc { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+.glyph-cell { cursor: pointer; border-radius: 10px; padding: 8px 10px; display: inline-flex; align-items: center; gap: 10px; border: 1px solid transparent; transition: all 120ms; }
+.glyph-cell:hover { background: var(--bg-hover); }
+.glyph-cell[data-picked="true"] { background: var(--bg-active); border-color: var(--line-strong); }
+.glyph-cell.warn { color: var(--warning); }
+.sizes { display: inline-flex; align-items: center; gap: 8px; }
+.sz-14 svg.g { width: 14px; height: 14px; }
+.sz-18 svg.g { width: 18px; height: 18px; }
+.sz-24 svg.g { width: 24px; height: 24px; color: var(--fg-3); }
+.glyph-cell.warn .sz-24 svg.g { color: var(--warning); }
+
+.copy-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--bg); border-radius: 12px; box-shadow: 0 0 0 1px var(--line); }
+.copy-code { font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); overflow-x: auto; white-space: nowrap; }
+.btn-primary { height: 28px; padding: 0 12px; border-radius: 8px; background: var(--primary); color: var(--primary-fg); font-size: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <span class="title">Riffet · 权限模式图标集合设计方案</span>
+  <div class="seg" id="scheme-tabs">
+    <button data-scheme="A" aria-selected="true">方案 A · 盾牌语义族</button>
+    <button data-scheme="B" aria-selected="false">方案 B · 直觉独立符号</button>
+    <button data-scheme="C" aria-selected="false">方案 C · 工作区门禁族</button>
+    <button data-scheme="D" aria-selected="false">方案 D · 刻度圆环族</button>
+  </div>
+  <span class="sp"></span>
+  <div class="seg" id="agent-tabs">
+    <button data-agent="cursor" aria-selected="true">Cursor (3)</button>
+    <button data-agent="claude" aria-selected="false">Claude Code (7)</button>
+    <button data-agent="codex" aria-selected="false">Codex (4)</button>
+    <button data-agent="dsh" aria-selected="false">DSH (4)</button>
+    <button data-agent="droid" aria-selected="false">Droid (4)</button>
+    <button data-agent="antigravity" aria-selected="false">Antigravity (4)</button>
+  </div>
+  <button class="icon-btn" id="theme-toggle" title="切换深浅色" style="width:32px;height:32px">
+    <svg class="g" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+</header>
+
+<main class="wrap">
+  <section>
+    <div class="sec-head">
+      <h2>1. 真实输入框与权限菜单实时预览</h2>
+      <p>点击输入框左下角权限图标或右侧菜单项切换模式；顶部可切换 6 个不同 Agent 验证单菜单无撞衫</p>
+    </div>
+    <div class="stage-grid">
+      <div class="card" style="display:flex;flex-direction:column;gap:16px">
+        <div style="font-size:12px;color:var(--fg-3);display:flex;justify-content:space-between">
+          <span>桌面输入框工具栏（仅图标 18px + 悬停 Tip，与左侧 + 和麦克风对齐）</span>
+          <span id="current-status" style="font-family:var(--font-mono)"></span>
+        </div>
+        <div class="composer">
+          <div class="composer-input">输入下一条消息…</div>
+          <div class="composer-bar">
+            <button class="icon-btn" aria-label="添加附件">
+              <svg class="g" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg>
+              <span class="tip">添加附件</span>
+            </button>
+            <button class="icon-btn" aria-label="语音输入">
+              <svg class="g" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
+              <span class="tip">语音输入</span>
+            </button>
+            <button class="icon-btn" id="composer-perm-btn" data-open="true">
+              <span id="composer-perm-icon"></span>
+              <span class="tip" id="composer-perm-tip"></span>
+            </button>
+            <button class="model-pill">
+              <span>Opus 5.5 · high</span>
+            </button>
+            <button class="send-btn" aria-label="发送">
+              <svg class="g" viewBox="0 0 24 24" style="width:16px;height:16px;stroke-width:2.2"><path d="m5 12 7-7 7 7M12 19V5"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="padding-top:4px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--fg-3)">
+          <span>手机端发送设置胶囊前缀预览：</span>
+          <span id="mobile-summary-preview" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:var(--bg-subtle);color:var(--fg-2);font-weight:500"></span>
+        </div>
+      </div>
+
+      <div class="card" style="display:flex;justify-content:center;background:var(--bg-subtle)">
+        <div class="menu-preview" id="menu-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>2. 四套方案 × 7 个语义档位全览（支持点击单元格自由混搭）</h2>
+      <p>每个单元格依次展示 14px（行内）、18px（输入框工具栏）、24px（放大检视），全部采用 1.25px 恒定描边</p>
+    </div>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="width:240px">权限语义槽位（覆盖全仓 7 个 Agent）</th>
+          <th>方案 A · 盾牌语义族<br><span style="font-weight:400">统一护盾外框 + 内部极简符号</span></th>
+          <th>方案 B · 直觉独立符号<br><span style="font-weight:400">高辨识度独立几何形，16px 最透气</span></th>
+          <th>方案 C · 工作区门禁族<br><span style="font-weight:400">表达工作区边界 `[ ]` 与越界行为</span></th>
+          <th>方案 D · 刻度圆环族<br><span style="font-weight:400">统一圆环基底 + 放行状态符号</span></th>
+        </tr>
+      </thead>
+      <tbody id="matrix-body"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="copy-bar">
+      <div>
+        <div style="font-weight:500;margin-bottom:2px">当前选中配置（可直接复制发回对话）</div>
+        <div class="copy-code" id="selection-summary"></div>
+      </div>
+      <button class="btn-primary" id="copy-btn">复制选择结果</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const TIERS = [
+  { key: 'read', name: '1. 只读 / 规划 (Read / Plan)', ids: 'read-only, plan', desc: '只读不改，任何写入或命令前询问', warn: false },
+  { key: 'ask', name: '2. 每次询问 (Ask each time)', ids: 'allowlist, manual, off, request-review', desc: '涉及修改或执行命令前逐次由人确认', warn: false },
+  { key: 'default', name: '3. 默认护栏 / 严格 (Default / Guarded)', ids: 'default, strict, low', desc: '标准默认护栏，安全操作放行、敏感操作询问', warn: false },
+  { key: 'workspace', name: '4. 工作区可写 / 自动编辑 (Workspace / Edits)', ids: 'acceptEdits, on-request, workspace-write, proceed-in-sandbox, medium', desc: '工作区内自由编辑读写，跨出目录或联网时询问', warn: false },
+  { key: 'auto', name: '5. AI 自动审查 (Auto review)', ids: 'auto-review, auto', desc: '由审查模型自动判断每次工具调用是否安全放行', warn: false },
+  { key: 'deny', name: '6. 自动拒绝越权 (Deny / Don\'t ask)', ids: 'dontAsk', desc: '无人值守模式：需要额外授权的工具直接拒绝而不弹窗', warn: false },
+  { key: 'full', name: '7. 全部放行 (Run everything / Bypass)', ids: 'unrestricted, bypassPermissions, danger-full-access, always-proceed, high', desc: '无沙盒且不询问，直接执行全部工具与命令（warning 着色）', warn: true },
+];
+
+// 24x24 paths, designed for 1.25px non-scaling-stroke
+const SHIELD = 'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z';
+const GATE_OPEN = 'M8.5 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-2';
+function innerOf(cy) {
+  const r = (n) => Math.round(n * 100) / 100;
+  return {
+    read: `<path d="M8.25 ${r(cy)}Q12 ${r(cy - 3)} 15.75 ${r(cy)}Q12 ${r(cy + 3)} 8.25 ${r(cy)}Z"/><circle cx="12" cy="${r(cy)}" r="0.9" fill="currentColor" stroke="none"/>`,
+    ask: `<path d="M9.85 ${r(cy - 1.5)}C9.85 ${r(cy - 2.65)} 10.75 ${r(cy - 3.3)} 11.9 ${r(cy - 3.3)}c1.15 0 2 .65 2 1.65 0 .95-.65 1.4-1.35 1.8-.4.25-.55.55-.55 1.05"/><circle cx="12" cy="${r(cy + 3.1)}" r="0.8" fill="currentColor" stroke="none"/>`,
+    default: `<path d="m9.1 ${r(cy)} 1.9 1.9 3.9-3.9"/>`,
+    workspace: `<path d="m10.3 ${r(cy - 1.9)}-1.9 1.9 1.9 1.9M13.7 ${r(cy - 1.9)}l1.9 1.9-1.9 1.9"/>`,
+    auto: `<path d="M12 ${r(cy - 3.6)}Q12 ${r(cy)} 15.6 ${r(cy)}Q12 ${r(cy)} 12 ${r(cy + 3.6)}Q12 ${r(cy)} 8.4 ${r(cy)}Q12 ${r(cy)} 12 ${r(cy - 3.6)}Z"/>`,
+    deny: `<path d="m9.8 ${r(cy - 2.2)} 4.4 4.4M14.2 ${r(cy - 2.2)}l-4.4 4.4"/>`,
+    full: `<path d="M12.5 ${r(cy - 3.6)} 9.6 ${r(cy + 0.2)}h4.8L11.5 ${r(cy + 3.6)}"/>`,
+  };
+}
+const SI = innerOf(11.4);
+const CI = innerOf(12);
+const GLYPHS = {
+  A: {
+    read: `<path d="${SHIELD}"/>${SI.read}`,
+    ask: `<path d="${SHIELD}"/>${SI.ask}`,
+    default: `<path d="${SHIELD}"/>${SI.default}`,
+    workspace: `<path d="${SHIELD}"/>${SI.workspace}`,
+    auto: `<path d="${SHIELD}"/>${SI.auto}`,
+    deny: `<path d="${SHIELD}"/>${SI.deny}`,
+    full: `<path d="${SHIELD}"/>${SI.full}`,
+  },
+  B: {
+    read: `<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>`,
+    ask: `<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>${CI.ask}`,
+    default: `<path d="${SHIELD}"/>${SI.default}`,
+    workspace: `<path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/>`,
+    auto: `<path d="M12 3Q12 12 21 12Q12 12 12 21Q12 12 3 12Q12 12 12 3Z"/><path d="M19 4v3M17.5 5.5h3"/>`,
+    deny: `<circle cx="12" cy="12" r="9"/><path d="m5.64 5.64 12.72 12.72"/>`,
+    full: `<path d="M13 3 5 13.5h6.5L11 21l8-10.5h-6.5L13 3Z"/>`,
+  },
+  C: {
+    read: `<rect x="4" y="4" width="16" height="16" rx="3.5"/>${CI.read}`,
+    ask: `<path d="${GATE_OPEN}"/>${CI.ask}`,
+    default: `<rect x="4" y="4" width="16" height="16" rx="3.5"/>${CI.default}`,
+    workspace: `<rect x="4" y="4" width="16" height="16" rx="3.5"/>${CI.workspace}`,
+    auto: `<path d="${GATE_OPEN}"/>${CI.auto}`,
+    deny: `<rect x="4" y="4" width="16" height="16" rx="3.5"/>${CI.deny}`,
+    full: `<path d="${GATE_OPEN}"/>${CI.full}`,
+  },
+  D: {
+    read: `<circle cx="12" cy="12" r="9"/>${CI.read}`,
+    ask: `<circle cx="12" cy="12" r="9"/>${CI.ask}`,
+    default: `<circle cx="12" cy="12" r="9"/>${CI.default}`,
+    workspace: `<circle cx="12" cy="12" r="9"/>${CI.workspace}`,
+    auto: `<circle cx="12" cy="12" r="9" stroke-dasharray="3.5 2.5"/>${CI.auto}`,
+    deny: `<circle cx="12" cy="12" r="9"/>${CI.deny}`,
+    full: `<circle cx="12" cy="12" r="9"/>${CI.full}`,
+  },
+};
+
+const AGENTS = {
+  cursor: [
+    { id: 'allowlist', label: 'Ask each time', desc: 'Only commands on your allowlist run without asking', tier: 'ask' },
+    { id: 'auto-review', label: 'Auto review', desc: 'An automatic reviewer decides whether each tool call runs', tier: 'auto' },
+    { id: 'unrestricted', label: 'Run everything', desc: 'Every tool call runs without asking', tier: 'full' },
+  ],
+  claude: [
+    { id: 'default', label: 'Claude default', short: 'Default', desc: 'Standard workspace protection; asks before shell commands and sensitive edits', tier: 'default' },
+    { id: 'manual', label: 'Ask before each permission', short: 'Ask', desc: 'Prompts before every file edit and tool call', tier: 'ask' },
+    { id: 'acceptEdits', label: 'Accept edits automatically', short: 'Accept edits', desc: 'Applies file edits automatically; still asks before running commands', tier: 'workspace' },
+    { id: 'plan', label: 'Plan mode (read only)', short: 'Plan', desc: 'Reads and plans only; makes no file changes', tier: 'read' },
+    { id: 'auto', label: 'Auto mode', short: 'Auto', desc: 'Classifier reviews each action before it runs', tier: 'auto' },
+    { id: 'dontAsk', label: 'Deny tools that need permission', short: 'Deny', desc: 'Refuses any tool that would require a permission prompt', tier: 'deny' },
+    { id: 'bypassPermissions', label: 'Bypass permissions', short: 'Bypass', desc: 'Skips all permission checks', tier: 'full' },
+  ],
+  codex: [
+    { id: 'on-request', label: 'Default', desc: 'Edits the workspace freely; asks before going outside it or onto the network', tier: 'workspace' },
+    { id: 'dontAsk', label: 'Deny tools that need permission', short: 'Deny', desc: 'Edits the workspace freely; refuses anything more instead of asking', tier: 'deny' },
+    { id: 'read-only', label: 'Read only', desc: 'Reads anything; asks before every edit or command that needs more', tier: 'read' },
+    { id: 'danger-full-access', label: 'Full access', desc: 'No sandbox and never asks: edits and network anywhere', tier: 'full' },
+  ],
+  dsh: [
+    { id: 'workspace-write', label: 'Workspace write', desc: 'Writes inside the workspace and temporary directories; anything wider asks first', tier: 'workspace' },
+    { id: 'read-only', label: 'Read only', desc: 'Reads anything; every write asks first', tier: 'read' },
+    { id: 'auto', label: 'Auto review (experimental)', short: 'Auto review', desc: 'The agent\'s own model reviews each tool call before it runs', tier: 'auto' },
+    { id: 'danger-full-access', label: 'Full access', desc: 'No sandbox and no approval prompts', tier: 'full' },
+  ],
+  droid: [
+    { id: 'off', label: 'Ask first', desc: 'Reads freely; asks before every edit and command', tier: 'ask' },
+    { id: 'low', label: 'Auto (Low)', desc: 'Edits files and runs read-only commands without asking', tier: 'default' },
+    { id: 'medium', label: 'Auto (Medium)', desc: 'Also runs reversible commands, such as installs and local git', tier: 'workspace' },
+    { id: 'high', label: 'Auto (High)', desc: 'Runs every command without asking, including irreversible ones', tier: 'full' },
+  ],
+  antigravity: [
+    { id: 'request-review', label: 'Ask each time', desc: 'Prompts for review before running actions', tier: 'ask' },
+    { id: 'strict', label: 'Strict', desc: 'Strict policy bounds on tool execution', tier: 'default' },
+    { id: 'proceed-in-sandbox', label: 'Sandbox', desc: 'Runs commands automatically inside the sandbox', tier: 'workspace' },
+    { id: 'always-proceed', label: 'Run everything', desc: 'Proceeds with all tool calls without asking', tier: 'full' },
+  ],
+};
+
+let picks = { read: 'A', ask: 'A', default: 'A', workspace: 'A', auto: 'A', deny: 'A', full: 'A' };
+let activeAgent = 'cursor';
+let activeModeId = 'unrestricted';
+
+function svgOf(scheme, tier) {
+  return `<svg class="g" viewBox="0 0 24 24">${GLYPHS[scheme][tier]}</svg>`;
+}
+
+function renderStage() {
+  const modes = AGENTS[activeAgent];
+  if (!modes.some((m) => m.id === activeModeId)) activeModeId = modes[modes.length - 1].id;
+  const current = modes.find((m) => m.id === activeModeId) || modes[0];
+  const isWarn = current.tier === 'full';
+  const scheme = picks[current.tier];
+
+  const btn = document.getElementById('composer-perm-btn');
+  btn.className = 'icon-btn' + (isWarn ? ' warn' : '');
+  document.getElementById('composer-perm-icon').innerHTML = svgOf(scheme, current.tier);
+  document.getElementById('composer-perm-tip').textContent = `权限模式：${current.label}`;
+  document.getElementById('current-status').textContent = `${activeAgent} · ${current.id} (${scheme}方案)`;
+
+  const mobileSummary = document.getElementById('mobile-summary-preview');
+  mobileSummary.innerHTML = `<span style="display:inline-flex;width:14px;height:14px;${isWarn ? 'color:var(--warning)' : ''}">${svgOf(scheme, current.tier)}</span><span style="${isWarn ? 'color:var(--warning)' : ''}">${current.short || current.label}</span><span style="color:var(--fg-4)">·</span><span>Opus 5.5</span>`;
+
+  const menu = document.getElementById('menu-list');
+  menu.innerHTML = `
+    <div class="menu-label">权限模式</div>
+    ${modes.map((m) => {
+      const s = picks[m.tier];
+      const warn = m.tier === 'full';
+      const checked = m.id === current.id;
+      return `<button class="menu-item ${warn ? 'warn' : ''}" aria-checked="${checked}" data-mode="${m.id}">
+        <span class="mi-icon">${svgOf(s, m.tier)}</span>
+        <span class="mi-body">
+          <span class="mi-title">${m.label} <span class="mi-id">${m.id}</span></span>
+          <span class="mi-desc">${m.desc}</span>
+        </span>
+        ${checked ? `<span class="mi-check"><svg class="g" viewBox="0 0 24 24" style="width:15px;height:15px"><path d="M20 6 9 17l-5-5"/></svg></span>` : ''}
+      </button>`;
+    }).join('')}
+  `;
+  menu.querySelectorAll('.menu-item').forEach((el) => {
+    el.onclick = () => { activeModeId = el.dataset.mode; renderStage(); };
+  });
+}
+
+function renderMatrix() {
+  const tbody = document.getElementById('matrix-body');
+  tbody.innerHTML = TIERS.map((t) => `
+    <tr>
+      <td>
+        <div class="tier-name" style="${t.warn ? 'color:var(--warning)' : ''}">${t.name}</div>
+        <div class="tier-ids">${t.ids}</div>
+        <div class="tier-desc">${t.desc}</div>
+      </td>
+      ${['A', 'B', 'C', 'D'].map((s) => `
+        <td>
+          <div class="glyph-cell ${t.warn ? 'warn' : ''}" data-tier="${t.key}" data-scheme="${s}" data-picked="${picks[t.key] === s}">
+            <div class="sizes">
+              <span class="sz-14">${svgOf(s, t.key)}</span>
+              <span class="sz-18">${svgOf(s, t.key)}</span>
+              <span class="sz-24">${svgOf(s, t.key)}</span>
+            </div>
+            <span style="font-family:var(--font-mono);font-size:11px;color:var(--fg-4)">${s}-${t.key}</span>
+          </div>
+        </td>
+      `).join('')}
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.glyph-cell').forEach((cell) => {
+    cell.onclick = () => {
+      picks[cell.dataset.tier] = cell.dataset.scheme;
+      syncSchemeTabs();
+      renderMatrix();
+      renderStage();
+      renderSummary();
+    };
+  });
+}
+
+function syncSchemeTabs() {
+  const vals = new Set(Object.values(picks));
+  const unified = vals.size === 1 ? [...vals][0] : null;
+  document.querySelectorAll('#scheme-tabs button').forEach((b) => {
+    b.setAttribute('aria-selected', b.dataset.scheme === unified ? 'true' : 'false');
+  });
+}
+
+function renderSummary() {
+  const vals = new Set(Object.values(picks));
+  const text = vals.size === 1
+    ? `整套采用方案 ${[...vals][0]}`
+    : '混搭选择：' + Object.entries(picks).map(([k, v]) => `${k}=${v}`).join(', ');
+  document.getElementById('selection-summary').textContent = text;
+}
+
+document.querySelectorAll('#scheme-tabs button').forEach((btn) => {
+  btn.onclick = () => {
+    const s = btn.dataset.scheme;
+    Object.keys(picks).forEach((k) => { picks[k] = s; });
+    syncSchemeTabs();
+    renderMatrix();
+    renderStage();
+    renderSummary();
+  };
+});
+
+document.querySelectorAll('#agent-tabs button').forEach((btn) => {
+  btn.onclick = () => {
+    activeAgent = btn.dataset.agent;
+    document.querySelectorAll('#agent-tabs button').forEach((b) => b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+    renderStage();
+  };
+});
+
+document.getElementById('composer-perm-btn').onclick = () => {
+  const modes = AGENTS[activeAgent];
+  const idx = modes.findIndex((m) => m.id === activeModeId);
+  activeModeId = modes[(idx + 1) % modes.length].id;
+  renderStage();
+};
+
+document.getElementById('theme-toggle').onclick = () => {
+  document.documentElement.classList.toggle('dark');
+};
+
+document.getElementById('copy-btn').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('selection-summary').textContent);
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = '已复制';
+  setTimeout(() => { btn.textContent = '复制选择结果'; }, 1200);
+};
+
+renderMatrix();
+renderStage();
+renderSummary();
+</script>
+</body>
+</html>

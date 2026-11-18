@@ -55,4 +55,34 @@ internal fun IconPackPicker(state: IconPackState) {
         SettingsFootnote(stringResource(Res.string.settings_icon_pack_unavailable))
         SettingsGroup("") { SettingsActionRow(stringResource(Res.string.settings_retry), onClick = state::refresh) }
     }
+    SettingsGroup(title = stringResource(Res.string.settings_permission_icons)) {
+        Column(Modifier.selectableGroup()) {
+            PermissionIconStyle.entries.forEach { style ->
+                val selected = style == state.permissionStyle
+                val title = when (style) {
+                    PermissionIconStyle.SHIELD -> stringResource(Res.string.settings_permission_icons_shield)
+                    PermissionIconStyle.SEMANTIC -> stringResource(Res.string.settings_permission_icons_semantic)
+                    PermissionIconStyle.GATE -> stringResource(Res.string.settings_permission_icons_gate)
+                    PermissionIconStyle.RING -> stringResource(Res.string.settings_permission_icons_ring)
+                }
+                GroupRow(
+                    title = title,
+                    leading = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(metrics.controlInset)) {
+                            listOf(PermissionTier.ASK, PermissionTier.DEFAULT, PermissionTier.AUTO, PermissionTier.FULL).forEach { tier ->
+                                Icon(
+                                    PermissionIcons.vector(tier, style),
+                                    null,
+                                    Modifier.size(metrics.iconSize),
+                                    if (tier == PermissionTier.FULL) colors.warning else colors.fg2,
+                                )
+                            }
+                        }
+                    },
+                    trailing = { riffet.ui.design.SelectionMark(selected) },
+                    modifier = Modifier.selectable(selected, role = Role.RadioButton) { state.selectPermissionStyle(style) },
+                )
+            }
+        }
+    }
 }

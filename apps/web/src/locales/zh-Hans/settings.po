@@ -285,6 +285,10 @@ msgstr "5xx {0}"
 msgid "5xx 服务器"
 msgstr "5xx 服务器"
 
+#: src/app/design/foundations/IconChapter.tsx
+msgid "7 个无冲突语义档位 × 4 套可选风格，默认盾牌，1.25px 恒定描边。"
+msgstr "7 个无冲突语义档位 × 4 套可选风格，默认盾牌，1.25px 恒定描边。"
+
 #: src/app/settings/StorageSection.tsx
 msgid "7 天未活动的会话清空，打开时重建"
 msgstr "7 天未活动的会话清空，打开时重建"
@@ -1036,10 +1040,6 @@ msgstr "仅保存到服务器；留空保留现有 Key，不会回显"
 msgid "仅保存在这个浏览器。"
 msgstr "仅保存在这个浏览器。"
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
-msgstr "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
-
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "仅保存在这台 Mac"
 msgstr "仅保存在这台 Mac"
@@ -1623,6 +1623,11 @@ msgstr "全部 {0} 个"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "全部后端"
 msgstr "全部后端"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "全部放行"
+msgstr "全部放行"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "全部模型"
@@ -2492,6 +2497,11 @@ msgstr "只用 CLI 标题"
 msgid "只用于二到三个短选项"
 msgstr "只用于二到三个短选项"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "只读"
+msgstr "只读"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "只读打开项目外路径；文件树与搜索仍限定在项目内。"
 msgstr "只读打开项目外路径；文件树与搜索仍限定在项目内。"
@@ -2809,6 +2819,7 @@ msgstr "图中宽度按 1440 窗口的主区 {MAIN} 折算"
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/settingsSections.ts
 msgid "图标"
 msgstr "图标"
 
@@ -2860,6 +2871,11 @@ msgstr "图片放大、面板出现"
 #: src/app/settings/ViewsSection.tsx
 msgid "圆点"
 msgstr "圆点"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "圆环"
+msgstr "圆环"
 
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
@@ -3539,7 +3555,9 @@ msgstr "峰值"
 msgid "嵌套"
 msgstr "嵌套"
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "工作区"
 msgstr "工作区"
 
@@ -3729,6 +3747,10 @@ msgstr "已复制链接"
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "已安装"
 msgstr "已安装"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已安装的 Web 应用图标不变。"
+msgstr "已安装的 Web 应用图标不变。"
 
 #: src/app/design/components/DisplayChapter.tsx
 #: src/app/settings/channels/CardSettings.tsx
@@ -3940,7 +3962,7 @@ msgstr "应用内模块"
 msgid "应用内模块经 usePluginHost().ui 取得。"
 msgstr "应用内模块经 usePluginHost().ui 取得。"
 
-#: src/app/settings/settingsSections.ts
+#: src/app/settings/PreferencesSections.tsx
 msgid "应用图标"
 msgstr "应用图标"
 
@@ -4478,8 +4500,10 @@ msgstr "抬起的表面"
 msgid "抽屉"
 msgstr "抽屉"
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/overview/Opening.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
 msgstr "拒绝"
 
@@ -5770,6 +5794,16 @@ msgstr "机器人"
 msgid "权限、文件选择与分享"
 msgstr "权限、文件选择与分享"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标"
+msgstr "权限图标"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标风格"
+msgstr "权限图标风格"
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "来源"
 msgstr "来源"
@@ -6196,6 +6230,11 @@ msgstr "每格用该风格的字体与字号排出；取值在各风格间相同
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
 msgstr "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "每次询问"
+msgstr "每次询问"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "每种组件每端一个实现"
@@ -6749,6 +6788,11 @@ msgstr "直接加入"
 #: src/app/design/android/StylesChapter.tsx
 msgid "相连的按钮"
 msgstr "相连的按钮"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "盾牌"
+msgstr "盾牌"
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "省略"
@@ -7506,6 +7550,11 @@ msgstr "自动化"
 msgid "自动增高上限"
 msgstr "自动增高上限"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "自动审查"
+msgstr "自动审查"
+
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "自动归档"
@@ -7921,6 +7970,11 @@ msgstr "试用"
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "该 Agent 尚未配置提供商"
 msgstr "该 Agent 尚未配置提供商"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "语义"
+msgstr "语义"
 
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/DisplayChapter.tsx
@@ -8873,6 +8927,11 @@ msgstr "长按打开操作菜单"
 msgid "长行自动换行"
 msgstr "长行自动换行"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "门禁"
+msgstr "门禁"
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "间距"
 msgstr "间距"
@@ -9350,6 +9409,7 @@ msgstr "墨色实心，每个区域最多一个"
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx

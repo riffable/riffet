@@ -33,12 +33,13 @@ enum NativeConfigurationSummary {
         return true
     }
     static func approval(status: NativeStatus?, backend: NativeBackendId, sessionApproval: String?) -> String? {
+        if let sessionApproval, !sessionApproval.isEmpty { return sessionApproval }
         if let value = status?.approval, !value.isEmpty { return value }
         if backend == .cursor, let permission = status?.permission?.lowercased() {
             if permission.range(of: "auto.?review", options: .regularExpression) != nil { return "auto-review" }
             if ["run everything", "unrestricted", "yolo"].contains(where: permission.contains) { return "unrestricted" }
         }
-        return sessionApproval
+        return nil
     }
     static func configuration(catalog: NativeBackendCatalogEntry?, profileID: String?, selection: String?) -> String {
         [profile(catalog: catalog, profileID: profileID), model(catalog: catalog, selection: selection)].compactMap { $0 }.joined(separator: " · ")
@@ -159,7 +160,7 @@ struct NewTaskOptions: View {
                 }
                 if catalog.capabilities.supportsPermissionSelection {
                     Section {
-                        ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: choice.approval) { draft.approval = $0 }
+                        ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: choice.approval, showPermissionIcons: true) { draft.approval = $0 }
                     } header: { Text("操作确认") }
                 }
                 let phones = catalog.capabilities.supportsRiffetTools && backend != .chat && ToolsPick.offered(devices: toolDevices, value: [], plugins: toolPlugins)
@@ -355,7 +356,7 @@ struct SessionOptionsView: View {
                 }
                 if (focus == .all || focus == .approval) && catalog.capabilities.supportsPermissionSelection {
                     Section {
-                        ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval) { value in change { api in try await api.nativeSetApproval(id: session.id, approval: value) } }
+                        ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval, showPermissionIcons: true) { value in change { api in try await api.nativeSetApproval(id: session.id, approval: value) } }
                     } header: { Text("操作确认") } footer: { Text("只影响此会话；部分 Agent 会重启 CLI。") }
                     .disabled(pending || current.archivedAt != nil)
                 }
@@ -410,7 +411,7 @@ struct SessionOptionsView: View {
                         RiffetForm {
                             focusedSaveFeedback
                             Section {
-                                ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval) { value in
+                                ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval, showPermissionIcons: true) { value in
                                     change { api in try await api.nativeSetApproval(id: session.id, approval: value) }
                                 }
                             } footer: { Text("只影响此会话；部分 Agent 会重启 CLI。") }
@@ -586,12 +587,35 @@ private struct ConfigurationOptionPicker: View {
     let title: String
     let options: [NativeBackendOption]
     let selection: String?
+    var showPermissionIcons = false
     let choose: (String) -> Void
     @Environment(\.palette) private var palette
     var body: some View {
         ForEach(options, id: \.id) { option in
-            SettingsCheckRow(title: option.label, subtitle: option.description_, selected: selection == option.id) { choose(option.id) }
+            if showPermissionIcons {
+                let risky = PermissionTier.of(option.id) == .full
+                Button { choose(option.id) } label: {
+                    HStack(spacing: 12) {
+                        PermissionIconView(mode: option.id, size: 18, color: risky ? palette.warning : palette.fg2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(option.label).riffetFont(.body).foregroundStyle(risky ? palette.warning : palette.fg)
+                            if let subtitle = option.description_, !subtitle.isEmpty {
+                                Text(subtitle).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent)
+                            .opacity(selection == option.id ? 1 : 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == option.id ? .isSelected : [])
                 .accessibilityIdentifier("configurationOption.\(option.id)")
+            } else {
+                SettingsCheckRow(title: option.label, subtitle: option.description_, selected: selection == option.id) { choose(option.id) }
+                    .accessibilityIdentifier("configurationOption.\(option.id)")
+            }
         }
         if options.isEmpty { Text("没有可用选项").foregroundStyle(palette.fg2) }
     }

@@ -60,7 +60,7 @@ function cliError(below: readonly string[]): string | undefined {
   return text.length > 300 ? `${text.slice(0, 299)}…` : text;
 }
 
-const WORKSPACE_LINE = /^\s{1,4}[~/]/;
+const WORKSPACE_LINE = /^\s{1,4}(?:~(?=$|\s|\/)|\/(?![/*])\S)/;
 const PROMPT_BAR = /^\s*→(\s|$)/;
 
 /**
@@ -144,7 +144,11 @@ export function parseScreen(text: string): ScreenState {
   const permission = right?.trim();
   const floor = Math.max(0, status - 6);
   const bar = tail.slice(floor, status).findLastIndex((line) => PROMPT_BAR.test(line));
-  const busy = tail.slice(0, status).some((line) => CURSOR_AGENT_BUSY_PATTERN.test(line)) || spinnerAbove(tail, bar < 0 ? -1 : floor + bar);
+  const barIndex = bar < 0 ? -1 : floor + bar;
+  const busy = barIndex >= 0 && (
+    tail.slice(Math.max(0, barIndex - 3), status).some((line) => CURSOR_AGENT_BUSY_PATTERN.test(line))
+    || spinnerAbove(tail, barIndex)
+  );
   const error = cliError(tail.slice(status + 2));
   return { phase: busy ? 'busy' : bar >= 0 ? 'idle' : 'attention', footer: true, ...(model ? { model } : {}), ...(permission ? { permission } : {}), ...(error ? { error } : {}) };
 }

@@ -181,10 +181,6 @@ msgid "存为自动化…"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
-msgid "对话会保留；正在回复时，本轮结束后生效"
-msgstr ""
-
-#: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"
 msgstr ""
 
@@ -335,6 +331,10 @@ msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
 msgid "本轮开始前没有检查点，无法回退代码。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "本轮结束后生效"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx

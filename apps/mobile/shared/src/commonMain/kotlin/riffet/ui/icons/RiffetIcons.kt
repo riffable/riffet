@@ -3,6 +3,9 @@ package riffet.ui.icons
 import androidx.compose.foundation.layout.Box
 import riffet.ui.icons.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathFillType
@@ -267,6 +270,89 @@ object RiffetIcons {
 
     /** A person: the owner's avatar before a name or picture is set. */
     val User: ImageVector get() = LucideIcons.User
+}
+
+enum class PermissionIconStyle(val id: String) {
+    SHIELD("shield"),
+    SEMANTIC("semantic"),
+    GATE("gate"),
+    RING("ring");
+
+    companion object {
+        fun fromId(raw: String?): PermissionIconStyle = entries.firstOrNull { it.id == raw } ?: SHIELD
+    }
+}
+
+enum class PermissionTier {
+    READ, ASK, DEFAULT, WORKSPACE, AUTO, DENY, FULL;
+
+    companion object {
+        fun of(mode: String): PermissionTier = when (mode) {
+            "read-only", "plan" -> READ
+            "allowlist", "manual", "off", "request-review" -> ASK
+            "default", "strict", "low" -> DEFAULT
+            "acceptEdits", "on-request", "workspace-write", "proceed-in-sandbox", "medium" -> WORKSPACE
+            "auto-review", "auto" -> AUTO
+            "dontAsk" -> DENY
+            "unrestricted", "bypassPermissions", "danger-full-access", "always-proceed", "high", "never" -> FULL
+            else -> DEFAULT
+        }
+    }
+}
+
+object PermissionIcons {
+    private const val PREF_KEY = "riffet.permission-icons"
+    private const val SHIELD_OUTLINE = "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+    private const val GATE_OPEN = "M8.5 4H6.5A2.5 2.5 0 0 0 4 6.5v11A2.5 2.5 0 0 0 6.5 20h2M15.5 4h2A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-2"
+    private const val GATE_CLOSED = "M7.5 4h9A3.5 3.5 0 0 1 20 7.5v9a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 16.5v-9A3.5 3.5 0 0 1 7.5 4Z"
+    private const val RING_OUTLINE = "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0"
+
+    var currentStyle by mutableStateOf(PermissionIconStyle.SHIELD)
+        internal set
+
+    private fun innerPath(tier: PermissionTier, cy: Float): String = when (tier) {
+        PermissionTier.READ -> "M8.25 $cy Q12 ${cy - 3f} 15.75 $cy Q12 ${cy + 3f} 8.25 $cy Z M11.35 $cy a0.65 0.65 0 1 0 1.3 0 a0.65 0.65 0 1 0 -1.3 0"
+        PermissionTier.ASK -> "M9.85 ${cy - 1.5f} C9.85 ${cy - 2.65f} 10.75 ${cy - 3.3f} 11.9 ${cy - 3.3f} c1.15 0 2 0.65 2 1.65 0 0.95-0.65 1.4-1.35 1.8-0.4 0.25-0.55 0.55-0.55 1.05 M12 ${cy + 3.05f} v0.1"
+        PermissionTier.DEFAULT -> "m9.1 $cy 1.9 1.9 3.9-3.9"
+        PermissionTier.WORKSPACE -> "m10.3 ${cy - 1.9f}-1.9 1.9 1.9 1.9 M13.7 ${cy - 1.9f}l1.9 1.9-1.9 1.9"
+        PermissionTier.AUTO -> "M12 ${cy - 3.6f} Q12 $cy 15.6 $cy Q12 $cy 12 ${cy + 3.6f} Q12 $cy 8.4 $cy Q12 $cy 12 ${cy - 3.6f} Z"
+        PermissionTier.DENY -> "m9.8 ${cy - 2.2f} 4.4 4.4 M14.2 ${cy - 2.2f}l-4.4 4.4"
+        PermissionTier.FULL -> "M12.5 ${cy - 3.6f} 9.6 ${cy + 0.2f}h4.8L11.5 ${cy + 3.6f}"
+    }
+
+    private val cache = mutableMapOf<Pair<PermissionIconStyle, PermissionTier>, ImageVector>()
+
+    fun vector(tier: PermissionTier, style: PermissionIconStyle): ImageVector =
+        cache.getOrPut(style to tier) {
+            val d = when (style) {
+                PermissionIconStyle.SHIELD -> "$SHIELD_OUTLINE ${innerPath(tier, 11.4f)}"
+                PermissionIconStyle.SEMANTIC -> when (tier) {
+                    PermissionTier.READ -> "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0 M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0"
+                    PermissionTier.ASK -> "M7.9 20A9 9 0 1 0 4 16.1L2 22Z ${innerPath(PermissionTier.ASK, 12f)}"
+                    PermissionTier.DEFAULT -> "$SHIELD_OUTLINE ${innerPath(PermissionTier.DEFAULT, 11.4f)}"
+                    PermissionTier.WORKSPACE -> "m8 8-4 4 4 4 M16 8l4 4-4 4 M13.5 6l-3 12"
+                    PermissionTier.AUTO -> "M12 3Q12 12 21 12Q12 12 12 21Q12 12 3 12Q12 12 12 3Z M19 4v3 M17.5 5.5h3"
+                    PermissionTier.DENY -> "$RING_OUTLINE m5.64 5.64 12.72 12.72"
+                    PermissionTier.FULL -> "M13 3 5 13.5h6.5L11 21l8-10.5h-6.5L13 3Z"
+                }
+                PermissionIconStyle.GATE -> {
+                    val outer = if (tier == PermissionTier.ASK || tier == PermissionTier.AUTO || tier == PermissionTier.FULL) GATE_OPEN else GATE_CLOSED
+                    "$outer ${innerPath(tier, 12f)}"
+                }
+                PermissionIconStyle.RING -> "$RING_OUTLINE ${innerPath(tier, 12f)}"
+            }
+            ImageVector.Builder("LucidePermission_${style.id}_${tier.name}", 24.dp, 24.dp, 24f, 24f)
+                .addPath(
+                    pathData = addPathNodes(d),
+                    stroke = SolidColor(Color.Black),
+                    strokeLineWidth = 1.25f,
+                    strokeLineCap = StrokeCap.Round,
+                    strokeLineJoin = StrokeJoin.Round,
+                )
+                .build()
+        }
+
+    fun vector(mode: String, style: PermissionIconStyle = currentStyle): ImageVector = vector(PermissionTier.of(mode), style)
 }
 
 private const val BRAND_MANE = "M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z"

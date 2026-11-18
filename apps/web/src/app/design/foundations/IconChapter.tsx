@@ -1,10 +1,12 @@
 import { useMemo, useState, type ComponentType, type CSSProperties } from 'react';
 import { useLingui } from '@lingui/react/macro';
+import { PermissionGlyph, permissionIconStyles, permissionTiers, setPermissionIconStyle, usePermissionIconStyle, type PermissionIconStyle, type PermissionTier } from '@/app/session/ApprovalPicker';
 import * as icons from '@/components/icons';
 import { IconSearch, IconSparkles } from '@/components/icons';
-import { Input } from '@/components/ui/controls';
+import { Input, Segmented } from '@/components/ui/controls';
 import { copyWithToast } from '@/lib/files';
-import { Chapter, Frame, Plate, Scrubber, Value } from '../specimen';
+import { cn } from '@/lib/utils';
+import { Chapter, Frame, Matrix, Plate, Scrubber, Value } from '../specimen';
 
 type Glyph = ComponentType<{ className?: string; style?: CSSProperties }>;
 
@@ -54,6 +56,22 @@ function Stroke() {
 export function IconChapter() {
   const { t } = useLingui();
   const [query, setQuery] = useState('');
+  const permissionStyle = usePermissionIconStyle();
+  const tierLabels: Record<PermissionTier, string> = {
+    read: t`只读`,
+    ask: t`每次询问`,
+    default: t`默认`,
+    workspace: t`工作区`,
+    auto: t`自动审查`,
+    deny: t`拒绝`,
+    full: t`全部放行`,
+  };
+  const styleLabels: Record<PermissionIconStyle, string> = {
+    shield: t`盾牌`,
+    semantic: t`语义`,
+    gate: t`门禁`,
+    ring: t`圆环`,
+  };
   const shown = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return needle ? GLYPHS.filter(([name]) => name.toLowerCase().includes(needle)) : GLYPHS;
@@ -65,6 +83,35 @@ export function IconChapter() {
       </Plate>
       <Plate
         number={2}
+        title={t`权限图标`}
+        note={t`7 个无冲突语义档位 × 4 套可选风格，默认盾牌，1.25px 恒定描边。`}
+        action={(
+          <Segmented<PermissionIconStyle>
+            size="xs"
+            value={permissionStyle}
+            onChange={setPermissionIconStyle}
+            ariaLabel={t`权限图标风格`}
+            options={permissionIconStyles.map((style) => ({ value: style, label: styleLabels[style] }))}
+          />
+        )}
+      >
+        <Frame className="p-6">
+          <Matrix
+            columns={permissionIconStyles.map((style) => styleLabels[style])}
+            rows={permissionTiers.map((tier) => ({
+              label: tierLabels[tier],
+              cells: permissionIconStyles.map((style) => (
+                <span key={style} className={cn('inline-flex items-center gap-3', tier === 'full' ? 'text-warning' : 'text-fg-2')}>
+                  <PermissionGlyph tier={tier} iconStyle={style} className="size-[18px]" />
+                  <Value>{`${style}.${tier}`}</Value>
+                </span>
+              )),
+            }))}
+          />
+        </Frame>
+      </Plate>
+      <Plate
+        number={3}
         title={t`图标表`}
         note={t`${GLYPHS.length} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。`}
         action={(

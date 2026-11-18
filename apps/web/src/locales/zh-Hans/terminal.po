@@ -181,10 +181,6 @@ msgid "存为自动化…"
 msgstr "存为自动化…"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "对话会保留；正在回复时，本轮结束后生效"
-msgstr "对话会保留；正在回复时，本轮结束后生效"
-
-#: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"
 msgstr "导出为 PDF…"
 
@@ -336,6 +332,10 @@ msgstr "未命名会话"
 #: src/app/terminal/NativeSession.tsx
 msgid "本轮开始前没有检查点，无法回退代码。"
 msgstr "本轮开始前没有检查点，无法回退代码。"
+
+#: src/app/terminal/NativeSession.tsx
+msgid "本轮结束后生效"
+msgstr "本轮结束后生效"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "来源会话"

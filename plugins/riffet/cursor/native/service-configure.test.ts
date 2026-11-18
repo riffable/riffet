@@ -340,6 +340,33 @@ describe('NativeService.configure with a watch', () => {
     expect(next.configPending).toBe(true);
     expect(session().terminalId).toBe('terminal-1');
   });
+
+  it('allows back-to-back permission switches while a config relaunch is still booting and never flips to busy on historical scrollback', async () => {
+    const { service, session, screens, created, stopped } = watchHarness(idleScreen);
+    const phases: NativeStatus['phase'][] = [];
+    service.subscribe(session().id, (msg) => {
+      if (msg.type === 'status') phases.push(msg.status.phase);
+    });
+    await settle(service, session().id, (phase) => phase === 'idle');
+
+    // Switch 1: relaunches into a terminal that is still rendering historical scrollback (including a past busy footer).
+    screens.value = busyScreen;
+    const first = await service.configure(session(), { approval: 'unrestricted' });
+    expect(first.configPending).toBe(false);
+    expect(first.approval).toBe('unrestricted');
+    await settle(service, session().id, (phase) => phase === 'starting');
+    expect(phases).not.toContain('busy');
+
+    // Switch 2 while the first config relaunch is still booting: replaces immediately without deferring.
+    const second = await service.configure(session(), { approval: 'allowlist' });
+    expect(second.configPending).toBe(false);
+    expect(second.approval).toBe('allowlist');
+    expect(created).toHaveLength(2);
+    expect(stopped).toHaveLength(2);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(session().approval).toBe('allowlist');
+    expect(phases).not.toContain('busy');
+  });
 });
 
 describe('NativeService approval follow-through', () => {

@@ -1,7 +1,9 @@
 package riffet.ui.pickers
 
 import riffet.ui.design.LocalInterfaceStyle
+import riffet.ui.icons.PermissionIcons
 import riffet.ui.settings.SettingsNoticeKind
+import riffet.ui.theme.LocalRiffetColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -52,7 +54,7 @@ private fun approvalDescription(id: String): String? = when (id) {
 }
 
 /** Modes the approval page warns about; list rows stay plain. */
-private val RISKY_PERMISSIONS = setOf("unrestricted", "bypassPermissions", "danger-full-access", "never", "high")
+private val RISKY_PERMISSIONS = setOf("unrestricted", "bypassPermissions", "danger-full-access", "always-proceed", "never", "high")
 
 /**
  * The mode list as one page of a sheet. Picking applies [onSelect] and then lets the sheet leave
@@ -116,6 +118,7 @@ internal fun ApprovalPickerPage(
     onBack: (() -> Unit)? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
+    val colors = LocalRiffetColors.current
     val host = LocalPickerHost.current
     PickerPage(
         title = stringResource(Res.string.pickers_approval_title),
@@ -128,10 +131,14 @@ internal fun ApprovalPickerPage(
         }
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = metrics.rowPadding)) {
             options.forEach { option ->
+                val risky = option.id in RISKY_PERMISSIONS
                 OptionRow(
                     label = option.label.ifEmpty { option.id },
                     description = option.description?.takeIf { it.isNotBlank() }
                         ?: if (options.any { it.id == "allowlist" }) approvalDescription(option.id) else null,
+                    icon = PermissionIcons.vector(option.id),
+                    iconTint = if (risky) colors.warning else null,
+                    tone = if (risky) colors.warning else null,
                     selected = option.id == value,
                     onClick = {
                         onSelect(option.id)

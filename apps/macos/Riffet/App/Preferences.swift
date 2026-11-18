@@ -25,6 +25,8 @@ enum PreferenceKey {
     static let railDots = "riffet.rail-dots"
     /// Dock icon variant id (`AppIconVariant`).
     static let appIcon = "riffet.app-icon"
+    /// Permission mode icon style (`PermissionIconStyle.rawValue`).
+    static let permissionIconStyle = "riffet.permission-icons"
     /// What shows behind the window (`WindowMaterial.rawValue`).
     static let windowMaterial = "riffet.window-material"
     /// The interface style (`InterfaceStyle.rawValue`).
@@ -72,7 +74,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .tabs: String(localized: "标签页")
         case .typography: String(localized: "排版")
         case .terminal: String(localized: "终端")
-        case .appIcon: String(localized: "应用图标")
+        case .appIcon: String(localized: "图标")
         case .input: String(localized: "输入")
         case .shortcuts: String(localized: "快捷键")
         case .notifications: String(localized: "通知")
@@ -150,7 +152,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .tabs: String(localized: "标签栏与打开方式")
         case .typography: String(localized: "文字大小、间距与阅读宽度")
         case .terminal: String(localized: "终端字号与边距")
-        case .appIcon: String(localized: "Dock 中的应用图标")
+        case .appIcon: String(localized: "Dock 中的应用图标与权限图标")
         case .input: String(localized: "发送键与运行中发送的消息")
         case .shortcuts: String(localized: "全局快捷键与应用内快捷键")
         case .notifications: String(localized: "系统通知与网页端提醒")
@@ -280,6 +282,7 @@ final class DisplayPreferences {
     var sessionOverview: Bool { didSet { save(PreferenceKey.sessionOverview, sessionOverview) } }
     var railDots: Bool { didSet { save(PreferenceKey.railDots, railDots) } }
     var appIcon: String { didSet { save(PreferenceKey.appIcon, appIcon); applyIcon() } }
+    var permissionIconStyle: PermissionIconStyle { didSet { save(PreferenceKey.permissionIconStyle, permissionIconStyle.rawValue) } }
     var windowMaterial: WindowMaterial { didSet { save(PreferenceKey.windowMaterial, windowMaterial.rawValue) } }
     var interfaceStyle: InterfaceStyle {
         didSet {
@@ -324,6 +327,8 @@ final class DisplayPreferences {
         sessionOverview = defaults.object(forKey: PreferenceKey.sessionOverview) as? Bool ?? true
         railDots = defaults.object(forKey: PreferenceKey.railDots) as? Bool ?? false
         appIcon = defaults.string(forKey: PreferenceKey.appIcon) ?? AppIconVariant.defaultId
+        permissionIconStyle = defaults.string(forKey: PreferenceKey.permissionIconStyle)
+            .flatMap(PermissionIconStyle.init(rawValue:)) ?? .shield
         windowMaterial = defaults.string(forKey: PreferenceKey.windowMaterial)
             .flatMap(WindowMaterial.init(rawValue:))
             .flatMap { WindowMaterial.available.contains($0) ? $0 : nil } ?? .defaultValue

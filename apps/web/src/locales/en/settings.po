@@ -285,6 +285,10 @@ msgstr "5xx {0}"
 msgid "5xx 服务器"
 msgstr "5xx server errors"
 
+#: src/app/design/foundations/IconChapter.tsx
+msgid "7 个无冲突语义档位 × 4 套可选风格，默认盾牌，1.25px 恒定描边。"
+msgstr "7 distinct semantic tiers across 4 selectable styles, defaulting to Shield, with a constant 1.25px stroke."
+
 #: src/app/settings/StorageSection.tsx
 msgid "7 天未活动的会话清空，打开时重建"
 msgstr "Cleared after 7 days without activity; rebuilt on open"
@@ -1036,10 +1040,6 @@ msgstr "Saved on the server only. Leave blank to keep the current key; it is nev
 msgid "仅保存在这个浏览器。"
 msgstr "Saved in this browser only."
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
-msgstr "Saved in this browser only. Installed web app icons stay the same."
-
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "仅保存在这台 Mac"
 msgstr "Saved only on this Mac"
@@ -1623,6 +1623,11 @@ msgstr "All {0}"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "全部后端"
 msgstr "All backends"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "全部放行"
+msgstr "Run everything"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "全部模型"
@@ -2492,6 +2497,11 @@ msgstr "CLI titles only"
 msgid "只用于二到三个短选项"
 msgstr "Only for two or three short options"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "只读"
+msgstr "Read-only"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "只读打开项目外路径；文件树与搜索仍限定在项目内。"
 msgstr "Paths outside the project open read-only; the file tree and search stay within the project."
@@ -2809,6 +2819,7 @@ msgstr "Widths in the diagram are scaled to the {MAIN} main area of a 1440 windo
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/settingsSections.ts
 msgid "图标"
 msgstr "Icons"
 
@@ -2860,6 +2871,11 @@ msgstr "Images zooming in, panels appearing"
 #: src/app/settings/ViewsSection.tsx
 msgid "圆点"
 msgstr "Dots"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "圆环"
+msgstr "Ring"
 
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
@@ -3539,7 +3555,9 @@ msgstr "Peak"
 msgid "嵌套"
 msgstr "Nesting"
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "工作区"
 msgstr "Workspace"
 
@@ -3729,6 +3747,10 @@ msgstr "Link copied"
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "已安装"
 msgstr "Installed"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已安装的 Web 应用图标不变。"
+msgstr "Installed web apps keep their existing icon."
 
 #: src/app/design/components/DisplayChapter.tsx
 #: src/app/settings/channels/CardSettings.tsx
@@ -3940,7 +3962,7 @@ msgstr "In-app modules"
 msgid "应用内模块经 usePluginHost().ui 取得。"
 msgstr "In-app modules get it through usePluginHost().ui."
 
-#: src/app/settings/settingsSections.ts
+#: src/app/settings/PreferencesSections.tsx
 msgid "应用图标"
 msgstr "App icon"
 
@@ -4478,8 +4500,10 @@ msgstr "Raised surface"
 msgid "抽屉"
 msgstr "Drawer"
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/overview/Opening.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
 msgstr "Deny"
 
@@ -5770,6 +5794,16 @@ msgstr "Bots"
 msgid "权限、文件选择与分享"
 msgstr "Permissions, file picking and sharing"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标"
+msgstr "Permission icons"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标风格"
+msgstr "Permission icon style"
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "来源"
 msgstr "Source"
@@ -6196,6 +6230,11 @@ msgstr "Each cell is set in that style's font and size; rows whose value is the 
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
 msgstr "Each cell is set in that style's size; rows where the styles agree are set back."
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "每次询问"
+msgstr "Ask each time"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "每种组件每端一个实现"
@@ -6749,6 +6788,11 @@ msgstr "Add to tabs"
 #: src/app/design/android/StylesChapter.tsx
 msgid "相连的按钮"
 msgstr "Connected buttons"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "盾牌"
+msgstr "Shield"
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "省略"
@@ -7506,6 +7550,11 @@ msgstr "Automations"
 msgid "自动增高上限"
 msgstr "Auto-grow limit"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "自动审查"
+msgstr "Auto review"
+
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "Auto-archive"
@@ -7921,6 +7970,11 @@ msgstr "Try"
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "该 Agent 尚未配置提供商"
 msgstr "No provider is configured for this agent"
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "语义"
+msgstr "Semantic"
 
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/DisplayChapter.tsx
@@ -8873,6 +8927,11 @@ msgstr "Long press opens the action menu"
 msgid "长行自动换行"
 msgstr "Wrap long lines"
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "门禁"
+msgstr "Gate"
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "间距"
 msgstr "Spacing"
@@ -9350,6 +9409,7 @@ msgstr "Solid ink, at most one per region"
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx

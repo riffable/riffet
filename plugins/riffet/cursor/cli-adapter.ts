@@ -96,7 +96,7 @@ export function cursorPromptBar(screen: string): string | undefined {
   const tail = lines.slice(-14);
   let footer = -1;
   for (let index = tail.length - 2; index >= 0; index -= 1) {
-    if (/^\s{1,4}[~/]/.test(tail[index + 1]!) && !/^\s*→/.test(tail[index]!)) { footer = index; break; }
+    if (/^\s{1,4}(?:~(?=$|\s|\/)|\/(?![/*])\S)/.test(tail[index + 1]!) && !/^\s*→/.test(tail[index]!)) { footer = index; break; }
   }
   if (footer < 0) return undefined;
   const floor = Math.max(0, footer - 6);

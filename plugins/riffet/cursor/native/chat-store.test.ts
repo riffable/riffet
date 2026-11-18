@@ -589,6 +589,10 @@ describe('screen status', () => {
   it('ignores transcript text above the footer', () => {
     const screen = ['  the agent said: press ctrl+c to stop', ...Array.from({ length: 20 }, (_, index) => `  line ${index}`), footer('  → Add a follow-up')].join('\n');
     expect(parseScreen(screen).phase).toBe('idle');
+    const nearTail = ['  the agent said: press ctrl+c to stop', '  line 1', '  line 2', '  line 3', footer('  → Add a follow-up')].join('\n');
+    expect(parseScreen(nearTail).phase).toBe('idle');
+    const commentLines = ['  ctrl+c to stop', '  const x = 1;', '  // a code comment in transcript'].join('\n');
+    expect(parseScreen(commentLines)).toEqual({ phase: 'attention', footer: false });
   });
 
   it('recognises the subagent view opened from the TUI, wrapped title included', () => {

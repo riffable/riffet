@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type AgentTurnStatus } from '@riffet/plugin-api/experimental/agent';
-import { cursorAgentAdapter, cursorComposerHoldsPrompt } from '../cli-adapter.js';
+import { cursorAgentAdapter, CURSOR_AGENT_READY_PATTERN, cursorComposerHoldsPrompt } from '../cli-adapter.js';
 import { approvalArgs, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import { strictInputHandle } from './strict-input-handle.js';
-import { ChatReader, workspaceChatsDir, type ChatMeta } from './chat-store.js';
+import { ChatReader, workspaceChatsDir, writeChatApproval, type ChatMeta } from './chat-store.js';
 import { readJobLog } from './job-log.js';
 import { cursorLoginPrompt, parseScreen, turnControls, type FollowUps } from './screen.js';
 import { normalizeNativeModelSelection } from './model-catalog.js';
@@ -152,6 +152,10 @@ export class NativeService {
   private modelResources = new Map<string, { models?: Array<{ value: string; name: string }>; error?: string; expiresAt: number; request?: Promise<Array<{ value: string; name: string }>> }>();
   /** Conversations with a deferred switch already queued for their next idle moment. */
   private readonly pendingConfigApplies = new Set<string>();
+  /** Conversations currently mid-restart (`stop` + `launch`), so concurrent poll ticks stand down. */
+  private readonly restartingSessions = new Set<string>();
+  /** Terminals launched by `restart()` for a config switch that have not yet reached their idle prompt. */
+  private readonly configBootTerminals = new Map<string, string>();
   private readonly stats: StatsSink;
   private turnObserver?: NativeTurnObserver;
 
@@ -190,6 +194,7 @@ export class NativeService {
 
   /** The live tap saw the CLI send a prompt to the agent server; announce `busy` immediately. */
   notePromptReceived(sessionId: string): void {
+    this.configBootTerminals.delete(sessionId);
     const watch = this.watches.get(sessionId);
     if (!watch || watch.closed) return;
     watch.paneBusyAt = Date.now();
@@ -313,6 +318,7 @@ export class NativeService {
 
   /** The pane a prompt is written into, and the chat it continues as the watch has just read it. */
   private async deliveryTarget(sessionId: string, info: { id: string; epoch: number }): Promise<DeliveryTarget> {
+    this.configBootTerminals.delete(sessionId);
     const watch = this.ensureWatch(sessionId);
     await this.tick(watch);
     return { terminalId: info.id, epoch: info.epoch, ...(watch.chat ? { chatId: watch.chat.chatId } : {}) };
@@ -472,6 +478,7 @@ export class NativeService {
   /** Types a prompt (or slash command) into the CLI's prompt bar and submits it. */
   async send(session: AgentSessionView, text: string): Promise<void> {
     if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'Open the Cursor terminal before sending', 409);
+    this.configBootTerminals.delete(session.id);
     try {
       await this.waitForPrompt(session.terminalId);
     } catch (error) {
@@ -715,7 +722,12 @@ export class NativeService {
     if ((await this.port.unfinishedRuns(session.id)).some(run => (run.delivery ?? 'queued') !== 'queued')) return true;
     const phase = this.status(session.id).phase;
     const screenPhase = phase === 'offline' && session.terminalId ? await this.screenPhase(session.terminalId) : undefined;
-    return configureGate({ phase, screenPhase }) !== 'proceed';
+    const verdict = configureGate({ phase, screenPhase });
+    if (verdict === 'starting' && session.terminalId && this.configBootTerminals.get(session.id) === session.terminalId) {
+      return false;
+    }
+    if (verdict !== 'proceed') this.configBootTerminals.delete(session.id);
+    return verdict !== 'proceed';
   }
 
   /**
@@ -778,46 +790,61 @@ export class NativeService {
     // `offline` means nothing has read this pane, not that it is free; ask the screen before deciding.
     const screenPhase = phase === 'offline' ? await this.screenPhase(session.terminalId) : undefined;
     const verdict = configureGate({ phase, screenPhase });
-    if (verdict !== 'proceed') throw configureRefusal(verdict);
+    const isConfigBoot = verdict === 'starting' && this.configBootTerminals.get(session.id) === session.terminalId;
+    if (!isConfigBoot && verdict !== 'proceed') {
+      this.configBootTerminals.delete(session.id);
+      throw configureRefusal(verdict);
+    }
     const project = this.port.getProject(session.projectId);
     const model = patch.model === undefined ? session.model : await this.prepareModel(patch.model, project);
     const modelPatch = model !== undefined && (patch.model !== undefined || model !== session.model) ? { model } : {};
     const normalizedPatch = { ...patch, ...modelPatch };
     const next = { ...session, ...normalizedPatch };
-    await this.port.terminals.stop(session.terminalId);
-    // A restart has to say everything again: the mode and the approval mode are launch flags, and
-    // dropping them would silently move the conversation back to the plain agent/allowlist default.
-    // The argv comes from the adapter that owns it, so the launch flags cannot drift between the
-    // first start and every switch after it. `resumePicker` is false because this conversation is
-    // already bound: the picker rule that keeps `--model` off a *new* picker launch would here drop
-    // the very model the user just asked for.
-    const info = await this.port.terminals.launch(session.id, {
-      ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [
-        ...(session.nativeSessionId ? ['--resume', session.nativeSessionId] : []),
-        ...cursorAgentAdapter.buildArgs({
-          resumePicker: false,
-          hasStoredSession: Boolean(session.nativeSessionId),
-          mode: next.mode,
-          approval: next.approval,
-          model: next.model,
-        }),
-      ], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),
-      kind: 'cursor',
-      reuseLive: true,
-    });
-    // The pane restarted, so drop everything read from the old process and re-read on the next tick.
-    const watch = this.watches.get(session.id);
-    if (watch) {
-      watch.chat?.close();
-      for (const item of watch.subagents.values()) item.transcript.close();
-      watch.subagents.clear();
-      watch.jobs.clear();
-      watch.chat = undefined;
-      watch.transcript = undefined;
-      watch.notice = undefined;
-      watch.booted = undefined;
+    this.restartingSessions.add(session.id);
+    try {
+      await this.port.terminals.stop(session.terminalId);
+      writeChatApproval(this.options.configDir, project.cwd, session.nativeSessionId, next.approval);
+      // A restart has to say everything again: the mode and the approval mode are launch flags, and
+      // dropping them would silently move the conversation back to the plain agent/allowlist default.
+      // The argv comes from the adapter that owns it, so the launch flags cannot drift between the
+      // first start and every switch after it. `resumePicker` is false because this conversation is
+      // already bound: the picker rule that keeps `--model` off a *new* picker launch would here drop
+      // the very model the user just asked for.
+      const info = await this.port.terminals.launch(session.id, {
+        ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [
+          ...(session.nativeSessionId ? ['--resume', session.nativeSessionId] : []),
+          ...cursorAgentAdapter.buildArgs({
+            resumePicker: false,
+            hasStoredSession: Boolean(session.nativeSessionId),
+            mode: next.mode,
+            approval: next.approval,
+            model: next.model,
+          }),
+        ], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),
+        kind: 'cursor',
+        reuseLive: true,
+      });
+      this.configBootTerminals.set(session.id, info.id);
+      // The pane restarted, so drop pane-level state from the old process and re-read on the next tick;
+      // keep `watch.chat` when resuming the same chatId so the SQLite history is not re-parsed from scratch.
+      const watch = this.watches.get(session.id);
+      if (watch) {
+        if (watch.chat && watch.chat.chatId !== session.nativeSessionId) {
+          watch.chat.close();
+          watch.chat = undefined;
+          watch.transcript = undefined;
+        }
+        for (const item of watch.subagents.values()) item.transcript.close();
+        watch.subagents.clear();
+        watch.jobs.clear();
+        watch.notice = undefined;
+        watch.booted = undefined;
+        watch.unrecognized = undefined;
+      }
+      return this.port.updateSession(session.id, { terminalId: info.id, state: 'running', ...normalizedPatch, configPending: false });
+    } finally {
+      this.restartingSessions.delete(session.id);
     }
-    return this.port.updateSession(session.id, { terminalId: info.id, state: 'running', ...normalizedPatch, configPending: false });
   }
 
   /**
@@ -852,6 +879,8 @@ export class NativeService {
     clearInterval(this.sweepTimer);
     for (const watch of this.watches.values()) watch.close();
     this.watches.clear();
+    this.restartingSessions.clear();
+    this.configBootTerminals.clear();
     this.workspaceChatScans.clear();
     this.chatMetas.clear();
   }
@@ -872,16 +901,25 @@ export class NativeService {
         if (session.archivedAt || this.watches.has(session.id)) continue;
         if (!['running', 'starting', 'waiting'].includes(session.state)) continue;
         const info = session.terminalId ? this.port.findTerminal(session.terminalId) : undefined;
-        if (!info || info.kind !== 'cursor' || info.state === 'exited') continue;
+        if (!info || info.kind !== 'cursor' || info.state === 'exited') {
+          this.configBootTerminals.delete(session.id);
+          continue;
+        }
         const screen = await this.port.terminals.screen(info.id);
         if (screen === undefined) continue;
         const { footer, subview, ...parsed } = parseScreen(screen);
+        const configBoot = this.configBootTerminals.get(session.id) === info.id;
         if (subview) {
+          if (configBoot) this.configBootTerminals.delete(session.id);
           const state = stateForPhase(subviewPhase({ working: subview.working, previous: session.state === 'running' ? 'busy' : 'offline' }));
           if (state && state !== session.state) this.port.updateSession(session.id, { state });
           continue;
         }
         if (!footer) continue;
+        if (configBoot) {
+          if (parsed.phase !== 'idle' || !CURSOR_AGENT_READY_PATTERN.test(screen)) continue;
+          this.configBootTerminals.delete(session.id);
+        }
         const state = stateForPhase(parsed.phase);
         if (state === 'idle' && session.nativeSessionId) this.ensureWatch(session.id, true);
         else if (state && state !== session.state) this.port.updateSession(session.id, { state });
@@ -986,6 +1024,7 @@ export class NativeService {
   }
 
   private async updateStatus(watch: Watch, session: AgentSessionView): Promise<void> {
+    if (this.restartingSessions.has(session.id)) return;
     let status: NativeStatus = { phase: cursorTurns.report(watch, 'offline', 'screen') };
     let startupNotice: string | undefined;
     let startupNoticeLevel: NativeStatus['noticeLevel'] = 'warning';
@@ -1000,7 +1039,7 @@ export class NativeService {
         const root = chat?.rootId;
         const screenTurn = chat?.turnId() ?? root;
         const screen = await this.port.terminals.screen(info.id);
-        if (watch.closed) return;
+        if (watch.closed || this.restartingSessions.has(session.id)) return;
         const current = this.port.getSession(session.id);
         if (current.archivedAt || current.terminalId !== info.id || current.nativeSessionId !== session.nativeSessionId) {
           watch.idleTurn = undefined;
@@ -1012,12 +1051,24 @@ export class NativeService {
           const { footer, subview, error: cliError, ...parsed } = parseScreen(screen);
           const interaction = this.port.dialogs.observe(screen, info)
             ?? (this.port.dialogs.isResponding(info.id) ? watch.status.interaction : undefined);
-          if (footer || subview) watch.booted = info.id;
+          const configBoot = this.configBootTerminals.get(session.id) === info.id;
+          const readyFooter = configBoot
+            ? (footer && parsed.phase === 'idle' && CURSOR_AGENT_READY_PATTERN.test(screen))
+            : (footer && (parsed.phase !== 'attention' || watch.booted === info.id));
+          if (readyFooter || subview || interaction || stalled) {
+            if (readyFooter || subview) watch.booted = info.id;
+            if (configBoot) this.configBootTerminals.delete(session.id);
+          }
           // The resume picker is shown instead of the footer on purpose; everything else footer-less is boot.
-          const booting = !footer && !subview && watch.booted !== info.id && !(session.resumePicker && !session.nativeSessionId);
+          const booting = !readyFooter && !subview && watch.booted !== info.id && !(session.resumePicker && !session.nativeSessionId);
           const login = booting && cursorLoginPrompt(screen);
-          if (login) stalled = true;
-          if (parsed.phase === 'busy' || subview?.working) watch.paneBusyAt = Date.now();
+          if (login) {
+            stalled = true;
+            if (configBoot) this.configBootTerminals.delete(session.id);
+          }
+          const effectiveFooter = configBoot && !readyFooter ? false : footer;
+          const effectiveParsedPhase = configBoot && booting && parsed.phase === 'busy' ? 'attention' : parsed.phase;
+          if (effectiveParsedPhase === 'busy' || subview?.working) watch.paneBusyAt = Date.now();
           if (cliError !== watch.cliError?.text) watch.cliError = cliError
             ? { text: cliError, paneBusyAt: watch.paneBusyAt, chatId: chat?.chatId, turn: screenTurn } : undefined;
           const error = watch.cliError;
@@ -1025,24 +1076,24 @@ export class NativeService {
             && error.turn === (watch.chat?.turnId() ?? watch.chat?.rootId) ? error.text : undefined;
           const turnId = watch.chat?.turnId();
           const nativeSessionId = session.nativeSessionId;
-          const outcomeKnown = Boolean(parsed.phase === 'idle' && turnId && nativeSessionId && watch.chat?.chatId === nativeSessionId
+          const outcomeKnown = Boolean(effectiveParsedPhase === 'idle' && turnId && nativeSessionId && watch.chat?.chatId === nativeSessionId
             && this.turnObserver?.recordedOutcome?.(session.id, { nativeSessionId, turnId }));
           const liveStep = nativeSessionId ? this.options.live?.read(nativeSessionId) : undefined;
           const liveStreaming = Boolean(liveStep && ((!liveStep.sealed && liveStep.parts.length > 0)
-            || (booting && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
-          const hiddenTurn = (parsed.phase === 'idle' || booting) && !currentError && !outcomeKnown
+            || (booting && !configBoot && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
+          const hiddenTurn = !configBoot && (effectiveParsedPhase === 'idle' || booting) && !currentError && !outcomeKnown
             && (liveStreaming || (watch.chat !== undefined
               && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt })));
           let phase: NativeStatus['phase'] = interaction ? 'attention'
             : subview ? subviewPhase({ working: subview.working, previous: watch.status.phase, ...(watch.chat ? { transcript: { awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt } } : {}) })
-            : parsed.phase === 'busy' || hiddenTurn ? 'busy' : booting && !stalled ? 'starting' : parsed.phase;
+            : effectiveParsedPhase === 'busy' || hiddenTurn ? 'busy' : booting && !stalled ? 'starting' : effectiveParsedPhase;
           if (phase !== 'attention' || interaction || booting) watch.unrecognized = undefined;
           else {
             watch.unrecognized ??= { since: Date.now(), logged: false };
             const unread = Date.now() - watch.unrecognized.since;
             // Counted in polls (about 3 s and 11 s at the default 700 ms), so each window spans frames.
             if (unread < UNRECOGNIZED_PANE_ATTENTION_POLLS * this.pollMs) {
-              phase = watch.status.phase === 'idle' || watch.status.phase === 'starting' ? watch.status.phase : 'busy';
+              phase = watch.status.phase === 'busy' ? 'busy' : watch.status.phase === 'idle' ? 'idle' : 'starting';
               // Still waiting, not yet a problem: the attention phase after the longer window is.
               if (unread >= UNRECOGNIZED_PANE_NOTICE_POLLS * this.pollMs) { startupNotice = UNRECOGNIZED_PANE_NOTICE; startupNoticeLevel = 'info'; }
             } else if (!watch.unrecognized.logged) {
@@ -1058,10 +1109,10 @@ export class NativeService {
           }
           // A painted footer is the whole truth about the model and the approval mode; while the CLI
           // is booting or a dialog covers it, the last known values are kept instead of blinking out.
-          const model = parsed.model ?? watch.status.model;
-          const permission = footer ? parsed.permission : parsed.permission ?? watch.status.permission;
-          const approval = footer ? approvalFromFooter(parsed.permission) : watch.status.approval;
-          observedApproval = adoptableApproval(footer, parsed.permission);
+          const model = (effectiveFooter ? parsed.model : undefined) ?? watch.status.model;
+          const permission = effectiveFooter ? parsed.permission : watch.status.permission;
+          const approval = effectiveFooter ? approvalFromFooter(parsed.permission) : watch.status.approval;
+          observedApproval = adoptableApproval(effectiveFooter, parsed.permission);
           status = {
             ...parsed, phase: cursorTurns.report(watch, phase, interaction ? 'screen' : hiddenTurn ? 'transcript' : 'screen'),
             ...(interaction ? { interaction } : {}),
@@ -1069,15 +1120,20 @@ export class NativeService {
             ...(permission ? { permission } : {}),
             ...(approval ? { approval } : {}),
           };
-          if (footer && !subview && parsed.phase === 'idle' && status.phase === 'idle'
+          if (effectiveFooter && !subview && effectiveParsedPhase === 'idle' && status.phase === 'idle'
             && watch.chat === chat && chat?.rootId === root) idlePane = { terminalId: info.id, error: currentError, outcomeKnown };
         } else if (this.port.dialogs.isResponding(info.id) && watch.status.interaction) {
           status = { ...watch.status, phase: cursorTurns.report(watch, 'attention', 'screen') };
         } else {
+          if (stalled) this.configBootTerminals.delete(session.id);
           status = { phase: cursorTurns.report(watch, stalled ? 'attention' : 'starting', 'screen') };
           if (stalled) startupNotice = '暂时无法读取 CLI 终端画面，请打开终端检查连接状态。';
         }
+      } else {
+        this.configBootTerminals.delete(session.id);
       }
+    } else {
+      this.configBootTerminals.delete(session.id);
     }
     if (status.phase === 'offline') {
       startupNotice = this.port.getSession(session.id).error;
@@ -1195,7 +1251,8 @@ export class NativeService {
     if ((change.reset || change.events.length || (change.draftChanged && chat.draft.length))
       && (watch.status.phase === 'offline' || watch.status.phase === 'starting')
       && (chat.awaitingReply() || (change.draftChanged && chat.draft.length > 0))
-      && session.terminalId && !session.archivedAt) {
+      && session.terminalId && !session.archivedAt
+      && this.configBootTerminals.get(session.id) !== session.terminalId) {
       const info = this.port.findTerminal(session.terminalId);
       if (info && info.state !== 'exited') {
         const activeTurn = this.turnObserver?.activeTurn(session);

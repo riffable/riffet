@@ -393,12 +393,14 @@ struct TerminalSettings: View {
     }
 }
 
-/// 应用图标: the Dock icon while Riffet runs.
+/// 图标: the Dock icon while Riffet runs, and the permission mode icon style.
 struct AppIconSettings: View {
+    @Environment(\.palette) private var palette
+
     var body: some View {
         @Bindable var prefs = DisplayPreferences.shared
         Form {
-            Section {
+            SettingsBlock("应用图标") {
                 let current = AppIconVariant.named(prefs.appIcon).id
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: AppIconTile.width, maximum: AppIconTile.width), spacing: Space.md)],
@@ -414,6 +416,34 @@ struct AppIconSettings: View {
                 .padding(.vertical, Space.xs)
 
                 SettingsHint("退出后 Dock 显示默认图标。")
+            }
+
+            SettingsBlock("权限图标") {
+                SettingsRow("风格") {
+                    FormSegmented("风格", selection: $prefs.permissionIconStyle) {
+                        ForEach(PermissionIconStyle.allCases) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                HStack(spacing: Space.md) {
+                    ForEach(PermissionTier.allCases) { tier in
+                        HStack(spacing: Space.xs) {
+                            PermissionIconView(
+                                tier: tier,
+                                style: prefs.permissionIconStyle,
+                                size: 15,
+                                color: tier == .full ? palette.warning : palette.fg2
+                            )
+                            Text(tier.title)
+                                .riffetFont(.caption)
+                                .foregroundStyle(tier == .full ? palette.warning : palette.fg2)
+                        }
+                    }
+                }
+                .padding(.vertical, Space.xs)
             }
 
             SettingsScopeFooter()

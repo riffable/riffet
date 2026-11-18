@@ -153,7 +153,6 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
   const { t } = useLingui();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const [picked, setPicked] = useState<string>();
-  const [switching, setSwitching] = useState(false);
   const errorRef = useRef(onError);
   errorRef.current = onError;
   const sessionId = session.id;
@@ -184,21 +183,19 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
   const apply = (value: string) => {
     if (!value) return;
     setPicked(value);
-    setSwitching(true);
     onSwitchingChange(true);
     void api.nativeSetModel(sessionId, value)
       .then((updated) => { onSessionChanged(updated); onRememberModel?.(updated.model ?? value); })
       .catch((error) => { setPicked(undefined); errorRef.current(errorMessage(error, t`无法切换模型`)); })
-      .finally(() => { setSwitching(false); onSwitchingChange(false); });
+      .finally(() => { onSwitchingChange(false); });
   };
 
   const switchProfile = (target: NativeProfileContinuation, value: string) => {
-    setSwitching(true);
     onSwitchingChange(true);
     void api.nativeSwitchProfile(sessionId, target.profile.id, value)
       .then(onSessionChanged)
       .catch((error) => { errorRef.current(errorMessage(error, t`无法切换模型`)); })
-      .finally(() => { setSwitching(false); onSwitchingChange(false); });
+      .finally(() => { onSwitchingChange(false); });
   };
 
   const choose = (id: string) => {
@@ -226,7 +223,7 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
         refreshing={refreshing}
         error={catalogError}
         onRetry={refreshCatalog}
-        disabled={disabled || switching}
+        disabled={disabled}
         onChange={choose}
         onParamChange={(id, value) => { if (model) apply(catalogSelection(catalog, model, { ...selection.params, [id]: value }, id)); }}
       />
@@ -435,6 +432,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [pickedApproval, setPickedApproval] = useState<string>();
   const [switchingApproval, setSwitchingApproval] = useState(false);
   const [switchingModel, setSwitchingModel] = useState(false);
+  const [configRelaunching, setConfigRelaunching] = useState(false);
+  const [configSwitchSeq, setConfigSwitchSeq] = useState(0);
+  const prevConfigPending = useRef(Boolean(session.configPending));
   const [repairingNativeModel, setRepairingNativeModel] = useState(false);
   const [runtimeActionPendingSession, setRuntimeActionPendingSession] = useState<string>();
   const runtimeActionPending = runtimeActionPendingSession === session.id;
@@ -445,7 +445,12 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const connectionNotice = connectionNoticeState(connectionState, native.connected, native.statusKnown);
   const interaction = native.status.interaction;
   const recognizedInteraction = Boolean(interaction && interaction.actions.length > 0);
-  const unknownAttention = phase === 'attention' && !recognizedInteraction;
+  const nativeRunInProgress = native.runs.some((run) => Boolean(run.native) && (run.state === 'queued' || run.state === 'running'));
+  const silentConfigBoot = (configRelaunching || switchingApproval || switchingModel)
+    && !nativeRunInProgress
+    && !native.sending
+    && !interaction;
+  const unknownAttention = !silentConfigBoot && phase === 'attention' && !recognizedInteraction;
   const backendId = sessionBackend(session);
   const labelOf = useBackendLabel();
   const backendLabel = labelOf(backendId);
@@ -485,19 +490,21 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const latestUser = latestUserIndex >= 0 && native.timeline[latestUserIndex]?.kind === 'user' ? native.timeline[latestUserIndex] : undefined;
   const latestOutput = latestOutputIndex >= 0 ? native.timeline[latestOutputIndex] : undefined;
   const latestUserRun = latestUser?.run;
-  const preBusyPhase = !native.statusKnown || phase === 'starting' || phase === 'offline';
+  const preBusyPhase = !silentConfigBoot && (!native.statusKnown || phase === 'starting' || phase === 'offline');
   const turnOutputActive = latestOutputIndex > latestUserIndex
     && Boolean(latestUser && latestOutput && (!latestUser.turn || !latestOutput.turn || latestUser.turn === latestOutput.turn))
     && Boolean(latestUserRun
       && (latestUserRun.state === 'running' || latestUserRun.state === 'queued')
       && !['queued', 'cancelled', 'failed', 'uncertain'].includes(latestUserRun.native?.delivery ?? '')
-      && (preBusyPhase || latestUserRun.state === 'queued' || (phase === 'idle' && !latestUserRun.native?.timings?.busyAt)));
+      && !latestUserRun.native?.timings?.busyAt
+      && (preBusyPhase || latestUserRun.state === 'queued' || phase === 'idle'));
   const runObservedActive = native.runs.some((run) => !run.native?.queueReleasedAt
     && (run.state === 'running' || (run.state === 'queued' && (run.native?.delivery === 'observed' || Boolean(run.native?.nativeMessageId || run.native?.timings?.observedAt || run.native?.timings?.providerAcceptedAt))))
-    && (preBusyPhase || (phase === 'idle' && !run.native?.timings?.busyAt)));
+    && !run.native?.timings?.busyAt
+    && (preBusyPhase || phase === 'idle'));
   const causallyBusy = !connectionNotice && (turnOutputActive || runObservedActive);
-  const busy = (native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy;
-  const working = busy || (native.statusKnown ? phase === 'attention' : session.state === 'waiting');
+  const busy = !silentConfigBoot && ((native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy);
+  const working = busy || (!silentConfigBoot && (native.statusKnown ? phase === 'attention' : session.state === 'waiting'));
   // The main agent is idle while background agents keep going; only then is there something to stop that `working` does not cover.
   const runningSubagents = useRunningSubagentCount(native.subagents);
   // Background tasks the session reports (`status.activity`) and subagents still running overlap, so the larger count stands.
@@ -509,7 +516,6 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // The page the reader is on should not sleep mid-turn. Same `working` the rest of this view
   // renders from, so a lock can never outlive the spinner it belongs to.
   useWakeLock(working);
-  const nativeRunInProgress = native.runs.some((run) => run.native && !['completed', 'failed', 'cancelled'].includes(run.state));
   const nativeConfigLocked = native.sending || native.hasUncertainSubmission || nativeRunInProgress;
 
   // Recognized prompts have native controls. Open the terminal automatically only for an attention
@@ -545,19 +551,42 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     setDrawer(false);
   }, [recognizedId]);
 
-  // The CLI's own footer says which approval mode is in force (it can also be toggled inside the
-  // terminal), so it wins over what the conversation was created with; a local pick only bridges
-  // the restart a switch takes.
-  const approval = pickedApproval ?? native.status.approval ?? session.approval ?? backendCapabilities?.permissions[0]?.id ?? '';
-  useEffect(() => { setPickedApproval(undefined); }, [session.approval]);
+  // The session record holds both user picks and modes adopted from the CLI's own footer/hooks;
+  // during a restart or deferred switch `native.status.approval` still carries the pre-switch pane.
+  const approval = pickedApproval ?? session.approval ?? native.status.approval ?? backendCapabilities?.permissions[0]?.id ?? '';
+  useEffect(() => { setPickedApproval(undefined); }, [session.id, session.approval]);
+  useEffect(() => { prevConfigPending.current = Boolean(session.configPending); setConfigRelaunching(false); }, [session.id]);
+  useEffect(() => {
+    const pending = Boolean(session.configPending);
+    if (prevConfigPending.current && !pending && !nativeRunInProgress && !native.sending) {
+      setConfigRelaunching(true);
+      setConfigSwitchSeq((seq) => seq + 1);
+    }
+    prevConfigPending.current = pending;
+  }, [session.configPending, nativeRunInProgress, native.sending]);
+  useEffect(() => {
+    if (!configRelaunching) return;
+    if (nativeRunInProgress || native.sending || Boolean(interaction)) {
+      setConfigRelaunching(false);
+      return;
+    }
+    if (switchingApproval || switchingModel || session.configPending) return;
+    const delayMs = phase === 'idle' ? 2_500 : 15_000;
+    const timer = window.setTimeout(() => {
+      setConfigRelaunching(false);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [configRelaunching, configSwitchSeq, nativeRunInProgress, native.sending, interaction, switchingApproval, switchingModel, session.configPending, phase]);
   const changeApproval = useCallback((next: string) => {
     setPickedApproval(next);
     setSwitchingApproval(true);
+    setConfigRelaunching(true);
+    setConfigSwitchSeq((seq) => seq + 1);
     void api.nativeSetApproval(session.id, next)
       .then(onSessionChanged)
-      .catch((error) => { setPickedApproval(undefined); onError(errorMessage(error, t`无法切换权限模式`)); })
-      .finally(() => { setSwitchingApproval(false); setPickedApproval(undefined); });
-  }, [session.id, onSessionChanged, onError]);
+      .catch((error) => { setPickedApproval(undefined); setConfigRelaunching(false); onError(errorMessage(error, t`无法切换权限模式`)); })
+      .finally(() => { setSwitchingApproval(false); });
+  }, [session.id, onSessionChanged, onError, t]);
 
   const timeline = native.timeline;
   const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
@@ -620,7 +649,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const held = Boolean(session.terminalHold);
   const runActionPending = useCallback((run: Run) => archived || native.sending || native.interrupting || (run.native?.delivery === 'queued' && native.hasUnknownSubmission) || native.runActionIds.has(run.id), [archived, native.sending, native.interrupting, native.hasUnknownSubmission, native.runActionIds]);
   const acceptedRunPreparing = native.runs.some((run) => ['queued', 'running'].includes(run.state) && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(run.native?.delivery ?? ''));
-  const starting = reopening || phase === 'starting' || (!connectionNotice && phase === 'offline' && (session.state === 'starting' || acceptedRunPreparing));
+  const starting = reopening || (!silentConfigBoot && phase === 'starting') || (!connectionNotice && phase === 'offline' && (session.state === 'starting' || acceptedRunPreparing));
   const [queueOverride, setQueueOverride] = useState('');
   const runningTargetKey = `${session.id}:${native.status.activeTurn?.turnId ?? ''}`;
   const preferredSubmitIntent = composerRunningIntent(runningBehavior, {
@@ -643,11 +672,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // flight. A running turn deliberately is not one of them — the backends record a mid-turn switch and
   // apply it at the next idle moment, so the control stays live and the change lands with the next
   // turn. Leaving it `disabled` is what made a phone tap do nothing and drop the keyboard.
-  const pickersBlocked = archived || switchingApproval || switchingModel;
+  const pickersBlocked = archived;
   const pickerBlocked = pickerBlockReason({
     archived,
     catalogUnavailable: catalogLoading || Boolean(catalogError) || catalog.length === 0,
-    switching: switchingApproval || switchingModel,
+    switching: false,
   });
   const [restartingBackend, setRestartingBackend] = useState(false);
   const restartBackend = useCallback(async () => {
@@ -884,9 +913,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       options={backendCapabilities.permissions}
       onChange={changeApproval}
       disabled={pickersBlocked || !backendCapabilities.supportsPermissionSelection}
-      note={paneAnswers ? t`对话会保留；正在回复时，本轮结束后生效` : undefined}
+      note={paneAnswers && busy ? t`本轮结束后生效` : undefined}
     />
-  ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, pickersBlocked, paneAnswers, t]);
+  ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, pickersBlocked, paneAnswers, busy, t]);
   const [toolGroupsValue, changeToolGroups] = useSessionPick(session, 'toolGroups', NO_TOOL_GROUPS, onSessionChanged, onError);
   const [extensionsOffValue, changeExtensionsOff] = useSessionPick(session, 'extensionsOff', NO_EXTENSIONS_OFF, onSessionChanged, onError);
   const pluginToolRows = usePluginToolGroups(toolGroupsValue).rows.length;
@@ -899,9 +928,16 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered)
     ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} onError={onError} footnote={t`下次启动时生效`} />
     : undefined), [quickChat, archived, phonesOffered, extensionsOffered, extensionPick, toolGroupsValue, changeToolGroups, onError, t]);
+  const handleSwitchingModel = useCallback((next: boolean) => {
+    setSwitchingModel(next);
+    if (next) {
+      setConfigRelaunching(true);
+      setConfigSwitchSeq((seq) => seq + 1);
+    }
+  }, []);
   const modelPicker = useMemo(() => (backendCapabilities?.supportsModelSelection
-    ? <NativeModelPicker session={session} catalog={catalog} continuations={continuations} profiles={profiles} providerLabel={providerLabel} loading={catalogLoading && !catalog.length} refreshing={catalogLoading} catalogError={catalogError} disabled={pickersBlocked} {...(pickerBlocked ? { blockedReason: pickerBlocked } : {})} onError={onError} onSessionChanged={onSessionChanged} onSwitchingChange={setSwitchingModel} onRememberModel={onRememberModel} refreshCatalog={onRetryCatalog} />
-    : undefined), [backendCapabilities?.supportsModelSelection, session, catalog, continuations, profiles, providerLabel, catalogLoading, catalogError, pickersBlocked, pickerBlocked, onError, onSessionChanged, onRememberModel, onRetryCatalog]);
+    ? <NativeModelPicker session={session} catalog={catalog} continuations={continuations} profiles={profiles} providerLabel={providerLabel} loading={catalogLoading && !catalog.length} refreshing={catalogLoading} catalogError={catalogError} disabled={pickersBlocked} {...(pickerBlocked ? { blockedReason: pickerBlocked } : {})} onError={onError} onSessionChanged={onSessionChanged} onSwitchingChange={handleSwitchingModel} onRememberModel={onRememberModel} refreshCatalog={onRetryCatalog} />
+    : undefined), [backendCapabilities?.supportsModelSelection, session, catalog, continuations, profiles, providerLabel, catalogLoading, catalogError, pickersBlocked, pickerBlocked, onError, onSessionChanged, handleSwitchingModel, onRememberModel, onRetryCatalog]);
 
   // What the header's badge says, as a value the header's memo can compare.
   // Session.state may aggregate background children; the conversation header describes only the
@@ -912,7 +948,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     : starting || sendingInitial ? 'starting'
     : !native.statusKnown ? 'connecting'
     : connectionNotice ? `connection:${connectionNotice}`
-    : recognizedInteraction ? 'interaction' : unknownAttention ? 'attention' : busy ? 'busy' : phase === 'offline' ? 'offline' : '';
+    : recognizedInteraction ? 'interaction' : unknownAttention ? 'attention' : busy ? 'busy' : !silentConfigBoot && phase === 'offline' ? 'offline' : '';
   // Opening a session waits on its status for a moment; until that wait has lasted, the header reads
   // the session list's state, as the transcript does, instead of a spinner the answer then removes.
   const connectingLong = useLingering(headerStatus === 'connecting', ASSEMBLY_MS);

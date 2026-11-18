@@ -19,6 +19,8 @@ data class IconPackChoice(val id: String, val title: Map<String, String>)
 class IconPackState internal constructor(private val preferences: AppPreferences, private val preferenceKey: String, private val cache: IconPackCache?) {
     var selected by mutableStateOf(preferences.string(preferenceKey) ?: "lucide")
         private set
+    var permissionStyle by mutableStateOf(PermissionIconStyle.fromId(preferences.string("riffet.permission-icons")))
+        private set
     internal var catalog by mutableStateOf(cache?.catalog())
     internal var revision by mutableIntStateOf(0)
     internal var loaded by mutableStateOf<Pair<String, Map<String, ImageVector>>?>(null)
@@ -28,6 +30,7 @@ class IconPackState internal constructor(private val preferences: AppPreferences
         internal set
 
     init {
+        PermissionIcons.currentStyle = permissionStyle
         catalog?.iconPacks?.firstOrNull { it.id == selected }?.let { entry ->
             cache?.pack(entry.asset.sha256)?.let { loaded = entry.asset.sha256 to it.vectors(entry.id) }
         }
@@ -41,6 +44,11 @@ class IconPackState internal constructor(private val preferences: AppPreferences
         if (choices.none { it.id == id }) return
         preferences.setString(preferenceKey, id)
         selected = id
+    }
+    fun selectPermissionStyle(style: PermissionIconStyle) {
+        preferences.setString("riffet.permission-icons", style.id)
+        permissionStyle = style
+        PermissionIcons.currentStyle = style
     }
     fun refresh() { revision++ }
 }

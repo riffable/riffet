@@ -27,6 +27,7 @@ import { cn, errorMessage } from '@/lib/utils';
 import { textOf } from '@/lib/errors';
 import { readEnterKeyBehavior, type EnterKeyBehavior } from '../session/composerKeyboard';
 import { readComposerRunningBehavior, type ComposerRunningBehavior } from '../session/composerRunning';
+import { PermissionGlyph, setPermissionIconStyle, usePermissionIconStyle, type PermissionIconStyle, type PermissionTier } from '../session/ApprovalPicker';
 import { SettingsGroup as Group, SettingsLinkRow, SettingsRow as Row } from './SettingsLayout';
 import { DirectoryPicker } from '../DirectoryPicker';
 import { useLists } from '../state/stores';
@@ -116,6 +117,31 @@ function CodeThemePreview() {
       <pre className="overflow-x-auto rounded-lg bg-subtle px-3.5 py-3 font-mono text-xs leading-5 text-fg">
         {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{CODE_PREVIEW_SNIPPET}</code>}
       </pre>
+    </div>
+  );
+}
+
+function PermissionIconPreview({ style }: { style: PermissionIconStyle }) {
+  const { t } = useLingui();
+  const items: ReadonlyArray<{ tier: PermissionTier; label: string }> = [
+    { tier: 'read', label: t`只读` },
+    { tier: 'ask', label: t`每次询问` },
+    { tier: 'default', label: t`默认` },
+    { tier: 'workspace', label: t`工作区` },
+    { tier: 'auto', label: t`自动审查` },
+    { tier: 'deny', label: t`拒绝` },
+    { tier: 'full', label: t`全部放行` },
+  ];
+  return (
+    <div className="py-3.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-subtle px-3.5 py-2.5 text-xs text-fg-2">
+        {items.map(({ tier, label }) => (
+          <span key={tier} className={cn('inline-flex items-center gap-1.5', tier === 'full' && 'text-warning')}>
+            <PermissionGlyph tier={tier} iconStyle={style} className="size-4" />
+            <span>{label}</span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -288,13 +314,15 @@ export function TerminalSettingsSection() {
   </div>;
 }
 
-/** 应用图标: the icon this browser shows for Riffet. */
+/** 图标: the browser's app icon and the permission mode icon style. */
 export function AppIconSection() {
+  const { t } = useLingui();
   const appIcon = useAppIcon();
+  const permissionIconStyle = usePermissionIconStyle();
   return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。已安装的 Web 应用图标不变。</Trans></p>
-    <Group>
-      <div className="flex flex-wrap gap-2 py-3.5">
+    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
+    <Group title={t`应用图标`}>
+      <div className="flex flex-wrap gap-2 pt-3.5 pb-2">
         {appIcons.map((icon) => <button
           key={icon.id}
           type="button"
@@ -307,6 +335,24 @@ export function AppIconSection() {
           <AppIconTile accent={icon.accent} className="size-10" />
         </button>)}
       </div>
+      <p className="pb-3.5 text-xs text-fg-3"><Trans>已安装的 Web 应用图标不变。</Trans></p>
+    </Group>
+    <Group title={t`权限图标`}>
+      <Row title={t`风格`}>
+        <Segmented<PermissionIconStyle>
+          size="xs"
+          value={permissionIconStyle}
+          onChange={setPermissionIconStyle}
+          ariaLabel={t`权限图标风格`}
+          options={[
+            { value: 'shield', label: t`盾牌` },
+            { value: 'semantic', label: t`语义` },
+            { value: 'gate', label: t`门禁` },
+            { value: 'ring', label: t`圆环` },
+          ]}
+        />
+      </Row>
+      <PermissionIconPreview style={permissionIconStyle} />
     </Group>
   </div>;
 }

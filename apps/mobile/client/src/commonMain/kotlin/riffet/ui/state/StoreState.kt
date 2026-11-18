@@ -125,7 +125,7 @@ internal data class StoreState(
                             || run.native?.timings?.get("providerAcceptedAt") != null
                         )
                     )
-                ) && (preBusyPhase || (phase == NativeStatusPhase.IDLE && run.native?.timings?.get("busyAt") == null))
+                ) && run.native?.timings?.get("busyAt") == null && (preBusyPhase || phase == NativeStatusPhase.IDLE)
         }
         if (runObservedActive) return true
         val latestUserIndex = timeline.indexOfLast { it is TimelineItem.User }
@@ -139,7 +139,8 @@ internal data class StoreState(
         val turnOutputActive = latestOutputIndex > latestUserIndex && sameTurn && latestUserRun != null
             && (latestUserRun.state == RunState.RUNNING || latestUserRun.state == RunState.QUEUED)
             && delivery != NativeDeliveryState.QUEUED && delivery != NativeDeliveryState.CANCELLED && delivery != NativeDeliveryState.FAILED && delivery != NativeDeliveryState.UNCERTAIN
-            && (preBusyPhase || latestUserRun.state == RunState.QUEUED || (phase == NativeStatusPhase.IDLE && latestUserRun.native?.timings?.get("busyAt") == null))
+            && latestUserRun.native?.timings?.get("busyAt") == null
+            && (preBusyPhase || latestUserRun.state == RunState.QUEUED || phase == NativeStatusPhase.IDLE)
         return turnOutputActive
     }
 

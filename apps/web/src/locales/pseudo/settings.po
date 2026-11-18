@@ -285,6 +285,10 @@ msgstr ""
 msgid "5xx 服务器"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
+msgid "7 个无冲突语义档位 × 4 套可选风格，默认盾牌，1.25px 恒定描边。"
+msgstr ""
+
 #: src/app/settings/StorageSection.tsx
 msgid "7 天未活动的会话清空，打开时重建"
 msgstr ""
@@ -1036,10 +1040,6 @@ msgstr ""
 msgid "仅保存在这个浏览器。"
 msgstr ""
 
-#: src/app/settings/PreferencesSections.tsx
-msgid "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
-msgstr ""
-
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "仅保存在这台 Mac"
 msgstr ""
@@ -1622,6 +1622,11 @@ msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "全部后端"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "全部放行"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
@@ -2492,6 +2497,11 @@ msgstr ""
 msgid "只用于二到三个短选项"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "只读"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "只读打开项目外路径；文件树与搜索仍限定在项目内。"
 msgstr ""
@@ -2809,6 +2819,7 @@ msgstr ""
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/settingsSections.ts
 msgid "图标"
 msgstr ""
 
@@ -2859,6 +2870,11 @@ msgstr ""
 
 #: src/app/settings/ViewsSection.tsx
 msgid "圆点"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "圆环"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -3539,7 +3555,9 @@ msgstr ""
 msgid "嵌套"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "工作区"
 msgstr ""
 
@@ -3728,6 +3746,10 @@ msgstr ""
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "已安装"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已安装的 Web 应用图标不变。"
 msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
@@ -3940,7 +3962,7 @@ msgstr ""
 msgid "应用内模块经 usePluginHost().ui 取得。"
 msgstr ""
 
-#: src/app/settings/settingsSections.ts
+#: src/app/settings/PreferencesSections.tsx
 msgid "应用图标"
 msgstr ""
 
@@ -4478,8 +4500,10 @@ msgstr ""
 msgid "抽屉"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/overview/Opening.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
 msgstr ""
 
@@ -5770,6 +5794,16 @@ msgstr ""
 msgid "权限、文件选择与分享"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "权限图标风格"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "来源"
 msgstr ""
@@ -6195,6 +6229,11 @@ msgstr ""
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "每次询问"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -6748,6 +6787,11 @@ msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "相连的按钮"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "盾牌"
 msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -7506,6 +7550,11 @@ msgstr ""
 msgid "自动增高上限"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "自动审查"
+msgstr ""
+
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr ""
@@ -7920,6 +7969,11 @@ msgstr ""
 
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "该 Agent 尚未配置提供商"
+msgstr ""
+
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "语义"
 msgstr ""
 
 #: src/app/design/components/ActionsChapter.tsx
@@ -8873,6 +8927,11 @@ msgstr ""
 msgid "长行自动换行"
 msgstr ""
 
+#: src/app/design/foundations/IconChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "门禁"
+msgstr ""
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "间距"
 msgstr ""
@@ -9350,6 +9409,7 @@ msgstr ""
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
+#: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx

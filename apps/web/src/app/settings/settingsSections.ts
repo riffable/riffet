@@ -61,7 +61,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'tabs', label: msg`标签页`, group: 'appearance', icon: IconColumns2 },
   { id: 'views', label: msg`视图`, group: 'appearance', icon: IconPanelRight },
   { id: 'terminal', label: msg`终端`, group: 'appearance', icon: IconTerminal },
-  { id: 'appicon', label: msg`应用图标`, group: 'appearance', icon: IconImage },
+  { id: 'appicon', label: msg`图标`, group: 'appearance', icon: IconImage },
   { id: 'interaction', label: msg`输入`, group: 'behavior', icon: IconCornerDownLeft },
   { id: 'notifications', label: msg`通知`, group: 'behavior', icon: IconActivity },
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog },

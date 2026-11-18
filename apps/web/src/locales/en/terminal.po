@@ -181,10 +181,6 @@ msgid "存为自动化…"
 msgstr "Save as automation…"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "对话会保留；正在回复时，本轮结束后生效"
-msgstr "The conversation is kept; mid-reply, it applies when the turn ends"
-
-#: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"
 msgstr "Export as PDF…"
 
@@ -336,6 +332,10 @@ msgstr "Untitled session"
 #: src/app/terminal/NativeSession.tsx
 msgid "本轮开始前没有检查点，无法回退代码。"
 msgstr "There is no checkpoint from before this turn, so the code cannot be reverted."
+
+#: src/app/terminal/NativeSession.tsx
+msgid "本轮结束后生效"
+msgstr "Takes effect after this turn"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "来源会话"
