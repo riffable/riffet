@@ -2259,9 +2259,7 @@ describe('conversation search scope', () => {
 
 describe('session list push', () => {
   it('tells an open workbench which lists moved, debounced and carrying independent revisions', async () => {
-    const { app, projectDir, call, store } = await boot();
-    const status = await app.inject({ method: 'GET', url: '/api/auth/status', headers: { host: '127.0.0.1:4317' } });
-    const cookie = String(status.headers['set-cookie']).split(';')[0]!;
+    const { app, projectDir, call, store, cookie } = await boot(undefined, undefined, undefined, true);
     await app.listen({ host: '127.0.0.1', port: 0 });
     const { port } = app.server.address() as import('node:net').AddressInfo;
     const { request } = await import('node:http');
@@ -2277,10 +2275,20 @@ describe('session list push', () => {
     response.on('data', (chunk: string) => { body += chunk; });
     const frames = () => [...body.matchAll(/event: changed\ndata: (.*)\n/g)].map(match => JSON.parse(match[1]!) as Record<string, number>);
     const current = () => ({ revision: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision, marks: store.marksRevision, workItems: store.workItemsRevision, favorites: store.favoritesRevision });
+    const stream = '/api/lists/stream';
+    const host = '127.0.0.1:4317';
+    await expect(app.injectWS(stream, { headers: { host } })).rejects.toThrow('401');
+    await expect(app.injectWS(stream, { headers: { host, cookie, origin: 'https://cross-origin.example' } })).rejects.toThrow('403');
+    const socketFrames: unknown[] = [];
+    const socket = await app.injectWS(stream, { headers: { host, cookie, origin: `http://${host}` } }, {
+      onInit: peer => peer.on('message', frame => socketFrames.push(JSON.parse(frame.toString()))),
+    });
+    cleanups.unshift(async () => { socket.terminate(); });
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(body).toContain(': connected');
     // Where every list stands on connect, so a reconnect reads only what moved meanwhile.
     expect(frames()).toEqual([current()]);
+    expect(socketFrames).toEqual([{ event: 'changed', data: current() }]);
     const sessions = store.listRevision;
     const created = await call('POST', '/api/projects', { cwd: projectDir });
     expect(created.statusCode).toBe(200);
@@ -2290,6 +2298,7 @@ describe('session list push', () => {
     await new Promise(resolve => setTimeout(resolve, 400));
     expect(frames()).toHaveLength(2);
     expect(frames()[1]).toEqual(current());
+    expect(socketFrames).toEqual(frames().map(data => ({ event: 'changed', data })));
     // Projects move on their own: the session list is not read again for them.
     expect(store.listRevision).toBe(sessions);
   });

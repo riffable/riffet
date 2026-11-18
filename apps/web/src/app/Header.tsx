@@ -139,7 +139,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const branch = session && !ownDirectory ? git?.branch ?? '' : '';
 
   // Shared with the changes panel. A turn ending or the panel opening is when the count most likely moved.
-  useEffect(() => (projectId ? watchGitStatus(projectId, true) : undefined), [projectId, session?.id, session?.state, panelTab]);
+  useEffect(() => (projectId && !ownDirectory ? watchGitStatus(projectId, true) : undefined), [projectId, ownDirectory, session?.id, session?.state, panelTab]);
 
   const sessionActions: HeaderAction[] = session ? [
     ...(onRename ? [{ id: 'rename', icon: <IconPencilLine />, label: t`重命名`, onSelect: onRename }] : []),

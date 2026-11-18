@@ -28,8 +28,10 @@ ETag 为 `W/"<修订>"`，`If-None-Match` 命中回 304。
 GET /api/bootstrap               → {…, workItemSummaries, revisions: {sessions, terminals, projects, workItems}}
 GET /api/sessions                → Session[]（全量，不变）
 GET /api/sessions?since=<修订>    → SessionListDelta
-GET /api/lists/stream            SSE；连上立即发一帧 changed，之后去抖 250 ms 发送
+GET /api/lists/stream            SSE 或 WebSocket；连上立即发一帧 changed，之后去抖 250 ms 发送
 ```
+
+Web 在服务声明 `list-stream-ws` 时使用 WebSocket。HTTP/1.1 下，多个标签页的侧栏订阅因而不会占用聊天请求所需的 HTTP 连接。WebSocket 帧是 `{event, data}`。旧服务或代理不支持升级时沿用 SSE。
 
 `changed` 的 `data`：`{revision, terminals, projects, marks, workItems, favorites}`。`revision` 是会话修订（沿用旧字段名）。
 

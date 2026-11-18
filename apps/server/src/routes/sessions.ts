@@ -1,7 +1,8 @@
 import { submissionFingerprint } from '../orchestration/session-commands.js';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AppError, requireString } from '../errors.js';
 import type { SessionKind, SessionListDelta, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { SYNC_BUDGET } from '../../../../packages/contracts/src/sync.js';
 import { recordTerminalAppearance } from '../terminal/appearance.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
 import { requestedNativeSessionId, startsWithBareTerminal, type IdentifiedSession, type RequestedNativeSession } from '../session-identity.js';
@@ -38,7 +39,6 @@ function requestedWorkItemId(value: unknown): string|undefined {
 export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): void {
   registerDiscussionRoutes(app, deps);
   const {store,workItems,auth,settings,terminal,sessionLock,nativeBackends,dispatch,streams,sessionCommands,renameNative,readNativeInput,nativeRuns,contextReferences}=deps;
-  const LIST_CHANGE_DEBOUNCE_MS=250;
   /**
    * The 任务 a new conversation starts (docs/TASK-BOARD.md §4.3): only one the request names. A conversation
    * opened from a composer is not a task by itself. Called inside the creation's transaction.
@@ -181,42 +181,51 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
    * Tells open workbenches the session, terminal or project lists moved so they re-read them. Carries
    * separate project, marks and folder-favorites revisions; a client re-reads only the data that moved.
    */
-  app.get('/api/lists/stream',async(request,reply)=>{
-    const unwatch=auth.onRevoke(request,()=>reply.raw.destroy());
-    reply.raw.once('close',unwatch);
-    reply.hijack(); streams.add(reply.raw);
-    reply.raw.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
-    reply.raw.write(': connected\n\n');
-    const changed=()=>`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,marks:store.marksRevision,workItems:store.workItemsRevision,favorites:store.favoritesRevision})}\n\n`;
-    // Where every list stands now: a client compares it with what it holds and reads only what moved while it was away.
-    reply.raw.write(changed());
-    let pending:NodeJS.Timeout|undefined;
-    const unsubscribe=store.onListsChanged(()=>{
-      if(pending)return;
-      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(changed());},LIST_CHANGE_DEBOUNCE_MS);
-    });
-    // An agent's notice (docs/DEVICES.md §2). A client listening only for `changed` never sees it.
-    const unsubscribeNotices=deps.notices.subscribe(notice=>{
-      if(reply.raw.destroyed||reply.raw.writableEnded)return;
-      try{if(!sessionVisibleToClient(request.headers,store.getSession(notice.sessionId),id=>store.getProject(id)))return;}catch{return;}
-      reply.raw.write(`event: notice\ndata: ${JSON.stringify(notice)}\n\n`);
-    });
-    // A task changed state (docs/TASKS.md): the client reads the task itself.
-    const unsubscribeTasks=deps.tasks.subscribe(task=>{
-      if(reply.raw.destroyed||reply.raw.writableEnded)return;
-      try{if(!projectVisibleToClient(request.headers,store.getProject(task.projectId)))return;}catch{return;}
-      reply.raw.write(`event: task\ndata: ${JSON.stringify(task)}\n\n`);
-    });
-    // A plugin was turned on or off (docs/PLUGIN_ARCHITECTURE.md): clients read the plugins and appearance again.
-    const unsubscribePlugins=deps.plugins.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: integrations\ndata: {}\n\n');});
-    // The owner's name or avatar changed (docs/OWNER.md): the whole record, so a client replaces its copy without asking.
-    const unsubscribeOwner=deps.owner.subscribe(owner=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: owner\ndata: ${JSON.stringify(owner)}\n\n`);});
-    // A device came online, went offline, reported or was unpaired (docs/DEVICES.md §2): clients read the devices again.
-    const unsubscribeDevices=deps.devices.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: devices\ndata: {}\n\n');});
-    // Channel accounts, bound users or chats changed (docs/design/channels.md): the settings page reads them again.
-    const unsubscribeChannels=deps.channels.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: channels\ndata: {}\n\n');});
-    const heartbeat=setInterval(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(': heartbeat\n\n');},15_000);
-    reply.raw.on('close',()=>{clearInterval(heartbeat);if(pending)clearTimeout(pending);unsubscribe();unsubscribeChannels();unsubscribeNotices();unsubscribeTasks();unsubscribePlugins();unsubscribeOwner();unsubscribeDevices();streams.delete(reply.raw);});
+  app.route({
+    method: 'GET',
+    url: '/api/lists/stream',
+    handler: async (request, reply) => {
+      const response = reply.raw;
+      const unwatch = auth.onRevoke(request, () => response.destroy());
+      const write = (frame: string) => {
+        if (response.destroyed || response.writableEnded) return;
+        if (response.writableLength + Buffer.byteLength(frame) > SYNC_BUDGET.frameBytes) { response.destroy(); return; }
+        response.write(frame);
+      };
+      reply.hijack();
+      streams.add(response);
+      response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+      write(': connected\n\n');
+      const unsubscribe = subscribeLists(deps, request, unwatch, (event, json) => write(`event: ${event}\ndata: ${json}\n\n`));
+      const heartbeat = setInterval(() => write(': heartbeat\n\n'), SYNC_BUDGET.pingMs);
+      response.once('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        streams.delete(response);
+      });
+    },
+    wsHandler: (socket, request) => {
+      const unwatch = auth.onRevoke(request, () => socket.terminate());
+      const unsubscribe = subscribeLists(deps, request, unwatch, (event, json) => {
+        if (socket.readyState !== socket.OPEN) return;
+        const frame = `{"event":"${event}","data":${json}}`;
+        if (socket.bufferedAmount + Buffer.byteLength(frame) > SYNC_BUDGET.frameBytes) { socket.terminate(); return; }
+        socket.send(frame);
+      });
+      let awaitingPong = false;
+      const heartbeat = setInterval(() => {
+        if (socket.readyState !== socket.OPEN) return;
+        if (awaitingPong) { socket.terminate(); return; }
+        awaitingPong = true;
+        socket.ping();
+      }, SYNC_BUDGET.pingMs);
+      socket.on('pong', () => { awaitingPong = false; });
+      socket.on('error', () => socket.terminate());
+      socket.once('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+      });
+    },
   });
   app.get<{Params:{id:string};Querystring:{commandId?:string}}>('/api/sessions/:id/runs',async(request)=>{
     const session=store.getSession(request.params.id);
@@ -245,6 +254,48 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
       return {session:opened.session,status:opened.status,...(opened.nativeSessionId?{nativeSessionId:opened.nativeSessionId}:{}),...(opened.terminal?{terminal:opened.terminal}:{})};
     });}finally{releaseSessionStart();}
   });
+}
+
+const LIST_CHANGE_DEBOUNCE_MS = 250;
+type ListEvent = 'changed' | 'notice' | 'task' | 'integrations' | 'owner' | 'devices' | 'channels';
+
+/** Both transports notify clients of the same revisions and changes. */
+function subscribeLists({ store, notices, tasks, plugins, owner, devices, channels }: RouteDeps, request: FastifyRequest, unwatch: () => void, write: (event: ListEvent, json: string) => void): () => void {
+  const emit = (event: ListEvent, data: unknown) => write(event, JSON.stringify(data));
+  // A connected client compares these revisions with its own and reads only what moved.
+  const changed = () => emit('changed', {
+    revision: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision,
+    marks: store.marksRevision, workItems: store.workItemsRevision, favorites: store.favoritesRevision,
+  });
+  changed();
+  let pending: NodeJS.Timeout | undefined;
+  const unsubscribe = [
+    unwatch,
+    store.onListsChanged(() => {
+      if (pending) return;
+      pending = setTimeout(() => { pending = undefined; changed(); }, LIST_CHANGE_DEBOUNCE_MS);
+    }),
+    notices.subscribe(notice => {
+      try {
+        if (!sessionVisibleToClient(request.headers, store.getSession(notice.sessionId), id => store.getProject(id))) return;
+      } catch { return; }
+      emit('notice', notice);
+    }),
+    tasks.subscribe(task => {
+      try {
+        if (!projectVisibleToClient(request.headers, store.getProject(task.projectId))) return;
+      } catch { return; }
+      emit('task', task);
+    }),
+    plugins.onChange(() => emit('integrations', {})),
+    owner.subscribe(record => emit('owner', record)),
+    devices.onChange(() => emit('devices', {})),
+    channels.onChange(() => emit('channels', {})),
+  ];
+  return () => {
+    clearTimeout(pending);
+    for (const stop of unsubscribe) stop();
+  };
 }
 
 type PinStore = Pick<RouteDeps['store'], 'listSessions'>;

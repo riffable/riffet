@@ -1,7 +1,7 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { OwnerInfo, Session, SessionListDelta, TaskEvent, TerminalInfo, WorkItemSummary } from '@contracts';
-import { api, etagRevision, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
+import { SYNC_BUDGET, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
+import { api, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { loadCachedLists, refreshCachedLists, saveCachedLists } from '@/lib/list-cache';
 import { reconcileById, sameRecord } from '@/lib/reconcile';
 import { confirmSessionGone, isSessionDeleted } from '@/lib/session-deletion';
@@ -389,6 +389,9 @@ export function createListsStore(deps: ListsDeps) {
       let sessionsInFlight = false, sessionsAgain = false, terminalsInFlight = false, terminalsAgain = false;
       /** A whole list dropped for a local write is read once more at once; a stream writing on every frame must not keep it reading. */
       let fullRetried = false;
+      const onReadError = (error: unknown) => {
+        if (active && isUnreachable(error)) store.set({ status: 'offline' });
+      };
       const readSessions = () => {
         if (sessionsInFlight) { sessionsAgain = true; return; }
         sessionsInFlight = true;
@@ -422,7 +425,7 @@ export function createListsStore(deps: ListsDeps) {
             const sessions = mergeDelta(current.sessions, incoming, removed);
             if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
           })
-          .catch(() => store.set({ status: 'offline' }))
+          .catch(onReadError)
           .finally(() => { sessionsInFlight = false; if (sessionsAgain) { sessionsAgain = false; readSessions(); } });
       };
       const readTerminals = () => {
@@ -438,7 +441,7 @@ export function createListsStore(deps: ListsDeps) {
             const terminals = reconcileById(current.terminals, answer.data);
             if (terminals !== current.terminals) { store.set({ terminals }); saveSoon(); }
           })
-          .catch(() => store.set({ status: 'offline' }))
+          .catch(onReadError)
           .finally(() => { terminalsInFlight = false; if (terminalsAgain) { terminalsAgain = false; readTerminals(); } });
       };
       const poll = (lists: { sessions: boolean; terminals: boolean } = { sessions: true, terminals: true }) => {
@@ -506,42 +509,101 @@ export function createListsStore(deps: ListsDeps) {
         if (hasDelta()) return;
         announce({}); refreshProjects(true); poll();
       };
-      let source: EventSource | undefined;
+      let closeStream: (() => void) | undefined;
       let retryTimer: number | undefined;
       let retries = 0;
+      let nextSocketAttempt = 0;
+      let usingSse = false;
+      const supportsWebSocket = () => negotiatedProtocol?.features.includes('list-stream-ws') === true;
+      const streamOpened = () => {
+        retries = 0; pushed = true;
+        if (opened) reconnected();
+        else if (!hasDelta()) refreshProjects(true);
+        opened = true;
+      };
+      const events: Record<string, (event: Event) => void> = {
+        changed, task, owner, integrations: announcePlugins, devices: announceDevices, channels: announceChannels,
+      };
+      const retry = () => {
+        pushed = false;
+        closeStream?.();
+        closeStream = undefined;
+        if (active) retryTimer = window.setTimeout(connect, reconnectDelay(++retries));
+      };
       const connect = () => {
         retryTimer = undefined;
         if (!active) return;
-        const current = new EventSource(listsStreamUrl());
-        source = current;
-        // A reconnect may have missed changes made while the stream was down.
-        current.onopen = () => { retries = 0; pushed = true; if (opened) reconnected(); else if (!hasDelta()) refreshProjects(true); opened = true; };
-        current.onerror = () => {
+        // WebSockets leave the browser's limited HTTP/1.1 connections for sync and commands.
+        usingSse = false;
+        if (supportsWebSocket() && Date.now() >= nextSocketAttempt) {
+          const url = new URL(listsStreamUrl(), window.location.href);
+          url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+          try {
+            const socket = new WebSocket(url);
+            let established = false;
+            const disconnected = () => {
+              // A proxy may block upgrades. Keep its SSE stream until a later
+              // foreground activity or a reconnect can try WebSocket again.
+              if (!established) nextSocketAttempt = Date.now() + PUSHED_POLL_MS;
+              retry();
+            };
+            const handshakeTimer = window.setTimeout(disconnected, SYNC_BUDGET.pingMs);
+            closeStream = () => {
+              window.clearTimeout(handshakeTimer);
+              socket.onclose = null;
+              socket.onmessage = null;
+              socket.close();
+            };
+            socket.onmessage = ({ data }) => {
+              if (!active || typeof data !== 'string') return;
+              let frame: { event?: unknown; data?: unknown } | null;
+              try { frame = JSON.parse(data); } catch { return; }
+              if (!frame || typeof frame.event !== 'string' || !Object.hasOwn(events, frame.event)) return;
+              if (!established) {
+                if (frame.event !== 'changed') return;
+                established = true;
+                window.clearTimeout(handshakeTimer);
+                streamOpened();
+              }
+              events[frame.event]!(new MessageEvent(frame.event, { data: JSON.stringify(frame.data) }));
+            };
+            socket.onclose = disconnected;
+            return;
+          } catch { nextSocketAttempt = Date.now() + PUSHED_POLL_MS; }
+        }
+        usingSse = true;
+        const source = new EventSource(listsStreamUrl());
+        closeStream = () => { source.onerror = null; source.close(); };
+        source.onopen = streamOpened;
+        source.onerror = () => {
           pushed = false;
-          // The browser retries a dropped stream by itself, but gives up for good on an HTTP error,
-          // which a proxy or a restarting server can return. The poll covers the gap meanwhile.
-          if (!active || source !== current || current.readyState !== EventSource.CLOSED || retryTimer !== undefined) return;
-          current.close();
-          retries += 1;
-          retryTimer = window.setTimeout(connect, reconnectDelay(retries));
+          if (active && source.readyState === EventSource.CLOSED) retry();
         };
-        current.addEventListener('changed', changed);
-        current.addEventListener('task', task);
-        current.addEventListener('owner', owner);
-        current.addEventListener('integrations', announcePlugins);
-        current.addEventListener('devices', announceDevices);
-        current.addEventListener('channels', announceChannels);
+        for (const [type, listener] of Object.entries(events)) source.addEventListener(type, listener);
       };
-      connect();
+      if (pendingBootstrap) void pendingBootstrap.then(connect, connect);
+      else connect();
       const timer = window.setInterval(() => { if (missed || !pushed || Date.now() - lastPoll >= PUSHED_POLL_MS) poll(); }, 5000);
       // While the stream is up it has told every project change; without it the projects are read again.
-      const onFocus = () => { poll(); if (!pushed) refreshProjects(true); };
-      const onVisibility = () => { poll(); if (document.visibilityState === 'visible' && !pushed) refreshProjects(true); };
-      window.addEventListener('focus', onFocus);
+      const refresh = () => {
+        poll();
+        if (!pushed) refreshProjects(true);
+        if (usingSse && supportsWebSocket() && Date.now() >= nextSocketAttempt) {
+          closeStream?.();
+          closeStream = undefined;
+          pushed = false;
+          window.clearTimeout(retryTimer);
+          connect();
+        }
+      };
+      const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); else poll(); };
+      window.addEventListener('focus', refresh);
+      window.addEventListener('online', refresh);
       document.addEventListener('visibilitychange', onVisibility);
       return () => {
-        active = false; source?.close(); window.clearTimeout(retryTimer); window.clearTimeout(saveTimer); window.clearInterval(timer);
-        window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onVisibility);
+        active = false; closeStream?.(); window.clearTimeout(retryTimer); window.clearTimeout(saveTimer); window.clearInterval(timer);
+        window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh);
+        document.removeEventListener('visibilitychange', onVisibility);
       };
     },
   };

@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Sending a personal assistant message with several Riffet Web tabs open no longer waits behind each tab’s sidebar updates on HTTP/1.1 connections.
 - On the web, approval requests and questions appear directly below the last conversation entry, without an empty progress row between them.
 - When a turn finishes, its thinking and tool calls fold into "Processed" even if you had scrolled up during the turn; they stay open only when you opened a tool or thinking item inside that block or have text selected in it.
 - When translating a reply or a selection fails, the translation card stays in place with the reason and a Retry button (and Choose a model when no model is set yet), instead of disappearing into a toast. Closing a card while it is still running stops the request, and changing the target language in the plugin settings translates again on the next click.

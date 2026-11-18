@@ -21,10 +21,12 @@
  * - `list-delta`: `GET /api/sessions?since=<revision>` answers with the sessions changed since (`SessionListDelta`),
  *   `GET /api/bootstrap` carries `revisions`, and the lists stream sends `changed` on connect and carries
  *   `terminals` (docs/LIST-SYNC.md).
+ * - `list-stream-ws`: `GET /api/lists/stream` also accepts a WebSocket upgrade, carrying each lists
+ *   event as a JSON text message with `event` and `data` fields.
  */
-export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta';
+export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta' | 'list-stream-ws';
 export interface ProtocolInfo { version: number; features: ProtocolFeature[]; }
-export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta'] };
+export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta', 'list-stream-ws'] };
 /** Request header naming the features a client understands, comma-separated. */
 export const CLIENT_FEATURES_HEADER = 'x-riffet-features';
 // Shared HTTP contract. JSON request/response fields are kept stable across workers.

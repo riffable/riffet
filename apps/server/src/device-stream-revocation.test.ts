@@ -56,6 +56,8 @@ describe.each(['cookie','bearer'] as const)('live device revocation (%s)',kind=>
       const masterStream=await open('/api/lists/stream',masterHeaders);
       const otherStream=await open('/api/lists/stream',{...host,authorization:`Bearer ${other.token}`});
       const socket=await app.injectWS('/api/terminals/revocation-terminal/ws',{headers});sockets.push(socket);
+      const listsSocket=await app.injectWS('/api/lists/stream',{headers});sockets.push(listsSocket);
+      const masterListsSocket=await app.injectWS('/api/lists/stream',{headers:masterHeaders});sockets.push(masterListsSocket);
       const masterSocket=await app.injectWS('/api/terminals/revocation-terminal/ws',{headers:masterHeaders});sockets.push(masterSocket);
       const otherSocket=await app.injectWS('/api/terminals/revocation-terminal/ws',{headers:{...host,authorization:`Bearer ${other.token}`}});sockets.push(otherSocket);
       socket.send(JSON.stringify({type:'claim',clientId:'revoked-client'}));
@@ -64,11 +66,12 @@ describe.each(['cookie','bearer'] as const)('live device revocation (%s)',kind=>
       await tick();
       expect(auth.revokeDevice(deviceId)).toBe(true);
       finishClaim?.();
-      await until(()=>streams.every(response=>response.destroyed)&&socket.readyState===3);
+      await until(()=>streams.every(response=>response.destroyed)&&socket.readyState===3&&listsSocket.readyState===3);
       expect(input).not.toHaveBeenCalled();
       expect(unsubscribe).toHaveBeenCalledTimes(1);
       expect(masterStream.destroyed).toBe(false);
       expect(otherStream.destroyed).toBe(false);
+      expect(masterListsSocket.readyState).toBe(1);
       expect(masterSocket.readyState).toBe(1);
       expect(otherSocket.readyState).toBe(1);
       expect((await app.inject({url:'/api/bootstrap',headers})).statusCode).toBe(401);
