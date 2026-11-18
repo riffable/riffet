@@ -326,8 +326,8 @@ const components: Components = {
   // The table scrolls horizontally when its columns need the room, and a hidden overflow is not
   // keyboard-reachable in Chromium unless the element itself takes focus (the reveal-on-hover rule
   // in `styles/index.css` follows the same idea).
-  table({ node, children }) {
-    return <MarkdownTable node={node}>{children}</MarkdownTable>;
+  table({ children }) {
+    return <table tabIndex={0}>{children}</table>;
   },
   th: ({ node, ...props }) => <th {...props} data-short={isShortCell(node) || undefined} />,
   td: ({ node, ...props }) => <td {...props} data-short={isShortCell(node) || undefined} />,
@@ -342,47 +342,6 @@ interface HastNodeLike {
   value?: string;
   properties?: Record<string, unknown>;
   children?: HastNodeLike[];
-}
-
-function inlineCodeMarkdown(text: string): string {
-  let maxFence = 0;
-  for (const match of text.matchAll(/`+/g)) maxFence = Math.max(maxFence, match[0].length);
-  const fence = '`'.repeat(maxFence + 1);
-  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : '';
-  return `${fence}${pad}${text}${pad}${fence}`;
-}
-
-function tableCellMarkdown(node: HastNodeLike): string {
-  if (node.type === 'text') return node.value ?? '';
-  if (node.type !== 'element') return '';
-  if (node.tagName === 'br') return '<br>';
-  const classes = Array.isArray(node.properties?.className) ? node.properties.className : [];
-  if (classes.includes('katex-html')) return '';
-  if (node.tagName === 'annotation' && node.properties?.encoding === 'application/x-tex') {
-    const tex = (node.children ?? []).map((child) => (child.type === 'text' ? child.value ?? '' : '')).join('').trim();
-    return tex ? `$${tex}$` : '';
-  }
-  if (classes.includes('katex-mathml')) {
-    const annotation = (node.children ?? []).map(tableCellMarkdown).join('');
-    if (annotation) return annotation;
-  }
-  if (node.tagName === 'math') {
-    for (const child of node.children ?? []) {
-      const tex = tableCellMarkdown(child);
-      if (tex.startsWith('$') && tex.endsWith('$')) return tex;
-    }
-  }
-  if (node.tagName === 'semantics') {
-    for (const child of node.children ?? []) {
-      if (child.type === 'element' && child.tagName === 'annotation') return tableCellMarkdown(child);
-    }
-  }
-  const inner = (node.children ?? []).map(tableCellMarkdown).join('');
-  if (node.tagName === 'code') {
-    if (classes.includes('math-inline')) return `$${inner}$`;
-    return inlineCodeMarkdown(inner);
-  }
-  return inner;
 }
 
 /**
@@ -406,56 +365,6 @@ function isShortCell(node: HastNodeLike | ExtraProps['node'] | undefined): boole
     return (current.children ?? []).every(visit);
   };
   return node ? visit(node as unknown as HastNodeLike) : false;
-}
-
-function tableMarkdownText(table: ExtraProps['node'] | undefined): string {
-  if (!table) return '';
-  const rows: Array<{ cells: string[]; aligns: Array<string | undefined> }> = [];
-  const collectRows = (node: HastNodeLike) => {
-    if (node.type !== 'element') return;
-    if (node.tagName === 'tr') {
-      const cells: string[] = [];
-      const aligns: Array<string | undefined> = [];
-      for (const child of node.children ?? []) {
-        if (child.type !== 'element' || (child.tagName !== 'th' && child.tagName !== 'td')) continue;
-        const text = tableCellMarkdown(child).replace(/\r?\n+/g, ' ').trim().replace(/\|/g, '\\|');
-        cells.push(text);
-        const align = child.properties?.align;
-        aligns.push(typeof align === 'string' ? align : undefined);
-      }
-      if (cells.length) rows.push({ cells, aligns });
-      return;
-    }
-    for (const child of node.children ?? []) collectRows(child);
-  };
-  collectRows(table as unknown as HastNodeLike);
-  if (!rows.length) return '';
-  const columns = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
-  if (!columns) return '';
-  const padRow = (cells: string[]) => `| ${Array.from({ length: columns }, (_, i) => cells[i] ?? '').join(' | ')} |`;
-  const sep = Array.from({ length: columns }, (_, i) => {
-    const align = rows[0]?.aligns[i];
-    if (align === 'center') return ':---:';
-    if (align === 'right') return '---:';
-    if (align === 'left') return ':---';
-    return '---';
-  });
-  return [padRow(rows[0]!.cells), `| ${sep.join(' | ')} |`, ...rows.slice(1).map((row) => padRow(row.cells))].join('\n');
-}
-
-function MarkdownTable({ node, children }: { node?: ExtraProps['node']; children?: ReactNode }) {
-  const { t } = useLingui();
-  const markdown = useMemo(() => tableMarkdownText(node), [node]);
-  return (
-    <div className="md-table group/table relative w-fit max-w-full">
-      <table tabIndex={0}>{children}</table>
-      {markdown && (
-        <span className="md-table-copy absolute bottom-full right-0 -mr-1 pb-1.5 pl-6 pr-1 pt-2">
-          <CopyButton text={markdown} label={t`复制表格`} size="xs" />
-        </span>
-      )}
-    </div>
-  );
 }
 
 /**

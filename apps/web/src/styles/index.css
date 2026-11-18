@@ -1822,66 +1822,12 @@ html.dark {
   max-width: 100%;
   margin: 0 0 14px;
   overflow-x: auto;
+  overflow-wrap: normal;
   border-collapse: separate;
   border-spacing: 0;
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
   font-variant-numeric: tabular-nums;
-}
-.md > .md-table:last-child table {
-  margin-bottom: 0;
-}
-@media (hover: hover) {
-  .md .md-table-copy {
-    opacity: 0;
-    visibility: hidden;
-    transition:
-      opacity var(--duration-fast) var(--ease-standard) 220ms,
-      visibility 0s linear calc(220ms + var(--duration-fast));
-  }
-  .md .md-table:hover .md-table-copy,
-  .md .md-table:has(:focus-visible:not([data-pointer-focus])) .md-table-copy {
-    opacity: 1;
-    visibility: visible;
-    transition:
-      opacity var(--duration-fast) var(--ease-standard) 0ms,
-      visibility 0s linear 0ms;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .md .md-table-copy {
-      transition-property: opacity, visibility !important;
-      transition-duration: 100ms, 0s !important;
-      transition-delay: 220ms, 320ms !important;
-    }
-    .md .md-table:hover .md-table-copy,
-    .md .md-table:has(:focus-visible:not([data-pointer-focus])) .md-table-copy {
-      transition-delay: 0ms, 0ms !important;
-    }
-  }
-}
-@media (hover: none) {
-  .md .md-table {
-    padding-top: 32px;
-  }
-  .md .md-table-copy {
-    bottom: auto;
-    top: -6px;
-    right: 0;
-    margin-right: 0;
-    padding: 0;
-  }
-  .md.share-md .md-table {
-    padding-top: 0;
-  }
-}
-.md.share-md .md-table {
-  width: 100%;
-}
-.md.share-md .md-table-copy {
-  display: none;
-}
-.md table {
-  overflow-wrap: normal;
 }
 /*
  * Rules between rows only, no frame, column lines or header fill: a table in an answer is prose laid
