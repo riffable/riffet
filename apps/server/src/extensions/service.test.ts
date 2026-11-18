@@ -24,7 +24,7 @@ const CURSOR_EXTENSION_LAYOUT: AgentExtensionLayout = {
     user: { skill: [], rule: ['rules'], command: [], plugin: ['plugins'] },
     project: { skill: SKILLS, rule: ['.cursor/rules'], command: ['.cursor/commands'], plugin: ['.cursor/plugins'] },
   },
-  ruleFiles: { user: [], project: ['.cursorrules'] },
+  ruleFiles: { user: [], project: ['AGENTS.md', 'CLAUDE.md', '.cursorrules'] },
   create: {
     user: [{ id: 'mcp', label: 'MCP configuration', kind: 'mcp', directory: '', fileName: 'mcp.json' }, { id: 'hook', label: 'Hook configuration', kind: 'hook', directory: '', fileName: 'hooks.json', template: '{\n  "version": 1,\n  "hooks": {}\n}\n' }],
     project: [
@@ -34,8 +34,8 @@ const CURSOR_EXTENSION_LAYOUT: AgentExtensionLayout = {
     ],
   },
   sharedRoot: {
-    directories: { skill: SKILLS, command: ['.cursor/commands'] },
-    create: [{ id: 'skill', label: 'Skill', kind: 'skill', directory: '.cursor/skills' }, { id: 'command', label: 'Command', kind: 'command', directory: '.cursor/commands' }],
+    directories: { skill: SKILLS, rule: ['.cursor/rules'], command: ['.cursor/commands'] },
+    create: [{ id: 'skill', label: 'Skill', kind: 'skill', directory: '.cursor/skills' }, { id: 'rule', label: 'Rule', kind: 'rule', directory: '.cursor/rules' }, { id: 'command', label: 'Command', kind: 'command', directory: '.cursor/commands' }],
   },
   skillsAlwaysEnabled: true,
 };
@@ -483,5 +483,45 @@ describe('ExtensionService static discovery and documents', () => {
     const service = new ExtensionService(path.join(tempRoot, 'state'));
     await service.list({ backendId: 'traex', profile });
     await expect(readFile(marker, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('discovers agent rule files, override precedence, and frontmatter activation metadata', async () => {
+    const cursorUser = path.join(tempRoot, 'cursor-rules-user');
+    const claudeUser = path.join(tempRoot, 'claude-rules-user');
+    const codexUser = path.join(tempRoot, 'codex-rules-user');
+    const projectRoot = path.join(tempRoot, 'rules-project');
+    await mkdir(cursorUser, { recursive: true });
+    await mkdir(claudeUser, { recursive: true });
+    await mkdir(codexUser, { recursive: true });
+    await mkdir(projectRoot, { recursive: true });
+
+    await put(projectRoot, 'AGENTS.md', '# Repo Guide\n\nFollow workspace conventions.\n');
+    await put(projectRoot, 'AGENTS.override.md', '# Local Override\n\nPrefer local rules.\n');
+    await put(projectRoot, '.claude/CLAUDE.md', '# Claude Project\n\nScoped instructions.\n');
+    await put(projectRoot, '.claude/rules/api.md', '---\ndescription: API conventions\npaths:\n  - "apps/server/**/*.{ts,tsx}"\n---\nUse strict types.\n');
+    await put(projectRoot, '.cursor/rules/ui.mdc', '---\ndescription: UI styling rules\nglobs: ["apps/web/**/*.tsx", "apps/web/**/*.ts"]\nalwaysApply: false\n---\nUse design tokens.\n');
+    await put(cursorUser, 'rules/global.mdc', '---\ndescription: Global conventions\nalwaysApply: true\n---\nKeep it simple.\n');
+
+    const service = new ExtensionService(path.join(tempRoot, 'state'));
+    const project = makeProject(projectRoot);
+
+    const cursorItems = (await service.list(makeContext('cursor', cursorUser, project))).items.filter(item => item.kind === 'rule');
+    expect(cursorItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'AGENTS.md', scope: 'project', description: 'AGENTS.md · 常驻生效 · Repo Guide · Follow workspace conventions.' }),
+      expect.objectContaining({ name: 'ui.mdc', scope: 'project', description: '.cursor/rules/ui.mdc · 匹配 apps/web/**/*.tsx, apps/web/**/*.ts · UI styling rules' }),
+      expect.objectContaining({ name: 'global.mdc', scope: 'user', description: expect.stringContaining('常驻生效 · Global conventions') }),
+    ]));
+
+    const claudeItems = (await service.list(makeContext('claude', claudeUser, project))).items.filter(item => item.kind === 'rule');
+    expect(claudeItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'CLAUDE.md', scope: 'project', sourcePath: '.claude/CLAUDE.md', description: '.claude/CLAUDE.md · 常驻生效 · Claude Project · Scoped instructions.' }),
+      expect.objectContaining({ name: 'api.md', scope: 'project', description: '.claude/rules/api.md · 匹配 apps/server/**/*.{ts,tsx} · API conventions' }),
+    ]));
+
+    const codexItems = (await service.list(makeContext('codex', codexUser, project))).items.filter(item => item.kind === 'rule');
+    expect(codexItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'AGENTS.override.md', scope: 'project', description: 'AGENTS.override.md · 优先覆盖 AGENTS.md · Local Override · Prefer local rules.' }),
+      expect.objectContaining({ name: 'AGENTS.md', scope: 'project', enabled: false, description: 'AGENTS.md · 已被 AGENTS.override.md 覆盖 · Repo Guide · Follow workspace conventions.' }),
+    ]));
   });
 });

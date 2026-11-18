@@ -33,6 +33,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Added an initial Collaboration page in the sidebar for running multi-model debates, Prism discussions, and document reviews across configured agents, then sending results into a session or task.
 - Favorites on the web now filter by type, unlinked status, project, and agent from a contents column (moving to a header menu on narrow screens), switch between grid and list views with search match highlights, and open a reader dialog to read full text, copy code, change highlight colors, edit notes, or relocate unlinked favorites.
 - On the web, the left sidebar is slightly wider by default, and opening another page such as Favorites or Plugins clears the selected state on the previous conversation row.
+- Extensions lists shared `~/.cursor/rules/*.mdc` rules, project `AGENTS.md` and `CLAUDE.md` for Cursor, `.claude/CLAUDE.md` for Claude Code, `AGENTS.override.md` for Codex, and rules for Droid and TRAE CLI, showing each rule's path, when it applies (always on, matching globs or paths, on demand, or overridden by `AGENTS.override.md`), and summary. In the scope menu, the personal assistant now sits right below User configuration.
 
 ## 0.8.0 - 2026-11-17
 

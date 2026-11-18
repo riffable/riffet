@@ -159,7 +159,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
   const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
   // The 助理's directory has extensions of its own, reached from its page.
-  const extensionProjects = useMemo(() => assistantProject ? [...regular, { ...assistantProject, name: t`个人助理` }] : regular, [regular, assistantProject, t]);
+  const extensionProjects = useMemo(() => assistantProject ? [{ ...assistantProject, name: t`个人助理` }, ...regular] : regular, [regular, assistantProject, t]);
   const project = projects.find((item) => item.id === selectedProjectId);
   const quickChat = isQuickChatProject(project);
   // The 助理 is one long conversation: once it exists, its page is that conversation (docs/ASSISTANT.md).

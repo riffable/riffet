@@ -387,8 +387,8 @@ export interface AgentExtensionLayout {
   ruleFiles: Record<'user' | 'project', string[]>;
   /** What the inventory offers to create, per scope. */
   create: Record<'user' | 'project', AgentExtensionTarget[]>;
-  /** Skills and commands also read from directories under the home directory, shared with other Agents. */
-  sharedRoot?: { directories: Record<'skill' | 'command', string[]>; create: AgentExtensionTarget[] };
+  /** Skills, rules and commands also read from directories under the home directory, shared with other Agents. */
+  sharedRoot?: { directories: { skill: string[]; rule?: string[]; command: string[] }; create: AgentExtensionTarget[] };
   /** Its skills have no switch of their own: every one found is on. */
   skillsAlwaysEnabled?: boolean;
   /** The command that manages the Agent's configuration (`plugin`, `--version`), without credentials or trust flags. */

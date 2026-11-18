@@ -21,7 +21,7 @@ export const CURSOR_EXTENSION_LAYOUT: AgentExtensionLayout = {
     user: { skill: [], rule: ['rules'], command: [], plugin: ['plugins'] },
     project: { skill: SKILLS, rule: ['.cursor/rules'], command: ['.cursor/commands'], plugin: ['.cursor/plugins'] },
   },
-  ruleFiles: { user: [], project: ['.cursorrules'] },
+  ruleFiles: { user: [], project: ['AGENTS.md', 'CLAUDE.md', '.cursorrules'] },
   create: {
     user: [
       { id: 'mcp', label: 'MCP configuration', kind: 'mcp', directory: '', fileName: 'mcp.json' },
@@ -36,8 +36,8 @@ export const CURSOR_EXTENSION_LAYOUT: AgentExtensionLayout = {
     ],
   },
   sharedRoot: {
-    directories: { skill: SKILLS, command: ['.cursor/commands'] },
-    create: [{ id: 'skill', label: 'Skill', kind: 'skill', directory: '.cursor/skills' }, { id: 'command', label: 'Command', kind: 'command', directory: '.cursor/commands' }],
+    directories: { skill: SKILLS, rule: ['.cursor/rules'], command: ['.cursor/commands'] },
+    create: [{ id: 'skill', label: 'Skill', kind: 'skill', directory: '.cursor/skills' }, { id: 'rule', label: 'Rule', kind: 'rule', directory: '.cursor/rules' }, { id: 'command', label: 'Command', kind: 'command', directory: '.cursor/commands' }],
   },
   skillsAlwaysEnabled: true,
   command(config, args) {

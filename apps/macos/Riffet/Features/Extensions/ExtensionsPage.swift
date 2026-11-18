@@ -107,7 +107,7 @@ struct ExtensionsPage: View {
 
     /// The projects a scope can be picked from: the assistant's directory is one, under its own name.
     private var scopeProjects: [(id: String, name: String)] {
-        workbench.projects.map { ($0.id, $0.name) } + (workbench.assistantProject.map { [($0.id, String(localized: "个人助理"))] } ?? [])
+        (workbench.assistantProject.map { [($0.id, String(localized: "个人助理"))] } ?? []) + workbench.projects.map { ($0.id, $0.name) }
     }
 
     private var projectTitle: String { scopeProjects.first { $0.id == projectId }?.name ?? String(localized: "用户配置") }

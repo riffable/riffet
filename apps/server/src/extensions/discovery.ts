@@ -159,21 +159,115 @@ function managedPath(relativePath: string, backendId?: ExtensionContext['backend
 
 function normalizeItemName(value: string): string { return redactSensitiveText(value).trim().slice(0, 160) || 'Unnamed extension'; }
 
-function markdownDescription(content: string): { name?: string; description?: string; invalidFrontmatter?: boolean } {
-  if (!content.startsWith('---')) return {};
-  const end = content.indexOf('\n---', 3);
+function markdownDescription(content: string): { name?: string; description?: string; alwaysApply?: boolean; patterns?: string[]; hasFrontmatter?: boolean; invalidFrontmatter?: boolean } {
+  const normalized = content.replace(/\r\n/g, '\n');
+  if (!normalized.startsWith('---\n') && normalized !== '---') return {};
+  const end = normalized.indexOf('\n---', 3);
   if (end < 0) return { invalidFrontmatter: true };
-  const front = content.slice(3, end).split(/\r?\n/);
+  const front = normalized.slice(4, end).split('\n');
   let name: string | undefined;
   let description: string | undefined;
+  let alwaysApply: boolean | undefined;
+  const patterns: string[] = [];
+  let listKey: 'globs' | 'paths' | undefined;
+  const clean = (raw: string) => {
+    const trimmed = raw.trim();
+    return trimmed.replace(/^(?:"(.*)"|'(.*)')$/, (_all, double?: string, single?: string) => double ?? single ?? '').trim();
+  };
+  const splitTopLevelCommas = (input: string): string[] => {
+    const parts: string[] = [];
+    let current = '';
+    let quote: '"' | "'" | undefined;
+    let braceDepth = 0;
+    for (let i = 0; i < input.length; i++) {
+      const ch = input[i]!;
+      if (quote) {
+        if (ch === quote && input[i - 1] !== '\\') quote = undefined;
+        current += ch;
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+        current += ch;
+      } else if (ch === '{') {
+        braceDepth++;
+        current += ch;
+      } else if (ch === '}') {
+        braceDepth = Math.max(0, braceDepth - 1);
+        current += ch;
+      } else if (ch === ',' && braceDepth === 0) {
+        parts.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    parts.push(current);
+    return parts;
+  };
+  const pushPatterns = (raw: string, splitCommas = true) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    const isBracketed = trimmed.startsWith('[') && trimmed.endsWith(']');
+    const inner = isBracketed ? trimmed.slice(1, -1) : trimmed;
+    const segments = isBracketed || splitCommas ? splitTopLevelCommas(inner) : [inner];
+    for (const part of segments) {
+      const item = clean(part);
+      if (item && !patterns.includes(item)) patterns.push(redactSensitiveText(item));
+    }
+  };
   for (const line of front) {
-    const match = line.match(/^\s*(name|description)\s*:\s*(.*?)\s*$/i);
+    if (listKey) {
+      const itemMatch = line.match(/^\s*-\s*(.+?)\s*$/);
+      if (itemMatch) { pushPatterns(itemMatch[1]!, false); continue; }
+      if (/^\s*$/.test(line) || /^\s*#/.test(line)) continue;
+      listKey = undefined;
+    }
+    const match = line.match(/^\s*(name|description|alwaysApply|globs|paths)\s*:\s*(.*?)\s*$/i);
     if (!match) continue;
-    const value = match[2].replace(/^(?:"(.*)"|'(.*)')$/, (_all, double?: string, single?: string) => double ?? single ?? '').trim();
-    if (match[1].toLowerCase() === 'name') name = redactSensitiveText(value);
-    else description = redactSensitiveText(value);
+    const key = match[1]!.toLowerCase();
+    const rawValue = match[2]!.trim();
+    const value = clean(rawValue);
+    if (key === 'name') { if (value) name = redactSensitiveText(value); }
+    else if (key === 'description') { if (value) description = redactSensitiveText(value); }
+    else if (key === 'alwaysapply') {
+      if (/^(?:true|yes|1)$/i.test(value)) alwaysApply = true;
+      else if (/^(?:false|no|0)$/i.test(value)) alwaysApply = false;
+    } else if (key === 'globs' || key === 'paths') {
+      if (rawValue) pushPatterns(rawValue, true);
+      else listKey = key;
+    }
   }
-  return { ...(name ? { name } : {}), ...(description ? { description } : {}) };
+  return {
+    hasFrontmatter: true,
+    ...(name ? { name } : {}),
+    ...(description ? { description } : {}),
+    ...(alwaysApply !== undefined ? { alwaysApply } : {}),
+    ...(patterns.length ? { patterns } : {}),
+  };
+}
+
+function markdownSummary(content: string): string | undefined {
+  let body = content.replace(/\r\n/g, '\n');
+  if (body.startsWith('---\n')) {
+    const end = body.indexOf('\n---', 3);
+    if (end >= 0) body = body.slice(end + 4);
+  }
+  body = body.replace(/<!--[\s\S]*?-->/g, '');
+  let inFence = false;
+  let heading: string | undefined;
+  for (const rawLine of body.split('\n')) {
+    const line = rawLine.trim();
+    if (/^(?:```|~~~)/.test(line)) { inFence = !inFence; continue; }
+    if (inFence || !line || /^(?:---|\*\*\*|___|\|[\s:-]+\|)$/.test(line)) continue;
+    const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      heading ??= redactSensitiveText(headingMatch[1]!.trim());
+      continue;
+    }
+    const cleaned = redactSensitiveText(line.replace(/^(?:[-*+]\s+|\d+\.\s+|>\s+)/, '').trim());
+    if (!cleaned) continue;
+    return heading ? `${heading} · ${cleaned}` : cleaned;
+  }
+  return heading;
 }
 
 async function scanFiles(source: SourceRoot, relativeDir: string, matches: (base: string, relative: string) => boolean, diagnostics: string[], maxDepth = MAX_SCAN_DEPTH, realRoot?: string): Promise<Array<{ absolute: string; relative: string; symlink: boolean }>> {
@@ -221,7 +315,7 @@ async function readCandidate(filePath: string, root: string, realRoot?: string, 
   const info = knownRegularFile ? undefined : await lstat(filePath);
   const symlink = info ? info.isSymbolicLink() : false;
   const resolvedRoot = realRoot ?? await realpath(root);
-  const target = symlink ? await realpath(filePath) : filePath;
+  const target = symlink || !knownRegularFile ? await realpath(filePath) : filePath;
   assertWithin(resolvedRoot, target, 'EXTENSION_PATH_OUTSIDE_ROOT');
   if (symlink) {
     const targetInfo = await stat(target);
@@ -258,7 +352,7 @@ function configTargets(ctx: ExtensionContext, scope: SourceRoot['scope'], role: 
 
 function markdownDirectories(ctx: ExtensionContext, source: Pick<SourceRoot, 'scope' | 'role' | 'shared'>, kind: 'skill' | 'rule' | 'command'): string[] {
   const { scope, role } = source;
-  if (role === 'declared-shared-skills') return kind === 'rule' ? [] : source.shared?.directories[kind] ?? [];
+  if (role === 'declared-shared-skills') return source.shared?.directories[kind] ?? [];
   if (role === 'codex-shared-skills') return kind === 'skill' ? ['.agents/skills'] : [];
   if (role === 'pi-shared-skills') return kind === 'skill' ? ['.agents/skills'] : [];
   if (role !== 'agent') return [];
@@ -276,12 +370,12 @@ function markdownDirectories(ctx: ExtensionContext, source: Pick<SourceRoot, 'sc
     },
     dsh: { user: { skill: [], rule: [], command: [] }, project: { skill: [], rule: [], command: [] } },
     droid: {
-      user: { skill: ['skills'], rule: [], command: ['commands'] },
-      project: { skill: ['.factory/skills'], rule: [], command: ['.factory/commands'] },
+      user: { skill: ['skills'], rule: ['rules'], command: ['commands'] },
+      project: { skill: ['.factory/skills'], rule: ['.factory/rules'], command: ['.factory/commands'] },
     },
     traex: {
-      user: { skill: ['skills'], rule: [], command: [] },
-      project: { skill: [], rule: [], command: [] },
+      user: { skill: ['skills'], rule: ['rules'], command: [] },
+      project: { skill: ['.trae/skills', '.agents/skills'], rule: ['.trae/rules'], command: [] },
     },
     pi: {
       user: { skill: ['skills'], rule: [], command: ['prompts'] },
@@ -320,7 +414,12 @@ function createTargetList(ctx: ExtensionContext, source: SourceRoot): ExtensionC
   const skillDir: Partial<Record<ExtensionContext['backendId'], string>> = scope === 'project'
     ? { codex: '.agents/skills', claude: '.claude/skills', droid: '.factory/skills', pi: '.pi/skills' }
     : { codex: 'skills', claude: 'skills', droid: 'skills', traex: 'skills', pi: 'skills' };
-  const ruleDir: Partial<Record<ExtensionContext['backendId'], string>> = { codex: scope === 'project' ? '.codex/rules' : 'rules', claude: scope === 'project' ? '.claude/rules' : 'rules' };
+  const ruleDir: Partial<Record<ExtensionContext['backendId'], string>> = {
+    codex: scope === 'project' ? '.codex/rules' : 'rules',
+    claude: scope === 'project' ? '.claude/rules' : 'rules',
+    droid: scope === 'project' ? '.factory/rules' : 'rules',
+    traex: scope === 'project' ? '.trae/rules' : 'rules',
+  };
   const commandDir: Partial<Record<ExtensionContext['backendId'], string>> = { codex: scope === 'project' ? '.codex/prompts' : 'prompts', claude: scope === 'project' ? '.claude/commands' : 'commands', droid: scope === 'project' ? '.factory/commands' : 'commands', pi: scope === 'project' ? '.pi/prompts' : 'prompts' };
   const targets: Array<{ id: string; label: string; kind: ExtensionCreateTarget['kind']; directory: string; fileName?: string }> = [];
   const add = (target: { id: string; label: string; kind: ExtensionCreateTarget['kind']; directory: string; fileName?: string }) => targets.push(target);
@@ -427,7 +526,7 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
     return match?.itemId;
   };
 
-  const addDocumentItem = async (input: { source: SourceRoot; absolute: string; relative: string; kind: ExtensionKind; name: string; description?: string; ownerPluginId?: string; nativeId?: string; enabled?: boolean; symlink?: boolean; content?: string }): Promise<ExtensionItem | undefined> => {
+  const addDocumentItem = async (input: { source: SourceRoot; absolute: string; relative: string; kind: ExtensionKind; name: string; description?: string; effectNote?: string; ownerPluginId?: string; nativeId?: string; enabled?: boolean; symlink?: boolean; content?: string }): Promise<ExtensionItem | undefined> => {
     const sourceScope = builtinSkillPath(input.relative) ? 'builtin' : input.symlink || managedPath(input.relative, ctx.backendId) ? 'managed' : input.source.scope;
     const descriptor = addDoc(input.source, input.absolute, input.relative, input.kind, input.symlink);
     let description = input.description;
@@ -437,6 +536,21 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
       name = metadata.name ?? name;
       description = metadata.description ?? description;
       if (metadata.invalidFrontmatter) diagnostics.push(`Skill metadata has an unterminated frontmatter block: ${descriptor.path}`);
+    } else if ((input.kind === 'rule' || input.kind === 'command') && input.content !== undefined) {
+      const metadata = markdownDescription(input.content);
+      if (metadata.invalidFrontmatter) diagnostics.push(`${input.kind === 'rule' ? 'Rule' : 'Command'} metadata has an unterminated frontmatter block: ${descriptor.path}`);
+      const summary = metadata.description ?? markdownSummary(input.content);
+      if (input.kind === 'rule') {
+        const effect = input.effectNote
+          ?? (metadata.patterns?.length ? `匹配 ${metadata.patterns.join(', ')}`
+            : metadata.alwaysApply === true ? '常驻生效'
+              : metadata.alwaysApply === false ? (metadata.description ? '按需生效' : '手动引用')
+                : /\.rules$/i.test(input.relative) ? '命令审批规则'
+                  : '常驻生效');
+        description = [descriptor.path, effect, summary].filter(Boolean).join(' · ');
+      } else {
+        description = summary ?? description;
+      }
     }
     const id = itemId(sourceScope, input.kind, input.kind === 'skill' ? skillIdentityPath(descriptor.absolutePath) : descriptor.absolutePath, input.nativeId ?? '');
     const item: ExtensionItem = {
@@ -488,7 +602,7 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
       const name = path.basename(relative);
       const id = itemId(descriptor.scope, 'config', descriptor.absolutePath, candidate.kind);
       const item: ExtensionItem = {
-        id, kind: 'config', name,
+        id, kind: 'config', name, description: descriptor.path,
         scope: descriptor.scope, sourcePath: descriptor.path, runtimeState: 'unknown',
         ...(descriptor.reason ? { readOnlyReason: descriptor.reason } : {}), documentId: descriptor.id,
       };
@@ -683,14 +797,15 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
           continue;
         } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       }
-      const visitKey = `${source.scope}:${kind}:${file.absolute}`;
+      const canonical = await realpath(file.absolute).catch(() => file.absolute);
+      const visitKey = `${source.scope}:${kind}:${canonical}`;
       if (seenMarkdown.has(visitKey)) continue;
       seenMarkdown.add(visitKey);
       let data: { content: string; symlink: boolean };
       try { data = await readCandidate(file.absolute, source.root, rootReal, !file.symlink); }
       catch (error) { diagnostics.push(`Cannot read ${kind} ${displayPath(source.root, file.absolute, source.scope)}: ${errMessage(error)}`); continue; }
       const pluginId = ownerFor(source, file.relative);
-      const fallback = kind === 'skill' ? path.basename(path.dirname(file.absolute)) : path.basename(file.absolute, path.extname(file.absolute));
+      const fallback = kind === 'skill' ? path.basename(path.dirname(file.absolute)) : kind === 'rule' ? path.basename(file.absolute) : path.basename(file.absolute, path.extname(file.absolute));
       const item = await addDocumentItem({ source, absolute: file.absolute, relative: file.relative, kind, name: fallback, ownerPluginId: pluginId, symlink: file.symlink || await dirHasSymlinkAncestor(source.root, path.dirname(file.absolute)), content: data.content });
       if (kind === 'skill' && item) {
         const descriptor = docs.get(item.documentId!)!;
@@ -734,26 +849,43 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
   };
 
   const addKnownRuleFiles = async (source: SourceRoot): Promise<void> => {
-    if (source.role !== 'agent') return;
-    const fixedByBackend: Partial<Record<ExtensionContext['backendId'], { user: string[]; project: string[] }>> = {
-      codex: { user: ['AGENTS.md'], project: ['AGENTS.md'] },
-      claude: { user: ['CLAUDE.md'], project: ['CLAUDE.md', 'CLAUDE.local.md'] },
-      dsh: { user: [], project: [] },
-      droid: { user: [], project: ['AGENTS.md'] },
-      traex: { user: [], project: [] },
-      pi: {
-        user: ['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'SYSTEM.md', 'APPEND_SYSTEM.md'],
-        project: ['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', '.pi/SYSTEM.md', '.pi/APPEND_SYSTEM.md'],
-      },
-    };
-    const fixed = ctx.layout?.ruleFiles[source.scope] ?? fixedByBackend[ctx.backendId]?.[source.scope] ?? [];
-    for (const relative of fixed) {
-      const absolute = path.resolve(source.root, relative);
-      try { await lstat(absolute); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; diagnostics.push(`Cannot inspect rule ${relative}: ${errMessage(error)}`); continue; }
-      let data: { content: string; symlink: boolean };
-      try { data = await readCandidate(absolute, source.root); } catch (error) { diagnostics.push(`Cannot read rule ${relative}: ${errMessage(error)}`); continue; }
-      const symlink = data.symlink || await hasSymlinkAncestor(source.root, absolute);
-      await addDocumentItem({ source, absolute, relative, kind: 'rule', name: path.basename(relative), ownerPluginId: ownerFor(source, relative), content: data.content, symlink });
+    if (source.role === 'agent') {
+      const fixedByBackend: Partial<Record<ExtensionContext['backendId'], { user: string[]; project: string[] }>> = {
+        codex: { user: ['AGENTS.override.md', 'AGENTS.md'], project: ['AGENTS.override.md', 'AGENTS.md'] },
+        claude: { user: ['CLAUDE.md'], project: ['CLAUDE.md', '.claude/CLAUDE.md', 'CLAUDE.local.md'] },
+        dsh: { user: [], project: [] },
+        droid: { user: ['AGENTS.md'], project: ['AGENTS.md', 'CLAUDE.md'] },
+        traex: { user: ['AGENTS.md'], project: ['AGENTS.md'] },
+        pi: {
+          user: ['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', 'SYSTEM.md', 'APPEND_SYSTEM.md'],
+          project: ['AGENTS.md', 'AGENTS.override.md', 'CLAUDE.md', '.pi/SYSTEM.md', '.pi/APPEND_SYSTEM.md'],
+        },
+      };
+      const fixed = ctx.layout?.ruleFiles[source.scope] ?? fixedByBackend[ctx.backendId]?.[source.scope] ?? [];
+      const present = new Set<string>();
+      const found: Array<{ relative: string; absolute: string; content: string; symlink: boolean }> = [];
+      for (const relative of fixed) {
+        const absolute = path.resolve(source.root, relative);
+        try { await lstat(absolute); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; diagnostics.push(`Cannot inspect rule ${relative}: ${errMessage(error)}`); continue; }
+        let data: { content: string; symlink: boolean };
+        try { data = await readCandidate(absolute, source.root); } catch (error) { diagnostics.push(`Cannot read rule ${relative}: ${errMessage(error)}`); continue; }
+        const symlink = data.symlink || await hasSymlinkAncestor(source.root, absolute);
+        present.add(relative.split(path.sep).join('/'));
+        found.push({ relative, absolute, content: data.content, symlink });
+      }
+      for (const file of found) {
+        const normalized = file.relative.split(path.sep).join('/');
+        const overridden = normalized === 'AGENTS.md' && present.has('AGENTS.override.md');
+        const effectNote = overridden ? '已被 AGENTS.override.md 覆盖'
+          : normalized === 'AGENTS.override.md' ? '优先覆盖 AGENTS.md'
+            : normalized === 'CLAUDE.local.md' ? '本地私有 · 常驻生效'
+              : '常驻生效';
+        await addDocumentItem({
+          source, absolute: file.absolute, relative: file.relative, kind: 'rule',
+          name: path.basename(file.relative), effectNote, ownerPluginId: ownerFor(source, file.relative),
+          ...(overridden ? { enabled: false } : {}), content: file.content, symlink: file.symlink,
+        });
+      }
     }
     for (const directory of markdownDirectories(ctx, source, 'rule')) {
       await scanMarkdownKind(source, 'rule', directory, isMarkdown);

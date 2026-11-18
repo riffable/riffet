@@ -314,10 +314,10 @@ function InspectorContent({
   </div>;
   const markdownBody = (() => {
     const content = document?.content ?? '';
-    if (item?.kind !== 'skill' || document?.id !== detail?.item.documentId) return content;
+    if (!['skill', 'rule', 'command'].includes(item?.kind ?? '') || document?.id !== detail?.item.documentId) return content;
     const lines = content.replace(/\r\n/g, '\n').split('\n');
     const end = lines.indexOf('---', 1);
-    return lines[0] === '---' && end > 0 && lines.slice(1, end).some(line => /^(name|description):/.test(line))
+    return lines[0] === '---' && end > 0 && lines.slice(1, end).some(line => /^(name|description|alwaysApply|globs|paths):/i.test(line.trim()))
       ? lines.slice(end + 1).join('\n') : content;
   })();
 

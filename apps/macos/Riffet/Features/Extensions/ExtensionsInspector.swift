@@ -414,10 +414,14 @@ struct ExtensionsInspector: View {
     /// Front matter stays intact in the source and editor; the reader presents the document body.
     private func markdownBody(_ document: ExtensionDocument) -> String {
         let content = document.content
-        guard item?.kind == "skill", document.id == detail?.item.documentId else { return content }
+        guard ["skill", "rule", "command"].contains(item?.kind ?? ""), document.id == detail?.item.documentId else { return content }
         let lines = content.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        let frontmatterKeys = ["name:", "description:", "alwaysapply:", "globs:", "paths:"]
         guard lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---"),
-              lines[1..<end].contains(where: { $0.hasPrefix("name:") || $0.hasPrefix("description:") }) else { return content }
+              lines[1..<end].contains(where: { line in
+                  let trimmed = line.trimmingCharacters(in: .whitespaces).lowercased()
+                  return frontmatterKeys.contains(where: { trimmed.hasPrefix($0) })
+              }) else { return content }
         return lines.dropFirst(end + 1).joined(separator: "\n")
     }
 
