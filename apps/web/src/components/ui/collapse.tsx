@@ -50,18 +50,20 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
     if (latest.current.open || latest.current.keep) setSettled(true);
     else setMounted(false);
   };
+  useLayoutEffect(() => {
+    if (open && expanded && settled) { shown.current = open; return; }
+    if (!still || (shown.current === open && expanded === open && settled)) return;
+    shown.current = open;
+    setInstant(true);
+    setExpanded(open);
+    setSettled(true);
+    if (open) setMounted(true);
+    else if (!keep) setMounted(false);
+  }, [open, still, keep, expanded, settled]);
   useEffect(() => {
     // Nothing to animate: the first render already shows this state, or a find-in-page match opened it.
     if (shown.current === open || (open && expanded && settled)) { shown.current = open; return; }
     shown.current = open;
-    if (latest.current.still) {
-      setInstant(true);
-      setExpanded(open);
-      setSettled(true);
-      if (open) setMounted(true);
-      else if (!latest.current.keep) setMounted(false);
-      return;
-    }
     if (!open) setExpanded(false);
     else setMounted(true);
     setSettled(false);

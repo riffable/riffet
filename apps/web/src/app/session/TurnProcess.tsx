@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconSparkles } from '@/components/icons';
 import { Collapse } from '@/components/ui/collapse';
@@ -56,6 +56,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const resources = useTranscriptResources();
   const { quiet } = useContext(TranscriptCatchUp);
   const [open, setOpen] = useState(choice ?? (defaultOpen || detailOpen || running || interrupted || issueCount > 0));
+  const [offscreenFold, setOffscreenFold] = useState(false);
   /** Explicit reader choices survive completion; automatic expansion never records a choice. */
   const manuallySet = useRef(choice !== undefined);
   const previousRunning = useRef(running);
@@ -78,6 +79,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 
   const chooseOpen = (next: boolean) => {
     manuallySet.current = true;
+    setOffscreenFold(false);
     setOpen(next);
     onOpenChange?.(next);
   };
@@ -87,19 +89,22 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
     chooseOpen(true);
   }, [reveal]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const fold = () => {
       if (detailOpen || beingRead(section.current)) chooseOpen(true);
-      else setOpen(false);
+      else {
+        setOffscreenFold(isOffscreen(section.current));
+        setOpen(false);
+      }
     };
     if (running && !previousRunning.current) {
-      if (!manuallySet.current) setOpen(true);
+      if (!manuallySet.current) { setOffscreenFold(false); setOpen(true); }
     } else if (!running && previousRunning.current) {
       if (!manuallySet.current && !defaultOpen && !interrupted && issueCount === 0) fold();
     }
     // The stop receipt can arrive after the running flag settled. Restore automatically folded
     // output then too, while preserving an explicit choice to close it.
-    if ((interrupted || issueCount > 0) && !manuallySet.current) setOpen(true);
+    if ((interrupted || issueCount > 0) && !manuallySet.current) { setOffscreenFold(false); setOpen(true); }
     previousRunning.current = running;
   }, [running, issueCount, interrupted, defaultOpen, detailOpen]);
 
@@ -136,7 +141,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
       </button>
       {/* Opening and folding, the turn's own fold at its end included, animate their height; the
           transcript's scroll coordinator keeps the end or the reader's place meanwhile. */}
-      <Collapse open={open} keep still={!onScreen || quiet} id={contentsId} onReveal={() => chooseOpen(true)}>
+      <Collapse open={open} keep still={!onScreen || quiet || offscreenFold} id={contentsId} onReveal={() => chooseOpen(true)}>
         {/* No left rail or indent: a turn's contents line up with its own header. Indentation
             is reserved for genuinely nested detail (a tool row expanding its own payload).
             `mx-2` cancels the row's own widening, so the contents stay on the text column. The
@@ -174,4 +179,13 @@ function beingRead(element: HTMLElement | null): boolean {
   const selection = element.ownerDocument.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
   return selection.getRangeAt(0).intersectsNode(element);
+}
+
+function isOffscreen(element: HTMLElement | null): boolean {
+  if (!element) return false;
+  const scroller = element.closest('[data-transcript-scroll]');
+  if (!scroller) return false;
+  const view = scroller.getBoundingClientRect();
+  const box = element.getBoundingClientRect();
+  return box.top < view.top || box.top >= view.bottom;
 }

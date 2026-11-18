@@ -3,7 +3,10 @@
  * at the top of the view also names the block inside it there (a paragraph, a picture, a fence), so
  * a picture or a formula growing earlier in the same long message does not move the words being read.
  */
-export interface ReadingAnchor { rows: { key: string; top: number; block?: { element: Element; top: number } }[]; scrollTop: number }
+export interface ReadingAnchor {
+  rows: { key: string; top: number; processOpen?: boolean; block?: { element: Element; top: number } }[];
+  scrollTop: number;
+}
 
 /** Blocks a reading anchor does not look inside: text runs, media and fences. */
 const LEAF = 'p,h1,h2,h3,h4,h5,h6,pre,table,img,picture,video,canvas,svg,iframe,hr,math,.katex-display';
@@ -82,9 +85,17 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
     const rect = row.getBoundingClientRect();
     if (rect.top >= bounds.bottom) break;
     if (rect.height === 0 || !row.dataset.rowKey) continue;
+    const process = row.querySelector('[data-process-open]');
+    const processOpen = process ? process.getAttribute('data-process-open') === 'true' || !process.querySelector('[hidden]') : undefined;
+    const foldingProcess = rect.top < bounds.top && process?.getAttribute('data-process-open') === 'false';
     // Only a row that starts above the view has something above the reader that could grow.
-    const block = !rows.length && rect.top < bounds.top ? blockAt(row, bounds.top, bounds.bottom) : undefined;
-    rows.push({ key: row.dataset.rowKey, top: rect.top - bounds.top, ...(block ? { block: { element: block, top: block.getBoundingClientRect().top - bounds.top } } : {}) });
+    const block = !rows.length && rect.top < bounds.top && !foldingProcess ? blockAt(row, bounds.top, bounds.bottom) : undefined;
+    rows.push({
+      key: row.dataset.rowKey,
+      top: rect.top - bounds.top,
+      ...(processOpen !== undefined ? { processOpen } : {}),
+      ...(block ? { block: { element: block, top: block.getBoundingClientRect().top - bounds.top } } : {}),
+    });
   }
   if (!rows.length) return fallback?.() ?? { rows, scrollTop: scroller.scrollTop };
   return { rows, scrollTop: scroller.scrollTop };
@@ -95,14 +106,25 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
  * anchor still names where the reader was, and the list's index knows where that row would be.
  */
 export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, locate?: (key: string) => number | undefined): number {
-  for (const saved of anchor.rows) {
+  let foldedTop: number | undefined;
+  for (let index = 0; index < anchor.rows.length; index += 1) {
+    const saved = anchor.rows[index]!;
     const row = findRow(scroller, saved.key);
     if (!row) continue;
+    // A process block that was open (or mid-fold) when captured, whose header is above the viewport
+    // and that has now folded away, collapses into that off-screen header; the row below it is what
+    // remains stable on screen for the reader.
+    if (saved.top < 0 && saved.processOpen && row.querySelector('[data-process-open="false"]')) {
+      foldedTop ??= scroller.scrollTop + row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      if (index + 1 < anchor.rows.length) continue;
+      return foldedTop;
+    }
     // The block, while the row still holds it; a re-rendered message falls back to the row.
-    const block = saved.block && saved.block.element.isConnected && row.contains(saved.block.element) ? saved.block : undefined;
+    const block = saved.block && saved.block.element.isConnected && row.contains(saved.block.element) && !saved.block.element.closest('[data-process-open="false"]') ? saved.block : undefined;
     const top = block ? block.element.getBoundingClientRect().top - block.top : row.getBoundingClientRect().top - saved.top;
     return scroller.scrollTop + top - scroller.getBoundingClientRect().top;
   }
+  if (foldedTop !== undefined) return foldedTop;
   const first = anchor.rows[0];
   const at = first && locate ? locate(first.key) : undefined;
   return at !== undefined ? at - first!.top : anchor.scrollTop;
