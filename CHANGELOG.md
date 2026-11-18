@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Opening the web model picker scrolls the currently selected model into view (along with the active Agent and provider columns when shown), and keeps the selection in view when switching back to the active provider.
 - The personal assistant can list built-in and shared Riffet Web themes and available plugin palettes even when a message has no connected tab. Retrying an unsent message from the assistant now identifies the workbench that submits it.
 - Sending a personal assistant message with several Riffet Web tabs open no longer waits behind each tab’s sidebar updates on HTTP/1.1 connections.
 - The personal assistant can read and change the theme after you reload Riffet Web, and an open tab can reconnect after a server restart.
