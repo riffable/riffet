@@ -64,14 +64,8 @@ import riffet_mobile.shared.generated.resources.session_working
  * been going; this row is the conversation-level "the CLI is working right now" signal, and it
  * carries the recent rolling output speed sampled by the server.
  *
- * The gate is the web's, character for character (`NativeSession.tsx:289`):
- *
- *     showWorking = busy && turnHasVisibleOutput(visibleTimeline)
- *
- * `turnHasVisibleOutput` is why a turn that has produced **nothing but thinking** stands this row
- * down: the turn's own block is already open and showing a spinner and `Working · 12s`, and a
- * second identical line under it is noise, not liveness. `core.turnHasVisibleOutput` is the single
- * implementation of that rule, and this call site is the mobile port of the web's only call site.
+ * The gate is the web's (`useSessionTranscript.ts`): the row shows for the whole running turn,
+ * thinking included. The turn header scrolls away with its turn, so it cannot stand in for this row.
  *
  * The caller evaluates that gate and passes this row as the transcript's footer, so it sits under
  * the newest row and scrolls with it, as on the web.

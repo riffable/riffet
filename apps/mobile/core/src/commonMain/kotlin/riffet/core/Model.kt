@@ -471,32 +471,6 @@ private fun outputFollowsCompletedRun(item: TimelineItem, run: Run): Boolean {
 }
 
 /**
- * Whether the turn in progress has put anything on screen besides reasoning.
- *
- * The bottom "working" row stands down while a turn has produced nothing but thinking. Walking
- * back past the thinking rows to the turn's own prompt gives an answer that changes at most once
- * per turn, which is what stops the indicator from blinking on every chunk.
- */
-fun turnHasVisibleOutput(timeline: List<TimelineItem>): Boolean {
-    var thoughts = 0
-    for (index in timeline.indices.reversed()) {
-        when (timeline[index].kind) {
-            TimelineItemKind.THOUGHT -> {
-                thoughts += 1
-                continue
-            }
-            // A system activity says nothing about whether the turn has answered.
-            TimelineItemKind.ACTIVITY -> continue
-            // A prompt with nothing but thoughts under it is the one case the indicator stands down for.
-            TimelineItemKind.USER -> return thoughts == 0
-            else -> return true
-        }
-    }
-    // Nothing on screen at all: the indicator is the only sign that work is happening.
-    return thoughts == 0
-}
-
-/**
  * The Run a timeline turn key stands for, when it was derived from one. Turn keys are either
  * `run:<runId>` or a provider-local turn id — only the first kind has a run to hang speed on.
  */

@@ -36,7 +36,6 @@ import riffet.core.nativeEventIds
 import riffet.core.speedDescription
 import riffet.core.timelineItemTime
 import riffet.core.tokensPerSecond
-import riffet.core.turnHasVisibleOutput
 import riffet.ui.composer.TodoEntry
 import riffet.ui.composer.latestTodoEntries
 import riffet.ui.composer.todoEntries
@@ -58,7 +57,7 @@ data class TimelinePresentation(
     val goal: SessionGoal? = null,
     /** What the running turn is doing right now, for the "正在处理" line. */
     val step: String?,
-    /** The "正在处理" line shows: the turn runs and has nothing but reasoning (or nothing) on screen. */
+    /** The "正在处理" line shows: the turn runs. */
     val showsWorking: Boolean,
     /**
      * The row holding the running turn's footer ([heldFooterRow]): the working line goes in its place
@@ -318,9 +317,8 @@ fun presentTimeline(
         grouping = grouping,
         todos = plan?.let(::todoEntries).orEmpty(),
         step = if (working) currentStep(timeline) else null,
-        // The web's gate (`NativeSession.tsx`): busy, and the turn has shown more than thinking. While
-        // it has only thought, the process block's own Working header is the progress sign.
-        showsWorking = working && turnHasVisibleOutput(timeline),
+        // The web's gate (`useSessionTranscript.ts`): the whole running turn, thinking included.
+        showsWorking = working,
         heldFooter = heldFooterRow(grouping.rows),
         compactAbove = grouping.rows.mapIndexed { index, row ->
             val above = grouping.rows.getOrNull(index - 1)?.lastItem()

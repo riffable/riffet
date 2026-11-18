@@ -6,7 +6,6 @@ import { inQueue, messagePlace, sendPhase } from './delivery';
 import { showsRunningCompaction } from './Activities';
 import { sameMap, sameSet, useStable } from './stable';
 import type { SubagentBrief } from './SessionWorkActions';
-import { turnHasVisibleOutput } from './timelineTurns';
 import { toolView } from './toolView';
 import { isRecord, str } from '@/lib/utils';
 import type { useSessionSync } from './useSessionSync';
@@ -109,10 +108,10 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
     ? timeline.filter((item) => (!todoEntries || item.kind !== 'plan') && !queuedKeys.has(item.key))
     : timeline), [timeline, timelineVersion, queuedKeys, todoEntries]);
   const visibleTurns = useMemo(() => (queuedKeys.size ? native.turns.filter((turn) => !queuedKeys.has(turn.key)) : native.turns), [native.turns, turnsVersion, queuedKeys]);
-  // Asked of the whole turn rather than its last row: a streaming turn alternates reasoning and
-  // answer rows, so a last-row test made the indicator blink through the entire response.
-  // A compaction row in the transcript already counts its own time; the working line stands down for it.
-  const showWorking = busy && turnHasVisibleOutput(visibleTimeline) && !(compacting && showsRunningCompaction(visibleTimeline));
+  // Shown for the whole of a running turn, thinking included: the turn header that also says so
+  // scrolls away, and an opened thought row has no shimmer, so this line is the one sign that stays
+  // in view. A compaction row in the transcript already counts its own time; the line stands down for it.
+  const showWorking = busy && !(compacting && showsRunningCompaction(visibleTimeline));
   /**
    * When the turn being worked on was prompted, so the indicator can count from it. A turn a hidden
    * prompt opened (a peer's message, a scheduled wake-up) has no prompt row: it counts from its first

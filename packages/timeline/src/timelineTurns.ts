@@ -118,35 +118,6 @@ function outputFollowsCompletedRun(item: TimelineItem, run: Run): boolean {
 }
 
 /**
- * Whether the turn in progress has put anything on screen besides reasoning.
- *
- * The bottom "working" row stands down while a turn has produced nothing but thinking, because the
- * thinking row is already the progress sign at that point. Asking the *last* row made it blink: a
- * streaming turn emits reasoning and answer as separate alternating rows, so the tail flipped
- * between them on every chunk and the indicator vanished and reappeared several times a second.
- *
- * Whether a turn has produced real output only ever goes one way, so walking back past the thinking
- * rows to the turn's own prompt gives an answer that changes at most once per turn.
- */
-export function turnHasVisibleOutput(timeline: TimelineItem[]): boolean {
-  let thoughts = 0;
-  for (let index = timeline.length - 1; index >= 0; index -= 1) {
-    const kind = timeline[index]!.kind;
-    if (kind === 'thought') {
-      thoughts += 1;
-      continue;
-    }
-    // A system activity says nothing about whether the turn has answered.
-    if (kind === 'activity') continue;
-    // A prompt with nothing but thoughts under it is the one case the indicator stands down for.
-    if (kind === 'user') return thoughts === 0;
-    return true;
-  }
-  // Nothing on screen at all: the indicator is the only sign that work is happening.
-  return thoughts === 0;
-}
-
-/**
  * The Run a timeline turn key stands for, when it was derived from one. Turn keys are either
  * `run:<runId>` for a turn that could be tied back to a workbench run, or a provider-local turn id
  * when it could not — and only the first kind has a run to hang measured output speed on.

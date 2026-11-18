@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The "Working" line at the bottom of a conversation shows for the whole turn, also while the agent is only thinking; it used to stay blank until the first tool call or reply.
 - When a Cursor turn fails after running tools, the conversation shows the error once after that work. The error stays visible when the process is folded, including in earlier conversations.
 - Cursor conversations keep showing the current turn as running while the agent thinks, and keep subsequent tool calls and replies in that turn.
 - Scanning a pairing QR works when the Mac has several network addresses and the phone can reach only some of them, such as Wi-Fi that keeps wireless devices apart while the wired address answers: the QR carries every address and the phone pairs at the first that answers. Android also falls back to these addresses later if the one it uses stops answering.
