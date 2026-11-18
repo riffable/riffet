@@ -11,6 +11,8 @@ import { runProcess, type ProcessResult } from './exec.js';
 const MAX_CHECKPOINT_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_CHECKPOINT_TOTAL_BYTES = 256 * 1024 * 1024;
 const MAX_CHECKPOINT_FILES = 5_000;
+/** Paths one `ls-files` reads for a checkpoint; keeps the argument list far below the system's limit. */
+const INDEX_BATCH_PATHS = 500;
 const MAX_DIFF_BYTES = 1024 * 1024;
 const MAX_COUNTED_UNTRACKED = 200;
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
@@ -962,8 +964,10 @@ export class GitService {
     const blob = `blob-${digest}`;
     const target = path.join(folder, blob);
     try {
+      // No fsync: a turn waits for its checkpoint, and one per blob cost about 5 ms each on macOS, a
+      // second for a hundred changes. The manifest is not synced either, so it bought no crash safety.
       const handle = await open(target, 'wx', 0o600);
-      try { await handle.writeFile(data); await handle.sync(); } finally { await handle.close(); }
+      try { await handle.writeFile(data); } finally { await handle.close(); }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
     return { blob, hash: digest };
   }
@@ -1006,12 +1010,80 @@ export class GitService {
     if (result.code !== 0) throw gitError(result, 'cat-file');
     const data = result.stdoutData;
     if (data.length > MAX_CHECKPOINT_FILE_BYTES || result.truncated) throw new AppError('CHECKPOINT_FILE_TOO_LARGE', 'Checkpoint Git blob exceeds the per-file limit', 413, { size: data.length });
+    return this.blobImage(data, mode, folder);
+  }
+
+  private async blobImage(data: Buffer, mode: string, folder?: string): Promise<Image> {
     const symlinkMode = mode === '120000';
     const image: Image = { exists: true, kind: symlinkMode ? 'symlink' : 'file', mode: parseInt(mode, 8), size: data.length };
     if (folder) Object.assign(image, await this.storeBlob(folder, data));
     else image.hash = hash(data);
     if (symlinkMode) image.linkTarget = data.toString('utf8');
     return image;
+  }
+
+  /**
+   * The index side of many paths with a few Git processes rather than two per path: `ls-files` in
+   * batches, `cat-file --batch-check` for sizes, one `cat-file --batch` for the blobs. A turn waits
+   * for its checkpoint, and per path a worktree with a hundred changes took seconds. A path this
+   * cannot settle (unmerged, not a blob, over the per-file limit, a failed batch) is left out, and
+   * the caller reads it with `indexImage`, which reports it the way it always has.
+   */
+  private async indexImages(repo: Repo, gitPaths: string[], folder: string): Promise<Map<string, Image>> {
+    const images = new Map<string, Image>();
+    const entries = new Map<string, { mode: string; oid: string }>();
+    for (let start = 0; start < gitPaths.length; start += INDEX_BATCH_PATHS) {
+      const batch = gitPaths.slice(start, start + INDEX_BATCH_PATHS);
+      // A row is a path and 50 bytes of mode, id and stage; a path is at most 4 KiB.
+      const listed = await this.git(repo, ['ls-files', '--stage', '-z', '--', ...batch.map(literalPath)], { maxOutputBytes: batch.length * 4_200 });
+      if (listed.code !== 0 || listed.truncated) continue;
+      const records = new Map<string, string[]>();
+      for (const row of listed.stdout.split('\0').filter(Boolean)) {
+        const tab = row.indexOf('\t');
+        const rowPath = row.slice(tab + 1);
+        records.set(rowPath, [...records.get(rowPath) ?? [], row.slice(0, tab)]);
+      }
+      for (const gitPath of batch) {
+        const found = records.get(gitPath);
+        if (!found) { images.set(gitPath, { exists: false, kind: 'missing', mode: 0 }); continue; }
+        if (found.length !== 1 || !found[0]!.endsWith(' 0')) continue;
+        const [mode, oid] = found[0]!.split(' ');
+        if (mode !== '160000') entries.set(gitPath, { mode: mode!, oid: oid! });
+      }
+    }
+    // Paths under a directory pathspec would list as other paths; only an exact match counts as missing.
+    for (const [gitPath, image] of images) if (!image.exists && gitPaths.some(other => other !== gitPath && other.startsWith(`${gitPath}/`))) images.delete(gitPath);
+    const oids = [...new Set([...entries.values()].map(entry => entry.oid))];
+    if (!oids.length) return images;
+    const checked = await this.git(repo, ['cat-file', '--batch-check'], { input: Buffer.from(`${oids.join('\n')}\n`), maxOutputBytes: oids.length * 128 });
+    if (checked.code !== 0 || checked.truncated) return images;
+    const sizes = new Map<string, number>();
+    for (const line of checked.stdout.split('\n')) {
+      const [oid, type, size] = line.split(' ');
+      if (oid && type === 'blob' && Number(size) <= MAX_CHECKPOINT_FILE_BYTES) sizes.set(oid, Number(size));
+    }
+    const wanted = oids.filter(oid => sizes.has(oid));
+    const total = wanted.reduce((sum, oid) => sum + sizes.get(oid)!, 0);
+    if (!wanted.length || total > MAX_CHECKPOINT_TOTAL_BYTES) return images;
+    const read = await this.git(repo, ['cat-file', '--batch'], { input: Buffer.from(`${wanted.join('\n')}\n`), maxOutputBytes: total + wanted.length * 128, timeoutMs: 60_000 });
+    if (read.code !== 0 || read.truncated) return images;
+    const blobs = new Map<string, Buffer>();
+    let offset = 0;
+    const out = read.stdoutData;
+    for (const oid of wanted) {
+      const end = out.indexOf(0x0a, offset);
+      if (end < 0) break;
+      const [headOid, type, size] = out.subarray(offset, end).toString('utf8').split(' ');
+      const length = Number(size);
+      if (headOid !== oid || type !== 'blob' || length !== sizes.get(oid)) break;
+      blobs.set(oid, out.subarray(end + 1, end + 1 + length));
+      offset = end + 1 + length + 1;
+    }
+    for (const [gitPath, entry] of entries) {
+      const data = blobs.get(entry.oid);
+      if (data) images.set(gitPath, await this.blobImage(data, entry.mode, folder));
+    }
+    return images;
   }
 
   private async indexImage(repo: Repo, gitPath: string, folder?: string): Promise<Image> {
@@ -1051,11 +1123,12 @@ export class GitService {
     };
     const dirty = options.paths ? options.paths.map(item => path.relative(repo.root, path.resolve(repo.projectRoot, item)).split(path.sep).join('/')) : await this.dirtyPaths(repo);
     let totalBytes = 0;
+    const staged = await this.indexImages(repo, dirty.slice(0, MAX_CHECKPOINT_FILES), folder);
     for (const gitPath of dirty.slice(0, MAX_CHECKPOINT_FILES)) {
       const relative = asRelativePath(repo.root, repo.projectRoot, gitPath);
       if (relative === undefined) continue;
       try {
-        const index = await this.indexImage(repo, gitPath, folder);
+        const index = staged.get(gitPath) ?? await this.indexImage(repo, gitPath, folder);
         const worktree = await this.readWorktreeImage(repo, relative, folder);
         totalBytes += (index.size ?? 0) + (worktree.size ?? 0);
         if (totalBytes > MAX_CHECKPOINT_TOTAL_BYTES) throw new AppError('CHECKPOINT_TOTAL_TOO_LARGE', 'Checkpoint exceeds the total size limit', 413);
