@@ -1360,8 +1360,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);
-  // A visible compaction row already carries progress. Its preceding turn needs no empty slot.
-  const suppressHeldFooter = running && !progress && showsRunningCompaction(timeline);
+  // A pending interaction or a visible compaction row already explains the pause.
+  const suppressHeldFooter = !progress && (pendingConfirmationCount > 0 || (running && showsRunningCompaction(timeline)));
   const latestRows = rowTurns.at(-1)?.rows;
   const renderRow = (row: TranscriptRow) => (
     <RememberedScope.Provider key={row.key} value={row.key}>
