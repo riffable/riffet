@@ -1,9 +1,10 @@
 import type { StatsBreakdown } from '@contracts';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Segmented } from '@/components/ui/controls';
-import { formatCount, formatSpeed, formatTokens } from '@/lib/stats-format';
+import { Tip } from '@/components/ui/tooltip';
+import { formatCount, formatPercent, formatSpeed, formatTokens } from '@/lib/stats-format';
 import type { RankMetric } from '@/lib/stats-query';
-import { seriesOpacity, sortBreakdown } from '@/lib/stats-series';
+import { rowCacheHitRate, rowTokensPerRun, seriesOpacity, sortBreakdown } from '@/lib/stats-series';
 import { ChartCard, EmptyNote, ellipsizeMiddle, Unavailable, useHighlight, useRovingIndex } from './chart-shared';
 
 export function RankChart({ breakdown, rank, onRank }: { breakdown: StatsBreakdown; rank: RankMetric; onRank: (rank: RankMetric) => void }) {
@@ -11,16 +12,26 @@ export function RankChart({ breakdown, rank, onRank }: { breakdown: StatsBreakdo
   const options: Array<{ value: RankMetric; label: string }> = [
     { value: 'tokens', label: 'Token' },
     { value: 'runs', label: t`轮次` },
-    { value: 'speed', label: t`输出速度` },
+    { value: 'avgTokens', label: t`单轮` },
+    { value: 'cache', label: t`缓存` },
+    { value: 'speed', label: t`速度` },
   ];
   const { highlight, setHighlight } = useHighlight();
   const rows = sortBreakdown(breakdown.rows, rank).slice(0, 8);
   const { index, setIndex, onKeyDown } = useRovingIndex(rows.length);
-  const amount = (row: (typeof rows)[number]) => rank === 'runs' ? row.count : rank === 'speed' ? row.outputTokensPerSecond?.p50 ?? null : row.totalTokens;
-  const max = rows.reduce((best, row) => {
-    const value = amount(row);
-    return value != null && value > best ? value : best;
-  }, 0);
+  const amount = (row: (typeof rows)[number]) => {
+    if (rank === 'runs') return row.count;
+    if (rank === 'avgTokens') return rowTokensPerRun(row);
+    if (rank === 'cache') return rowCacheHitRate(row.tokens);
+    if (rank === 'speed') return row.outputTokensPerSecond?.p50 ?? null;
+    return row.totalTokens;
+  };
+  const max = rank === 'cache'
+    ? 1
+    : rows.reduce((best, row) => {
+        const value = amount(row);
+        return value != null && value > best ? value : best;
+      }, 0);
 
   return (
     <ChartCard title={t`模型排行`} actions={<Segmented size="xs" ariaLabel={t({ message: '排序', context: 'stats-sort-control' })} value={rank} options={options} onChange={onRank} />}>
@@ -29,7 +40,15 @@ export function RankChart({ breakdown, rank, onRank }: { breakdown: StatsBreakdo
           {rows.map((row, rowIndex) => {
             const value = amount(row);
             const width = value != null && max > 0 ? Math.max((value / max) * 100, 0.8) : 0;
-            const label = value == null ? null : rank === 'runs' ? formatCount(value) : rank === 'speed' ? formatSpeed(value) : formatTokens(value);
+            const label = value == null
+              ? null
+              : rank === 'runs'
+                ? formatCount(value)
+                : rank === 'cache'
+                  ? formatPercent(value)
+                  : rank === 'speed'
+                    ? formatSpeed(value)
+                    : formatTokens(value);
             return (
               <div
                 key={row.key}
@@ -40,7 +59,7 @@ export function RankChart({ breakdown, rank, onRank }: { breakdown: StatsBreakdo
                 onMouseEnter={() => { setIndex(rowIndex); setHighlight(row); }}
                 onMouseLeave={() => setHighlight(null)}
               >
-                <span className="truncate text-xs text-fg-2" title={row.label}>{ellipsizeMiddle(row.label)}</span>
+                <Tip label={row.label}><span className="truncate text-xs text-fg-2">{ellipsizeMiddle(row.label)}</span></Tip>
                 <span className="h-1.5 overflow-hidden rounded-full bg-muted">
                   <span
                     className="block h-full rounded-full transition-[width] duration-[var(--duration-medium)] ease-[var(--ease-out-soft)]"

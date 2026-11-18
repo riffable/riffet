@@ -7,16 +7,6 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
-#. placeholder {0}: active.date
-#. placeholder {0}: day.date
-#. placeholder {1}: formatCount(active.runs)
-#. placeholder {1}: formatCount(day.runs)
-#. placeholder {2}: formatTokens(active.totalTokens)
-#. placeholder {2}: formatTokens(day.totalTokens)
-#: src/app/stats/Heatmaps.tsx
-msgid "{0} · {1} 轮 · {2}"
-msgstr "{0} · {1} 轮 · {2}"
-
 #. placeholder {0}: active.label
 #. placeholder {1}: format(activeSample.p50)
 #. placeholder {2}: format(activeSample.p90)
@@ -75,9 +65,25 @@ msgstr "0 轮"
 msgid "1 年"
 msgstr "1 年"
 
+#: src/app/stats/SplitBars.tsx
+msgid "1 步"
+msgstr "1 步"
+
+#: src/app/stats/SplitBars.tsx
+msgid "10+ 步"
+msgstr "10+ 步"
+
+#: src/app/stats/SplitBars.tsx
+msgid "2–4 步"
+msgstr "2–4 步"
+
 #: src/app/stats/FilterBar.tsx
 msgid "30 天"
 msgstr "30 天"
+
+#: src/app/stats/SplitBars.tsx
+msgid "5–9 步"
+msgstr "5–9 步"
 
 #: src/app/stats/FilterBar.tsx
 msgid "7 天"
@@ -87,9 +93,15 @@ msgstr "7 天"
 msgid "90 天"
 msgstr "90 天"
 
-#: src/app/stats/DonutChart.tsx
-msgid "Agent 占比"
-msgstr "Agent 占比"
+#. placeholder {0}: Math.round(autonomy.stepsPerRun.p50)
+#. placeholder {1}: Math.round(autonomy.stepsPerRun.p90)
+#: src/app/stats/SplitBars.tsx
+msgid "p50 {0} 步 · p90 {1} 步"
+msgstr "p50 {0} 步 · p90 {1} 步"
+
+#: src/app/stats/SplitBars.tsx
+msgid "Token 构成与缓存"
+msgstr "Token 构成与缓存"
 
 #: src/app/stats/Heatmaps.tsx
 msgid "一周中每个小时的轮次。方向键移动。"
@@ -106,27 +118,68 @@ msgid "下一页"
 msgstr "下一页"
 
 #: src/app/stats/SplitBars.tsx
-msgctxt "stats-status-interrupted"
-msgid "中断"
-msgstr "中断"
+msgid "中 (medium)"
+msgstr "中 (medium)"
+
+#. placeholder {0}: formatTokens(mainTokens)
+#. placeholder {1}: formatTokens(subagentTokens)
+#: src/app/stats/SplitBars.tsx
+msgid "主 {0} · 子 {1}"
+msgstr "主 {0} · 子 {1}"
+
+#: src/app/stats/SplitBars.tsx
+msgid "主 / 子 Agent 用量分担"
+msgstr "主 / 子 Agent 用量分担"
 
 #: src/app/stats/FilterBar.tsx
 msgid "今天"
 msgstr "今天"
+
+#: src/app/stats/SplitBars.tsx
+msgctxt "common-metric-sessions"
+msgid "会话"
+msgstr "会话"
 
 #: src/app/stats/RunsTable.tsx
 msgctxt "stats-session-column"
 msgid "会话"
 msgstr "会话"
 
+#: src/app/stats/SplitBars.tsx
+msgid "低 (low)"
+msgstr "低 (low)"
+
 #: src/app/stats/FilterBar.tsx
 msgid "全部"
 msgstr "全部"
 
 #: src/app/stats/SplitBars.tsx
-msgctxt "stats-status-cancelled"
-msgid "取消"
-msgstr "取消"
+msgid "最大 (max)"
+msgstr "最大 (max)"
+
+#: src/app/stats/SplitBars.tsx
+msgid "最高频档位"
+msgstr "最高频档位"
+
+#: src/app/stats/SplitBars.tsx
+msgid "单会话轮次"
+msgstr "单会话轮次"
+
+#: src/app/stats/RankChart.tsx
+msgid "单轮"
+msgstr "单轮"
+
+#: src/app/stats/SplitBars.tsx
+msgid "单轮平均步数"
+msgstr "单轮平均步数"
+
+#: src/app/stats/SplitBars.tsx
+msgid "单轮模型请求步数均值"
+msgstr "单轮模型请求步数均值"
+
+#: src/app/stats/DonutChart.tsx
+msgid "占比维度"
+msgstr "占比维度"
 
 #: src/app/stats/LatencyChart.tsx
 msgid "另有 {unmeasured} 个模型未测量"
@@ -137,8 +190,8 @@ msgid "各 Agent 占比。方向键切换扇区。"
 msgstr "各 Agent 占比。方向键切换扇区。"
 
 #: src/app/stats/SplitBars.tsx
-msgid "各 Agent 的结束状态"
-msgstr "各 Agent 的结束状态"
+msgid "各模型缓存命中率"
+msgstr "各模型缓存命中率"
 
 #: src/app/stats/AreaChart.tsx
 msgid "合计"
@@ -150,17 +203,12 @@ msgid "含估算"
 msgstr "含估算"
 
 #: src/app/stats/SplitBars.tsx
-msgid "失败"
-msgstr "失败"
+msgid "命中率"
+msgstr "命中率"
 
 #: src/app/stats/SplitBars.tsx
-msgid "失败调用"
-msgstr "失败调用"
-
-#: src/app/stats/SplitBars.tsx
-msgctxt "stats-status-completed"
-msgid "完成"
-msgstr "完成"
+msgid "子 Agent 步数"
+msgstr "子 Agent 步数"
 
 #. placeholder {0}: total((day) => day.decisions)
 #. placeholder {1}: total((day) => day.questions)
@@ -198,12 +246,8 @@ msgid "导出数据"
 msgstr "导出数据"
 
 #: src/app/stats/SplitBars.tsx
-msgid "工具"
-msgstr "工具"
-
-#: src/app/stats/SplitBars.tsx
-msgid "工具分布"
-msgstr "工具分布"
+msgid "常规输出"
+msgstr "常规输出"
 
 #: src/app/stats/LatencyChart.tsx
 msgid "延迟与速度"
@@ -225,13 +269,33 @@ msgstr "开始日期"
 msgid "当前页明细"
 msgstr "当前页明细"
 
+#: src/app/stats/SplitBars.tsx
+msgid "思考 (默认)"
+msgstr "思考 (默认)"
+
+#: src/app/stats/SplitBars.tsx
+msgid "思考档位分布"
+msgstr "思考档位分布"
+
+#: src/app/stats/SplitBars.tsx
+msgid "思考次数"
+msgstr "思考次数"
+
+#: src/app/stats/SplitBars.tsx
+msgid "思考统计"
+msgstr "思考统计"
+
+#: src/app/stats/SplitBars.tsx
+msgid "思考统计维度"
+msgstr "思考统计维度"
+
+#: src/app/stats/SplitBars.tsx
+msgid "思考输出"
+msgstr "思考输出"
+
 #: src/app/stats/AreaChart.tsx
 msgid "总 token"
 msgstr "总 token"
-
-#: src/app/stats/Heatmaps.tsx
-msgid "悬停或选中日期查看用量"
-msgstr "悬停或选中日期查看用量"
 
 #: src/app/stats/AreaChart.tsx
 msgid "拆分"
@@ -266,6 +330,14 @@ msgstr "无法加载明细"
 #: src/app/stats/use-stats-data.ts
 msgid "无法加载统计"
 msgstr "无法加载统计"
+
+#: src/app/stats/NorthStar.tsx
+msgid "日均待处理"
+msgstr "日均待处理"
+
+#: src/app/stats/NorthStar.tsx
+msgid "日均等待耗时"
+msgstr "日均等待耗时"
 
 #: src/app/stats/FilterBar.tsx
 msgid "日期"
@@ -307,11 +379,24 @@ msgstr "更新中"
 msgid "未命名会话"
 msgstr "未命名会话"
 
+#: src/app/stats/SplitBars.tsx
+msgid "未开启思考"
+msgstr "未开启思考"
+
+#: src/app/stats/SplitBars.tsx
+msgid "未缓存输入"
+msgstr "未缓存输入"
+
 #: src/app/stats/RunsTable.tsx
 msgid "本页暂无记录，可以返回上一页"
 msgstr "本页暂无记录，可以返回上一页"
 
+#: src/app/stats/SplitBars.tsx
+msgid "极低 (minimal)"
+msgstr "极低 (minimal)"
+
 #: src/app/stats/AreaChart.tsx
+#: src/app/stats/DonutChart.tsx
 #: src/app/stats/FilterBar.tsx
 #: src/app/stats/RunsTable.tsx
 msgid "模型"
@@ -321,6 +406,10 @@ msgstr "模型"
 msgid "模型排行"
 msgstr "模型排行"
 
+#: src/app/stats/SplitBars.tsx
+msgid "次数"
+msgstr "次数"
+
 #: src/app/stats/RunsTable.tsx
 msgid "正在读取…"
 msgstr "正在读取…"
@@ -328,22 +417,6 @@ msgstr "正在读取…"
 #: src/app/stats/RunsTable.tsx
 msgid "正在读取轮次"
 msgstr "正在读取轮次"
-
-#: src/app/stats/NorthStar.tsx
-msgid "每天 Agent 等你"
-msgstr "每天 Agent 等你"
-
-#: src/app/stats/NorthStar.tsx
-msgid "每天打扰你"
-msgstr "每天打扰你"
-
-#: src/app/stats/Heatmaps.tsx
-msgid "每日活跃"
-msgstr "每日活跃"
-
-#: src/app/stats/Heatmaps.tsx
-msgid "每日活跃，左右方向键查看日期"
-msgstr "每日活跃，左右方向键查看日期"
 
 #: src/app/stats/RunsTable.tsx
 msgid "每页 {pageSize} 条"
@@ -361,6 +434,10 @@ msgstr "活跃时段"
 msgctxt "stats-state-column"
 msgid "状态"
 msgstr "状态"
+
+#: src/app/stats/DonutChart.tsx
+msgid "用量占比"
+msgstr "用量占比"
 
 #: src/app/stats/AreaChart.tsx
 msgid "用量趋势。方向键移动十字线，在底部条带上拖动可缩小时间范围。"
@@ -387,15 +464,20 @@ msgstr "筛选，{activeFilterCount} 项已启用"
 msgid "结束日期"
 msgstr "结束日期"
 
-#: src/app/stats/SplitBars.tsx
-msgid "结束状态"
-msgstr "结束状态"
-
 #: src/app/stats/StatsPage.tsx
 msgid "统计"
 msgstr "统计"
 
+#: src/app/stats/RankChart.tsx
+msgid "缓存"
+msgstr "缓存"
+
+#: src/app/stats/SplitBars.tsx
+msgid "缓存写"
+msgstr "缓存写"
+
 #: src/app/stats/AreaChart.tsx
+#: src/app/stats/SplitBars.tsx
 msgid "缓存读"
 msgstr "缓存读"
 
@@ -408,6 +490,10 @@ msgstr "编辑自定义日期：{0} 至 {1}"
 #: src/app/stats/RunsTable.tsx
 msgid "耗时"
 msgstr "耗时"
+
+#: src/app/stats/SplitBars.tsx
+msgid "自主度与子 Agent"
+msgstr "自主度与子 Agent"
 
 #: src/app/stats/FilterBar.tsx
 msgid "自定义"
@@ -425,6 +511,10 @@ msgstr "该数据源不提供"
 msgid "读取失败"
 msgstr "读取失败"
 
+#: src/app/stats/SplitBars.tsx
+msgid "超高 (xhigh)"
+msgstr "超高 (xhigh)"
+
 #: src/app/stats/AreaChart.tsx
 msgid "趋势"
 msgstr "趋势"
@@ -432,6 +522,7 @@ msgstr "趋势"
 #: src/app/stats/AreaChart.tsx
 #: src/app/stats/DonutChart.tsx
 #: src/app/stats/RankChart.tsx
+#: src/app/stats/SplitBars.tsx
 msgid "轮次"
 msgstr "轮次"
 
@@ -444,7 +535,6 @@ msgid "输出"
 msgstr "输出"
 
 #: src/app/stats/LatencyChart.tsx
-#: src/app/stats/RankChart.tsx
 msgid "输出速度"
 msgstr "输出速度"
 
@@ -452,21 +542,29 @@ msgstr "输出速度"
 msgid "还没有可分配的用量"
 msgstr "还没有可分配的用量"
 
+#: src/app/stats/SplitBars.tsx
+msgid "还没有可拆解的 Token 数据"
+msgstr "还没有可拆解的 Token 数据"
+
 #: src/app/stats/StatsPage.tsx
 msgid "还没有可统计的会话。缺失的指标显示为「—」，不是 0。"
 msgstr "还没有可统计的会话。缺失的指标显示为「—」，不是 0。"
 
 #: src/app/stats/SplitBars.tsx
-msgid "还没有工具调用"
-msgstr "还没有工具调用"
-
-#: src/app/stats/SplitBars.tsx
-msgid "还没有已结束的轮次"
-msgstr "还没有已结束的轮次"
+msgid "还没有思考档位记录"
+msgstr "还没有思考档位记录"
 
 #: src/app/stats/RankChart.tsx
 msgid "还没有模型数据"
 msgstr "还没有模型数据"
+
+#: src/app/stats/SplitBars.tsx
+msgid "还没有轮次步数分布"
+msgstr "还没有轮次步数分布"
+
+#: src/app/stats/SplitBars.tsx
+msgid "还没有项目数据"
+msgstr "还没有项目数据"
 
 #: src/app/stats/RunsTable.tsx
 msgid "这个范围里没有轮次"
@@ -484,9 +582,9 @@ msgstr "这些模型没有这项测量。缺失不按 0 计入。"
 msgid "这段时间没有可绘制的用量"
 msgstr "这段时间没有可绘制的用量"
 
-#: src/app/stats/Heatmaps.tsx
-msgid "这段时间没有每日记录"
-msgstr "这段时间没有每日记录"
+#: src/app/stats/RankChart.tsx
+msgid "速度"
+msgstr "速度"
 
 #. placeholder {0}: windows.length
 #: src/app/stats/LatencyChart.tsx
@@ -508,12 +606,25 @@ msgid "重试"
 msgstr "重试"
 
 #: src/app/stats/AreaChart.tsx
+#: src/app/stats/DonutChart.tsx
 #: src/app/stats/FilterBar.tsx
 #: src/app/stats/RunsTable.tsx
 msgid "项目"
 msgstr "项目"
 
+#: src/app/stats/SplitBars.tsx
+msgid "项目分布"
+msgstr "项目分布"
+
+#: src/app/stats/SplitBars.tsx
+msgid "项目排序"
+msgstr "项目排序"
+
 #: src/app/stats/LatencyChart.tsx
 #: src/app/stats/RunsTable.tsx
 msgid "首字延迟"
 msgstr "首字延迟"
+
+#: src/app/stats/SplitBars.tsx
+msgid "高 (high)"
+msgstr "高 (high)"

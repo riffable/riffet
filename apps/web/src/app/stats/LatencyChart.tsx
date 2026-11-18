@@ -79,29 +79,29 @@ export function LatencyChart({ latency, kind, onKind }: { latency: StatsLatency 
               );
             })}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-2xs text-fg-4">
-            <span className="inline-flex items-center gap-3">
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1 text-2xs text-fg-4">
+            <span className="inline-flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-1"><span aria-hidden className="inline-block h-1.5 w-4 rounded-full bg-fg-4" />p50–p90</span>
               <span className="inline-flex items-center gap-1"><span aria-hidden className="inline-block h-3 w-px bg-fg-3" />p99</span>
+              {kind === 'speed' && windows.length > 0 && (
+                <Tip label={t`速度窗口：${windows.join(' · ')}`}>
+                  <span className="cursor-help"><Trans>速度窗口 {windows.length} 种</Trans></span>
+                </Tip>
+              )}
+              {latency && latency.rows.length > rows.length && (
+                <Tip label={t`这些模型没有这项测量。缺失不按 0 计入。`}>
+                  <span className="cursor-help"><Trans>另有 {unmeasured} 个模型未测量</Trans></span>
+                </Tip>
+              )}
             </span>
             <span className="tabular-nums">{format(0)} – {format(max)}</span>
           </div>
-          {kind === 'speed' && windows.length > 0 && (
-            <Tip label={t`速度窗口：${windows.join(' · ')}`}>
-              <p className="w-fit cursor-help text-2xs text-fg-4"><Trans>速度窗口 {windows.length} 种</Trans></p>
-            </Tip>
-          )}
           {active && activeSample && (
             <p className="truncate text-xs tabular-nums text-fg-3">
               <Trans>{active.label} · p50 {format(activeSample.p50)} · p90 {format(activeSample.p90)} · p99 {format(activeSample.p99)} · {activeSample.samples} 个样本</Trans>
             </p>
           )}
         </>
-      )}
-      {latency && latency.rows.length > rows.length && (
-        <Tip label={t`这些模型没有这项测量。缺失不按 0 计入。`}>
-          <p className="w-fit cursor-help text-2xs text-fg-4"><Trans>另有 {unmeasured} 个模型未测量</Trans></p>
-        </Tip>
       )}
     </ChartCard>
   );

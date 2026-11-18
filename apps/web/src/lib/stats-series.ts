@@ -1,9 +1,10 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { NativeBackendId, StatsBreakdownRow, StatsHeatmap, StatsKeyInfo, StatsPercentiles, StatsRunStates, StatsSeries, StatsSummary } from '@contracts';
+import type { NativeBackendId, StatsBreakdownRow, StatsHeatmap, StatsKeyInfo, StatsPercentiles, StatsRunStates, StatsSeries, StatsSummary, StatsTokens } from '@contracts';
 import { scaleLinear } from 'd3-scale';
 import { curveBumpX, curveMonotoneX, area, line, pie, arc } from 'd3-shape';
 import type { KpiFormat } from './stats-format';
+import type { RankMetric } from './stats-query';
 
 /** Shared sample count for consumers that explicitly need two arrays on one interpolation grid. */
 export const TWEEN_SAMPLES = 48;
@@ -458,9 +459,22 @@ export function buildKpis(summary: StatsSummary, series: StatsSeries): KpiModel[
   ];
 }
 
-export function sortBreakdown(rows: StatsBreakdownRow[], rank: 'tokens' | 'runs' | 'speed'): StatsBreakdownRow[] {
+export function rowCacheHitRate(tokens: StatsTokens | undefined): number | null {
+  if (!tokens || tokens.input == null || tokens.cacheRead == null) return null;
+  const total = tokens.input + tokens.cacheRead;
+  return total > 0 ? tokens.cacheRead / total : null;
+}
+
+export function rowTokensPerRun(row: StatsBreakdownRow): number | null {
+  if (row.count <= 0 || row.totalTokens <= 0) return null;
+  return row.totalTokens / row.count;
+}
+
+export function sortBreakdown(rows: StatsBreakdownRow[], rank: RankMetric): StatsBreakdownRow[] {
   const value = (row: StatsBreakdownRow) => {
     if (rank === 'runs') return row.count;
+    if (rank === 'avgTokens') return rowTokensPerRun(row) ?? Number.NEGATIVE_INFINITY;
+    if (rank === 'cache') return rowCacheHitRate(row.tokens) ?? Number.NEGATIVE_INFINITY;
     if (rank === 'speed') return row.outputTokensPerSecond?.p50 ?? Number.NEGATIVE_INFINITY;
     return row.totalTokens;
   };

@@ -10,7 +10,7 @@ import type { MetricsWindow, Run } from './run.js';
  * `includeEstimated`. A missing `from`/`to` means the last 30 days ending now.
  */
 export type StatsGranularity = 'hour' | 'day' | 'week' | 'month';
-export type StatsDimension = 'backend' | 'model' | 'profile' | 'project' | 'mode' | 'tool';
+export type StatsDimension = 'backend' | 'model' | 'profile' | 'project' | 'mode' | 'tool' | 'effort';
 export type StatsSplit = 'backend' | 'model' | 'project';
 export type StatsAgentKind = 'main' | 'subagent' | 'all';
 /** `totalTokens` is input + cache read + cache write + output, counting only the parts that were reported. */
@@ -71,15 +71,35 @@ export interface StatsHeatmap {
 }
 export interface StatsRunRow {
   runId: string; sessionId: string; sessionTitle: string; projectId: string; projectName: string;
-  backendId: NativeBackendId; model?: string; state: Run['state']; createdAt: string;
+  backendId: NativeBackendId; model?: string; rawModel?: string; effort?: string; state: Run['state']; createdAt: string;
   durationMs: number | null; ttftMs: number | null; tokens: StatsTokens; totalTokens: number; toolCalls: number;
 }
 export interface StatsRunsPage { rows: StatsRunRow[]; nextCursor?: string; }
+export interface StatsStepBucket {
+  key: '1' | '2-4' | '5-9' | '10+';
+  runs: number;
+  share: number;
+}
+export interface StatsAutonomy {
+  averageStepsPerRun: number | null;
+  stepsPerRun: StatsPercentiles | null;
+  runsPerSession: number | null;
+  stepBuckets: StatsStepBucket[];
+  mainTokens: number;
+  subagentTokens: number;
+  mainSteps: number;
+  subagentSteps: number;
+  subagentRuns: number;
+  subagentTypes: Array<{ key: string; count: number; totalTokens: number }>;
+}
 /** Everything the first paint needs, so a phone makes one request. */
 export interface StatsDashboard {
   filter: StatsFilter; generatedAt: string;
   summary: StatsSummary; series: StatsSeries;
   backends: StatsBreakdown; models: StatsBreakdown; tools: StatsBreakdown;
+  projects?: StatsBreakdown;
+  efforts?: StatsBreakdown;
+  autonomy?: StatsAutonomy;
   heatmap: StatsHeatmap;
   /** Choices for the filter bar, drawn from all recorded data regardless of the current filter. */
   options: { backends: StatsKeyInfo[]; models: StatsKeyInfo[]; projects: StatsKeyInfo[]; profiles: StatsKeyInfo[] };

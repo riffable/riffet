@@ -4,7 +4,7 @@ import { isNativeBackendId, type NativeBackendId, type StatsGranularity, type St
 import { formatDate } from './i18n/format';
 
 export type StatsRangePreset = 'today' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
-export type RankMetric = 'tokens' | 'runs' | 'speed';
+export type RankMetric = 'tokens' | 'runs' | 'avgTokens' | 'cache' | 'speed';
 export type LatencyMetric = 'ttft' | 'duration' | 'speed';
 
 export interface StatsUiState {
@@ -29,7 +29,7 @@ export interface StatsUiState {
 const PRESETS = new Set<StatsRangePreset>(['today', '7d', '30d', '90d', '1y', 'all', 'custom']);
 const METRICS = new Set<StatsSeriesMetric>(['totalTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'runs', 'sessions', 'durationMs']);
 const SPLITS = new Set<StatsSplit>(['backend', 'model', 'project']);
-const RANKS = new Set<RankMetric>(['tokens', 'runs', 'speed']);
+const RANKS = new Set<RankMetric>(['tokens', 'runs', 'avgTokens', 'cache', 'speed']);
 const LATENCIES = new Set<LatencyMetric>(['ttft', 'duration', 'speed']);
 
 /** A missing `from` on the server means the last 30 days, so "全部" still sends an explicit start. */

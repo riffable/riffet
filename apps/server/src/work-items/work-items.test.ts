@@ -160,20 +160,30 @@ describe('work items', () => {
   it('records what held the owner up, from the conversations\' own state changes', async () => {
     const { store, call, project, workItems } = await boot();
     const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', title: 'Work' });
+    const parallel = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', title: 'Parallel' });
+    const idleChat = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', title: 'Idle chat' });
     const task = workItems.create({ title: 'Work', projectId: project.id });
     workItems.attachSession(session.id, task.id);
-    const at = (iso: string, state: Session['state']) => { vi.setSystemTime(new Date(iso)); store.updateSession(session.id, { state }); };
+    const at = (iso: string, state: Session['state'], id = session.id) => { vi.setSystemTime(new Date(iso)); store.updateSession(id, { state }); };
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
       at('2026-11-10T02:00:00Z', 'running');
       at('2026-11-10T02:01:00Z', 'waiting'); // an approval
       at('2026-11-10T02:03:00Z', 'running');
       at('2026-11-10T02:10:00Z', 'idle'); // the turn ends
+      // A parallel conversation stopped during [02:20, 02:35] overlaps [02:10, 02:40] and must not double-count.
+      at('2026-11-10T02:15:00Z', 'running', parallel.id);
+      at('2026-11-10T02:20:00Z', 'idle', parallel.id);
+      at('2026-11-10T02:35:00Z', 'running', parallel.id);
       at('2026-11-10T02:40:00Z', 'running'); // the owner comes back half an hour later
       at('2026-11-10T02:50:00Z', 'idle');
       vi.setSystemTime(new Date('2026-11-10T03:00:00Z'));
       workItems.patch(task.id, { status: 'done' }); // the owner settles it ten minutes later
       at('2026-11-13T09:00:00Z', 'running'); // coming back days later is not a wait
+      // An unarchived conversation resumed 20 hours later is an idle hiatus, not a 20-hour wait.
+      at('2026-11-10T04:00:00Z', 'running', idleChat.id);
+      at('2026-11-10T04:05:00Z', 'idle', idleChat.id);
+      at('2026-11-11T00:05:00Z', 'running', idleChat.id);
     } finally { vi.useRealTimers(); }
     const report = (await call('GET', '/api/work-items/north-star?from=2026-11-10T00:00:00Z&to=2026-11-11T00:00:00Z&tz=UTC')).json() as { days: Array<{ date: string; decisions: number; waitMs: number }> };
     expect(report.days.find(day => day.date === '2026-11-10')).toMatchObject({ decisions: 1, waitMs: 2 * 60_000 + 30 * 60_000 + 10 * 60_000 });

@@ -101,7 +101,7 @@ export function useRovingIndex(length: number) {
 
 export function ChartCard({ title, actions, children, className }: { title: string; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cn('flex min-w-0 flex-col gap-3 rounded-xl border border-line bg-elevated p-4 max-md:p-3.5', className)}>
+    <section className={cn('flex h-full min-w-0 flex-col gap-3 rounded-xl border border-line bg-elevated p-4 max-md:p-3.5', className)}>
       <div className="flex min-h-6 flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 className="text-sm font-medium leading-5 text-fg">{title}</h2>
         {actions}

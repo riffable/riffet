@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { StatsBreakdown } from '@contracts';
+import { Segmented } from '@/components/ui/controls';
 import { formatCount, formatPercent, formatTokens } from '@/lib/stats-format';
 import { donutBasis, donutPath, donutSlices, seriesColors, seriesOpacity, type DonutSlice } from '@/lib/stats-series';
 import { ChartCard, ChartTooltip, EmptyNote, SeriesLegend, useHighlight, useReducedMotion, useRovingIndex } from './chart-shared';
@@ -72,12 +73,21 @@ function useRampedSlices(slices: DonutSlice[], reduced: boolean): DonutSlice[] {
   return shown;
 }
 
-export function DonutChart({ breakdown }: { breakdown: StatsBreakdown }) {
+type DonutDimension = 'backend' | 'project' | 'model';
+
+export function DonutChart({ breakdown, projects, models }: { breakdown: StatsBreakdown; projects?: StatsBreakdown; models?: StatsBreakdown }) {
   const { t } = useLingui();
+  const [dimension, setDimension] = useState<DonutDimension>('backend');
+  const activeBreakdown = dimension === 'project' && projects
+    ? projects
+    : dimension === 'model' && models
+      ? models
+      : breakdown;
   const reduced = useReducedMotion();
   const { highlight, setHighlight } = useHighlight();
-  const basis = donutBasis(breakdown.rows);
-  const slices = donutSlices(breakdown.rows.map((row) => ({ ...row, value: basis === 'tokens' ? row.totalTokens : row.count })));
+  const basis = donutBasis(activeBreakdown.rows);
+  const topRows = activeBreakdown.rows.slice(0, 8);
+  const slices = donutSlices(topRows.map((row) => ({ ...row, value: basis === 'tokens' ? row.totalTokens : row.count })));
   const ramped = useRampedSlices(slices, reduced);
   const { index, setIndex, onKeyDown } = useRovingIndex(slices.length);
   const [hover, setHover] = useState<string | null>(null);
@@ -87,9 +97,19 @@ export function DonutChart({ breakdown }: { breakdown: StatsBreakdown }) {
   const legend = slices.map((slice) => ({ ...slice, color: palette.get(slice.key)!, detail: formatPercent(slice.share) }));
   const size = 220;
   const center = size / 2;
+  const hasMultipleDimensions = Boolean(projects || models);
+  const options: Array<{ value: DonutDimension; label: string }> = [
+    { value: 'backend', label: 'Agent' },
+    ...(projects ? [{ value: 'project' as const, label: t`项目` }] : []),
+    ...(models ? [{ value: 'model' as const, label: t`模型` }] : []),
+  ];
 
   return (
-    <ChartCard title={t`Agent 占比`} className="justify-between">
+    <ChartCard
+      title={t`用量占比`}
+      actions={hasMultipleDimensions ? <Segmented size="xs" ariaLabel={t`占比维度`} value={dimension} options={options} onChange={setDimension} /> : undefined}
+      className="justify-between"
+    >
       {slices.length === 0 ? <EmptyNote><Trans>还没有可分配的用量</Trans></EmptyNote> : (
         <div className="flex flex-1 flex-col items-center justify-center gap-4">
           <div className="relative">

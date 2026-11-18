@@ -43,7 +43,7 @@ const SeriesQuery = z.object({
   granularity: z.enum(['hour', 'day', 'week', 'month']).optional(),
   split: z.enum(['backend', 'model', 'project']).default('backend'),
 });
-const BreakdownQuery = z.object({ dimension: z.enum(['backend', 'model', 'profile', 'project', 'mode', 'tool']).default('backend') });
+const BreakdownQuery = z.object({ dimension: z.enum(['backend', 'model', 'profile', 'project', 'mode', 'tool', 'effort']).default('backend') });
 const LatencyQuery = z.object({ dimension: z.enum(['backend', 'model']).default('model') });
 const RunsQuery = z.object({ cursor: z.string().max(500).optional(), limit: z.coerce.number().int().min(1).max(200).default(50) });
 const ExportQuery = z.object({ format: z.enum(['csv', 'json']).default('csv') });

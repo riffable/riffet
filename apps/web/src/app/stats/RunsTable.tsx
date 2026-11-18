@@ -120,7 +120,9 @@ export function RunsTable({ rows, page, pageSize, hasNext, loading, error, onPag
                     </td>
                     <td className={cn(CELL_CLASS, 'max-w-36 truncate text-fg-2')}>{row.projectName}</td>
                     <td className={CELL_CLASS}><AgentLabel backendId={row.backendId} /></td>
-                    <td className={cn(CELL_CLASS, 'max-w-36 truncate text-fg-2')}>{row.model || <Unavailable />}</td>
+                    <td className={cn(CELL_CLASS, 'max-w-36 truncate text-fg-2')}>
+                      {row.model ? (row.rawModel ? <Tip label={row.rawModel}><span className="cursor-default">{row.model}</span></Tip> : row.model) : <Unavailable />}
+                    </td>
                     <td className={cn(CELL_CLASS, 'whitespace-nowrap text-fg-2')}>{runStateLabel(row.state)}</td>
                     <td className={cn(CELL_CLASS, 'text-right tabular-nums')}>{tokens.unavailable ? <Unavailable /> : <span className="inline-flex items-center gap-1">{tokens.text}{tokens.estimated && <EstimatedMark />}</span>}</td>
                     <td className={cn(CELL_CLASS, 'text-right tabular-nums')}>{formatDuration(row.durationMs)}</td>

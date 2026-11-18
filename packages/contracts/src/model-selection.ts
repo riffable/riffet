@@ -229,6 +229,54 @@ export function splitModelId(id: string): { base: string; slots: NativeSlots } {
   return { base, slots };
 }
 
+const STATS_GATEWAY_PREFIX = /^(?:dsh|codex|claude|cursor|droid|traex|pi|chat):[^:]+:(.+)$/i;
+
+export interface NormalizedStatsModel {
+  model: string | null;
+  effort: string | null;
+  fast: boolean;
+  thinking: boolean;
+}
+
+/**
+ * Normalizes a persisted or reported model string into its base family model and thinking/speed
+ * dimensions, stripping `[k=v,…]` selectors, `[1m]`-style context tags, `<backend>:<profile>:`
+ * prefixes, and `-xhigh`/`-fast`/`-thinking` variant suffixes.
+ */
+export function normalizeStatsModelSelection(value?: string | null): NormalizedStatsModel {
+  const raw = value?.trim() ?? '';
+  if (!raw) return { model: null, effort: null, fast: false, thinking: false };
+  const { model: withoutParams, params } = parseSelection(raw);
+  let cleaned = withoutParams.replace(/\[[^\[\]]*\]$/g, '').trim();
+  const gateway = STATS_GATEWAY_PREFIX.exec(cleaned);
+  if (gateway?.[1]) cleaned = gateway[1].trim();
+  if (cleaned.includes('/')) cleaned = cleaned.slice(cleaned.lastIndexOf('/') + 1).trim();
+  const { base, slots } = splitModelId(cleaned.toLowerCase());
+  const rawEffort = (params.effort ?? params.reasoning_effort ?? params.reasoning ?? slots.effort ?? '').trim().toLowerCase();
+  const normalizedEffort = rawEffort === 'extra-high' || rawEffort === 'very-high' || rawEffort === 'very_high'
+    ? 'xhigh'
+    : rawEffort === 'default' || rawEffort === ''
+      ? null
+      : rawEffort;
+  const thinkingFlag = params.thinking !== undefined ? params.thinking === 'true' : slots.thinking;
+  const effort = normalizedEffort ?? (thinkingFlag ? 'thinking' : null);
+  const fast = params.fast !== undefined ? params.fast === 'true' : slots.fast;
+  const thinking = thinkingFlag || (effort !== null && effort !== 'none');
+  return { model: base || null, effort, fast, thinking };
+}
+
+export function normalizeStatsModel(value?: string | null): string | null {
+  return normalizeStatsModelSelection(value).model;
+}
+
+export function resolveStatsEffort(...candidates: Array<string | null | undefined>): string | null {
+  for (const candidate of candidates) {
+    const { effort } = normalizeStatsModelSelection(candidate);
+    if (effort) return effort;
+  }
+  return null;
+}
+
 /**
  * Maps a persisted selection onto the catalog's family model and its config options: an exact
  * family id (with legacy effort keys renamed), a flat native variant id such as `…-high-fast`, or an

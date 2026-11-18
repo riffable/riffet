@@ -15,20 +15,21 @@ import { AreaChart } from './AreaChart';
 import { HighlightProvider } from './chart-shared';
 import { DonutChart } from './DonutChart';
 import { FilterBar } from './FilterBar';
-import { CalendarHeatmap, WeekHeatmap } from './Heatmaps';
+import { WeekHeatmap } from './Heatmaps';
 import { KpiCards } from './KpiCards';
 import { LatencyChart } from './LatencyChart';
 import { NorthStar } from './NorthStar';
 import { RankChart } from './RankChart';
 import { RunsTable } from './RunsTable';
-import { ReliabilityChart, ToolChart } from './SplitBars';
+import { AutonomyChart, EffortChart, ProjectChart, TokenCompositionChart } from './SplitBars';
 import { useStatsData } from './use-stats-data';
 import { PageScaffold } from '../PageScaffold';
 
 /** Mirrors the real grid, including card heights, so the page does not jump when data lands. */
 function StatsSkeleton() {
   return (
-    <div className="flex flex-col gap-3" aria-hidden>
+    <div className="flex flex-col gap-4" aria-hidden>
+      <Skeleton className="h-[76px] rounded-2xl" />
       <Skeleton className="h-[228px] rounded-2xl sm:h-[132px]" />
       <Skeleton className="h-[72px] rounded-lg sm:h-[48px]" />
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
@@ -65,11 +66,11 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
   };
   const empty = dashboard && dashboard.summary.current.runs === 0 && dashboard.summary.current.sessions === 0 && dashboard.series.points.length === 0;
   const period = windowLabel(state, new Date());
-  // Read again whenever the dashboard is: the same window, and fresh when it refreshes.
+  // Read again whenever the filter window changes.
   const filterKey = statsFilterKey(state);
   const northWindow = useMemo(() => resolveWindow(state, new Date()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [filterKey, dashboard?.generatedAt]);
+    [filterKey]);
   const compare = previousWindowLabel(state, new Date());
 
   return (
@@ -114,18 +115,21 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
               onSplit={(split) => onStateChange({ ...state, split })}
               onBrush={(from, to) => onStateChange({ ...state, preset: 'custom', from, to })}
             />
-            <DonutChart breakdown={dashboard.backends} />
+            <DonutChart breakdown={dashboard.backends} projects={dashboard.projects} models={dashboard.models} />
           </div>
-          <CalendarHeatmap heatmap={dashboard.heatmap} />
-          <div className="grid items-start gap-3 lg:grid-cols-2">
+          <div className="grid items-stretch gap-3 lg:grid-cols-2">
             <RankChart breakdown={dashboard.models} rank={state.rank} onRank={(rank) => onStateChange({ ...state, rank })} />
             <LatencyChart latency={data.latency} kind={state.latency} onKind={(latency) => onStateChange({ ...state, latency })} />
           </div>
-          <div className="grid items-start gap-3 lg:grid-cols-2">
-            <WeekHeatmap heatmap={dashboard.heatmap} />
-            <ReliabilityChart breakdown={dashboard.backends} />
+          <div className="grid items-stretch gap-3 lg:grid-cols-2">
+            <EffortChart efforts={dashboard.efforts} summary={dashboard.summary} />
+            <TokenCompositionChart summary={dashboard.summary} models={dashboard.models} />
           </div>
-          <ToolChart breakdown={dashboard.tools} />
+          <div className="grid items-stretch gap-3 lg:grid-cols-2">
+            <ProjectChart breakdown={dashboard.projects} />
+            <AutonomyChart autonomy={dashboard.autonomy} summary={dashboard.summary} />
+          </div>
+          <WeekHeatmap heatmap={dashboard.heatmap} />
           <RunsTable
             rows={data.runs}
             page={data.runsPage}

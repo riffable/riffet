@@ -1,10 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type {
-  MetricsWindow, NativeBackendId, StatsAgentKind, StatsBreakdown, StatsBreakdownRow, StatsDashboard, StatsDimension, StatsFilter,
+  MetricsWindow, NativeBackendId, StatsAgentKind, StatsAutonomy, StatsBreakdown, StatsBreakdownRow, StatsDashboard, StatsDimension, StatsFilter,
   StatsGranularity, StatsHeatmap, StatsKeyInfo, StatsLatency, StatsLatencyRow, StatsPercentiles, StatsRunRow, StatsRunStates,
-  StatsRunsPage, StatsSeries, StatsSeriesMetric, StatsSplit, StatsSummary, StatsTokens, StatsTotals,
+  StatsRunsPage, StatsSeries, StatsSeriesMetric, StatsSplit, StatsStepBucket, StatsSummary, StatsTokens, StatsTotals,
 } from '../../../../packages/contracts/src/index.js';
-import { isNativeBackendId, isPluginAgentId } from '../../../../packages/contracts/src/index.js';
+import { isNativeBackendId, isPluginAgentId, normalizeStatsModel, resolveStatsEffort } from '../../../../packages/contracts/src/index.js';
 import { autoGranularity, boundedGranularity, bucketEdges, bucketIndex, localDate, localParts, previousDate } from './buckets.js';
 import type { RunFactRow, ToolCallRow, UsageStepRow } from './schema.js';
 
@@ -36,8 +36,18 @@ const MAX_PLAUSIBLE_TOKENS_PER_SECOND = 1_000;
 const SERIES_KEYS = 8;
 
 const BACKEND_LABELS: Record<string, string> = { codex: 'Codex', claude: 'Claude Code', dsh: 'DeepSeek Harness', droid: 'Droid', traex: 'TRAE CLI', chat: '快速对话' };
+const EFFORT_LABELS: Record<string, string> = {
+  max: '最大 (max)',
+  xhigh: '超高 (xhigh)',
+  high: '高 (high)',
+  medium: '中 (medium)',
+  low: '低 (low)',
+  minimal: '极低 (minimal)',
+  thinking: '思考 (默认)',
+  none: '未开启思考',
+};
 
-type StepRow = UsageStepRow & { run_mode: string | null };
+type StepRow = UsageStepRow & { run_mode: string | null; run_model_resolved: string | null; run_model_requested: string | null };
 type ToolRow = ToolCallRow & { project_id: string | null };
 type Dimension = Exclude<StatsDimension, 'tool'>;
 
@@ -115,17 +125,19 @@ function runStates(rows: readonly RunFactRow[]): StatsRunStates {
 
 const STEP_KEY: Record<Dimension, (row: StepRow) => string> = {
   backend: row => row.backend_id,
-  model: row => row.model ?? UNKNOWN_MODEL,
+  model: row => normalizeStatsModel(row.model ?? row.requested_model) ?? UNKNOWN_MODEL,
   profile: row => row.profile_id ?? DEFAULT_PROFILE,
   project: row => row.project_id,
   mode: row => row.run_mode ?? 'unknown',
+  effort: row => resolveStatsEffort(row.model, row.requested_model, row.run_model_resolved, row.run_model_requested) ?? ((row.reasoning_tokens ?? 0) > 0 ? 'thinking' : 'none'),
 };
 const RUN_KEY: Record<Dimension, (row: RunFactRow) => string> = {
   backend: row => row.backend_id,
-  model: row => row.model_resolved ?? row.model_requested ?? UNKNOWN_MODEL,
+  model: row => normalizeStatsModel(row.model_resolved ?? row.model_requested) ?? UNKNOWN_MODEL,
   profile: row => row.profile_id ?? DEFAULT_PROFILE,
   project: row => row.project_id,
   mode: row => row.mode ?? 'unknown',
+  effort: row => resolveStatsEffort(row.model_resolved, row.model_requested) ?? ((row.reasoning_tokens ?? 0) > 0 ? 'thinking' : 'none'),
 };
 
 function group<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
@@ -163,6 +175,9 @@ export class StatsQuery {
       backends: this.breakdown(filter, 'backend'),
       models: this.breakdown(filter, 'model'),
       tools: this.breakdown(filter, 'tool'),
+      projects: this.breakdown(filter, 'project'),
+      efforts: this.breakdown(filter, 'effort'),
+      autonomy: this.autonomy(filter),
       heatmap: this.heatmap(filter),
       options: this.options(filter.hiddenBackends, filter.excludeTaskWorkspaces, filter.hidePluginAgents),
     };
@@ -272,17 +287,88 @@ export class StatsQuery {
       const keySteps = steps.get(key) ?? [];
       const tokens = stepTokens(keySteps);
       const backends = new Set([...keyRuns.map(row => row.backend_id), ...keySteps.map(row => row.backend_id)]);
+      const count = dimension === 'effort' && keyRuns.length === 0 ? keySteps.length : keyRuns.length;
       return {
         ...this.keyInfo(dimension, key, backends),
-        count: keyRuns.length, sessions: new Set(keyRuns.map(row => row.session_id)).size, states: runStates(keyRuns),
+        count, sessions: new Set([...keyRuns.map(row => row.session_id), ...keySteps.map(row => row.session_id)]).size, states: runStates(keyRuns),
         tokens, totalTokens: totalOf(tokens), share: 0,
         durationMs: percentiles(present(keyRuns.map(row => row.duration_ms))),
         outputTokensPerSecond: percentiles(this.speeds(keyRuns, filter.includeEstimated)),
       } satisfies StatsBreakdownRow;
     });
-    const total = built.reduce((acc, row) => acc + row.totalTokens, 0);
-    for (const row of built) row.share = total ? row.totalTokens / total : 0;
+    const totalTokens = built.reduce((acc, row) => acc + row.totalTokens, 0);
+    const totalCount = built.reduce((acc, row) => acc + row.count, 0);
+    for (const row of built) {
+      row.share = dimension === 'effort'
+        ? (totalCount ? row.count / totalCount : totalTokens ? row.totalTokens / totalTokens : 0)
+        : (totalTokens ? row.totalTokens / totalTokens : totalCount ? row.count / totalCount : 0);
+    }
+    if (dimension === 'effort') {
+      return { dimension, rows: built.sort((a, b) => b.count - a.count || b.totalTokens - a.totalTokens || a.key.localeCompare(b.key)) };
+    }
     return { dimension, rows: built.sort((a, b) => b.totalTokens - a.totalTokens || b.count - a.count || a.key.localeCompare(b.key)) };
+  }
+
+  autonomy(filter: ResolvedFilter): StatsAutonomy {
+    const runs = this.runs(filter, filter.from, filter.to);
+    const steps = this.steps(filter, filter.from, filter.to);
+    const sessions = new Set(runs.map(row => row.session_id)).size;
+    const runsPerSession = sessions > 0 ? runs.length / sessions : null;
+    const stepCounts = runs.map(row => row.steps).filter(count => count > 0);
+    const averageStepsPerRun = stepCounts.length > 0
+      ? stepCounts.reduce((sum, count) => sum + count, 0) / stepCounts.length
+      : null;
+    const stepsPerRun = percentiles(stepCounts);
+    const bucketCounts = { '1': 0, '2-4': 0, '5-9': 0, '10+': 0 };
+    for (const count of stepCounts) {
+      if (count === 1) bucketCounts['1'] += 1;
+      else if (count <= 4) bucketCounts['2-4'] += 1;
+      else if (count <= 9) bucketCounts['5-9'] += 1;
+      else bucketCounts['10+'] += 1;
+    }
+    const measuredRuns = stepCounts.length;
+    const stepBuckets: StatsStepBucket[] = (['1', '2-4', '5-9', '10+'] as const).map(key => ({
+      key,
+      runs: bucketCounts[key],
+      share: measuredRuns > 0 ? bucketCounts[key] / measuredRuns : 0,
+    }));
+    let mainTokens = 0;
+    let subagentTokens = 0;
+    let mainSteps = 0;
+    let subagentSteps = 0;
+    const subTypes = new Map<string, { count: number; totalTokens: number }>();
+    for (const step of steps) {
+      const tokens = rowTotal(step);
+      if (step.agent_kind === 'subagent') {
+        subagentTokens += tokens;
+        subagentSteps += 1;
+        const typeKey = step.subagent_type || 'subagent';
+        const entry = subTypes.get(typeKey) ?? { count: 0, totalTokens: 0 };
+        entry.count += 1;
+        entry.totalTokens += tokens;
+        subTypes.set(typeKey, entry);
+      } else {
+        mainTokens += tokens;
+        if (step.observation_id === null) mainSteps += 1;
+      }
+    }
+    const subagentRuns = runs.filter(row => row.subagents > 0).length;
+    const subagentTypes = [...subTypes.entries()]
+      .map(([key, value]) => ({ key, count: value.count, totalTokens: value.totalTokens }))
+      .sort((a, b) => b.count - a.count || b.totalTokens - a.totalTokens)
+      .slice(0, 6);
+    return {
+      averageStepsPerRun,
+      stepsPerRun,
+      runsPerSession,
+      stepBuckets,
+      mainTokens,
+      subagentTokens,
+      mainSteps,
+      subagentSteps,
+      subagentRuns,
+      subagentTypes,
+    };
   }
 
   latency(filter: ResolvedFilter, dimension: 'backend' | 'model'): StatsLatency {
@@ -343,7 +429,8 @@ export class StatsQuery {
     const collect = (dimension: Dimension, rows: Array<{ key: string | null; backend_id: string }>, nullKey: string) => {
       const backends = new Map<string, Set<string>>();
       for (const row of rows) {
-        const key = row.key ?? nullKey;
+        const raw = row.key ?? nullKey;
+        const key = dimension === 'model' && raw !== nullKey ? (normalizeStatsModel(raw) ?? nullKey) : raw;
         let set = backends.get(key);
         if (!set) backends.set(key, set = new Set());
         set.add(row.backend_id);
@@ -405,12 +492,14 @@ export class StatsQuery {
   private speeds(runs: readonly RunFactRow[], includeEstimated: boolean): number[] {
     const result: number[] = [];
     for (const row of runs) {
-      if (row.output_tokens === null) continue;
+      if (row.output_tokens === null || row.output_tokens <= 0) continue;
       if (!includeEstimated && (row.speed_estimated_output_tokens ?? row.estimated_output_tokens) > 0) continue;
       const window = row.measured_ms;
       if (!window || window < MIN_SPEED_WINDOW_MS) continue;
-      const speed = (row.speed_output_tokens ?? row.output_tokens) / window * 1000;
-      if (speed <= MAX_PLAUSIBLE_TOKENS_PER_SECOND) result.push(speed);
+      const tokens = row.speed_output_tokens ?? row.output_tokens;
+      if (tokens <= 0) continue;
+      const speed = tokens / window * 1000;
+      if (speed > 0 && speed <= MAX_PLAUSIBLE_TOKENS_PER_SECOND) result.push(speed);
     }
     return result;
   }
@@ -428,12 +517,12 @@ export class StatsQuery {
 
   private steps(filter: ResolvedFilter, from: number, to: number): StepRow[] {
     return this.cached(`steps:${from}:${to}`, () => {
-      const where = this.conditions(filter, 'u.backend_id', 'u.model', 'u.project_id', 'u.profile_id');
+      const where = this.conditions(filter, 'u.backend_id', 'COALESCE(u.model,u.requested_model)', 'u.project_id', 'u.profile_id');
       const extra = [
         filter.agentKind === 'all' ? '' : 'AND u.agent_kind=?',
         filter.includeEstimated ? '' : "AND u.token_source<>'estimated'",
       ].join(' ');
-      return this.db.prepare(`SELECT u.*, r.mode AS run_mode FROM usage_steps u LEFT JOIN sessions s ON s.id=u.session_id LEFT JOIN run_facts r ON r.run_id=u.run_id
+      return this.db.prepare(`SELECT u.*, r.mode AS run_mode, r.model_resolved AS run_model_resolved, r.model_requested AS run_model_requested FROM usage_steps u LEFT JOIN sessions s ON s.id=u.session_id LEFT JOIN run_facts r ON r.run_id=u.run_id
         WHERE u.at>=? AND u.at<? AND u.suppressed_by IS NULL ${where.sql} ${extra}`)
         .all(from, to, ...where.parameters, ...(filter.agentKind === 'all' ? [] : [filter.agentKind])) as unknown as StepRow[];
     });
@@ -456,6 +545,23 @@ export class StatsQuery {
     });
   }
 
+  private expandModels(models: readonly string[]): string[] {
+    if (!models.length) return [];
+    const wanted = new Set(models.map(item => item === UNKNOWN_MODEL ? UNKNOWN_MODEL : (normalizeStatsModel(item) ?? item)));
+    const rawModels = this.cached('raw-models', () => (
+      this.db.prepare(`SELECT model AS key FROM usage_steps WHERE model IS NOT NULL
+        UNION SELECT requested_model AS key FROM usage_steps WHERE requested_model IS NOT NULL
+        UNION SELECT COALESCE(model_resolved,model_requested) AS key FROM run_facts WHERE COALESCE(model_resolved,model_requested) IS NOT NULL`)
+        .all() as Array<{ key: string }>
+    ).map(row => row.key));
+    const expanded = new Set<string>(models);
+    for (const raw of rawModels) {
+      const normalized = normalizeStatsModel(raw) ?? raw;
+      if (wanted.has(normalized) || wanted.has(raw)) expanded.add(raw);
+    }
+    return [...expanded];
+  }
+
   /** SQL for the dimension filters and the archive switch. Expects `sessions` joined as `s`. */
   private conditions(filter: ResolvedFilter, backend: string, model: string, project: string, profile: string): { sql: string; parameters: string[] } {
     const clauses: string[] = [];
@@ -471,7 +577,7 @@ export class StatsQuery {
     add(backend, filter.backends);
     if (filter.hiddenBackends?.length) { clauses.push(`${backend} NOT IN (${filter.hiddenBackends.map(() => '?').join(',')})`); parameters.push(...filter.hiddenBackends); }
     if (filter.hidePluginAgents) clauses.push(`${backend} NOT LIKE '%.%'`);
-    add(model, filter.models, UNKNOWN_MODEL);
+    add(model, this.expandModels(filter.models), UNKNOWN_MODEL);
     add(project, filter.projects);
     if (filter.excludeTaskWorkspaces) clauses.push(`(${project} IS NULL OR ${project} NOT IN (SELECT id FROM projects WHERE json_extract(json,'$.system')='task-workspace'))`);
     add(profile, filter.profiles, DEFAULT_PROFILE);
@@ -489,6 +595,7 @@ export class StatsQuery {
       case 'profile': label = key === DEFAULT_PROFILE ? '默认' : (only ? this.labels.profileLabel(only, key) : undefined) ?? key; break;
       case 'project': label = this.labels.projectName(key) ?? key; break;
       case 'mode': label = key === 'unknown' ? '未知' : key; break;
+      case 'effort': label = EFFORT_LABELS[key] ?? key; break;
       case 'tool': label = key; break;
     }
     return { key, label, ...(backendId && isNativeBackendId(backendId) ? { backendId } : {}) };
@@ -496,13 +603,17 @@ export class StatsQuery {
 
   private runRow(row: RunFactRow & { session_title: string | null }): StatsRunRow {
     const tokens = runTokens([row]);
-    const model = row.model_resolved ?? row.model_requested;
+    const rawModel = row.model_resolved ?? row.model_requested ?? undefined;
+    const model = normalizeStatsModel(rawModel) ?? rawModel;
+    const effort = resolveStatsEffort(row.model_resolved, row.model_requested) ?? undefined;
     return {
       runId: row.run_id, sessionId: row.session_id, sessionTitle: row.session_title ?? '',
       projectId: row.project_id, projectName: this.labels.projectName(row.project_id) ?? '',
       // Stored ids are Agent ids, built-in or a plugin's; one this build has no provider for stays as it was stored, never another Agent's.
       backendId: row.backend_id as NativeBackendId,
       ...(model ? { model } : {}),
+      ...(rawModel && rawModel !== model ? { rawModel } : {}),
+      ...(effort ? { effort } : {}),
       state: row.state, createdAt: new Date(row.created_at).toISOString(),
       durationMs: row.duration_ms, ttftMs: row.ttft_ms, tokens, totalTokens: totalOf(tokens), toolCalls: row.tool_calls,
     };

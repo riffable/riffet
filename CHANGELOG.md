@@ -30,6 +30,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Usage statistics now group models by their base family name across rankings, latency, trends, filters, and the runs table instead of splitting variants by `effort`, `fast`, or `context`, and add thinking effort distribution, token composition and per-model cache hit rates, project distribution, autonomy and sub-agent share, and per-run token / cache sorting on the model ranking. Daily wait time excludes multi-hour idle gaps and merges overlapping waits across parallel sessions, and the top pending/wait card holds its height while loading.
 - Ask the personal assistant which tasks need you, why a plugin is unavailable, or what a restart would interrupt. It can watch a task for a status change, adjust supported preferences on an authorized Riffet client and edit a shared custom theme. Changing the default Agent, provider or model requires a separate confirmation from the owner.
 
 - `@` session references work in Cursor, TRAE CLI, Droid, pi and DeepSeek Harness conversations, in addition to Claude Code, Codex and Antigravity.

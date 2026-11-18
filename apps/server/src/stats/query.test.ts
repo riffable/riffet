@@ -97,6 +97,36 @@ describe('StatsQuery', () => {
     expect(rows.map(row => [row.key, row.label, row.count, row.share, row.backendId])).toEqual([['opus', 'opus', 1, 0.75, 'claude'], ['__unknown__', '未知模型', 0, 0.25, 'claude']]);
   });
 
+  it('normalizes model parameters and suffixes while aggregating thinking effort separately', () => {
+    const { step, fact, query } = seed();
+    fact({ run: 'r1', at: T0 + 10, backend: 'codex', model: 'gpt-6.1-sol[effort=high,fast=true]', ttft: 100, duration: 1000 });
+    fact({ run: 'r2', at: T0 + 20, backend: 'codex', model: 'GPT-6.1-Sol[effort=xhigh,fast=false]', ttft: 300, duration: 3000 });
+    fact({ run: 'r3', at: T0 + 30, backend: 'claude', model: 'passthrough/claude-opus-5-5[context=default,effort=high,fast=false]', ttft: 200, duration: 2000 });
+    step({ key: 's1', run: 'r1', at: T0 + 10, backend: 'codex', model: 'gpt-6.1-sol[effort=high,fast=true]', input: 100, output: 50 });
+    step({ key: 's2', run: 'r2', at: T0 + 20, backend: 'codex', model: 'gpt-6.1-sol[effort=xhigh,fast=false]', input: 200, output: 150 });
+    step({ key: 's3', run: 'r3', at: T0 + 30, backend: 'claude', model: 'claude-opus-5-5', input: 500, output: 500 });
+
+    const models = query.breakdown(filter(), 'model').rows;
+    expect(models.map(row => [row.key, row.count, row.totalTokens])).toEqual([
+      ['claude-opus-5-5', 1, 1000],
+      ['gpt-6.1-sol', 2, 500],
+    ]);
+    const latency = query.latency(filter(), 'model').rows;
+    expect(latency.map(row => [row.key, row.ttftMs?.p50, row.ttftMs?.samples])).toEqual([
+      ['gpt-6.1-sol', 200, 2],
+      ['claude-opus-5-5', 200, 1],
+    ]);
+    expect(query.options().models.map(item => item.key)).toEqual(['claude-opus-5-5', 'gpt-6.1-sol']);
+    const filteredQuery = new StatsQuery(query['db'], { projectName: () => undefined, profileLabel: () => undefined });
+    expect(filteredQuery.summary(filter({ models: ['gpt-6.1-sol'] })).current).toMatchObject({ runs: 2, totalTokens: 500 });
+
+    const efforts = query.breakdown(filter(), 'effort').rows;
+    expect(efforts.map(row => [row.key, row.count, row.totalTokens])).toEqual([
+      ['high', 2, 1150],
+      ['xhigh', 1, 350],
+    ]);
+  });
+
   it('fills every calendar day in the window and counts runs by local weekday and hour', () => {
     const { fact, query } = seed();
     fact({ run: 'r1', at: T0 + 2 * DAY + 3 * 3_600_000 });

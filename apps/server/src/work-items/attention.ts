@@ -6,6 +6,28 @@ const ACTIVE: ReadonlySet<Session['state']> = new Set(['starting', 'running', 'c
 const STOPPED: ReadonlySet<Session['state']> = new Set(['idle', 'failed', 'interrupted']);
 const DAY_MS = 86_400_000;
 const MAX_DAYS = 366;
+/** Returning to an idle conversation hours or days later is a new work session, not a continuous wait. */
+const MAX_STOPPED_WAIT_MS = 2 * 3_600_000;
+const MAX_DECISION_WAIT_MS = 8 * 3_600_000;
+
+function mergedDuration(intervals: ReadonlyArray< readonly [number, number]>): number {
+  if (!intervals.length) return 0;
+  const sorted = [...intervals].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  let total = 0;
+  let [curStart, curEnd] = sorted[0]!;
+  for (let i = 1; i < sorted.length; i += 1) {
+    const [nextStart, nextEnd] = sorted[i]!;
+    if (nextStart <= curEnd) {
+      if (nextEnd > curEnd) curEnd = nextEnd;
+    } else {
+      total += curEnd - curStart;
+      curStart = nextStart;
+      curEnd = nextEnd;
+    }
+  }
+  total += curEnd - curStart;
+  return Math.min(total, DAY_MS);
+}
 
 /**
  * When the owner was held up and for how long (docs/TASK-BOARD.md §1): a conversation waiting on an
@@ -37,6 +59,8 @@ export class AttentionLog {
     this.db.prepare('INSERT INTO attention_log(session_id,kind,started_at) VALUES(?,?,?)').run(sessionId, kind, at);
   }
   private close(sessionId: string, kind: 'decision' | 'stopped', at: number): void {
+    const maxWait = kind === 'decision' ? MAX_DECISION_WAIT_MS : MAX_STOPPED_WAIT_MS;
+    this.db.prepare('DELETE FROM attention_log WHERE session_id=? AND kind=? AND ended_at IS NULL AND ?-started_at>?').run(sessionId, kind, at, maxWait);
     this.db.prepare('UPDATE attention_log SET ended_at=? WHERE session_id=? AND kind=? AND ended_at IS NULL').run(at, sessionId, kind);
   }
 
@@ -77,10 +101,23 @@ export class AttentionLog {
     for (let at = start; at < to; at += DAY_MS) day(at);
     day(to - 1);
     const waits = this.db.prepare('SELECT kind, started_at, ended_at FROM attention_log WHERE started_at>=? AND started_at<?').all(start, to) as Array<{ kind: string; started_at: number; ended_at: number | null }>;
+    const intervalsByDay = new Map<string, Array<readonly [number, number]>>();
     for (const row of waits) {
       const entry = day(row.started_at);
       if (row.kind === 'decision') entry.decisions += 1;
-      if (row.ended_at !== null) entry.waitMs += Math.max(0, row.ended_at - row.started_at);
+      if (row.ended_at !== null) {
+        const duration = row.ended_at - row.started_at;
+        const maxWait = row.kind === 'decision' ? MAX_DECISION_WAIT_MS : MAX_STOPPED_WAIT_MS;
+        if (duration > 0 && duration <= maxWait) {
+          let list = intervalsByDay.get(entry.date);
+          if (!list) intervalsByDay.set(entry.date, list = []);
+          list.push([row.started_at, row.ended_at]);
+        }
+      }
+    }
+    for (const [date, list] of intervalsByDay) {
+      const entry = days.get(date);
+      if (entry) entry.waitMs = mergedDuration(list);
     }
     const events = this.db.prepare(`SELECT at, json FROM work_item_events WHERE at>=? AND at<? AND (json LIKE '%"kind":"question"%' OR json LIKE '%"kind":"status"%')`)
       .all(new Date(start).toISOString(), new Date(to).toISOString()) as Array<{ at: string; json: string }>;

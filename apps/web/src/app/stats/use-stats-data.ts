@@ -97,7 +97,9 @@ export function useStatsData(state: StatsUiState): StatsData {
   const dashboardRef = useRef(dashboard);
   dashboardRef.current = dashboard;
   const [series, setSeries] = useState<StatsSeries | undefined>();
-  const [latency, setLatency] = useState<StatsLatency | undefined>();
+  const [latency, setLatency] = useState<StatsLatency | undefined>(cached.current?.latency);
+  const latencyRef = useRef(latency);
+  latencyRef.current = latency;
   const [phase, setPhase] = useState<'loading' | 'refreshing' | 'idle'>(cached.current ? 'refreshing' : 'loading');
   const [error, setError] = useState('');
   const [reloadToken, setReloadToken] = useState(0);
@@ -256,8 +258,13 @@ export function useStatsData(state: StatsUiState): StatsData {
 
   useEffect(() => {
     const controller = new AbortController();
-    api.statsLatency(queryOf(stateRef.current), 'model', controller.signal)
-      .then((next) => { if (!controller.signal.aborted) setLatency(next); })
+    const key = queryOf(stateRef.current);
+    api.statsLatency(key, 'model', controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setLatency(next);
+        if (dashboardRef.current) saveStatsCache(key, dashboardRef.current, next);
+      })
       .catch(() => { /* a latency miss leaves the previous bars up */ });
     return () => controller.abort();
   }, [filterKey, reloadToken]);
