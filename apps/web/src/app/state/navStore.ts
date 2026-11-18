@@ -36,6 +36,8 @@ export interface NavState {
   tasksOpen: boolean;
   /** 自动化. */
   automationsOpen: boolean;
+  /** 多模型讨论. */
+  councilOpen: boolean;
   extensionsOpen: boolean;
   marksOpen: boolean;
   /** The design system's specimen page (docs/design/system). */
@@ -62,7 +64,7 @@ export interface NavState {
 }
 
 /** The pages that cover the conversation. */
-export type NavPage = 'stats' | 'tasks' | 'automations' | 'extensions' | 'marks' | 'plugins' | 'design';
+export type NavPage = 'stats' | 'tasks' | 'automations' | 'council' | 'extensions' | 'marks' | 'plugins' | 'design';
 
 /** One way a conversation is shown, by view id: `chat`, `terminal`, or a plugin's `<pluginId>/<name>`. */
 export type SessionView = string;
@@ -103,7 +105,7 @@ function startingSelection(link: DeepLink | undefined, lists: { projects: Projec
 }
 
 /** Closes every page that covers the conversation, for a destination that is a conversation or project. */
-export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, marksOpen: false, designOpen: false, pluginsOpen: false, attemptsGroupId: '' } as const satisfies Partial<NavState>;
+export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, designOpen: false, pluginsOpen: false, attemptsGroupId: '' } as const satisfies Partial<NavState>;
 
 /**
  * What is selected and which page is showing, and the gate every change of destination goes through.
@@ -127,6 +129,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     statsOpen: view === 'stats',
     tasksOpen: view === 'tasks',
     automationsOpen: view === 'automations',
+    councilOpen: view === 'council',
     extensionsOpen,
     extensionsMounted: extensionsOpen,
     marksOpen: view === 'marks',
@@ -155,7 +158,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   store.subscribe(() => {
     const current = store.get();
     if (current.projectId !== previousDestination.projectId || current.sessionId !== previousDestination.sessionId
-      || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen
+      || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
       || current.extensionsOpen !== previousDestination.extensionsOpen || current.marksOpen !== previousDestination.marksOpen
       || current.designOpen !== previousDestination.designOpen
       || current.pluginsOpen !== previousDestination.pluginsOpen || current.pluginId !== previousDestination.pluginId
@@ -206,7 +209,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     /** The page header and browser-back handler already checked the guard. */
     closeExtensions() { store.set({ extensionsOpen: false }); },
     openPage(page: NavPage) {
-      store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', marksOpen: page === 'marks', designOpen: page === 'design', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
+      store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', designOpen: page === 'design', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
     },
     openPlugins(pluginId = '', pluginViewId = '', pluginDetailTab: PluginDetailTab = 'overview') { store.set({ ...NO_PAGE, extensionsOpen: false, pluginsOpen: true, pluginId, pluginViewId, pluginDetailTab, pluginOpenRevision: (store.get().pluginOpenRevision ?? 0) + 1 }); },
     openAttemptsGroup(groupId: string) {

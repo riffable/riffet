@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
 import Fastify from 'fastify';
@@ -129,6 +129,8 @@ import type { ChannelProvider } from './channels/types.js';
 import { feishuProvider } from './channels/feishu/index.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
+import { CouncilService } from './council/service.js';
+import { registerCouncilRoutes } from './routes/council.js';
 
 export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; token?:string; auth?:boolean; allowedHosts?:string[]; webRoot?:string; logger?:boolean; instanceId?:string;
   /** The trusted launcher may provide the system Documents directory; saved settings win. */
@@ -359,7 +361,127 @@ export async function createApp(options: AppOptions = {}) {
   workItemsRef=workItems;
   assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:savedDefaultBackendId(saved)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
     search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[],work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
-  const deps:RouteDeps={assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
+  let deletionRef:SessionDeletion|undefined;
+  const council=new CouncilService({
+    db:store.db,
+    listBackendProfiles:backendId=>nativeBackends.catalog.profileSettings(backendId).profiles.map(p=>({id:p.id,name:p.name,...(p.isDefault?{isDefault:true}:{}),...(p.defaultModel?{defaultModel:p.defaultModel}:{})})),
+    runAgentTurn:async({backendId,profileId,model,prompt,signal,onDelta})=>{
+      signal.throwIfAborted();
+      const councilDir=join(stateDir,'council-work');
+      await mkdir(councilDir,{recursive:true,mode:0o700});
+      const targetProject=store.listProjects().find(p=>!p.archivedAt&&!p.system)
+        ??store.listProjects().find(p=>p.cwd===councilDir&&!p.archivedAt)
+        ??store.createProject(councilDir,'Council');
+      const resolvedProfileId=profileId??nativeBackends.catalog.profileSettings(backendId).defaultProfileId;
+      const caps=await nativeBackends.catalog.capabilitiesFor(backendId,resolvedProfileId).catch(()=>undefined);
+      const preferredMode=caps?.supportsModeSelection?(caps.modes.find(m=>m.id==='ask'||m.id==='plan')?.id):undefined;
+      const preferredApproval=caps?.supportsPermissionSelection?(caps.permissions.find(p=>p.id==='dontAsk')?.id):undefined;
+      const session=await orchestration.start({
+        projectId:targetProject.id,
+        backendId,
+        ...(profileId?{backendProfileId:profileId}:{}),
+        ...(model?{model}:{}),
+        ...(preferredMode?{mode:preferredMode}:{}),
+        ...(preferredApproval?{approval:preferredApproval}:{}),
+        title:'[模型协作]',
+      },prompt,{kind:'council'},{sessionId:randomUUID(),commandId:randomUUID()});
+      const offFollow=ingest.follow(session.id);
+      void ingest.read(session.id);
+      const rows=new Map<string,import('../../../packages/contracts/src/index.js').TimelineRow>();
+      let lastLiveText='';
+      let lastLiveThought='';
+      const offTimeline=timeline.subscribe(session.id,'main',change=>{
+        if(change.type!=='rows')return;
+        for(const key of change.deletes)rows.delete(key);
+        for(const row of change.upserts)rows.set(row.key,row);
+        const sorted=[...rows.values()].sort((a,b)=>a.pos-b.pos);
+        const liveText=sorted.filter(r=>r.kind==='assistant').map(r=>r.text).join('\n\n');
+        const liveThought=sorted.filter(r=>r.kind==='thought').map(r=>r.text).join('\n\n');
+        if(liveText!==lastLiveText||liveThought!==lastLiveThought){
+          lastLiveText=liveText;
+          lastLiveThought=liveThought;
+          onDelta?.({text:liveText,...(liveThought?{thought:liveThought}:{})});
+        }
+      });
+      try{
+        const finishedRun=await new Promise<import('../../../packages/contracts/src/index.js').Run>((resolvePromise,rejectPromise)=>{
+          let settled=false;
+          let offRuns=():void=>{};
+          let offState=():void=>{};
+          const cleanup=()=>{settled=true;offRuns();offState();signal.removeEventListener('abort',onAbort);clearTimeout(timer);};
+          const check=()=>{
+            if(settled)return;
+            const run=store.listRuns(session.id).at(-1);
+            if(run&&['completed','failed','cancelled','interrupted'].includes(run.state)){
+              cleanup();
+              resolvePromise(run);
+              return;
+            }
+            const cur=store.getSession(session.id);
+            if(cur.state==='waiting'||cur.state==='failed'){
+              cleanup();
+              rejectPromise(new Error(cur.error??'Agent stopped waiting for input'));
+            }
+          };
+          const onAbort=()=>{
+            cleanup();
+            const run=store.listRuns(session.id).at(-1);
+            if(run)try{dispatch.cancel(session.id,run.id);}catch{/* already settled */}
+            rejectPromise(signal.reason instanceof Error?signal.reason:new Error('Cancelled by user'));
+          };
+          const timer=setTimeout(()=>{
+            cleanup();
+            const run=store.listRuns(session.id).at(-1);
+            if(run)try{dispatch.cancel(session.id,run.id);}catch{/* already settled */}
+            rejectPromise(new Error('Agent turn timed out'));
+          },180_000);
+          timer.unref?.();
+          offRuns=store.onRunChanged(run=>{if(run.sessionId===session.id)check();});
+          offState=store.onSessionState(cur=>{if(cur.id===session.id)check();});
+          signal.addEventListener('abort',onAbort,{once:true});
+          check();
+        });
+        if(finishedRun.state!=='completed'){
+          throw new Error(finishedRun.error??`Agent run ended with state: ${finishedRun.state}`);
+        }
+        await timeline.ready(session.id,'main');
+        const turn=timeline.outline(session.id,'main',1).turns.at(-1);
+        let text=turn?timeline.turnText(session.id,turn.turn)?.answer:undefined;
+        if(!text?.trim()){
+          const events=await nativeBackends.indexableTranscript(session.id).catch(()=>[]);
+          for(let i=events.length-1;i>=0;i--){
+            const ev=events[i] as {type?:string;role?:string;text?:string;content?:string};
+            if((ev.type==='message'||ev.role==='assistant')&&typeof (ev.text??ev.content)==='string'&&(ev.text??ev.content)!.trim()){
+              text=(ev.text??ev.content)!.trim();
+              break;
+            }
+          }
+        }
+        if(!text?.trim()&&lastLiveText.trim())text=lastLiveText.trim();
+        if(!text?.trim())throw new Error('Agent returned an empty response');
+        return {
+          text:text.trim(),
+          ...(finishedRun.native?.metrics?.outputTokens!==undefined?{outputTokens:finishedRun.native.metrics.outputTokens}:{}),
+        };
+      }finally{
+        offTimeline();
+        offFollow();
+        void (deletionRef?.delete(session.id,[session.id])??patchSession(deps,session.id,{archived:true})).catch(()=>undefined);
+      }
+    },
+    exports:{
+      createWorkItem:input=>{
+        const item=workItems.create({title:input.title,description:input.body,...(input.projectId?{projectId:input.projectId}:{})});
+        return item.id;
+      },
+      openSession:async input=>{
+        const fallbackProject=input.projectId??store.listProjects().find(p=>!p.archivedAt&&!p.system)?.id??assistantProject(store,stateDir).id;
+        const created=await orchestration.open({projectId:fallbackProject,...(input.backendId?{backendId:input.backendId}:{}),...(input.model?{model:input.model}:{}),title:input.title},input.prompt,()=>{});
+        return created.id;
+      },
+    },
+  });
+  const deps:RouteDeps={assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -373,10 +495,13 @@ export async function createApp(options: AppOptions = {}) {
   registerExternalSessionRoutes(app,deps);
   registerMarkRoutes(app,deps);
   registerWorkItemRoutes(app,deps);
+  registerCouncilRoutes(app,deps);
   const shares=new ShareService(deps);
   registerShareRoutes(app,deps,shares);
   const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,riffetMcp,planFiles,
     onCleanupError:(sessionId,error)=>app.log.warn({err:error,sessionId},'deleted conversation file cleanup failed; retrying on next start')});
+  deletionRef=deletion;
+  for(const orphan of store.listSessions().filter(item=>item.origin?.kind==='council'))void deletion.delete(orphan.id,[orphan.id]).catch(()=>undefined);
   registerSessionDeletionRoutes(app,deletion);
   void deletion.resumeCleanup();
   const clientLogs=new ClientLogs(join(stateDir,'client-logs'));
@@ -517,7 +642,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }

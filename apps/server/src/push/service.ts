@@ -232,7 +232,7 @@ export class PushService {
     const getProject = (id: string) => this.deps.store.getProject(id);
     // The 助理's background runs are its own work, not the owner's conversations (docs/ASSISTANT.md §7.1).
     return withoutQuickChats(sessions, request).filter(session => {
-      if (session.origin?.kind === 'assistant') return false;
+      if (session.origin?.kind === 'assistant' || session.origin?.kind === 'council') return false;
       try { return sessionVisibleToClient(request.headers, session, getProject); } catch { return false; }
     });
   }

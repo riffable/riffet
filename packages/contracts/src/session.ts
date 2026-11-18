@@ -216,7 +216,7 @@ export interface ExternalSessionDirectory {
  * `groupId` and `automationId` name what launched it.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
   sessionId?: string; runId?: string; groupId?: string; automationId?: string;

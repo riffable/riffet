@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { UnderlineTabs } from '@/components/ui/controls';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { IconArchive, IconSquareKanban, IconBookmark, IconBot, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal, IconWrench } from '@/components/icons';
+import { IconArchive, IconSquareKanban, IconBookmark, IconBot, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconMessagesSquare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal, IconWrench } from '@/components/icons';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery, useMobileViewport } from '@/lib/use-media-query';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
 import { api, type PromptContextReference } from '@/lib/api';
@@ -51,6 +51,7 @@ import { assistantChoice, isAssistantBackend, withAssistantDefaults } from './wo
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
 const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
 const AutomationsPage = lazy(() => import('./automations/AutomationsPage').then((module) => ({ default: module.AutomationsPage })));
+const CouncilPage = lazy(() => import('./council/CouncilPage').then((module) => ({ default: module.CouncilPage })));
 const ExtensionsPage = lazy(() => import('./extensions/ExtensionsPage').then((module) => ({ default: module.ExtensionsPage })));
 const PluginsPage = lazy(() => import('./plugins/PluginsPage').then((module) => ({ default: module.PluginsPage })));
 const MarksPage = lazy(() => import('./marks/MarksPage').then((module) => ({ default: module.MarksPage })));
@@ -101,6 +102,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const statsOpen = useNav((state) => state.statsOpen);
   const tasksOpen = useNav((state) => state.tasksOpen);
   const automationsOpen = useNav((state) => state.automationsOpen);
+  const councilOpen = useNav((state) => state.councilOpen);
   const workItemList = useWorkItems((state) => state.items);
   const workItemsSupported = useWorkItems((state) => state.supported);
   const extensionsOpen = useNav((state) => state.extensionsOpen);
@@ -234,14 +236,14 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const standInCatalog = catalogLoading && !catalogSession && held?.agent === catalogAgent ? held.result.entry.models : undefined;
   const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
-  const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || extensionsOpen || marksOpen || designOpen;
+  const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || designOpen;
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   /** On the 助理 page: its project, with no page over it, showing its main conversation or the empty state. Derived, so it has no address of its own. */
   const assistantPage = isAssistantProject(project) && !anyPageOpen && (!session || session.id === mainSessionIdOf(project));
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -403,6 +405,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       {...(assistantProject ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
       {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
       onOpenAutomations={() => openPage('automations')}
+      onOpenCouncil={() => openPage('council')}
+      councilActive={councilOpen}
       onOpenExtensions={() => openPage('extensions')}
       onOpenPlugins={() => openPage('plugins')}
       pluginsActive={pluginsOpen}
@@ -556,6 +560,20 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onError={pushError}
       />
     );
+  } else if (councilOpen) {
+    content = (
+      <CouncilPage
+        projects={regular}
+        backends={backends}
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={() => nav.set({ councilOpen: false })}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
+        onOpenSession={openSessionById}
+        onOpenTasks={() => openPage('tasks')}
+        onOpenProviderSettings={() => openSettingsAt('providers')}
+      />
+    );
   } else if ((!project && !projectlessTasks) || (selectedSessionId && !project)) {
     content = <NoProjects onAddProject={() => ui.set({ addProjectOpen: true })} header={homeHeader} />;
   } else if (session?.kind === 'native') {
@@ -641,6 +659,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     // i18n-ignore: search keywords in both languages, not interface text
     ...(workItemsSupported ? [{ id: 'open-work-items', label: t`打开任务看板`, keywords: 'tasks board kanban inbox 任务 看板 收件箱', icon: <IconSquareKanban className="size-4 shrink-0 text-fg-3" />, run: () => openPage('tasks') }] : []),
     { id: 'open-automations', label: t`打开自动化`, keywords: 'automations templates schedules cron 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('automations') },
+    // i18n-ignore: search keywords in both languages, not interface text
+    { id: 'open-council', label: t`打开模型协作`, keywords: 'council debate prism insight 模型协作 讨论 辩论 审阅', icon: <IconMessagesSquare className="size-4 shrink-0 text-fg-3" />, run: () => openPage('council') },
     { id: 'open-marks', label: t`打开收藏夹`, keywords: 'marks bookmarks highlights saved 收藏 收藏夹 高亮 书签', icon: <IconBookmark className="size-4 shrink-0 text-fg-3" />, run: () => openPage('marks') },
     { id: 'open-plugins', label: t`管理插件`, keywords: 'plugins install packages', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('plugins') },
     { id: 'open-extensions', label: t`打开扩展管理`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconWrench className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },

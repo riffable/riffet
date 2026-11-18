@@ -1,0 +1,1555 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 多模型讨论</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --bg-sidebar: #f7f8fa; --bg-subtle: #f5f6f8; --bg-muted: #eef0f3; --bg-elevated: #ffffff; --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055); --bg-active: rgb(35 45 70 / 0.09); --bg-bubble: #eef3fd;
+  --fg: #1f2226; --fg-2: #50555d; --fg-3: #60666e; --fg-4: #adb2ba;
+  --line: rgb(15 23 42 / 0.08); --line-strong: rgb(15 23 42 / 0.14);
+  --primary: #15171a; --primary-hover: #34373d; --primary-fg: #ffffff;
+  --accent: #3867f0; --accent-soft: rgb(56 103 240 / 0.09);
+  --success: #1f9d55; --success-soft: rgb(31 157 85 / 0.1);
+  --warning: #c77f06; --warning-soft: rgb(245 158 11 / 0.12);
+  --danger: #e0454b; --danger-soft: rgb(224 69 75 / 0.09);
+  --diff-add: #e6f4e7; --diff-del: #fce6e2;
+  --agent-claude: #d97757; --agent-openai: #10a37f; --agent-deepseek: #4d6bfe; --agent-gemini: #8566c1;
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --scrim: rgb(0 0 0 / 0.25);
+  --canvas: var(--bg-sidebar);
+  --focus-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --fast: 150ms;
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416; --bg-sidebar: #1a1a1d; --bg-subtle: #1d1d20; --bg-muted: #27272b; --bg-elevated: #1f1f22; --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06); --bg-active: rgb(255 255 255 / 0.1); --bg-bubble: #23262e;
+  --fg: #e2e4e8; --fg-2: #b6bac1; --fg-3: #9da2aa; --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075); --line-strong: rgb(255 255 255 / 0.13);
+  --primary: #eceef1; --primary-hover: #d3d6db; --primary-fg: #141416;
+  --accent: #5b8cff; --accent-soft: rgb(91 140 255 / 0.14);
+  --success: #3fb96f; --success-soft: rgb(63 185 111 / 0.14);
+  --warning: #e5a13a; --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c; --danger-soft: rgb(240 103 108 / 0.14);
+  --diff-add: #1f3124; --diff-del: #3c1f1b;
+  --agent-claude: #e8916f; --agent-openai: #2fc79b; --agent-deepseek: #7590ff; --agent-gemini: #b497df;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.18);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--fg); font: 13px/20px var(--font-sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: default; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ui { user-select: none; -webkit-user-select: none; }
+.selectable { user-select: text; -webkit-user-select: text; cursor: text; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+svg.i * { vector-effect: non-scaling-stroke; }
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grow { flex: 1; min-width: 0; }
+.t-title { font-size: 16px; line-height: 24px; font-weight: 500; }
+.t-body { font-size: 14px; line-height: 23px; }
+.t-prose { font-size: 14px; line-height: 26px; }
+.t-ui { font-size: 13px; line-height: 20px; }
+.t-sec { font-size: 12px; line-height: 16px; }
+.t-foot { font-size: 11px; line-height: 16px; }
+.fg-2 { color: var(--fg-2); } .fg-3 { color: var(--fg-3); } .fg-4 { color: var(--fg-4); }
+
+/* Button */
+.btn { display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; font-weight: 500;
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease), scale var(--fast) var(--ease); }
+.btn:active { scale: 0.97; }
+.btn.xs { height: 24px; padding: 0 8px; border-radius: 6px; font-size: 12px; line-height: 16px; } .btn.xs svg.i { width: 14px; height: 14px; }
+.btn.sm { height: 28px; padding: 0 10px; border-radius: 8px; } .btn.sm svg.i { width: 14px; height: 14px; }
+.btn.md { height: 32px; padding: 0 12px; border-radius: 8px; }
+.btn.icon-xs { width: 24px; height: 24px; border-radius: 6px; } .btn.icon-xs svg.i { width: 14px; height: 14px; }
+.btn.icon-sm { width: 28px; height: 28px; border-radius: 8px; }
+.btn.primary { background: var(--primary); color: var(--primary-fg); } .btn.primary:hover { background: var(--primary-hover); }
+.btn.secondary { background: color-mix(in srgb, var(--fg) 7%, transparent); color: var(--fg); }
+.btn.secondary:hover { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+.btn.ghost { color: var(--fg-2); } .btn.quiet { color: var(--fg-3); }
+.btn.ghost:hover, .btn.quiet:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* Segmented */
+.seg { position: relative; display: inline-flex; align-items: center; padding: 2px; border-radius: 10px; background: var(--bg-muted); box-shadow: inset 0 0 0 .5px var(--line); }
+.seg .thumb { position: absolute; left: 0; top: 0; border-radius: 8px; background: var(--bg-elevated); box-shadow: 0 0 0 .5px var(--line-strong), var(--shadow-soft);
+  transition: transform 200ms var(--ease), width 200ms var(--ease); }
+.dark .seg .thumb { background: var(--bg-active); }
+.seg button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 8px; font-weight: 500; color: var(--fg-3); white-space: nowrap; }
+.seg button:hover { color: var(--fg-2); }
+.seg button[aria-checked="true"] { color: var(--fg); }
+.seg.xs button { height: 24px; padding: 0 10px; font-size: 12px; }
+
+/* Badge, StatusDot, Spinner, Check */
+.badge { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border-radius: 6px; background: var(--bg-muted); color: var(--fg-2); font-size: 11px; line-height: 16px; font-weight: 500; white-space: nowrap; }
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.warning { background: var(--warning-soft); color: var(--warning); }
+.badge.danger { background: var(--danger-soft); color: var(--danger); }
+.sdot { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.sdot.ring { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fg-3); }
+.m-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.spinner { width: 12px; height: 12px; flex: none; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin .75s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-hl { 0%,100% { box-shadow: inset 0 0 0 1.5px var(--accent); } 50% { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 30%, transparent); } }
+
+.check { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; border-radius: 4px; border: 1px solid var(--line-strong); background: var(--bg-elevated); color: var(--primary-fg); transition: background-color var(--fast), border-color var(--fast); }
+.check svg.i { width: 12px; height: 12px; opacity: 0; }
+.check[aria-checked="true"] { background: var(--primary); border-color: var(--primary); }
+.check[aria-checked="true"] svg.i { opacity: 1; }
+
+/* Demo bar */
+.demo-bar { position: fixed; inset: 0 0 auto 0; height: 44px; z-index: 50; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; background: var(--canvas); box-shadow: inset 0 -1px var(--line); }
+.demo-bar .name { font-weight: 500; color: var(--fg-3); white-space: nowrap; }
+.stage { position: absolute; inset: 44px 0 0 0; display: flex; }
+
+/* Sidebar */
+.sb { width: 248px; flex: none; display: flex; flex-direction: column; min-height: 0; }
+.sb-top { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+.sb-top .brand { font-size: 14px; line-height: 22px; font-weight: 600; letter-spacing: -.01em; }
+.brand-mark { width: 20px; height: 20px; flex: none; }
+.sb-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 8px; }
+.nav { display: flex; height: 32px; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; color: var(--fg-2); }
+.nav svg.i { width: 18px; height: 18px; color: var(--fg-3); }
+.nav:hover { background: var(--bg-hover); color: var(--fg); }
+.nav[aria-current="page"] { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.nav[aria-current="page"] svg.i { color: var(--fg); }
+.nav .end { margin-left: auto; font-size: 11px; color: var(--fg-4); font-variant-numeric: tabular-nums; }
+.sb-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px; }
+.sb-sec { display: flex; align-items: center; height: 28px; margin-top: 12px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--fg-4); }
+.srow { display: flex; width: 100%; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; color: var(--fg-2); }
+.srow:hover { background: var(--bg-hover); color: var(--fg); }
+.srow.sel { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.sb-foot { display: flex; align-items: center; height: 48px; flex: none; padding: 0 12px; }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--bg-active); color: var(--fg); display: grid; place-items: center; font-size: 12px; font-weight: 500; }
+
+/* Main card */
+.main { position: relative; flex: 1; min-width: 0; margin: 8px 8px 8px 0; border-radius: 12px; background: var(--bg); display: flex; flex-direction: column; overflow: hidden; }
+.page-h { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
+.page-h h1 { margin: 0; font-size: 13px; line-height: 20px; font-weight: 500; }
+.page-h .acts { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+/* Workspace */
+.workspace { flex: 1; min-height: 0; display: flex; overflow: hidden; }
+.stage-col { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.stage-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 32px 48px; scroll-behavior: smooth; }
+.col-read { max-width: 840px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.col-wide { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* Launch page (ProjectHome style) */
+.launch-wrap { max-width: 720px; margin: 56px auto 0; display: flex; flex-direction: column; gap: 16px; }
+.launch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.composer { border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-composer); }
+.composer textarea { display: block; width: 100%; min-height: 92px; max-height: 240px; padding: 14px 16px 8px; border: 0; background: none; resize: none; outline: none; font-size: 14px; line-height: 23px; }
+.composer textarea::placeholder { color: var(--fg-4); }
+.composer-setup { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--bg-subtle); font-size: 12px; color: var(--fg-2); flex-wrap: wrap; }
+.composer .bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.composer .send { margin-left: auto; width: 32px; height: 32px; }
+.capsule { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; color: var(--fg-3); font-size: 12px; line-height: 16px; transition: background-color var(--fast), color var(--fast); }
+.capsule:hover { background: var(--bg-hover); color: var(--fg); }
+.capsule[aria-pressed="true"] { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.samples { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.sample-row { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border-radius: 8px; color: var(--fg-2); }
+.sample-row:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* Stage Progress Rail */
+.rail { display: flex; align-items: center; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.rail-step { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 99px; font-size: 12px; color: var(--fg-3); transition: background-color var(--fast), color var(--fast); }
+.rail-step:hover { background: var(--bg-hover); color: var(--fg); }
+.rail-step.cur { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.rail-step.done { color: var(--fg-2); }
+.rail-sep { color: var(--fg-4); font-size: 12px; }
+
+/* ===================== DEBATE: BILATERAL ARENA ===================== */
+.matchup { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--bg-subtle); border: 1px solid var(--line); flex-wrap: wrap; }
+.side-tag { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.side-pill { font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: 6px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--fg-2); }
+
+.round-divider { display: flex; align-items: center; gap: 12px; margin: 8px 0 4px; }
+.round-divider::before, .round-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.round-label { font-size: 12px; color: var(--fg-3); font-weight: 500; white-space: nowrap; }
+
+.chat-stream { display: flex; flex-direction: column; gap: 18px; }
+.turn-msg { display: flex; flex-direction: column; gap: 6px; max-width: 78%; transition: opacity var(--fast); }
+.turn-msg.pro { align-self: flex-start; align-items: flex-start; }
+.turn-msg.con { align-self: flex-end; align-items: flex-end; }
+.turn-msg.host { align-self: center; align-items: center; max-width: 82%; }
+.turn-msg.pulse .bubble { animation: pulse-hl 1.2s ease-out 2; }
+
+.turn-meta { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-size: 12px; color: var(--fg-3); }
+.turn-meta .name { font-weight: 500; color: var(--fg-2); }
+
+.bubble { padding: 12px 16px; font-size: 14px; line-height: 24px; color: var(--fg); display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.turn-msg.pro .bubble { background: var(--bg-subtle); border-radius: 4px 16px 16px 16px; box-shadow: inset 0 0 0 1px var(--line); }
+.turn-msg.con .bubble { background: var(--bg-bubble); border-radius: 16px 4px 16px 16px; }
+.turn-msg.host .bubble { background: var(--bg); border-radius: 99px; padding: 7px 16px; box-shadow: inset 0 0 0 1px var(--line-strong); font-size: 13px; line-height: 20px; color: var(--fg-2); }
+
+.bubble p { margin: 0; }
+.bubble code { font-family: var(--font-mono); font-size: 0.86em; color: var(--fg-2); }
+
+/* Reply quote & cross-exam attachment inside bubble */
+.reply-quote { display: flex; flex-direction: column; gap: 3px; padding: 7px 10px; border-radius: 8px; background: color-mix(in srgb, var(--fg) 4%, transparent); border-left: 2px solid var(--line-strong); font-size: 12.5px; line-height: 19px; color: var(--fg-2); cursor: pointer; }
+.reply-quote:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.reply-head { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fg-3); }
+
+.cross-q { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 8px; border-top: 1px dashed var(--line-strong); font-size: 13px; line-height: 20px; color: var(--fg-2); margin-top: 2px; }
+.cross-q .qtag { flex: none; font-size: 11px; font-weight: 500; color: var(--fg-3); margin-top: 2px; }
+
+.verdict-sheet { margin-top: 6px; padding: 18px 20px; border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line-strong); display: flex; flex-direction: column; gap: 12px; }
+.verdict-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.verdict-foot { display: flex; align-items: center; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+
+/* ===================== PRISM: COLLISION & CONVERGENCE ===================== */
+.sheet-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.sheet-col { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid var(--line); transition: opacity var(--fast) var(--ease), background-color var(--fast) var(--ease); }
+.sheet-col:last-child { border-right: 0; }
+.sheet-col.dim { opacity: 0.36; }
+.sheet-col.lit { background: color-mix(in srgb, var(--bg-subtle) 55%, var(--bg)); }
+.sheet-col-h { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.sheet-col-stance { font-size: 12px; color: var(--fg-3); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+
+.clash-list { display: flex; flex-direction: column; gap: 10px; }
+.clash-item { border-radius: 12px; padding: 14px 16px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 10px; transition: box-shadow var(--fast); }
+.clash-item.lit { box-shadow: inset 0 0 0 1px var(--line-strong); background: color-mix(in srgb, var(--bg-subtle) 40%, var(--bg)); }
+.clash-quotes { display: grid; grid-template-columns: 1fr 24px 1fr; gap: 8px; align-items: stretch; }
+.clash-qbox { padding: 8px 10px; border-radius: 8px; background: var(--bg-subtle); font-size: 12.5px; line-height: 19px; color: var(--fg-2); display: flex; flex-direction: column; gap: 4px; }
+.clash-vs { display: grid; place-items: center; color: var(--fg-4); font-size: 12px; }
+.clash-ask { display: flex; align-items: flex-start; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+
+.shift-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--fg-3); padding: 3px 8px; border-radius: 6px; background: var(--bg-subtle); width: fit-content; }
+.shift-tag .old { text-decoration: line-through; color: var(--fg-4); }
+
+.prose-verdict { padding: 18px 0 6px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.prose-verdict p { margin: 0; font-size: 14px; line-height: 26px; }
+.prose-verdict code { font-family: var(--font-mono); font-size: 0.86em; color: var(--fg-2); }
+
+/* ===================== INSIGHT: SPEC REVIEW WORKBENCH ===================== */
+.doc-sheet { border-radius: 12px; background: var(--bg); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.doc-toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--bg-subtle); flex-wrap: wrap; }
+.doc-goal { padding: 10px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--fg-2); }
+.doc-row { position: relative; border-bottom: 1px solid var(--line); transition: background-color var(--fast); }
+.doc-row:last-child { border-bottom: 0; }
+.doc-row-main { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; cursor: pointer; }
+.doc-row-main:hover { background: var(--bg-hover); }
+.doc-row.lit .doc-row-main { background: var(--accent-soft); }
+.doc-row.has-ann::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2.5px; border-radius: 2px; background: var(--line-strong); }
+.doc-row.has-checked::before { background: var(--success); }
+.doc-pno { font-family: var(--font-mono); font-size: 12px; line-height: 25px; color: var(--fg-4); width: 24px; flex: none; }
+.doc-text { flex: 1; font-size: 14px; line-height: 25px; color: var(--fg); }
+.doc-inline-ann { margin: 0 16px 14px 54px; padding: 10px 12px; border-radius: 10px; background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--line); display: flex; flex-direction: column; gap: 8px; }
+.inline-del { background: var(--diff-del); text-decoration: line-through; padding: 1px 4px; border-radius: 4px; }
+.inline-add { background: var(--diff-add); padding: 1px 4px; border-radius: 4px; }
+
+.rev-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rev-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px; background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--line); font-size: 12px; color: var(--fg-2); }
+
+/* Shared formatting */
+.quote-hit { background: var(--accent-soft); border-radius: 4px; padding: 1px 3px; color: var(--fg); }
+.thought-btn { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--fg-3); height: 22px; }
+.thought-btn:hover { color: var(--fg); }
+.thought-btn svg.i { width: 13px; height: 13px; transition: transform var(--fast); }
+.thought-btn[aria-expanded="true"] svg.i { transform: rotate(90deg); }
+.thought { padding: 4px 10px; border-left: 1px solid var(--line-strong); font-size: 12px; line-height: 19px; color: var(--fg-3); }
+
+/* Right Aside */
+.aside { width: 356px; flex: none; border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+.aside-h { height: 48px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 500; }
+.aside-b { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.arow { padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.arow:last-child { border-bottom: 0; }
+.arow.clickable { border-radius: 10px; padding: 10px; margin: 0 -10px; border-bottom: 0; cursor: pointer; }
+.arow.clickable:hover { background: var(--bg-hover); }
+.arow.active { background: var(--bg-active); }
+.diff-del { background: var(--diff-del); padding: 4px 8px; border-radius: 6px; font-size: 12px; line-height: 18px; }
+.diff-add { background: var(--diff-add); padding: 4px 8px; border-radius: 6px; font-size: 12px; line-height: 18px; }
+
+/* Bottom embedded input */
+.dock { flex: none; padding: 10px 32px 16px; }
+.embed { max-width: 840px; margin: 0 auto; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 12px; background: var(--bg-subtle); box-shadow: inset 0 0 0 1px var(--line); }
+.embed.wide { max-width: 1120px; }
+.embed input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 13px; line-height: 20px; }
+.embed input::placeholder { color: var(--fg-4); }
+.send { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--primary-fg); flex: none; }
+.send:hover { background: var(--primary-hover); }
+
+/* Dialog & Popover */
+.scrim { position: fixed; inset: 0; z-index: 69; background: var(--scrim); backdrop-filter: blur(1.5px); }
+.dialog { position: fixed; z-index: 70; left: 50%; top: 50%; width: min(448px, calc(100vw - 32px)); transform: translate(-50%, -50%); border-radius: 16px; background: var(--bg-elevated); box-shadow: var(--shadow-pop); overflow: hidden; }
+.dh { padding: 18px 44px 10px 20px; font-size: 16px; line-height: 24px; font-weight: 500; position: relative; }
+.dx { position: absolute; top: 14px; right: 12px; }
+.db { padding: 4px 20px 8px; display: flex; flex-direction: column; gap: 12px; }
+.df { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 18px; }
+.input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg-elevated); font-size: 13px; line-height: 20px; outline: none; }
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.notice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--warning-soft); font-size: 12px; line-height: 16px; }
+.notice svg.i { color: var(--warning); width: 14px; height: 14px; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 12px; background: var(--bg-popover); box-shadow: var(--shadow-pop); font-size: 13px; }
+.toast svg.i { color: var(--success); width: 15px; height: 15px; }
+
+@media (max-width: 1100px) {
+  .sheet-grid { grid-template-columns: 1fr; }
+  .sheet-col { border-right: 0; border-bottom: 1px solid var(--line); }
+  .sheet-col:last-child { border-bottom: 0; }
+  .clash-quotes { grid-template-columns: 1fr; }
+  .clash-vs { display: none; }
+}
+@media (max-width: 960px) { .aside { display: none; } }
+@media (max-width: 767px) {
+  .sb { display: none; }
+  .main { margin: 0; border-radius: 0; }
+  .stage-scroll, .dock { padding-left: 16px; padding-right: 16px; }
+  .turn-msg { max-width: 90%; }
+}
+</style>
+</head>
+<body class="ui">
+
+<div class="demo-bar">
+  <span class="name t-ui">多模型讨论</span>
+  <div class="seg xs" role="radiogroup" aria-label="视图切换" id="mode-seg">
+    <span class="thumb" aria-hidden="true"></span>
+    <button role="radio" data-id="launch">发起</button>
+    <button role="radio" data-id="debate-monolith">Debate 辩论</button>
+    <button role="radio" data-id="prism-arch">Prism</button>
+    <button role="radio" data-id="insight-rfc">Insight</button>
+  </div>
+  <span class="grow"></span>
+  <button class="btn xs secondary" id="btn-replay">从头演示</button>
+  <button class="btn icon-sm quiet" id="btn-theme" aria-label="切换深浅色"></button>
+</div>
+
+<div class="stage">
+  <nav class="sb" aria-label="侧栏导航">
+    <div class="sb-top" id="sb-brand"></div>
+    <div class="sb-nav" id="sb-nav"></div>
+    <div class="sb-list">
+      <div class="sb-sec"><span>讨论</span></div>
+      <div id="sb-sessions"></div>
+    </div>
+    <div class="sb-foot">
+      <button class="avatar" title="个人资料" onclick="showToast('个人资料与设置')">H</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <header class="page-h">
+      <h1 id="page-title" class="trunc">新建讨论</h1>
+      <span class="badge" id="mode-badge" hidden></span>
+      <span class="t-sec fg-3 tnum" id="cost-pill"></span>
+      <div class="acts" id="header-acts"></div>
+    </header>
+
+    <div class="workspace">
+      <div class="stage-col">
+        <div class="stage-scroll" id="stage-scroll">
+          <div id="stage-inner"></div>
+        </div>
+        <div class="dock" id="steer-dock" hidden></div>
+      </div>
+      <aside class="aside" id="ledger-aside"></aside>
+    </div>
+  </main>
+</div>
+
+<div id="overlay-host"></div>
+<div id="toast-host"></div>
+
+<script>
+const ICONS = {
+  'square-pen': '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>',
+  search: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2M20 14h2M15 13v2M9 13v2"/>',
+  'square-kanban': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/>',
+  'messages-square': '<path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/>',
+  'calendar-clock': '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4M8 2v4M3 10h5M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/>',
+  ellipsis: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'arrow-up': '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  swap: '<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+  'git-fork': '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  'panel-right': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+  corner: '<polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/>'
+};
+const ico = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+
+const BRAND = { viewBox: '0.6 -0.2 24 24',
+  mane: 'M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z',
+  body: 'M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z',
+  eye: 'M11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z' };
+const brandMark = () => `<svg class="brand-mark" viewBox="${BRAND.viewBox}" aria-hidden="true" stroke-linejoin="round"><path d="${BRAND.mane}" stroke-width=".6" fill="var(--accent)" stroke="var(--accent)"/><path d="${BRAND.body}${BRAND.eye}" fill="currentColor" fill-rule="evenodd"/><path d="${BRAND.body}" fill="none" stroke="currentColor"/></svg>`;
+
+const MODELS = [
+  { id: 'claude-opus-4.8', name: 'Claude Opus 4.8', family: 'anthropic', color: 'var(--agent-claude)' },
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', family: 'openai', color: 'var(--agent-openai)' },
+  { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', family: 'deepseek', color: 'var(--agent-deepseek)' },
+  { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', family: 'google', color: 'var(--agent-gemini)' }
+];
+const modelOf = id => MODELS.find(m => m.id === id) || MODELS[0];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const SESSIONS = [
+  {
+    id: 'debate-monolith',
+    mode: 'debate',
+    title: '多模型讨论应独立建表还是复用 NativeSession',
+    proposition: '首版应当新建独立的表与路由，不复用单线会话 NativeSession',
+    status: 'done',
+    cost: '56s · 21.6K tokens',
+    proModel: 'claude-opus-4.8',
+    conModel: 'gpt-5.6-sol',
+    judgeModel: 'deepseek-v4-pro',
+    phaseIndex: 3,
+    phases: ['命题与分工', '第 1 轮 · 立论', '第 2 轮 · 结辩', '结论'],
+    rounds: [
+      {
+        num: 1, stage: '立论', order: ['pro', 'con'],
+        pro: {
+          id: 'r1-pro',
+          text: '`NativeSession` 的底层假设是「单驱动 + 串行队列」。多模型讨论需要同一轮并行流式输出、结构化分歧和互换重赛，硬塞进旧表会直接污染核心投递状态机。独立建表只需 2 张表，对现有会话零回归风险。',
+          question: { id: 'q1', summary: '如何兼容旧同步协议', text: '如果复用 `NativeSession`，同一轮 3 个并发输出与分歧列表如何兼容旧同步协议？', status: 'direct' }
+        },
+        con: {
+          id: 'r1-con',
+          replyTo: { id: 'r1-pro', label: '回应正方「如何兼容旧同步协议」', quote: '可映射为 subagent 分支与工具结果，旧客户端按既有协议展示或折叠。', status: 'direct' },
+          text: '独立建表等于放弃 Riffet 现有的 5 端同步、全文搜索、收藏与导出体系。每新增一个平行实体，Web、Mac、iOS、Android 就要各自多写一套拉取和缓存逻辑，长期维护成本远高于协议适配。',
+          question: { id: 'q2', summary: '如何接入搜索与移动端', text: '独立建表后，`⌘K` 搜索、收藏和手机端查看如何不重写三套逻辑？', status: 'direct' }
+        },
+        ledger: {
+          pro: { claim: '单驱动串行模型与多模型并行冲突', weakness: null },
+          con: { claim: '复用底座可直接继承搜索、收藏与多端同步', weakness: null }
+        }
+      },
+      {
+        num: 2, stage: '结辩（反方先陈词）', order: ['con', 'pro'],
+        con: {
+          id: 'r2-con',
+          text: 'Riffet 需要同时维护 5 个端。把多模型讨论建模为一种特殊的 `SessionOrigin`，即使首期移动端只做只读渲染，也比另起一套表和同步通道更稳妥。',
+          question: null
+        },
+        pro: {
+          id: 'r2-pro',
+          replyTo: { id: 'r1-con', label: '回应反方「如何接入搜索与移动端」', quote: '结案后一键导出为只读会话或任务，直接进入现有搜索和收藏，无需重写基建。', status: 'direct' },
+          text: '把并排对比的模型强行降格成折叠 `subagent` 行会彻底破坏阅读体验。独立模块先让 Web 快速验证交互形态，结论稳定后再接入搜索索引与移动端。',
+          question: null
+        },
+        ledger: {
+          pro: { claim: 'Web 先行验证，不污染核心时间线', weakness: '原生端同步延后' },
+          con: { claim: '零成本继承五端同步与检索', weakness: '折叠子行不适合并排对比' }
+        }
+      }
+    ],
+    hostTurns: [],
+    rematchRounds: [
+      {
+        num: 1, stage: '立论（互换立场）', order: ['pro', 'con'],
+        pro: {
+          id: 'br1-pro',
+          text: '站在正方重审：强行复用 `NativeSession` 会把多模型并行的协议复杂度带进每条常规编码会话。用独立的 2 张表承接讨论生命周期，不仅上线快，而且接口语义干净。',
+          question: { id: 'bq1', summary: '如何隔离旧客户端渲染异常', text: '若复用 `NativeSession`，旧版移动端收到未识别的多模型事件时如何避免白屏或错乱？', status: 'direct' }
+        },
+        con: {
+          id: 'br1-con',
+          replyTo: { id: 'br1-pro', label: '回应正方「如何隔离旧客户端渲染异常」', quote: '服务端按客户端版本号降级为纯文本摘要即可，不必另起一套同步通道。', status: 'direct' },
+          text: '站在反方重审：即便首期独立建表，只要产品长期需要跨设备同步与全局搜索，最终还是要走统一索引，早做底座适配反而少一次迁移。',
+          question: { id: 'bq2', summary: '导出快照后的同步断点', text: '结案导出为会话后，如果用户继续在讨论里追加一轮，原会话如何同步更新？', status: 'direct' }
+        }
+      },
+      {
+        num: 2, stage: '结辩（反方先陈词）', order: ['con', 'pro'],
+        con: {
+          id: 'br2-con',
+          text: '独立建表短期省事，但跨端同步与追问追踪迟早要补齐，不如首期就接入现有会话基础设施。',
+          question: null
+        },
+        pro: {
+          id: 'br2-pro',
+          replyTo: { id: 'br1-con', label: '回应反方「导出快照后的同步断点」', quote: '已结案讨论追加新轮次时生成新版本快照，保持导出会话不可变，反而更可预期。', status: 'direct' },
+          text: 'Web 工作台先跑通辩论与对比交互，比提前背上五端兼容包袱重要得多。独立模块能最快验证产品价值。',
+          question: null
+        }
+      }
+    ],
+    verdict: {
+      winner: '正方论据更扎实',
+      takeaway: '首期独立建表验证 Web 协作界面，不改动 `NativeSession`；结论通过「转为任务」或「带入会话」接入现有工作流。',
+      rematch: {
+        proName: 'GPT-5.6 Sol',
+        conName: 'Claude Opus 4.8',
+        note: '互换立场后正方依然占优：在「Web 先行验证」的前提下，独立模块风险更低、交付更稳。'
+      }
+    }
+  },
+  {
+    id: 'prism-arch',
+    mode: 'prism',
+    title: '插件是否应订阅跨会话状态',
+    status: 'done',
+    cost: '42s · 18.4K tokens',
+    participants: ['claude-opus-4.8', 'gpt-5.6-sol', 'deepseek-v4-pro'],
+    observer: 'gemini-3.1-pro',
+    phaseIndex: 3,
+    phases: ['各自作答', '分歧焦点', '回应追问', '结论'],
+    explore: {
+      'claude-opus-4.8': {
+        stance: '拒绝全局总线',
+        thought: '全局事件流会让单个视图插件拿到所有项目的活动信息。',
+        text: '不建议开放。Riffet 按项目与会话单独授权，全局订阅会把所有项目的上下文暴露给单一插件。跨会话统计应由服务端只读接口按需返回。',
+        quoteId: 'c1', quoteSnippet: '把所有项目的上下文暴露给单一插件'
+      },
+      'gpt-5.6-sol': {
+        stance: '只推脱敏状态',
+        thought: '需要区分消息原文与状态通知，周报与看板插件依赖状态变更。',
+        text: '可以开放只读状态事件，仅发送脱敏状态（回合完成、任务变更），不带正文。正文读取仍锁在 `sessions.read` 权限后。',
+        quoteId: 'c1', quoteSnippet: '仅发送脱敏状态（回合完成、任务变更）'
+      },
+      'deepseek-v4-pro': {
+        stance: '暂不做总线',
+        thought: '多数跨会话需求可由个人助理和内置视图解决，没必要冻结事件契约。',
+        text: '暂不做总线。个人助理和内置视图已覆盖大多数跨项目汇总需求，过早承诺插件事件契约会限制服务端内部演进。',
+        quoteId: 'c2', quoteSnippet: '过早承诺插件事件契约会限制服务端内部演进'
+      }
+    },
+    probe: {
+      contradictions: [
+        {
+          id: 'c1',
+          title: '脱敏状态事件是否泄漏项目边界',
+          left: { model: 'claude-opus-4.8', quote: '把所有项目的上下文暴露给单一插件' },
+          right: { model: 'gpt-5.6-sol', quote: '仅发送脱敏状态（回合完成、任务变更）' },
+          question: '项目路径、活跃时段与会话标题本身就构成工作记录，是否违背按项目授权？',
+          selected: true
+        },
+        {
+          id: 'c2',
+          title: '第三方跨项目统计插件的接口归属',
+          left: { model: 'deepseek-v4-pro', quote: '过早承诺插件事件契约会限制服务端内部演进' },
+          right: { model: 'gpt-5.6-sol', quote: '周报与看板插件依赖状态变更' },
+          question: '如果不做总线，第三方想做跨项目统计插件应使用哪个接口？',
+          selected: true
+        }
+      ],
+      gaps: ['子进程插件走 JSON RPC，高频事件推送会带来序列化开销。']
+    },
+    deepen: {
+      'claude-opus-4.8': { shifted: false, oldStance: '拒绝全局总线', newStance: '维持原判', challenge: '状态边界 + 子进程通信开销', text: '高频跨进程推送确实不划算。若需要全局统计，应由服务端提供受 `projects.read` 约束的按需查询接口，而非推送事件流。' },
+      'gpt-5.6-sol': { shifted: true, oldStance: '只推脱敏状态', newStance: '改用按需拉取', challenge: '标题与活跃时间同样敏感', text: '收回实时推送建议，改用按需拉取摘要接口，并在插件清单中单独声明权限。' },
+      'deepseek-v4-pro': { shifted: false, oldStance: '暂不做总线', newStance: '维持原判', challenge: '第三方插件的接口入口', text: '现阶段不开放跨项目实时订阅，先用内置视图验证需求，再决定是否抽象只读汇总接口。' }
+    },
+    verdict: {
+      headline: '一致结论：不推实时事件，改用按需只读查询',
+      analysis: '1. 不向子进程插件推送高频事件流，避免序列化开销与跨项目越权。\n2. 确需全局统计时，在服务端增加受 `projects.read` 约束的按需汇总接口。'
+    },
+    supplements: []
+  },
+  {
+    id: 'insight-rfc',
+    mode: 'insight',
+    title: '审阅：docs/VOICE.md 语音听写方案',
+    status: 'done',
+    cost: '29s · 14.1K tokens',
+    refs: ['docs/VOICE.md'],
+    participants: ['claude-opus-4.8', 'gpt-5.6-sol', 'gemini-3.1-pro'],
+    synthesizer: 'deepseek-v4-pro',
+    phaseIndex: 2,
+    phases: ['目标与原文', '分工审阅', '确认修改'],
+    goal: '定义低延迟语音听写协议与本地插件边界，保证弱网不丢失录音。',
+    paragraphs: [
+      { id: 'P1', text: '客户端采集 16kHz 单声道 16-bit PCM，每 100ms 切为一帧通过 WebSocket 发送至 `/api/dictation`。' },
+      { id: 'P2', text: '服务端转发给选中的识别器（远端接口或本地 `speech-local` 插件），结果实时推送回客户端。' },
+      { id: 'P3', text: '网络断开或识别超时时弹出提示条告知用户重试。单次最多 5 分钟。' },
+      { id: 'P4', text: '本地插件首次使用时自动下载模型权重，约 450MB。' }
+    ],
+    reviews: {
+      'claude-opus-4.8': { role: '补充', summary: '补全非流式接口状态' },
+      'gpt-5.6-sol': { role: '修改', summary: '断网不能直接丢录音' },
+      'gemini-3.1-pro': { role: '结构', summary: '隐私说明应前置到开头' }
+    },
+    annotations: [
+      { id: 'a1', task: 'correct', taskLabel: '修改', model: 'GPT-5.6 Sol', modelId: 'gpt-5.6-sol', para: 'P3', title: '断网后保留录音缓冲并重传', before: '网络断开或识别超时时弹出提示条告知用户重试。', after: '客户端保留本段 PCM 环形缓冲，断线重连后直接重传，不再丢失录音。', checked: true },
+      { id: 'a2', task: 'augment', taskLabel: '补充', model: 'Claude Opus 4.8', modelId: 'claude-opus-4.8', para: 'P2', title: '区分流式与非流式接口状态', before: '结果实时推送回客户端。', after: '结果实时推送回客户端；非流式接口在结束帧后打包 WAV 上传，期间状态为 `finishing`。', checked: true },
+      { id: 'a3', task: 'diagnose', taskLabel: '问题', model: 'DeepSeek V4 Pro', modelId: 'deepseek-v4-pro', para: 'P4', title: '未说明权重路径与沙箱权限', before: '自动下载模型权重，约 450MB。', after: '在 `plugin-data/speech-local/` 下载权重，回传进度并申请 `process.exec` 权限。', checked: false },
+      { id: 'a4', task: 'restructure', taskLabel: '结构', model: 'Gemini 3.1 Pro', modelId: 'gemini-3.1-pro', para: 'P1', title: '音频不落盘说明前置', before: '客户端采集 16kHz 单声道 16-bit PCM，', after: '音频仅在内存流转、不写入服务端磁盘。客户端采集 16kHz 单声道 16-bit PCM，', checked: false }
+    ],
+    synthesis: '建议优先采纳右侧已勾选的 2 项修改：保留断网环形缓冲、补全非流式 `finishing` 状态。'
+  }
+];
+
+const state = {
+  activeId: 'launch',
+  dark: false,
+  asideOpen: true,
+  // Debate state
+  debateTrack: 'a', // 'a' | 'b'
+  pulseTurnId: null,
+  // Prism state
+  litQuoteId: null,
+  hoverClashId: null,
+  openThoughts: new Set(),
+  // Insight state
+  docMode: 'annotate', // 'annotate' | 'preview'
+  litParaId: 'P3',
+  insightFilter: 'all',
+  // Streaming / simulation
+  streaming: false,
+  streamProgress: 100,
+  customSessions: [],
+  // Launch state
+  launchMode: 'debate',
+  launchModels: new Set(['claude-opus-4.8', 'gpt-5.6-sol', 'deepseek-v4-pro']),
+  launchPro: 'claude-opus-4.8',
+  launchCon: 'gpt-5.6-sol',
+  launchRhythm: 'pause'
+};
+
+const currentSession = () => [...state.customSessions, ...SESSIONS].find(s => s.id === state.activeId);
+
+function positionThumb(seg) {
+  if (!seg) return;
+  const active = seg.querySelector('button[aria-checked="true"]');
+  const thumb = seg.querySelector('.thumb');
+  if (!active || !thumb) return;
+  thumb.style.width = active.offsetWidth + 'px';
+  thumb.style.height = active.offsetHeight + 'px';
+  thumb.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+}
+
+function showToast(text) {
+  const host = document.getElementById('toast-host');
+  host.innerHTML = `<div class="toast">${ico('check')}<span>${esc(text)}</span></div>`;
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => { host.innerHTML = ''; }, 2800);
+}
+
+function renderSidebar() {
+  document.getElementById('sb-brand').innerHTML = `${brandMark()}<span class="brand">Riffet</span>`;
+  const navItems = [
+    { icon: 'square-pen', label: '新会话' },
+    { icon: 'search', label: '搜索内容' },
+    { icon: 'bot', label: '个人助理' },
+    { icon: 'square-kanban', label: '任务看板', end: '3' },
+    { icon: 'messages-square', label: '多模型讨论', active: true },
+    { icon: 'calendar-clock', label: '自动化' },
+    { icon: 'ellipsis', label: '更多' }
+  ];
+  document.getElementById('sb-nav').innerHTML = navItems.map(n => `
+    <button class="nav t-ui" ${n.active ? 'aria-current="page"' : ''} onclick="${n.active ? `selectSession('launch')` : `showToast('${n.label}')`}">
+      ${ico(n.icon)}<span class="trunc">${n.label}</span>${n.end ? `<span class="end">${n.end}</span>` : ''}
+    </button>
+  `).join('');
+
+  const all = [...state.customSessions, ...SESSIONS];
+  document.getElementById('sb-sessions').innerHTML = all.map(s => `
+    <button class="srow ${s.id === state.activeId ? 'sel' : ''}" onclick="selectSession('${s.id}')">
+      ${s.status === 'running' ? '<span class="spinner" aria-label="运行中"></span>' : '<span class="sdot ring" aria-label="已完成"></span>'}
+      <span class="trunc t-ui grow">${esc(s.title)}</span>
+    </button>
+  `).join('');
+}
+
+function renderHeader() {
+  const s = currentSession();
+  const badge = document.getElementById('mode-badge');
+  const cost = document.getElementById('cost-pill');
+  const acts = document.getElementById('header-acts');
+
+  if (!s) {
+    document.getElementById('page-title').textContent = '新建讨论';
+    badge.hidden = true;
+    cost.textContent = '';
+    acts.innerHTML = '';
+    return;
+  }
+
+  document.getElementById('page-title').textContent = s.title;
+  const badgeMap = { prism: 'Prism', debate: 'Debate', insight: 'Insight' };
+  badge.hidden = false;
+  badge.textContent = badgeMap[s.mode];
+  cost.textContent = s.cost;
+
+  const btns = [];
+  btns.push(`<button class="btn sm secondary" onclick="openExportDialog('session')">${ico('git-fork')}<span>带入会话</span></button>`);
+  btns.push(`<button class="btn sm primary" onclick="openExportDialog('task')">${ico('square-kanban')}<span>转为任务</span></button>`);
+  btns.push(`<button class="btn icon-sm quiet" title="右侧栏" aria-label="切换右侧栏" onclick="toggleAside()">${ico('panel-right')}</button>`);
+  acts.innerHTML = btns.join('');
+}
+
+function renderLaunchPage() {
+  const pro = modelOf(state.launchPro);
+  const con = modelOf(state.launchCon);
+  const families = [...state.launchModels].map(id => modelOf(id).family);
+  const dupFamily = state.launchMode !== 'debate' && new Set(families).size < families.length;
+
+  const defaultTopic = state.launchMode === 'debate'
+    ? '首版应当新建独立的表与路由，不复用单线会话 NativeSession'
+    : state.launchMode === 'prism'
+    ? '插件是否应订阅跨会话状态'
+    : '';
+
+  const setupStrip = state.launchMode === 'debate'
+    ? `
+      <div class="composer-setup">
+        <button class="capsule" aria-pressed="true" onclick="cycleDebateSide('pro')" title="点击切换正方模型">
+          <span>正方</span><span class="m-dot" style="background:${pro.color}"></span><span>${pro.name}</span>
+        </button>
+        <button class="btn icon-xs quiet" onclick="swapLaunchSides()" aria-label="互换正反方" title="互换正反方">${ico('swap')}</button>
+        <button class="capsule" aria-pressed="true" onclick="cycleDebateSide('con')" title="点击切换反方模型">
+          <span>反方</span><span class="m-dot" style="background:${con.color}"></span><span>${con.name}</span>
+        </button>
+        <span class="grow"></span>
+        <span class="t-sec fg-3">裁判：DeepSeek V4 Pro</span>
+      </div>
+    `
+    : state.launchMode === 'insight'
+    ? `
+      <div class="composer-setup">
+        <button class="capsule" onclick="showToast('已关联 docs/VOICE.md')">${ico('file')}<span>docs/VOICE.md</span></button>
+        <span class="t-sec fg-3">分工：修改 · 补充 · 问题 · 结构</span>
+      </div>
+    `
+    : '';
+
+  return `
+    <div class="launch-wrap">
+      <div class="launch-head">
+        <span class="t-title">多模型讨论</span>
+        <div class="seg xs" role="radiogroup" aria-label="讨论方式" id="launch-seg">
+          <span class="thumb" aria-hidden="true"></span>
+          <button role="radio" data-mode="debate" aria-checked="${state.launchMode === 'debate'}" onclick="setLaunchMode('debate')">Debate 辩论</button>
+          <button role="radio" data-mode="prism" aria-checked="${state.launchMode === 'prism'}" onclick="setLaunchMode('prism')">Prism</button>
+          <button role="radio" data-mode="insight" aria-checked="${state.launchMode === 'insight'}" onclick="setLaunchMode('insight')">Insight 审阅</button>
+        </div>
+      </div>
+
+      <div class="composer">
+        <textarea id="launch-topic" placeholder="${state.launchMode === 'insight' ? '粘贴待审阅的文档或 Diff…' : state.launchMode === 'debate' ? '输入辩论命题…' : '输入要讨论的问题…'}">${esc(defaultTopic)}</textarea>
+        ${setupStrip}
+        <div class="bar">
+          <button class="capsule" onclick="showToast('已关联上下文')">${ico('file')}<span>文件 / 会话</span></button>
+          <button class="capsule" onclick="toggleLaunchRhythm()"><span>${state.launchRhythm === 'pause' ? '每轮停顿' : '自动完成'}</span></button>
+          ${state.launchMode !== 'debate' ? MODELS.map(m => `
+            <button class="capsule" aria-pressed="${state.launchModels.has(m.id)}" onclick="toggleLaunchModel('${m.id}')">
+              <span class="m-dot" style="background:${m.color}"></span>
+              <span>${m.name}</span>
+            </button>
+          `).join('') : ''}
+          <button class="send" aria-label="开始讨论" onclick="startFromLaunch()">${ico('arrow-up')}</button>
+        </div>
+      </div>
+
+      ${dupFamily ? `<div class="notice">${ico('alert')}<span>存在相同模型家族，可能给出相近结论。</span></div>` : ''}
+
+      <div class="samples">
+        <button class="sample-row" onclick="selectSession('debate-monolith')">
+          <span class="badge">Debate</span>
+          <span class="trunc t-ui">多模型讨论应独立建表还是复用 NativeSession</span>
+          <span class="grow"></span>
+          <span class="t-sec fg-4">56s</span>
+        </button>
+        <button class="sample-row" onclick="selectSession('prism-arch')">
+          <span class="badge">Prism</span>
+          <span class="trunc t-ui">插件是否应订阅跨会话状态</span>
+          <span class="grow"></span>
+          <span class="t-sec fg-4">42s</span>
+        </button>
+        <button class="sample-row" onclick="selectSession('insight-rfc')">
+          <span class="badge">Insight</span>
+          <span class="trunc t-ui">审阅：docs/VOICE.md 语音听写方案</span>
+          <span class="grow"></span>
+          <span class="t-sec fg-4">29s</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function formatMdLite(text, highlightSnippet) {
+  let html = esc(text)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  if (highlightSnippet) {
+    const safe = esc(highlightSnippet).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    html = html.replace(new RegExp(safe, 'g'), `<span class="quote-hit">${esc(highlightSnippet)}</span>`);
+  }
+  return html.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+
+function clipStream(text, pct) {
+  if (pct >= 100) return text;
+  return text.slice(0, Math.max(12, Math.floor(text.length * pct / 100))) + '…';
+}
+
+function renderRail(s) {
+  return `
+    <div class="rail">
+      ${s.phases.map((label, i) => {
+        const cls = i === s.phaseIndex ? 'cur' : i < s.phaseIndex ? 'done' : '';
+        const spin = i === s.phaseIndex && state.streaming ? '<span class="spinner"></span>' : '';
+        return `
+          ${i > 0 ? '<span class="rail-sep">›</span>' : ''}
+          <button class="rail-step ${cls}" onclick="jumpPhase(${i})">${spin}<span>${esc(label)}</span></button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ===================== DEBATE VIEW ===================== */
+function renderDebateStage(s) {
+  const swapped = state.debateTrack === 'b';
+  const pro = modelOf(swapped ? s.conModel : s.proModel);
+  const con = modelOf(swapped ? s.proModel : s.conModel);
+  const judge = modelOf(s.judgeModel);
+  const pIdx = s.phaseIndex;
+
+  const matchupHtml = `
+    <div class="matchup">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="side-tag"><span class="side-pill">正方</span><span class="m-dot" style="background:${pro.color}"></span><span style="font-weight:500">${pro.name}</span></span>
+        <span class="fg-4 t-sec">vs</span>
+        <span class="side-tag"><span class="m-dot" style="background:${con.color}"></span><span style="font-weight:500">${con.name}</span><span class="side-pill">反方</span></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${pIdx === 0 ? `<button class="btn xs secondary" onclick="swapDebateSides()">${ico('swap')}<span>互换</span></button><button class="btn xs primary" onclick="advancePhase(1)">开始辩论</button>` : ''}
+        ${pIdx >= 3 ? `
+          <div class="seg xs" role="radiogroup" aria-label="场次" id="track-seg">
+            <span class="thumb" aria-hidden="true"></span>
+            <button role="radio" aria-checked="${state.debateTrack === 'a'}" onclick="setDebateTrack('a')">首轮</button>
+            <button role="radio" aria-checked="${state.debateTrack === 'b'}" onclick="setDebateTrack('b')">互换重赛</button>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+    <div class="t-body selectable" style="padding:0 4px">
+      <span class="t-sec fg-3" style="margin-right:6px">命题</span>${esc(s.proposition)}
+    </div>
+  `;
+
+  const rounds = swapped && s.rematchRounds ? s.rematchRounds : s.rounds;
+  const streamHtml = [];
+  rounds.forEach((r, idx) => {
+    const rp = idx + 1;
+    if (pIdx < rp) return;
+    const pct = pIdx === rp && state.streaming ? state.streamProgress : 100;
+
+    streamHtml.push(`<div class="round-divider" id="phase-${rp}"><span class="round-label">第 ${r.num} 轮 · ${esc(r.stage)}</span></div>`);
+
+    r.order.forEach(side => {
+      const isPro = side === 'pro';
+      const m = isPro ? pro : con;
+      const turn = r[side];
+      const pulsed = state.pulseTurnId === turn.id ? 'pulse' : '';
+
+      const meta = isPro
+        ? `<div class="turn-meta"><span class="m-dot" style="background:${m.color}"></span><span class="name">${m.name}</span><span>正方</span>${pct < 100 ? '<span class="spinner"></span>' : ''}</div>`
+        : `<div class="turn-meta">${pct < 100 ? '<span class="spinner"></span>' : ''}<span>反方</span><span class="name">${m.name}</span><span class="m-dot" style="background:${m.color}"></span></div>`;
+
+      const replyBlock = turn.replyTo ? `
+        <div class="reply-quote" onclick="focusTurn('${turn.replyTo.id}')">
+          <div class="reply-head">
+            ${ico('corner')}
+            <span>${esc(turn.replyTo.label)}</span>
+            <span class="badge success">${turn.replyTo.status === 'direct' ? '已正面回应' : '部分回应'}</span>
+          </div>
+          <div>${esc(turn.replyTo.quote)}</div>
+        </div>
+      ` : '';
+
+      const questionBlock = turn.question ? `
+        <div class="cross-q">
+          <span class="qtag">追问${isPro ? '反方' : '正方'}</span>
+          <span class="grow selectable">${esc(turn.question.text)}</span>
+        </div>
+      ` : '';
+
+      streamHtml.push(`
+        <div class="turn-msg ${isPro ? 'pro' : 'con'} ${pulsed}" id="turn-${turn.id}">
+          ${meta}
+          <div class="bubble selectable">
+            ${replyBlock}
+            ${formatMdLite(clipStream(turn.text, pct))}
+            ${questionBlock}
+          </div>
+        </div>
+      `);
+    });
+  });
+
+  if (s.hostTurns?.length) {
+    s.hostTurns.forEach(ht => {
+      streamHtml.push(`<div class="turn-msg host"><div class="bubble selectable">主持人追问：${esc(ht.prompt)}</div></div>`);
+      streamHtml.push(`
+        <div class="turn-msg pro">
+          <div class="turn-meta"><span class="m-dot" style="background:${pro.color}"></span><span class="name">${pro.name}</span><span>正方补充</span></div>
+          <div class="bubble selectable">${formatMdLite(ht.proReply)}</div>
+        </div>
+        <div class="turn-msg con">
+          <div class="turn-meta"><span>反方补充</span><span class="name">${con.name}</span><span class="m-dot" style="background:${con.color}"></span></div>
+          <div class="bubble selectable">${formatMdLite(ht.conReply)}</div>
+        </div>
+      `);
+    });
+  }
+
+  let verdictHtml = '';
+  if (pIdx >= 3) {
+    verdictHtml = `
+      <div class="round-divider" id="phase-3"><span class="round-label">讨论总结</span></div>
+      <section class="verdict-sheet">
+        <div class="verdict-head">
+          <span class="m-dot" style="background:${judge.color}"></span>
+          <span class="t-ui" style="font-weight:500">${judge.name}</span>
+          <span class="badge warning">${esc(s.verdict.winner)}</span>
+        </div>
+        <div class="t-prose selectable">${formatMdLite(s.verdict.takeaway)}</div>
+        ${state.debateTrack === 'b' ? `
+          <div class="t-sec fg-2 selectable" style="padding:8px 12px;border-radius:8px;background:var(--bg-subtle)">
+            互换验证（${esc(s.verdict.rematch.proName)} 持正方 vs ${esc(s.verdict.rematch.conName)} 持反方）：${esc(s.verdict.rematch.note)}
+          </div>
+        ` : ''}
+        <div class="verdict-foot">
+          <button class="btn sm secondary" onclick="setDebateTrack(state.debateTrack === 'a' ? 'b' : 'a')">${ico('swap')}<span>${state.debateTrack === 'a' ? '查看互换立场重赛' : '切回首轮'}</span></button>
+          <span class="grow"></span>
+          <button class="btn sm secondary" onclick="openExportDialog('session')">带入会话</button>
+          <button class="btn sm primary" onclick="openExportDialog('task')">转为任务</button>
+        </div>
+      </section>
+    `;
+  }
+
+  return `<div class="col-read">${renderRail(s)}${matchupHtml}<div class="chat-stream">${streamHtml.join('')}</div>${verdictHtml}</div>`;
+}
+
+/* ===================== PRISM VIEW ===================== */
+function renderPrismStage(s) {
+  const pIdx = s.phaseIndex;
+  const activeClash = s.probe.contradictions.find(c => c.id === (state.hoverClashId || state.litQuoteId));
+  const involvedModels = activeClash ? new Set([activeClash.left.model, activeClash.right.model]) : null;
+
+  const pct0 = pIdx === 0 && state.streaming ? state.streamProgress : 100;
+  const exploreHtml = `
+    <div id="phase-0">
+      <div class="sheet-grid">
+        ${s.participants.map(id => {
+          const m = modelOf(id);
+          const entry = s.explore[id];
+          const isInvolved = involvedModels ? involvedModels.has(id) : false;
+          const isDim = involvedModels && !isInvolved;
+          const tOpen = state.openThoughts.has('exp:' + id);
+          return `
+            <article class="sheet-col ${isDim ? 'dim' : ''} ${isInvolved ? 'lit' : ''}" data-prism-col="${id}">
+              <div class="sheet-col-h">
+                <span class="m-dot" style="background:${m.color}"></span>
+                <span class="t-ui trunc" style="font-weight:500">${m.name}</span>
+                <span class="grow"></span>
+                ${pct0 < 100 ? '<span class="spinner"></span>' : ''}
+              </div>
+              <div class="sheet-col-stance">${esc(entry.stance)}</div>
+              <button class="thought-btn" aria-expanded="${tOpen}" onclick="toggleThought('exp:${id}')">
+                ${ico('chevron-right')}<span>思考</span>
+              </button>
+              ${tOpen ? `<div class="thought">${esc(entry.thought)}</div>` : ''}
+              <div class="t-body selectable">${formatMdLite(clipStream(entry.text, pct0), isInvolved ? entry.quoteSnippet : null)}</div>
+            </article>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  let probeHtml = '';
+  if (pIdx >= 1) {
+    const obs = modelOf(s.observer);
+    probeHtml = `
+      <div id="phase-1" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="t-ui" style="font-weight:500">分歧焦点</span>
+          <span class="t-sec fg-3">${obs.name} 整理 · 悬停定位原文</span>
+          <span class="grow"></span>
+          ${pIdx === 1 ? `<button class="btn sm primary" onclick="advancePhase(2)">开始回应追问</button>` : ''}
+        </div>
+        <div class="clash-list">
+          ${s.probe.contradictions.map(c => {
+            const lm = modelOf(c.left.model);
+            const rm = modelOf(c.right.model);
+            const isLit = (state.hoverClashId || state.litQuoteId) === c.id;
+            return `
+              <div class="clash-item ${isLit ? 'lit' : ''}" data-clash="${c.id}" onmouseenter="hoverClash('${c.id}')" onmouseleave="hoverClash(null)">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <button class="check" role="checkbox" aria-checked="${c.selected}" aria-label="保留追问" onclick="toggleProbeQuestion('${c.id}')">${ico('check')}</button>
+                  <span class="t-ui" style="font-weight:500">${esc(c.title)}</span>
+                </div>
+                <div class="clash-quotes">
+                  <div class="clash-qbox">
+                    <div style="display:flex;align-items:center;gap:6px"><span class="m-dot" style="background:${lm.color}"></span><span class="t-sec fg-3">${lm.name}</span></div>
+                    <div class="selectable">“${esc(c.left.quote)}”</div>
+                  </div>
+                  <div class="clash-vs">vs</div>
+                  <div class="clash-qbox">
+                    <div style="display:flex;align-items:center;gap:6px"><span class="m-dot" style="background:${rm.color}"></span><span class="t-sec fg-3">${rm.name}</span></div>
+                    <div class="selectable">“${esc(c.right.quote)}”</div>
+                  </div>
+                </div>
+                <div class="clash-ask">
+                  <span class="badge warning">追问</span>
+                  <span class="t-sec fg-2 grow selectable">${esc(c.question)}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        ${s.probe.gaps?.length ? `<div class="t-sec fg-3" style="padding:2px 4px">待补充：${s.probe.gaps.map(esc).join(' · ')}</div>` : ''}
+      </div>
+    `;
+  }
+
+  let deepenHtml = '';
+  if (pIdx >= 2) {
+    const pct2 = pIdx === 2 && state.streaming ? state.streamProgress : 100;
+    deepenHtml = `
+      <div id="phase-2" style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="t-ui" style="font-weight:500">回应追问</span>
+          <span class="t-sec fg-3">立场变化</span>
+        </div>
+        <div class="sheet-grid">
+          ${s.participants.map(id => {
+            const m = modelOf(id);
+            const d = s.deepen[id];
+            return `
+              <article class="sheet-col">
+                <div class="sheet-col-h">
+                  <span class="m-dot" style="background:${m.color}"></span>
+                  <span class="t-ui trunc" style="font-weight:500">${m.name}</span>
+                  <span class="grow"></span>
+                  ${pct2 < 100 ? '<span class="spinner"></span>' : ''}
+                </div>
+                <div class="shift-tag">
+                  ${d.shifted ? `<span class="old">${esc(d.oldStance)}</span><span>→</span><span style="color:var(--success);font-weight:500">${esc(d.newStance)}</span>` : `<span>${esc(d.newStance)}</span>`}
+                </div>
+                <div class="t-body selectable">${formatMdLite(clipStream(d.text, pct2))}</div>
+              </article>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let verdictHtml = '';
+  if (pIdx >= 3) {
+    const obs = modelOf(s.observer);
+    verdictHtml = `
+      <section class="prose-verdict" id="phase-3">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="badge success">一致结论</span>
+          <span class="t-title">${esc(s.verdict.headline)}</span>
+          <span class="grow"></span>
+          <span class="t-sec fg-3"><span class="m-dot" style="background:${obs.color};vertical-align:middle;margin-right:4px"></span>${obs.name}</span>
+        </div>
+        <div class="selectable">${formatMdLite(s.verdict.analysis)}</div>
+      </section>
+    `;
+  }
+
+  return `<div class="col-wide">${renderRail(s)}${exploreHtml}${probeHtml}${deepenHtml}${verdictHtml}</div>`;
+}
+
+/* ===================== INSIGHT VIEW ===================== */
+function renderInsightStage(s) {
+  const pIdx = s.phaseIndex;
+  const checkedIds = new Set(s.annotations.filter(a => a.checked).map(a => a.id));
+  const byPara = pid => (pIdx >= 2 ? s.annotations.filter(a => a.para === pid) : []);
+
+  const reviewerChips = pIdx >= 1 ? `
+    <div class="rev-strip">
+      ${s.participants.map(id => {
+        const m = modelOf(id);
+        const r = s.reviews[id];
+        return `<span class="rev-chip">${pIdx === 1 && state.streaming ? '<span class="spinner"></span>' : `<span class="m-dot" style="background:${m.color}"></span>`}<span>${m.name}</span><span class="fg-3">· ${r.role}：${esc(r.summary)}</span></span>`;
+      }).join('')}
+      <span class="grow"></span>
+      ${pIdx >= 2 ? `<span class="t-sec fg-3">已采纳 ${checkedIds.size} / ${s.annotations.length}</span>` : ''}
+    </div>
+  ` : '';
+
+  const docHtml = `
+    <section class="doc-sheet">
+      <div class="doc-toolbar">
+        <span class="mono t-sec fg-2">${esc(s.refs[0])}</span>
+        <span class="grow"></span>
+        ${pIdx >= 2 ? `
+          <div class="seg xs" role="radiogroup" aria-label="文档视图" id="doc-seg">
+            <span class="thumb" aria-hidden="true"></span>
+            <button role="radio" aria-checked="${state.docMode === 'annotate'}" onclick="setDocMode('annotate')">原文批注</button>
+            <button role="radio" aria-checked="${state.docMode === 'preview'}" onclick="setDocMode('preview')">修订预览 (${checkedIds.size})</button>
+          </div>
+        ` : pIdx === 0 ? `<button class="btn xs primary" onclick="advancePhase(1)">开始审阅</button>` : ''}
+      </div>
+      <div class="doc-goal selectable">目标：${esc(s.goal)}</div>
+      <div>
+        ${s.paragraphs.map(p => {
+          const anns = byPara(p.id);
+          const hasChecked = anns.some(a => a.checked);
+          const isLit = pIdx >= 2 && state.litParaId === p.id;
+
+          let bodyHtml = esc(p.text);
+          if (pIdx >= 2 && state.docMode === 'preview') {
+            anns.filter(a => a.checked).forEach(a => {
+              if (bodyHtml.includes(esc(a.before))) {
+                bodyHtml = bodyHtml.replace(esc(a.before), `<span class="inline-del">${esc(a.before)}</span> <span class="inline-add">${esc(a.after)}</span>`);
+              } else {
+                bodyHtml += ` <span class="inline-add">${esc(a.after)}</span>`;
+              }
+            });
+          }
+
+          const inlineAnns = pIdx >= 2 && state.docMode === 'annotate' && isLit && anns.length ? anns.map(a => `
+            <div class="doc-inline-ann">
+              <div style="display:flex;align-items:center;gap:8px">
+                <button class="check" role="checkbox" aria-checked="${a.checked}" aria-label="采纳修改" onclick="toggleAnnotation('${a.id}')">${ico('check')}</button>
+                <span class="badge ${a.task === 'correct' ? 'warning' : ''}">${a.taskLabel}</span>
+                <span class="t-ui" style="font-weight:500">${esc(a.title)}</span>
+                <span class="grow"></span>
+                <span class="t-sec fg-3">${a.model}</span>
+              </div>
+              <div class="diff-del">- ${esc(a.before)}</div>
+              <div class="diff-add">+ ${esc(a.after)}</div>
+            </div>
+          `).join('') : '';
+
+          return `
+            <div class="doc-row ${anns.length ? 'has-ann' : ''} ${hasChecked ? 'has-checked' : ''} ${isLit ? 'lit' : ''}" id="doc-${p.id}">
+              <div class="doc-row-main" onclick="highlightPara('${p.id}')">
+                <span class="doc-pno">${p.id}</span>
+                <div class="doc-text selectable">${bodyHtml}</div>
+                ${anns.length ? `<span class="badge ${hasChecked ? 'success' : ''}">${anns.length} 条建议</span>` : ''}
+              </div>
+              ${inlineAnns}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </section>
+  `;
+
+  return `<div class="col-read">${renderRail(s)}${reviewerChips}${docHtml}</div>`;
+}
+
+/* ===================== RIGHT ASIDE ===================== */
+function renderAside(s) {
+  const aside = document.getElementById('ledger-aside');
+  if (!s || !state.asideOpen) { aside.hidden = true; return; }
+  aside.hidden = false;
+
+  if (s.mode === 'debate') {
+    const qList = [];
+    s.rounds.forEach(r => {
+      if (r.pro.question) qList.push({ side: '正方追问', ...r.pro.question, targetTurn: r.con.id });
+      if (r.con.question) qList.push({ side: '反方追问', ...r.con.question, targetTurn: s.rounds[1]?.pro.id || r.pro.id });
+    });
+    const lastRound = s.rounds[Math.max(0, Math.min(s.phaseIndex - 1, s.rounds.length - 1))];
+    aside.innerHTML = `
+      <div class="aside-h"><span>交锋记录</span></div>
+      <div class="aside-b">
+        <div class="arow">
+          <span class="t-sec fg-3">正方核心</span>
+          <span class="t-ui">${esc(lastRound.ledger.pro.claim)}</span>
+          ${lastRound.ledger.pro.weakness ? `<span class="t-sec" style="color:var(--warning)">待补：${esc(lastRound.ledger.pro.weakness)}</span>` : ''}
+        </div>
+        <div class="arow">
+          <span class="t-sec fg-3">反方核心</span>
+          <span class="t-ui">${esc(lastRound.ledger.con.claim)}</span>
+          ${lastRound.ledger.con.weakness ? `<span class="t-sec" style="color:var(--warning)">待补：${esc(lastRound.ledger.con.weakness)}</span>` : ''}
+        </div>
+        <div class="t-sec fg-3" style="margin-top:4px;font-weight:500">质询定位</div>
+        <div>
+          ${qList.map(q => `
+            <div class="arow clickable" onclick="focusTurn('${q.targetTurn}')">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="t-sec fg-3">${q.side}</span>
+                <span class="grow"></span>
+                <span class="badge success">已正面回应</span>
+              </div>
+              <div class="t-ui">${esc(q.summary)}</div>
+              <div class="t-sec fg-2">${esc(q.text)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (s.mode === 'prism') {
+    aside.innerHTML = `
+      <div class="aside-h"><span>各方立场</span></div>
+      <div class="aside-b">
+        ${s.participants.map(id => {
+          const m = modelOf(id);
+          const e = s.explore[id];
+          const d = s.deepen[id];
+          return `
+            <div class="arow">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span class="m-dot" style="background:${m.color}"></span>
+                <span class="t-ui" style="font-weight:500">${m.name}</span>
+              </div>
+              <div class="t-sec fg-2">${esc(e.stance)} ${d && d.shifted ? `→ <b style="color:var(--success);font-weight:500">${esc(d.newStance)}</b>` : ''}</div>
+            </div>
+          `;
+        }).join('')}
+        <div class="t-sec fg-3" style="margin-top:4px;font-weight:500">分歧索引</div>
+        <div>
+          ${s.probe.contradictions.map(c => `
+            <div class="arow clickable ${state.litQuoteId === c.id ? 'active' : ''}" onclick="highlightContradiction('${c.id}')">
+              <div class="t-ui" style="font-weight:500">${esc(c.title)}</div>
+              <div class="t-sec fg-2">${esc(c.question)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else {
+    const filtered = s.annotations.filter(a => state.insightFilter === 'all' || a.task === state.insightFilter);
+    aside.innerHTML = `
+      <div class="aside-h"><span>修改建议 · ${s.annotations.length}</span></div>
+      <div class="aside-b">
+        <div class="seg xs" role="radiogroup" aria-label="筛选" id="insight-seg">
+          <span class="thumb" aria-hidden="true"></span>
+          ${[['all','全部'],['correct','修改'],['augment','补充'],['diagnose','问题'],['restructure','结构']].map(([k,l]) => `
+            <button role="radio" data-filter="${k}" aria-checked="${state.insightFilter === k}" onclick="setInsightFilter('${k}')">${l}</button>
+          `).join('')}
+        </div>
+        <div>
+          ${filtered.map(a => `
+            <div class="arow clickable ${state.litParaId === a.para ? 'active' : ''}" onclick="highlightPara('${a.para}')">
+              <div style="display:flex;align-items:center;gap:6px">
+                <button class="check" role="checkbox" aria-checked="${a.checked}" aria-label="选中" onclick="event.stopPropagation();toggleAnnotation('${a.id}')">${ico('check')}</button>
+                <span class="badge ${a.task === 'correct' ? 'warning' : ''}">${a.taskLabel}</span>
+                <span class="mono t-sec fg-3">${a.para}</span>
+                <span class="grow"></span>
+                <span class="t-sec fg-3">${a.model}</span>
+              </div>
+              <div class="t-ui" style="font-weight:500">${esc(a.title)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+    positionThumb(document.getElementById('insight-seg'));
+  }
+}
+
+function renderSteerDock(s) {
+  const dock = document.getElementById('steer-dock');
+  if (!s || s.mode === 'insight') { dock.hidden = true; return; }
+  dock.hidden = false;
+  const wide = s.mode === 'prism' ? 'wide' : '';
+  dock.innerHTML = `
+    <div class="embed ${wide}">
+      <input id="steer-input" placeholder="${s.mode === 'debate' ? '作为主持人向双方追问或补充约束…' : '补充条件或追问…'}" onkeydown="if(event.key==='Enter')injectSupplement()" />
+      <button class="send" aria-label="发送" onclick="injectSupplement()">${ico('arrow-up')}</button>
+    </div>
+  `;
+}
+
+function render() {
+  const s = currentSession();
+  renderSidebar();
+  renderHeader();
+
+  const inner = document.getElementById('stage-inner');
+  if (!s) inner.innerHTML = renderLaunchPage();
+  else if (s.mode === 'debate') inner.innerHTML = renderDebateStage(s);
+  else if (s.mode === 'prism') inner.innerHTML = renderPrismStage(s);
+  else inner.innerHTML = renderInsightStage(s);
+
+  renderAside(s);
+  renderSteerDock(s);
+
+  document.querySelectorAll('#mode-seg button').forEach(b => {
+    b.setAttribute('aria-checked', b.dataset.id === state.activeId ? 'true' : 'false');
+  });
+  positionThumb(document.getElementById('mode-seg'));
+  positionThumb(document.getElementById('launch-seg'));
+  positionThumb(document.getElementById('track-seg'));
+  positionThumb(document.getElementById('doc-seg'));
+}
+
+/* ===================== ACTIONS ===================== */
+window.selectSession = id => {
+  clearInterval(startStreamSim._timer);
+  state.activeId = id;
+  state.litQuoteId = null;
+  state.hoverClashId = null;
+  state.pulseTurnId = null;
+  state.streaming = false;
+  state.streamProgress = 100;
+  render();
+};
+
+window.jumpPhase = i => {
+  const s = currentSession();
+  if (!s) return;
+  if (i > s.phaseIndex) { s.phaseIndex = i; render(); }
+  document.getElementById('phase-' + i)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.advancePhase = idx => {
+  const s = currentSession();
+  if (!s) return;
+  s.phaseIndex = idx;
+  startStreamSim(true);
+};
+
+window.setDebateTrack = t => { state.debateTrack = t; render(); };
+
+window.focusTurn = turnId => {
+  state.pulseTurnId = turnId;
+  render();
+  document.getElementById('turn-' + turnId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => { state.pulseTurnId = null; }, 2200);
+};
+
+window.hoverClash = id => {
+  if (state.hoverClashId === id) return;
+  state.hoverClashId = id;
+  const s = currentSession();
+  if (!s || s.mode !== 'prism') return;
+  const activeId = state.hoverClashId || state.litQuoteId;
+  const clash = s.probe.contradictions.find(c => c.id === activeId);
+  const involved = clash ? new Set([clash.left.model, clash.right.model]) : null;
+  document.querySelectorAll('[data-prism-col]').forEach(el => {
+    const mid = el.getAttribute('data-prism-col');
+    el.classList.toggle('dim', Boolean(involved && !involved.has(mid)));
+    el.classList.toggle('lit', Boolean(involved && involved.has(mid)));
+  });
+  document.querySelectorAll('[data-clash]').forEach(el => {
+    el.classList.toggle('lit', el.getAttribute('data-clash') === activeId);
+  });
+};
+
+window.highlightContradiction = id => {
+  state.litQuoteId = state.litQuoteId === id ? null : id;
+  render();
+  document.getElementById('phase-0')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.setDocMode = m => { state.docMode = m; render(); };
+
+window.highlightPara = pid => {
+  state.litParaId = state.litParaId === pid ? null : pid;
+  render();
+  document.getElementById('doc-' + pid)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+window.setInsightFilter = f => { state.insightFilter = f; render(); };
+
+window.toggleAnnotation = id => {
+  const item = currentSession()?.annotations?.find(a => a.id === id);
+  if (item) item.checked = !item.checked;
+  render();
+};
+
+window.toggleThought = key => {
+  if (state.openThoughts.has(key)) state.openThoughts.delete(key);
+  else state.openThoughts.add(key);
+  render();
+};
+
+window.toggleProbeQuestion = id => {
+  const q = currentSession()?.probe?.contradictions?.find(x => x.id === id);
+  if (q) q.selected = !q.selected;
+  render();
+};
+
+window.swapDebateSides = () => {
+  const s = currentSession();
+  if (!s || s.mode !== 'debate') return;
+  [s.proModel, s.conModel] = [s.conModel, s.proModel];
+  render();
+  showToast('已互换正反方');
+};
+
+window.setLaunchMode = m => { state.launchMode = m; render(); };
+window.toggleLaunchRhythm = () => { state.launchRhythm = state.launchRhythm === 'pause' ? 'auto' : 'pause'; render(); };
+window.toggleLaunchModel = id => {
+  if (state.launchModels.has(id)) { if (state.launchModels.size > 2) state.launchModels.delete(id); }
+  else state.launchModels.add(id);
+  render();
+};
+window.cycleDebateSide = side => {
+  const ids = MODELS.map(m => m.id);
+  const cur = side === 'pro' ? state.launchPro : state.launchCon;
+  const other = side === 'pro' ? state.launchCon : state.launchPro;
+  let next = ids[(ids.indexOf(cur) + 1) % ids.length];
+  if (next === other) next = ids[(ids.indexOf(next) + 1) % ids.length];
+  if (side === 'pro') state.launchPro = next; else state.launchCon = next;
+  render();
+};
+window.swapLaunchSides = () => {
+  [state.launchPro, state.launchCon] = [state.launchCon, state.launchPro];
+  render();
+};
+
+window.startFromLaunch = () => {
+  const title = (document.getElementById('launch-topic')?.value || '').trim() || '未命名讨论';
+  const base = JSON.parse(JSON.stringify(SESSIONS.find(x => x.mode === state.launchMode) || SESSIONS[0]));
+  base.id = 'custom-' + Date.now();
+  base.title = title;
+  if (base.mode === 'debate') {
+    base.proposition = title;
+    base.proModel = state.launchPro;
+    base.conModel = state.launchCon;
+  } else {
+    base.participants = [...state.launchModels].slice(0, 3);
+  }
+  base.status = 'running';
+  base.phaseIndex = base.mode === 'debate' ? 1 : 0;
+  state.customSessions.unshift(base);
+  state.activeId = base.id;
+  startStreamSim(false);
+  showToast('已开始讨论');
+};
+
+window.toggleAside = () => { state.asideOpen = !state.asideOpen; render(); };
+
+window.injectSupplement = () => {
+  const input = document.getElementById('steer-input');
+  const val = (input?.value || '').trim();
+  if (!val) { showToast('请输入追问内容'); return; }
+  const s = currentSession();
+  if (!s) return;
+  if (s.mode === 'debate') {
+    s.hostTurns = s.hostTurns || [];
+    s.hostTurns.push({
+      prompt: val,
+      proReply: `针对「${val}」，正方补充：可通过独立的只读快照导出，把结论同步进既有会话检索，避免在核心投递表中维护两套生命周期。`,
+      conReply: `针对「${val}」，反方回应：若只靠导出快照，讨论过程中的增量变化依然无法跨端同步，统一抽象层才是长期解法。`
+    });
+    render();
+    const sc = document.getElementById('stage-scroll');
+    sc.scrollTop = sc.scrollHeight;
+  } else if (s.mode === 'prism') {
+    s.probe.contradictions.push({
+      id: 'u-' + Date.now(),
+      title: '追加追问',
+      left: { model: s.participants[0], quote: '已收到追加约束' },
+      right: { model: s.participants[1], quote: val },
+      question: val,
+      selected: true
+    });
+    s.phaseIndex = 2;
+    startStreamSim(true);
+    showToast('已追问并重新收敛');
+  }
+  if (input) input.value = '';
+};
+
+function startStreamSim(singleStep = false) {
+  clearInterval(startStreamSim._timer);
+  const s = currentSession();
+  if (!s) return;
+  state.streaming = true;
+  state.streamProgress = 18;
+  render();
+  startStreamSim._timer = setInterval(() => {
+    state.streamProgress += 28;
+    if (state.streamProgress >= 100) {
+      if (singleStep || state.phaseIndex >= s.phases.length - 1) {
+        state.streamProgress = 100;
+        state.streaming = false;
+        s.status = 'done';
+        clearInterval(startStreamSim._timer);
+      } else {
+        s.phaseIndex += 1;
+        state.streamProgress = 20;
+      }
+    }
+    render();
+  }, 240);
+}
+
+window.openExportDialog = kind => {
+  const s = currentSession();
+  if (!s) return;
+  const host = document.getElementById('overlay-host');
+  const titleMap = { task: '转为任务', session: '带入会话', review: '发回会话' };
+  const actionMap = { task: '创建任务', session: '开始会话', review: '发送' };
+  const defaultBody = s.mode === 'prism'
+    ? `${s.verdict.headline}\n\n${s.verdict.analysis}`
+    : s.mode === 'debate'
+    ? s.verdict.takeaway
+    : s.annotations.filter(a => a.checked).map((a, i) => `${i + 1}. [${a.para}] ${a.after}`).join('\n');
+
+  host.innerHTML = `
+    <div class="scrim" onclick="closeOverlay()"></div>
+    <div class="dialog" role="dialog" aria-modal="true">
+      <header class="dh">
+        <span>${titleMap[kind]}</span>
+        <button class="btn icon-sm quiet dx" aria-label="关闭" onclick="closeOverlay()">${ico('x')}</button>
+      </header>
+      <div class="db">
+        <textarea class="input" rows="5">${esc(defaultBody)}</textarea>
+        <select class="input">
+          <option>Claude Code · claude-opus-4.8</option>
+          <option>Codex · gpt-5.6-codex</option>
+        </select>
+      </div>
+      <footer class="df">
+        <button class="btn md ghost" onclick="closeOverlay()">取消</button>
+        <button class="btn md primary" onclick="closeOverlay();showToast('${kind === 'task' ? '已创建任务' : '已打开会话'}')">${actionMap[kind]}</button>
+      </footer>
+    </div>
+  `;
+};
+
+window.closeOverlay = () => { document.getElementById('overlay-host').innerHTML = ''; };
+window.addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay(); });
+window.addEventListener('resize', () => {
+  positionThumb(document.getElementById('mode-seg'));
+  positionThumb(document.getElementById('launch-seg'));
+  positionThumb(document.getElementById('track-seg'));
+  positionThumb(document.getElementById('doc-seg'));
+  positionThumb(document.getElementById('insight-seg'));
+});
+
+document.getElementById('mode-seg').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-id]');
+  if (btn) selectSession(btn.dataset.id);
+});
+document.getElementById('btn-replay').addEventListener('click', () => {
+  const s = currentSession();
+  if (!s) { selectSession('debate-monolith'); currentSession().phaseIndex = 1; startStreamSim(false); return; }
+  s.phaseIndex = s.mode === 'debate' ? 1 : 0;
+  startStreamSim(false);
+});
+document.getElementById('btn-theme').addEventListener('click', () => {
+  state.dark = !state.dark;
+  document.documentElement.classList.toggle('dark', state.dark);
+  document.getElementById('btn-theme').innerHTML = ico(state.dark ? 'sun' : 'moon');
+});
+
+document.getElementById('btn-theme').innerHTML = ico('moon');
+render();
+</script>
+</body>
+</html>

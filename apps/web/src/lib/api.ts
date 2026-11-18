@@ -8,6 +8,7 @@ import type {
   ApiError,
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
+  CouncilAdvanceRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSteerRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
   ExtensionContext, ExtensionInventory, ExtensionDetail, ExtensionDocument, ExtensionManagementCapabilities, ExtensionActionRequest, ExtensionActionResult, ExtensionRuntimeReport,
@@ -965,6 +966,16 @@ export const api = {
     params.set('limit', String(limit));
     return request<StatsRunsPage>(`${API.stats}/runs?${params}`, { signal });
   },
+
+  councilList: (signal?: AbortSignal) => request<{ items: CouncilDiscussion[] }>('/api/council', { signal }),
+  councilGet: (id: string, signal?: AbortSignal) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { signal }),
+  councilCreate: (body: CouncilCreateRequest) => request<CouncilDiscussion>('/api/council', { method: 'POST', body: JSON.stringify(body) }),
+  councilPatch: (id: string, body: CouncilPatchRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  councilAdvance: (id: string, body?: CouncilAdvanceRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/advance`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  councilSteer: (id: string, body: CouncilSteerRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/steer`, { method: 'POST', body: JSON.stringify(body) }),
+  councilCancel: (id: string) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: '{}' }),
+  councilDelete: (id: string) => request<void>(`/api/council/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  councilExport: (id: string, body: CouncilExportRequest) => request<CouncilExportResult>(`/api/council/${encodeURIComponent(id)}/export`, { method: 'POST', body: JSON.stringify(body) }),
 };
 
 /** `GET /api/stats/export`. The body is a file, so this does not go through `request()`. */
@@ -994,6 +1005,10 @@ export async function exportStats(query: string, format: 'csv' | 'json'): Promis
 
 export function statsStreamUrl(): string {
   return withClientFeatures(`${API.stats}/stream`);
+}
+
+export function councilStreamUrl(id: string): string {
+  return withClientFeatures(`/api/council/${encodeURIComponent(id)}/stream`);
 }
 
 export function listsStreamUrl(): string {

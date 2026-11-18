@@ -229,3 +229,19 @@ export const MODEL_PICKER_BUDGET = {
   /** A kept model list or quota reading older than this is not shown; a newer one shows while the fresh read runs. */
   storedMaxAgeMs: 24 * 60 * 60_000,
 } as const;
+
+/** Multi-model discussions: stored list cap, input text cap, and model call limits. */
+export const COUNCIL_BUDGET = {
+  /** Discussions kept in the store; older ones are pruned on create. */
+  keptDiscussions: 100,
+  /** Longest topic / proposition text accepted on create. */
+  topicChars: 4_000,
+  /** Longest document text accepted for Insight review. */
+  documentChars: 64_000,
+  /** Longest follow-up message in steer. */
+  steerChars: 4_000,
+  /** Output token ceiling per model turn. */
+  maxOutputTokens: 4_096,
+  /** Stream idle timeout before failing a silent model request. */
+  idleTimeoutMs: 60_000,
+} as const;

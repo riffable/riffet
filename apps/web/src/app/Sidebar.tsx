@@ -68,6 +68,8 @@ interface Props {
   /** Its main conversation, whose state the row shows: the sidebar's lists do not hold it. */
   assistantSession?: Session;
   onOpenAutomations: () => void;
+  onOpenCouncil?: () => void;
+  councilActive?: boolean;
   onOpenMarks: () => void;
   onOpenExtensions: () => void;
   onOpenPlugins: () => void;
@@ -374,6 +376,7 @@ export function Sidebar(props: Props) {
       trailing: props.tasksCount ? <span className="ml-auto text-2xs tabular-nums text-fg-4">{props.tasksCount}</span> : null,
     } } : {}),
     automations: { open: props.onOpenAutomations, active: props.automationsActive },
+    ...(props.onOpenCouncil ? { council: { open: props.onOpenCouncil, active: props.councilActive } } : {}),
     marks: { open: props.onOpenMarks, active: props.marksActive },
     plugins: { open: props.onOpenPlugins, active: props.pluginsActive },
     extensions: { open: props.onOpenExtensions, active: props.extensionsActive },

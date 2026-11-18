@@ -28,6 +28,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Voice input on the web, Android and iPhone: speak into the input box and the text appears at the caret. Choose a speech-to-text service that speaks the OpenAI format in Settings › Input on the web, or install the Local speech recognition plugin, which downloads its engine and models on demand and shows text as you speak. On a phone the mic switches to voice mode: hold to talk, release to insert, slide up to cancel, or tap to keep recording until you tap done. In a browser the microphone needs an HTTPS address; the phone apps do not.
 - New Codex and Claude Code conversations start sooner: while the new-conversation page is open, the agent is started ahead of your first message, as Cursor already was. The first reply comes about 1.5–3 s sooner from Codex and about 0.6 s sooner from Claude Code. One started but not used ends when you leave the page.
 - The model menu remembers each provider's last model with its effort and Fast settings: switching back to a provider starts on it, and picking another model keeps effort, Fast and the context window where that model offers them. Quota figures from the last reading show as soon as the menu opens, also after a reload, while a fresh reading loads.
+- Added an initial Collaboration page in the sidebar for running multi-model debates, Prism discussions, and document reviews across configured agents, then sending results into a session or task.
 
 ## 0.8.0 - 2026-11-17
 

@@ -912,6 +912,10 @@ msgid "打开文件面板"
 msgstr "打开文件面板"
 
 #: src/app/Workbench.tsx
+msgid "打开模型协作"
+msgstr "打开模型协作"
+
+#: src/app/Workbench.tsx
 msgid "打开统计"
 msgstr "打开统计"
 
@@ -1531,6 +1535,11 @@ msgstr "模型"
 #: src/app/plugins/PluginsPage.tsx
 msgid "模型与 Agent"
 msgstr "模型与 Agent"
+
+#: src/app/sidebarDestinations.ts
+#: src/app/Workbench.tsx
+msgid "模型协作"
+msgstr "模型协作"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-feature"

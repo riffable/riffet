@@ -2,7 +2,7 @@ import type { ComponentType } from 'react';
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { DEFAULT_SIDEBAR_PINNED, SIDEBAR_DESTINATIONS, type SidebarDestination } from '@contracts';
-import { IconBookmark, IconBot, IconCalendarClock, IconChartColumn, IconPuzzle, IconSquareKanban, IconWrench } from '@/components/icons';
+import { IconBookmark, IconBot, IconCalendarClock, IconChartColumn, IconMessagesSquare, IconPuzzle, IconSquareKanban, IconWrench } from '@/components/icons';
 
 /** The sidebar's destinations the web has; 活动 is the Mac's. */
 export type WebSidebarDestination = Exclude<SidebarDestination, 'activity'>;
@@ -11,6 +11,7 @@ export const SIDEBAR_DESTINATION_META: Record<WebSidebarDestination, { label: Me
   assistant: { label: msg`个人助理`, icon: IconBot },
   tasks: { label: msg`任务看板`, icon: IconSquareKanban },
   automations: { label: msg`自动化`, icon: IconCalendarClock },
+  council: { label: msg`模型协作`, icon: IconMessagesSquare },
   marks: { label: msg`收藏夹`, icon: IconBookmark },
   plugins: { label: msg`插件`, icon: IconPuzzle },
   extensions: { label: msg`扩展管理`, icon: IconWrench },

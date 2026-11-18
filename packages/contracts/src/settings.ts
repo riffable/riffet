@@ -111,7 +111,7 @@ export interface VoiceInputSettingsUpdate {
  * actions and always rows; 个人资料, 主题 and 设置 stay in the account menu. A client offers the ones
  * it has (`activity` is the Mac's).
  */
-export const SIDEBAR_DESTINATIONS = ['assistant', 'tasks', 'automations', 'marks', 'plugins', 'extensions', 'stats', 'activity'] as const;
+export const SIDEBAR_DESTINATIONS = ['assistant', 'tasks', 'automations', 'council', 'marks', 'plugins', 'extensions', 'stats', 'activity'] as const;
 export type SidebarDestination = typeof SIDEBAR_DESTINATIONS[number];
 export const DEFAULT_SIDEBAR_PINNED: readonly SidebarDestination[] = ['assistant', 'tasks', 'automations'];
 /** The most ids `sidebarPinned` holds; past it the server refuses the list. */

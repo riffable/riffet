@@ -1058,6 +1058,7 @@
             "enum": [
               "prompt",
               "provider",
+              "agent",
               "generated",
               "user"
             ],
@@ -1221,7 +1222,8 @@
                   "schedule",
                   "discussion",
                   "channel",
-                  "assistant"
+                  "assistant",
+                  "council"
                 ],
                 "open": true
               },
@@ -1519,6 +1521,7 @@
                   "enum": [
                     "prompt",
                     "provider",
+                    "agent",
                     "generated",
                     "user"
                   ],
@@ -1682,7 +1685,8 @@
                         "schedule",
                         "discussion",
                         "channel",
-                        "assistant"
+                        "assistant",
+                        "council"
                       ],
                       "open": true
                     },
@@ -3036,6 +3040,7 @@
                     "enum": [
                       "prompt",
                       "provider",
+                      "agent",
                       "generated",
                       "user"
                     ],
@@ -3199,7 +3204,8 @@
                           "schedule",
                           "discussion",
                           "channel",
-                          "assistant"
+                          "assistant",
+                          "council"
                         ],
                         "open": true
                       },
@@ -10072,6 +10078,7 @@
                     "enum": [
                       "prompt",
                       "provider",
+                      "agent",
                       "generated",
                       "user"
                     ],
@@ -10235,7 +10242,8 @@
                           "schedule",
                           "discussion",
                           "channel",
-                          "assistant"
+                          "assistant",
+                          "council"
                         ],
                         "open": true
                       },

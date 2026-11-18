@@ -243,7 +243,10 @@ export class Store {
       CREATE TABLE IF NOT EXISTS session_shares (id TEXT PRIMARY KEY, session_id TEXT NOT NULL UNIQUE, json TEXT NOT NULL);
       -- Folder favorites. Additive; project_id is '' for host-level ones so one folder is one row per scope.
       -- No foreign key: deleteProject removes a project's own favorites itself.
-      CREATE TABLE IF NOT EXISTS folder_favorites (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, path TEXT NOT NULL, json TEXT NOT NULL, UNIQUE(project_id, path));`);
+      CREATE TABLE IF NOT EXISTS folder_favorites (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, path TEXT NOT NULL, json TEXT NOT NULL, UNIQUE(project_id, path));
+      -- Multi-model discussions (council). Additive and unversioned.
+      CREATE TABLE IF NOT EXISTS council_discussions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, json TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS council_updated ON council_discussions(updated_at DESC, id);`);
     this.journal = new Journal(this.db, fn => this.transaction(fn), fn => this.afterTransaction(fn), id => this.isSessionDeleted(id));
     try { this.ensureMessageSearchIndex(); } catch (error) { console.error('[riffet] message search index unavailable; search falls back to a table scan:', error); }
     // Schema v2 removed the ACP backend. `purgeAcpConversations` writes `user_version` only as part

@@ -165,7 +165,7 @@ export class AssistantBoard {
   private conversations(): Session[] {
     const system = new Set(this.deps.store.listProjects().filter(project => project.system === 'assistant' || project.system === 'quick-chat' || project.archivedAt).map(project => project.id));
     const moved = (session: Session) => session.lastActivityAt ?? session.createdAt;
-    return this.deps.store.listSessions().filter(session => !session.archivedAt && session.state !== 'archived' && !system.has(session.projectId))
+    return this.deps.store.listSessions().filter(session => !session.archivedAt && session.state !== 'archived' && session.origin?.kind !== 'council' && !system.has(session.projectId))
       .sort((a, b) => moved(b).localeCompare(moved(a)));
   }
 

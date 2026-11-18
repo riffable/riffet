@@ -102,8 +102,8 @@ export function requireSessionVisibleToClient(headers: IncomingHttpHeaders | und
   if (!sessionVisibleToClient(headers, session, getProject)) throw new AppError('SESSION_NOT_FOUND', 'Conversation does not exist', 404);
 }
 
-export function visibleSessionsForClient<T extends { backendId?: string; projectId?: string }>(headers: IncomingHttpHeaders | undefined, items: readonly T[], getProject?: ProjectLookup): T[] {
-  return items.filter(item => sessionVisibleToClient(headers, item, getProject));
+export function visibleSessionsForClient<T extends { backendId?: string; projectId?: string; origin?: { kind?: string } }>(headers: IncomingHttpHeaders | undefined, items: readonly T[], getProject?: ProjectLookup): T[] {
+  return items.filter(item => item.origin?.kind !== 'council' && sessionVisibleToClient(headers, item, getProject));
 }
 
 export function visibleBackendsForClient<T extends { backendId: string }>(headers: IncomingHttpHeaders | undefined, items: readonly T[]): T[] {

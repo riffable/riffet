@@ -29,6 +29,7 @@ import type { DeviceChannel } from '../riffet-mcp/devices.js';
 import type { DeviceAdb } from '../riffet-mcp/adb.js';
 import type { WorkItemService } from '../work-items/index.js';
 import type { ChannelService } from '../channels/service.js';
+import type { CouncilService } from '../council/service.js';
 
 export type NativeMessageBody = { commandId?: string; text: string; attachments?: Array<{id?:string}>; context?: Array<{path?:string;line?:number}>; references?: unknown; expectedConfigRevision?: number };
 
@@ -45,6 +46,8 @@ export interface RouteDeps {
   stateDir: string;
   /** Tasks (docs/TASK-BOARD.md). */
   workItems: WorkItemService;
+  /** Multi-model discussions. */
+  council: CouncilService;
   contextReferences: SessionReferenceService;
   store: Store;
   auth: Auth;
