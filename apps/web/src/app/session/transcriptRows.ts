@@ -18,8 +18,13 @@ function backgroundTask(item: TimelineItem): boolean {
   return item.kind === 'activity' && item.activity.kind === 'background_task';
 }
 
+/**
+ * Rows that stay inside the process around them. A notice that reaches a turn already running (a
+ * background agent reporting back mid-turn) belongs here too: as a row of its own it would split
+ * the turn's work into two processes, both running.
+ */
 function processActivity(item: TimelineItem): boolean {
-  return item.kind === 'activity' && (item.activity.kind === 'background_task' || item.activity.kind === 'compaction');
+  return (item.kind === 'activity' && (item.activity.kind === 'background_task' || item.activity.kind === 'compaction')) || item.kind === 'task_notification';
 }
 
 function compact(item: TimelineItem | undefined): boolean {

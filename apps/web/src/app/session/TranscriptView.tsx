@@ -466,8 +466,9 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const { items, gaps, running } = row;
     // Background task status can settle much later than its owning process. Its elapsed time
     // belongs to the task row; the process header and footer follow actual model output.
-    const first = items.find((item) => item.kind !== 'activity')!;
-    const lastOutputIndex = items.findLastIndex((item) => item.kind !== 'activity');
+    const output = (item: TimelineItem) => item.kind !== 'activity' && item.kind !== 'task_notification';
+    const first = items.find(output)!;
+    const lastOutputIndex = items.findLastIndex(output);
     const runs = toolRuns(items);
     const detailOpen = hasOpenProcessDetail(remembered, items, runs);
     const runCovered = new Set([...runs].flatMap(([start, end]) => Array.from({ length: end - start - 1 }, (_, offset) => start + 1 + offset)));
@@ -533,6 +534,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
               case 'plan': inner = <PlanBlock entries={item.entries} />; break;
               case 'image': inner = <ImageBlock src={item.src} />; break;
               case 'activity': inner = <ActivityRow item={item} />; break;
+              case 'task_notification': inner = <TaskNotificationRow item={item} />; break;
               default: inner = null;
             }
             return (

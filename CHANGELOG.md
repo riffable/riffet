@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- When a background agent reports back while its turn is still running, the web conversation keeps that turn in one "Working" block with the report inside it, instead of splitting it into two blocks that both show "Working".
 - Opening the web model picker scrolls the currently selected model into view (along with the active Agent and provider columns when shown), and keeps the selection in view when switching back to the active provider.
 - In the web new-session model picker, clicking an available Agent or provider switches to it directly and restores its last chosen provider, model, and parameters (instead of staying in preview until a model is clicked); opening the menu while parameters or quota are still loading no longer locks the list to a shorter height.
 - The personal assistant can list built-in and shared Riffet Web themes and available plugin palettes even when a message has no connected tab. Retrying an unsent message from the assistant now identifies the workbench that submits it.
