@@ -22,7 +22,7 @@ import { warmTerminals } from '../shared/warm-terminals.js';
 import { claudeWarmKey, sessionClaudeWarmKey, startClaudeWarm, stopClaudeWarm, type ClaudeWarm } from './warm.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { claudeHistoryMetrics, claudeUsageRecord, runForClaudeStep } from './metering.js';
-import { ClaudeTranscript, claudePromptKey, findClaudeTranscript, parseRow, mapRow, type MapperState, type ClaudeRow } from './history.js';
+import { claudePromptKey, readClaudeMeasurements, findClaudeTranscript, parseRow, mapRow, type MapperState, type ClaudeRow } from './history.js';
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
@@ -552,12 +552,11 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     const generation = `metrics-v2:${info.size}:${Math.round(info.mtimeMs)}:${quiet ? 'quiet' : 'busy'}`;
     if (generation === known) return undefined;
     const steering = new DeferredSteerInputs(host, { backendId, sessionId: session.id, currentTarget: () => undefined });
-    const transcript = new ClaudeTranscript(session, nativeSessionId, {
+    // Streamed: a transcript runs to hundreds of megabytes, and only the meter's state is kept (docs/guide/performance.md §3.8).
+    const measured = await readClaudeMeasurements(file, session, {
       additionalContext: (text, nativeId, createdAt) => steering.receiptEvents(text, nativeId, createdAt),
     });
-    await transcript.setFile(file);
-    if (transcript.state !== 'ok') throw new Error(`Claude transcript is ${transcript.state}`);
-    const steps = transcript.measurements().filter(step => step.agentKind === 'subagent' || !step.live || quiet);
+    const steps = measured.filter(step => step.agentKind === 'subagent' || !step.live || quiet);
     claudeHistoryMetrics(host, session, steps);
     const entries = steps
       .map(step => {

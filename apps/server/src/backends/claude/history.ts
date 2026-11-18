@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open, readFile, readdir, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
@@ -953,7 +954,9 @@ const usageOf = (message: Record<string, unknown> | undefined) => {
  * from its new rows only, and a response no row touched keeps the object it was last reported as.
  */
 class ClaudeStepMeter {
-  private readonly open = new Map<string, { step: ClaudeStepMeasurement; text: string[]; built?: ClaudeStepMeasurement; kept?: boolean }>();
+  /** Without `keepText` a step's `text` stays empty and only whether it had any visible text is kept. */
+  constructor(private readonly keepText = true) {}
+  private readonly open = new Map<string, { step: ClaudeStepMeasurement; text: string[]; visible?: boolean; built?: ClaudeStepMeasurement; kept?: boolean }>();
   private readonly order: string[] = [];
   private readonly subagents: ClaudeStepMeasurement[] = [];
   private readonly toolParents = new Map<string, { stepId: string; subagentType?: string; nativeMessageId?: string; commandId?: string }>();
@@ -1022,9 +1025,13 @@ class ClaudeStepMeter {
       for (const part of parts) {
         const block = record(part);
         if (!block) continue;
-        if (block.type === 'text' && typeof block.text === 'string') entry.text.push(block.text);
-        else if ((block.type === 'thinking' || block.type === 'reasoning') && typeof (block.thinking ?? block.text) === 'string') entry.text.push(readableThinking(String(block.thinking ?? block.text)));
-        else if (block.type === 'tool_use') entry.text.push(JSON.stringify(block.input ?? {}));
+        let piece: string | undefined;
+        if (block.type === 'text' && typeof block.text === 'string') piece = block.text;
+        else if ((block.type === 'thinking' || block.type === 'reasoning') && typeof (block.thinking ?? block.text) === 'string') piece = readableThinking(String(block.thinking ?? block.text));
+        else if (block.type === 'tool_use') piece = JSON.stringify(block.input ?? {});
+        if (piece === undefined) continue;
+        if (this.keepText) entry.text.push(piece);
+        else if (!entry.visible && /\S/.test(piece)) entry.visible = true;
       }
       entry.step.endedAt = Math.max(entry.step.endedAt, stamp);
       // Usage on the parts is cumulative for the response, so the largest reading is the total.
@@ -1079,7 +1086,7 @@ class ClaudeStepMeter {
       const entry = this.open.get(id)!;
       if (!entry.built) {
         entry.built = { ...entry.step, text: entry.text.join('') };
-        entry.kept = entry.built.outputTokens > 0 || /\S/.test(entry.built.text);
+        entry.kept = entry.built.outputTokens > 0 || (this.keepText ? /\S/.test(entry.built.text) : entry.visible === true);
       }
       // The last response in the transcript is the one still being written; every earlier one was
       // superseded by a later record, which is exactly when Claude stopped streaming into it.
@@ -1136,6 +1143,46 @@ function newProgress(sessionId: string, putBlob: (text: string) => string | unde
     state: { turnAt: '', calls: new Map(), tasks: new Map(), activities: new ClaudeActivities(sessionId, { putBlob }) },
     turnState: initialState('alive'), parents: new Map(), meter: new ClaudeStepMeter(), openCalls: new Map(),
   };
+}
+
+/**
+ * The step measurements of a whole transcript, read as a stream (docs/guide/performance.md §3.8). Each row
+ * is mapped only so the meter can attribute it to its run; rows, events and response text are not kept,
+ * and children's JSONL is not read (the meter does not measure them). Bytes after the last newline wait
+ * for a later read, as in `ClaudeTranscript`. Throws `Claude transcript is unparsed` where a full read
+ * would leave the transcript unparsed, and `… is unavailable` when the file is gone.
+ */
+export async function readClaudeMeasurements(file: string, session: Session, hooks: ClaudeTranscriptHooks = {}): Promise<ClaudeStepMeasurement[]> {
+  const meter = new ClaudeStepMeter(false);
+  const state: MapperState = { turnAt: '', calls: new Map(), tasks: new Map(), activities: new ClaudeActivities(session.id, { putBlob: () => undefined }) };
+  let index = 0;
+  const take = (bytes: Buffer, start: number, end: number) => {
+    if (end <= start) return;
+    index += 1;
+    const row = parseRow(bytes.toString('utf8', start, end), hooks.unbounded);
+    if (row) meter.add(row, mapRow(row, index, session, state, hooks));
+  };
+  try {
+    const info = await stat(file);
+    if (info.size > MAX_TRANSCRIPT_BYTES) throw new Error('transcript exceeds read limit');
+    if (info.size === 0) return [];
+    // A line longer than a chunk waits as a list and is joined once its newline arrives, not re-copied per chunk.
+    let pending: Buffer[] = [];
+    for await (const read of createReadStream(file, { start: 0, end: info.size - 1 })) {
+      const chunk = read as Buffer;
+      if (chunk.indexOf(0x0a) < 0) { pending.push(chunk); continue; }
+      const bytes = pending.length ? Buffer.concat([...pending, chunk]) : chunk;
+      let start = 0;
+      for (let end = bytes.indexOf(0x0a); end >= 0; end = bytes.indexOf(0x0a, start)) {
+        take(bytes, start, end);
+        start = end + 1;
+      }
+      pending = start < bytes.length ? [bytes.subarray(start)] : [];
+    }
+  } catch (error) {
+    throw new Error(`Claude transcript is ${(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'unavailable' : 'unparsed'}`);
+  }
+  return meter.steps();
 }
 
 function trackOpenToolUses(open: Map<string, OpenToolUse>, row: ClaudeRow): void {

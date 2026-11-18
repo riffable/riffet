@@ -184,7 +184,6 @@
 ### 服务端
 
 - §3.7：冷会话只丢弃主车道；子 Agent 车道的行（2026-11-16 本机约占时间线一半）要等子 Agent 摘要落进主车道的行之后才能丢弃。
-- §3.8：Claude 用量补算整读转录文件并做完整投影（`backends/claude/index.ts` 的 `usageTranscript` → `ClaudeTranscript.setFile`）。本机 46 个转录超过 32 MB，最大 242 MB；改法是像 Codex 的 `RolloutUsageReader` 一样单独按行读取用量。
 - §3.10：旧版本拉起的 tmux 服务没有所有者标记。socket 不在临时状态目录里的（`<临时目录>/riffet-<uid>-<hash>/tmux.sock`，状态目录路径过长时的位置）无法判断所有者，只在 socket 消失后扫除。这类服务只会越来越少，不另做迁移。
 
 ### Kotlin 共享客户端（Mac、iOS、Android）

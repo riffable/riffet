@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 import type { AvatarStyleProvider } from '@riffet/plugin-api';
 import {
   OWNER_AVATAR_PREVIEW_SIDE, OWNER_AVATAR_SEED_MAX, OWNER_AVATAR_SIDE,
@@ -60,6 +59,7 @@ export function avatarSvgProblem(svg: unknown): string | undefined {
  */
 export async function rasterizeAvatar(svg: string, side: number, paper: string): Promise<Buffer> {
   const input = Buffer.from(svg);
+  const { default: sharp } = await import('sharp');
   const { width } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
   const density = Math.min(1200, Math.max(36, Math.round(72 * 2 * side / (width || side))));
   return sharp(input, { density, limitInputPixels: MAX_INPUT_PIXELS })

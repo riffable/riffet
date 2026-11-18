@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
 import type { AgentToolContext, AgentToolDefinition, AgentToolGroup, AgentToolResult, PluginHost } from '@riffet/plugin-api';
 import { parseSteps, StepRunner, ACTIONS, MAX_STEPS } from './act.js';
 import { DEFAULT_VIEWPORT, type Browsers, type SessionBrowser, type Tab } from './browsers.js';
@@ -154,6 +153,7 @@ export function toolGroup(browsers: Browsers, host: PluginHost): AgentToolGroup 
         const raw = ref
           ? await (async () => { const locator = tab.page.getByRef(ref); if (!(await locator.count().catch(() => 0))) throw error('BROWSER_STALE_REF', `No element ${ref}; take a new browser_snapshot`, 409); return locator.first().screenshot({ type: 'jpeg', quality: 85, timeout: 15_000 }); })()
           : await tab.page.screenshot({ type: 'jpeg', quality: 85, fullPage: args.fullPage === true, timeout: 15_000 });
+        const { default: sharp } = await import('sharp');
         const image = await sharp(raw, { limitInputPixels: 128 * 1024 * 1024 }).resize({ width: IMAGE_EDGE, height: IMAGE_EDGE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
         // The timeline cannot hold an inline picture this large; a registered attachment is shown by its path.
         const saved = await host.sessions?.saveImage?.(context.sessionId, { name: 'screenshot.jpg', mimeType: 'image/jpeg', data: image }).then(file => file.path, () => undefined);

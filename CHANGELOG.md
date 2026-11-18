@@ -52,7 +52,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Performance
 
-- The server uses less memory while it backfills Claude Code token usage: a long conversation's history is read line by line instead of loaded whole, so peak memory for a 240 MB history drops from about 590 MB to 245 MB. The image library is loaded only when an image is first processed, about 30 MB less at startup.
+- The server uses less memory while it backfills Claude Code token usage: a long conversation's history is read line by line instead of loaded whole, so peak memory for a 240 MB history drops from about 590 MB to 170 MB. The image library is loaded only when an image is first processed, about 30 MB less at startup.
 
 ## 0.8.0 - 2026-11-17
 

@@ -1,4 +1,3 @@
-import sharp from 'sharp';
 
 // A wide screenshot remains readable; tall screenshots keep their full aspect ratio.
 const MAX_WIDTH = 2048;
@@ -27,6 +26,7 @@ export async function optimizeShareImage(data: Buffer, mimeType: string): Promis
   if (mimeType !== 'image/png' && mimeType !== 'image/jpeg') return { data };
   if (mimeType === 'image/png' && animatedPng(data)) return { data };
   try {
+    const { default: sharp } = await import('sharp');
     const image = sharp(data, { limitInputPixels: MAX_INPUT_PIXELS });
     const metadata = await image.metadata();
     if (!metadata.width || !metadata.height || (metadata.pages ?? 1) > 1) return { data };

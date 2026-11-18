@@ -1,7 +1,6 @@
 import { toolObject as object, type BoundAssistantTool, type ToolDefinition } from '../assistant-capability.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { AgentToolGroup } from '@riffet/plugin-api';
-import sharp from 'sharp';
 import type { DeviceCapability, Session, RiffetWakeup, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
 import type { SessionReferenceService } from '../context-references/service.js';
 import type { Auth } from '../auth.js';
@@ -693,6 +692,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
 /** A JPEG no larger than PREVIEW_EDGE on its long side, or undefined when the image cannot be decoded. */
 async function previewImage(data: Buffer): Promise<{ data: string; mimeType: string } | undefined> {
   try {
+    const { default: sharp } = await import('sharp');
     const encoded = await sharp(data, { limitInputPixels: 64 * 1024 * 1024 }).autoOrient()
       .resize({ width: PREVIEW_EDGE, height: PREVIEW_EDGE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
     return { data: encoded.toString('base64'), mimeType: 'image/jpeg' };
