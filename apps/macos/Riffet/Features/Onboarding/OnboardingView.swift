@@ -273,27 +273,48 @@ private struct PhonePage: View {
     var body: some View {
         OnboardingColumn(title: "在手机上接着看", subtitle: "用手机上的 Riffet 扫码，离开电脑也能处理审批") {
             VStack(spacing: Space.md) {
-                Group {
-                    if let image = flow.pairingQR {
-                        Image(nsImage: image).interpolation(.none).resizable().frame(width: 172, height: 172)
-                    } else {
-                        Spinner(size: .small).frame(width: 172, height: 172)
+                if flow.needsNetworkAccess && flow.pairing == nil {
+                    // The code's place, held until the server can be reached from the network: the QR
+                    // then appears where this stood.
+                    Group {
+                        if flow.openingNetwork {
+                            VStack(spacing: Space.sm) {
+                                Spinner(size: .small)
+                                Text("正在重启服务器").font(RiffetFont.label).foregroundStyle(palette.fg3)
+                            }
+                        } else {
+                            Image(icon: "qrcode").font(RiffetFont.pageTitle).foregroundStyle(palette.fg4)
+                        }
                     }
-                }
-                .padding(Space.lg)
-                .background(.white, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.lineSoft))
-                if let device = flow.pairedDevice {
-                    Label("\(device.name) 已连接", icon: "checkmark.circle")
-                        .font(RiffetFont.label).foregroundStyle(palette.fg)
-                    if device.allowControl {
-                        Text("在「技能与工具」里可以让 Agent 操作这台手机")
-                            .font(RiffetFont.caption).foregroundStyle(palette.fg3).multilineTextAlignment(.center)
+                    .frame(width: 172, height: 172)
+                    .padding(Space.lg)
+                    .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+                    if let error = flow.networkError {
+                        Text(verbatim: error).font(RiffetFont.caption).foregroundStyle(palette.danger).multilineTextAlignment(.center)
                     }
                 } else {
-                    HStack(spacing: Space.sm) {
-                        Spinner(size: .small)
-                        Text("等待扫码").font(RiffetFont.label).foregroundStyle(palette.fg3)
+                    Group {
+                        if let image = flow.pairingQR {
+                            Image(nsImage: image).interpolation(.none).resizable().frame(width: 172, height: 172)
+                        } else {
+                            Spinner(size: .small).frame(width: 172, height: 172)
+                        }
+                    }
+                    .padding(Space.lg)
+                    .background(.white, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.lineSoft))
+                    if let device = flow.pairedDevice {
+                        Label("\(device.name) 已连接", icon: "checkmark.circle")
+                            .font(RiffetFont.label).foregroundStyle(palette.fg)
+                        if device.allowControl {
+                            Text("在「技能与工具」里可以让 Agent 操作这台手机")
+                                .font(RiffetFont.caption).foregroundStyle(palette.fg3).multilineTextAlignment(.center)
+                        }
+                    } else {
+                        HStack(spacing: Space.sm) {
+                            Spinner(size: .small)
+                            Text("等待扫码").font(RiffetFont.label).foregroundStyle(palette.fg3)
+                        }
                     }
                 }
             }
@@ -301,6 +322,11 @@ private struct PhonePage: View {
         } foot: {
             if flow.pairedDevice == nil {
                 Button("以后再说") { model.finishOnboarding() }.buttonStyle(OnboardingButtonStyle(kind: .ghost))
+                if flow.needsNetworkAccess && flow.pairing == nil {
+                    OnboardingPrimaryButton(title: "允许同一网络的设备连接", busy: flow.openingNetwork) {
+                        Task { await flow.allowNetworkAccess(model: model) }
+                    }
+                }
             } else {
                 OnboardingPrimaryButton(title: "完成") { model.finishOnboarding() }
             }

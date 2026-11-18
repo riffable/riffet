@@ -31,6 +31,16 @@
         }
       }
     },
+    "允许同一网络的设备连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow devices on the same network"
+          }
+        }
+      }
+    },
     "它的文件夹会删除，可以从个人助理目录的提交历史找回": {
       "localizations": {
         "en": {
@@ -101,12 +111,42 @@
         }
       }
     },
+    "开启后，这台电脑上的浏览器也需要登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browsers on this computer will need to sign in too"
+          }
+        }
+      }
+    },
     "插件源": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Plugin sources"
+          }
+        }
+      }
+    },
+    "服务器没有按时重启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server did not restart in time"
+          }
+        }
+      }
+    },
+    "正在重启服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restarting the server"
           }
         }
       }

@@ -38,6 +38,10 @@ final class OnboardingFlow {
     private(set) var pairingQR: NSImage?
     private(set) var pairedDevice: PublicDevice?
     private(set) var phoneAvailable = true
+    /// The local server listens on this Mac alone: the page offers to open it to the network instead of a code.
+    private(set) var needsNetworkAccess = false
+    private(set) var openingNetwork = false
+    private(set) var networkError: String?
     @ObservationIgnored private var baseline: Set<String> = []
 
     /// The full order. A page is skipped when it is not needed, but the current one always stays in the
@@ -203,22 +207,47 @@ final class OnboardingFlow {
     // MARK: Phone
 
     /// A pairing code lasts five minutes; the one already issued is reused while it has a minute left.
-    func preparePairing(model: AppModel, fresh: Bool = false) async {
+    /// [tolerant]: a failed request leaves the page as it is (the server is restarting) instead of dropping it.
+    func preparePairing(model: AppModel, fresh: Bool = false, tolerant: Bool = false) async {
         guard let api = model.workbench?.host.api else { return }
         if !fresh, let expiry = pairing?.expiresAt, Date().timeIntervalSince1970 * 1000 < Double(expiry) - 60_000 { return }
         do {
             let next = try await api.pairingCode(name: nil)
             if next.localOnly {
-                // A server listening on this Mac alone cannot be scanned by a phone.
-                phoneAvailable = false
+                // A phone cannot scan a server that listens on this Mac alone: the local one can be opened to the
+                // network here; any other has nothing to offer.
+                guard model.target == .local, let manager = model.server.state.running?.manager, model.server.canSetNetworkAccess(manager) else {
+                    phoneAvailable = false
+                    return
+                }
+                needsNetworkAccess = true
                 return
             }
+            needsNetworkAccess = false
             pairing = next
             pairingQR = ConnectionSettings.qrImage(next)
             pairedDevice = nil
             baseline = Set((try? await api.devices())?.map(\.id) ?? [])
         } catch {
-            phoneAvailable = false
+            if !tolerant { phoneAvailable = false }
+        }
+    }
+
+    /// Opens the local server to the network, then shows the code once it answers again.
+    func allowNetworkAccess(model: AppModel) async {
+        guard !openingNetwork else { return }
+        openingNetwork = true
+        networkError = nil
+        defer { openingNetwork = false }
+        do {
+            guard try await model.server.setNetworkAccess(true) else { return }
+            for _ in 0..<60 where pairing == nil {
+                await preparePairing(model: model, fresh: true, tolerant: true)
+                if pairing == nil { try? await Task.sleep(for: .milliseconds(500)) }
+            }
+            if pairing == nil { networkError = String(localized: "无法连接 Riffet") }
+        } catch {
+            networkError = error.riffetMessage
         }
     }
 

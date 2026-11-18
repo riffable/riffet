@@ -18,6 +18,7 @@ struct ConnectionSettings: View {
     @State private var pairingQR: NSImage?
     @State private var pairingBusy = false
     @State private var pairingError: String?
+    @State private var networkBusy = false
     @State private var pushKey = PushKeyStore()
 
     var body: some View {
@@ -30,6 +31,20 @@ struct ConnectionSettings: View {
                     SettingsRow(server.title, detail: server.detail) {
                         serverTrailing(current: isCurrent(server), forget: { forgetting = server }) {
                             if let url = server.url { Task { await model.connectRemote(url) } }
+                        }
+                    }
+                }
+                if canSetNetworkAccess, let running = model.server.state.running {
+                    SettingsRow("允许同一网络的设备连接", detail: "开启后，这台电脑上的浏览器也需要登录") {
+                        HStack(spacing: Space.sm) {
+                            if networkBusy { Spinner(size: .small) }
+                            Toggle("允许同一网络的设备连接", isOn: Binding(
+                                get: { running.allowsNetworkDevices },
+                                set: { value in Task { await setNetworkAccess(value) } }
+                            ))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .disabled(networkBusy)
                         }
                     }
                 }
@@ -127,7 +142,16 @@ struct ConnectionSettings: View {
 
     @ViewBuilder
     private var pairingRow: some View {
-        if let pairing {
+        if let pairing, pairing.localOnly, canSetNetworkAccess {
+            HStack(spacing: Space.sm) {
+                SettingsActionButton("允许同一网络的设备连接", kind: .primary) {
+                    Task { await setNetworkAccess(true) }
+                }
+                .disabled(networkBusy)
+                if networkBusy { Spinner(size: .small) }
+                Spacer(minLength: 0)
+            }
+        } else if let pairing {
             HStack(alignment: .top, spacing: Space.lg) {
                 if let image = pairingQR {
                     Image(nsImage: image)
@@ -187,6 +211,36 @@ struct ConnectionSettings: View {
     }
 
     private var isLocal: Bool { model.target == .local }
+
+    /// The local server only; a login service keeps its address in its plist.
+    private var canSetNetworkAccess: Bool {
+        guard isLocal, let manager = model.server.state.running?.manager else { return false }
+        return model.server.canSetNetworkAccess(manager)
+    }
+
+    private func setNetworkAccess(_ on: Bool) async {
+        guard !networkBusy else { return }
+        networkBusy = true
+        error = nil
+        defer { networkBusy = false }
+        let hadCode = pairing != nil
+        do {
+            guard try await model.server.setNetworkAccess(on) else { return }
+        } catch {
+            self.error = error.riffetMessage
+            return
+        }
+        pairing = nil
+        pairingQR = nil
+        pairingError = nil
+        guard hadCode, on else { return }
+        // The window reconnects to the restarted server; the code follows once it answers.
+        for _ in 0..<40 {
+            await makePairing()
+            if pairing != nil { break }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+    }
 
     private func isCurrent(_ server: SavedServer) -> Bool {
         guard case let .remote(url) = model.target else { return false }

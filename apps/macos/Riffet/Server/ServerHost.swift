@@ -43,6 +43,9 @@ struct RunningServer: Equatable, Sendable {
     let record: DaemonRecord
     let version: String?
     let manager: ServerManager
+
+    /// The server listens beyond this Mac (host 0.0.0.0 or a LAN address), so it requires the token.
+    var allowsNetworkDevices: Bool { !ServerHost.isLoopback(record.host) }
 }
 
 /// A conversation a restart would end now (`GET /api/service/restartable`, docs/DELIVERY.md, 重启).
@@ -352,8 +355,11 @@ final class ServerHost {
     /// renews the hold. [restartAnyway] and [cancelRestart] end the wait; after 3 minutes it gives up, lifts
     /// the hold and names the blockers. A service without these endpoints restarts as before; one that fails
     /// to answer (a timeout, a 5xx, a refused token) is not restarted unless the owner chooses 仍然重启.
-    func restartWhenIdle() async throws {
-        guard let server = state.running, restartBlockers == nil else { return }
+    /// [network]: the server comes back with that network access (`writeAppServerConfig`, `riffet restart --host`).
+    /// Returns false when the wait was cancelled and nothing restarted.
+    @discardableResult
+    func restartWhenIdle(network: Bool? = nil) async throws -> Bool {
+        guard let server = state.running, restartBlockers == nil else { return false }
         restartChoice = nil
         restartBlockers = []
         restartProblem = nil
@@ -362,13 +368,42 @@ final class ServerHost {
         restartBlockers = nil
         restartProblem = nil
         switch outcome {
-        case .cancelled: return
+        case .cancelled: return false
         case .ready, .unsupported:
-            if server.manager == .cli { restartCliDaemon(drained: outcome == .ready); return }
+            if server.manager == .cli { restartCliDaemon(drained: outcome == .ready, network: network); return true }
+            if let network, server.manager == .app { writeAppServerConfig(network: network) }
             // A restart that did not happen lets the service deliver again.
             do { try await restart() } catch { _ = try? await serviceCall(server, drain: false); throw error }
+            return true
         }
     }
+
+    /// Whether this manager can change the network access: a login service has its arguments baked into its plist.
+    func canSetNetworkAccess(_ manager: ServerManager) -> Bool { manager != .loginService }
+
+    /// Opens the local server to other devices on the network (host 0.0.0.0, token required) or back to this Mac
+    /// alone (127.0.0.1, token-free), restarting through `restartWhenIdle`, and returns once the server runs with
+    /// that access; false when the wait was cancelled. The choice is kept in `app-server.env`, so it survives a
+    /// clean stop of the App-managed server; a CLI daemon keeps it in its own saved launch settings.
+    @discardableResult
+    func setNetworkAccess(_ on: Bool) async throws -> Bool {
+        guard let server = state.running, canSetNetworkAccess(server.manager) else { return false }
+        if server.allowsNetworkDevices == on { return true }
+        guard try await restartWhenIdle(network: on) else { return false }
+        let deadline = ContinuousClock.now + .seconds(90)
+        while ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(500))
+            await refresh()
+            if let running = state.running, running.allowsNetworkDevices == on, running.record.pid != server.record.pid { return true }
+            if case let .failed(message) = state { throw HostError.command(message) }
+            if server.manager == .cli, let failure = maintenance, !failure.running, let code = failure.status, code != 0 {
+                throw HostError.command(failure.output.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        }
+        throw HostError.command(String(localized: "服务器没有按时重启"))
+    }
+
+    nonisolated static func isLoopback(_ host: String) -> Bool { ["127.0.0.1", "localhost", "::1"].contains(host) }
 
     func restartAnyway() { if restartBlockers != nil { restartChoice = .now } }
 
@@ -483,8 +518,9 @@ final class ServerHost {
     /// Restarts a daemon this App does not own, the way its own message says to: `riffet restart`
     /// replays the running daemon's arguments, so host, port and auth survive.
     /// [drained]: the App already waited (`restartWhenIdle`), so the CLI does not wait again.
-    private func restartCliDaemon(drained: Bool) {
-        runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))\(drained ? " --force" : "")")
+    private func restartCliDaemon(drained: Bool, network: Bool? = nil) {
+        let access = network.map { $0 ? " --host 0.0.0.0 --auth" : " --host 127.0.0.1 --no-auth" } ?? ""
+        runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))\(drained ? " --force" : "")\(access)")
     }
 
     /// Rebuilds the server the daemon runs (`dist/`). The running daemon keeps the code it started
@@ -674,13 +710,31 @@ final class ServerHost {
 
     // MARK: Helpers
 
-    /// What the launcher in the bundle reads: the same host, port and auth as the daemon it replaces.
-    private func writeAppServerConfig() {
+    /// What the launcher in the bundle reads: the same host, port and auth as the daemon it replaces. Without a
+    /// daemon record (it is deleted on a clean stop) the values already in the file stay; [network] replaces the
+    /// access choice (on: 0.0.0.0 with the token, off: 127.0.0.1 without).
+    private func writeAppServerConfig(network: Bool? = nil) {
         var host = "127.0.0.1", port = "4337", auth = "0"
+        if let text = try? String(contentsOf: stateDirectory.appending(path: "app-server.env"), encoding: .utf8) {
+            for line in text.split(separator: "\n") {
+                let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { continue }
+                switch parts[0] {
+                case "RIFFET_HOST": host = parts[1]
+                case "RIFFET_PORT": port = parts[1]
+                case "RIFFET_AUTH": auth = parts[1]
+                default: break
+                }
+            }
+        }
         if let args = readDaemonRecord()?.args {
             if let index = args.firstIndex(of: "--host"), index + 1 < args.count { host = args[index + 1] }
             if let index = args.firstIndex(of: "--port"), index + 1 < args.count { port = args[index + 1] }
-            if args.contains("--auth") || !["127.0.0.1", "localhost", "::1"].contains(host) { auth = "1" }
+            if args.contains("--auth") || !Self.isLoopback(host) { auth = "1" }
+        }
+        if let network {
+            host = network ? "0.0.0.0" : "127.0.0.1"
+            auth = network ? "1" : "0"
         }
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         let workspace = documents.map { $0.appending(path: "Riffet").path }
