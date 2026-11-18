@@ -1,17 +1,17 @@
 # IM 通道方案（首个：飞书机器人）
 
-日期：2026-11-11。范围：服务端、Web 设置页。状态：设计稿，未实现。
+日期：2026-11-11；2026-11-18 改为插件扩展点（见「插件化」）。范围：服务端、Web 与 Mac 设置页、插件 API。状态：通道层与飞书已实现；插件化为设计稿，未实现。
 
 在飞书里和 Riffet 的会话对话：私聊或群里发消息，服务按聊天选定的项目新建或继续会话，把思考、工具和回答实时写回一张卡片，审批和提问也能在飞书里直接回答。飞书就是又一个客户端，和 Web、Mac、手机看到的是同一批会话、同一个交互。
 
-通道层放在服务端核心，与具体 IM 无关；飞书是第一个适配器，后续 Slack、Telegram 等只新增适配器。卡片、流式与过程消息的做法沿用已在生产环境验证过的飞书机器人实践；但不把飞书调用写进会话主流程，平台细节都留在适配器里。
+通道层放在服务端核心，与具体 IM 无关；具体 IM 是插件实现的 `imChannels` 扩展点，飞书是第一个实现（内置插件 `riffet.feishu`），后续 Slack、Telegram 等只新增插件。卡片、流式与过程消息的做法沿用已在生产环境验证过的飞书机器人实践；但不把飞书调用写进会话主流程，平台细节都留在适配器里。
 
 ## 已定决策
 
 | 问题 | 决定 |
 | --- | --- |
 | 部署 | Riffet 可能在任意服务器上；只要求服务能主动连出飞书，不要求公网入口 |
-| 代码位置 | 服务端核心 `apps/server/src/channels/`，不做插件扩展点 |
+| 代码位置 | 通道层在服务端核心 `apps/server/src/channels/`；具体 IM 是插件扩展点 `imChannels`，飞书为内置插件 `riffet.feishu`（2026-11-18 修改，原为「不做插件扩展点」） |
 | 聊天范围 | 私聊、群聊、话题群都支持 |
 | 谁能使用 | 只有绑定过的飞书账号；群里其他人的消息忽略。按群授权全部成员以后再做 |
 | 会话粒度 | 默认一个话题一个会话，群里新的 @ 消息开新会话；可把某个群设为整群共用一个会话 |
@@ -25,7 +25,7 @@
 ## 架构
 
 ```
-ChannelProvider（feishu/，后续 slack/、telegram/）
+ImChannelProvider（插件 plugins/riffet/feishu，后续 slack、telegram 插件）
    │ 入站消息 · 卡片回调                 ▲ 渲染 TurnView · 交互卡 · 通知
    ▼                                     │
 ChannelService（channels/，与 IM 无关）
@@ -53,15 +53,64 @@ apps/server/src/channels/
   projector.ts    TimelineRow → TurnView
   commands.ts     /new /stop /project /status /bind …
   routes.ts       /api/channels/*（设置页用）
-  feishu/
-    provider.ts   ChannelProvider 实现
-    connection.ts 长连接与事件归一化
-    openapi.ts    tenant token、fetch、错误分类
-    cards.ts      回合卡、交互卡、项目选择卡、简卡
-    markdown.ts   Markdown → 卡片元素
-    cot.ts        原生 COT 消息：创建、追加事件、收口
-    surface.ts    一个回合的 COT 与答案卡：节流、更新、降级与拆卡
+
+plugins/riffet/feishu/      内置插件（插件化之后；之前在 apps/server/src/channels/feishu/）
+  index.ts        清单：contributes.imChannels
+  activate.ts     返回 Contributions.imChannels
+  provider.ts     ImChannelProvider 实现
+  connection.ts 长连接与事件归一化
+  openapi.ts    tenant token、fetch、错误分类
+  cards.ts      回合卡、交互卡、项目选择卡、简卡
+  markdown.ts   Markdown → 卡片元素
+  cot.ts        原生 COT 消息：创建、追加事件、收口
+  surface.ts    一个回合的 COT 与答案卡：节流、更新、降级与拆卡
 ```
+
+
+## 插件化
+
+2026-11-18 决定：具体 IM 做成插件扩展点，飞书搬进内置插件。通道层（入站管线、门禁、绑定、会话跟随、投影、命令、交互、收口、持久化、路由）留在核心，作为这个扩展点的宿主实现；插件只实现平台适配器。
+
+### 现状与边界
+
+- `channels/feishu/`（约 2200 行）只依赖通道层的 `types.ts` 和契约里的 `ChannelDomain`，不引用 store、timeline 或其他服务端模块；npm 依赖 `@larksuiteoapi/node-sdk`、`unified`、`remark-parse`、`remark-gfm` 都在根 `package.json` 里，满足 `check:plugins` 的边界。
+- 核心对飞书的硬依赖只有四处：`app.ts` 里 `providers: [feishuProvider]`；`service.ts` 的 `createAccount` 只收 `kind: 'feishu'`、`domain` 只收 `feishu | lark`；`bindings.ts` 的 `StoredAccount.kind: 'feishu'`；契约 `ChannelKind = 'feishu'`。
+- 插件只需要提供一个适配器，不需要直接操作会话：`ChannelService` 调用适配器，适配器经 `ChannelContext` 把入站消息和卡片回调交回核心。因此不扩大 `host.sessions`。
+
+### 扩展点
+
+| 项 | 定义 |
+| --- | --- |
+| 清单 | `contributes.imChannels: [{ id: '<plugin>/<name>', title, icon?, account }]`，最多 16 个（与 `channels`、`agentTools` 相同）；`account` 声明账号表单字段（见下）。不用 `channels`：它已是会话级 socket（`PluginChannelHandler`，浏览器插件在用） |
+| 实现 | `Contributions.imChannels: Record<string, ImChannelProvider>`，按声明 ID 取 |
+| 类型 | `channels/types.ts` 里与平台相关的接口移到 `packages/plugin-api`：`ChannelProvider` → `ImChannelProvider`，以及 `ChannelConnection`、`TurnSurface`、`ChannelContext`、`InboundMessage`、`InboundAction`、`ActionReply`、`TurnView`、`InteractionView`、`ProjectPickerView`、`ModelPickerView`、`CommandPanelView`。核心改为从插件 API 导入；只供核心内部用的类型留在原处 |
+| 范围 | 只给进程内插件（与 `channels`、`agentTools` 相同）；是否开放给隔离安装的插件另行决定 |
+| 生命周期 | 插件启用：核心为该声明 ID 下的已有账号调用 `connect`。插件停用或换代：`ActivationScope` 结束时核心关闭这些连接，账号与绑定保留；回合卡停止更新，重新启用后由「重启接管与收口」补齐 |
+
+**账号字段**：`account.fields` 是 `{ key, label, kind: 'text' | 'secret' | 'select', options? }` 的列表，label 按 `{ 'zh-Hans', en }` 本地化。核心按它渲染手动添加表单、保存取值；`secret` 照旧写 `<stateDir>/channels/<id>.secret`（0600），不经插件 `secrets`，也从不返回前端。`connect(account)` 收到 `{ id, name, settings, secret, cards }`。飞书声明 `appId`（text）、`domain`（select：feishu / lark）、`appSecret`（secret）。
+
+**扫码创建**：`register` 保持为适配器的可选方法；声明了它，设置页才出现扫码入口。
+
+### 契约与数据
+
+- `ChannelKind` 从 `'feishu'` 改为声明 ID 字符串。`ChannelAccountInfo` 增加 `provider`（声明 ID）与 `available`（实现当前是否在线）；`appId`、`domain` 收进 `settings`。
+- 已有账号不改写存储：读取时把 `kind: 'feishu'` 视为 `riffet.feishu/feishu`，`appId`、`domain` 视为 `settings` 的同名字段。下次保存账号时按新形状写回。
+- `GET /api/channels` 增加 `providers: [{ id, title, icon?, fields, register }]`，客户端据此渲染，不再写死飞书。
+- 会话来源 `{ kind: 'channel', channel: { kind, account } }` 中的 `kind` 同样改存声明 ID，旧值按上条读取。
+
+### 设置页
+
+- Web（`apps/web/src/app/settings/channels/`）与 Mac（`ChannelsSettings.swift`、`ChannelSheets.swift`）改为按 `providers` 渲染：添加对话框先选通道（只有一个时跳过），标题、扫码说明用通道的 `title`，表单用声明的字段。分组与位置不变。
+- 账号所属插件停用时，详情页显示不可用及原因，入口仍在；删除账号照常可用。
+- 没有任何 `imChannels` 实现时，「机器人」页显示空状态，指向扩展页。
+
+### 迁移步骤
+
+1. 插件 API：新增 `imChannels` 声明与实现类型，`pnpm gen:plugin-api`、`gen:plugin-api:check`；新增成员均为可选，`released/1.0.0` 兼容。
+2. 核心：`ChannelService` 的 providers 改从插件注册表取，随注册表变化增删连接；`app.ts` 去掉 `feishuProvider`；保留测试用的 `channelProviders` 注入；去掉 `kind`、`domain` 的写死校验，改按声明字段校验。
+3. 搬迁：`channels/feishu/` 移到内置插件 `riffet.feishu`（目录见「目录」），函数体原样搬，只改导入路径与类型名，逐行对照验收；`normalize.test.ts` 随之搬移。`defaultEnabled: true`，已有用户升级后不需要操作。
+4. 客户端：Web 与 Mac 设置页按 `providers` 渲染；文案改动跑 `i18n:extract`、`i18n:check`。
+5. 验证：`check:plugins`、`check:layers`、`gen:plugin-api:check`、`pnpm typecheck`、`channels/service.test.ts` 与搬过去的 `normalize.test.ts`；飞书真机跑通私聊、群聊、话题、审批卡、扫码创建，以及停用再启用插件后的收口。
 
 ## 核心模型
 
