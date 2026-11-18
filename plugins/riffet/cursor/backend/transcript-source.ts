@@ -19,9 +19,8 @@ import { historyStartSteps, sameStep } from '../native/transcript.js';
  *   a new prompt) is a new version of what stood there; the blob id stays on as `nativeAliases`
  *   (`<position>:<blob>:<part>`, the id the in-memory transcript gives the same event).
  * - A turn is the CLI's request id, or `turn:<position>…` for one it gave none (a task notification,
- *   older CLIs). It ends when the next one begins, or once the store ends on an answer with no step
- *   in flight, the CLI's own record of a finished turn (G3); a hook that ends it first goes through
- *   `drain` (G6).
+ *   older CLIs). A new prompt bounds the preceding turn. The last turn of an attached CLI waits
+ *   for a hook or a settled idle prompt; the store may checkpoint several answers in one turn.
  * - The cursor is the reader's whole state: the root read, how much of it and the digest of that
  *   prefix (a rewound history no longer matches it), and the mapper's state, so a read resumes
  *   exactly where the last commit left it (G7).
@@ -56,6 +55,8 @@ export interface CursorTranscriptOptions {
   chatsDir(): string;
   /** The chat the session follows now; undefined until the CLI has made one. */
   chatId(): string | undefined;
+  /** A live CLI owns its last turn. After exit, a recorded outcome takes precedence over the lost connection. */
+  tailState?(chatId: string, turnId: string): 'live' | 'exited' | AgentTurnStatus | undefined;
   /** Where change signals come from; without it `watch` never wakes. */
   signals?(listener: CursorTranscriptSignals): () => void;
   /** Stamped on events; the journal does not keep it. */
@@ -103,6 +104,8 @@ interface TurnState {
   at: string;
   /** Its turn_ended is written: a later message of the same CLI turn opens a turn of its own. */
   ended?: true;
+  /** This open turn was observed in a running CLI, including before a server restart. */
+  attached?: true;
   /** Its newest message left a tool call or result unanswered: cut short there, it was interrupted. */
   owes?: true;
 }
@@ -199,7 +202,17 @@ interface ReadOptions {
 }
 
 /** `endTurn`: how the turn the store leaves open ends, and which one it is when the caller knows. */
-interface TurnEnd { status: AgentTurnStatus; at: string; turnId?: string }
+interface TurnEnd { status: AgentTurnStatus; at: string; turnId?: string; expectedRoot?: string; stillCurrent?: () => boolean }
+
+/** A stop hook may arrive after the next prompt already bounded this exact turn. */
+function correctInferredEnd(w: AgentLaneWriter, id: string, end: TurnEnd): boolean {
+  const previous = w.turnEndStatus(id);
+  if (previous === end.status) return true;
+  if (end.expectedRoot || (previous !== 'completed' && previous !== 'interrupted')) return false;
+  w.turnReopened(id, end.at);
+  w.turnEnded(id, end.status, end.at);
+  return true;
+}
 
 /**
  * One read's hold on the event loop: `ms` at a time, a turn of the loop in between. No single step of
@@ -318,27 +331,27 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
     if (base) base.dismissed = true;
   }
 
-  drain(w: AgentLaneWriter): Promise<void> { return this.readServing(w); }
+  tailState(chatId: string, turnId: string) { return this.options.tailState?.(chatId, turnId); }
 
-  /**
-   * A turn the store leaves open because its last step never returned: the CLI was interrupted, failed
-   * or exited in it, and a hook or the settled store says so. What is on disk is read first (G6); then
-   * the turn the reading has open ends, `turnId`'s only (the CLI's request id) when given, and the
-   * cursor records it, so whatever the CLI still writes of it opens a turn of its own. A turn the read
-   * ended already is left as it was.
-   */
-  endTurn(w: AgentLaneWriter, status: AgentTurnStatus, at: string, turnId?: string): Promise<void> {
-    return this.readServing(w, { status, at, ...(turnId ? { turnId } : {}) });
+  async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
+
+  /** Drain the CLI's checkpoint before the hook or settled idle observation ends its turn (G6). */
+  endTurn(w: AgentLaneWriter, status: AgentTurnStatus, at: string, turnId?: string, expectedRoot?: string, stillCurrent?: () => boolean): Promise<boolean> {
+    return this.readServing(w, { status, at, turnId, expectedRoot, stillCurrent });
   }
 
   /** Reads everything on disk into the log that serves the lane (G6), then ends its open turn if asked to. */
-  private async readServing(w: AgentLaneWriter, end?: TurnEnd): Promise<void> {
+  private async readServing(w: AgentLaneWriter, end?: TurnEnd): Promise<boolean> {
     const view = this.open();
-    if (!view) return;
+    if (!view) return false;
     try {
       const target = w.scratch ?? w;
       const options: ReadOptions = { bounded: false, origin: target === w ? 'start' : 'tail', serving: true, behind: false, depth: 0, slice: new Slice(this.limits.sliceMs) };
-      await this.read(target, view, options, end);
+      const accepted = await this.read(target, view, options, end);
+      if (accepted && target !== w && end?.turnId && target.turnEndStatus(end.turnId) === end.status) {
+        correctInferredEnd(w, end.turnId, end);
+      }
+      return accepted;
     } finally { view.close(); }
   }
 
@@ -372,7 +385,7 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   /** Reads `view` into `w` from its cursor on, then the subagents it follows; true once nothing readable is left. */
   private async read(w: AgentLaneWriter, view: ChatView, options: ReadOptions, end?: TurnEnd): Promise<boolean> {
-    if (!view.meta()) return true;
+    if (!view.meta()) return !end;
     const saved = w.cursor === null ? undefined : parseState(w.cursor);
     if (w.cursor !== null && !saved) {
       // Only this reader writes this cursor; one it cannot read was written by another version of it.
@@ -380,9 +393,7 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
       return false;
     }
     const lane = new LaneRead(this, w, view, saved, options);
-    const done = await lane.run();
-    if (end) lane.end(end);
-    return done;
+    return lane.run(end);
   }
 
   /** Reads each subagent of a lane into a lane of its own (G9), dropping the ones that are done; true once all are caught up. */
@@ -457,6 +468,8 @@ class LaneRead {
   /** See `LaneState.tasks`. */
   private readonly tasks: Map<string, AgentSubagentInfo>;
   private seenAt: string | undefined;
+  /** This read reached a stored assistant checkpoint with no pending step. */
+  private historyAnswered = false;
   /** What this read holds in memory is not to be committed: the lane was rebuilt, or the read stopped mid-rewind. */
   private abandoned = false;
 
@@ -469,7 +482,7 @@ class LaneRead {
     this.tasks = new Map(this.state.tasks);
   }
 
-  async run(): Promise<boolean> {
+  async run(end?: TurnEnd): Promise<boolean> {
     this.restoreCompactions();
     if (!await this.reprojectHistory()) return false;
     const meta = this.view.meta()!;
@@ -477,15 +490,40 @@ class LaneRead {
     if (this.fresh || this.state.mapping !== MAPPING_VERSION || this.state.root !== meta.latestRootBlobId || this.state.n < this.state.len || this.stale.size) done = await this.readStore();
     // The store is where the last read left it; only the live step can have moved, unless the store has a step of its own.
     else if (this.state.live && (!this.state.draft || this.state.draft.live)) this.draft(this.state.len, undefined);
-    if (this.abandoned) return done;
+    if (this.abandoned) return !end && done;
+    this.settleTail(end);
     if (this.options.serving) {
       if (this.state.turn) for (const signal of this.source.takeCompactions()) this.compactionStarted(signal);
       for (const [toolCallId, agentId] of this.source.takeHints()) this.follow(toolCallId, agentId);
     }
     this.flush();
-    done = (await this.source.readChildren(this.w, this.children, this.tasks, this.options)) && done;
+    const childrenDone = await this.source.readChildren(this.w, this.children, this.tasks, this.options);
     this.flush();
-    return done;
+    // A child still importing history does not hold the parent's Stop hook open.
+    return end ? done && this.end(end) : done && childrenDone;
+  }
+
+  private settleTail(ending?: TurnEnd): void {
+    const turn = this.state.turn;
+    if (!turn || turn.ended || !this.state.live || this.state.n !== this.state.len) return;
+    // Promotion drops the scratch log. Carry the outcome it served into the full history first.
+    let outcome = this.w.scratch?.turnEndStatus(turn.id);
+    if (!outcome) {
+      if (ending && (!ending.turnId || ending.turnId === turn.id || ending.turnId === this.mapper.turnId)) return;
+      const state = this.options.depth === 0 ? this.source.tailState(this.view.chatId, this.mapper.turnId ?? turn.id) : undefined;
+      if (state === 'live') {
+        turn.attached = true;
+        return;
+      }
+      if (state === 'exited' && turn.attached) outcome = 'interrupted';
+      else if (state && state !== 'exited') outcome = state;
+      else if (this.historyAnswered && !this.state.draft && !turn.attached) outcome = 'completed';
+    }
+    if (!outcome) return;
+    if (this.state.draft && !this.state.draft.prompt) this.dropDraft();
+    this.flush();
+    turn.ended = true;
+    this.writeEnd(turn, outcome);
   }
 
   /** Repair old normalized payloads in place; CLI reads, receipts and terminal turn marks stay intact. */
@@ -565,20 +603,42 @@ class LaneRead {
   }
 
   /** {@link CursorTranscriptSource.endTurn}, once the store has been read. */
-  end({ status, at, turnId }: TurnEnd): void {
+  end(end: TurnEnd): boolean {
+    const { status, at, turnId, expectedRoot, stillCurrent } = end;
+    if (this.abandoned || (stillCurrent && !stillCurrent())) return false;
     const turn = this.state.turn;
+    if (expectedRoot) {
+      if (this.state.root !== expectedRoot || this.state.n !== this.state.len || this.view.reader.meta()?.latestRootBlobId !== expectedRoot) return false;
+      // A new step can start during the drain without changing the store root yet.
+      const live = this.source.liveStep(this.view.chatId, expectedRoot);
+      if (live && !live.sealed && !this.state.recent.includes(live.turn)) return false;
+      if (status === 'completed' && (this.state.draft || (live && !live.sealed && live.turn === this.mapper.turnId))) return false;
+    }
     // The turn a live step opened is the open one while the store has not recorded it.
     const prompt = this.state.draft?.prompt;
-    if (!this.abandoned && prompt && (turnId ? turnId === prompt : !turn || turn.ended)) {
+    if (prompt && (turnId ? turnId === prompt : !turn || turn.ended)) {
       this.source.dismissLive(this.view.chatId);
       this.dropDraft(status, at);
       this.flush();
-      return;
+      return true;
     }
-    if (this.abandoned || !turn || turn.ended || (turnId && turn.id !== turnId && this.mapper.turnId !== turnId)) return;
+    // A continuation after an older end has its own journal id and the same CLI request id.
+    // Settle the continuation before considering a correction to the earlier end.
+    if (!turn || turn.ended || (turnId && turn.id !== turnId && this.mapper.turnId !== turnId)) {
+      if (turn?.ended && (!turnId || turnId === turn.id || turnId === this.mapper.turnId)) {
+        return correctInferredEnd(this.w, turn.id, end);
+      }
+      return !!turnId && correctInferredEnd(this.w, turnId, end);
+    }
+    if (this.state.draft && !prompt) {
+      this.source.dismissLive(this.view.chatId);
+      this.dropDraft();
+      this.flush();
+    }
     turn.ended = true;
     this.writeEnd({ ...turn, at }, status);
     this.flush();
+    return true;
   }
 
   private abandon(): false {
@@ -650,11 +710,7 @@ class LaneRead {
       const drafted = new Set(this.drafts.map(draft => draft.finalId));
       for (const id of this.stale) if (!drafted.has(id)) this.retire.push(id);
       this.stale.clear();
-      if (!pending && !this.mapper.awaitingReply && this.state.turn && !this.state.turn.ended) {
-        this.flush();
-        this.state.turn.ended = true;
-        this.writeEnd({ ...this.state.turn }, 'completed');
-      }
+      this.historyAnswered = !pending && !this.mapper.awaitingReply;
     }
     return end || (blocked && !this.options.behind);
   }
@@ -785,7 +841,7 @@ class LaneRead {
     };
   }
 
-  private writeEnd(turn: TurnState, status: AgentTurnStatus = turn.owes ? 'interrupted' : 'completed'): void {
+  private writeEnd(turn: TurnState, status: AgentTurnStatus = this.w.scratch?.turnEndStatus(turn.id) ?? (turn.owes ? 'interrupted' : 'completed')): void {
     const at = turn.at || new Date().toISOString();
     this.w.turnEnded(turn.id, status, at);
     // A compaction the CLI reported that no archive completed will not finish now; a late archive still can.

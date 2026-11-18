@@ -11,6 +11,7 @@ import { cursorSteerContext } from '../native/chat-store.js';
 import type { NativeService } from '../native/service.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { CursorSteerBridge } from './steer.js';
+import { CursorTranscriptSource } from './transcript-source.js';
 
 vi.mock('./launch-plugin.js', async importOriginal => ({ ...await importOriginal<typeof import('./launch-plugin.js')>(), probeCursorHookSteer: async () => true }));
 const cleanup: Array<() => Promise<void>> = [];
@@ -36,6 +37,9 @@ async function fixture() {
   const port = cursorPort(host);
   const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
   const bridge = new CursorSteerBridge(host, port, native, stateDir, {} as never);
+  const source = new CursorTranscriptSource({ chatId: () => session().nativeSessionId, chatsDir: () => stateDir });
+  const endTurn = vi.spyOn(source, 'endTurn').mockImplementation(async (_w, _status, _at, _turn, _root, stillCurrent) => stillCurrent?.() ?? true);
+  vi.spyOn(host.transcript, 'withSource').mockImplementation(async (_id, task) => task(source, undefined as never));
   cleanup.push(() => bridge.close());
   bridge.bind('s');
   await bridge.launchArgs();
@@ -53,7 +57,8 @@ async function fixture() {
   const fenced = (runId: string) => host.fences.filter(fence => fence.runId === runId).length;
   const context = (): AgentContext => ({ session: session(), project, profile });
   return {
-    bridge, native, host, port, stateDir, events, runs, hook, request, fenced, context, session,
+    bridge, native, host, port, stateDir, events, runs, hook, request, fenced, context, session, endTurn,
+    answer: (turnId?: string, nativeSessionId = 'chat', error?: string) => bridge.answered(session(), { nativeSessionId, turnId, rootId: `root-of-${turnId}`, error }, () => true),
     setSession: (patch: Partial<AgentSessionView>) => { host.sessions.set('s', { ...session(), ...patch }); },
     setEpoch: (value: number) => { host.terminalRecords.set('pty', { ...host.terminalRecords.get('pty')!, epoch: value }); },
   };
@@ -220,30 +225,86 @@ describe('Cursor strict tool-boundary steering', () => {
     await f.hook('preToolUse');
     const request = f.request('pending');
     await f.bridge.enqueue(request, request.input.text);
-    f.bridge.answered(f.session(), { nativeSessionId: 'other-chat', turnId: 'generation' });
+    await f.answer('generation', 'other-chat');
     expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'generation' });
-    f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation' });
-    f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation' });
+    await Promise.all([f.answer('generation'), f.answer('generation')]);
     expect(f.bridge.activeTurn(f.session())).toBeUndefined();
     expect(f.events().filter(event => event.type === 'run_completed')).toEqual([expect.objectContaining({ runId: 'owner', data: expect.objectContaining({ commandId: 'original' }) })]);
     expect(f.events().find(event => event.type === 'native_input_rejected')).toMatchObject({ data: { beforeWrite: true } });
     await f.hook('stop', { status: 'error' });
+    await f.answer('generation');
     expect(f.events().filter(event => ['run_completed', 'run_failed', 'run_cancelled'].includes(event.type))).toHaveLength(1);
+    expect(f.endTurn).toHaveBeenCalledTimes(1);
     expect(f.fenced('run-pending')).toBe(0);
   });
 
   it('ends the tracked generation when the store answer has no turn id, and leaves a finished turn alone', async () => {
     const f = await fixture();
     await f.hook('preToolUse', { generation_id: 'auto-turn' });
-    f.bridge.answered(f.session(), { nativeSessionId: 'chat' });
+    await f.answer();
     expect(f.bridge.activeTurn(f.session())).toBeUndefined();
     expect(f.events().filter(event => event.type === 'run_completed').map(event => event.nativeTurnId)).toEqual(['auto-turn']);
     f.runs[0]!.state = 'completed';
-    f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation' });
+    await f.answer('generation');
     expect(f.events().filter(event => event.type === 'run_completed')).toHaveLength(1);
     f.runs[0]!.state = 'running';
-    f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation' });
+    await f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation', rootId: 'later-root' }, () => true);
     expect(f.events().filter(event => event.type === 'run_completed').map(event => event.runId)).toEqual([undefined, 'owner']);
+  });
+
+  it.each([['error', 'run_failed'], ['aborted', 'run_cancelled']])('keeps a %s Stop that arrives while idle completion is reading', async (status, eventType) => {
+    const f = await fixture();
+    await f.hook('preToolUse');
+    let resume!: () => void;
+    const gate = new Promise<void>(resolve => { resume = resolve; });
+    f.endTurn.mockImplementationOnce(async (_w, _status, _at, _turn, _root, stillCurrent) => {
+      await gate;
+      return stillCurrent?.() ?? true;
+    });
+    const answer = f.answer('generation');
+    await f.hook('stop', { status });
+    resume();
+    await answer;
+    await f.answer('generation');
+    expect(f.events().map(event => event.type)).toEqual([eventType]);
+    expect(f.endTurn.mock.calls.map(([, result]) => result)).toEqual(['completed', status === 'error' ? 'failed' : 'cancelled']);
+  });
+
+  it('retries a Stop whose first journal read found no store, then applies it once to each new idle root', async () => {
+    const f = await fixture();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      f.endTurn.mockResolvedValueOnce(false);
+      await f.hook('stop', { status: 'error' });
+      expect(f.bridge.recordedOutcome('s', { nativeSessionId: 'chat', turnId: 'generation' })).toBe('failed');
+      expect(f.bridge.recordedOutcome('s', { nativeSessionId: 'other-chat', turnId: 'generation' })).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(f.endTurn).toHaveBeenCalledTimes(1);
+      const [, , hookAt] = f.endTurn.mock.calls[0]!;
+
+      await f.answer('generation');
+      await f.answer('generation', 'chat', 'gateway timeout');
+      await f.bridge.answered(f.session(), { nativeSessionId: 'chat', turnId: 'generation', rootId: 'later-root' }, () => true);
+      expect(f.endTurn.mock.calls.map(([, status, at, id, root]) => [status, at, id, root])).toEqual([
+        ['failed', hookAt, 'generation', undefined],
+        ['failed', hookAt, 'generation', 'root-of-generation'],
+        ['failed', hookAt, 'generation', 'later-root'],
+      ]);
+      expect(f.events().map(event => event.type)).toEqual(['run_failed']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the successor open when idle evidence and a late Stop name its predecessor', async () => {
+    const f = await fixture();
+    await f.hook('preToolUse', { generation_id: 'successor' });
+    await f.answer('generation');
+    expect(f.endTurn).not.toHaveBeenCalled();
+    expect(f.events()).toHaveLength(0);
+    await f.hook('stop', { status: 'aborted' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('successor');
+    expect(f.events()).toMatchObject([{ nativeTurnId: 'generation', type: 'run_cancelled' }]);
   });
 
   it('publishes a terminal target even when the original native echo is not yet associated', async () => {

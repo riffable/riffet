@@ -86,10 +86,12 @@ export class Watch {
   /** Last moment the pane itself accounted for the CLI's work: it showed busy, or a stop settled. */
   paneBusyAt = 0;
   /**
-   * The CLI error under the footer, with [paneBusyAt] when it was first seen: the CLI may leave the
-   * line on screen through later turns, and once one has run the error is no longer news.
+   * The CLI error under the footer and the turn it was first seen in. The line can stay on screen
+   * through later turns, including one whose busy frames fell between captures.
    */
-  cliError: { text: string; paneBusyAt: number } | undefined;
+  cliError: { text: string; paneBusyAt: number; chatId?: string; turn?: string } | undefined;
+  /** The same turn's normal prompt and store root must stay idle together before they can settle it. */
+  idleTurn: { nativeSessionId: string; terminalId: string; rootId: string; activeTurnId?: string; error?: string; since: number } | undefined;
   /** Terminal whose CLI has drawn its footer at least once; before that it is still booting. */
   booted: string | undefined;
   booting: { terminalId: string; since: number } | undefined;

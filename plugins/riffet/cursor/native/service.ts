@@ -2,7 +2,7 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
-import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl } from '@riffet/plugin-api/experimental/agent';
+import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type AgentTurnStatus } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter, cursorComposerHoldsPrompt } from '../cli-adapter.js';
 import { approvalArgs, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
@@ -42,17 +42,26 @@ export interface NativeServiceOptions {
 /** The phase of each watched conversation goes through its tracker; the pane and transcript are its evidence. */
 const cursorTurns = new KeyedTurnTrackers<object>();
 
+export interface SettledCursorTurn {
+  nativeSessionId: string;
+  turnId?: string;
+  rootId: string;
+  error?: string;
+}
+
 /** Provider hooks supply identities; screen parsing continues to own the coarse UI phase. */
 export interface NativeTurnObserver {
   activeTurn(session: AgentSessionView): NativeStatus['activeTurn'];
+  /** A provider outcome for this exact turn also allows a checkpoint ending on an incomplete step. */
+  recordedOutcome?(sessionId: string, target: NativeTurnTarget): AgentTurnStatus | undefined;
   /** Events just read from the conversation's chat store, where a steer the CLI took leaves its context. */
   transcript?(session: AgentSessionView, events: NativeWorkbenchEvent[]): void;
   offline(session: AgentSessionView): void;
   /**
-   * The chat store ends on an answer and the CLI has stayed idle since (see `Transcript.answered`); `turnId` is that answer's
-   * turn, when it has one. Called on every status poll while that holds; `rootId` tells one settled store from the next.
+   * The same store and the normal CLI prompt have settled. The guard is checked again after the
+   * journal reads the last messages, since the CLI can start another turn in the meantime.
    */
-  answered?(session: AgentSessionView, answer: { nativeSessionId: string; turnId?: string; rootId?: string }): void;
+  answered?(session: AgentSessionView, answer: SettledCursorTurn, stillIdle: () => boolean): void;
 }
 
 /**
@@ -956,14 +965,24 @@ export class NativeService {
     let status: NativeStatus = { phase: cursorTurns.report(watch, 'offline', 'screen') };
     let startupNotice: string | undefined;
     let startupNoticeLevel: NativeStatus['noticeLevel'] = 'warning';
+    let idlePane: { terminalId: string; error?: string; outcomeKnown: boolean } | undefined;
     // What this tick actually saw, as opposed to the cached values `status` may fall back to.
     let observedApproval: ApprovalMode | undefined;
     if (session.terminalId && !session.archivedAt) {
       const info = this.port.findTerminal(session.terminalId);
       if (info && info.state !== 'exited') {
         if (watch.booting?.terminalId !== info.id) watch.booting = { terminalId: info.id, since: Date.now() };
+        const chat = watch.chat;
+        const root = chat?.rootId;
+        const screenTurn = chat?.turnId() ?? root;
         const screen = await this.port.terminals.screen(info.id);
         if (watch.closed) return;
+        const current = this.port.getSession(session.id);
+        if (current.archivedAt || current.terminalId !== info.id || current.nativeSessionId !== session.nativeSessionId) {
+          watch.idleTurn = undefined;
+          return;
+        }
+        session = current;
         let stalled = Date.now() - watch.booting.since >= CURSOR_BOOT_STALL_MS;
         if (screen !== undefined) {
           const { footer, subview, error: cliError, ...parsed } = parseScreen(screen);
@@ -975,7 +994,16 @@ export class NativeService {
           const login = booting && cursorLoginPrompt(screen);
           if (login) stalled = true;
           if (parsed.phase === 'busy' || subview?.working) watch.paneBusyAt = Date.now();
-          const hiddenTurn = parsed.phase === 'idle' && watch.chat !== undefined
+          if (cliError !== watch.cliError?.text) watch.cliError = cliError
+            ? { text: cliError, paneBusyAt: watch.paneBusyAt, chatId: chat?.chatId, turn: screenTurn } : undefined;
+          const error = watch.cliError;
+          const currentError = error?.paneBusyAt === watch.paneBusyAt && error.chatId === watch.chat?.chatId
+            && error.turn === (watch.chat?.turnId() ?? watch.chat?.rootId) ? error.text : undefined;
+          const turnId = watch.chat?.turnId();
+          const nativeSessionId = session.nativeSessionId;
+          const outcomeKnown = Boolean(parsed.phase === 'idle' && turnId && nativeSessionId && watch.chat?.chatId === nativeSessionId
+            && this.turnObserver?.recordedOutcome?.(session.id, { nativeSessionId, turnId }));
+          const hiddenTurn = parsed.phase === 'idle' && !currentError && !outcomeKnown && watch.chat !== undefined
             && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt });
           let phase: NativeStatus['phase'] = interaction ? 'attention'
             : subview ? subviewPhase({ working: subview.working, previous: watch.status.phase, ...(watch.chat ? { transcript: { awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt } } : {}) })
@@ -994,11 +1022,10 @@ export class NativeService {
               console.warn(`[riffet] ${session.id}: Cursor pane shows no prompt bar and no known dialog; its last lines:\n${paneTail(screen)}`);
             }
           }
-          if (cliError !== watch.cliError?.text) watch.cliError = cliError ? { text: cliError, paneBusyAt: watch.paneBusyAt } : undefined;
           if (login && !interaction) startupNotice = 'Cursor CLI 需要登录，请在终端中完成登录。登录后会自动恢复。';
           else if (booting && stalled && !interaction) startupNotice = 'CLI 尚未出现可输入的提示栏，请查看终端中的登录、提示或错误。就绪后会自动恢复。';
-          else if (cliError && phase === 'idle' && watch.cliError?.paneBusyAt === watch.paneBusyAt) {
-            startupNotice = `Cursor CLI 报错，上一轮已中断：${cliError}。发送「继续」可以让它接着做。`;
+          else if (currentError && phase === 'idle') {
+            startupNotice = `Cursor CLI 报错，上一轮已中断：${currentError}。发送「继续」可以让它接着做。`;
             startupNoticeLevel = 'error';
           }
           // A painted footer is the whole truth about the model and the approval mode; while the CLI
@@ -1014,6 +1041,8 @@ export class NativeService {
             ...(permission ? { permission } : {}),
             ...(approval ? { approval } : {}),
           };
+          if (footer && !subview && parsed.phase === 'idle' && status.phase === 'idle'
+            && watch.chat === chat && chat?.rootId === root) idlePane = { terminalId: info.id, error: currentError, outcomeKnown };
         } else if (this.port.dialogs.isResponding(info.id) && watch.status.interaction) {
           status = { ...watch.status, phase: cursorTurns.report(watch, 'attention', 'screen') };
         } else {
@@ -1026,15 +1055,9 @@ export class NativeService {
       startupNotice = this.port.getSession(session.id).error;
       startupNoticeLevel = 'error';
       this.turnObserver?.offline(session);
-    } else if (status.phase === 'idle' && watch.chat && watch.chat.chatId === session.nativeSessionId
-      && Date.now() - Math.max(watch.paneBusyAt, watch.chat.lastActivityAt) >= ANSWERED_SETTLE_MS) {
-      if (watch.chat.answered()) {
-        const turnId = watch.chat.turnId();
-        const rootId = watch.chat.rootId;
-        this.turnObserver?.answered?.(session, { nativeSessionId: watch.chat.chatId, ...(turnId ? { turnId } : {}), ...(rootId ? { rootId } : {}) });
-      }
     }
     const activeTurn = status.phase !== 'offline' ? this.turnObserver?.activeTurn(session) : undefined;
+    this.observeSettledTurn(watch, session, idlePane, activeTurn?.turnId);
     const next: NativeStatus = {
       ...status,
       ...(activeTurn ? { activeTurn } : {}),
@@ -1050,6 +1073,46 @@ export class NativeService {
     if (observedApproval) this.followApproval(watch, session, observedApproval);
     // The tick knows the phase, which is exactly what a deferred switch waits for.
     this.schedulePendingConfig(session);
+  }
+
+  private observeSettledTurn(watch: Watch, session: AgentSessionView,
+    idlePane: { terminalId: string; error?: string; outcomeKnown: boolean } | undefined, activeTurnId: string | undefined): void {
+    const answered = this.turnObserver?.answered;
+    if (!answered) return;
+    const chat = watch.chat;
+    const rootId = chat?.rootId;
+    const turnId = chat?.turnId();
+    if (!idlePane || !chat || chat.status !== 'ok' || !rootId || !chat.events.length || chat.chatId !== session.nativeSessionId
+      || session.state === 'cancelling' || (turnId && activeTurnId && turnId !== activeTurnId)) {
+      watch.idleTurn = undefined;
+      return;
+    }
+    const { terminalId, error, outcomeKnown } = idlePane;
+    const canSettle = () => Boolean(error || outcomeKnown || chat.answered());
+    if (!canSettle()) {
+      watch.idleTurn = undefined;
+      return;
+    }
+    const nativeSessionId = chat.chatId;
+    const idle = watch.idleTurn;
+    if (!idle || idle.nativeSessionId !== nativeSessionId || idle.terminalId !== terminalId || idle.rootId !== rootId
+      || idle.activeTurnId !== activeTurnId || idle.error !== error) {
+      watch.idleTurn = { nativeSessionId, terminalId, rootId, activeTurnId, error, since: Date.now() };
+      return;
+    }
+    if (Date.now() - Math.max(idle.since, watch.paneBusyAt, chat.lastActivityAt) < ANSWERED_SETTLE_MS) return;
+    const { paneBusyAt } = watch;
+    const { lastActivityAt } = chat;
+    answered(session, { nativeSessionId, rootId, turnId, error }, () => {
+      if (watch.closed || watch.idleTurn !== idle || watch.chat !== chat || chat.status !== 'ok'
+        || chat.rootId !== rootId || chat.turnId() !== turnId || paneBusyAt !== watch.paneBusyAt
+        || lastActivityAt !== chat.lastActivityAt || !canSettle()) return false;
+      const current = this.port.getSession(session.id);
+      const terminal = this.port.findTerminal(terminalId);
+      return !current.archivedAt && current.state !== 'cancelling'
+        && current.nativeSessionId === nativeSessionId && current.terminalId === terminalId
+        && terminal !== undefined && terminal.state !== 'exited';
+    });
   }
 
   /**
@@ -1214,6 +1277,7 @@ export class NativeService {
 
   /** Following another conversation invalidates every association derived from the old one. */
   private clearDerivedState(watch: Watch): void {
+    watch.idleTurn = undefined;
     for (const item of watch.subagents.values()) item.transcript.close();
     watch.subagents.clear();
     watch.jobs.clear();

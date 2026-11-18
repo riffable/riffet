@@ -27,7 +27,7 @@ const field = (number: number, payload: Uint8Array) => Buffer.from([...varint(nu
 interface Chat { messages: ChatMessage[]; meta?: Record<string, unknown>; compactAt?: number; summary?: ChatMessage; pending?: ChatMessage }
 
 /** Writes `chat` as its root says it now: messages before `compactAt` (after the first two) archived behind `summary`. */
-function writeChat(dir: string, chatId: string, chat: Chat): void {
+function writeChat(dir: string, chatId: string, chat: Chat): string {
   mkdirSync(join(dir, chatId), { recursive: true });
   const db = new DatabaseSync(join(dir, chatId, 'store.db'));
   db.exec('CREATE TABLE IF NOT EXISTS blobs (id TEXT PRIMARY KEY, data BLOB); CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);');
@@ -41,8 +41,10 @@ function writeChat(dir: string, chatId: string, chat: Chat): void {
   const live = compactAt && summary ? [...messages.slice(0, 2), summary, ...messages.slice(compactAt)] : messages;
   const archive = compactAt && summary ? [field(13, Buffer.from(put(Buffer.concat([...messages.slice(2, compactAt).map(message => ref(1, message)), ref(4, summary)])), 'hex'))] : [];
   const root = Buffer.concat([...live.map(message => ref(1, message)), ...(chat.pending ? [field(4, Buffer.from(JSON.stringify(chat.pending)))] : []), ...archive]);
-  db.prepare("INSERT OR REPLACE INTO meta VALUES ('0', ?)").run(Buffer.from(JSON.stringify({ agentId: chatId, latestRootBlobId: put(root), name: 'Probe', ...chat.meta })).toString('hex'));
+  const rootId = put(root);
+  db.prepare("INSERT OR REPLACE INTO meta VALUES ('0', ?)").run(Buffer.from(JSON.stringify({ agentId: chatId, latestRootBlobId: rootId, name: 'Probe', ...chat.meta })).toString('hex'));
   db.close();
+  return rootId;
 }
 
 const query = (text: string) => `<timestamp>Thursday, Oct 1, 2026, 12:14 AM (UTC+8)</timestamp>\n<user_query>\n${text}\n</user_query>`;
@@ -337,10 +339,16 @@ describe('Cursor transcript source', () => {
     await catchUp(source(), writer);
     assertUnchanged(ended, snapshot(lanes), 'ending an ended turn and reading on');
 
-    // What the CLI still writes of that turn, then the next prompt: turns of their own, the ended one untouched (G6).
+    // A resumed CLI writes a continuation with the old request id; its own end must survive a reopen.
     messages.push(say('Stopped.'));
     writeChat(dir, 'chat-1', { messages });
-    await catchUp(source(), writer);
+    const resumed = new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', tailState: () => 'live' });
+    await catchUp(resumed, writer);
+    const continuation = rowsOf(lanes).findLast(row => row.kind === 'agent_message_chunk')!.turnId!;
+    expect(continuation).not.toBe('req-1');
+    expect(await resumed.endTurn(writer, 'completed', '2026-10-25T08:01:00.000Z', 'req-1')).toBe(true);
+    expect(writer.turnEndStatus(continuation)).toBe('completed');
+    expect(writer.turnEndStatus('req-1')).toBe('cancelled');
     messages.push(ask('go on', 'req-2'), say('Done.'));
     writeChat(dir, 'chat-1', { messages });
     await catchUp(source(), writer);
@@ -350,6 +358,86 @@ describe('Cursor transcript source', () => {
     expect(ends[0]).toEqual(['req-1', 'cancelled']);
     expect(ends.at(-1)).toEqual(['req-2', 'completed']);
     expect(rowsOf(lanes).filter(row => row.turnId === 'req-1' && row.kind === 'agent_message_chunk')).toEqual([]);
+  });
+
+  it('keeps reasoning and later output in the live turn until its matching end', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
+    dirs.push(dir);
+    const thought: ChatMessage = { role: 'assistant', content: [{ type: 'reasoning', text: 'Plan the work.' }] };
+    const messages = [...SYSTEM, ask('run the tests', 'req-1'), thought];
+    const thoughtRoot = writeChat(dir, 'chat-1', { messages });
+    const { lanes, writer } = openLanes();
+    let live: CursorLiveStep | undefined;
+    const source = new CursorTranscriptSource({
+      chatsDir: () => dir, chatId: () => 'chat-1', tailState: () => 'live',
+      live: { read: () => live, watch: () => () => {} },
+    });
+    const at = '2026-11-18T06:48:08.000Z';
+    await catchUp(source, writer);
+    expect(turnEnds(lanes)).toEqual([]);
+
+    messages.push(call('tests', 'Shell', { command: 'npm test' }), result('tests', 'Shell', 'Passed'), say('The tests passed.'));
+    writeChat(dir, 'chat-1', { messages });
+    await source.endTurn(writer, 'completed', at, 'req-1', thoughtRoot);
+    expect(turnEnds(lanes)).toEqual([]);
+    await source.endTurn(writer, 'completed', at, 'req-1');
+    const rows = rowsOf(lanes);
+    expect(rows.filter(row => !row.kind.startsWith('meta.')).map(row => [row.kind, row.turnId])).toEqual([
+      ['user_message_chunk', 'req-1'],
+      ['agent_thought_chunk', 'req-1'],
+      ['tool_call', 'req-1'],
+      ['tool_call_update', 'req-1'],
+      ['agent_message_chunk', 'req-1'],
+    ]);
+    expect(rows.at(-1)?.kind).toBe('meta.turn_ended');
+
+    messages.push(ask('check again', 'req-2'), thought);
+    const nextRoot = writeChat(dir, 'chat-1', { messages });
+    await catchUp(source, writer);
+    await source.endTurn(writer, 'completed', at, 'req-1');
+    expect(turnEnds(lanes)).toEqual([['req-1', 'completed']]);
+    // Another model step starts after the idle observation, before either its text or checkpoint lands.
+    live = { turn: 'req-2', at, step: 'retry', prompt: 'check again', sealed: false, parts: [] };
+    expect(await source.endTurn(writer, 'completed', at, 'req-2', nextRoot)).toBe(false);
+    expect(writer.turnEndStatus('req-2')).toBeUndefined();
+    live = undefined;
+    await source.endTurn(writer, 'completed', at, 'req-2', nextRoot);
+    expect(turnEnds(lanes)).toEqual([['req-1', 'completed'], ['req-2', 'completed']]);
+    checkSession(lanes);
+  });
+
+  it('records an interrupted live turn when the terminal exits without another checkpoint', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
+    dirs.push(dir);
+    writeChat(dir, 'chat-1', { messages: [...SYSTEM, ask('check the file', 'req-1'), call('tool', 'Read', { path: 'file' })] });
+    const { lanes, writer } = openLanes();
+    const source = (state: 'live' | 'exited') => new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', tailState: () => state });
+    await catchUp(source('live'), writer);
+    expect(turnEnds(lanes)).toEqual([]);
+    await catchUp(source('exited'), FakeLaneWriter.open(lanes));
+    expect(turnEnds(lanes)).toEqual([['req-1', 'interrupted']]);
+  });
+
+  it('retains an explicit failure when the import replaces its scratch transcript', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
+    dirs.push(dir);
+    const messages = [...SYSTEM, ask('check the files', 'req-1'), say('Checked.'), ask('build it', 'req-2'), say('The build failed.')];
+    writeChat(dir, 'chat-1', { messages });
+    const { lanes, writer } = openLanes();
+    const source = () => new CursorTranscriptSource({
+      chatsDir: () => dir, chatId: () => 'chat-1', tailState: () => 'live', limits: { stepMessages: 2 },
+    });
+    await pullLane(source(), writer, new AbortController().signal);
+    expect(writer.scratch).toBeDefined();
+    expect(writer.scratch?.turnEndStatus('req-2')).toBeUndefined();
+    await source().endTurn(writer, 'failed', '2026-11-18T06:48:08.000Z', 'req-2');
+    expect(writer.scratch?.turnEndStatus('req-2')).toBe('failed');
+
+    const restarted = FakeLaneWriter.open(lanes);
+    await catchUp(source(), restarted);
+    expect(restarted.scratch).toBeUndefined();
+    expect(turnEnds(lanes)).toEqual([['req-1', 'completed'], ['req-2', 'failed']]);
+    checkSession(lanes);
   });
 
   it('writes the step in flight as drafts under the ids its message takes, and retires what it did not', async () => {

@@ -410,11 +410,7 @@ export class Transcript {
     return this.mapper.awaitingReply;
   }
 
-  /**
-   * Whether the store ends on an answer: every message is decoded, no step is still being written,
-   * and the last committed message is an assistant answer that calls nothing. This is the CLI's own
-   * record of a finished turn, which holds even when its Stop hook never fires.
-   */
+  /** The store is caught up with no pending tool or draft. The live CLI must also be idle to end the turn. */
   answered(): boolean {
     return this.status === 'ok' && !this.pendingIds.length && !this.draftSource && !this.mapper.awaitingReply;
   }

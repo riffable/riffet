@@ -3,7 +3,7 @@ import type { ApprovalMode, NativeStatus } from '@contracts';
 import type { AgentLaunchSpec, AgentSessionView, AgentTerminalView } from '@riffet/plugin-api/experimental/agent';
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
-import { adoptableApproval, approvalFromFooter, configureGate, NativeService } from './service.js';
+import { adoptableApproval, approvalFromFooter, configureGate, NativeService, Transcript, type SettledCursorTurn } from './service.js';
 import { Watch } from './watch.js';
 
 /** A footer the CLI painted: prompt bar above the model/context/permission line above the workspace. */
@@ -173,11 +173,89 @@ function harness(screen: string | undefined) {
   host.onLaunch = () => ({ id: 'terminal-2' });
   const service = new NativeService(cursorPort(host), { configDir: '/tmp/riffet-test', cliPath: 'cursor-agent' });
   services.push(service);
-  return { service, session, stopped: host.stopped, created: host.launched, updates: host.updates };
+  return { service, session, host, stopped: host.stopped, created: host.launched, updates: host.updates };
 }
 
 const services: NativeService[] = [];
 afterEach(() => { while (services.length) services.pop()!.closeAll(); });
+
+it('waits for a continuously idle Cursor prompt before settling the same turn', async () => {
+  const { service, session, host } = harness(busyScreen);
+  const watch = new Watch(session.id);
+  const chat = new Transcript(session.nativeSessionId!, '/tmp/riffet-test-unused/store.db', session.id);
+  chat.status = 'ok';
+  chat.rootId = 'root';
+  chat.events = [{ type: 'agent_thought_chunk', nativeId: 'thought', sessionId: session.id, sequence: 1, data: {}, createdAt: '' }];
+  const turn = vi.spyOn(chat, 'turnId').mockReturnValue('generation');
+  watch.chat = chat;
+  const answered = vi.fn<(_session: AgentSessionView, answer: SettledCursorTurn, stillIdle: () => boolean) => void>();
+  let stoppedTurn: string | undefined;
+  service.useTurnObserver({
+    answered, activeTurn: () => undefined, offline: vi.fn(),
+    recordedOutcome: (_sessionId, target) => target.turnId === stoppedTurn ? 'cancelled' : undefined,
+  });
+  const poll = (clock: number) => {
+    vi.setSystemTime(new Date(clock));
+    return (service as unknown as { updateStatus(watch: Watch, session: AgentSessionView): Promise<void> }).updateStatus(watch, session);
+  };
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    await poll(1000);
+    await poll(5000);
+    expect(answered).not.toHaveBeenCalled();
+
+    host.screen = idleScreen;
+    await poll(5100);
+    host.screen = dialogScreen;
+    await poll(8000);
+    host.screen = idleScreen;
+    await poll(8100);
+    await poll(11099);
+    expect(answered).not.toHaveBeenCalled();
+    await poll(11100);
+    expect(answered).toHaveBeenCalledTimes(1);
+    const [_, answer, stillIdle] = answered.mock.calls[0]!;
+    expect(answer).toMatchObject({ turnId: 'generation', rootId: 'root' });
+    expect(stillIdle()).toBe(true);
+
+    host.screen = `${idleScreen}\n  Error: gateway timeout`;
+    await poll(11200);
+    await poll(14200);
+    const [, failed, stillFailed] = answered.mock.calls[1]!;
+    expect(failed).toMatchObject({ turnId: 'generation', error: 'gateway timeout' });
+    expect(stillFailed()).toBe(true);
+
+    chat.rootId = 'successor-root';
+    turn.mockReturnValue('successor');
+    expect(stillFailed()).toBe(false);
+    // The old error line stayed visible while the successor's busy frames went unsampled.
+    await poll(14300);
+    await poll(17300);
+    expect(answered.mock.calls[2]?.[1]).toMatchObject({ turnId: 'successor', rootId: 'successor-root', error: undefined });
+
+    host.screen = idleScreen;
+    chat.rootId = 'incomplete-tool-root';
+    chat.lastActivityAt = 17400;
+    vi.spyOn(chat, 'answered').mockReturnValue(false);
+    vi.spyOn(chat, 'awaitingReply').mockReturnValue(true);
+    stoppedTurn = 'generation';
+    await poll(17400);
+    await poll(20400);
+    expect(answered).toHaveBeenCalledTimes(3);
+    expect(watch.status.phase).toBe('busy');
+    // An exact Stop can settle a checkpoint that has no final assistant answer.
+    stoppedTurn = 'successor';
+    await poll(20500);
+    await poll(23500);
+    const [, stopped, stillStopped] = answered.mock.calls[3]!;
+    expect(stopped).toMatchObject({ turnId: 'successor', rootId: 'incomplete-tool-root', error: undefined });
+    expect(stillStopped()).toBe(true);
+    expect(watch.status.phase).toBe('idle');
+  } finally {
+    watch.close();
+    vi.useRealTimers();
+  }
+});
 
 it('publishes a persisted startup error offline and clears it after correcting the session settings', async () => {
   const { service, session } = watchHarness(undefined);

@@ -535,13 +535,25 @@ export class CursorBackend implements AgentBackend {
    * check of the store (the frames it emits) and the CLI's hooks.
    */
   transcriptSource(host: AgentHost, context: AgentContext): AgentTranscriptSource {
-    const { native, profile: launch, port, live } = this.parts(host, context.profile);
+    const { native, profile: launch, port, live, steering } = this.parts(host, context.profile);
     const sessionId = context.session.id;
     return new CursorTranscriptSource({
       sessionId,
       live,
       chatsDir: () => workspaceChatsDir(launch.configDir, port.getProject(port.getSession(sessionId).projectId).cwd),
       chatId: () => port.getSession(sessionId).nativeSessionId,
+      tailState: (chatId, turnId) => {
+        const session = port.getSession(sessionId);
+        if (session.nativeSessionId !== chatId) return;
+        const terminal = session.terminalId ? port.findTerminal(session.terminalId) : undefined;
+        if (!session.archivedAt && terminal && terminal.state !== 'exited') return 'live';
+        const observed = steering.recordedOutcome(sessionId, { nativeSessionId: chatId, turnId });
+        if (observed) return observed;
+        const run = port.runsOfTurn(sessionId, chatId, turnId).find(run => run.intent !== 'steer');
+        if (run?.state === 'failed' || run?.state === 'completed' || run?.state === 'cancelled') return run.state;
+        if (run?.state === 'interrupted') return run.stage === 'provider_cancelled' ? 'cancelled' : 'interrupted';
+        return terminal?.state === 'exited' ? 'exited' : undefined;
+      },
       ...(host.workspaceChanges ? { observedChanges: (toolCallId: string) => host.workspaceChanges?.changes(sessionId, toolCallId) } : {}),
       signals: listener => this.followTranscript(native, sessionId, listener),
     });
@@ -555,7 +567,8 @@ export class CursorBackend implements AgentBackend {
     try {
       stop = native.subscribe(sessionId, message => {
         if (message.type === 'subagent') listener.subagent(message.toolCallId, message.agentId);
-        if (message.type === 'reset' || message.type === 'append' || message.type === 'draft' || message.type === 'subagent') listener.changed();
+        if (message.type === 'reset' || message.type === 'append' || message.type === 'draft' || message.type === 'subagent'
+          || (message.type === 'status' && message.status.phase === 'offline')) listener.changed();
       });
     } catch { /* not a conversation the service follows: the hooks still wake it */ }
     return () => {
