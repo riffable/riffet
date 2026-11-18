@@ -2,6 +2,7 @@ package riffet.ui.timeline
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import io.ktor.http.decodeURLPart
+import io.ktor.http.encodeURLParameter
 
 /*
  * What the transcript needs to open, show and download the files an agent names. Ported from
@@ -72,6 +73,45 @@ internal fun localFileLink(href: String): LocalFileLink? {
 
 private val extensionlessFiles = Regex("^(?:Makefile|Dockerfile|Containerfile|Justfile|Procfile|Gemfile|Rakefile|Brewfile|LICENSE|NOTICE|CODEOWNERS)$")
 private val extensionPattern = Regex("\\.([A-Za-z0-9]{1,10})$")
+private val bareFileExtensions = setOf(
+    "ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs", "json", "jsonl", "md", "mdx", "mdc", "css", "scss", "html", "vue", "svelte",
+    "yml", "yaml", "toml", "ini", "xml", "kt", "kts", "gradle", "swift", "m", "mm", "h", "c", "cc", "cpp", "hpp", "go", "rs", "py",
+    "rb", "java", "sh", "bash", "zsh", "sql", "txt", "csv", "lock", "pdf", "png", "jpg", "jpeg", "gif", "svg", "webp", "proto",
+)
+private val codeFilePathPattern = Regex("^[\\w.@~/-]+(?::\\d+(?::\\d+)?)?$")
+
+private fun fileShaped(path: String): Boolean {
+    val name = path.substringAfterLast('/')
+    if (extensionlessFiles.matches(name)) return true
+    val extension = extensionPattern.find(name)?.groupValues?.get(1)?.lowercase() ?: return false
+    return '/' in path || name.startsWith('.') || extension in bareFileExtensions
+}
+
+/** Inline code the agent writes as `path/to/file.ts:42` or `~/.cursor/rules/foo.mdc`. */
+internal fun codeFileMention(text: String): LocalFileLink? {
+    val value = text.trim()
+    if (value.isEmpty() || value.length > 300 || !codeFilePathPattern.matches(value)) return null
+    val target = localFileLink(value) ?: return null
+    return target.takeIf { fileShaped(it.path) }
+}
+
+private const val FILE_LINK_PREFIX = "riffet-file://open?path="
+
+internal fun encodeFileLinkUrl(path: String, line: Int?): String = buildString {
+    append(FILE_LINK_PREFIX)
+    append(path.encodeURLParameter(spaceToPlus = false))
+    if (line != null) append("&line=").append(line)
+}
+
+internal fun parseFileLinkUrl(url: String): LocalFileLink? {
+    if (!url.startsWith(FILE_LINK_PREFIX)) return null
+    val query = url.substring(FILE_LINK_PREFIX.length)
+    val lineIndex = query.indexOf("&line=")
+    val rawPath = if (lineIndex < 0) query else query.substring(0, lineIndex)
+    val line = if (lineIndex < 0) null else query.substring(lineIndex + "&line=".length).toIntOrNull()?.takeIf { it > 0 }
+    val path = decode(rawPath).ifEmpty { return null }
+    return LocalFileLink(path, line)
+}
 
 /** What a markdown link target is, mirroring the web's `markdownLinkTarget`. */
 internal sealed interface MarkdownLinkTarget {

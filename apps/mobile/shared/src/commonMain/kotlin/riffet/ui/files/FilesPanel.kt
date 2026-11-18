@@ -367,9 +367,9 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
         } finally { loading = false }
     }
     val path = preview?.path ?: page.path
-    val outside = isAbsolutePath(path)
+    val outside = isAbsolutePath(path) || path == "~" || path.startsWith("~/")
     // Downloading reads the file as it is, so it does not wait on, or depend on, a preview that may fail.
-    val download = if (!outside && downloadsSupported) ({ DownloadCenter.shared.start(api, projectId, path) }) else null
+    val download = if (downloadsSupported) ({ DownloadCenter.shared.start(api, projectId, path) }) else null
     val value = preview
     val html = value != null && htmlPreviewSupported && (value.render != null || (!value.binary && value.image == null && isHtmlPreviewPath(value.path)))
     var renderHtml by remember(path, page.line) { mutableStateOf(page.line == null) }

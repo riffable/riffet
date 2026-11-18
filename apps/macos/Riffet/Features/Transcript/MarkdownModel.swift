@@ -32,11 +32,18 @@ enum FileLink {
         }
         var path = value.components(separatedBy: "#")[0]
         if path.lowercased().hasPrefix("file://") {
-            path = URL(string: path)?.path ?? ""
+            if let parsed = URL(string: path) {
+                path = parsed.path
+            } else {
+                let rest = String(path.dropFirst("file://".count))
+                let raw = rest.hasPrefix("/") ? rest : (rest.firstIndex(of: "/").map { String(rest[$0...]) } ?? "")
+                path = raw.removingPercentEncoding ?? raw
+            }
         } else if path.range(of: #"^[a-z][a-z0-9+.-]*:(?!\d)"#, options: [.regularExpression, .caseInsensitive]) != nil {
             return nil
+        } else {
+            path = path.removingPercentEncoding ?? path
         }
-        path = path.removingPercentEncoding ?? path
         guard !path.isEmpty, !path.hasSuffix("/") else { return nil }
         let ns = path as NSString
         if let match = Self.lineSuffix.firstMatch(in: path, range: NSRange(location: 0, length: ns.length)) {
@@ -50,7 +57,7 @@ enum FileLink {
     /// Inline code that reads as a path (`src/app.ts:42`), not as a command or an identifier.
     static func target(code: String) -> (path: String, line: Int?)? {
         let text = code.trimmingCharacters(in: .whitespaces)
-        guard text.count <= 300, text.range(of: #"^[\w.@~/-]+(:\d+)?$"#, options: .regularExpression) != nil else { return nil }
+        guard text.count <= 300, text.range(of: #"^[\w.@~/-]+(:\d+(?::\d+)?)?$"#, options: .regularExpression) != nil else { return nil }
         guard text.contains("/") || text.contains(".") || text.range(of: #":\d+$"#, options: .regularExpression) != nil else { return nil }
         return target(href: text)
     }

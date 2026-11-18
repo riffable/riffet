@@ -508,7 +508,7 @@ private struct FilesSettingsView: View {
         RiffetForm {
             Section {
                 Toggle("允许预览项目外的文件", isOn: Binding(
-                    get: { workbench.settings?.allowOutsideRead?.boolValue == true },
+                    get: { workbench.settings?.allowOutsideRead?.boolValue != false },
                     set: { value in Task { error = await save(managementSettingsPatch(allowOutsideRead: value)) } }
                 )).tint(palette.accent).disabled(saving)
             } header: { RiffetSectionTitle(String(localized: "文件访问", bundle: .riffet)) } footer: { Text("只读打开项目外路径；文件树与搜索仍限项目内。") }

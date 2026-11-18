@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { text } from 'node:stream/consumers';
@@ -82,6 +82,24 @@ describe('file downloads', () => {
     await expect(workspace.rawFile(project, path.join(dir, 'outside.png'))).rejects.toMatchObject({ code: 'INVALID_PATH' });
     await expect(workspace.rawFile(project, path.join(dir, 'outside.png'), { allowOutside: true })).resolves.toMatchObject({ name: 'outside.png', contentType: 'image/png' });
     await expect(workspace.rawFile(project, '../outside.png')).rejects.toMatchObject({ code: 'INVALID_PATH' });
+  });
+
+  it('expands home-relative (~/) paths for single-file reads while enforcing outside and secret rules', async () => {
+    const project = path.join(dir, 'project');
+    await mkdir(project);
+    const rule = path.join(dir, '.cursor', 'rules', 'global.mdc');
+    await mkdir(path.dirname(rule), { recursive: true });
+    await writeFile(rule, '# rule\n');
+    const secret = path.join(dir, '.cursor', 'cli-config.json');
+    await writeFile(secret, '{"apiKey":"secret"}\n');
+
+    await expect(workspace.preview(project, '~/.cursor/rules/global.mdc')).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    await expect(workspace.preview(project, '~/.cursor/rules/global.mdc', { allowOutside: true })).resolves.toMatchObject({
+      path: await realpath(rule),
+      content: '# rule\n',
+    });
+    await expect(workspace.rawFile(project, '~/.cursor/rules/global.mdc', { allowOutside: true })).resolves.toMatchObject({ name: 'global.mdc' });
+    await expect(workspace.preview(project, '~/.cursor/cli-config.json', { allowOutside: true })).rejects.toMatchObject({ code: 'PATH_DENIED' });
   });
 
   it('refuses harness credential stores both outside and inside a project', async () => {

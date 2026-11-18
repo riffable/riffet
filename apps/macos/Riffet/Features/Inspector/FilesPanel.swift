@@ -532,7 +532,7 @@ enum FileSymbols {
         switch (name as NSString).pathExtension.lowercased() {
         case "swift", "kt", "kts", "ts", "tsx", "js", "jsx", "mjs", "py", "go", "rs", "java", "c", "h", "cpp", "m", "rb", "sh", "zsh":
             "chevron.left.forwardslash.chevron.right"
-        case "md", "txt", "rtf": "doc.text"
+        case "md", "markdown", "mdown", "mkd", "mdx", "mdc", "txt", "rtf": "doc.text"
         case "json", "yml", "yaml", "toml", "plist", "xml", "lock": "curlybraces"
         case "png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "icns": "photo"
         case "html", "htm": "globe"
@@ -576,19 +576,28 @@ struct FilePreviewPage: View {
         return cache
     }()
 
-    private var isHTML: Bool { ["html", "htm"].contains((path as NSString).pathExtension.lowercased()) }
+    private var isHTML: Bool { ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased()) }
+    private var effectivePath: String { preview?.path ?? path }
+    private var isAbsoluteOrTilde: Bool { effectivePath.hasPrefix("/") || effectivePath == "~" || effectivePath.hasPrefix("~/") }
 
     private func moreEntries() -> [NativeMenuEntry] {
         var entries: [NativeMenuEntry] = []
         if workbench.local {
+            let targetPath: String = if effectivePath == "~" || effectivePath.hasPrefix("~/") {
+                (effectivePath as NSString).expandingTildeInPath
+            } else if effectivePath.hasPrefix("/") {
+                effectivePath
+            } else {
+                (project.cwd as NSString).appendingPathComponent(effectivePath)
+            }
             entries.append(.item(String(localized: "在 Finder 中显示")) {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path.hasPrefix("/") ? path : (project.cwd as NSString).appendingPathComponent(path))])
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: targetPath)])
             })
         }
         if preview?.binary == false { entries.append(.item(String(localized: "复制文件内容")) { Task { await copyContent() } }) }
         entries.append(.separator)
-        entries.append(.item(String(localized: "复制路径")) { copyToPasteboard(path) })
-        if !path.hasPrefix("/") { entries.append(.item(String(localized: "复制绝对路径")) { copyToPasteboard((project.cwd as NSString).appendingPathComponent(path)) }) }
+        entries.append(.item(String(localized: "复制路径")) { copyToPasteboard(effectivePath) })
+        if !isAbsoluteOrTilde { entries.append(.item(String(localized: "复制绝对路径")) { copyToPasteboard((project.cwd as NSString).appendingPathComponent(effectivePath)) }) }
         entries.append(.separator)
         entries.append(.item(String(localized: "刷新")) { reload += 1 })
         return entries
@@ -596,20 +605,20 @@ struct FilePreviewPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DetailHeader(title: (path as NSString).lastPathComponent, subtitle: (path as NSString).deletingLastPathComponent, back: back) {
+            DetailHeader(title: (effectivePath as NSString).lastPathComponent, subtitle: (effectivePath as NSString).deletingLastPathComponent, back: back) {
                 if canRender, preview?.binary == false {
                     Button { htmlRendered.toggle() } label: { Image(icon: htmlRendered ? "chevron.left.forwardslash.chevron.right" : "eye").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
                         .help(htmlRendered ? "显示源码" : "渲染预览")
                 }
-                Button { workbench.addReference(path: path) } label: { Image(icon: "plus").font(.riffet(size: S(12))) }
+                Button { workbench.addReference(path: effectivePath) } label: { Image(icon: "plus").font(.riffet(size: S(12))) }
                     .buttonStyle(IconButtonStyle())
                     .help("引用整个文件")
-                Button { Task { notice = await ProjectDownloads.saveFile(projectId: project.id, path: path) } } label: { Image(icon: "arrow.down.circle").font(.riffet(size: S(12))) }
+                Button { Task { notice = await ProjectDownloads.saveFile(projectId: project.id, path: effectivePath) } } label: { Image(icon: "arrow.down.circle").font(.riffet(size: S(12))) }
                     .buttonStyle(IconButtonStyle())
                     .help("下载")
                 if workbench.local {
-                    Button { FileOpener.open(path: path, line: target?.0, projectId: project.id, workbench: workbench) } label: { Image(icon: "arrow.up.forward.app").font(.riffet(size: S(12))) }
+                    Button { FileOpener.open(path: effectivePath, line: target?.0, projectId: project.id, workbench: workbench) } label: { Image(icon: "arrow.up.forward.app").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
                         .help("在编辑器中打开")
                 }
@@ -719,7 +728,7 @@ struct FilePreviewPage: View {
         guard let preview else { return }
         if !preview.truncated { copyToPasteboard(preview.content); return }
         do {
-            copyToPasteboard(try await ProjectDownloads.text(projectId: project.id, path: path))
+            copyToPasteboard(try await ProjectDownloads.text(projectId: project.id, path: effectivePath))
         } catch {
             notice = error.riffetMessage
         }

@@ -7,7 +7,7 @@ import type { Readable } from 'node:stream';
 import type { Attachment, CodeDefinitions, CodeReferences, FileEntry, FilePreview, SearchHit } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { collectArchiveEntries, gitArchiveEntries, rawFileType, readSample, zipStream, type RawFileType } from './download.js';
-import { projectRoot, isWithin, resolveReadablePath, resolveScopedPath, toProjectRelative, type ProjectRef } from './scope.js';
+import { expandHomePath, projectRoot, isWithin, resolveReadablePath, resolveScopedPath, toProjectRelative, type ProjectRef } from './scope.js';
 import { FileIndex, rankPaths, ripgrepSearch } from './file-index.js';
 import { CodeNav, findDefinitions, findReferences, type DefinitionQuery, type ReferenceQuery } from './code-nav.js';
 import { decodePreviewText, MAX_PREVIEW_FILE_BYTES, previewKind } from '../previews/formats.js';
@@ -466,7 +466,7 @@ export class WorkspaceService {
    */
   async readPreviewImage(project: ProjectRef, filePath: string, options: { allowOutside?: boolean; harnessImageHomes?: readonly string[] } = {}): Promise<{ mimeType: string; data: Buffer }> {
     const root = await projectRoot(project);
-    const requested = path.resolve(root, filePath);
+    const requested = path.resolve(root, expandHomePath(filePath));
     const attachmentId = path.basename(requested, '.bin');
     let data: Buffer;
     if (validId(attachmentId) && requested === path.join(this.stateDir, 'attachments', `${attachmentId}.bin`)) {

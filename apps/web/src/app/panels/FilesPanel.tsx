@@ -118,8 +118,9 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   const renderable = Boolean(preview?.render || (preview && isHtmlPath(preview.path)));
   const showingRendered = renderable && rendered && !preview?.image;
   const [imageLoadError, setImageLoadError] = useState(false);
-  // A missing file says so in place; retrying it cannot help, and a toast would say it twice.
+  // A missing or outside-blocked file says so in place; retrying missing cannot help, and a toast would say it twice.
   const [previewMissing, setPreviewMissing] = useState(false);
+  const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
   /** The line (and column) the code view goes to, for the file it belongs to. */
   const [jump, setJump] = useState<CodeTarget & { path: string }>();
@@ -267,6 +268,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     setMenuPath(undefined);
     setImageLoadError(false);
     setPreviewMissing(false);
+    setPreviewBlocked(false);
     setRendered(!line);
     setPreviewLoading(true);
     show();
@@ -280,7 +282,8 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
       // The server refuses out-of-project paths when the setting is off; say so in Chinese
       // instead of surfacing the raw "Path must stay inside the project directory".
       const blocked = error instanceof HttpError && (error.code === 'PATH_OUTSIDE_PROJECT' || error.code === 'INVALID_PATH');
-      onError(blocked ? t`该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。` : errorMessage(error, t`无法打开文件`));
+      if (blocked) { setPreviewBlocked(true); return; }
+      onError(errorMessage(error, t`无法打开文件`));
     }
     finally { if (request === previewRequest.current) setPreviewLoading(false); }
   }, [project.id, onError, show, rememberScroll, recent.touch]);
@@ -621,13 +624,15 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
               {preview && !preview.binary && <DropdownMenuItem onSelect={() => void copyPreviewContent(preview)}><IconCopy /><Trans>复制文件内容</Trans></DropdownMenuItem>}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void copyWithToast(previewFilePath, t`已复制路径`)}><IconCopy /><Trans>复制路径</Trans></DropdownMenuItem>
-              {!previewFilePath.startsWith('/') && <DropdownMenuItem onSelect={() => void copyWithToast(absolutePath(project.cwd, previewFilePath), t`已复制绝对路径`)}><IconCopy /><Trans>复制绝对路径</Trans></DropdownMenuItem>}
+              {!previewFilePath.startsWith('/') && previewFilePath !== '~' && !previewFilePath.startsWith('~/') && <DropdownMenuItem onSelect={() => void copyWithToast(absolutePath(project.cwd, previewFilePath), t`已复制绝对路径`)}><IconCopy /><Trans>复制绝对路径</Trans></DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
       {previewLoading && !preview ? <div className="flex justify-center py-10"><Spinner /></div> : !preview ? previewMissing ? (
         <EmptyState title={t`文件不存在`} />
+      ) : previewBlocked ? (
+        <EmptyState title={t`无法打开文件`} description={t`该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
       ) : (
         <EmptyState title={t`无法打开文件`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
       ) : preview.image ? imageLoadError ? (

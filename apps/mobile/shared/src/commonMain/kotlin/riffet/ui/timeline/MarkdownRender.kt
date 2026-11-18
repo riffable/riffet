@@ -20,9 +20,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import org.intellij.markdown.ast.getTextInNode
 import androidx.compose.ui.text.font.FontWeight
@@ -203,6 +205,11 @@ internal fun PreparedMarkdownBody(
         object : UriHandler {
             override fun openUri(uri: String) {
                 val destination = markdownLinkDestination(uri)
+                val codeFile = parseFileLinkUrl(destination)
+                if (codeFile != null) {
+                    if (files != null) files.open(files.resolve(codeFile.path), codeFile.line)
+                    return
+                }
                 when (val target = markdownLinkTarget(destination)) {
                     is MarkdownLinkTarget.File -> if (files != null) files.open(files.resolve(target.link.path), target.link.line) else runCatching { system.openUri(destination) }
                     MarkdownLinkTarget.Web -> runCatching { system.openUri(destination) }
@@ -288,6 +295,7 @@ private fun MarkdownDocument(
 ) {
     val colors = TimelineTheme.colors
     val prose = TimelineTheme.prose
+    val linkifyCode = LocalFileAccess.current != null
     if (state == null) {
         PlainBlocks(text = document, style = style, color = color, codeStyle = codeStyle, modifier = modifier)
         return
@@ -296,12 +304,12 @@ private fun MarkdownDocument(
     val markdownColors = remember(colors, color) { markdownColors(colors, color) }
     val quoteColors = remember(colors) { markdownColors(colors, colors.fg2) }
     // The library's annotator is kept for everything but `**strong**` (Medium, since CJK at 600
-    // reads as a smudge) and safe `<br>` line-break tags. Re-entering the annotation for strong
-    // spans needs the settings the library builds inside `Markdown`, so `success` hands them over
-    // before any text is annotated.
+    // reads as a smudge), safe `<br>` line-break tags, and inline code file mentions. Re-entering
+    // the annotation for strong spans needs the settings the library builds inside `Markdown`, so
+    // `success` hands them over before any text is annotated.
     val settings = remember { arrayOfNulls<AnnotatorSettings>(1) }
     val findMark = colors.warningSoft
-    val annotator = remember(marks, findMark) {
+    val annotator = remember(marks, findMark, linkifyCode) {
         markdownAnnotator { content, child ->
             if (child.type == MarkdownTokenTypes.HTML_TAG) {
                 val breaks = safeBreakNewlines(child.getTextInNode(content).toString())
@@ -319,6 +327,18 @@ private fun MarkdownDocument(
                 return@markdownAnnotator true
             }
             val current = settings[0]
+            if (child.type == MarkdownElementTypes.CODE_SPAN && linkifyCode && current != null) {
+                val code = child.children.filter { it.type != MarkdownTokenTypes.BACKTICK }
+                    .joinToString("") { it.getTextInNode(content) }
+                val target = codeFileMention(code)
+                if (target != null) {
+                    val url = encodeFileLinkUrl(target.path, target.line)
+                    withLink(LinkAnnotation.Url(url, current.linkTextSpanStyle, current.linkInteractionListener)) {
+                        withStyle(current.codeSpanStyle) { append(code) }
+                    }
+                    return@markdownAnnotator true
+                }
+            }
             if (child.type != MarkdownElementTypes.STRONG || current == null) return@markdownAnnotator false
             pushStyle(SpanStyle(fontWeight = FontWeight.Medium))
             buildMarkdownAnnotatedString(content = content, node = child, annotatorSettings = current)

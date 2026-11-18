@@ -44,7 +44,7 @@ export function openProjectFile(projectId: string, path: string): void {
 }
 
 export function absolutePath(root: string | undefined, path: string): string {
-  if (path.startsWith('/') || !root) return path;
+  if (path.startsWith('/') || path === '~' || path.startsWith('~/') || !root) return path;
   return `${root.replace(/\/+$/, '')}/${path}`;
 }
 

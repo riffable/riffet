@@ -19,6 +19,7 @@ import org.intellij.markdown.parser.MarkdownParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 /** Exercises the Markdown library's emitted link targets at the app's routing boundary. */
 class MarkdownLinkRoutingTest {
@@ -68,6 +69,18 @@ class MarkdownLinkRoutingTest {
         }.toAnnotatedString().text.trim()
         assertEquals("1. a\n2. b", cellText)
         assertEquals(null, safeBreakNewlines("<T>"))
+    }
+
+    @Test
+    fun `inline code mentions recognize tilde paths and line columns while skipping identifiers`() {
+        assertEquals(LocalFileLink("~/.cursor/rules/global-conventions.mdc", null), codeFileMention("~/.cursor/rules/global-conventions.mdc"))
+        assertEquals(LocalFileLink("src/app.ts", 42), codeFileMention("src/app.ts:42:3"))
+        assertEquals(LocalFileLink("Makefile", null), codeFileMention("Makefile"))
+        assertNull(codeFileMention("console.log"))
+        assertNull(codeFileMention("process.env"))
+
+        val encoded = encodeFileLinkUrl("~/.cursor/rules/My File.mdc", 12)
+        assertEquals(LocalFileLink("~/.cursor/rules/My File.mdc", 12), parseFileLinkUrl(encoded))
     }
 
     private fun emittedUrl(source: String): String {

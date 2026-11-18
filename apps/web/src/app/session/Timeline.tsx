@@ -441,7 +441,7 @@ export function DiffView({ path, nameOnly, before, after, lineOffset, newLineOff
   const hiddenLines = diff && !expanded ? Math.max(0, diff.lines.length - DIFF_PREVIEW_LINES) : 0;
   const shownLines = diff ? (hiddenLines ? diff.lines.slice(0, DIFF_PREVIEW_LINES) : diff.lines) : [];
   // Prose is read, not scanned by column: its lines run to a paragraph each, so they fold instead of scrolling sideways.
-  const wrap = Boolean(path && /\.(md|mdx|markdown|txt|rst)$/i.test(path));
+  const wrap = Boolean(path && /\.(md|mdx|mdc|markdown|txt|rst)$/i.test(path));
   // A file that did not exist has no old line numbers to show.
   const created = !before;
   const stats = (diff || created) && (
@@ -563,7 +563,7 @@ function PathEditButton({ onClick, className }: { onClick: () => void; className
  * (single file, read-only — see the `allowOutsideRead` setting), so they only get a hint.
  */
 function isOutsideProject(path: string, root?: string): boolean {
-  return Boolean(root) && path.startsWith('/');
+  return Boolean(root) && (path.startsWith('/') || path === '~' || path.startsWith('~/'));
 }
 
 function LocationChip({ path, line, outside, onOpenPath, onOpenInEditor }: {

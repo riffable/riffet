@@ -39,8 +39,11 @@ enum FileOpener {
     /// Resolves against the server's project directory, including for a remote server. Only an
     /// absolute path is standardized: Foundation would otherwise resolve it against this Mac's cwd.
     private static func resolvedPath(_ path: String, projectId: String?, workbench: Workbench) -> String {
+        let expanded = workbench.local && (path == "~" || path.hasPrefix("~/"))
+            ? (path as NSString).expandingTildeInPath
+            : path
         let root = workbench.project(projectId)?.cwd
-        let resolved = path.hasPrefix("/") ? path : (root.map { ($0 as NSString).appendingPathComponent(path) } ?? path)
+        let resolved = expanded.hasPrefix("/") ? expanded : (root.map { ($0 as NSString).appendingPathComponent(expanded) } ?? expanded)
         return resolved.hasPrefix("/") ? URL(fileURLWithPath: resolved).standardized.path : resolved
     }
 

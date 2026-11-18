@@ -8983,6 +8983,16 @@
         }
       }
     },
+    "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is outside the project directory. You can allow read-only previews of files outside the project in “Settings → Files & Editors”."
+          }
+        }
+      }
+    },
     "说明" : {
       "localizations" : {
         "en" : {

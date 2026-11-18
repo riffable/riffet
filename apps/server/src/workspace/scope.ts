@@ -85,12 +85,23 @@ export async function isSecretPath(real: string, deniedRoots: readonly string[] 
 }
 
 /**
+ * Expand a leading `~` or `~/` to the server user's home directory, mirroring project picker and
+ * settings inputs. Bare `~user/...` stays untouched.
+ */
+export function expandHomePath(input: string): string {
+  if (input === '~') return homedir();
+  if (input.startsWith('~/')) return path.join(homedir(), input.slice(2));
+  return input;
+}
+
+/**
  * Resolve a path for reading. Project paths keep the strict scoping; an explicit absolute
- * path outside the project falls back to the relaxed single-file read when allowed.
+ * (or `~/`) path outside the project falls back to the relaxed single-file read when allowed.
  */
 export async function resolveReadablePath(root: string, input: string, allowOutside = false, deniedRoots: readonly string[] = [], harnessImageHomes: readonly string[] = []): Promise<string> {
-  if (allowOutside && path.isAbsolute(input) && !isWithin(root, path.resolve(input))) return resolveExternalFile(input, deniedRoots, harnessImageHomes);
-  const target = await resolveScopedPath(root, input);
+  const expanded = typeof input === 'string' ? expandHomePath(input) : input;
+  if (allowOutside && path.isAbsolute(expanded) && !isWithin(root, path.resolve(expanded))) return resolveExternalFile(expanded, deniedRoots, harnessImageHomes);
+  const target = await resolveScopedPath(root, expanded);
   // A project rooted at the home directory (or above the state directory) holds the same stores.
   const real = await realpath(target).catch(() => target);
   if (await isSecretPath(real, deniedRoots, false, harnessImageHomes)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);

@@ -21,12 +21,13 @@ struct ProjectFilePage: View {
     @State private var shown = 1
     @State private var readingMarkdown = true
     @State private var actionError: String?
-    private var isMarkdown: Bool { ["md", "markdown", "mdown", "mdx"].contains((path as NSString).pathExtension.lowercased()) }
+    private var effectivePath: String { preview?.path ?? path }
+    private var isMarkdown: Bool { ["md", "markdown", "mdown", "mkd", "mdx", "mdc"].contains((effectivePath as NSString).pathExtension.lowercased()) }
     private var language: String {
-        let leaf = (path as NSString).lastPathComponent.lowercased()
+        let leaf = (effectivePath as NSString).lastPathComponent.lowercased()
         if leaf == "dockerfile" { return "docker" }
         if leaf == "makefile" { return "makefile" }
-        return ["m": "objectivec", "mm": "objectivec", "h": "c", "kt": "kotlin", "kts": "kotlin", "py": "python", "rb": "ruby", "sh": "bash", "yml": "yaml", "rs": "rust", "md": "markdown", "mdown": "markdown", "ts": "typescript", "tsx": "tsx", "js": "javascript", "jsx": "jsx"][((path as NSString).pathExtension.lowercased())] ?? (path as NSString).pathExtension.lowercased()
+        return ["m": "objectivec", "mm": "objectivec", "h": "c", "kt": "kotlin", "kts": "kotlin", "py": "python", "rb": "ruby", "sh": "bash", "yml": "yaml", "rs": "rust", "md": "markdown", "mdown": "markdown", "mkd": "markdown", "mdx": "markdown", "mdc": "markdown", "ts": "typescript", "tsx": "tsx", "js": "javascript", "jsx": "jsx"][((effectivePath as NSString).pathExtension.lowercased())] ?? (effectivePath as NSString).pathExtension.lowercased()
     }
 
     var body: some View {
@@ -58,7 +59,7 @@ struct ProjectFilePage: View {
                 }
             } else { ProgressView() }
         }
-        .navigationTitle((path as NSString).lastPathComponent)
+        .navigationTitle((effectivePath as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top, spacing: 0) { underBar }
         .toolbar(.hidden, for: .bottomBar)
@@ -68,7 +69,7 @@ struct ProjectFilePage: View {
                 Menu {
                     Button("下载并分享", systemImage: "square.and.arrow.up") { Task { await download() } }
                     Button("系统预览", systemImage: "eye") { Task { await download(preview: true) } }
-                    Button("复制路径", systemImage: "doc.on.doc") { UIPasteboard.general.string = path }
+                    Button("复制路径", systemImage: "doc.on.doc") { UIPasteboard.general.string = effectivePath }
                     if let preview, !preview.binary, !preview.truncated {
                         Button("复制内容", systemImage: "doc.on.clipboard") { UIPasteboard.general.string = preview.content }
                     }
@@ -83,14 +84,14 @@ struct ProjectFilePage: View {
             RiffetToastCenter.shared.error(message)
         }
         .sheet(item: $exported) { NativeShareSheet(items: [$0.url]) }
-        .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (path as NSString).lastPathComponent) }
+        .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (effectivePath as NSString).lastPathComponent) }
     }
 
     /// What can be shown as a rendered page: Markdown and HTML, never an image or a binary.
     private var previewable: Bool {
         guard let preview, !preview.binary, preview.image == nil, error == nil else { return false }
         if isMarkdown { return true }
-        return preview.render != nil || ["html", "htm"].contains((path as NSString).pathExtension.lowercased())
+        return preview.render != nil || ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased())
     }
 
     private var showsPreview: Binding<Bool> {
@@ -179,7 +180,7 @@ struct ProjectFilePage: View {
             guard !Task.isCancelled else { return }
             preview = result
             renderHTML = !isMarkdown && result.render != nil && targetLine == nil
-            if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: path, image: true) {
+            if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: result.path, image: true) {
                 let data = try await workbench.resources.data(for: url)
                 guard !Task.isCancelled else { return }
                 let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data) }.value
@@ -195,7 +196,10 @@ struct ProjectFilePage: View {
             }
         } catch {
             guard !Task.isCancelled else { return }
-            self.error = error.riffetMessage
+            let blocked = error.riffetCode == "PATH_OUTSIDE_PROJECT" || error.riffetCode == "INVALID_PATH"
+            self.error = blocked
+                ? String(localized: "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。", bundle: .riffet)
+                : error.riffetMessage
         }
     }
 
@@ -204,14 +208,14 @@ struct ProjectFilePage: View {
         exporting = true
         defer { exporting = false }
         do {
-            guard let url = workbench.resources.fileURL(projectID: project.id, path: path) else { throw InspectorFailure.invalidURL }
-            let file = try await workbench.resources.file(for: url, name: (path as NSString).lastPathComponent)
+            guard let url = workbench.resources.fileURL(projectID: project.id, path: effectivePath) else { throw InspectorFailure.invalidURL }
+            let file = try await workbench.resources.file(for: url, name: (effectivePath as NSString).lastPathComponent)
             if preview { quickLook = InspectorExport(url: file) } else { exported = InspectorExport(url: file) }
         } catch { actionError = error.riffetMessage }
     }
 
     private var previewURL: URL? {
-        guard let raw = workbench.resources.fileURL(projectID: project.id, path: path) else { return nil }
+        guard let raw = workbench.resources.fileURL(projectID: project.id, path: effectivePath) else { return nil }
         return ConversationPreviewDocument.previewURL(raw, dark: scheme == .dark)
     }
 
@@ -219,7 +223,7 @@ struct ProjectFilePage: View {
         if preview?.render != nil { renderHTML.toggle(); return }
         if renderHTML { renderHTML = false; return }
         do {
-            guard let url = workbench.resources.fileURL(projectID: project.id, path: path) else { throw InspectorFailure.invalidURL }
+            guard let url = workbench.resources.fileURL(projectID: project.id, path: effectivePath) else { throw InspectorFailure.invalidURL }
             html = try await workbench.resources.data(for: url)
             renderHTML = true
         } catch { actionError = error.riffetMessage }
