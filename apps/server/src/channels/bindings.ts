@@ -1,4 +1,4 @@
-import type { ChannelCardOptions, ChannelChat } from '../../../../packages/contracts/src/channels.js';
+import type { ChannelCardOptions, ChannelChat, ChannelKind } from '../../../../packages/contracts/src/channels.js';
 import type { Store } from '../store.js';
 import type { ChannelAddress, SurfaceState } from './types.js';
 
@@ -22,7 +22,7 @@ function pickBooleans(value: object | undefined): Record<string, boolean> {
   return Object.fromEntries(Object.entries(value ?? {}).filter(([key, item]) => key !== 'footer' && typeof item === 'boolean')) as Record<string, boolean>;
 }
 
-export interface StoredAccount { id: string; kind: 'feishu'; appId: string; domain: 'feishu' | 'lark'; enabled: boolean;
+export interface StoredAccount { id: string; kind: ChannelKind; appId: string; domain: 'feishu' | 'lark'; enabled: boolean;
   /** How it was added; records from before this field are manual. */
   source?: 'scan' | 'manual';
   /** Only what was changed from the defaults; read through `mergeCard`. */
@@ -38,6 +38,10 @@ export interface StoredSurface {
 
 /** What new conversations of a chat start on, set by `/model`; `model` is the full selection string. */
 export interface ChatModelDefaults { backendId?: string; model?: string }
+
+/** Kinds stored or sent before platforms became plugin declarations (docs/design/channels.md「插件化」). */
+const LEGACY_KINDS: Record<string, ChannelKind> = { feishu: 'riffet.feishu/feishu' };
+export const channelKind = (kind: string): ChannelKind => Object.hasOwn(LEGACY_KINDS, kind) ? LEGACY_KINDS[kind]! : kind;
 
 export const chatKey = (account: string, chatId: string) => `${account}:${chatId}`;
 
@@ -61,7 +65,7 @@ export class ChannelBindings {
 
   // ---- accounts and identities -----------------------------------------------------------------
 
-  accounts(): StoredAccount[] { return Object.values(this.read<StoredAccount>('accounts')); }
+  accounts(): StoredAccount[] { return Object.values(this.read<StoredAccount>('accounts')).map(account => ({ ...account, kind: channelKind(account.kind) })); }
   setAccount(account: StoredAccount): void { const all = this.read<StoredAccount>('accounts'); all[account.id] = account; this.write('accounts', all); }
   removeAccount(id: string): void {
     const accounts = this.read<StoredAccount>('accounts'); delete accounts[id]; this.write('accounts', accounts);

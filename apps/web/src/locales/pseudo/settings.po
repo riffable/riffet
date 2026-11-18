@@ -2938,6 +2938,10 @@ msgstr ""
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "在手机上扫码配对后出现在这里。"
 msgstr ""
+#: src/app/settings/ChannelsSection.tsx
+msgid "在插件中启用飞书后可添加"
+msgstr ""
+
 
 #: src/app/settings/StorageSection.tsx
 msgid "在服务下次启动时进行，期间服务不可用"

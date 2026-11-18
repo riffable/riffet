@@ -8,6 +8,7 @@ import { avatars } from './riffet/avatars/index.js';
 import { browser } from './riffet/browser/index.js';
 import { canvas } from './riffet/canvas/index.js';
 import { cursor } from './riffet/cursor/index.js';
+import { feishu } from './riffet/feishu/index.js';
 import { speechLocal } from './riffet/speech-local/index.js';
 import { translate } from './riffet/translate/index.js';
 
@@ -19,4 +20,5 @@ export const builtinPlugins: Plugin[] = [
   avatars,
   translate,
   speechLocal,
+  feishu,
 ];

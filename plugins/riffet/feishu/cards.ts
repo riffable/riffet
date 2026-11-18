@@ -6,7 +6,7 @@
  * `standard_icon` tokens are limited to ones confirmed in Feishu's official list: an unknown token
  * in a header or button fails the whole card (200621), and no icon is better than a guess.
  */
-import type { CommandPanelView, InteractionView, ModelPickerView, PanelView, ProjectPickerView, TurnView } from '../types.js';
+import type { CommandPanelView, InteractionView, ModelPickerView, PanelView, ProjectPickerView, TurnView } from '@riffet/plugin-api';
 import { renderMarkdown, type CardElement, type TableMode } from './markdown.js';
 import { HERO, SUB, STRONG, buttonRow, callbackValue, card as kitCard, commandGroup, md, note, oneLine, plain, safe, select, selectBlock, simpleCard, surface, type Card, type CallbackValue } from './kit.js';
 

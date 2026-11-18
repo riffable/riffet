@@ -130,7 +130,7 @@ function runtime(mode) {
 
   const cellAt = (x, at, name, layer) => p.cell(x + 6, row(at) - 19, STRIP - 12, 38, name, layer);
   [[0, 'routes/*', 'surfaces'], [1, 'routes/sync.ts', 'surfaces'], [2, 'routes/terminals.ts', 'surfaces'], [3, 'discovery.ts', 'base'],
-    [5, 'channels/feishu', 'surfaces'], [6, 'push/apns.ts', 'features'], [7, 'auxiliary/gateway', 'kernel'], [8, 'update', 'features']]
+    [5, 'riffet/feishu', 'channel · built-in plugin'], [6, 'push/apns.ts', 'features'], [7, 'auxiliary/gateway', 'kernel'], [8, 'update', 'features']]
     .forEach(([at, name, layer]) => cellAt(SERVER.x, at, name, layer));
   [[0, 'backends/claude', 'driver'], [1, 'riffet/cursor', 'driver · built-in plugin'], [2, 'backends/codex', 'driver · flavor traex'], [3, 'backends/droid', 'driver'],
     [4, 'backends/pi', 'driver'], [5, 'backends/dsh', 'driver'], [6, 'backends/chat', 'driver'], [7, 'plugins-host/', 'features'],

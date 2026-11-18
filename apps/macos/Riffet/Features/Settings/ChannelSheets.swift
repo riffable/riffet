@@ -185,8 +185,14 @@ struct ChannelAddSheet: View {
     init(mode: Mode, model: ChannelsModel) {
         self.mode = mode
         self.model = model
-        if case .replace = mode { _step = State(initialValue: .manual) } else { _step = State(initialValue: .scan) }
+        let kind = mode.account?.kind ?? model.state?.newBotKind ?? "feishu"
+        self.kind = kind
+        if case .replace = mode { _step = State(initialValue: .manual) }
+        else { _step = State(initialValue: model.state?.scannable(kind) == false ? .manual : .scan) }
     }
+
+    /// A new bot is for the platform a plugin provides; an existing one stays on its own.
+    private let kind: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -194,6 +200,7 @@ struct ChannelAddSheet: View {
             switch step {
             case .scan:
                 ChannelScanStep(
+                    kind: kind,
                     appId: mode.account?.appId,
                     canType: { if case .add = mode { true } else { false } }(),
                     onType: { step = .manual },
@@ -204,7 +211,7 @@ struct ChannelAddSheet: View {
                     }
                 )
             case .manual:
-                ChannelManualStep(account: mode.account, onCancel: { dismiss() }) { account in
+                ChannelManualStep(kind: kind, account: mode.account, onCancel: { dismiss() }) { account in
                     Task { await model.reload() }
                     if case .replace = mode { dismiss() } else { step = .progress(accountId: account.id, manual: true) }
                 }
@@ -226,6 +233,7 @@ struct ChannelAddSheet: View {
 }
 
 private struct ChannelScanStep: View {
+    let kind: String
     let appId: String?
     let canType: Bool
     let onType: () -> Void
@@ -286,7 +294,7 @@ private struct ChannelScanStep: View {
         expired = false
         error = nil
         let created: ChannelRegistration
-        do { created = try await ChannelsAPI.createRegistration(appId: appId) } catch {
+        do { created = try await ChannelsAPI.createRegistration(kind: kind, appId: appId) } catch {
             if !Task.isCancelled { self.error = error.riffetMessage.isEmpty ? String(localized: "无法生成二维码") : error.riffetMessage }
             return
         }
@@ -315,6 +323,7 @@ private struct ChannelScanStep: View {
 }
 
 private struct ChannelManualStep: View {
+    let kind: String
     let account: ChannelAccount?
     let onCancel: () -> Void
     let onSaved: (ChannelAccount) -> Void
@@ -324,7 +333,8 @@ private struct ChannelManualStep: View {
     @State private var busy = false
     @State private var error: String?
 
-    init(account: ChannelAccount?, onCancel: @escaping () -> Void, onSaved: @escaping (ChannelAccount) -> Void) {
+    init(kind: String, account: ChannelAccount?, onCancel: @escaping () -> Void, onSaved: @escaping (ChannelAccount) -> Void) {
+        self.kind = kind
         self.account = account
         self.onCancel = onCancel
         self.onSaved = onSaved
@@ -372,7 +382,7 @@ private struct ChannelManualStep: View {
             if let account {
                 onSaved(try await ChannelsAPI.update(account.id, ["appId": id, "appSecret": secret, "domain": domain]))
             } else {
-                onSaved(try await ChannelsAPI.create(appId: id, appSecret: secret, domain: domain))
+                onSaved(try await ChannelsAPI.create(kind: kind, appId: id, appSecret: secret, domain: domain))
             }
         } catch {
             self.error = error.riffetMessage

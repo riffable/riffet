@@ -13,11 +13,13 @@ import type {
   CommandMessage, CommandSelection, NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
+import type { ImChannelProvider } from './im-channel.js';
 import type { GatewayProtocol } from '@riffet/contracts';
 
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
 export type { CommandMessage, CommandSelection, PluginCommandResult };
+export type * from './im-channel.js';
 
 /**
  * The plugin API version this host provides. A manifest's `apiVersion` is accepted when it lies in
@@ -124,6 +126,8 @@ export interface Contributions {
   page?: PluginPageProvider;
   /** Transcribes dictation (docs/VOICE.md §3), declared by the manifest's `contributes.speechRecognizer`. In-process packages only. */
   speechRecognizer?: SpeechRecognizer;
+  /** Keyed by declaration id; each is declared in the manifest's `contributes.imChannels`. The channel layer connects its accounts while the plugin is on. In-process packages only. */
+  imChannels?: Record<string, ImChannelProvider>;
 }
 
 // ── Speech recognition (docs/VOICE.md §3) ─────────────────────────────────────

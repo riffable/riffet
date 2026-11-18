@@ -29,7 +29,7 @@ function fakeProvider() {
     acknowledge: async () => undefined,
     close: async () => undefined,
   };
-  const provider: ChannelProvider = { kind: 'feishu', capabilities: { edit: true, actions: 'buttons', threads: true }, connect: async (_account, ctx) => { context = ctx; return connection; },
+  const provider: ChannelProvider = { kind: 'riffet.feishu/feishu', capabilities: { edit: true, actions: 'buttons', threads: true }, connect: async (_account, ctx) => { context = ctx; return connection; },
     links: account => ({ open: `https://open.test/${account.appId}` }),
     register: async ({ ready }) => { ready('https://scan.test/code', 600); return registrations.shift()!; },
   };

@@ -24,20 +24,24 @@ export function AddBotDialog({ open, onOpenChange, mode, state, onChanged }: {
   state?: ChannelsState;
   onChanged: () => void;
 }) {
-  const [step, setStep] = useState<Step>(mode.kind === 'replace' ? { kind: 'manual' } : { kind: 'scan' });
+  // A new bot is for the platform a plugin provides; an existing one stays on its own.
+  const kind = mode.kind === 'add' ? state?.providers[0]?.id : mode.account.kind;
+  const scannable = Boolean(state?.providers.find((provider) => provider.id === kind)?.register);
+  const [step, setStep] = useState<Step>(mode.kind === 'replace' || !scannable ? { kind: 'manual' } : { kind: 'scan' });
   const title = step.kind === 'manual' && mode.kind === 'replace' ? undefined : mode.kind === 'reauthorize' && step.kind === 'scan' ? <Trans>重新扫码授权</Trans> : <Trans>添加飞书机器人</Trans>;
   return <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent aria-describedby={undefined}>
       <DialogHeader><DialogTitle>{title ?? <Trans>更换凭据</Trans>}</DialogTitle></DialogHeader>
-      {step.kind === 'scan' && <ScanStep open={open} account={mode.kind === 'reauthorize' ? mode.account : undefined} canType={mode.kind === 'add'} onClose={() => onOpenChange(false)} onType={() => setStep({ kind: 'manual' })} onDone={(accountId) => { onChanged(); setStep({ kind: 'progress', accountId, manual: false }); }} />}
-      {step.kind === 'manual' && <ManualStep account={mode.kind === 'replace' ? mode.account : undefined} onClose={() => onOpenChange(false)} onSaved={(account) => { onChanged(); if (mode.kind === 'replace') onOpenChange(false); else setStep({ kind: 'progress', accountId: account.id, manual: true }); }} />}
+      {step.kind === 'scan' && kind && <ScanStep open={open} kind={kind} account={mode.kind === 'reauthorize' ? mode.account : undefined} canType={mode.kind === 'add'} onClose={() => onOpenChange(false)} onType={() => setStep({ kind: 'manual' })} onDone={(accountId) => { onChanged(); setStep({ kind: 'progress', accountId, manual: false }); }} />}
+      {step.kind === 'manual' && kind && <ManualStep kind={kind} account={mode.kind === 'replace' ? mode.account : undefined} onClose={() => onOpenChange(false)} onSaved={(account) => { onChanged(); if (mode.kind === 'replace') onOpenChange(false); else setStep({ kind: 'progress', accountId: account.id, manual: true }); }} />}
       {step.kind === 'progress' && <ProgressStep accountId={step.accountId} manual={step.manual} state={state} onChanged={onChanged} onClose={() => onOpenChange(false)} />}
     </DialogContent>
   </Dialog>;
 }
 
-function ScanStep({ open, account, canType, onClose, onType, onDone }: {
+function ScanStep({ open, kind, account, canType, onClose, onType, onDone }: {
   open: boolean;
+  kind: string;
   account?: ChannelAccountInfo;
   canType: boolean;
   onClose: () => void;
@@ -68,7 +72,7 @@ function ScanStep({ open, account, canType, onClose, onType, onDone }: {
       } catch { /* a missed poll is retried */ }
       if (!stopped) timer = window.setTimeout(() => void poll(registrationId), 2000);
     };
-    api.createChannelRegistration({ kind: 'feishu', ...(appId ? { appId } : {}) }).then((created) => {
+    api.createChannelRegistration({ kind, ...(appId ? { appId } : {}) }).then((created) => {
       if (stopped) { void api.deleteChannelRegistration(created.id).catch(() => undefined); return; }
       id = created.id;
       setRegistration(created);
@@ -104,7 +108,7 @@ function ScanStep({ open, account, canType, onClose, onType, onDone }: {
   </>;
 }
 
-function ManualStep({ account, onClose, onSaved }: { account?: ChannelAccountInfo; onClose: () => void; onSaved: (account: ChannelAccountInfo) => void }) {
+function ManualStep({ kind, account, onClose, onSaved }: { kind: string; account?: ChannelAccountInfo; onClose: () => void; onSaved: (account: ChannelAccountInfo) => void }) {
   const { t } = useLingui();
   const [appId, setAppId] = useState(account?.appId ?? '');
   const [appSecret, setAppSecret] = useState('');
@@ -116,7 +120,7 @@ function ManualStep({ account, onClose, onSaved }: { account?: ChannelAccountInf
     setBusy(true); setError('');
     try {
       const value = { appId: appId.trim(), appSecret: appSecret.trim(), domain };
-      onSaved(account ? await api.updateChannelAccount(account.id, value) : await api.createChannelAccount({ kind: 'feishu', ...value, enabled: true }));
+      onSaved(account ? await api.updateChannelAccount(account.id, value) : await api.createChannelAccount({ kind, ...value, enabled: true }));
     } catch (reason) { setError(errorMessage(reason, t`无法保存`)); setBusy(false); }
   };
   return <form onSubmit={(event) => void submit(event)}>

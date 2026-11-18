@@ -67,7 +67,7 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="icon" variant="quiet" aria-label={t`更多`} disabled={busy}><IconEllipsis /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => onDialog({ kind: 'reauthorize', account })}><IconRotateCcw /><Trans>重新扫码授权</Trans></DropdownMenuItem>
+              {state.providers.some((provider) => provider.id === account.kind && provider.register) && <DropdownMenuItem onSelect={() => onDialog({ kind: 'reauthorize', account })}><IconRotateCcw /><Trans>重新扫码授权</Trans></DropdownMenuItem>}
               <DropdownMenuItem onSelect={() => onDialog({ kind: 'replace', account })}><IconKey /><Trans>更换凭据</Trans></DropdownMenuItem>
               {consoleLink && <DropdownMenuItem asChild><a {...consoleLink}><IconExternalLink /><Trans>打开开发者后台</Trans></a></DropdownMenuItem>}
               <DropdownMenuSeparator />

@@ -112,7 +112,7 @@
     "apps/server/src/backends/pi/history.ts": 2,
     "apps/server/src/backends/pi/models.ts": 1,
     "apps/server/src/backends/shared/workspace-observer.ts": 1,
-    "apps/server/src/channels/feishu/openapi.ts": 2,
+    "plugins/riffet/feishu/openapi.ts": 2,
     "apps/server/src/channels/projector.ts": 1,
     "apps/server/src/diagram-assets.ts": 1,
     "apps/server/src/exec.ts": 1,

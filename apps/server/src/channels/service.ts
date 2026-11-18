@@ -21,18 +21,28 @@ import type { Store } from '../store.js';
 import type { TranscriptIngest } from '../sync/ingest.js';
 import type { TimelineService } from '../timeline/service.js';
 import type { WorkspaceService } from '../workspace/index.js';
-import { ChannelBindings, addressKeys, chatKey, mergeCard, type CardPatch, type StoredAccount } from './bindings.js';
+import { ChannelBindings, addressKeys, channelKind, chatKey, mergeCard, type CardPatch, type StoredAccount } from './bindings.js';
 import { commandOfAction, helpText, panelContent, parseCommand, REPLY, type ChannelCommand } from './commands.js';
 import { followSession, type Following } from './follow.js';
 import { ChannelIdentities } from './identity.js';
 import { buildModelView, isTerminalRun, projectTurn } from './projector.js';
-import type { ActionReply, ChannelAccount, ChannelAddress, ChannelConnection, ChannelContext, ChannelProvider, InboundAction, InboundMessage, InteractionView, ModelPickerView, ProjectPickerView, ProviderRegistration, ReplyAnchor, SentRef, TurnSurface, TurnView } from './types.js';
+import type { ActionReply, ChannelAccount, ChannelAddress, ChannelConnection, ChannelContext, ChannelProvider, ImChannelProvider, InboundAction, InboundMessage, InteractionView, ModelPickerView, ProjectPickerView, ProviderRegistration, ReplyAnchor, SentRef, TurnSurface, TurnView } from './types.js';
 
 /*
  * The IM-agnostic core of docs/design/channels.md: accounts, the gate, chat and conversation
  * bindings, the inbound pipeline, and following a conversation's turns back to the chat. Providers
  * (feishu/) only translate the platform; they never see the store or the sessions.
  */
+
+const withKind = new WeakMap<ImChannelProvider, Map<string, ChannelProvider>>();
+/** The same object for the same provider and declaration, so a reconnect is needed only when the platform really changed. */
+export function channelProvider(kind: string, provider: ImChannelProvider): ChannelProvider {
+  let byKind = withKind.get(provider);
+  if (!byKind) { byKind = new Map(); withKind.set(provider, byKind); }
+  let wrapped = byKind.get(kind);
+  if (!wrapped) { wrapped = Object.assign(Object.create(provider) as ImChannelProvider, { kind }); byKind.set(kind, wrapped); }
+  return wrapped;
+}
 
 export interface ChannelDeps {
   store: Store;
@@ -46,7 +56,10 @@ export interface ChannelDeps {
   workspace: WorkspaceService;
   owner: OwnerService;
   stateDir: string;
-  providers: ChannelProvider[];
+  /** The platforms of the plugins that are on, read each time: a plugin can be turned on or off at any time. */
+  providers: () => ChannelProvider[];
+  /** Called after the plugins' platforms changed; accounts connect, reconnect or drop accordingly. */
+  onProvidersChanged?: (listener: () => void) => () => void;
 }
 
 const DEDUPE_WINDOW_MS = 60_000;
@@ -91,6 +104,8 @@ interface Runtime {
   status: ChannelConnectionStatus;
   abort: AbortController;
   connection?: ChannelConnection;
+  /** The platform this attempt connected through; a different one (or none) once plugins change means reconnecting. */
+  provider?: ChannelProvider;
   /** Settles when the connection attempt (and the resume after it) is over. */
   settled: Promise<void>;
   /** Set once the previous process's turn cards are taken over; runs seen before wait in `pending`. */
@@ -164,6 +179,7 @@ export class ChannelService {
   private readonly registrations = new Map<string, Registration>();
   private readonly healthCache = new Map<string, { at: number; value: ChannelHealth }>();
   private offRuns?: () => void;
+  private offProviders?: () => void;
   private started?: Promise<void>;
   private closed = false;
 
@@ -178,6 +194,7 @@ export class ChannelService {
   start(): Promise<void> {
     this.started ??= (async () => {
       this.offRuns = this.deps.store.onRunChanged(run => this.runChanged(run));
+      this.offProviders = this.deps.onProvidersChanged?.(() => this.providersChanged());
       await Promise.allSettled(this.bindings.accounts().filter(account => account.enabled).map(account => this.connect(account.id)));
     })();
     return this.started;
@@ -186,6 +203,7 @@ export class ChannelService {
   async close(): Promise<void> {
     this.closed = true;
     this.offRuns?.();
+    this.offProviders?.();
     for (const registration of this.registrations.values()) registration.abort.abort();
     for (const tracker of this.trackers.values()) clearTimeout(tracker.timer);
     for (const follow of this.follows.values()) follow.following.close();
@@ -200,6 +218,25 @@ export class ChannelService {
   /** Resolves once the account's connection attempt is over; for tests and the settings page. */
   connected(id: string): Promise<void> { return this.runtimes.get(id)?.settled ?? Promise.resolve(); }
 
+  private provider(kind: string): ChannelProvider | undefined { return this.deps.providers().find(item => item.kind === kind); }
+
+  /** A plugin was turned on or off: each enabled account whose platform appeared, went or was replaced connects again. */
+  private providersChanged(): void {
+    if (this.closed) return;
+    let changed = false;
+    for (const account of this.bindings.accounts()) {
+      if (!account.enabled) continue;
+      const runtime = this.runtimes.get(account.id);
+      if (runtime && runtime.provider === this.provider(account.kind)) continue;
+      void this.connect(account.id);
+      changed = true;
+    }
+    if (changed) this.changed();
+  }
+
+  /** `feishu-1a2b3c4d` for `riffet.feishu/feishu`: the declaration's own name, so the id stays a URL segment. */
+  private newAccountId(kind: string): string { return `${kind.slice(kind.lastIndexOf('/') + 1)}-${randomBytes(4).toString('hex')}`; }
+
   // ---- accounts ----------------------------------------------------------------------------------
 
   private secretPath(id: string): string { return join(this.deps.stateDir, 'channels', `${id}.secret`); }
@@ -212,7 +249,7 @@ export class ChannelService {
     const status = this.runtimes.get(account.id)?.status ?? { state: account.enabled ? 'connecting' as const : 'disabled' as const };
     const connection = this.runtimes.get(account.id)?.connection;
     const { source: _source, card, ...rest } = account;
-    const links = this.deps.providers.find(item => item.kind === account.kind)?.links(account) ?? {};
+    const links = this.provider(account.kind)?.links(account) ?? {};
     return { ...rest, ...(connection?.botName ? { botName: connection.botName } : {}), ...(connection?.avatarUrl ? { avatarUrl: connection.avatarUrl } : {}), secretSet: existsSync(this.secretPath(account.id)), status, links, card: mergeCard(card) };
   }
 
@@ -255,12 +292,13 @@ export class ChannelService {
   }
 
   state(): ChannelsState {
-    return { accounts: this.bindings.accounts().map(account => this.info(account)), identities: this.identities.list(), chats: this.bindings.chats() };
+    return { providers: this.deps.providers().map(item => ({ id: item.kind, register: Boolean(item.register) })), accounts: this.bindings.accounts().map(account => this.info(account)), identities: this.identities.list(), chats: this.bindings.chats() };
   }
 
   async createAccount(input: ChannelAccountInput): Promise<ChannelAccountInfo> {
-    if (input?.kind !== 'feishu') throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
-    const account: StoredAccount = { id: `${input.kind}-${randomBytes(4).toString('hex')}`, kind: input.kind, appId: requireString(input.appId, 'appId', 200).trim(), domain: this.domain(input.domain), enabled: input.enabled !== false, source: 'manual' };
+    const kind = typeof input?.kind === 'string' ? channelKind(input.kind) : undefined;
+    if (!kind || !this.provider(kind)) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
+    const account: StoredAccount = { id: this.newAccountId(kind), kind, appId: requireString(input.appId, 'appId', 200).trim(), domain: this.domain(input.domain), enabled: input.enabled !== false, source: 'manual' };
     this.writeSecret(account.id, requireString(input.appSecret, 'appSecret', 500).trim());
     this.bindings.setAccount(account);
     if (account.enabled) void this.connect(account.id);
@@ -307,7 +345,7 @@ export class ChannelService {
     const stored = this.account(id);
     const cached = this.healthCache.get(id);
     if (!refresh && cached && Date.now() - cached.at < HEALTH_TTL_MS) return this.liveHealth(id, cached.value);
-    const provider = this.deps.providers.find(item => item.kind === stored.kind);
+    const provider = this.provider(stored.kind);
     let remote: Awaited<ReturnType<NonNullable<ChannelProvider['health']>>> = {};
     const secret = readPrivateSettingsFile(this.secretPath(id))?.trim();
     if (provider?.health && secret) {
@@ -333,13 +371,14 @@ export class ChannelService {
   }
 
   async startRegistration(input: ChannelRegistrationInput): Promise<ChannelRegistration> {
-    const provider = this.deps.providers.find(item => item.kind === input?.kind);
-    if (!provider?.register) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
+    const kind = typeof input?.kind === 'string' ? channelKind(input.kind) : undefined;
+    const provider = kind ? this.provider(kind) : undefined;
+    if (!kind || !provider?.register) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
     const appId = input.appId === undefined ? undefined : requireString(input.appId, 'appId', 200).trim();
-    if (appId && !this.bindings.accounts().some(item => item.appId === appId && item.kind === input.kind)) throw new AppError('CHANNEL_ACCOUNT_NOT_FOUND', 'No such channel account', 404);
+    if (appId && !this.bindings.accounts().some(item => item.appId === appId && item.kind === kind)) throw new AppError('CHANNEL_ACCOUNT_NOT_FOUND', 'No such channel account', 404);
     const now = Date.now();
     for (const [id, item] of this.registrations) {
-      if (item.kind === input.kind && item.state === 'waiting') this.endRegistration(item, 'cancelled');
+      if (item.kind === kind && item.state === 'waiting') this.endRegistration(item, 'cancelled');
       if (item.finishedAt && now - item.finishedAt > REGISTRATION_KEEP_MS) this.registrations.delete(id);
     }
     const id = randomUUID();
@@ -360,7 +399,7 @@ export class ChannelService {
     let qr: string;
     try { qr = await QRCode.toString(first.url, { type: 'svg' }); }
     catch (error) { abort.abort(); throw new AppError('CHANNEL_REGISTRATION_FAILED', message(error).slice(0, 200), 502); }
-    const registration: Registration = { id, kind: input.kind, state: 'waiting', abort, url: first.url, expiresAt: Date.now() + first.expiresIn * 1000, qr } as Registration;
+    const registration: Registration = { id, kind, state: 'waiting', abort, url: first.url, expiresAt: Date.now() + first.expiresIn * 1000, qr } as Registration;
     this.registrations.set(id, registration);
     const expiry = setTimeout(() => this.endRegistration(registration, 'expired'), Math.max(0, registration.expiresAt - Date.now()));
     running.then(
@@ -396,7 +435,7 @@ export class ChannelService {
     const existing = this.bindings.accounts().find(account => account.kind === item.kind && account.appId === result.appId);
     const account: StoredAccount = existing
       ? { ...existing, domain: result.domain, enabled: true }
-      : { id: `${item.kind}-${randomBytes(4).toString('hex')}`, kind: item.kind, appId: result.appId, domain: result.domain, enabled: true, source: 'scan' };
+      : { id: this.newAccountId(item.kind), kind: item.kind, appId: result.appId, domain: result.domain, enabled: true, source: 'scan' };
     this.writeSecret(account.id, result.appSecret);
     this.bindings.setAccount(account);
     this.healthCache.delete(account.id);
@@ -458,8 +497,9 @@ export class ChannelService {
       // A runtime left behind by a concurrent account update is shut down first, so no connection leaks.
       if (previous) { for (const runId of previous.pending) runtime.pending.add(runId); previous.abort.abort(); await previous.settled.catch(() => undefined); await previous.connection?.close().catch(() => undefined); }
       try {
-        const provider = this.deps.providers.find(item => item.kind === stored.kind);
-        if (!provider) throw new Error('这个版本没有对应的连接器');
+        const provider = this.provider(stored.kind);
+        runtime.provider = provider;
+        if (!provider) throw new Error('提供这个通道的插件没有启用');
         const secret = readPrivateSettingsFile(this.secretPath(id))?.trim();
         if (!secret) throw new Error('缺少 App Secret');
         const context: ChannelContext = {

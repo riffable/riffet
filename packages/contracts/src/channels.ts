@@ -3,7 +3,8 @@
  * Web settings page. Secrets never appear here: `secretSet` only says one is stored.
  */
 
-export type ChannelKind = 'feishu';
+/** The declaration id of the IM platform (`contributes.imChannels`), e.g. `riffet.feishu/feishu`. Inputs still accept the bare `feishu` of older clients. */
+export type ChannelKind = string;
 export type ChannelDomain = 'feishu' | 'lark';
 
 export interface ChannelConnectionStatus {
@@ -100,7 +101,12 @@ export interface ChannelChat {
   updatedAt: string;
 }
 
+/** An IM platform a plugin that is on provides; `register` when it offers scan-to-create. */
+export interface ChannelProviderInfo { id: ChannelKind; register: boolean }
+
 export interface ChannelsState {
+  /** What a new bot can be added for; an account of a platform not listed stays, but cannot connect. */
+  providers: ChannelProviderInfo[];
   accounts: ChannelAccountInfo[];
   identities: ChannelIdentity[];
   chats: ChannelChat[];

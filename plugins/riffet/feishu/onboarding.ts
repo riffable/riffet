@@ -3,7 +3,7 @@
  * `registerApp`, the live health checks behind the bot page's checklist, and the deep links.
  */
 import * as Lark from '@larksuiteoapi/node-sdk';
-import type { ChannelAccount, ChannelProvider, ProviderHealth, ProviderRegistration } from '../types.js';
+import type { ChannelAccount, ImChannelProvider, ProviderHealth, ProviderRegistration } from '@riffet/plugin-api';
 import { createFeishuApi, FeishuApiError } from './openapi.js';
 
 /** What the provider calls, by the names in the platform's scan-to-create default template. */
@@ -32,7 +32,7 @@ async function reachableAvatar(): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-const register: NonNullable<ChannelProvider['register']> = async ({ appId, signal, ready }): Promise<ProviderRegistration> => {
+const register: NonNullable<ImChannelProvider['register']> = async ({ appId, signal, ready }): Promise<ProviderRegistration> => {
   const avatar = await reachableAvatar();
   const result = await Lark.registerApp({
     signal,
@@ -48,7 +48,7 @@ const register: NonNullable<ChannelProvider['register']> = async ({ appId, signa
   };
 };
 
-const health: NonNullable<ChannelProvider['health']> = async (account: ChannelAccount): Promise<ProviderHealth> => {
+const health: NonNullable<ImChannelProvider['health']> = async (account: ChannelAccount): Promise<ProviderHealth> => {
   const api = createFeishuApi({ appId: account.appId, appSecret: account.appSecret, domain: account.domain });
   const out: ProviderHealth = {};
   const [bot, scopes] = await Promise.allSettled([
@@ -71,7 +71,7 @@ const health: NonNullable<ChannelProvider['health']> = async (account: ChannelAc
   return out;
 };
 
-const links: ChannelProvider['links'] = (account, missingScopes) => {
+const links: ImChannelProvider['links'] = (account, missingScopes) => {
   const lark = account.domain === 'lark';
   const console = lark ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
   return {

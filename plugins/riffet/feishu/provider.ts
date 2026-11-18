@@ -1,10 +1,10 @@
 /*
  * The Feishu / Lark provider: a long connection in, cards and a native process message out.
- * Platform details stay in this directory; the channel core only sees `ChannelProvider`.
+ * Platform details stay in this directory; the channel core only sees `ImChannelProvider` (`contributes.imChannels`).
  */
 import type {
-  ChannelAccount, ChannelAddress, ChannelConnection, ChannelContext, ChannelProvider, InteractionView, ProjectPickerView, ReplyAnchor, SentRef,
-} from '../types.js';
+  ChannelAccount, ChannelAddress, ChannelConnection, ChannelContext, ImChannelProvider, InteractionView, ProjectPickerView, ReplyAnchor, SentRef,
+} from '@riffet/plugin-api';
 import { interactionCard, noticeCard, panelCard, projectPickerCard } from './cards.js';
 import { openSocket } from './connection.js';
 import { onboarding } from './onboarding.js';
@@ -114,8 +114,7 @@ async function connect(account: ChannelAccount, ctx: ChannelContext): Promise<Ch
   return connection;
 }
 
-export const feishuProvider: ChannelProvider = {
-  kind: 'feishu',
+export const feishuProvider: ImChannelProvider = {
   capabilities: { edit: true, actions: 'forms', threads: true },
   connect,
   ...onboarding,

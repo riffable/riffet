@@ -132,9 +132,8 @@ import { ApnsClient, type ApnsTransport } from './push/apns.js';
 import { PushService, type PushTiming } from './push/service.js';
 import { registerPushRoutes } from './push/routes.js';
 import { readServerId } from './server-id.js';
-import { ChannelService } from './channels/service.js';
+import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
-import { feishuProvider } from './channels/feishu/index.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
@@ -373,7 +372,7 @@ export async function createApp(options: AppOptions = {}) {
     (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside}));
   const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id)});
   // Needs the timeline, so it is built here rather than beside orchestration. Unfinished turn cards are taken over once connected.
-  const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,providers:options.channelProviders??[feishuProvider]});
+  const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,...(options.channelProviders?{providers:()=>options.channelProviders!}:{providers:()=>plugins.imChannels().map(({id,provider})=>channelProvider(id,provider)),onProvidersChanged:listener=>plugins.onChange(listener)})});
   void channels.start().catch(error=>console.warn('[riffet] channels failed to start',error));
   const externalSessions=new ExternalSessions({store,settings,nativeBackends,auth});
   const terminalHolds=new TerminalHolds({store,nativeBackends,runtime:sessionLock,log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});

@@ -47,6 +47,8 @@ struct ChannelAccount: Decodable, Identifiable, Equatable {
     }
 
     let id: String
+    /// The platform's declaration id (`riffet.feishu/feishu`); a server before 2026-11-18 sends `feishu`.
+    let kind: String
     let appId: String
     let domain: String
     var enabled: Bool
@@ -81,10 +83,23 @@ struct ChannelChat: Decodable, Identifiable, Equatable {
     var isGroup: Bool { chatType == "group" }
 }
 
+/// An IM platform a plugin that is on provides; `register` when it offers scan-to-create.
+struct ChannelProviderInfo: Decodable, Equatable {
+    let id: String
+    let register: Bool
+}
+
 struct ChannelsState: Decodable, Equatable {
+    /// Absent from a server before platforms became plugins, where Feishu is always there.
+    var providers: [ChannelProviderInfo]?
     var accounts: [ChannelAccount]
     var identities: [ChannelIdentity]
     var chats: [ChannelChat]
+
+    /// The platform a new bot is added for, or nil while no plugin provides one.
+    var newBotKind: String? { providers.map { $0.first?.id } ?? "feishu" }
+
+    func scannable(_ kind: String) -> Bool { providers.map { $0.contains { $0.id == kind && $0.register } } ?? true }
 }
 
 struct ChannelHealth: Decodable, Equatable {
@@ -120,8 +135,8 @@ enum ChannelsAPI {
 
     static func state() async throws -> ChannelsState { try await ServerJSON.send("GET", root) }
 
-    static func create(appId: String, appSecret: String, domain: String) async throws -> ChannelAccount {
-        try await ServerJSON.send("POST", "\(root)/accounts", body: ["kind": "feishu", "appId": appId, "appSecret": appSecret, "domain": domain, "enabled": true])
+    static func create(kind: String, appId: String, appSecret: String, domain: String) async throws -> ChannelAccount {
+        try await ServerJSON.send("POST", "\(root)/accounts", body: ["kind": kind, "appId": appId, "appSecret": appSecret, "domain": domain, "enabled": true])
     }
 
     @discardableResult
@@ -153,8 +168,8 @@ enum ChannelsAPI {
         _ = try await ServerJSON.send("DELETE", "\(root)/chats/\(ServerJSON.segment(key))", as: ServerJSON.Done.self)
     }
 
-    static func createRegistration(appId: String?) async throws -> ChannelRegistration {
-        var body: [String: Any] = ["kind": "feishu"]
+    static func createRegistration(kind: String, appId: String?) async throws -> ChannelRegistration {
+        var body: [String: Any] = ["kind": kind]
         if let appId { body["appId"] = appId }
         return try await ServerJSON.send("POST", "\(root)/registrations", body: body)
     }

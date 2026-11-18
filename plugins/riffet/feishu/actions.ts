@@ -4,7 +4,7 @@
  * answer to the callback is the card's new state, returned synchronously: a card refreshed only by
  * a later PATCH flashes back to its old state.
  */
-import type { ActionReply, InboundAction } from '../types.js';
+import type { ActionReply, InboundAction } from '@riffet/plugin-api';
 import { ACTION_ANSWER, FORM_FIELD_OTHER, FORM_FIELD_PICK, FORM_SUBMIT_PREFIX, parseCallbackValue, redrawCard } from './cards.js';
 
 type Loose = Record<string, unknown>;

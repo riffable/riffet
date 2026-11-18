@@ -112,8 +112,12 @@ struct ChannelsSettings: View {
                 }
                 .buttonStyle(.plain)
             }
-            SettingsActionButton("添加飞书机器人", symbol: "plus", kind: state.accounts.isEmpty ? .primary : .secondary) { sheet = .add }
-                .controlSize(.small)
+            if state.newBotKind != nil {
+                SettingsActionButton("添加飞书机器人", symbol: "plus", kind: state.accounts.isEmpty ? .primary : .secondary) { sheet = .add }
+                    .controlSize(.small)
+            } else if state.accounts.isEmpty {
+                SettingsHint("在插件中启用飞书后可添加")
+            }
         }
     }
 
@@ -155,7 +159,7 @@ struct ChannelsSettings: View {
                         SettingsActionButton("在飞书中打开") { NSWorkspace.shared.open(url) }.controlSize(.small)
                     }
                     Menu {
-                        Button("重新扫码授权") { sheet = .reauthorize(account) }
+                        if state.scannable(account.kind) { Button("重新扫码授权") { sheet = .reauthorize(account) } }
                         Button("更换凭据") { sheet = .replace(account) }
                         if let link = account.links.console, let url = URL(string: link) {
                             Button("打开开发者后台") { NSWorkspace.shared.open(url) }

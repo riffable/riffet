@@ -6,7 +6,7 @@
  * The final render is split into several cards when the limits need it.
  */
 import { randomUUID } from 'node:crypto';
-import type { ChannelAddress, ChannelContext, ReplyAnchor, SurfaceState, TurnSurface, TurnView } from '../types.js';
+import type { ChannelAddress, ChannelContext, ReplyAnchor, SurfaceState, TurnSurface, TurnView } from '@riffet/plugin-api';
 import { finalCards, placeholderCard, turnCard, CARD_SAFE_BYTES, type AnswerMode, type Card } from './cards.js';
 import { CotRun, type CotOutcome, type CotRunState } from './cot.js';
 import { FeishuApiError, type FeishuApi } from './openapi.js';

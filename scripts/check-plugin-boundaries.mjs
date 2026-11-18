@@ -38,6 +38,11 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
 
 const posix = path => path.split(sep).join('/');
 const packageName = specifier => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
+// A package that ships no types is declared by its `@types/` counterpart (`mdast` by `@types/mdast`, `@a/b` by `@types/a__b`).
+const declared = specifier => {
+  const name = packageName(specifier);
+  return packages.has(name) || packages.has(`@types/${name.startsWith('@') ? name.slice(1).replace('/', '__') : name}`);
+};
 const problems = [];
 
 for (const file of files) {
@@ -50,7 +55,7 @@ for (const file of files) {
       if (relativeTarget !== undefined) {
         const own = file === 'plugins/web.ts' ? 'plugins/' : `${file.split('/').slice(0, 3).join('/')}/`;
         if (!relativeTarget.startsWith(own)) fail(`may only import files under ${own}`);
-      } else if (specifier !== '@riffet/plugin-web' && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !packages.has(packageName(specifier))) {
+      } else if (specifier !== '@riffet/plugin-web' && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !declared(specifier)) {
         fail('client code may import only @riffet/plugin-web, @contracts and package.json dependencies');
       }
     } else if (file.startsWith('plugins/') || file.startsWith('official/')) {
@@ -58,12 +63,12 @@ for (const file of files) {
         // `plugins/index.ts` and `web.ts` list the packages; every other file belongs to the one directory `plugins/<vendor>/<name>/`.
         const own = file.startsWith('official/') ? `${file.split('/').slice(0, 2).join('/')}/` : file.split('/').length > 2 ? `${file.split('/').slice(0, 3).join('/')}/` : 'plugins/';
         if (!relativeTarget.startsWith(own)) fail(`may only import files under ${own}`);
-      } else if (specifier !== '@riffet/plugin-api' && !specifier.startsWith('@riffet/plugin-api/') && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) {
+      } else if (specifier !== '@riffet/plugin-api' && !specifier.startsWith('@riffet/plugin-api/') && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !declared(specifier)) {
         fail('may import only @riffet/plugin-api, @contracts, Node built-ins and package.json dependencies');
       }
     } else if (file.startsWith(API)) {
       if (relativeTarget !== undefined ? !relativeTarget.startsWith(API)
-        : specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) fail('the plugin API may import only @contracts, Node built-ins and package.json dependencies');
+        : specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !declared(specifier)) fail('the plugin API may import only @contracts, Node built-ins and package.json dependencies');
     } else if ((relativeTarget === 'plugins' || relativeTarget?.startsWith('plugins/')) && file !== GATE && !(file === WEB_GATE && WEB_ENTRIES.test(relativeTarget))
       && !(file.startsWith(MAC_CANVAS) && relativeTarget.startsWith(CANVAS_CLIENT))) {
       fail(`only ${GATE} may import plugins/, and ${WEB_GATE} only plugins/web`);

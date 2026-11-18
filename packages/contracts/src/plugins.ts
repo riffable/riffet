@@ -221,6 +221,8 @@ export interface PluginDeclarations {
   agentTools?: AgentToolsDeclaration[];
   /** Per-session WebSockets at `PLUGIN_CHANNEL_ROUTE(pluginId, name)`, for a plugin's own live views. */
   channels?: Array<{ id: string; scope: 'session' }>;
+  /** IM platforms the channel layer serves (docs/design/channels.md「插件化」); `id` is a contribution id and the `ChannelKind` of the accounts it connects. */
+  imChannels?: Array<{ id: string; title: LocalizedText }>;
   /** The plugin's own page in its details (`plugin-page.ts`), built while it is on; `title` names its tab, 设置 when absent. */
   page?: { title?: LocalizedText };
   /** Jobs it runs on a model the user chooses for each, on the 辅助模型 settings page. */

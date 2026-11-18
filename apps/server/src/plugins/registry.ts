@@ -2,7 +2,7 @@ import { realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
-  type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup,
+  type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup, type ImChannelProvider,
   type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type SpeechRecognizer, type TaskProvider,
 } from '@riffet/plugin-api';
 import { protocolBackends, sourceProtocols } from '@riffet/plugin-api/kit';
@@ -69,6 +69,8 @@ export interface OwnedSharePublisher { owner: PluginManifest['id']; publisher: S
 export interface OwnedTaskProvider { owner: PluginManifest['id']; version?: string; projectType?: string; source?: Source; provider: TaskProvider }
 /** A generated avatar style of an enabled plugin: its declaration and the provider that draws it. */
 /** `signal` is the activation's: it aborts when the plugin is turned off. */
+/** An IM platform of an enabled plugin: `id` is its declaration id, the `ChannelKind` of the accounts it connects. */
+export interface OwnedImChannel { owner: PluginManifest['id']; id: string; provider: ImChannelProvider; signal: AbortSignal }
 export interface OwnedAgentTools { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['agentTools']>[number]; group: AgentToolGroup; signal: AbortSignal }
 export interface OwnedAvatarStyle { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['avatarStyles']>[number]; provider: AvatarStyleProvider }
 /** A command ready to run: the declaration, the handler, and the signal that aborts with the activation. */
@@ -530,6 +532,17 @@ export class PluginRegistry {
       return (entry.plugin.manifest.contributes?.agentTools ?? []).flatMap(declaration => {
         const group = groups && Object.hasOwn(groups, declaration.id) ? groups[declaration.id] : undefined;
         return group && entry.active ? [{ owner: entry.plugin.manifest.id, declaration, group, signal: entry.active.controller.signal }] : [];
+      });
+    });
+  }
+
+  /** The IM platforms of the enabled plugins: declared in the manifest and provided by the committed activation. */
+  imChannels(): OwnedImChannel[] {
+    return [...this.entries.values()].filter(entry => !entry.waiting).flatMap(entry => {
+      const providers = entry.active?.contributions?.imChannels;
+      return (entry.plugin.manifest.contributes?.imChannels ?? []).flatMap(declaration => {
+        const provider = providers && Object.hasOwn(providers, declaration.id) ? providers[declaration.id] : undefined;
+        return provider && entry.active ? [{ owner: entry.plugin.manifest.id, id: declaration.id, provider, signal: entry.active.controller.signal }] : [];
       });
     });
   }
@@ -1677,6 +1690,9 @@ export class PluginRegistry {
     if (manifest.contributes?.page && !contributions.page) throw new Error('Declared page is not provided');
     for (const [channelId, handler] of Object.entries(contributions.channels ?? {})) {
       if (!manifest.contributes?.channels?.some(declared => declared.id === channelId) || typeof handler?.open !== 'function') throw new Error(`channel "${channelId}" is not declared in contributes.channels or has no open()`);
+    }
+    for (const [channelId, provider] of Object.entries(contributions.imChannels ?? {})) {
+      if (!manifest.contributes?.imChannels?.some(declared => declared.id === channelId) || typeof provider?.connect !== 'function' || typeof provider.links !== 'function') throw new Error(`IM channel "${channelId}" is not declared in contributes.imChannels or has no connect() and links()`);
     }
     for (const [name, service] of Object.entries(contributions.services ?? {})) {
       if (!SERVICE_NAME.test(name) || !service || typeof service !== 'object' || typeof service.version !== 'string' || !SERVICE_VERSION.test(service.version)) throw new Error(`service "${name}" needs a name like "scan" and a version like "1.0.0"`);

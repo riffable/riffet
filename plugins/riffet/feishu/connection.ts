@@ -4,7 +4,7 @@
  * one of them, so a second connection shows up as lost messages.
  */
 import * as Lark from '@larksuiteoapi/node-sdk';
-import type { ChannelAccount, ChannelAddress, ChannelContext, InboundAttachment, InboundMessage } from '../types.js';
+import type { ChannelAccount, ChannelAddress, ChannelContext, InboundAttachment, InboundMessage } from '@riffet/plugin-api';
 import { normalizeCardAction, toCallbackResponse } from './actions.js';
 import type { FeishuApi } from './openapi.js';
 

@@ -65,6 +65,7 @@ export function ChannelsSection() {
     : <div className="flex justify-center p-5"><Spinner /></div>;
 
   const detail = detailId ? state.accounts.find((account) => account.id === detailId) : undefined;
+  const canAdd = state.providers.length > 0;
 
   const status = (account: ChannelAccountInfo) => {
     const { state: connection, lastEventAt } = account.status;
@@ -85,8 +86,10 @@ export function ChannelsSection() {
         ? <CardSettings account={detail} busy={busy} run={run} onBack={() => setCardOpen(false)} />
         : <BotDetail account={detail} state={state} busy={busy} run={run} onBack={() => setDetailId(undefined)} onOpenCard={() => setCardOpen(true)} onDialog={openDialog} />
       : state.accounts.length === 0
-        ? <EmptyState icon={<IconBot />} title={t`还没有机器人`}><Button variant="primary" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加飞书机器人</Trans></Button></EmptyState>
-        : <SettingsGroup action={<Button size="xs" variant="ghost" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加</Trans></Button>}>
+        ? canAdd
+          ? <EmptyState icon={<IconBot />} title={t`还没有机器人`}><Button variant="primary" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加飞书机器人</Trans></Button></EmptyState>
+          : <EmptyState icon={<IconBot />} title={t`还没有机器人`} description={t`在插件中启用飞书后可添加`} />
+        : <SettingsGroup action={canAdd && <Button size="xs" variant="ghost" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加</Trans></Button>}>
           {state.accounts.map((account) => {
             const { tone, label, pulse } = status(account);
             return <button key={account.id} type="button" onClick={() => setDetailId(account.id)} className="-mx-4 flex min-h-14 items-center gap-3 px-4 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus max-md:-mx-3 max-md:px-3">

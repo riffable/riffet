@@ -4,7 +4,7 @@
  * with RUN_STARTED must end with RUN_FINISHED or RUN_ERROR and then be completed, otherwise the
  * client shows a spinner forever; that is why `finish` always runs, even after the circuit breaks.
  */
-import type { TurnStep } from '../types.js';
+import type { TurnStep } from '@riffet/plugin-api';
 import { FeishuApiError, type FeishuApi } from './openapi.js';
 
 /** The endpoint counts UTF-8 bytes, not characters, and a CJK character is three. */

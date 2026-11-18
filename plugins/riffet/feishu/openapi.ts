@@ -3,7 +3,7 @@
  * concurrent requests coalesced), one error class that sorts failures by code, and the handful of
  * endpoints the channel uses. Only the long connection itself goes through the SDK.
  */
-import type { ChannelDomain } from '../../../../../packages/contracts/src/channels.js';
+import type { ChannelDomain } from '@contracts';
 
 export const DOMAIN_BASE: Record<ChannelDomain, string> = {
   feishu: 'https://open.feishu.cn',
