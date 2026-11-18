@@ -18,6 +18,8 @@ const MAX_COUNTED_UNTRACKED = 200;
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
 /** Turn checkpoints kept per project; manual ones are never pruned. Each copies the dirty files of its moment. */
 const TURN_CHECKPOINTS_KEPT = 50;
+/** How old a checkpoint folder without a manifest is before it counts as one a stopped capture left. */
+const UNFINISHED_CHECKPOINT_MS = 60 * 60_000;
 /** Partial checkpoints kept per project: the copies taken before a discard, which is what undoes it. */
 const PARTIAL_CHECKPOINTS_KEPT = 20;
 const MAX_LINE_CHANGES = 2_000;
@@ -117,6 +119,15 @@ function projectId(project: ProjectRef, root: string): string {
 }
 
 function literalPath(filePath: string): string { return `:(literal)${filePath}`; }
+
+/**
+ * Whether an entry's ctime is at or after `since` (epoch milliseconds). File systems stamp from a
+ * coarse kernel clock, up to a few milliseconds behind the one `since` was read from; one that keeps
+ * whole seconds only (a ctime with no fraction) is given two.
+ */
+function changedSince(info: { ctimeMs: number }, since: number): boolean {
+  return info.ctimeMs >= since - (info.ctimeMs % 1000 === 0 ? 2_000 : 100);
+}
 
 function gitError(result: ProcessResult, operation: string): AppError {
   const message = (result.stderr || result.stdout || `git ${operation} failed`).trim().slice(0, 2000);
@@ -964,8 +975,8 @@ export class GitService {
     const blob = `blob-${digest}`;
     const target = path.join(folder, blob);
     try {
-      // No fsync: a turn waits for its checkpoint, and one per blob cost about 5 ms each on macOS, a
-      // second for a hundred changes. The manifest is not synced either, so it bought no crash safety.
+      // No fsync: one per blob cost about 5 ms each on macOS, a second for a hundred changes, which a
+      // turn running meanwhile gets to use. The manifest is not synced either, so it bought no crash safety.
       const handle = await open(target, 'wx', 0o600);
       try { await handle.writeFile(data); } finally { await handle.close(); }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
@@ -1023,33 +1034,23 @@ export class GitService {
   }
 
   /**
-   * The index side of many paths with a few Git processes rather than two per path: `ls-files` in
-   * batches, `cat-file --batch-check` for sizes, one `cat-file --batch` for the blobs. A turn waits
-   * for its checkpoint, and per path a worktree with a hundred changes took seconds. A path this
-   * cannot settle (unmerged, not a blob, over the per-file limit, a failed batch) is left out, and
-   * the caller reads it with `indexImage`, which reports it the way it always has.
+   * The index side of many paths, from their `indexRecords`, with two more Git processes rather than
+   * two per path: `cat-file --batch-check` for sizes, one `cat-file --batch` for the blobs. Per path a
+   * worktree with a hundred changes took seconds, and a turn's checkpoint, taken while the turn runs,
+   * has to be done before the turn reaches the files. A path this cannot settle (unmerged, not a blob,
+   * over the per-file limit, a failed batch) is left out, and the caller reads it with `indexImage`,
+   * which reports it the way it always has.
    */
-  private async indexImages(repo: Repo, gitPaths: string[], folder: string): Promise<Map<string, Image>> {
+  private async indexImages(repo: Repo, gitPaths: string[], records: Map<string, string[]>, folder: string): Promise<Map<string, Image>> {
     const images = new Map<string, Image>();
     const entries = new Map<string, { mode: string; oid: string }>();
-    for (let start = 0; start < gitPaths.length; start += INDEX_BATCH_PATHS) {
-      const batch = gitPaths.slice(start, start + INDEX_BATCH_PATHS);
-      // A row is a path and 50 bytes of mode, id and stage; a path is at most 4 KiB.
-      const listed = await this.git(repo, ['ls-files', '--stage', '-z', '--', ...batch.map(literalPath)], { maxOutputBytes: batch.length * 4_200 });
-      if (listed.code !== 0 || listed.truncated) continue;
-      const records = new Map<string, string[]>();
-      for (const row of listed.stdout.split('\0').filter(Boolean)) {
-        const tab = row.indexOf('\t');
-        const rowPath = row.slice(tab + 1);
-        records.set(rowPath, [...records.get(rowPath) ?? [], row.slice(0, tab)]);
-      }
-      for (const gitPath of batch) {
-        const found = records.get(gitPath);
-        if (!found) { images.set(gitPath, { exists: false, kind: 'missing', mode: 0 }); continue; }
-        if (found.length !== 1 || !found[0]!.endsWith(' 0')) continue;
-        const [mode, oid] = found[0]!.split(' ');
-        if (mode !== '160000') entries.set(gitPath, { mode: mode!, oid: oid! });
-      }
+    for (const gitPath of gitPaths) {
+      const found = records.get(gitPath);
+      if (!found) continue;
+      if (!found.length) { images.set(gitPath, { exists: false, kind: 'missing', mode: 0 }); continue; }
+      if (found.length !== 1 || !found[0]!.endsWith(' 0')) continue;
+      const [mode, oid] = found[0]!.split(' ');
+      if (mode !== '160000') entries.set(gitPath, { mode: mode!, oid: oid! });
     }
     // Paths under a directory pathspec would list as other paths; only an exact match counts as missing.
     for (const [gitPath, image] of images) if (!image.exists && gitPaths.some(other => other !== gitPath && other.startsWith(`${gitPath}/`))) images.delete(gitPath);
@@ -1086,6 +1087,56 @@ export class GitService {
     return images;
   }
 
+  /**
+   * The index rows (`mode oid stage`) of each path, from `ls-files --stage` in batches: none for a path
+   * the index does not hold. A path of a batch Git failed to list is absent.
+   */
+  private async indexRecords(repo: Repo, gitPaths: string[]): Promise<Map<string, string[]>> {
+    const records = new Map<string, string[]>();
+    for (let start = 0; start < gitPaths.length; start += INDEX_BATCH_PATHS) {
+      const batch = gitPaths.slice(start, start + INDEX_BATCH_PATHS);
+      // A row is a path and 50 bytes of mode, id and stage; a path is at most 4 KiB.
+      const listed = await this.git(repo, ['ls-files', '--stage', '-z', '--', ...batch.map(literalPath)], { maxOutputBytes: batch.length * 4_200 });
+      if (listed.code !== 0 || listed.truncated) continue;
+      for (const gitPath of batch) records.set(gitPath, []);
+      for (const row of listed.stdout.split('\0').filter(Boolean)) {
+        const tab = row.indexOf('\t');
+        const rowPath = row.slice(tab + 1);
+        records.set(rowPath, [...records.get(rowPath) ?? [], row.slice(0, tab)]);
+      }
+    }
+    return records;
+  }
+
+  /**
+   * Whether the entry at `absolute`, or for one that is gone the nearest folder above it that is not,
+   * changed at or after `since`: by its ctime, which a write, a rename into place, a mode change and a
+   * removal from a folder (the folder's) all move.
+   */
+  private async touchedSince(repo: Repo, absolute: string, since: number): Promise<boolean> {
+    for (let target = absolute; ; target = path.dirname(target)) {
+      try { return changedSince(await lstat(target), since); } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if ((code !== 'ENOENT' && code !== 'ENOTDIR') || target === repo.root || !isWithin(repo.root, target)) return true;
+      }
+    }
+  }
+
+  /** Whether HEAD, the branch it is on or its reflog changed at or after `since`, or HEAD is no longer `head`. */
+  private async headMovedSince(repo: Repo, head: string | undefined, since: number): Promise<boolean> {
+    if (await this.headCommit(repo) !== head) return true;
+    const located = await this.git(repo, ['rev-parse', '--git-path', 'HEAD', '--git-path', 'logs/HEAD', '--symbolic-full-name', 'HEAD'], { maxOutputBytes: 64 * 1024 });
+    const [headFile, reflog, branch] = located.stdout.split('\n');
+    const files = [headFile, reflog];
+    if (branch?.startsWith('refs/')) files.push((await this.git(repo, ['rev-parse', '--git-path', branch], { maxOutputBytes: 64 * 1024 })).stdout.trim());
+    for (const file of files) {
+      if (!file) continue;
+      const info = await lstat(path.resolve(repo.root, file)).catch(() => undefined);
+      if (info && changedSince(info, since)) return true;
+    }
+    return false;
+  }
+
   private async indexImage(repo: Repo, gitPath: string, folder?: string): Promise<Image> {
     const result = await this.git(repo, ['ls-files', '--stage', '-z', '--', literalPath(gitPath)], { maxOutputBytes: 128 * 1024 });
     if (result.code !== 0) throw gitError(result, 'ls-files');
@@ -1107,32 +1158,50 @@ export class GitService {
     return this.objectImage(repo, oid, mode, folder);
   }
 
-  /** With `paths` (project-relative files) the checkpoint is partial: it holds those files, changed or not, and nothing else. */
-  private async createCheckpointRecord(repo: Repo, options: { sessionId?: string; runId?: string; title?: string; paths?: string[] }): Promise<CheckpointManifest> {
+  /**
+   * With `paths` (project-relative files) the checkpoint is partial: it holds those files, changed or not, and nothing else.
+   *
+   * With `since`, it is taken while something may already be changing the files (a turn sent at that
+   * time), so it holds only what it can tell is from before: a file whose worktree side changed after
+   * `since`, or whose index entry changed while it was read, is left out (`excluded`), and if HEAD moved
+   * it holds nothing at all (`CHECKPOINT_HEAD_MOVED`). A file changed after `since` that was clean
+   * before needs nothing: status did not list it, and the checkpoint takes it from HEAD.
+   */
+  private async createCheckpointRecord(repo: Repo, options: { sessionId?: string; runId?: string; title?: string; paths?: string[]; since?: number }): Promise<CheckpointManifest> {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     const title = options.title?.trim().slice(0, 300) || `Checkpoint ${createdAt}`;
     const folder = this.checkpointPath(repo, id);
-    await mkdir(folder, { recursive: true, mode: 0o700 });
-    const head = await this.headCommit(repo);
+    // Status first: a change a running turn makes before it lists a file that is clean, or gone, by then is one nothing can see.
+    const [dirty, head] = await Promise.all([
+      options.paths ? options.paths.map(item => path.relative(repo.root, path.resolve(repo.projectRoot, item)).split(path.sep).join('/')) : this.dirtyPaths(repo),
+      this.headCommit(repo),
+      mkdir(folder, { recursive: true, mode: 0o700 }),
+    ]);
     const manifest: CheckpointManifest = {
       checkpoint: { id, projectId: repo.projectId, ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(options.runId ? { runId: options.runId } : {}), title, createdAt, files: 0, excluded: [], ...(options.paths ? { partial: true } : {}) },
       projectRoot: repo.projectRoot,
       ...(head ? { head } : {}),
       files: [],
     };
-    const dirty = options.paths ? options.paths.map(item => path.relative(repo.root, path.resolve(repo.projectRoot, item)).split(path.sep).join('/')) : await this.dirtyPaths(repo);
     let totalBytes = 0;
-    const staged = await this.indexImages(repo, dirty.slice(0, MAX_CHECKPOINT_FILES), folder);
-    for (const gitPath of dirty.slice(0, MAX_CHECKPOINT_FILES)) {
+    const kept = dirty.slice(0, MAX_CHECKPOINT_FILES);
+    const records = await this.indexRecords(repo, kept);
+    const staged = await this.indexImages(repo, kept, records, folder);
+    const gitPaths = new Map<string, string>();
+    const { since } = options;
+    for (const gitPath of kept) {
       const relative = asRelativePath(repo.root, repo.projectRoot, gitPath);
       if (relative === undefined) continue;
       try {
         const index = staged.get(gitPath) ?? await this.indexImage(repo, gitPath, folder);
         const worktree = await this.readWorktreeImage(repo, relative, folder);
+        // Checked after the read: unchanged since `since` until now, what was read is from before it.
+        if (since !== undefined && await this.touchedSince(repo, path.join(repo.root, gitPath), since)) { manifest.checkpoint.excluded.push(relative); continue; }
         totalBytes += (index.size ?? 0) + (worktree.size ?? 0);
         if (totalBytes > MAX_CHECKPOINT_TOTAL_BYTES) throw new AppError('CHECKPOINT_TOTAL_TOO_LARGE', 'Checkpoint exceeds the total size limit', 413);
         manifest.files.push({ path: relative, index, worktree });
+        gitPaths.set(relative, gitPath);
       } catch (error) {
         const code = error instanceof AppError ? error.code : '';
         if (code.startsWith('CHECKPOINT_') || code === 'PATH_OUTSIDE_PROJECT') manifest.checkpoint.excluded.push(relative);
@@ -1142,6 +1211,18 @@ export class GitService {
     for (const gitPath of dirty.slice(MAX_CHECKPOINT_FILES)) {
       const relative = asRelativePath(repo.root, repo.projectRoot, gitPath);
       if (relative !== undefined) manifest.checkpoint.excluded.push(relative);
+    }
+    if (since !== undefined) {
+      // Status leaves the index alone (`GIT_OPTIONAL_LOCKS`), so a row that differs now was changed by someone else meanwhile.
+      const now = await this.indexRecords(repo, [...gitPaths.values()]);
+      const same = (a?: string[], b?: string[]) => a !== undefined && b !== undefined && a.join('\n') === b.join('\n');
+      const moved = new Set(manifest.files.filter(item => !same(records.get(gitPaths.get(item.path)!), now.get(gitPaths.get(item.path)!))).map(item => item.path));
+      manifest.files = manifest.files.filter(item => !moved.has(item.path));
+      manifest.checkpoint.excluded.push(...moved);
+      if (await this.headMovedSince(repo, head, since)) {
+        await rm(folder, { recursive: true, force: true }).catch(() => undefined);
+        throw new AppError('CHECKPOINT_HEAD_MOVED', 'HEAD moved while the checkpoint was taken', 409);
+      }
     }
     manifest.checkpoint.files = manifest.files.length;
     await writeFile(path.join(folder, 'manifest.json'), JSON.stringify(manifest), { mode: 0o600, flag: 'wx' });
@@ -1157,25 +1238,43 @@ export class GitService {
    * The checkpoint a turn starts from, so the turn can be undone. Older turn checkpoints of the
    * project are pruned past a fixed count; ones a person took by hand are left alone.
    */
-  async createTurnCheckpoint(project: ProjectRef, options: { sessionId: string; runId: string; title: string; late?: () => boolean }): Promise<Checkpoint | undefined> {
+  async createTurnCheckpoint(project: ProjectRef, options: { sessionId: string; runId: string; title: string; since: number }): Promise<Checkpoint | undefined> {
     const repo = await this.repo(project);
     const key = JSON.stringify([repo.projectId, options.sessionId, options.runId]);
     const pending = this.turnCheckpoints.get(key);
     if (pending) return pending;
     const capture = (async () => {
-      const existing = (await this.checkpoints(project)).find(item => item.runId === options.runId && item.sessionId === options.sessionId);
-      if (existing) return existing;
-      const checkpoint = (await this.createCheckpointRecord(repo, options)).checkpoint;
-      // Finished after the turn began, so it may hold some of the turn's own edits: restoring it would
-      // undo less than it claims, and no checkpoint is better than a misleading one.
-      if (options.late?.()) { await rm(this.checkpointPath(repo, checkpoint.id), { recursive: true, force: true }).catch(() => undefined); return undefined; }
-      const turns = (await this.checkpoints(project)).filter(item => item.runId);
+      // Taken while the turn runs (`since`), so before anything else. A commit made meanwhile leaves no
+      // way to tell which clean files were clean before it, and no checkpoint is better than a misleading one.
+      const taken = await this.createCheckpointRecord(repo, options).then(manifest => manifest.checkpoint, error => {
+        if (error instanceof AppError && error.code === 'CHECKPOINT_HEAD_MOVED') return undefined;
+        throw error;
+      });
+      // One this turn already has (a retry after a restart) stays the one it is undone to.
+      const all = await this.checkpoints(project);
+      const earlier = all.find(item => item.runId === options.runId && item.sessionId === options.sessionId && item.id !== taken?.id);
+      if (earlier && taken) await rm(this.checkpointPath(repo, taken.id), { recursive: true, force: true }).catch(() => undefined);
+      const checkpoint = earlier ?? taken;
+      const turns = all.filter(item => item.runId && item.id !== (earlier && taken?.id));
       for (const stale of turns.slice(TURN_CHECKPOINTS_KEPT)) await rm(this.checkpointPath(repo, stale.id), { recursive: true, force: true }).catch(() => undefined);
+      await this.pruneUnfinishedCheckpoints(repo);
       return checkpoint;
     })();
     this.turnCheckpoints.set(key, capture);
     try { return await capture; }
     finally { this.turnCheckpoints.delete(key); }
+  }
+
+  /** Folders a capture left without a manifest when the service stopped during it, an hour on. */
+  private async pruneUnfinishedCheckpoints(repo: Repo): Promise<void> {
+    const folder = this.checkpointFolder(repo);
+    for (const name of await readdir(folder).catch(() => [] as string[])) {
+      if (!/^[a-f0-9-]{36}$/i.test(name)) continue;
+      const entry = path.join(folder, name);
+      if (await lstat(path.join(entry, 'manifest.json')).then(() => true, () => false)) continue;
+      const info = await lstat(entry).catch(() => undefined);
+      if (info?.isDirectory() && Date.now() - info.mtimeMs > UNFINISHED_CHECKPOINT_MS) await rm(entry, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
 
   private async readManifest(repo: Repo, id: string): Promise<CheckpointManifest> {

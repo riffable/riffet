@@ -161,11 +161,11 @@ export class NativeDispatcher {
   private readonly drainHeldSteers = new Map<string, string>();
 
   /**
-   * `beforeTurn` runs once a turn is claimed and before anything reaches the CLI — the moment its
-   * checkpoint is taken. It is best effort: a rejection never fails the turn, and one slower than
-   * `beforeTurnTimeoutMs` is left behind, with `late()` telling it the turn went ahead without it.
+   * `beforeTurn` is started once a turn is claimed, with the time it was claimed at (`since`), and
+   * nothing waits for it: the turn's checkpoint is taken while the message goes out, and tells apart by
+   * that time what the turn may already have changed. It is best effort: a rejection never fails the turn.
    */
-  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: NativeDispatcherRuntime, private readonly workspace: WorkspaceService, private readonly options: { intervalMs?: number; confirmationMs?: number; beforeTurn?: (session: Session, run: Run, late: () => boolean) => Promise<unknown>; beforeTurnTimeoutMs?: number; busyLimitMs?: number; idleReconcileMs?: number; idleOutcomeGraceMs?: number } = {}) {
+  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: NativeDispatcherRuntime, private readonly workspace: WorkspaceService, private readonly options: { intervalMs?: number; confirmationMs?: number; beforeTurn?: (session: Session, run: Run, since: number) => Promise<unknown>; busyLimitMs?: number; idleReconcileMs?: number; idleOutcomeGraceMs?: number } = {}) {
     this.timer = setInterval(() => this.kick(), options.intervalMs ?? 500);
     this.timer.unref();
     this.offCorrections = native.subscribeCorrections?.((sessionId, message) => this.observe(sessionId, message));
@@ -468,23 +468,6 @@ export class NativeDispatcher {
     return !this.hasLiveTerminal(session);
   }
 
-  /** `beforeTurn`, with how long it took recorded on the run. Never rejects, as `beforeTurn` does not. */
-  private async checkpointed(session: Session, run: Run): Promise<void> {
-    const started = now();
-    await this.beforeTurn(session, run);
-    try {
-      const current = this.store.getRun(run.id).native;
-      if (current?.delivery === 'preparing') this.store.transitionNativeRun(run.id, ['preparing'], { timings: { ...current.timings, checkpointMs: now() - started } });
-    } catch { /* the run is gone; there is nothing to record on */ }
-  }
-
-  private async beforeTurn(session: Session, run: Run): Promise<void> {
-    let timer: NodeJS.Timeout | undefined, late = false;
-    const limit = new Promise<void>(resolve => { timer = setTimeout(() => { late = true; resolve(); }, this.options.beforeTurnTimeoutMs ?? 10_000); timer.unref(); });
-    const abandoned = () => late || this.closed || this.store.getRun(run.id).native?.delivery !== 'preparing';
-    try { await Promise.race([Promise.resolve().then(() => this.options.beforeTurn!(session, run, abandoned)).catch(() => undefined), limit]); } finally { clearTimeout(timer); }
-  }
-
   /**
    * With `now`, the run replaces the turn in progress through the backend's own send-now path; it is
    * called from inside an interrupt, whose fence it is the one write allowed through.
@@ -497,8 +480,8 @@ export class NativeDispatcher {
     if (this.draining) return;
     const initial = run.native;
     const checkpoint = Boolean(this.options.beforeTurn && !initial.checkpointAttempted && !isSlashCommand(initial));
-    if (!this.store.transitionNativeRun(runId, ['queued'], { delivery: 'preparing', stage: 'runtime', attempt: initial.attempt + 1, ...(checkpoint ? { checkpointAttempted: true } : {}), timings: { ...initial.timings, prepareAt: now() } })) return;
-    let checkpointTask: Promise<void> | undefined;
+    const prepareAt = now();
+    if (!this.store.transitionNativeRun(runId, ['queued'], { delivery: 'preparing', stage: 'runtime', attempt: initial.attempt + 1, ...(checkpoint ? { checkpointAttempted: true } : {}), timings: { ...initial.timings, prepareAt } })) return;
     try {
       let session = this.store.getSession(run.sessionId);
       if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
@@ -506,17 +489,11 @@ export class NativeDispatcher {
       if (project.archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
       // A 助理 conversation started on an agent it no longer runs on (docs/ASSISTANT.md §4) would run with the owner's configuration.
       if (project.system === 'assistant' && !isAssistantBackend(session.backendId)) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'The personal assistant runs on Claude Code or Codex', 409);
-      // The checkpoint has to be taken before the CLI can change a file, not before it starts: a CLI that
-      // has yet to start takes seconds, and the checkpoint is taken meanwhile. A CLI carrying the first
-      // prompt from its spawn waits for it at the spawn (`beforeSpawn`); a message for one started
-      // without it waits for it after `ensure`. To a CLI already running, any other send waits here.
+      // Started, and waited for nowhere: a send to a running CLI used to wait for all of it. `prepareAt`
+      // precedes anything the CLI is given, which is how the checkpoint tells what the turn changed meanwhile.
+      if (checkpoint) void Promise.resolve().then(() => this.options.beforeTurn!(session, run, prepareAt)).catch(() => undefined);
       const argvEligible = this.canUseArgvInitialPrompt(session, initial) && await this.native.supportsInitialPromptArgs?.(session) === true;
-      const coldStart = !this.hasLiveTerminal(session);
-      checkpointTask = checkpoint ? this.checkpointed(session, run) : undefined;
-      if (checkpointTask && !argvEligible && !coldStart) await checkpointTask;
-      // Checkpoint I/O may outlive cancellation or shutdown. Neither may deliver the message as a side
-      // effect after the caller has already stopped this still-uncommitted turn; a CLI started meanwhile
-      // without it stays idle.
+      // Neither a cancel nor a shutdown while the backend was asked may let the message out after all.
       if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
       if (this.store.getRun(runId).native?.delivery !== 'preparing') return;
       session = this.store.getSession(run.sessionId);
@@ -549,7 +526,6 @@ export class NativeDispatcher {
       // before the process exists: recovery then sees an uncertain delivery and never replays it,
       // and a cancel is refused because the CLI may already be running it.
       const beforeSpawn = async () => {
-        await checkpointTask;
         if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
         if (this.interruptingSessions.has(session.id)) throw new AppError('NATIVE_INTERRUPT_IN_PROGRESS', 'The current turn is stopping; the message was not sent', 409);
         const latest = this.store.getSession(session.id);
@@ -570,11 +546,7 @@ export class NativeDispatcher {
       // A launch-time prompt may already have committed its input fence while ensure was running.
       if (resuming) this.store.transitionNativeRun(runId, ['preparing'], { stage: 'runtime' });
       if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting', 409);
-      if (argvPrompt === undefined && checkpointTask) {
-        await checkpointTask;
-        if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
-        if (this.store.getRun(runId).native?.delivery !== 'preparing') return;
-      }
+      if (argvPrompt === undefined && this.store.getRun(runId).native?.delivery !== 'preparing') return;
       session = this.store.getSession(run.sessionId);
       // The launch returned without passing through the fence hook, so whether a CLI got the prompt
       // on its argv is unknown; pasting it as well could run it twice.
@@ -670,9 +642,6 @@ export class NativeDispatcher {
         }
       }
     } catch (error) {
-      // A launch that failed while its checkpoint ran lets it finish: a retry does not take another
-      // (`checkpointAttempted`), and leaving `preparing` first would make it give the snapshot up.
-      if (this.store.getRun(runId).native?.delivery === 'preparing') await checkpointTask;
       run = this.store.getRun(runId);
       const delivery = run.native?.delivery;
       if (delivery === 'cancelled' || delivery === 'observed') return;

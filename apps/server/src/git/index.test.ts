@@ -18,6 +18,12 @@ const temporary: string[] = [];
 async function git(cwd: string, ...args: string[]): Promise<string> {
   return (await exec('git', args, { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })).stdout.trim();
 }
+/** A turn's start, a moment after the files a test wrote before it (see `changedSince`). */
+async function turnStart(): Promise<number> {
+  await new Promise(resolve => setTimeout(resolve, 150));
+  return Date.now();
+}
+
 async function repository() {
   const folder = await mkdtemp(path.join(tmpdir(), 'riffet-git-'));
   temporary.push(folder);
@@ -240,7 +246,7 @@ it('rejects simultaneous merges before they can abort each other', async () => {
 it('keeps the original turn checkpoint across concurrent capture, dispatch retries and restart', async () => {
   const { root, service } = await repository();
   await writeFile(path.join(root, 'file.txt'), 'before turn\n');
-  const options = { sessionId: 'session', runId: 'run', title: 'Before turn' };
+  const options = { sessionId: 'session', runId: 'run', title: 'Before turn', since: await turnStart() };
   const [first, concurrent] = await Promise.all([service.createTurnCheckpoint(root, options), service.createTurnCheckpoint(root, options)]);
   expect(first).toBeDefined();
   expect(concurrent?.id).toBe(first!.id);
@@ -250,6 +256,24 @@ it('keeps the original turn checkpoint across concurrent capture, dispatch retri
   expect(await restarted.checkpoints(root)).toHaveLength(1);
   await restarted.restoreCheckpoint(root, first!.id, await restarted.checkpointChanges(root, first!.id));
   expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('before turn\n');
+});
+
+it('leaves out of a turn checkpoint what the turn changed while it was taken, and keeps none once HEAD moved', async () => {
+  const { root, service } = await repository();
+  await writeFile(path.join(root, 'file.txt'), 'before turn\n');
+  await writeFile(path.join(root, 'notes.txt'), 'before turn\n');
+  await writeFile(path.join(root, 'gone.txt'), 'committed\n');
+  await git(root, 'add', 'gone.txt');
+  await git(root, 'commit', '-m', 'gone');
+  const since = await turnStart();
+  // The turn reached these two before the checkpoint did: their content from before it is gone.
+  await writeFile(path.join(root, 'notes.txt'), 'turn edit\n');
+  await rm(path.join(root, 'gone.txt'));
+  const checkpoint = await service.createTurnCheckpoint(root, { sessionId: 'session', runId: 'run', title: 'Turn', since });
+  expect(checkpoint).toMatchObject({ files: 1, excluded: ['gone.txt', 'notes.txt'] });
+  await git(root, 'add', '.');
+  await git(root, 'commit', '-m', 'turn');
+  expect(await service.createTurnCheckpoint(root, { sessionId: 'session', runId: 'next', title: 'Turn', since })).toBeUndefined();
 });
 
 it.each(['active-session', 'unfinished-run'] as const)('fences checkpoint restoration when another client has an %s', async busy => {

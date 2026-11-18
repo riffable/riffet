@@ -322,46 +322,23 @@ describe('NativeDispatcher durable delivery', () => {
     });
   });
 
-  it.each(['cancel', 'close'] as const)('does not start a CLI when %s happens while its checkpoint is pending', async action => {
+  it.each(['running', 'cold'] as const)('sends to a %s CLI without waiting for a checkpoint that never finishes', async cli => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
-    const session = createSession(), run = accept(session.id, 'checkpoint-pending', 'inspect once');
-    const runtime = makeRuntime(), backend = new FakeNative(store), gate = deferred();
-    let abandoned: (() => boolean) | undefined;
+    let session = createSession();
+    if (cli === 'running') session = store.updateSession(session.id, { terminalId: `terminal-${session.id}` }), saveNativeTerminal(store, session);
+    const run = accept(session.id, 'checkpoint-pending', 'inspect once');
+    const runtime = makeRuntime(), backend = new FakeNative(store);
+    let since: number | undefined;
     const send = new NativeDispatcher(store, backend, runtime as never, workspace as never, {
       intervalMs: 60_000,
-      beforeTurn: async (_session, _run, late) => { abandoned = late; await gate.promise; },
+      beforeTurn: async (_session, _run, at) => { since = at; await new Promise(() => {}); },
     });
     cleanups.push(() => store.close(), () => send.close());
     send.kick();
-    await until(() => abandoned !== undefined, 'pending checkpoint');
-    const closing = action === 'close' ? send.close() : undefined;
-    if (action === 'cancel') send.cancel(session.id, run.id);
-    expect(abandoned!()).toBe(true);
-    gate.resolve();
-    await until(() => store.getRun(run.id).native?.delivery !== 'preparing', 'checkpoint worker released');
-    await closing;
-    // The launch may be prepared meanwhile; the CLI carrying the prompt waits for the checkpoint at its spawn.
-    expect(runtime.argvSpawns).toEqual([]);
-    expect(backend.writes).toEqual([]);
-    expect(store.getRun(run.id).native?.delivery).toBe(action === 'cancel' ? 'cancelled' : 'queued');
-  });
-
-  it('lets a checkpoint timeout fail open while discarding its eventual late result', async () => {
-    const { store, createSession, accept, workspace, makeRuntime } = setup();
-    const session = createSession(), run = accept(session.id, 'checkpoint-timeout', 'inspect once');
-    const runtime = makeRuntime(), backend = new FakeNative(store), gate = deferred();
-    let abandoned: (() => boolean) | undefined;
-    const send = new NativeDispatcher(store, backend, runtime as never, workspace as never, {
-      intervalMs: 60_000, beforeTurnTimeoutMs: 5,
-      beforeTurn: async (_session, _run, late) => { abandoned = late; await gate.promise; },
-    });
-    cleanups.push(() => store.close(), () => send.close());
-    send.kick();
-    await until(() => store.getRun(run.id).native?.delivery === 'input_sent', 'dispatch after checkpoint timeout');
-    expect(abandoned!()).toBe(true);
-    gate.resolve();
-    expect(runtime.argvSpawns).toEqual(['inspect once']);
-    expect(runtime.ensureCalls).toHaveLength(1);
+    await until(() => store.getRun(run.id).native?.delivery === 'input_sent', 'dispatch with the checkpoint pending');
+    // The checkpoint tells the turn's changes apart by the time the turn was claimed, before anything was sent.
+    expect(since).toBe(store.getRun(run.id).native?.timings?.prepareAt);
+    expect(cli === 'running' ? backend.writes : runtime.argvSpawns).toEqual(cli === 'running' ? [{ sessionId: session.id, text: 'inspect once' }] : ['inspect once']);
   });
 
   it('does not retake a failed checkpoint when a preparing run retries after restart', async () => {
