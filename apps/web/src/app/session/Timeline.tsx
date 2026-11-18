@@ -855,13 +855,13 @@ export const StatusRow = memo(function StatusRow({ tone, text, detail, reveal, f
 });
 
 /** Each trigger keeps its own task row; an aggregate heading would repeat its state and time. */
-export const TurnTriggerBlock = memo(function TurnTriggerBlock({ notices }: { notices: Extract<TimelineItem, { kind: 'task_notification' }>[] }) {
-  return <section className="flex flex-col gap-1.5">{notices.map((notice) => <NoticeItem key={notice.key} notice={notice} />)}</section>;
+export const TurnTriggerBlock = memo(function TurnTriggerBlock({ notices, moreOf }: { notices: Extract<TimelineItem, { kind: 'task_notification' }>[]; moreOf?: (notice: TimelineItem) => ReactNode }) {
+  return <section className="flex flex-col gap-1.5">{notices.map((notice) => <NoticeItem key={notice.key} notice={notice} more={moreOf?.(notice)} />)}</section>;
 });
 
 /** One notice of several in a row: findable by its own key, and remembering its own state. */
-function NoticeItem({ notice }: { notice: Extract<TimelineItem, { kind: 'task_notification' }> }) {
-  return <div data-item-key={notice.key} className="min-w-0"><RememberedScope.Provider value={notice.key}><TaskNotificationRow item={notice} /></RememberedScope.Provider></div>;
+function NoticeItem({ notice, more }: { notice: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode }) {
+  return <div data-item-key={notice.key} className="min-w-0"><RememberedScope.Provider value={notice.key}><TaskNotificationRow item={notice} more={more} /></RememberedScope.Provider></div>;
 }
 
 /** A notice's own numbers, in the same compact shape the subagent list uses. */
@@ -871,7 +871,7 @@ const compactTokens = (value: number) => value >= 1_000_000 ? `${(value / 1_000_
 /** Under ten seconds a tenth still says something; past that it is the transcript's one duration shape. */
 export const compactDuration = (ms: number) => ms > 0 && ms < 10_000 ? `${(ms / 1_000).toFixed(1)}s` : formatDuration(ms);
 
-export const TaskNotificationRow = memo(function TaskNotificationRow({ item }: { item: Extract<TimelineItem, { kind: 'task_notification' }> }) {
+export const TaskNotificationRow = memo(function TaskNotificationRow({ item, more }: { item: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode }) {
   const { t } = useLingui();
   const [open, setOpen] = useRemembered('notice', false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useRemembered('notice-diagnostics', false);
@@ -898,6 +898,7 @@ export const TaskNotificationRow = memo(function TaskNotificationRow({ item }: {
       <time dateTime={item.event.createdAt} className="text-2xs tabular-nums text-fg-3">{formatDateTime(item.event.createdAt)}</time>
       {item.command && <CodeBlock className="text-fg" copy={item.command} remember="command"><span className="select-none text-fg-4">$ </span>{item.command}</CodeBlock>}
       {item.detail && (subagent ? <Markdown text={item.detail} /> : <CodeBlock copy={item.detail} remember="detail">{item.detail}</CodeBlock>)}
+      {more}
       {(item.jobResult || duration !== undefined || item.tokens !== undefined || openSubagent) && (
         <div className="flex flex-wrap items-center gap-2 text-2xs text-fg-3">
           {item.jobResult?.exitCode !== undefined && <span className="tabular-nums"><Trans>退出码 {item.jobResult.exitCode}</Trans></span>}

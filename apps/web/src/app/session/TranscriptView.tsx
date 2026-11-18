@@ -534,13 +534,13 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
               case 'plan': inner = <PlanBlock entries={item.entries} />; break;
               case 'image': inner = <ImageBlock src={item.src} />; break;
               case 'activity': inner = <ActivityRow item={item} />; break;
-              case 'task_notification': inner = <TaskNotificationRow item={item} />; break;
+              case 'task_notification': inner = <TaskNotificationRow item={item} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />; break;
               default: inner = null;
             }
             return (
               <div key={item.key} data-item-key={item.key} className={cn('min-w-0', gaps[itemIndex], isFresh(fresh, item.key, row.key) && enter)}>
                 <RememberedScope.Provider value={item.key}><MarkSourceContext.Provider value={item.event}>{inner}</MarkSourceContext.Provider></RememberedScope.Provider>
-                {item.kind !== 'tool' && <TruncatedMore item={item} expand={context.onExpandRow} />}
+                {item.kind !== 'tool' && item.kind !== 'task_notification' && <TruncatedMore item={item} expand={context.onExpandRow} />}
               </div>
             );
           })}
@@ -551,7 +551,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   if (row.type === 'trigger') {
     return (
       <div ref={attach} data-row-key={row.key} className={cn('-ml-1.5 min-w-0 pl-1.5', contained, row.gap)}>
-        <TurnTriggerBlock notices={row.notices} />
+        <TurnTriggerBlock notices={row.notices} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
       </div>
     );
   }
@@ -568,7 +568,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const modelLabel = showModels ? [...new Map(models.map((info) => [shareModelKey(info), shareModelLabel(info)])).values()].join(' / ') : undefined;
     content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
   }
-  else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} />;
+  else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />;
   else if (item.kind === 'activity') content = <ActivityRow item={item} />;
   else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}
     footer={<MessageFooter text={row.answerText} showActions={settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />} />;
@@ -583,7 +583,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
       className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', contained, row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
     >
       {content}
-      <TruncatedMore item={item} expand={context.onExpandRow} />
+      {item.kind !== 'task_notification' && <TruncatedMore item={item} expand={context.onExpandRow} />}
     </div>
   );
 });
