@@ -155,6 +155,9 @@ export const CURSOR_API_CACHE_BUDGET = {
   tokenReuseMarginMs: 15 * 60_000,
 } as const;
 
+/** Extra tmux rows read only when a visible Cursor approval needs its preview or batch header. */
+export const CURSOR_APPROVAL_SCROLLBACK_ROWS = 128;
+
 /** Checking for a newer Riffet release (docs/UPDATE.md「提示」). */
 export const UPDATE_CHECK_BUDGET = {
   /** A check result is reused this long by the CLI, the server and every client; a check runs out of band once it is older. */

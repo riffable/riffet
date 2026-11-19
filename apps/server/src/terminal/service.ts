@@ -1084,9 +1084,14 @@ export class TerminalService {
    * Concurrent readers share one capture, and a capture answers later readers for `SCREEN_CACHE_MS`
    * as long as nothing was written to the pane and nothing new came out of it. `fresh` always takes
    * a new capture, for a caller that needs to see the effect of its own write.
+   * A scrollback read is uncached so it can be checked against the visible capture.
    */
-  async screen(id: string, options: { fresh?: boolean } = {}): Promise<string | undefined> {
+  async screen(id: string, options: { fresh?: boolean; scrollback?: number } = {}): Promise<string | undefined> {
     await this.ensureRestored(id);
+    const scrollback = Math.min(options.scrollback ?? 0, HISTORY_LIMIT);
+    if (Number.isInteger(scrollback) && scrollback > 0) {
+      return this.tmux(['capture-pane', '-p', '-S', `-${scrollback}`, '-t', terminalName(id)]).then(trimTrailingBlankLines, () => undefined);
+    }
     const generation = this.screenGenerations.get(id) ?? 0;
     const runtime = this.runtime.get(id);
     const cached = this.screenReads.get(id);

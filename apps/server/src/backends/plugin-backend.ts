@@ -579,7 +579,10 @@ export class PluginBackendDriver implements NativeBackendDriver {
       if (!profile) throw new AppError('AGENT_PROFILE_FOREIGN', `Profile ${profileId} does not belong to ${this.label}`, 403);
       return profile;
     };
-    const interactions = this.interactions ??= new NativeInteractions(native.terminal, this.backend.settledScreen ? { settledScreen: screen => this.backend.settledScreen!(screen) } : {});
+    const interactions = this.interactions ??= new NativeInteractions(native.terminal, {
+      ...(this.backend.settledScreen ? { settledScreen: screen => this.backend.settledScreen!(screen) } : {}),
+      recoverCursorApprovals: this.id === 'cursor',
+    });
     const lock = <T>(sessionId: string, operation: () => Promise<T> | T, options?: { detached?: boolean }): Promise<T> => {
       own(sessionId);
       return options?.detached && native.withDetachedSessionLock ? native.withDetachedSessionLock(sessionId, operation) : native.withSessionLock(sessionId, operation);

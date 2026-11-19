@@ -61,7 +61,7 @@ type Input = { keys: string[] } | { paste: string; submit: boolean };
 type Step = Input & { screen: string };
 
 /** Each input advances to one explicit fixture; this is not a second implementation of the CLI. */
-function harness(initial: string, steps: Step[]) {
+function harness(initial: string, steps: Step[], cursor?: { visibleRows: number }) {
   let screen = initial;
   const calls: Input[] = [];
   const remaining = [...steps];
@@ -74,17 +74,21 @@ function harness(initial: string, steps: Step[]) {
     screen = next;
   };
   const control: TerminalInteractionControl = {
-    screen: async () => screen,
+    screen: async () => cursor ? screen.split('\n').slice(-cursor.visibleRows).join('\n') : screen,
     keys: async keys => write({ keys }),
     paste: async (paste, submit) => write({ paste, submit }),
   };
+  const scrollback = vi.fn(async () => screen);
   const terminal = {
     get: async () => ({ id: 'terminal-1', epoch: 1, state: 'running' }),
-    screen: control.screen,
+    screen: async (_id: string, options?: { scrollback?: number }) => options?.scrollback ? scrollback() : control.screen(),
     withInteraction: async <T>(_id: string, task: (control: TerminalInteractionControl) => Promise<T>) => task(control),
   } as unknown as TerminalService;
-  const interactions = new NativeInteractions(terminal);
-  return { interactions, calls, remaining, repaint: (next: string) => { screen = next; } };
+  const interactions = new NativeInteractions(terminal, cursor && {
+    recoverCursorApprovals: true,
+    settledScreen: text => text === '→ Add a follow-up',
+  });
+  return { interactions, calls, remaining, scrollback, repaint: (next: string) => { screen = next; } };
 }
 
 function response(interaction: NativeInteraction, requestId: string, input: Partial<NativeInteractionResponse> = {}): NativeInteractionResponse {
@@ -98,6 +102,94 @@ async function settle<T>(promise: Promise<T>): Promise<T> {
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
+
+describe('NativeInteractions Cursor approvals', () => {
+  const rule = '  ────────────────────────────────────────────────';
+  const focused = (labels: string[], focus: number) => labels.map((label, index) => `${index === focus ? '   → ' : '     '}${label}`);
+
+  function writeApproval(page: number, focus = 0, previewPath = '.../src/example.ts'): string {
+    return [
+      rule,
+      `  Approval ${page} of 6`,
+      '',
+      `  ${previewPath} +33 -9`,
+      rule,
+      '  + first line',
+      '  + last line',
+      '  … truncated (7 more lines)',
+      '',
+      '  Write to this file?',
+      '  in /tmp/workspace/src/example.ts',
+      ...focused(['Proceed (y)', 'Reject & propose changes (esc or n or p)', 'Add Write(/tmp/.../example.ts) to allowlist? (tab)', 'Run Everything (shift+tab)'], focus),
+      '',
+      '  ←/→ to switch approval',
+    ].join('\n');
+  }
+
+  it('uses the same scrolled approval for reading, moving focus and answering, and invalidates a previous batch page', async () => {
+    const h = harness(writeApproval(1), [
+      { keys: ['Down'], screen: writeApproval(1, 1) },
+      { keys: ['Enter'], screen: writeApproval(2) },
+    ], { visibleRows: 12 });
+    const current = (await h.interactions.current(session))!;
+    expect(current.options.map(option => option.label)).toEqual([
+      'Proceed', 'Reject & propose changes', 'Add Write(/tmp/.../example.ts) to allowlist?', 'Run Everything',
+    ]);
+    expect(current.message).toContain('+ first line');
+    const answered = await settle(h.interactions.respond(session, response(current, 'write-1', { action: 'option:option-1' })));
+    expect(answered.status).toBe('advanced');
+    expect(answered.interaction?.id).not.toBe(current.id);
+    await expect(h.interactions.respond(session, response(current, 'write-stale', { action: 'option:option-0' })))
+      .rejects.toMatchObject({ code: 'NATIVE_INTERACTION_STALE' });
+    expect(h.calls).toEqual([{ keys: ['Down'] }, { keys: ['Enter'] }]);
+  });
+
+  it('does not attach a previous file preview to a different visible target', async () => {
+    const h = harness(writeApproval(1, 0, '.../src/previous.ts'), [], { visibleRows: 12 });
+    expect(await h.interactions.current(session)).toBeNull();
+  });
+
+  it('checks the batch header even when similar text is visible inside the diff', async () => {
+    const withPageText = (page: number) => writeApproval(page).replace('  + last line', '  + last line\n    Approval 6 of 6');
+    const h = harness(withPageText(1), [], { visibleRows: 14 });
+    const first = (await h.interactions.current(session))!;
+    h.repaint(withPageText(2));
+    await expect(h.interactions.respond(session, response(first, 'wrong-page', { action: 'option:option-0' })))
+      .rejects.toMatchObject({ code: 'NATIVE_INTERACTION_STALE' });
+    expect(h.calls).toEqual([]);
+  });
+
+  it('recovers the batch header for a binary write preview', async () => {
+    const binary = writeApproval(1)
+      .replace(' +33 -9', '')
+      .replace('  + first line\n  + last line\n  … truncated (7 more lines)', '');
+    const h = harness(binary, [], { visibleRows: 12 });
+    expect((await h.interactions.current(session))?.options).toHaveLength(4);
+  });
+
+  it.each([
+    { screen: 'Interrupted repaint', status: 'uncertain' },
+    { screen: '→ Add a follow-up', status: 'completed' },
+  ])('ignores the review footer at option indentation and reports $status after the answer', async ({ screen, status }) => {
+    const command = [
+      rule,
+      '  $ node --version in .',
+      '',
+      '  Run this command?',
+      '  Not in allowlist: node',
+      ...focused(['Run (once) (y)', 'Add Shell(node) to allowlist? (tab)', 'Run Everything (shift+tab)', 'Skip & tell the agent what to do instead (esc or n)'], 0),
+      '     ctrl+r to review changed files',
+    ].join('\n');
+    const h = harness(command, [{ keys: ['Enter'], screen }], { visibleRows: 40 });
+    const current = (await h.interactions.current(session))!;
+    expect(current.options).toHaveLength(4);
+    expect(h.scrollback).not.toHaveBeenCalled();
+    const request = response(current, 'run-once', { action: 'option:option-0' });
+    expect(await settle(h.interactions.respond(session, request))).toMatchObject({ status });
+    await h.interactions.respond(session, request);
+    expect(h.calls).toEqual([{ keys: ['Enter'] }]);
+  });
+});
 
 describe('NativeInteractions TRAE command permission execution', () => {
   const traeSession: Session = { ...session, backendId: 'traex' };

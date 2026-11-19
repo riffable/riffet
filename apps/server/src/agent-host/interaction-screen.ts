@@ -6,6 +6,7 @@ export interface DialogScreen {
   interaction: NativeInteraction;
   focus: number;
   rows: Array<{ id: string; label: string; selected: boolean; other: boolean }>;
+  cursorApprovalBatch?: string;
   /** Visible Other text before rejoining wraps, whose boundary spaces the terminal cannot preserve. */
   otherValueLines?: string[];
 }

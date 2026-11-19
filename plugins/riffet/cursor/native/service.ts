@@ -327,13 +327,13 @@ export class NativeService {
   /** Recheck and write under the existing terminal transaction; the callback commits the write fence, and is awaited before the write (`host.commitDispatchFence` is asynchronous). */
   async deliver(session: AgentSessionView, text: string, beforeWrite: (info: DeliveryTarget) => void | Promise<void>): Promise<void> {
     if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'The CLI has not started', 409);
-    await this.waitForPrompt(session.terminalId);
+    await this.waitForPrompt(session.id, session.terminalId);
     await this.port.terminals.interact(session.terminalId, async (raw) => {
       // Submit path: writes that are silently rejected must throw, never resolve as success.
       const control = strictInputHandle(raw);
       const screen = await this.leaveSubview(control, await control.screen());
       const info = await this.port.terminals.get(session.terminalId!);
-      const interaction = this.port.dialogs.observe(screen, info);
+      const interaction = await this.port.dialogs.current(session.id);
       if (interaction) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection first', 409);
       if (!screen || parseScreen(screen).phase !== 'idle') throw new AppError('CLI_BUSY', 'The CLI is not idle yet; the message stays queued', 409);
       await this.clearComposerInput(control, screen);
@@ -356,7 +356,7 @@ export class NativeService {
    */
   async deliverNow(session: AgentSessionView, text: string, beforeWrite: (info: DeliveryTarget) => void | Promise<void>): Promise<void> {
     if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'The CLI has not started', 409);
-    await this.waitForPrompt(session.terminalId);
+    await this.waitForPrompt(session.id, session.terminalId);
     await this.port.terminals.interact(session.terminalId, async (raw) => {
       const control = strictInputHandle(raw);
       const info = await this.port.terminals.get(session.terminalId!);
@@ -364,7 +364,7 @@ export class NativeService {
       let screen = await this.leaveSubview(control, await control.screen());
       // Wait for a state that takes the prompt: idle, or processing with the bar and queue empty.
       for (;;) {
-        if (this.port.dialogs.observe(screen, info)) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection first', 409);
+        if (await this.port.dialogs.current(session.id)) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection first', 409);
         const phase = screen === undefined ? undefined : parseScreen(screen).phase;
         if (phase === 'idle') break;
         const controls = phase === 'busy' ? turnControls(screen!) : undefined;
@@ -480,7 +480,7 @@ export class NativeService {
     if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'Open the Cursor terminal before sending', 409);
     this.configBootTerminals.delete(session.id);
     try {
-      await this.waitForPrompt(session.terminalId);
+      await this.waitForPrompt(session.id, session.terminalId);
     } catch (error) {
       const watch = this.watches.get(session.id);
       if (watch && !watch.closed) await this.updateStatus(watch, this.port.getSession(session.id)).catch(() => undefined);
@@ -569,7 +569,7 @@ export class NativeService {
                 pressedAt = Date.now();
                 await options.beforeWrite?.();
                 await control.keys(['C-c']);
-              } else if (screen && parsed?.phase === 'attention' && !dismissed && this.port.dialogs.observe(screen, initial)) {
+              } else if (screen && parsed?.phase === 'attention' && !dismissed && await this.port.dialogs.current(session.id)) {
                 dismissed = true;
                 await options.beforeWrite?.();
                 await control.keys(['Escape']);
@@ -851,7 +851,7 @@ export class NativeService {
    * A freshly started CLI needs a few seconds before its prompt bar accepts input, and text
    * pasted into a dialog would answer the dialog instead. Busy is fine: the CLI queues prompts.
    */
-  private async waitForPrompt(terminalId: string, timeoutMs = 30_000): Promise<void> {
+  private async waitForPrompt(sessionId: string, terminalId: string, timeoutMs = 30_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     let wake: (() => void) | undefined;
     const unsubscribe = this.port.terminals.observe(terminalId, () => wake?.());
@@ -861,7 +861,7 @@ export class NativeService {
       const info = await this.port.terminals.get(terminalId);
       if (info.state === 'exited') throw new AppError('TERMINAL_NOT_RUNNING', 'The CLI exited; reopen the conversation', 409);
       const screen = await this.port.terminals.screen(terminalId);
-      const interaction = this.port.dialogs.observe(screen, info);
+      const interaction = await this.port.dialogs.current(sessionId);
       if (interaction) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection in the interaction card before sending; the message was not sent', 409, { interaction });
       const parsed = screen === undefined ? undefined : parseScreen(screen);
       // The subagent view is left by whoever writes, under the interaction lease.
@@ -1039,6 +1039,7 @@ export class NativeService {
         const root = chat?.rootId;
         const screenTurn = chat?.turnId() ?? root;
         const screen = await this.port.terminals.screen(info.id);
+        const shown = screen === undefined ? undefined : await this.port.dialogs.current(session.id);
         if (watch.closed || this.restartingSessions.has(session.id)) return;
         const current = this.port.getSession(session.id);
         if (current.archivedAt || current.terminalId !== info.id || current.nativeSessionId !== session.nativeSessionId) {
@@ -1049,7 +1050,7 @@ export class NativeService {
         let stalled = Date.now() - watch.booting.since >= CURSOR_BOOT_STALL_MS;
         if (screen !== undefined) {
           const { footer, subview, error: cliError, ...parsed } = parseScreen(screen);
-          const interaction = this.port.dialogs.observe(screen, info)
+          const interaction = shown
             ?? (this.port.dialogs.isResponding(info.id) ? watch.status.interaction : undefined);
           const configBoot = this.configBootTerminals.get(session.id) === info.id;
           const readyFooter = configBoot

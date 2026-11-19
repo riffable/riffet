@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Cursor command and file approvals appear in the conversation when the terminal shows a review shortcut or the top of a long preview has scrolled out of view.
 - A long subagent report in a web conversation now shows "Show all" inside the expanded report, after its preview, and loads the rest in place. It no longer sits under the collapsed row and disappears when clicked without showing anything. Reports that arrive after the turn has ended can now be shown in full too.
 - When a background agent reports back while its turn is still running, the web conversation keeps that turn in one "Working" block with the report inside it, instead of splitting it into two blocks that both show "Working".
 - Opening the web model picker scrolls the currently selected model into view (along with the active Agent and provider columns when shown), and keeps the selection in view when switching back to the active provider.

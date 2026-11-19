@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { CURSOR_APPROVAL_SCROLLBACK_ROWS } from '../../../../packages/contracts/src/index.js';
 import type { NativeInteraction, NativeInteractionResponse, NativeInteractionResult, Session, TerminalInfo } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import type { TerminalService } from '../terminal/service.js';
+import { cursorApprovalNeedsHistory, hasCursorApprovalTitle, parseCursorApprovalHistory } from './interaction-choice.js';
 import { matchesOtherValue, parseDialog, type DialogScreen } from './interaction-screen.js';
 
 type Control = Parameters<Parameters<TerminalService['withInteraction']>[1]>[0];
@@ -13,6 +15,7 @@ const pause = () => new Promise<void>(resolve => setTimeout(resolve, 40));
 const stale = () => new AppError('NATIVE_INTERACTION_STALE', 'The CLI prompt changed; sync and try again', 409);
 
 export interface NativeInteractionsOptions {
+  recoverCursorApprovals?: boolean;
   /**
    * Whether a screen that shows no dialog has the CLI back at its own prompt, which completes an
    * answer at once instead of after several empty reads. Only a backend with a recognisable status
@@ -34,12 +37,24 @@ export class NativeInteractions {
   constructor(private readonly terminal: DialogTerminal, private readonly options: NativeInteractionsOptions = {}) {}
 
   observe(screen: string | undefined, info: Pick<TerminalInfo, 'id' | 'epoch'>): DialogScreen | undefined {
-    const parsed = screen === undefined ? undefined : parseDialog(screen, info);
-    if (!parsed) { if (!this.active.has(info.id)) this.observed.delete(info.id); return; }
-    let identity = this.observed.get(info.id);
+    return this.record(screen === undefined ? undefined : parseDialog(screen, info), info.id);
+  }
+
+  private async read(screen: string | undefined, info: Pick<TerminalInfo, 'id' | 'epoch'>): Promise<DialogScreen | undefined> {
+    let parsed = screen === undefined ? undefined : parseDialog(screen, info);
+    if (screen !== undefined && this.options.recoverCursorApprovals && cursorApprovalNeedsHistory(screen, parsed)) {
+      const history = await this.terminal.screen(info.id, { scrollback: CURSOR_APPROVAL_SCROLLBACK_ROWS });
+      parsed = history === undefined ? undefined : parseCursorApprovalHistory(screen, history, info);
+    }
+    return this.record(parsed, info.id);
+  }
+
+  private record(parsed: DialogScreen | undefined, terminalId: string): DialogScreen | undefined {
+    if (!parsed) { if (!this.active.has(terminalId)) this.observed.delete(terminalId); return; }
+    let identity = this.observed.get(terminalId);
     if (identity?.rawId !== parsed.interaction.id) {
       identity = { rawId: parsed.interaction.id, token: `${this.salt}:${randomUUID()}` };
-      this.observed.set(info.id, identity);
+      this.observed.set(terminalId, identity);
       while (this.observed.size > 128) this.observed.delete(this.observed.keys().next().value!);
     }
     parsed.interaction.id = identity.token;
@@ -64,7 +79,7 @@ export class NativeInteractions {
     if (!session.terminalId || session.archivedAt) return null;
     const info = await this.terminal.get(session.terminalId);
     if (info.state !== 'running') return null;
-    return this.observe(await this.terminal.screen(info.id), info)?.interaction ?? null;
+    return (await this.read(await this.terminal.screen(info.id), info))?.interaction ?? null;
   }
 
   respond(session: Session, input: NativeInteractionResponse, guard?: NativeInteractionGuard): Promise<NativeInteractionResult> {
@@ -98,10 +113,12 @@ export class NativeInteractions {
       this.active.add(terminalId);
       try {
         const info = await this.terminal.get(terminalId);
-        let current = this.observe(await control.screen(), info);
+        let current = await this.read(await control.screen(), info);
         if (!current || current.interaction.id !== input.interactionId || current.interaction.revision !== input.revision) throw stale();
         if (!current.interaction.actions.some(action => action.id === input.action)) throw new AppError('INVALID_INTERACTION_ACTION', 'The current interaction does not support this action');
         const identity = current.interaction.id;
+        const cursorApproval = this.options.recoverCursorApprovals && hasCursorApprovalTitle(current.interaction.title);
+        const optionId = input.action.startsWith('option:') ? input.action.slice('option:'.length) : undefined;
         let wrote = false;
         const write = async (operation: () => Promise<unknown>): Promise<void> => {
           // Capture/acquisition and redraws await independently of protocol notifications. A
@@ -160,13 +177,13 @@ export class NativeInteractions {
             if (current.interaction.options.some(option => option.selected !== selected.has(option.id)) || (other ? !matchesOtherValue(current, other) || !current.interaction.otherSelected : current.interaction.otherSelected)) throw stale();
             // Enter in Other commits its text. For ordinary answers, leave the text editor first.
             if (!other) await move(current.rows.findIndex(row => selected.has(row.id)));
-          } else if (input.action.startsWith('option:')) {
-            const optionId = input.action.slice('option:'.length);
+          } else if (optionId !== undefined) {
             const target = current.rows.findIndex(row => row.id === optionId);
             if (target < 0) throw stale();
             await move(target);
           }
           current = await readSame();
+          if (optionId !== undefined && current.rows[current.focus]?.id !== optionId) throw stale();
           const inOther = current.rows[current.focus]?.other;
           const key = input.action === 'previous' ? (inOther ? 'BTab' : 'Left') : input.action === 'next' ? (inOther ? 'Tab' : 'Right') : input.action === 'skip' ? 'Escape' : 'Enter';
           await write(() => control.keys([key]));
@@ -182,9 +199,13 @@ export class NativeInteractions {
           for (let attempt = 0; attempt < 50; attempt++) {
             await pause();
             const screen = await control.screen();
-            const next = this.observe(screen, info);
+            const next = await this.read(screen, info);
             if (next && next.interaction.id !== identity) return { status: 'advanced', interaction: next.interaction };
             if (!next && screen !== undefined) {
+              if (cursorApproval) {
+                if (!hasCursorApprovalTitle(screen) && this.options.settledScreen?.(screen)) return { status: 'completed' };
+                continue;
+              }
               gone = screen.split('\n').some(line => line.trim()) ? gone + 1 : 0;
               if (gone >= 5 || this.options.settledScreen?.(screen)) return { status: 'completed' };
             } else {
@@ -200,11 +221,11 @@ export class NativeInteractions {
     });
   }
 
-  private async currentFromControl(control: Control, info: TerminalInfo) { return this.observe(await control.screen(), info); }
+  private async currentFromControl(control: Control, info: TerminalInfo) { return this.read(await control.screen(), info); }
 
   private async changed(control: Control, info: TerminalInfo, identity: string, predicate: (screen: DialogScreen) => boolean): Promise<DialogScreen> {
     for (let attempt = 0; attempt < 40; attempt++) {
-      const parsed = this.observe(await control.screen(), info);
+      const parsed = await this.read(await control.screen(), info);
       if (!parsed) { await pause(); continue; }
       if (parsed.interaction.id !== identity) throw stale();
       if (predicate(parsed)) return parsed;

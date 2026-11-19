@@ -114,6 +114,22 @@ function keyHintLine(raw: string): boolean {
   return clauses.length > 0 && clauses.every(clause => KEY_HINT_KEY.test(clause) && /^[\w+/↑↓←→ -]+$/u.test(clause));
 }
 
+const CURSOR_APPROVAL_TITLE = /^ *(?:Write to this file\?|Run this command(?: outside the sandbox)?\?) *$/m;
+const CURSOR_APPROVAL_BATCH = /^ *Approval \d+ of \d+ *$/m;
+const CURSOR_APPROVAL_SWITCH = '←/→ to switch approval';
+const CURSOR_REVIEW_FOOTER = 'ctrl+r to review changed files';
+const CURSOR_WRITE_PREVIEW = /^(.+?)\s+\+\d+\s+-\d+$/;
+
+export function hasCursorApprovalTitle(screen: string): boolean {
+  return CURSOR_APPROVAL_TITLE.test(screen);
+}
+
+export function cursorApprovalNeedsHistory(screen: string, parsed: DialogScreen | undefined): boolean {
+  if (!parsed) return hasCursorApprovalTitle(screen);
+  return hasCursorApprovalTitle(parsed.interaction.title)
+    && screen.includes(CURSOR_APPROVAL_SWITCH) && !parsed.cursorApprovalBatch;
+}
+
 const WIDE = /[\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/;
 
 /** Rejoin a label Ink wrapped at the pane width; CJK text wraps without a separating space. */
@@ -236,7 +252,9 @@ function finish(
  * own focus one key at a time and re-reads the screen, so a row the user pressed is the row that
  * gets chosen even if this parser missed a sibling row entirely.
  */
-function parseDecisionSurface(screen: string, terminal: TerminalIdentity, lines: string[]): DialogScreen | undefined {
+function parseDecisionSurface(screen: string, terminal: TerminalIdentity, lines: string[], visibleStart?: number): DialogScreen | undefined {
+  const last = lines.findLastIndex(line => textLine(line));
+  if (last >= 0 && textLine(lines[last]!) === CURSOR_REVIEW_FOOTER) lines = lines.slice(0, last);
   const boundary = lines.findLastIndex(horizontalRule);
   if (boundary < 0) return;
 
@@ -271,18 +289,48 @@ function parseDecisionSurface(screen: string, terminal: TerminalIdentity, lines:
   const run = lines.slice(runStart, start).map(textLine).filter(Boolean);
   const titleIndex = run.findLastIndex(line => line.endsWith('?'));
   if (titleIndex < 0 || run[titleIndex]!.length > 200) return;
+  const title = run[titleIndex]!;
 
   // Whatever precedes the question is the preview of the operation being approved. Binary writes
   // preview only a path, and the CLI puts that above the rule, so pick it up from there too.
   const preview = [...lines.slice(boundary + 1, runStart).map(textLine).filter(Boolean), ...run.slice(0, titleIndex)].filter(line => !DASHED_RULE.test(line));
   const abovePreview = boundary > 0 && !horizontalRule(lines[boundary - 1]!) ? textLine(lines[boundary - 1]!) : '';
-  if (abovePreview) preview.unshift(abovePreview);
+  const cursorWrite = title === 'Write to this file?';
+  const cursorApproval = hasCursorApprovalTitle(title);
+  const writePath = cursorWrite ? CURSOR_WRITE_PREVIEW.exec(abovePreview)?.[1] ?? abovePreview : undefined;
+  const target = cursorWrite ? /^in (.+)$/.exec(run.slice(titleIndex + 1).join(''))?.[1] : undefined;
+  const suffix = writePath?.match(/^(?:…|\.\.\.)(.+)$/)?.[1];
+  const matchingWritePath = target !== undefined && (target === writePath || Boolean(suffix && target.endsWith(suffix)));
+  const batchIndex = matchingWritePath ? lines.findLastIndex((line, index) => index < boundary - 1 && Boolean(textLine(line))) : -1;
+  const writeBatch = batchIndex > 0 && horizontalRule(lines[batchIndex - 1]!) ? textLine(lines[batchIndex]!) : undefined;
+  const batch = cursorWrite ? writeBatch : cursorApproval ? preview[0] : undefined;
+  const batchLabel = batch && CURSOR_APPROVAL_BATCH.test(batch) ? batch : undefined;
+  if (visibleStart !== undefined) {
+    // The live title and options must already be visible. Scrollback can supply their preview
+    // only when the write header matches the target or the command starts at the approval rule.
+    if (!cursorApproval || runStart + titleIndex < visibleStart || preview.some(hasCursorApprovalTitle)) return;
+    if (cursorWrite ? !matchingWritePath : !/^\$\s+\S/.test(preview[batchLabel ? 1 : 0] ?? '')) return;
+    if (!batchLabel && lines.slice(parsed.end).some(line => textLine(line) === CURSOR_APPROVAL_SWITCH)) return;
+  }
+  if (abovePreview && (!cursorApproval || cursorWrite)) preview.unshift(abovePreview);
   if (!preview.length) return;
 
   const message = [...preview, ...run.slice(titleIndex + 1)].join('\n');
   const identityContext = lines.slice(boundary, parsed.end).map(textLine);
-  const kind: NativeInteraction['kind'] = PLAN_TITLES.test(run[titleIndex]!) ? 'plan' : 'permission';
-  return finish(terminal, screen, kind, run[titleIndex]!, message, parsed.rows, identityContext);
+  if (batchLabel) identityContext.unshift(batchLabel);
+  const kind: NativeInteraction['kind'] = PLAN_TITLES.test(title) ? 'plan' : 'permission';
+  const dialog = finish(terminal, screen, kind, title, message, parsed.rows, identityContext);
+  if (dialog && batchLabel) dialog.cursorApprovalBatch = batchLabel;
+  return dialog;
+}
+
+export function parseCursorApprovalHistory(screen: string, history: string, terminal: TerminalIdentity): DialogScreen | undefined {
+  const visible = linesOf(screen);
+  const lines = linesOf(history);
+  const start = lines.length - visible.length;
+  // The two captures must agree on every visible row. Drag-resize and TUI repaint can split them.
+  if (start <= 0 || !visible.every((line, index) => line === lines[start + index])) return;
+  return parseDecisionSurface(history, terminal, lines, start);
 }
 
 /**
