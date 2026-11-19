@@ -14,6 +14,11 @@
  * the runtime's answer then releases what the CLI sent after it. An interrupt is sent where the
  * recording sent it: the replay holds its stall release until that point (`reached`).
  *
+ * A recording may span a runtime restart. Each connection the driver opens gets the next `conn`
+ * index (absent means 0) and the replay hands the n-th client it creates the n-th connection's
+ * messages. `lifecycle` markers (`dispose`, `kill`, `configure`, and the CLI's `exit`) show where the
+ * scenario acted; the replay does not deliver them, `runScenario` repeats the action instead.
+ *
  * The hook channel (`observation.ts`) is recorded in the same stream, as `hook` messages in the
  * order they reached Riffet's hook endpoint. The replay delivers them to nothing: what a command
  * changed needs a real working tree. `hookProblems` checks the contract observation depends on
@@ -43,7 +48,12 @@ export interface RecordingMeta {
   approval: string;
 }
 
-export type RecordedMessage =
+export type RecordedMessage = RecordedBody & {
+  /** The connection the message crossed; absent means the first. */
+  conn?: number;
+};
+
+type RecordedBody =
   | { dir: 'out'; kind: 'request'; id: number; method: string; params?: unknown }
   | { dir: 'in'; kind: 'response'; id: number; result?: unknown; error?: { message: string; code?: number } }
   | { dir: 'out'; kind: 'notification'; method: string; params?: unknown }
@@ -51,7 +61,11 @@ export type RecordedMessage =
   | { dir: 'in'; kind: 'serverRequest'; id: JsonRpcId; method: string; params: Record<string, unknown> }
   | { dir: 'out'; kind: 'serverResponse'; id: JsonRpcId; result: unknown }
   /** A payload the CLI's hook command delivered to Riffet's hook endpoint. */
-  | { dir: 'in'; kind: 'hook'; payload: Record<string, unknown> };
+  | { dir: 'in'; kind: 'hook'; payload: Record<string, unknown> }
+  /** A scenario step that restarts or reconfigures the runtime (`out`), the app-server exiting, or a connection that was refused (`in`). */
+  | { dir: 'out' | 'in'; kind: 'lifecycle'; event: LifecycleAction | 'exit' | 'refused'; model?: string; /** The errno of a refused connection. */ code?: string };
+
+export type LifecycleAction = 'dispose' | 'kill' | 'configure';
 
 export interface Recording { meta: RecordingMeta; messages: RecordedMessage[] }
 
@@ -68,6 +82,8 @@ export interface Scenario {
   approve?: boolean;
   /** The turn is interrupted once the answer streams; it ends `interrupted`. */
   interrupt?: boolean;
+  /** Done once the turn after which it is listed has ended: the runtime is disposed, its app-server killed, or the model changed. */
+  lifecycle?: { after: number; action: LifecycleAction };
 }
 
 export const CODEX_SCENARIOS: Record<string, Scenario> = {
@@ -75,6 +91,10 @@ export const CODEX_SCENARIOS: Record<string, Scenario> = {
   command: { prompts: ['Run `ls` in the current directory, then reply with the number of entries only.'], approval: 'on-request', tool: true },
   'two-turns': { prompts: ['Remember the word maple. Reply with exactly: ok', 'Which word did I ask you to remember? Reply with the word only.'], approval: 'on-request' },
   approval: { prompts: ['Create a file named hello.txt containing the single word hi, then reply with: done'], approval: 'read-only', tool: true, approve: true },
+  resume: { prompts: ['Remember the word maple. Reply with exactly: ok', 'Which word did I ask you to remember? Reply with the word only.'], approval: 'on-request', lifecycle: { after: 1, action: 'dispose' } },
+  reconnect: { prompts: ['Remember the word maple. Reply with exactly: ok', 'Which word did I ask you to remember? Reply with the word only.'], approval: 'on-request', lifecycle: { after: 1, action: 'kill' } },
+  // The same profile, a different model: a real profile switch needs a second provider profile.
+  'profile-switch': { prompts: ['Remember the word maple. Reply with exactly: ok', 'Which word did I ask you to remember? Reply with the word only.'], approval: 'on-request', lifecycle: { after: 1, action: 'configure' } },
   interrupt: { prompts: ['Count from 1 to 300, one number per line, with no other text.'], approval: 'on-request', interrupt: true },
 };
 
@@ -90,7 +110,7 @@ export type RecordedCli = keyof typeof RECORDED_CLIS;
  * per prompt, the prompt itself, an answer, and a tool call where the scenario asks for one. Used by
  * the drift check (`pnpm record codex all --check`); the replay test compares exact rows instead.
  */
-export function scenarioProblems(scenario: Scenario, rows: JournalRow[]): string[] {
+export function scenarioProblems(scenario: Scenario, rows: JournalRow[], recording?: Recording): string[] {
   const count = (kind: string) => rows.filter(row => row.kind === kind).length;
   const problems: string[] = [];
   const turns = scenario.prompts.length;
@@ -103,6 +123,25 @@ export function scenarioProblems(scenario: Scenario, rows: JournalRow[]): string
   if (count('user_message_chunk') < turns) problems.push(`${count('user_message_chunk')} prompts, expected ${turns}`);
   if (!scenario.interrupt && count('agent_message_chunk') < turns) problems.push(`${count('agent_message_chunk')} answers, expected at least ${turns}`);
   if (scenario.tool && !count('tool_call')) problems.push('no tool call');
+  if (scenario.lifecycle && recording) problems.push(...lifecycleProblems(scenario.lifecycle, recording));
+  return problems;
+}
+
+/** A restart scenario must show the restart, a second connection where one is needed, one thread throughout, and the turn after it completing. */
+function lifecycleProblems(lifecycle: NonNullable<Scenario['lifecycle']>, recording: Recording): string[] {
+  const problems: string[] = [];
+  const messages = recording.messages;
+  if (!messages.some(message => message.kind === 'lifecycle' && message.dir === 'out' && message.event === lifecycle.action)) problems.push(`no ${lifecycle.action} step in the recording`);
+  const conns = Math.max(0, ...messages.map(message => message.conn ?? 0)) + 1;
+  if (lifecycle.action !== 'configure' && conns < 2) problems.push(`${conns} connection, expected a new one after the ${lifecycle.action}`);
+  const threads = new Set(messages.flatMap(message => {
+    const result = message.kind === 'response' ? message.result as { thread?: { id?: unknown } } | undefined : undefined;
+    return typeof result?.thread?.id === 'string' ? [result.thread.id] : [];
+  }));
+  if (threads.size !== 1) problems.push(`${threads.size} threads, expected the same one throughout`);
+  const marker = messages.findIndex(message => message.kind === 'lifecycle' && message.dir === 'out');
+  const completed = messages.findIndex((message, index) => index > marker && message.kind === 'notification' && message.dir === 'in' && message.method === 'turn/completed');
+  if (marker >= 0 && completed < 0) problems.push('no turn completed after the restart');
   return problems;
 }
 
@@ -156,21 +195,33 @@ export function formatRecording(recording: Recording): string {
 
 /** Wraps a real factory; every message crossing the seam is appended to `sink`. */
 export function recordingFactory(inner: CodexAppServerFactory, sink: RecordedMessage[], onClient?: (client: CodexAppServerClient) => void): CodexAppServerFactory {
+  let connections = 0;
   return async options => {
+    const conn = connections++;
+    const tag = (message: RecordedBody): RecordedMessage => conn ? { ...message, conn } : message;
     const wrapped: CodexAppServerOptions = {
       ...options,
       onNotification: (method, params) => {
-        sink.push({ dir: 'in', kind: 'notification', method, params: structuredClone(params) });
+        sink.push(tag({ dir: 'in', kind: 'notification', method, params: structuredClone(params) }));
         options.onNotification(method, params);
       },
+      onExit: error => {
+        sink.push(tag({ dir: 'in', kind: 'lifecycle', event: 'exit' }));
+        options.onExit(error);
+      },
       onServerRequest: async request => {
-        sink.push({ dir: 'in', kind: 'serverRequest', id: request.id, method: request.method, params: structuredClone(request.params) });
+        sink.push(tag({ dir: 'in', kind: 'serverRequest', id: request.id, method: request.method, params: structuredClone(request.params) }));
         const result = await options.onServerRequest(request);
-        if (result !== NO_SERVER_RESPONSE) sink.push({ dir: 'out', kind: 'serverResponse', id: request.id, result: structuredClone(result) });
+        if (result !== NO_SERVER_RESPONSE) sink.push(tag({ dir: 'out', kind: 'serverResponse', id: request.id, result: structuredClone(result) }));
         return result;
       },
     };
-    const client = await inner(wrapped);
+    // A socket left by an app-server that is gone: the driver tries it and falls back to a new process.
+    const client = await inner(wrapped).catch(error => {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      sink.push(tag({ dir: 'in', kind: 'lifecycle', event: 'refused', ...(typeof code === 'string' ? { code } : {}) }));
+      throw error;
+    });
     onClient?.(client);
     let nextId = 1;
     const recorded: CodexAppServerClient = {
@@ -181,19 +232,19 @@ export function recordingFactory(inner: CodexAppServerFactory, sink: RecordedMes
       get isOnline() { return client.isOnline; },
       async request<T>(method: string, params?: unknown, timeoutMs?: number): Promise<T> {
         const id = nextId++;
-        sink.push({ dir: 'out', kind: 'request', id, method, ...(params === undefined ? {} : { params: structuredClone(params) }) });
+        sink.push(tag({ dir: 'out', kind: 'request', id, method, ...(params === undefined ? {} : { params: structuredClone(params) }) }));
         try {
           const result = await client.request<T>(method, params, timeoutMs);
-          sink.push({ dir: 'in', kind: 'response', id, result: structuredClone(result) });
+          sink.push(tag({ dir: 'in', kind: 'response', id, result: structuredClone(result) }));
           return result;
         } catch (error) {
           const rpc = error as { message?: string; rpcCode?: number };
-          sink.push({ dir: 'in', kind: 'response', id, error: { message: String(rpc.message ?? error), ...(rpc.rpcCode === undefined ? {} : { code: rpc.rpcCode }) } });
+          sink.push(tag({ dir: 'in', kind: 'response', id, error: { message: String(rpc.message ?? error), ...(rpc.rpcCode === undefined ? {} : { code: rpc.rpcCode }) } }));
           throw error;
         }
       },
       notify(method: string, params?: unknown) {
-        sink.push({ dir: 'out', kind: 'notification', method, ...(params === undefined ? {} : { params: structuredClone(params) }) });
+        sink.push(tag({ dir: 'out', kind: 'notification', method, ...(params === undefined ? {} : { params: structuredClone(params) }) }));
         client.notify(method, params);
       },
       respond: (id, result) => client.respond(id, result),
@@ -221,6 +272,7 @@ class ReplayClient implements CodexAppServerClient {
   private pending = 0;
   private readonly delivered = new Set<number>();
   private lastActivity = Date.now();
+  private closed = false;
 
   constructor(private readonly options: CodexAppServerOptions, private readonly recording: Recording) {
     this.serverUserAgent = recording.meta.serverUserAgent;
@@ -237,6 +289,7 @@ class ReplayClient implements CodexAppServerClient {
    * batch (see the file comment).
    */
   async drained(release = true): Promise<void> {
+    if (this.closed) return;
     while (this.pending > 0) { await this.queue; await tick(); }
     if (!release || Date.now() - this.lastActivity < STALL_MS) return;
     const first = this.recording.messages.findIndex((message, index) => message.dir === 'in' && message.kind !== 'response' && !this.delivered.has(index));
@@ -245,6 +298,7 @@ class ReplayClient implements CodexAppServerClient {
 
   /** Every inbound message recorded before the next `method` request has been delivered and handled. */
   reached(method: string): boolean {
+    if (this.closed) return true;
     const index = this.requests.get(method)?.[0];
     if (index === undefined) return true;
     for (let at = 0; at < index; at++) {
@@ -267,12 +321,13 @@ class ReplayClient implements CodexAppServerClient {
 
   private deliver(indices: number[]): Promise<void> {
     this.lastActivity = Date.now();
-    if (!indices.length) return Promise.resolve();
+    if (!indices.length || this.closed) return Promise.resolve();
     for (const index of indices) this.delivered.add(index);
     this.pending++;
     const run = this.queue.then(async () => {
       for (const message of indices.map(index => this.recording.messages[index]!)) {
         await tick();
+        if (this.closed) return;
         if (message.kind === 'notification' && message.dir === 'in') this.options.onNotification(message.method, structuredClone(message.params));
         if (message.kind === 'serverRequest') {
           const index = this.recording.messages.findIndex(entry => entry.dir === 'out' && entry.kind === 'serverResponse' && entry.id === message.id);
@@ -312,16 +367,46 @@ class ReplayClient implements CodexAppServerClient {
   }
 
   respond(): void {}
-  async detach(): Promise<void> { this.isOnline = false; }
-  async dispose(): Promise<void> { this.isOnline = false; }
+  /** The app-server process went away: what the real client reports through `onExit`. */
+  exit(): void {
+    this.isOnline = false;
+    this.closed = true;
+    this.options.onExit(new Error('The app-server exited'));
+  }
+  async detach(): Promise<void> { this.isOnline = false; this.closed = true; }
+  async dispose(): Promise<void> { this.isOnline = false; this.closed = true; }
 }
 
-export interface Replay { factory: CodexAppServerFactory; drained(release?: boolean): Promise<void>; reached(method: string): boolean }
+export interface Replay {
+  factory: CodexAppServerFactory;
+  recording: Recording;
+  drained(release?: boolean): Promise<void>;
+  reached(method: string): boolean;
+  /** The newest client's app-server exits. */
+  exit(): void;
+}
+
+/** One recording per connection, without the lifecycle markers: those are steps, not traffic. */
+function connections(recording: Recording): Recording[] {
+  const count = Math.max(0, ...recording.messages.map(message => message.conn ?? 0)) + 1;
+  return Array.from({ length: count }, (_, conn) => ({ meta: recording.meta, messages: recording.messages.filter(message => (message.conn ?? 0) === conn && message.kind !== 'lifecycle') }));
+}
 
 export function replayFactory(recording: Recording): Replay {
   const clients: ReplayClient[] = [];
+  const slices = connections(recording);
+  const refused = new Map(recording.messages.flatMap(message => message.kind === 'lifecycle' && message.event === 'refused' ? [[message.conn ?? 0, message.code] as const] : []));
+  let created = 0;
   return {
-    factory: async options => { const client = new ReplayClient(options, recording); clients.push(client); return client; },
+    recording,
+    factory: async options => {
+      const conn = created++;
+      if (refused.has(conn)) throw Object.assign(new Error('Connection refused'), { code: refused.get(conn) });
+      const client = new ReplayClient(options, slices[conn] ?? { meta: recording.meta, messages: [] });
+      clients.push(client);
+      return client;
+    },
+    exit: () => clients.at(-1)?.exit(),
     drained: async (release = true) => { for (const client of clients) await client.drained(release); },
     reached: method => clients.every(client => client.reached(method)),
   };
@@ -375,7 +460,7 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
     const request = {
       session, project, profile, commandId: `command-${turn}`, runId: `run-${turn}`,
       input: { text, attachmentIds: [], context: [] },
-      config: { mode: 'code', approval: options.approval },
+      config: { mode: 'code', approval: options.approval, ...(session.model ? { model: session.model } : {}) },
       commitDispatchFence: () => ({}),
     } as unknown as NativeBackendSendRequest;
     await adapter.send(host, request);
@@ -408,6 +493,12 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
       await new Promise(resolve => setTimeout(resolve, 50));
     }
   };
+  /** Changes the session's model through the adapter, as the service does for a saved selection. */
+  const configure = async (model: string) => {
+    const resolved = await adapter.configure(host, session, profile, { model });
+    host.bumpConfig(session.id, { model, ...resolved } as Partial<Session>);
+  };
+  const models = async () => (await adapter.listModels(host, project, profile, session)).map(model => model.value);
   const interrupt = () => adapter.interrupt(host, session, profile);
   /** The rows the service's ingest would write, read into a journal of their own. */
   const rows = async (): Promise<JournalRow[]> => {
@@ -417,7 +508,7 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
     for (let pulls = 0; pulls < 20; pulls++) if ((await pullLane(source, writer, new AbortController().signal)).caughtUp) break;
     return rowsOf(journal, session.id);
   };
-  return { adapter, host, session, project, profile, send, idle, until, interrupt, rows, dispose: () => adapter.dispose(host, session.id) };
+  return { adapter, host, session, project, profile, send, idle, until, interrupt, configure, models, rows, dispose: () => adapter.dispose(host, session.id) };
 }
 
 export type RecordingHarness = ReturnType<typeof recordingHarness>;
@@ -426,10 +517,10 @@ export type RecordingHarness = ReturnType<typeof recordingHarness>;
  * Runs a scenario's steps, the same way when recording (against the CLI, watching `sink`) and when
  * replaying (driven by `replay`), so the two runs take the same path.
  */
-export async function runScenario(h: RecordingHarness, scenario: Scenario, mode: { replay: Replay } | { sink: RecordedMessage[] }): Promise<void> {
+export async function runScenario(h: RecordingHarness, scenario: Scenario, mode: { replay: Replay } | { sink: RecordedMessage[]; client?: () => CodexAppServerClient | undefined }): Promise<void> {
   const replay = 'replay' in mode ? mode.replay : undefined;
   const timeoutMs = replay ? 10_000 : 180_000;
-  for (const prompt of scenario.prompts) {
+  for (const [index, prompt] of scenario.prompts.entries()) {
     await h.send(prompt);
     if (scenario.interrupt) {
       if (replay) await h.until(() => replay.reached('turn/interrupt'), timeoutMs, () => replay.drained(false));
@@ -440,7 +531,36 @@ export async function runScenario(h: RecordingHarness, scenario: Scenario, mode:
       await h.interrupt();
     }
     await h.idle(timeoutMs, replay ? () => replay.drained() : undefined, { approve: scenario.approve });
+    if (scenario.lifecycle?.after === index + 1) await lifecycle(h, scenario.lifecycle.action, mode, timeoutMs);
   }
+}
+
+/** The scenario's restart step; both runs take the same call, the recording also writes the marker the replay reads. */
+async function lifecycle(h: RecordingHarness, action: LifecycleAction, mode: Parameters<typeof runScenario>[2], timeoutMs: number): Promise<void> {
+  if ('replay' in mode) {
+    const marker = mode.replay.recording.messages.find(message => message.kind === 'lifecycle' && message.dir === 'out' && message.event === action);
+    if (action === 'dispose') await h.dispose();
+    else if (action === 'kill') mode.replay.exit();
+    else await h.configure(marker?.kind === 'lifecycle' && marker.model ? marker.model : 'replay-model');
+    return;
+  }
+  const { sink, client } = mode;
+  let model: string | undefined;
+  if (action === 'configure') {
+    // The model the thread started with is not a change; take another from the CLI's own list.
+    const current = sink.flatMap(message => message.kind === 'response' ? [(message.result as { model?: unknown } | undefined)?.model] : []).find(value => typeof value === 'string');
+    model = (await h.models()).find(value => value !== current);
+    if (!model) throw new Error('The CLI lists no other model to switch to');
+  }
+  const mark = sink.length;
+  sink.push({ dir: 'out', kind: 'lifecycle', event: action, ...(model ? { model } : {}) });
+  if (action === 'dispose') await h.dispose();
+  else if (action === 'kill') {
+    const pid = client?.()?.processId;
+    if (!pid) throw new Error('The app-server has no process id to kill');
+    process.kill(pid, 'SIGKILL');
+    await h.until(() => sink.slice(mark).some(message => message.kind === 'lifecycle' && message.event === 'exit'), timeoutMs);
+  } else await h.configure(model!);
 }
 
 /** Generated ids: uuids, and the provider's message ids (`msg_` and hex), which change on every re-record. */

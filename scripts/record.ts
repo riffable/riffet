@@ -117,7 +117,7 @@ function redactor(project: string, projectReal: string) {
 }
 
 function redact(recording: Recording, { walk }: ReturnType<typeof redactor>): Recording {
-  const emptied = new Set<number>();
+  const emptied = new Set<string>();
   const messages: RecordedMessage[] = [];
   const threads = new Set(recording.messages.flatMap(message => {
     const id = message.kind === 'response' ? (message.result as { thread?: { id?: unknown } } | undefined)?.thread?.id : undefined;
@@ -126,8 +126,10 @@ function redact(recording: Recording, { walk }: ReturnType<typeof redactor>): Re
   for (const message of recording.messages) {
     // The endpoint also hears the hooks of threads this run did not start.
     if (message.kind === 'hook' && !threads.has(String(message.payload.session_id))) continue;
-    if (message.kind === 'request' && EMPTIED_METHODS.test(message.method)) { emptied.add(message.id); messages.push({ ...message, params: {} }); continue; }
-    if (message.kind === 'response' && emptied.has(message.id)) { messages.push({ dir: 'in', kind: 'response', id: message.id, result: {} }); continue; }
+    // Request ids restart on every connection.
+    const key = `${message.conn ?? 0}:${'id' in message ? message.id : ''}`;
+    if (message.kind === 'request' && EMPTIED_METHODS.test(message.method)) { emptied.add(key); messages.push({ ...message, params: {} }); continue; }
+    if (message.kind === 'response' && emptied.has(key)) { messages.push({ dir: 'in', kind: 'response', id: message.id, ...(message.conn ? { conn: message.conn } : {}), result: {} }); continue; }
     if (message.kind === 'notification' && message.dir === 'in' && DROPPED_NOTIFICATIONS.test(message.method)) continue;
     messages.push(walk(message) as RecordedMessage);
   }
@@ -203,7 +205,7 @@ for (const name of names) {
   const trust = cli === 'codex' ? sessionFlagTrust() : {};
   try {
     for (const prompt of scenario.prompts) console.log(`[${name}] > ${prompt}`);
-    await runScenario(harness, scenario, { sink });
+    await runScenario(harness, scenario, { sink, client: () => client });
     const rows = await harness.rows();
     realRows.set(name, rows);
     console.log(`[${name}] ${sink.length} messages, ${rows.length} journal rows`);
@@ -262,7 +264,7 @@ async function drift(): Promise<boolean> {
       if (added.length) (versionDir === newest ? notes : findings).push(`${name}: not in the recording: ${added.join(', ')}`);
       if (removed.length) notes.push(`${name}: not sent this run: ${removed.join(', ')}`);
     }
-    const problems = scenarioProblems(CODEX_SCENARIOS[name]!, realRows.get(name) ?? []);
+    const problems = scenarioProblems(CODEX_SCENARIOS[name]!, realRows.get(name) ?? [], fresh);
     if (problems.length) findings.push(`${name}: the real run broke the scenario: ${problems.join('; ')}`);
     const hooks = cli === 'codex' ? hookProblems(fresh) : [];
     if (hooks.length) findings.push(`${name}: the hooks no longer match observation.ts: ${hooks.join('; ')}`);
