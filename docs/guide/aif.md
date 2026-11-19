@@ -292,9 +292,10 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 
 阶段 1 进展（2026-11-19）：
 - 已完成：预热键派生；服务端覆盖（14 个模块，其中 13 份新文档，从各目录 90 天内的修复提交、代码注释和功能文档提炼，提交号与日志 scope 已逐条核对）；服务端超限文件进基线（26 个、共 3.8 万行）；Codex rollout 录制与回放；`aif context` 列出上级模块；Codex 审批与中断场景（录制与回放走同一个 `recording.ts#runScenario`，审批由宿主按主操作答复，中断在录制时发出的位置发出）；漂移检测命令 `pnpm record codex all --check`（实测 CLI 与最新录制比较方法集合、场景结果和回放结果，有漂移时退出码为 1，不写入仓库）；变更耦合 `pnpm aif coupling [--days N]`；每周一 10:00（北京时间）由 Riffet 自动化「AIF 每周检查」运行漂移检测和最近一周的耦合挖掘，只汇报不改仓库。
-- 首次耦合挖掘（90 天）：Codex 的 `index.ts`、`runtime.ts` 与 `backends/service.ts` 分别同改 36 次和 29 次，驱动接口过宽；Codex 与 droid、dsh 的 runtime 同改 11–12 次，共用机制没有抽出；`adapters/cli/claude-code.ts` 与 `backends/claude/index.ts` 每次都一起改，模块边界可能放错。三项都是 runtime 拆分的输入。
+- 首次耦合挖掘（90 天）：Codex 的 `index.ts`、`runtime.ts` 与 `backends/service.ts` 分别同改 36 次和 29 次，Codex 与 droid、dsh 的 runtime 同改 11–12 次。按提交类型看，两项多数是穿过驱动接口、改到每个后端的新功能和改名，不是漏抽的公共机制，留给 §6 的「后端公共层」。`adapters/cli/claude-code.ts` 与 `backends/claude/index.ts` 每次都一起改，模块边界可能放错，在 Claude 拆分时复核。
+- Codex 拆分方案：[codex-runtime-split.md](codex-runtime-split.md)，待评审。
 - Codex hook 录制：载荷与 App Server 消息录在同一份录制里，`hookProblems` 在回放测试和漂移检测里检查观察依赖的约定；录制改写的 hook 信任在结束后写回。漂移检测在已录制的版本上把本次才出现的方法记为提示而不是漂移：同一版本下这只是本次运行的时序（命令输出是否流式）。
-- 未完成：其余后端的场景矩阵；Codex runtime 拆分（先出方案评审）。
+- 未完成：其余后端的场景矩阵；Codex runtime 拆分（方案评审后实施）。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 
