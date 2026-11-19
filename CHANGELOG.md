@@ -50,6 +50,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The web sign-in page is one centred column: the command to run on the server, the code field and Continue, with QR pairing and the access-token option below. A browser that cannot reach the server says so and reconnects by itself instead of asking for a sign-in, and a browser that never signed in no longer sees "Your sign-in has expired".
 - A small game while you wait, on the web: when the workbench cannot load or the sign-in page cannot reach the server, a running track appears with fences to jump on the beat (Space or a tap). Bump the floating mane teeth to light the mane: a higher jump, then a longer one, then double points; a crash costs a tooth before it costs the run. Run "Dark Horse Run" from the command palette to play any time: on the new conversation page the track sits at the bottom of the page; in a conversation it sits in the empty space beside the composer, is not offered when there is no room, and closes if the room runs out. It pauses while the Agent waits for you and ends at a finish post when the turn ends. Escape closes it.
 - JSON, JSONL, YAML, TOML, and XML file previews now feature syntax coloring, inline collapsed summaries, live search filtering, expandable multi-line strings, formatted source with line numbers, and a table plus record-inspector split view for JSONL and object arrays.
 - Settings › About Riffet now includes a link to the Riffet GitHub repository (`riffable/riffet`) across Web, Mac, iPhone, and Android.

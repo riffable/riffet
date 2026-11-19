@@ -211,14 +211,6 @@ msgstr ""
 msgid "使用此目录"
 msgstr ""
 
-#: src/app/App.tsx
-msgid "使用访问令牌登录"
-msgstr ""
-
-#: src/app/App.tsx
-msgid "使用配对码登录"
-msgstr ""
-
 #: src/app/hostShortcuts.ts
 msgid "侧栏"
 msgstr ""
@@ -588,6 +580,14 @@ msgstr ""
 msgid "在内容中搜索「{needle}」"
 msgstr ""
 
+#: src/app/App.tsx
+msgid "在服务器上运行 <0>riffet pair</0>，输入显示的配对码"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "在服务器上运行 <0>riffet token</0> 查看访问令牌"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "在此目录新建会话"
 msgstr ""
@@ -611,10 +611,6 @@ msgstr ""
 
 #: src/app/plugins/PluginMarket.tsx
 msgid "在网页中查看"
-msgstr ""
-
-#: src/app/App.tsx
-msgid "在运行服务器的 Mac 或电脑上执行"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
@@ -933,7 +929,7 @@ msgid "扩展管理"
 msgstr ""
 
 #: src/app/App.tsx
-msgid "扫描配对二维码"
+msgid "扫码配对"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -1116,6 +1112,14 @@ msgstr ""
 
 #: src/app/Workbench.tsx
 msgid "收起文件面板"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "改用访问令牌"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "改用配对码"
 msgstr ""
 
 #: src/app/sidebarDestinations.ts
@@ -1503,10 +1507,6 @@ msgstr ""
 msgid "查看"
 msgstr ""
 
-#: src/app/App.tsx
-msgid "查看访问令牌"
-msgstr ""
-
 #: src/app/SessionInfo.tsx
 msgctxt "session-info-tags"
 msgid "标签"
@@ -1708,7 +1708,7 @@ msgid "登录已失效，请重新登录"
 msgstr ""
 
 #: src/app/App.tsx
-msgid "登录状态保存在当前浏览器。配对后可在 Riffet 的设备管理中撤销访问。"
+msgid "登录状态只保存在这个浏览器，可在 Riffet 的设备管理中撤销。"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -1906,10 +1906,6 @@ msgstr ""
 msgid "草稿无法保存到浏览器，刷新后会丢失"
 msgstr ""
 
-#: src/app/App.tsx
-msgid "获取配对码"
-msgstr ""
-
 #. placeholder {0}: project.name
 #: src/app/ProjectHome.tsx
 msgid "要在 {0} 做什么？"
@@ -2071,6 +2067,10 @@ msgctxt "workbench-remote-host"
 msgid "远端"
 msgstr ""
 
+#: src/app/App.tsx
+msgid "连不上 Riffet 服务器"
+msgstr ""
+
 #: src/app/Header.tsx
 msgid "连接中"
 msgstr ""
@@ -2158,6 +2158,7 @@ msgstr ""
 msgid "重新读取"
 msgstr ""
 
+#: src/app/App.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/Workbench.tsx
@@ -2186,6 +2187,10 @@ msgstr ""
 
 #: src/app/state/listsStore.ts
 msgid "需要你确认"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "页面会自动重连"
 msgstr ""
 
 #: src/app/CommandPalette.tsx

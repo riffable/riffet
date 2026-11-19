@@ -211,14 +211,6 @@ msgstr "In use"
 msgid "使用此目录"
 msgstr "Use this folder"
 
-#: src/app/App.tsx
-msgid "使用访问令牌登录"
-msgstr "Sign in with an access token"
-
-#: src/app/App.tsx
-msgid "使用配对码登录"
-msgstr "Sign in with a pairing code"
-
 #: src/app/hostShortcuts.ts
 msgid "侧栏"
 msgstr "Sidebar"
@@ -588,6 +580,14 @@ msgstr "New session in \"{0}\""
 msgid "在内容中搜索「{needle}」"
 msgstr "Search content for \"{needle}\""
 
+#: src/app/App.tsx
+msgid "在服务器上运行 <0>riffet pair</0>，输入显示的配对码"
+msgstr "Run <0>riffet pair</0> on the server and enter the code it shows"
+
+#: src/app/App.tsx
+msgid "在服务器上运行 <0>riffet token</0> 查看访问令牌"
+msgstr "Run <0>riffet token</0> on the server to see the access token"
+
 #: src/app/Sidebar.tsx
 msgid "在此目录新建会话"
 msgstr "New session in this folder"
@@ -612,10 +612,6 @@ msgstr "Resume in terminal…"
 #: src/app/plugins/PluginMarket.tsx
 msgid "在网页中查看"
 msgstr "View on the web"
-
-#: src/app/App.tsx
-msgid "在运行服务器的 Mac 或电脑上执行"
-msgstr "On the Mac or computer running the server, run"
 
 #: src/app/SessionInfo.tsx
 msgid "复制{label}"
@@ -933,8 +929,8 @@ msgid "扩展管理"
 msgstr "Extensions"
 
 #: src/app/App.tsx
-msgid "扫描配对二维码"
-msgstr "Scan pairing QR code"
+msgid "扫码配对"
+msgstr "Scan to pair"
 
 #: src/app/Sidebar.tsx
 msgid "折叠"
@@ -1117,6 +1113,14 @@ msgstr "Close changes panel"
 #: src/app/Workbench.tsx
 msgid "收起文件面板"
 msgstr "Close files panel"
+
+#: src/app/App.tsx
+msgid "改用访问令牌"
+msgstr "Use an access token"
+
+#: src/app/App.tsx
+msgid "改用配对码"
+msgstr "Use a pairing code"
 
 #: src/app/sidebarDestinations.ts
 msgid "数据统计"
@@ -1503,10 +1507,6 @@ msgstr "Source"
 msgid "查看"
 msgstr "View"
 
-#: src/app/App.tsx
-msgid "查看访问令牌"
-msgstr "to view an access token"
-
 #: src/app/SessionInfo.tsx
 msgctxt "session-info-tags"
 msgid "标签"
@@ -1708,8 +1708,8 @@ msgid "登录已失效，请重新登录"
 msgstr "Your sign-in has expired; sign in again"
 
 #: src/app/App.tsx
-msgid "登录状态保存在当前浏览器。配对后可在 Riffet 的设备管理中撤销访问。"
-msgstr "Your sign-in is saved in this browser. After pairing, you can revoke access in Riffet's device management."
+msgid "登录状态只保存在这个浏览器，可在 Riffet 的设备管理中撤销。"
+msgstr "Sign-in is kept in this browser only. Revoke it in Riffet's device settings."
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionInfo.tsx
@@ -1906,10 +1906,6 @@ msgstr "Customize sidebar"
 msgid "草稿无法保存到浏览器，刷新后会丢失"
 msgstr "The draft can't be saved in the browser and will be lost on refresh"
 
-#: src/app/App.tsx
-msgid "获取配对码"
-msgstr "to get a pairing code"
-
 #. placeholder {0}: project.name
 #: src/app/ProjectHome.tsx
 msgid "要在 {0} 做什么？"
@@ -2071,6 +2067,10 @@ msgctxt "workbench-remote-host"
 msgid "远端"
 msgstr "Remote"
 
+#: src/app/App.tsx
+msgid "连不上 Riffet 服务器"
+msgstr "Can't reach the Riffet server"
+
 #: src/app/Header.tsx
 msgid "连接中"
 msgstr "Connecting"
@@ -2158,6 +2158,7 @@ msgstr "Check again"
 msgid "重新读取"
 msgstr "Reload"
 
+#: src/app/App.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/Workbench.tsx
@@ -2187,6 +2188,10 @@ msgstr "Hide terminal"
 #: src/app/state/listsStore.ts
 msgid "需要你确认"
 msgstr "Needs your confirmation"
+
+#: src/app/App.tsx
+msgid "页面会自动重连"
+msgstr "This page reconnects by itself"
 
 #: src/app/CommandPalette.tsx
 #: src/app/Sidebar.tsx

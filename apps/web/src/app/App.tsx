@@ -1,8 +1,7 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowRight } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/controls';
@@ -10,6 +9,7 @@ import { DialogHost, Toaster } from '@/components/ui/overlays';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
 import { PairingQrScanner } from '@/components/PairingQrScanner';
+import { RunnerGame } from '@/components/runner/RunnerGame';
 import { api, HttpError, isUnreachable, onUnauthenticated, setCsrfToken, type AuthLogin, type AuthStatus } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { clearTranscripts } from '@/lib/transcript-store';
@@ -17,7 +17,7 @@ import { clearNativeOutbox } from '@/lib/native-outbox-storage';
 import { clearCachedPlugins } from '@/lib/plugins';
 import { clearCaches } from '@/lib/cache-registry';
 import { clearCachedLists, loadCachedLists } from '@/lib/list-cache';
-import { errorMessage } from '@/lib/utils';
+import { cn, errorMessage, reconnectDelay } from '@/lib/utils';
 import { startOverlayNavigation } from '@/lib/overlay-navigation';
 import { connectWorkbenchAppearance, needsWorkbenchDocumentReload } from '@/lib/workbench-appearance';
 
@@ -64,40 +64,96 @@ function browserDeviceName(): string {
   return (system ? `${browser} · ${system}` : browser).slice(0, 64);
 }
 
+/**
+ * A signed-out page: one column in the middle of a plain page, as the onboarding pages are
+ * (patterns §1.5), with an optional line pinned to the bottom.
+ */
+function SignInPage({ children, footer }: { children: ReactNode; footer?: ReactNode }) {
+  return (
+    <main className="flex min-h-dvh flex-col bg-bg px-5">
+      <div className="flex flex-1 flex-col items-center justify-center pb-[12vh] pt-12">{children}</div>
+      {footer && <p className="mx-auto max-w-md pb-6 text-center text-xs text-balance text-fg-4">{footer}</p>}
+    </main>
+  );
+}
+
 function Login({ onLogin, error, busy }: { onLogin: (credential: AuthLogin) => void; error?: SignInFailure; busy: boolean }) {
   const { t } = useLingui();
   const [mode, setMode] = useState<'code'|'token'>('code');
   const [credential, setCredential] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isCode = mode==='code';
   const label = isCode?t`配对码`:t`访问令牌`;
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-sidebar px-5">
-      <div className="flex w-full max-w-[360px] flex-col items-center">
-        <BrandMark className="mb-6 size-10 text-fg" />
-        <h1 className="text-2xl font-semibold tracking-tight text-fg"><Trans>登录 Riffet</Trans></h1>
-        <p className="mt-1.5 text-center text-sm text-fg-3"><Trans>在运行服务器的 Mac 或电脑上执行</Trans> <code className="font-mono text-fg-2">{isCode?'riffet pair':'riffet token'}</code> {isCode?t`获取配对码`:t`查看访问令牌`}</p>
-        <form className="mt-8 flex w-full flex-col gap-3" onSubmit={(event) => {
+    <SignInPage footer={<Trans>登录状态只保存在这个浏览器，可在 Riffet 的设备管理中撤销。</Trans>}>
+      <div className="flex w-full max-w-sm flex-col items-center">
+        <BrandMark className="size-12 text-fg" />
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight text-fg"><Trans>登录 Riffet</Trans></h1>
+        <p className="mt-1.5 text-center text-sm text-balance text-fg-3">
+          {isCode
+            ? <Trans>在服务器上运行 <code className="font-mono text-fg-2">riffet pair</code>，输入显示的配对码</Trans>
+            : <Trans>在服务器上运行 <code className="font-mono text-fg-2">riffet token</code> 查看访问令牌</Trans>}
+        </p>
+        <form className="mt-7 flex w-full flex-col" noValidate onSubmit={(event) => {
           event.preventDefault();
           const value=credential.trim();
-          if(value)onLogin(isCode?{code:value,name:browserDeviceName()}:{token:value});
+          if(!value){ inputRef.current?.focus(); return; }
+          onLogin(isCode?{code:value,name:browserDeviceName()}:{token:value});
         }}>
-          <Input key={mode} autoFocus className="h-10 rounded-lg px-3 font-mono text-base" type={isCode?'text':'password'} autoComplete={isCode?'one-time-code':'current-password'} autoCapitalize={isCode?'characters':'none'} spellCheck={false} value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={label} aria-label={label} disabled={busy} />
-          <Button type="submit" variant="primary" size="lg" className="h-10" disabled={!credential.trim()} busy={busy}><Trans>继续</Trans><IconArrowRight /></Button>
-          {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{'text' in error ? error.text : i18n._(error.message)}</p>}
-          {isCode && <Button type="button" variant="secondary" size="lg" onClick={() => setScannerOpen(true)}><IconQrCode className="size-4" /><Trans>扫描配对二维码</Trans></Button>}
-          <Button type="button" variant="ghost" disabled={busy} onClick={()=>{setMode(isCode?'token':'code');setCredential('');}}>{isCode?t`使用访问令牌登录`:t`使用配对码登录`}</Button>
+          <Input
+            key={mode}
+            ref={inputRef}
+            autoFocus
+            className={cn('h-11 rounded-xl px-4 font-mono text-base', isCode && 'text-center uppercase', isCode && credential && 'tracking-widest')}
+            type={isCode?'text':'password'}
+            autoComplete={isCode?'one-time-code':'current-password'}
+            autoCapitalize={isCode?'characters':'none'}
+            spellCheck={false}
+            value={credential}
+            onChange={(event) => setCredential(event.target.value)}
+            placeholder={label}
+            aria-label={label}
+            aria-invalid={Boolean(error) || undefined}
+            aria-describedby={error ? 'sign-in-error' : undefined}
+            disabled={busy}
+          />
+          {error && <p id="sign-in-error" role="alert" className="mt-2 text-center text-xs text-danger">{'text' in error ? error.text : i18n._(error.message)}</p>}
+          <Button type="submit" variant="primary" size="lg" className="mt-4 h-10 w-full rounded-xl text-sm" busy={busy}>
+            <Trans>继续</Trans><span aria-hidden className="text-primary-fg/50">↩</span>
+          </Button>
         </form>
-        <p className="mt-8 text-center text-xs text-fg-3"><Trans>登录状态保存在当前浏览器。配对后可在 Riffet 的设备管理中撤销访问。</Trans></p>
+        <div className="mt-4 flex items-center justify-center gap-1">
+          {isCode && <Button type="button" variant="quiet" size="sm" disabled={busy} onClick={() => setScannerOpen(true)}><IconQrCode /><Trans>扫码配对</Trans></Button>}
+          <Button type="button" variant="quiet" size="sm" disabled={busy} onClick={()=>{setMode(isCode?'token':'code');setCredential('');}}>{isCode?t`改用访问令牌`:t`改用配对码`}</Button>
+        </div>
       </div>
       <PairingQrScanner open={scannerOpen} onOpenChange={setScannerOpen} />
-    </main>
+    </SignInPage>
+  );
+}
+
+/**
+ * Nothing answered at all: there is no sign-in to ask for yet. The page keeps trying by itself, and
+ * meanwhile the horse runs, as the browser's dinosaur does when it is offline.
+ */
+function Unreachable({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+  return (
+    <SignInPage>
+      <h1 className="text-2xl font-semibold tracking-tight text-fg"><Trans>连不上 Riffet 服务器</Trans></h1>
+      <p className="mt-1.5 text-center text-sm text-balance text-fg-3"><Trans>页面会自动重连</Trans></p>
+      <Button className="mt-6" busy={retrying} onClick={onRetry}><Trans>重试</Trans></Button>
+      <RunnerGame globalKeys className="mt-12 max-w-2xl" />
+    </SignInPage>
   );
 }
 
 export function App() {
   const { t } = useLingui();
-  const [state, setState] = useState<'checking' | 'anonymous' | 'authenticated'>('checking');
+  const [state, setState] = useState<'checking' | 'unreachable' | 'anonymous' | 'authenticated'>('checking');
+  const [retrying, setRetrying] = useState(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const [error, setError] = useState<SignInFailure>();
   const [busy, setBusy] = useState(false);
   const [tokenRequired, setTokenRequired] = useState(true);
@@ -106,6 +162,9 @@ export function App() {
   useEffect(() => {
     let rechecking = false;
     onUnauthenticated(() => {
+      // Signed out already, a 401 (a theme read the page makes before sign-in) says nothing new: the
+      // sign-in page stays as it is, without a 「登录已失效」 for a browser that never signed in.
+      if (stateRef.current !== 'authenticated') return;
       forgetLocalData();
       setCsrfToken('');
       // Every poll in flight gets the same 401; one status check decides where the page goes. Without a
@@ -165,7 +224,7 @@ export function App() {
         if (!active) return;
         // A server that is down or restarting says nothing about the sign-in: with a local copy of the
         // lists the workbench opens on it, offline, and a real 401 later still lands here.
-        if (!token && !pairingCode && isUnreachable(reason) && loadCachedLists()) { setState('authenticated'); return; }
+        if (!token && !pairingCode && isUnreachable(reason)) { setState(loadCachedLists() ? 'authenticated' : 'unreachable'); return; }
         setState('anonymous');
         if (token || pairingCode || !(reason instanceof HttpError && reason.status === 401)) setError(signInError(reason, msg`无法登录`));
       }
@@ -176,6 +235,40 @@ export function App() {
   useEffect(() => {
     if (state === 'authenticated') return connectWorkbenchAppearance();
   }, [state]);
+
+  /** One status check from the unreachable page: whatever answers decides where the page goes. */
+  const recheck = useCallback(async () => {
+    setRetrying(true);
+    try {
+      const status = await api.authStatus();
+      if (!status.authenticated) forgetLocalData();
+      setTokenRequired(status.tokenRequired);
+      setState(status.authenticated ? 'authenticated' : 'anonymous');
+      return true;
+    } catch (reason) {
+      if (isUnreachable(reason)) return false;
+      // As on the first check: a 401 is just signed out, anything else is worth saying.
+      if (reason instanceof HttpError && reason.status === 401) forgetLocalData();
+      else setError(signInError(reason, msg`无法登录`));
+      setState('anonymous');
+      return true;
+    } finally {
+      setRetrying(false);
+    }
+  }, []);
+
+  // Unreachable, the page redials by itself, backing off, and at once when the device comes back online.
+  useEffect(() => {
+    if (state !== 'unreachable') return;
+    let active = true, attempt = 0, timer: number | undefined;
+    const retry = () => {
+      window.clearTimeout(timer);
+      void recheck().then((done) => { if (active && !done) timer = window.setTimeout(retry, reconnectDelay(++attempt)); });
+    };
+    timer = window.setTimeout(retry, reconnectDelay(++attempt));
+    window.addEventListener('online', retry);
+    return () => { active = false; window.clearTimeout(timer); window.removeEventListener('online', retry); };
+  }, [state, recheck]);
 
   const login = async (credential: AuthLogin) => {
     setBusy(true); setError(undefined);
@@ -204,6 +297,7 @@ export function App() {
   return (
     <TooltipProvider delayDuration={400} skipDelayDuration={150}>
       {state === 'checking' && <Splash />}
+      {state === 'unreachable' && <Unreachable retrying={retrying} onRetry={() => void recheck()} />}
       {state === 'anonymous' && <Login onLogin={(credential) => void login(credential)} error={error} busy={busy} />}
       {state === 'authenticated' && <Suspense fallback={<Splash />}><Workbench onLogout={tokenRequired ? () => void logout() : undefined} /></Suspense>}
       <Toaster />
