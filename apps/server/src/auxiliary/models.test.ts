@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../errors.js';
 import { BackendCatalog } from '../backends/catalog.js';
 import { ClaudeBackendAdapter } from '../backends/claude/index.js';
@@ -91,6 +91,11 @@ describe('host.models.complete', () => {
 });
 
 describe('CLI default provider auxiliary models', () => {
+  // The CLI reads these from the process too, so a run inside a shell or agent that sets them would
+  // otherwise test that environment instead of the settings files each case writes.
+  beforeEach(() => {
+    for (const name of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_SMALL_FAST_MODEL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX']) vi.stubEnv(name, undefined);
+  });
   it('resolves Claude default profile from settings.json, sends anthropic-version on api.anthropic.com, and runs apiKeyHelper', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'riffet-claude-aux-'));
     cleanups.push(() => rm(dir, { recursive: true, force: true }));
