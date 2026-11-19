@@ -4,9 +4,11 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
-### Features
+## 0.9.0 - 2026-11-19
 
-- Settings › Views (Web): added "Process auto-fold" (`At turn end` / `On next message`, device-local, defaults to `At turn end`) so readers who prefer zero layout change above a finishing reply can defer folding a turn's process block until the next message is sent.
+### Upgrade notes
+
+- On first start, Riffet splits the single `workbench.db` into `workbench.db`, `journal.db`, `derived.db`, and `blobs/`; back up your data directory before upgrading if you may need to roll back to 0.8.0.
 
 ### Fixes
 
@@ -17,14 +19,6 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - The conversation outline no longer lists a queued message again each time it is withdrawn or replaced; previously the extra entries stayed until the page was reloaded (Web, Android, iOS).
 - In Claude Code conversations, a table in a reply that is still streaming now shows as a table instead of box-drawing text in a code block.
 - Reading partway through a long streaming reply on the web no longer shifts when the reply finishes and replaces its live draft or re-parses Markdown above the viewport.
-
-## 0.9.0 - 2026-11-19
-
-### Upgrade notes
-
-- On first start, Riffet splits the single `workbench.db` into `workbench.db`, `journal.db`, `derived.db`, and `blobs/`; back up your data directory before upgrading if you may need to roll back to 0.8.0.
-
-### Fixes
 
 - Single tildes in prose (such as `~1.18 GiB`) no longer turn into strikethrough text in replies and previews; `~~strikethrough~~` still works.
 - `.mdc` rule files (as well as `.mdown`, `.mkd`, and `.mdx`) now render as Markdown previews with a metadata table for YAML frontmatter and syntax highlighting in code blocks on the web and Mac.
@@ -77,6 +71,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Settings › Views (Web): added "Process auto-fold" (`At turn end` / `On next message`, device-local, defaults to `At turn end`) so readers who prefer zero layout change above a finishing reply can defer folding a turn's process block until the next message is sent.
 - Shared conversation pages now use the full transcript reader—with chapter navigation, width dragging, in-page search, remembered code fence toggles, and direct PDF export—and show confirmation when a share link is created or updated.
 - Task board adds a "Watching" status (with optional snooze deadline and observation notes), renames cancelled tasks to "No longer needed", adds board search and collapsible sections, and separates active from idle items under In progress.
 
