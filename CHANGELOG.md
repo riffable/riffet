@@ -4,7 +4,15 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Upgrade notes
+
+- On first start, Riffet splits the single `workbench.db` into `workbench.db`, `journal.db`, `derived.db`, and `blobs/`; back up your data directory before upgrading if you may need to roll back to 0.8.0.
+
 ### Fixes
+
+- Single tildes in prose (such as `~1.18 GiB`) no longer turn into strikethrough text in replies and previews; `~~strikethrough~~` still works.
+- `.mdc` rule files (as well as `.mdown`, `.mkd`, and `.mdx`) now render as Markdown previews with a metadata table for YAML frontmatter and syntax highlighting in code blocks on the web and Mac.
+- File paths starting with `~/` expand to the server user's home directory when previewed or linked, and inline code file mentions work consistently across Web, Mac, iPhone, and Android (including `:line:col` and allowed outside-project files).
 
 - Starting a new conversation no longer shows "Stop and send" under the first message; queue actions now appear only on queued messages in the dock, driven by the server across Web, Mac, Android, and iPhone.
 - In Cursor conversations, steering remains available from prompt submission and after a server restart or opening the terminal drawer; "Stop and send" replaces the running turn immediately without stalling queued messages for 60 seconds, and stopping a turn keeps its tool calls expanded under "Stopped" instead of collapsing them as "Processed".
@@ -52,6 +60,9 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Codex tool call rows combine repeated file reads and searches into one action with short file names (such as `Read service.ts, runtime.ts, app.ts`), keep the search or file icon when a command only reads and searches, show only the first line of multi-line shell commands and heredocs while folded, list modified file names beside commands that changed files, and no longer mark searches with no matches (`exit 1`) as failed.
 
 ### Workbench
+
+- Shared conversation pages now use the full transcript reader—with chapter navigation, width dragging, in-page search, remembered code fence toggles, and direct PDF export—and show confirmation when a share link is created or updated.
+- Task board adds a "Watching" status (with optional snooze deadline and observation notes), renames cancelled tasks to "No longer needed", adds board search and collapsible sections, and separates active from idle items under In progress.
 
 - The web sign-in page is one centred column: the command to run on the server, the code field and Continue, with QR pairing and the access-token option below. A browser that cannot reach the server says so and reconnects by itself instead of asking for a sign-in, and a browser that never signed in no longer sees "Your sign-in has expired".
 - A small game while you wait, on the web: when the workbench cannot load or the sign-in page cannot reach the server, a running track appears with fences to jump on the beat (Space or a tap). Bump the floating mane teeth to light the mane: a higher jump, then a longer one, then double points; a crash costs a tooth before it costs the run. Run "Dark Horse Run" from the command palette to play any time: on the new conversation page the track sits at the bottom of the page; in a conversation it sits in the empty space beside the composer, is not offered when there is no room, and closes if the room runs out. It pauses while the Agent waits for you and ends at a finish post when the turn ends. Escape closes it.
