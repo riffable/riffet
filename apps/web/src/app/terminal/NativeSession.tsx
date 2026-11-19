@@ -821,8 +821,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
    * subtrees sit the frames out; the transcript and the side column's output list are what move.
    */
   const paneAnswers = backendCapabilities?.interactionTransport === 'both';
-  const latest = useRef({ native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView, assistantMain });
-  latest.current = { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView, assistantMain };
+  const compactCommand = !quickChat && !archived && !held ? backendCapabilities?.compactCommand?.replace(/^\//, '').trim() || undefined : undefined;
+  const latest = useRef({ native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain });
+  latest.current = { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain };
   const queuedRun = (runId: string) => latest.current.native.runs.find((item) => item.id === runId);
   const stop = useCallback(() => { void latest.current.native.cancel(); }, []);
   const sendQueuedNowById = useCallback((runId: string) => {
@@ -867,6 +868,16 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     if (ok && command && !skill && (backendId === 'claude' && command !== 'compact' || paneAnswers && commandNeedsTerminal(command))) setDrawer(true);
     return ok;
   }, []);
+  const compactContext = useCallback(async () => {
+    const { native, compactCommand, assistantMain } = latest.current;
+    if (!compactCommand) return false;
+    transcriptScrollRef.current?.followSent();
+    return native.send(`/${compactCommand}`, [], [], undefined, assistantMain ? workbenchAppearanceConnection : undefined);
+  }, []);
+  const compactDisabled = archived || held || starting || sendingInitial || switchingApproval || switchingModel
+    || working || compacting || Boolean(interaction)
+    || !native.connected || Boolean(connectionState && connectionState !== 'connected')
+    || native.sending || native.interrupting || native.hasUnknownSubmission;
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
   const queuedPending = useCallback((runId: string) => archived || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
     [archived, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
@@ -1131,6 +1142,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     modelsLoading: catalogLoading && !catalog.length,
     modelsError: catalogError || (!catalogLoading && !catalog.length ? t`没有可用模型` : ''),
     ...(quickChat ? {} : { usage: native.context }),
+    ...(compactCommand ? { onCompact: compactContext, compacting, compactDisabled } : {}),
     commands: slashCommands,
     inlineSkills: slash.catalog?.inlineSkills ?? backendCapabilities?.inlineSkills,
     onSlashMenuOpen: slash.refresh,

@@ -346,7 +346,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       supportsTerminal: true,
       // A plugin's sidecar attaches to a process as it is spawned for its conversation, so none is started ahead.
       supportsPrewarm: !this.runtimeHooks?.runtimeHooks(this.flavor.id).length,
-      slashCommands: this.flavor.id === 'codex' ? codexNativeSlashItems() : [],
+      slashCommands: this.flavor.id === 'codex' ? codexNativeSlashItems() : [], ...(this.flavor.id === 'codex' ? { compactCommand: 'compact' } : {}),
       inlineSkills: true,
     };
   }

@@ -572,6 +572,10 @@ msgstr "Matched {0}"
 msgid "单个附件最大 {0}：{1} 超了"
 msgstr "Max attachment size is {0}: {1} is too large"
 
+#: src/app/session/Composer.tsx
+msgid "压缩上下文"
+msgstr "Compact context"
+
 #. placeholder {0}: compactCount(preTokens)
 #: src/app/session/Activities.tsx
 msgid "压缩前 {0}"

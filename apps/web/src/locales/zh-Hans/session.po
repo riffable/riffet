@@ -572,6 +572,10 @@ msgstr "匹配 {0}"
 msgid "单个附件最大 {0}：{1} 超了"
 msgstr "单个附件最大 {0}：{1} 超了"
 
+#: src/app/session/Composer.tsx
+msgid "压缩上下文"
+msgstr "压缩上下文"
+
 #. placeholder {0}: compactCount(preTokens)
 #: src/app/session/Activities.tsx
 msgid "压缩前 {0}"

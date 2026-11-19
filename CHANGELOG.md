@@ -42,6 +42,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- On the web, the context usage popover now includes a "Compact context" action at the bottom for Agents that support manual compaction (Cursor, Claude Code, and Codex), triggering each Agent's native compaction command without disturbing your draft.
 - Database and checkpoint disk usage is substantially smaller and space is reclaimed automatically while Riffet runs: history logs and large outputs are compressed, superseded tool revisions and cold subagent timelines are pruned automatically, duplicate project checkpoints share hard links, and Settings › Storage separates control data, history journal, and rebuildable cache with a one-click online cleanup action (Web and Mac).
 - Files in the conversation aside's Outputs list now show monochrome file-type icons aligned with the sections above on both Web and Mac; opening a file's diff dialog on the web includes a jump-to-preview button beside the file path.
 - Claude Code replies now appear as they are written, on every client, instead of a whole paragraph or section at a time. The streamed text may show headings and emphasis plainly until each part is complete. Conversations that were already running when Riffet started stream again from their next message.

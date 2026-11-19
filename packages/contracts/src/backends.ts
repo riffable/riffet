@@ -161,6 +161,11 @@ export interface NativeBackendCapabilities {
   supportsInitialPromptArgs?: boolean;
   slashCommands?: Array<{ name: string; description?: string; hint?: string }>;
   /**
+   * Leading slash command (without `/`) that triggers manual context compaction
+   * (`summarize` for Cursor, `compact` for Claude Code and Codex). Absent when unsupported.
+   */
+  compactCommand?: string;
+  /**
    * A skill named mid-message (`… /name …`) is invoked, not only one that opens the message.
    * Commands only ever work as the leading token.
    */

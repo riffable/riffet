@@ -331,6 +331,7 @@ export class CursorBackend implements AgentBackend {
       // ride on the launch argv instead of being pasted into a TUI that is still booting.
       supportsInitialPromptArgs: true,
       slashCommands: CURSOR_COMMANDS,
+      compactCommand: 'summarize',
     };
   }
 

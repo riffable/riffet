@@ -302,6 +302,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
         { name: 'model', description: 'Change the Claude model' },
         { name: 'permissions', description: 'View native permission rules' },
       ],
+      compactCommand: 'compact',
       inlineSkills: true,
     };
   }

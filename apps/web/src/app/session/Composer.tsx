@@ -3,8 +3,9 @@ import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, typ
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
+import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconCompress, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
 import { isNativeBackendId, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
+import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ToolsPickerInMenu } from './ToolsPicker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -74,8 +75,15 @@ function contextPartLabel(id: string, parts: readonly { id: string }[]): string 
   return contextLabels[id] ? i18n._(contextLabels[id]!) : undefined;
 }
 
-const ContextMeter = memo(function ContextMeter({ usage }: { usage: ContextUsage }) {
+const ContextMeter = memo(function ContextMeter({ usage, onCompact, compacting = false, compactDisabled = false }: {
+  usage: ContextUsage;
+  onCompact?: () => Promise<boolean> | boolean;
+  compacting?: boolean;
+  compactDisabled?: boolean;
+}) {
   const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const ratio = Math.min(1, Math.max(0, usage.used / usage.size));
   const percent = Math.round(usage.used / usage.size * 100);
   const title = t`上下文用量`;
@@ -89,8 +97,20 @@ const ContextMeter = memo(function ContextMeter({ usage }: { usage: ContextUsage
   const circumference = 2 * Math.PI * 6;
   const parts = usage.breakdown?.filter((item) => item.tokens > 0) ?? [];
   const breakdownTotal = parts.reduce((total, item) => total + item.tokens, 0);
+  const compactBusy = compacting || submitting;
+  const compactBlocked = compactDisabled || usage.used <= 0;
+  const handleCompact = async () => {
+    if (!onCompact || compactBusy || compactBlocked) return;
+    setSubmitting(true);
+    try {
+      const ok = await onCompact();
+      if (ok) setOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <Tip label={`${title} ${percent}%`} side="top">
         <PopoverTrigger
           aria-label={label}
@@ -104,7 +124,15 @@ const ContextMeter = memo(function ContextMeter({ usage }: { usage: ContextUsage
           </svg>
         </PopoverTrigger>
       </Tip>
-      <PopoverContent side="top" align="start" className="w-72 p-3">
+      <PopoverContent
+        side="top"
+        align="start"
+        className="w-72 p-3"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          (event.currentTarget as HTMLElement).focus({ preventScroll: true });
+        }}
+      >
         <div className="flex items-baseline justify-between text-sm">
           <span className="font-medium text-fg">{title} <span className="tabular-nums text-fg-3">{percent}%</span></span>
           <span className="tabular-nums text-fg-3">{compactTokens(usage.used)} / {compactTokens(usage.size)}</span>
@@ -128,6 +156,23 @@ const ContextMeter = memo(function ContextMeter({ usage }: { usage: ContextUsage
           </ul>
         )}
         {usage.cost && <div className="mt-2 text-xs text-fg-3"><Trans>费用 {usage.cost.currency} {usage.cost.amount.toFixed(2)}</Trans></div>}
+        {onCompact && (
+          <div className="mt-2.5 border-t border-line pt-1.5">
+            <div className="-mx-1.5 -mb-1 flex">
+              <Button
+                size="xs"
+                variant="ghost"
+                className="h-7 flex-1 justify-start px-1.5 font-normal text-fg-2 hover:text-fg no-hover:min-h-11"
+                busy={compactBusy}
+                disabled={!compactBusy && compactBlocked}
+                onClick={() => void handleCompact()}
+              >
+                <IconCompress className="size-3.5 text-fg-3" />
+                <Trans>压缩上下文</Trans>
+              </Button>
+            </div>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
@@ -277,6 +322,10 @@ export interface ComposerProps {
   onModelParamChange?: (id: string, value: string) => void;
   /** Context-window usage reported by the agent; omit to render no meter. */
   usage?: ContextUsage;
+  /** Triggers manual context compaction via the backend's native command; omit when unsupported. */
+  onCompact?: () => Promise<boolean> | boolean;
+  compacting?: boolean;
+  compactDisabled?: boolean;
   /** The `/` menu: built-in commands and discovered skills. */
   commands?: SlashCommand[];
   /** The backend loads a skill named mid-message, so `/` opens the skill list anywhere in the draft. */
@@ -1720,7 +1769,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 )}
               </div>
               {hasMobileSettings && <>
-                {isMobile && props.usage && !compact && !holdInFooter && <ContextMeter usage={props.usage} />}
+                {isMobile && props.usage && !compact && !holdInFooter && <ContextMeter usage={props.usage} onCompact={props.onCompact} compacting={props.compacting} compactDisabled={props.compactDisabled} />}
                 <DialogTrigger asChild>
                   <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact || holdInFooter ? 'hidden' : toggleEntrance)}>
                     {props.mobileSettingsPrefix}
@@ -1769,7 +1818,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               stranded from the model while the send button sat right against it.
             */}
             <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 md:flex-nowrap">
-              {!isMobile && props.usage && <span className="hidden md:inline-flex"><ContextMeter usage={props.usage} /></span>}
+              {!isMobile && props.usage && <span className="hidden md:inline-flex"><ContextMeter usage={props.usage} onCompact={props.onCompact} compacting={props.compacting} compactDisabled={props.compactDisabled} /></span>}
               {!isMobile && props.startPickers && <span className="hidden min-w-0 md:inline-flex">{props.startPickers}</span>}
               {!isMobile && !modelLeadsRow && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
               {!isMobile && props.endPickers && <span className="hidden min-w-0 md:inline-flex">{props.endPickers}</span>}

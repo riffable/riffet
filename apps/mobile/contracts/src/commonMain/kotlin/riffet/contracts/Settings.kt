@@ -270,6 +270,8 @@ data class NativeBackendCapabilities(
     /** The backend can take a brand-new session's first user message as a launch argument. */
     val supportsInitialPromptArgs: Boolean? = null,
     val slashCommands: List<NativeBackendSlashCommand>? = null,
+    /** Leading slash command (without `/`) that triggers manual context compaction; null when unsupported. */
+    val compactCommand: String? = null,
     /** A skill named mid-message is invoked, not only one that opens the message. */
     val inlineSkills: Boolean? = null,
     val supportsSteer: Boolean = false,
