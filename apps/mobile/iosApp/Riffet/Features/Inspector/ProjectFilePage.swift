@@ -21,6 +21,11 @@ struct ProjectFilePage: View {
     @State private var shown = 1
     @State private var readingMarkdown = true
     @State private var actionError: String?
+    /// The page a followed link has shown inside an HTML site; title, copy and download follow it.
+    @State private var sitePage: String?
+    @State private var siteReload = 0
+    private var isSiteFile: Bool { !isMarkdown && ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased()) }
+    private var shownPath: String { (isSiteFile && renderHTML ? sitePage : nil) ?? effectivePath }
     private var effectivePath: String { preview?.path ?? path }
     private var isMarkdown: Bool { ["md", "markdown", "mdown", "mkd", "mdx", "mdc"].contains((effectivePath as NSString).pathExtension.lowercased()) }
     private var language: String {
@@ -38,7 +43,10 @@ struct ProjectFilePage: View {
                     .padding(RiffetMetrics.pageInset)
                     .frame(maxHeight: .infinity, alignment: .top)
             } else if let preview {
-                if !isMarkdown, preview.render != nil, renderHTML, let url = previewURL {
+                if isSiteFile, renderHTML, !preview.binary {
+                    ProjectHTMLSite(workbench: workbench, projectID: project.id, entry: effectivePath, reload: siteReload,
+                                    onPage: { sitePage = $0 }, failed: { error = $0 })
+                } else if !isMarkdown, preview.render != nil, renderHTML, let url = previewURL {
                     ConversationWebPage(workbench: workbench, url: url)
                 } else if preview.image != nil {
                     if let image { ProjectImagePreview(image: image).accessibilityLabel((path as NSString).lastPathComponent) }
@@ -59,7 +67,7 @@ struct ProjectFilePage: View {
                 }
             } else { ProgressView() }
         }
-        .navigationTitle((effectivePath as NSString).lastPathComponent)
+        .navigationTitle((shownPath as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .top, spacing: 0) { underBar }
         .toolbar(.hidden, for: .bottomBar)
@@ -69,11 +77,13 @@ struct ProjectFilePage: View {
                 Menu {
                     Button("下载并分享", systemImage: "square.and.arrow.up") { Task { await download() } }
                     Button("系统预览", systemImage: "eye") { Task { await download(preview: true) } }
-                    Button("复制路径", systemImage: "doc.on.doc") { UIPasteboard.general.string = effectivePath }
+                    Button("复制路径", systemImage: "doc.on.doc") { UIPasteboard.general.string = shownPath }
                     if let preview, !preview.binary, !preview.truncated {
                         Button("复制内容", systemImage: "doc.on.clipboard") { UIPasteboard.general.string = preview.content }
                     }
-                    Button("刷新", systemImage: "arrow.clockwise") { Task { await load() } }
+                    Button("刷新", systemImage: "arrow.clockwise") {
+                        if isSiteFile, renderHTML { siteReload += 1 } else { Task { await load() } }
+                    }
                 } label: { Label("文件操作", systemImage: "ellipsis.circle") }.disabled(exporting)
             }
         }
@@ -84,7 +94,7 @@ struct ProjectFilePage: View {
             RiffetToastCenter.shared.error(message)
         }
         .sheet(item: $exported) { NativeShareSheet(items: [$0.url]) }
-        .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (effectivePath as NSString).lastPathComponent) }
+        .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (shownPath as NSString).lastPathComponent) }
     }
 
     /// What can be shown as a rendered page: Markdown and HTML, never an image or a binary.
@@ -171,6 +181,7 @@ struct ProjectFilePage: View {
         image = nil
         preview = nil
         html = nil
+        sitePage = nil
         renderHTML = false
         pages = []; shown = 1
         readingMarkdown = targetLine == nil
@@ -179,7 +190,8 @@ struct ProjectFilePage: View {
             let result = try await api.preview(projectId: project.id, path: path)
             guard !Task.isCancelled else { return }
             preview = result
-            renderHTML = !isMarkdown && result.render != nil && targetLine == nil
+            let site = !isMarkdown && ["html", "htm"].contains((result.path as NSString).pathExtension.lowercased()) && !result.binary
+            renderHTML = !isMarkdown && (result.render != nil || site) && targetLine == nil
             if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: result.path, image: true) {
                 let data = try await workbench.resources.data(for: url)
                 guard !Task.isCancelled else { return }
@@ -208,8 +220,8 @@ struct ProjectFilePage: View {
         exporting = true
         defer { exporting = false }
         do {
-            guard let url = workbench.resources.fileURL(projectID: project.id, path: effectivePath) else { throw InspectorFailure.invalidURL }
-            let file = try await workbench.resources.file(for: url, name: (effectivePath as NSString).lastPathComponent)
+            guard let url = workbench.resources.fileURL(projectID: project.id, path: shownPath) else { throw InspectorFailure.invalidURL }
+            let file = try await workbench.resources.file(for: url, name: (shownPath as NSString).lastPathComponent)
             if preview { quickLook = InspectorExport(url: file) } else { exported = InspectorExport(url: file) }
         } catch { actionError = error.riffetMessage }
     }
@@ -220,7 +232,8 @@ struct ProjectFilePage: View {
     }
 
     private func toggleHTML() async {
-        if preview?.render != nil { renderHTML.toggle(); return }
+        // Back in the rendered view the site opens at the file itself again.
+        if preview?.render != nil || isSiteFile { renderHTML.toggle(); sitePage = nil; return }
         if renderHTML { renderHTML = false; return }
         do {
             guard let url = workbench.resources.fileURL(projectID: project.id, path: effectivePath) else { throw InspectorFailure.invalidURL }

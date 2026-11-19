@@ -1,6 +1,7 @@
 package riffet.shared
 
 import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.request
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -52,6 +53,20 @@ suspend fun RiffetApi.visualization(projectId: String, path: String, scheme: Str
         "/api/projects/${projectId.enc()}/file/raw",
         listOf("path" to path, "render" to "visualize", "scheme" to scheme),
     ).bodyAsText()
+}
+
+/**
+ * The address a project HTML file is served at as a site: the server answers the authenticated
+ * request with a redirect to a tokenised path, which is returned unfollowed so the device
+ * credential never reaches the WebView. The result resolves against the address actually reached.
+ */
+@Throws(Exception::class)
+suspend fun RiffetApi.fileSiteUrl(projectId: String, path: String, page: String? = null): String {
+    // `page`, relative to the folder of `path`, reopens another page of the site rooted there.
+    val response = getRedirect("/api/projects/${projectId.enc()}/file/raw", listOf("path" to path, "render" to "site") + listOfNotNull(page?.let { "page" to it }))
+    val location = response.headers[HttpHeaders.Location]
+    if (response.status.value !in 300..399 || location.isNullOrEmpty()) throw RiffetNetworkException("The page could not be opened", IllegalStateException("No redirect location"))
+    return resolveLocation(response.request.url.toString(), location)
 }
 
 /** A self-contained, server-generated preview. Credentials never enter the rendered document. */
@@ -136,3 +151,25 @@ suspend fun RiffetApi.uploadAttachment(projectId: String?, body: UploadAttachmen
 @Throws(Exception::class)
 suspend fun RiffetApi.archiveInfo(projectId: String, path: String): ArchiveInfo =
     get("/api/projects/${projectId.enc()}/archive", listOf("path" to path, "check" to "1")).decode()
+
+/** [location] against [base], dot segments removed (RFC 3986 §5.2); the server answers with `../` paths. */
+internal fun resolveLocation(base: String, location: String): String {
+    if (Regex("^[a-zA-Z][a-zA-Z0-9+.-]*:").containsMatchIn(location)) return location
+    val origin = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://[^/?#]*").find(base)?.value ?: return location
+    val basePath = base.removePrefix(origin).substringBefore('#').substringBefore('?')
+    val tail = location.indexOfFirst { it == '?' || it == '#' }.let { if (it < 0) "" else location.substring(it) }
+    val ref = if (tail.isEmpty()) location else location.substring(0, location.length - tail.length)
+    val merged = if (ref.startsWith("/")) ref else basePath.substringBeforeLast('/', "") + "/" + ref
+    val out = ArrayList<String>()
+    val segments = merged.split('/')
+    segments.forEachIndexed { index, segment ->
+        when (segment) {
+            "." -> {}
+            ".." -> { if (out.size > 1) out.removeAt(out.lastIndex) }
+            else -> if (segment.isNotEmpty() || index == segments.lastIndex || out.isEmpty()) out.add(segment)
+        }
+    }
+    val last = segments.last()
+    if (last == "." || last == "..") out.add("")
+    return origin + out.joinToString("/") + tail
+}

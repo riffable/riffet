@@ -22,6 +22,19 @@ const INLINE_TYPES: Record<string, string> = {
 
 export interface RawFileType { contentType: string; inline: boolean }
 
+/** A page's own assets: with `nosniff`, a stylesheet or script served as text/plain is refused. */
+const SITE_TYPES: Record<string, string> = {
+  css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8', mjs: 'text/javascript; charset=utf-8',
+  json: 'application/json; charset=utf-8', map: 'application/json; charset=utf-8', xml: 'application/xml; charset=utf-8',
+  wasm: 'application/wasm', woff: 'font/woff', woff2: 'font/woff2', ttf: 'font/ttf', otf: 'font/otf',
+};
+
+/** How a file is served to a previewed page: its assets by their web type, everything else as when opened in a tab. */
+export function siteFileType(name: string, fallback: RawFileType): RawFileType {
+  const known = SITE_TYPES[path.extname(name).slice(1).toLowerCase()];
+  return known ? { contentType: known, inline: true } : fallback;
+}
+
 /**
  * How a file is served when opened in a tab. The type comes from the extension and is pinned with
  * `nosniff`, so a mislabelled file renders broken instead of as something else; anything that is

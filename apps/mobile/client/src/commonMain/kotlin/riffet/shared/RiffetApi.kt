@@ -166,6 +166,23 @@ class RiffetApi(
         return response
     }
 
+    /** A GET whose redirect is returned rather than followed; any other non-success status is an error. */
+    internal suspend fun getRedirect(path: String, query: List<Pair<String, String>>): HttpResponse {
+        val token = readToken()
+        // A derived client shares the engine and the installed plugins; it must not be closed.
+        val noRedirects = http.config { followRedirects = false }
+        val response = try {
+            noRedirects.request(baseUrl + path) { configure(HttpMethod.Get, token, query, null) }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Throwable) {
+            throw RiffetNetworkException(error.message ?: "Network request failed", error)
+        }
+        if (response.status.value in 300..399) return response
+        ensureSuccess(response)
+        return response
+    }
+
     /**
      * A GET whose body [read] consumes as it arrives. [request] cannot do this: Ktor hands back its
      * response only after the whole body has been buffered, so anything reading it afterwards — a

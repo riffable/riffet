@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createReadStream } from 'node:fs';
 import { AppError, requireString } from '../errors.js';
 import { isLoopbackHost } from '../connection-addresses.js';
-import { proxiedRequest } from '../auth.js';
+import { FILE_SITE_ROUTE, proxiedRequest } from '../auth.js';
 import { DEFAULT_DSH_CONFIG_DIR } from '../compat.js';
 import path from 'node:path';
 import { previewImageData, readFileBounded } from '../workspace/index.js';
@@ -19,7 +19,7 @@ import { sendsQuickChat } from '../chat/quick-chat.js';
 import { backendVisibleToClient, clientSupportsFeature, hiddenBackendIds, hidesPluginAgents } from '../native/client-features.js';
 
 export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const {store,settings,workspace,nativeBackends,allowOutsideRead}=deps;
+  const {store,settings,workspace,nativeBackends,allowOutsideRead,auth}=deps;
   const localFileActions = (request: FastifyRequest) => isLoopbackHost(request.ip) && !proxiedRequest(request.headers);
   let backfill:Promise<void>|undefined;
   app.get<{Params:{id:string};Querystring:{path?:string;limit?:string;offset?:string;cursor?:string}}>('/api/projects/:id/files',async(request)=>workspace.files(store.getProject(request.params.id),{path:request.query.path,limit:pageSize(request.query.limit),offset:sequence(request.query.offset),cursor:request.query.cursor}));
@@ -84,7 +84,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     if(mimeType==='image/svg+xml')reply.header('Content-Security-Policy',"sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'");
     return reply.send(data);
   });
-  app.get<{Params:{id:string};Querystring:{path:string;download?:string;render?:string} & PreviewQuery}>('/api/projects/:id/file/raw',async(request,reply)=>{
+  app.get<{Params:{id:string};Querystring:{path:string;download?:string;render?:string;page?:string} & PreviewQuery}>('/api/projects/:id/file/raw',async(request,reply)=>{
     const file=await workspace.rawFile(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers)});
     if(request.query.render==='preview'&&request.query.download!=='1'){
       const data=await readFileBounded(file.path,MAX_PREVIEW_FILE_BYTES);
@@ -95,6 +95,15 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       });
       return reply.type('text/html; charset=utf-8').header('Content-Security-Policy',page.csp)
         .header('Referrer-Policy','no-referrer').header('X-Content-Type-Options','nosniff').header('Cache-Control','no-store').send(page.html);
+    }
+    if(request.query.render==='site'&&request.query.download!=='1'){
+      if(!file.contentType.startsWith('text/html'))throw new AppError('INVALID_SITE','A page preview must be an HTML file',415,undefined,{ subject: 'file' });
+      // `page` reopens another page of the same site, so the root stays the folder of the file first opened.
+      const page=request.query.page===undefined?file.name:requireString(request.query.page,'page',8192);
+      if(page.includes('\0')||page.split('/').some(part=>!part||part==='.'||part==='..'))throw new AppError('INVALID_PATH','page must be a path inside the page\'s folder');
+      const token=auth.issueFileSite(request,{projectId:request.params.id,...await workspace.siteScope(store.getProject(request.params.id),file.path)});
+      // Relative to `/api/projects/:id/file/raw`, so a deployment prefix carries over.
+      return reply.redirect(`../../../file-sites/${token}/${page.split('/').map(encodeURIComponent).join('/')}`,302);
     }
     if(request.query.render==='visualize'&&request.query.download!=='1'){
       if(!file.contentType.startsWith('text/html'))throw new AppError('INVALID_VISUALIZATION','A visualization preview must be an HTML file',415,undefined,{ subject: 'file' });
@@ -109,8 +118,35 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       .header('Content-Disposition',contentDisposition(attachment?'attachment':'inline',file.name));
     // An opened file runs in an opaque origin, away from the app's session. Chrome will not render
     // a PDF in a sandbox, and its viewer is isolated already.
-    if(!file.contentType.startsWith('application/pdf'))reply.header('Content-Security-Policy','sandbox allow-scripts allow-popups allow-forms allow-modals allow-downloads');
+    if(!file.contentType.startsWith('application/pdf'))reply.header('Content-Security-Policy',`sandbox ${FILE_SITE_SANDBOX}`);
     return reply.send(createReadStream(file.path));
+  });
+  // A previewed page and the files its links name. Visibility was checked when the token was minted
+  // under `/api/projects/:id`; the page's requests cannot carry the client's feature declaration.
+  app.get<{Params:{'*':string}}>(FILE_SITE_ROUTE,async(request,reply)=>{
+    const split=request.params['*'].indexOf('/');
+    const relative=split>0?request.params['*'].slice(split+1):request.params['*'];
+    // Opaque-origin fetches and module scripts are CORS requests; they carry no credentials.
+    reply.header('Access-Control-Allow-Origin','*').header('Content-Security-Policy',`sandbox ${FILE_SITE_SANDBOX}; frame-ancestors 'self'`);
+    try{
+      const scope=split>0?auth.fileSite(request.params['*'].slice(0,split)):undefined;
+      if(!scope)throw new AppError('UNAUTHENTICATED','This preview has expired; reopen the file',401);
+      const file=await workspace.siteFile(store.getProject(scope.projectId),scope.root,relative,{allowOutside:allowOutsideRead(request.headers),only:scope.only});
+      // Revalidated rather than refetched: a page's shared assets come back on every link followed.
+      const etag=`W/"${file.size.toString(36)}-${Math.floor(file.mtime.getTime()).toString(36)}"`;
+      reply.header('Cache-Control','private, no-cache').header('ETag',etag).header('Last-Modified',file.mtime.toUTCString());
+      if(request.headers['if-none-match']===etag)return reply.code(304).send();
+      reply.header('Content-Type',file.contentType).header('Content-Disposition',contentDisposition(file.inline?'inline':'attachment',file.name));
+      if(file.contentType.startsWith('text/html')&&file.size<=MAX_PREVIEW_FILE_BYTES)
+        return reply.send(reportsLocation((await readFileBounded(file.path,MAX_PREVIEW_FILE_BYTES)).toString('utf8')));
+      return reply.header('Content-Length',String(file.size)).send(createReadStream(file.path));
+    }catch(error){
+      // A link followed inside the preview gets a page rather than a JSON envelope; an expired one
+      // tells the panel, which opens the same page again under a fresh token.
+      const page=['document','iframe'].includes(String(request.headers['sec-fetch-dest']));
+      if(!page||!(error instanceof AppError))throw error;
+      return reply.code(error.statusCode).type('text/html; charset=utf-8').send(sitePageError(error.statusCode,relative));
+    }
   });
   app.get<{Params:{id:string};Querystring:{path?:string;check?:string}}>('/api/projects/:id/archive',async(request,reply)=>{
     const archive=await workspace.archive(store.getProject(request.params.id),request.query.path??'');
@@ -145,6 +181,24 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       .header('Content-Disposition',`${inlineImage?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(attachment.name)}`);
     return reply.send(data);
   });
+}
+/** What an opened or previewed file may do: run in an opaque origin, away from the app's session. */
+const FILE_SITE_SANDBOX='allow-scripts allow-popups allow-forms allow-modals allow-downloads';
+/**
+ * Tells the embedding panel which page the preview now shows. The script goes inside `<head>` (or
+ * after the doctype), so it never switches the page into quirks mode and runs before a page CSP.
+ */
+function reportsLocation(html: string, status = 200): string {
+  const script=`<script>try{if(parent!==window)parent.postMessage({type:"riffet-file-site",path:location.pathname,status:${status}},"*")}catch(e){}</script>`;
+  const anchor=/<head(?:\s[^>]*)?>/i.exec(html)??/<html(?:\s[^>]*)?>/i.exec(html)??/<!doctype[^>]*>/i.exec(html);
+  if(!anchor)return script+html;
+  const at=anchor.index+anchor[0].length;
+  return html.slice(0,at)+script+html.slice(at);
+}
+/** The status and the path asked for, in place of the page; the panel header already names the folder. */
+function sitePageError(status: number, relative: string): string {
+  const escaped=relative.replace(/[&<>"]/g,character=>`&#${character.charCodeAt(0)};`);
+  return reportsLocation(`<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="light dark"><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;color:GrayText}</style></head><body>${status} · ${escaped}</body></html>`,status);
 }
 /** Conversations read to fill the search index in one request, so a search stays responsive. */
 const SEARCH_BACKFILL_BATCH = 6;

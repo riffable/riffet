@@ -8,6 +8,7 @@ final class ResourceClient {
     private let host: IOSHost
     private let redirects = ResourceRedirectPolicy()
     private lazy var session = URLSession(configuration: .ephemeral, delegate: redirects, delegateQueue: nil)
+    private lazy var mintSession = URLSession(configuration: .ephemeral, delegate: ResourceNoRedirect(), delegateQueue: nil)
     init(baseURL: URL, host: IOSHost) { self.baseURL = baseURL; self.host = host }
 
     func request(for url: URL) async throws -> URLRequest {
@@ -43,6 +44,25 @@ final class ResourceClient {
             return output
         }.value
     }
+    /// The credential-free address of a project HTML page served as a site. The server answers the
+    /// authorized request with a redirect whose path carries the only credential the page needs, so
+    /// the device token never reaches the web view.
+    /// `page`, relative to the folder of `path`, reopens another page of the same site rooted there.
+    func siteURL(projectID: String, path: String, page: String? = nil) async throws -> URL {
+        let query = [URLQueryItem(name: "path", value: path), URLQueryItem(name: "render", value: "site")] + (page.map { [URLQueryItem(name: "page", value: $0)] } ?? [])
+        guard let raw = endpoint("/api/projects/\(projectID)/file/raw", query: query) else {
+            throw ClientFailure(String(localized: "不支持这个资源地址", bundle: .riffet))
+        }
+        let (_, response) = try await mintSession.data(for: request(for: raw))
+        guard let http = response as? HTTPURLResponse else { throw ClientFailure(String(localized: "无法加载资源（HTTP 0）", bundle: .riffet)) }
+        guard (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location"),
+              let url = URL(string: location, relativeTo: http.url ?? raw)?.absoluteURL,
+              ServerAddress.sameOrigin(url, baseURL), url.path.contains("/api/file-sites/") else {
+            try validate(response)
+            throw ClientFailure(String(localized: "无法加载资源（HTTP \(http.statusCode)）", bundle: .riffet))
+        }
+        return url
+    }
     func attachmentURL(_ id: String) -> URL? { endpoint("/api/attachments/\(id)") }
     func fileURL(projectID: String, path: String, image: Bool = false) -> URL? {
         endpoint("/api/projects/\(projectID)/file/\(image ? "image" : "raw")", query: [URLQueryItem(name: "path", value: path)])
@@ -59,6 +79,11 @@ final class ResourceClient {
             throw ClientFailure(status == 401 ? String(localized: "连接授权已失效，请重新配对", bundle: .riffet) : String(localized: "无法加载资源（HTTP \(status)）", bundle: .riffet))
         }
     }
+}
+
+private final class ResourceNoRedirect: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
 private final class ResourceRedirectPolicy: NSObject, URLSessionTaskDelegate {

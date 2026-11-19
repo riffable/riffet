@@ -580,6 +580,68 @@ describe('app route surface after ACP removal', () => {
     expect(sent.json().native.input.attachmentIds).toEqual(attachments.map(attachment => attachment.id));
   });
 
+  it('serves a previewed page its own folder, reached from its opaque origin, until the session ends', async () => {
+    const { app, projectDir, call } = await boot(undefined, undefined, undefined, true);
+    const project = (await call('POST', '/api/projects', { cwd: projectDir })).json();
+    await mkdir(join(projectDir, 'site', '.git'), { recursive: true });
+    await writeFile(join(projectDir, 'site', 'index.html'), '<!doctype html><html><head><link rel="stylesheet" href="app.css"></head><body><a href="next.html">next</a></body></html>');
+    await writeFile(join(projectDir, 'site', 'app.css'), 'body{color:red}');
+    await writeFile(join(projectDir, 'site', '.env'), 'SECRET=1');
+    await writeFile(join(projectDir, 'site', '.git', 'config'), '[core]');
+    await writeFile(join(projectDir, 'site', 'deploy.pem'), 'key');
+    await writeFile(join(projectDir, 'outside.txt'), 'project root');
+    const minted = await call('GET', `/api/projects/${project.id}/file/raw?path=site%2Findex.html&render=site`);
+    expect(minted.statusCode).toBe(302);
+    const page = new URL(String(minted.headers.location), `http://127.0.0.1:4317/api/projects/${project.id}/file/raw`).pathname;
+    expect(page).toMatch(/^\/api\/file-sites\/[^/]+\/index\.html$/);
+    const site = page.slice(0, -'index.html'.length);
+    // The page's own requests: no cookie, cross-site, and `Origin: null` for fetches.
+    const fromPage = (url: string) => app.inject({ method: 'GET', url, headers: { host: '127.0.0.1:4317', origin: 'null', 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'cors' } });
+    const html = await fromPage(page);
+    expect(html.statusCode, html.body).toBe(200);
+    expect(String(html.headers['content-security-policy'])).toMatch(/^sandbox allow-scripts/);
+    expect(String(html.headers['content-security-policy'])).not.toContain('allow-same-origin');
+    expect(html.body).toMatch(/^<!doctype html><html><head><script>.*riffet-file-site/);
+    const css = await fromPage(`${site}app.css`);
+    expect(css.statusCode).toBe(200);
+    expect(css.headers['content-type']).toContain('text/css');
+    expect(css.headers['access-control-allow-origin']).toBe('*');
+    expect((await app.inject({ method: 'GET', url: `${site}app.css`, headers: { host: '127.0.0.1:4317', 'if-none-match': String(css.headers.etag) } })).statusCode).toBe(304);
+    // A link followed inside the frame gets a page that reports its status to the panel.
+    const missing = await app.inject({ method: 'GET', url: `${site}gone.html`, headers: { host: '127.0.0.1:4317', 'sec-fetch-site': 'cross-site', 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate' } });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers['content-type']).toContain('text/html');
+    expect(missing.body).toContain('status:404');
+    for (const refused of ['.env', '.git/config', 'deploy.pem', '..%2Foutside.txt', '%2E%2E/outside.txt']) expect((await fromPage(`${site}${refused}`)).statusCode, refused).toBeGreaterThanOrEqual(400);
+    const tampered = page.replace(/\/api\/file-sites\/([^/]+)\./, (_, payload: string) => `/api/file-sites/${Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(payload, 'base64url').toString()), r: projectDir })).toString('base64url')}.`);
+    expect((await fromPage(tampered.replace('index.html', 'outside.txt'))).statusCode).toBe(401);
+    // Other API routes still refuse the page's cross-site, cookie-less requests.
+    expect((await fromPage(`/api/projects/${project.id}/file/raw?path=outside.txt`)).statusCode).toBe(403);
+    expect((await call('GET', `/api/projects/${project.id}/file/raw?path=site%2Fapp.css&render=site`)).statusCode).toBe(415);
+    // Reopening another page keeps the site rooted at the folder first opened.
+    await mkdir(join(projectDir, 'site', 'sub'));
+    await writeFile(join(projectDir, 'site', 'sub', 'a.html'), '<a href="../index.html">up</a>');
+    const reopened = await call('GET', `/api/projects/${project.id}/file/raw?path=site%2Findex.html&render=site&page=sub%2Fa.html`);
+    const reopenedPage = new URL(String(reopened.headers.location), `http://127.0.0.1:4317/api/projects/${project.id}/file/raw`).pathname;
+    expect(reopenedPage).toMatch(/\/sub\/a\.html$/);
+    expect((await fromPage(reopenedPage.replace(/sub\/a\.html$/, 'app.css'))).statusCode).toBe(200);
+    expect((await call('GET', `/api/projects/${project.id}/file/raw?path=site%2Findex.html&render=site&page=..%2Foutside.txt`)).statusCode).toBe(400);
+    // Outside the project only the single file opens, as the single-file read there allows.
+    const elsewhere = await mkdtemp(join(tmpdir(), 'riffet-elsewhere-'));
+    await writeFile(join(elsewhere, 'page.html'), '<p>outside</p>');
+    await writeFile(join(elsewhere, 'neighbour.txt'), 'private');
+    const outsideMint = await call('GET', `/api/projects/${project.id}/file/raw?path=${encodeURIComponent(join(elsewhere, 'page.html'))}&render=site`);
+    const outsidePage = new URL(String(outsideMint.headers.location), `http://127.0.0.1:4317/api/projects/${project.id}/file/raw`).pathname;
+    expect((await fromPage(outsidePage)).statusCode).toBe(200);
+    expect((await fromPage(outsidePage.replace(/page\.html$/, 'neighbour.txt'))).statusCode).toBe(404);
+    await rm(elsewhere, { recursive: true, force: true });
+    await call('POST', '/api/auth/logout');
+    expect((await fromPage(page)).statusCode).toBe(401);
+    const expired = await app.inject({ method: 'GET', url: page, headers: { host: '127.0.0.1:4317', 'sec-fetch-site': 'cross-site', 'sec-fetch-dest': 'iframe', 'sec-fetch-mode': 'navigate' } });
+    expect(expired.statusCode).toBe(401);
+    expect(expired.body).toContain('status:401');
+  });
+
   it('keeps generated previews scoped and isolated while original downloads retain their bytes', async () => {
     const { projectDir, stateDir, call } = await boot();
     const project = (await call('POST', '/api/projects', { cwd: projectDir })).json();

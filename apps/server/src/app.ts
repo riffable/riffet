@@ -15,7 +15,7 @@ import { registerContentPreview } from './previews/content.js';
 import { applyProcessEnvironment, expandHome } from './environment.js';
 import { Store } from './store.js';
 import { startWalCheckpoints } from './wal-checkpoint.js';
-import { Auth, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
+import { Auth, FILE_SITE_ROUTE, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
 import { clearAuxiliaryAuthCache, completeForPlugin, resolveAuxiliaryModel, streamForPlugin, type GatewayProfiles } from './auxiliary/models.js';
 import { AuxiliaryStats } from './stats/auxiliary.js';
@@ -336,6 +336,8 @@ export async function createApp(options: AppOptions = {}) {
       if (route===RIFFET_MCP_ROUTE) return;
       if (auth.sharePreview(request)) return;
       if (!route || !PUBLIC_API.has(route)) auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
+      // The token in the path is the credential; the route refuses a missing or stale one itself.
+      if (route===FILE_SITE_ROUTE) return;
     }
   });
   registerProjectVisibilityHook(app,store);

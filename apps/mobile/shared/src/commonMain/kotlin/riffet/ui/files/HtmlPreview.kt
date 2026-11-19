@@ -27,6 +27,7 @@ import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.timeline.Spinner
 import riffet.shared.visualization
 import riffet.shared.renderedPreview
+import riffet.shared.fileSiteUrl
 import riffet.ui.timeline.previewColorHex
 
 internal fun isHtmlPreviewPath(path: String): Boolean =
@@ -64,7 +65,106 @@ internal fun HtmlFilePreview(api: RiffetApi, projectId: String, path: String, in
     }
 }
 
+/** The path segment after the token of `/api/file-sites/<token>/…`, wherever the server's base path puts it. */
+private val sitePage = Regex("/api/file-sites/[^/]+/([^?#]*)")
+
+/**
+ * The project path of the page a site's main frame shows, for a site opened from [entry]; the
+ * server resolves a folder to its index.html the same way. Mirrors `sitePagePath` on the Web.
+ */
+internal fun sitePagePath(entry: String, url: String): String? {
+    val raw = sitePage.find(url)?.groupValues?.get(1) ?: return null
+    val parts = raw.split('/').map { segment -> percentDecode(segment)?.takeIf { it != "." && it != ".." && '/' !in it && '\\' !in it } }
+    if (parts.any { it == null }) return null
+    var relative = parts.joinToString("/")
+    if (relative.isEmpty() || relative.endsWith("/")) relative += "index.html"
+    val slash = entry.lastIndexOf('/')
+    return if (slash < 0) relative else entry.substring(0, slash) + "/" + relative
+}
+
+private fun percentDecode(segment: String): String? {
+    if ('%' !in segment) return segment
+    val bytes = ArrayList<Byte>()
+    var i = 0
+    while (i < segment.length) {
+        val c = segment[i]
+        if (c == '%') {
+            val code = segment.substring(i + 1, minOf(i + 3, segment.length)).takeIf { it.length == 2 }?.toIntOrNull(16) ?: return null
+            bytes.add(code.toByte())
+            i += 3
+        } else {
+            bytes.addAll(c.toString().encodeToByteArray().toList())
+            i++
+        }
+    }
+    return runCatching { bytes.toByteArray().decodeToString(throwOnInvalidSequence = true) }.getOrNull()
+}
+
+private class SiteLoad(val page: String, val count: Int)
+
+private class SiteState(var showing: String, var renewed: String? = null, var version: String?)
+
+/**
+ * A project HTML file served with its folder as the site, so links, styles and scripts resolve as
+ * in a browser. The authenticated request only mints the address; the WebView never holds the
+ * device credential. [onPage] reports the project path of the page shown; the page reloads when
+ * [version] changes, and re-mints once when its token has expired.
+ */
+@Composable
+internal fun HtmlSitePreview(api: RiffetApi, projectId: String, entry: String, version: String?, onPage: (String) -> Unit, modifier: Modifier) {
+    val designMetrics = LocalInterfaceStyle.current.metrics
+    val state = remember(api, projectId, entry) { SiteState(entry, version = version) }
+    var load by remember(api, projectId, entry) { mutableStateOf(SiteLoad(entry, 0)) }
+    var url by remember(api, projectId, entry) { mutableStateOf<String?>(null) }
+    var failure by remember(api, projectId, entry) { mutableStateOf<String?>(null) }
+    LaunchedEffect(version) {
+        if (state.version == version) return@LaunchedEffect
+        state.version = version
+        load = SiteLoad(state.showing, load.count + 1)
+    }
+    LaunchedEffect(api, projectId, load) {
+        failure = null
+        // Cleared first: a token minted within the same hour is the same address, which the WebView would not load again.
+        url = null
+        // The site stays rooted at the folder of [entry]; another page is reopened inside it, keeping its `../` links.
+        val folder = entry.substringBeforeLast('/', "")
+        val relative = when {
+            load.page == entry -> null
+            folder.isEmpty() -> load.page
+            else -> load.page.removePrefix("$folder/").takeIf { it != load.page }
+        }
+        try { url = api.fileSiteUrl(projectId, entry, relative) }
+        catch (cancellation: CancellationException) { throw cancellation }
+        catch (error: Throwable) { failure = error.message ?: getString(Res.string.files_html_read_failed) }
+    }
+    val error = failure
+    val reportPage: (String, Int) -> Unit = { shown, status ->
+        val page = sitePagePath(entry, shown)
+        if (page != null) when (status) {
+            401 -> if (state.renewed != page) {
+                state.renewed = page
+                state.showing = page
+                load = SiteLoad(page, load.count + 1)
+            }
+            200 -> {
+                state.renewed = null
+                state.showing = page
+                onPage(page)
+            }
+        }
+    }
+    if (error != null) Column(modifier.padding(designMetrics.rowPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SettingsMessageBanner(error, SettingsNoticeKind.ERROR)
+        SettingsButton(stringResource(Res.string.files_retry), onClick = { load = SiteLoad(load.page, load.count + 1) })
+    } else if (url == null) Box(modifier, contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
+    else PlatformSitePreview(url, modifier, onPage = reportPage, onError = { failure = it })
+}
+
 internal expect val htmlPreviewSupported: Boolean
+
+/** Loads [url], a tokenised site address; reports each main-frame page that finished loading and its HTTP status. */
+@Composable
+internal expect fun PlatformSitePreview(url: String?, modifier: Modifier, onPage: (url: String, status: Int) -> Unit, onError: (String) -> Unit)
 
 @Composable
 internal expect fun PlatformHtmlPreview(html: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean = false)

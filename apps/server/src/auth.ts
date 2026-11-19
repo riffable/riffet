@@ -36,6 +36,14 @@ export interface DeviceRecord extends Partial<DeviceReport> {
 }
 export type PublicDevice = Omit<DeviceRecord, 'hash' | 'installationId' | 'push' | 'features'>;
 export interface IssuedDevice { device: PublicDevice; token: string }
+/** What a file-site token reads: files below `root`, through the project's read scope. */
+/** What a file-site token reads: files below `root` through the project's read scope, or only `only` there. */
+export interface FileSiteScope { projectId: string; root: string; only?: string }
+/** The route a previewed page's own links and assets go through, authorized by the token in its path. */
+/** The token is the first path segment: it outgrows the router's limit on named parameters. */
+export const FILE_SITE_ROUTE = '/api/file-sites/*';
+/** A preview left open over a working day keeps following its links; reopening it mints a fresh token. */
+const FILE_SITE_TTL_MS = 12 * 3600_000;
 /** Cookie callers keep their CSRF obligations; a paired device proves itself with a bearer token. */
 export type AuthKind = 'cookie' | 'device';
 export interface AuthContext { kind: AuthKind; cookie?: string; deviceId?: string }
@@ -120,12 +128,15 @@ export class Auth {
     let host: URL;
     try { host=new URL(`http://${hostHeader}`); } catch { throw new AppError('INVALID_HOST','Invalid Host header',403); }
     if (!this.allowedHosts.has(normalizeHost(host.hostname))) throw new AppError('INVALID_HOST','This hostname is not allowed',403);
+    // A previewed page runs in an opaque origin, so its links, assets and fetches arrive cross-site
+    // with `Origin: null`. Its route only reads, behind the token in its path.
+    const fileSite=request.routeOptions?.url===FILE_SITE_ROUTE&&['GET','HEAD'].includes(request.method);
     const origin=request.headers.origin;
-    if (origin) {
+    if (origin && !(fileSite && origin==='null')) {
       let url: URL; try { url=new URL(origin); } catch { throw new AppError('INVALID_ORIGIN','Invalid Origin',403); }
       if (!['http:','https:'].includes(url.protocol) || url.host.toLowerCase()!==host.host.toLowerCase()) throw new AppError('INVALID_ORIGIN','Cross-origin access is not allowed',403);
     }
-    if (request.headers['sec-fetch-site']==='cross-site') {
+    if (request.headers['sec-fetch-site']==='cross-site' && !fileSite) {
       // Following a link from another site is a normal way to open the workbench. Only allow
       // top-level document navigation; API calls, embedded pages and mutations stay blocked.
       const documentNavigation=['GET','HEAD'].includes(request.method)
@@ -143,7 +154,7 @@ export class Auth {
   cookie(request: FastifyRequest): string | undefined {
     return this.cookieSession(request)?.cookie;
   }
-  private cookieSession(request: FastifyRequest): {cookie:string;nonce:string;deviceId?:string} | undefined {
+  private cookieSession(request: FastifyRequest): {cookie:string;nonce:string;exp:number;deviceId?:string} | undefined {
     const raw=request.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('cw_session='))?.slice(11);
     if (!raw) return;
     const split=raw.lastIndexOf('.'); if (split<0) return;
@@ -151,12 +162,14 @@ export class Auth {
     if (!equal(signature,this.sign(payload))) return;
     let deviceId:string|undefined;
     let nonce:string;
+    let exp:number;
     try {
       const body=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));
       if (typeof body.exp!=='number' || body.exp<Date.now() || typeof body.nonce!=='string') return;
       // Cookies issued before epochs existed count as epoch 0.
       if ((body.ep??0)!==this.sessionEpoch || this.revokedSessions[body.nonce]!==undefined) return;
       nonce=body.nonce;
+      exp=body.exp;
       // Older master-token cookies have no device id. Paired browsers remain individually revocable.
       if (body.deviceId!==undefined) {
         if (typeof body.deviceId!=='string') return;
@@ -166,7 +179,7 @@ export class Auth {
         this.touchDevice(device);
       }
     } catch { return; }
-    return {cookie:raw,nonce,...(deviceId?{deviceId}:{})};
+    return {cookie:raw,nonce,exp,...(deviceId?{deviceId}:{})};
   }
   csrf(cookie: string) { return this.sign('csrf:'+cookie); }
   isAuthenticated(request: FastifyRequest) { return Boolean(this.cookie(request)) || Boolean(this.bearer(request)); }
@@ -208,6 +221,38 @@ export class Auth {
     const path = `${prefix}/api/shares/drafts/${draftId}/files/`;
     const secure = request.protocol === 'https' || request.headers.origin?.startsWith('https://') || request.headers['x-forwarded-proto'] === 'https';
     reply.header('Set-Cookie', `wkn_share_preview=${payload}.${this.sign('share-preview:' + payload)}; HttpOnly; SameSite=Strict; Path=${path}; Max-Age=${seconds}${secure ? '; Secure' : ''}`);
+  }
+
+  /**
+   * A read capability for one previewed page's folder. The page runs in an opaque origin, which
+   * carries no session cookie, so its own links and assets present this in their path instead. It
+   * lasts as long as the credential that minted it, at most `FILE_SITE_TTL_MS` rounded up to the hour.
+   */
+  issueFileSite(request: FastifyRequest, scope: FileSiteScope): string {
+    const context=this.authenticate(request);
+    const session=context.kind==='cookie'?this.cookieSession(request):undefined;
+    const nonce=session?.nonce;
+    // Expiry rounded to the hour: reopening the page within it gets the same URLs, so the browser cache holds.
+    // Never past the minting cookie: its revocation record is dropped once the cookie would have expired.
+    const exp=Math.min(Math.ceil((Date.now()+FILE_SITE_TTL_MS)/3600_000)*3600_000,session?.exp??Infinity);
+    const body={p:scope.projectId,r:scope.root,...(scope.only?{o:scope.only}:{}),exp,...(context.deviceId?{d:context.deviceId}:{}),...(nonce?{n:nonce,ep:this.sessionEpoch}:{})};
+    const payload=Buffer.from(JSON.stringify(body)).toString('base64url');
+    return `${payload}.${this.sign('file-site:'+payload)}`;
+  }
+  fileSite(token: string): FileSiteScope | undefined {
+    const split=token.lastIndexOf('.');
+    if (split<0) return;
+    const payload=token.slice(0,split);
+    if (!equal(token.slice(split+1),this.sign('file-site:'+payload))) return;
+    try {
+      const body=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));
+      if (typeof body.p!=='string'||typeof body.r!=='string'||typeof body.exp!=='number'||body.exp<=Date.now()) return;
+      if (body.d!==undefined&&!this.devices.some(device=>device.id===body.d)) return;
+      if (body.n!==undefined&&(body.ep!==this.sessionEpoch||this.revokedSessions[body.n]!==undefined)) return;
+      if (body.d===undefined&&body.n===undefined) return;
+      if (body.o!==undefined&&typeof body.o!=='string') return;
+      return {projectId:body.p,root:body.r,...(body.o?{only:body.o}:{})};
+    } catch { return; }
   }
 
   /** Mints a long-lived device credential. The plaintext token is returned exactly once. */

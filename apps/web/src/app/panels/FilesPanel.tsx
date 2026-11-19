@@ -13,6 +13,7 @@ import { api, HttpError, withClientFeatures, type ProjectRecord, type PromptCont
 import { textOf } from '@/lib/errors';
 import { hostInfo, isApplePlatform, shortcutLabel } from '@/lib/platform';
 import { absolutePath, copyWithToast, downloadProjectFile, downloadProjectFolder, openProjectFile, projectFileUrl } from '@/lib/files';
+import { HtmlPagePreview } from './HtmlPagePreview';
 import { toast } from '@/lib/toast';
 import { usePreviewTheme } from '@/lib/content-preview';
 import { cn, errorMessage, formatBytes } from '@/lib/utils';
@@ -75,7 +76,8 @@ function FileMenu({ projectId, root, path, kind, open, onOpenChange, onReference
 }
 
 interface DirectoryVisit { entries: FileEntry[]; hasMore: boolean; scrollTop: number }
-interface Place { path: string; line?: number | undefined }
+/** `site` is the page a rendered HTML page was reached from, whose folder its site stays rooted at. */
+interface Place { path: string; line?: number | undefined; site?: string | undefined }
 /** A symbol's usages: the module's first, then the project's; `origin` is where it was asked for. */
 interface Usages { word: string; origin: Place; locations: CodeLocation[]; complete: boolean; searching: boolean; history: Place[] }
 const MAX_HISTORY = 50;
@@ -153,6 +155,10 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   const settleTreeWidth = (width: number) => { setTreeWidth(width); try { localStorage.setItem(TREE_WIDTH.key, String(width)); } catch { /* the width holds for this page */ } };
   const [previewLoading, setPreviewLoading] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  /** Bumped by Refresh: a rendered page reloads even when its file did not change, as a browser's would. */
+  const [pageReload, setPageReload] = useState(0);
+  /** The HTML file whose folder the open page's site is rooted at, once a link inside it was followed. */
+  const [siteEntry, setSiteEntry] = useState<string>();
   const [searchMode, setSearchMode] = useState<'name' | 'content'>('name');
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<FileEntry[]>();
@@ -268,6 +274,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     const top = line ? undefined : topLines.current.get(filePath);
     setJump(line ? { path: filePath, line, column, token: request } : top ? { path: filePath, line: top, restore: true, token: request } : undefined);
     setPreviewPath(filePath);
+    setSiteEntry(undefined);
     setPreview((current) => current?.path === filePath ? current : undefined);
     setMenuPath(undefined);
     setImageLoadError(false);
@@ -298,11 +305,32 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     if (from && !(from.path === to.path && from.line === to.line)) setHistory((previous) => [...previous, from].slice(-MAX_HISTORY));
     void openPreview(to.path, to.line, to.column);
   };
+  /**
+   * A link followed inside a rendered page: the frame already shows `page`, so the panel takes it as
+   * the open file without clearing the preview it is drawn in. Back returns to the page it left; the
+   * page's own Back, arriving at the page Back would open, takes that step off instead of adding one.
+   */
+  const followPage = async (page: string) => {
+    const from = here.current;
+    const site = siteEntry ?? preview?.path;
+    if (history.at(-1)?.path === page) setHistory(history.slice(0, -1));
+    else if (from) setHistory((previous) => [...previous, { ...from, site }].slice(-MAX_HISTORY));
+    here.current = { path: page, site };
+    setSiteEntry(site);
+    const request = ++previewRequest.current;
+    setPreviewPath(page);
+    try {
+      const result = await api.preview(project.id, page);
+      if (request === previewRequest.current) { setPreview(result); recent.touch(result.path); }
+    }
+    catch { /* the page is on screen already; the header keeps naming the one it came from */ }
+  };
   const back = () => {
     const previous = history.at(-1);
     if (!previous) return;
     setHistory(history.slice(0, -1));
     void openPreview(previous.path, previous.line);
+    setSiteEntry(previous.site);
   };
 
   const findUsages = (at: SymbolAt) => {
@@ -474,7 +502,9 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
 
   const refreshFiles = () => {
     if (wide) setRefreshToken((value) => value + 1);
-    if (previewPath !== undefined) { void openPreview(previewPath); return; }
+    setPageReload((value) => value + 1);
+    // Refreshing a page reached by a link keeps the site it was reached in.
+    if (previewPath !== undefined) { const site = siteEntry; void openPreview(previewPath); setSiteEntry(site); return; }
     rememberScroll();
     listingRequest.current += 1; paginationRequest.current = undefined;
     setFetching(true); setLoadingMore(false); setRefreshToken((value) => value + 1);
@@ -667,15 +697,17 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
           </>
         );
       })() : showingRendered ? (
-        preview.render ? (
+        // A project page keeps its folder, so its links, styles and scripts load; the shared
+        // renderer would keep only what is inline.
+        isHtmlPath(preview.path) ? (
+          <HtmlPagePreview key={siteEntry ?? preview.path} projectId={project.id} site={siteEntry ?? preview.path} path={preview.path} version={preview.hash} reload={pageReload} title={preview.path.split('/').at(-1) ?? t`HTML 预览`} onNavigate={(page) => void followPage(page)} />
+        ) : (
           <ContentPreview
             key={`${preview.path}:${preview.hash ?? ''}`}
             title={preview.path.split('/').at(-1) ?? t`文件预览`}
             url={`${projectFileUrl(project.id, preview.path)}&render=preview&${previewTheme}`}
             onDownload={() => downloadProjectFile(project.id, preview.path)}
           />
-        ) : (
-          <iframe title={preview.path.split('/').at(-1) ?? t`HTML 预览`} src={projectFileUrl(project.id, preview.path)} sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads" referrerPolicy="no-referrer" className="min-h-0 w-full flex-1 border-0 bg-bg" />
         )
       ) : preview.binary ? (
         <EmptyState icon={<IconFile />} title={t`二进制文件`} description={t`${formatBytes(preview.size)} · 无法在这里预览`}>

@@ -1,6 +1,7 @@
 package riffet.ui.files
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -40,4 +41,12 @@ class HtmlPreviewTest {
         assertFalse(html.contains("'unsafe-eval'"))
     }
 
+    @Test
+    fun aSitePageMapsToAProjectPathInsideTheEntryFolder() {
+        assertEquals("tmp/games/a b/c.html", sitePagePath("tmp/games/index.html", "http://h:1/p/api/file-sites/tok/a%20b/c.html?x=1"))
+        assertEquals("/tmp/x/sub/index.html", sitePagePath("/tmp/x/index.html", "http://h/api/file-sites/tok/sub/"))
+        assertEquals("index.html", sitePagePath("index.html", "http://h/api/file-sites/tok/"))
+        assertEquals(null, sitePagePath("a/index.html", "http://h/api/file-sites/tok/%2E%2E/x.html"))
+        assertEquals(null, sitePagePath("a/index.html", "http://h/other/tok/x.html"))
+    }
 }

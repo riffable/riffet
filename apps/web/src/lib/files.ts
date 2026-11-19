@@ -39,8 +39,10 @@ export async function downloadProjectFolder(projectId: string, path: string): Pr
   startDownload(projectArchiveUrl(projectId, path));
 }
 
+/** An HTML page opens with its folder as the site, so its links and assets resolve as they would on disk. */
 export function openProjectFile(projectId: string, path: string): void {
-  window.open(projectFileUrl(projectId, path), '_blank', 'noopener');
+  const url = projectFileUrl(projectId, path);
+  window.open(/\.html?$/i.test(path) ? `${url}&render=site` : url, '_blank', 'noopener');
 }
 
 export function absolutePath(root: string | undefined, path: string): string {

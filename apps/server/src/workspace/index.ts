@@ -6,8 +6,8 @@ import path from 'node:path';
 import type { Readable } from 'node:stream';
 import type { Attachment, CodeDefinitions, CodeReferences, FileEntry, FilePreview, SearchHit } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { collectArchiveEntries, gitArchiveEntries, rawFileType, readSample, zipStream, type RawFileType } from './download.js';
-import { expandHomePath, projectRoot, isWithin, resolveReadablePath, resolveScopedPath, toProjectRelative, type ProjectRef } from './scope.js';
+import { collectArchiveEntries, gitArchiveEntries, rawFileType, readSample, siteFileType, zipStream, type RawFileType } from './download.js';
+import { expandHomePath, projectRoot, isSecretPath, isWithin, resolveReadablePath, resolveScopedPath, toProjectRelative, type ProjectRef } from './scope.js';
 import { FileIndex, rankPaths, ripgrepSearch } from './file-index.js';
 import { CodeNav, findDefinitions, findReferences, type DefinitionQuery, type ReferenceQuery } from './code-nav.js';
 import { decodePreviewText, MAX_PREVIEW_FILE_BYTES, previewKind } from '../previews/formats.js';
@@ -492,6 +492,34 @@ export class WorkspaceService {
     if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');
     const name = path.basename(target);
     return { path: target, name, size: info.size, mtime: info.mtime, ...rawFileType(name, await readSample(target)) };
+  }
+
+  /**
+   * What a previewed page may read: its folder inside the project. Outside the project only the
+   * file itself, as the single-file read there allows (`scope.ts#resolveExternalFile`).
+   */
+  async siteScope(project: ProjectRef, filePath: string): Promise<{ root: string; only?: string }> {
+    const root = path.dirname(filePath);
+    return isWithin(await projectRoot(project), filePath) ? { root } : { root, only: path.basename(filePath) };
+  }
+
+  /**
+   * A file of a previewed page's folder, addressed the way the page's own links address it. Dot
+   * paths and key files are refused even inside the project: the page's scripts can read whatever
+   * this serves.
+   */
+  async siteFile(project: ProjectRef, root: string, relative: string, options: { allowOutside?: boolean; only?: string } = {}): Promise<{ path: string; name: string; size: number; mtime: Date } & RawFileType> {
+    const missing = () => new AppError('FILE_NOT_FOUND', 'File does not exist', 404);
+    const wanted = !relative || relative.endsWith('/') ? `${relative}index.html` : relative;
+    if (wanted.includes('\0') || wanted.split('/').some(part => !part || part.startsWith('.'))) throw missing();
+    if (options.only !== undefined && wanted !== options.only) throw missing();
+    const target = path.resolve(root, wanted);
+    if (!isWithin(root, target)) throw missing();
+    const file = await this.rawFile(project, target, options);
+    const real = await realpath(file.path);
+    if (!isWithin(await realpath(root), real)) throw missing();
+    if (await isSecretPath(real, [this.stateDir])) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
+    return { ...file, ...siteFileType(file.name, file) };
   }
 
   /**

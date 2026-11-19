@@ -44,4 +44,21 @@ class RiffetApiVisualizationTest {
         }
     }
 
+    @Test
+    fun aSiteAddressIsMintedWithoutFollowingTheRedirect() = runTest {
+        val seen = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            seen += request
+            if (request.url.encodedPath.startsWith("/api/file-sites/")) respond("page", HttpStatusCode.OK)
+            else respond("", HttpStatusCode.Found, headersOf(HttpHeaders.Location, "../../../file-sites/tok/index.html"))
+        }) { installRiffetClient() }
+        try {
+            val api = RiffetApi(client, "http://127.0.0.1:9", tokenProvider = { "wkn_site_secret" })
+            assertEquals("http://127.0.0.1:9/api/file-sites/tok/index.html", api.fileSiteUrl("p1", "a/index.html"))
+            assertEquals(1, seen.size)
+            assertEquals("site", seen[0].url.parameters["render"])
+            assertEquals("Bearer wkn_site_secret", seen[0].headers[HttpHeaders.Authorization])
+            assertEquals("http://h:1/x/y/c.html?q=1", resolveLocation("http://h:1/x/y/z/raw", "../c.html?q=1"))
+        } finally { client.close() }
+    }
 }

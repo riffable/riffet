@@ -590,6 +590,8 @@ struct FilePreviewPage: View {
     @State private var htmlRendered = true
     @State private var notice: String?
     @State private var reload = 0
+    /// The page an HTML site preview shows after a link was followed; nil while it shows the opened file.
+    @State private var sitePage: String?
 
     private var canRender: Bool { preview?.render != nil || isHTML }
 
@@ -600,8 +602,8 @@ struct FilePreviewPage: View {
         return cache
     }()
 
-    private var isHTML: Bool { ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased()) }
-    private var effectivePath: String { preview?.path ?? path }
+    private var isHTML: Bool { ["html", "htm"].contains(((preview?.path ?? path) as NSString).pathExtension.lowercased()) }
+    private var effectivePath: String { (isHTML && htmlRendered ? sitePage : nil) ?? preview?.path ?? path }
     private var isAbsoluteOrTilde: Bool { effectivePath.hasPrefix("/") || effectivePath == "~" || effectivePath.hasPrefix("~/") }
 
     private func moreEntries() -> [NativeMenuEntry] {
@@ -667,6 +669,7 @@ struct FilePreviewPage: View {
             }
         }
         .onChange(of: target?.1) { _, _ in if target != nil { htmlRendered = false } }
+        .onChange(of: path) { _, _ in sitePage = nil }
         .onDisappear { navigation?.cancel() }
         .task(id: "\(path)|\(reload)") {
             htmlRendered = target == nil
@@ -701,6 +704,10 @@ struct FilePreviewPage: View {
                 ScrollView {
                     TimelineImageView(source: .projectFile(projectId: project.id, path: preview.path), label: preview.path, maxHeight: 2000, projectId: project.id)
                         .padding(Space.md)
+                }
+            } else if isHTML, htmlRendered, !preview.binary {
+                HtmlSitePreview(projectId: project.id, entry: preview.path, version: preview.hash_, reload: reload) { page in
+                    sitePage = page == preview.path ? nil : page
                 }
             } else if canRender, htmlRendered,
                       let raw = ProjectDownloads.rawURL(projectId: project.id, path: preview.path),

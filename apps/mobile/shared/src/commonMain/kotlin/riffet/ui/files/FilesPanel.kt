@@ -366,13 +366,16 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
             error = if (code == "PATH_OUTSIDE_PROJECT" || code == "INVALID_PATH") getString(Res.string.files_outside_hint) else panelError(failure, getString(Res.string.files_error_open))
         } finally { loading = false }
     }
-    val path = preview?.path ?: page.path
+    val entryPath = preview?.path ?: page.path
+    val value = preview
+    val html = value != null && htmlPreviewSupported && (value.render != null || (!value.binary && value.image == null && isHtmlPreviewPath(value.path)))
+    var renderHtml by remember(entryPath, page.line) { mutableStateOf(page.line == null) }
+    // A link followed inside a project HTML site moves the title and the download to that page.
+    var sitePage by remember(page.path, renderHtml) { mutableStateOf<String?>(null) }
+    val path = sitePage ?: entryPath
     val outside = isAbsolutePath(path) || path == "~" || path.startsWith("~/")
     // Downloading reads the file as it is, so it does not wait on, or depend on, a preview that may fail.
     val download = if (downloadsSupported) ({ DownloadCenter.shared.start(api, projectId, path) }) else null
-    val value = preview
-    val html = value != null && htmlPreviewSupported && (value.render != null || (!value.binary && value.image == null && isHtmlPreviewPath(value.path)))
-    var renderHtml by remember(path, page.line) { mutableStateOf(page.line == null) }
     val textPreview = value != null && !(html && renderHtml) && value.image == null && !value.binary
     val footer: (@Composable () -> Unit)? = if (value != null && textPreview) ({ TextPreviewFooter(value) }) else null
     // The name is what the reader looks for; the directory is the line under it.
@@ -395,7 +398,7 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
     }, bottomBar = footer) { insets ->
         Box(Modifier.fillMaxSize().blurOnTap()) {
             if (value != null)
-                PreviewBody(value, api, projectId, page.line, page.visualization, download, html && renderHtml, insets)
+                PreviewBody(value, api, projectId, page.line, page.visualization, download, html && renderHtml, insets) { sitePage = it }
             else if (loading) Box(Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
         }
     }
@@ -639,13 +642,15 @@ private fun SearchBody(
 @Composable
 private fun PreviewBody(
     preview: FilePreview, api: RiffetApi, projectId: String, requestedLine: Int?, visualization: Boolean,
-    onDownload: (() -> Unit)?, renderHtml: Boolean, insets: PaddingValues,
+    onDownload: (() -> Unit)?, renderHtml: Boolean, insets: PaddingValues, onSitePage: (String) -> Unit,
 ) {
     // Scrollable code owns content padding so its lines pass beneath both fixed bars.
     // Static image/binary/native HTML viewers retain a safe content rectangle.
     if (!renderHtml && preview.image == null && !preview.binary) TextPreview(preview, requestedLine, insets)
     else Box(Modifier.fillMaxSize().padding(insets)) {
         when {
+            renderHtml && preview.render == null && !visualization ->
+                HtmlSitePreview(api, projectId, preview.path, preview.hash, onSitePage, Modifier.fillMaxSize())
             renderHtml -> HtmlFilePreview(api, projectId, preview.path, visualization, Modifier.fillMaxSize(), generated = preview.render != null)
             preview.image != null -> ImagePreview(preview, projectId)
             else -> BinaryMessage(preview, onDownload)
