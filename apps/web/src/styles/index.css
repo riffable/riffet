@@ -1620,15 +1620,6 @@ html.dark {
   textarea:focus-visible {
     outline: none;
   }
-  /* A bare modifier press (⇧⌘ for a screenshot, ⌘ before choosing a menu) must not paint a ring on
-     the element the pointer focused. `lib/focus-ring` sets this mark and clears it on real keyboard
-     navigation, so Tab/Enter/typing still show their rings. Unlayered on purpose: it has to win over
-     the utilities' own `focus-visible:ring-*` declarations. */
-  [data-pointer-focus]:focus-visible {
-    outline: none;
-    --tw-ring-shadow: 0 0 #0000;
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--line-strong) transparent;
@@ -1650,6 +1641,17 @@ html.dark {
     background: transparent;
   }
 }
+
+/* Focus that no navigating key brought (a click, a script, a shortcut) paints no ring: `lib/focus-ring`
+   sets the mark. Outside every layer on purpose — inside `@layer base` it loses to the components'
+   own `focus-visible:ring-*` utilities, and those rings came back. It empties the ring's variables
+   rather than setting `box-shadow`, so an element's own shadow stays. */
+[data-pointer-focus]:focus-visible {
+  outline: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+}
+
 
 @utility scrollbar-none {
   scrollbar-width: none;

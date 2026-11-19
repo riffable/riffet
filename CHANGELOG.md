@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Focus rings no longer appear on a button, list or game you clicked once you press Space, Escape or start typing, nor on what a shortcut or the command palette opens; they show only when Tab or the arrow keys move focus. Web.
 - The Background tasks list in the side panel and on narrow screens no longer ends with "The session reports N background tasks; some task details haven't loaded yet". Web.
 - Automations page (Web): the editor is wider, with the name and task on the left and the agent, project, schedule and delivery on the right. The agent field, and the quick bar, use the composer's agent, provider and model menu, including the model's effort, Fast and other parameters. Clicking a row opens it for editing (an agent wake-up or a send-later opens its conversation). "Recent runs" no longer lists "Deleted task": wake-ups and send-laters that have run show only in their conversation.
 - A subagent's own background commands no longer show up on their own at the end of the main conversation. Background tasks are titled by the agent's description; without one, by the command's first line in monospace, minus the leading `cd` into the project. Web.

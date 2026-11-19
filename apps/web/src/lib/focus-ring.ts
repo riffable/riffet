@@ -1,66 +1,53 @@
 /**
- * Keep `:focus-visible` rings for real keyboard navigation, but not for a bare modifier press.
+ * A focus ring answers "where did my Tab go?" — so it shows only on an element a navigating key
+ * (Tab, an arrow, Home/End, Page Up/Down) moved focus onto.
  *
- * A browser treats *any* key event as keyboard interaction, including a modifier on its own. So
- * holding ⇧⌘ to take a screenshot — or just resting a finger on ⌘ before choosing a menu — makes
- * whatever the pointer last focused suddenly match `:focus-visible` and paint its ring, which reads
- * as a random highlight on a button nobody is keyboard-navigating.
+ * The browser's own `:focus-visible` is looser: once *any* key is pressed, whatever is focused may
+ * start matching. Click a button and press Esc, click the game and press Space, hold ⇧⌘ for a
+ * screenshot, or let a script move focus after a shortcut (a popover focusing its first item, the
+ * palette handing focus to what it opened), and a ring appears on something nobody navigated to.
  *
- * The policy marks the element a pointer focused and clears that mark as soon as a non-modifier key
- * arrives. `styles/index.css` uses the mark to suppress the ring, so ⇧⌘ stays quiet while Tab,
- * arrows, Enter and typing keep the rings they need.
- *
- * Focus a script moves after a press is marked too. A popover's trigger keeps the caret in the
- * composer (`keepTypingFocus`), then Radix focuses the popover's first item; a text field always
- * matches `:focus-visible`, and the browser carries that onto whatever a script focuses next, so a
- * click would otherwise open the list with its first row ringed as if keyboard-selected.
+ * The policy marks every element that gets focus some other way — a press, a script, a shortcut —
+ * and `styles/index.css` uses the mark to suppress the ring. Typing or playing on a focused element
+ * never brings its ring back; tabbing onto it again does.
  */
 import { isTextField } from './tap-focus';
 
-const MODIFIER_KEYS = new Set(['Shift', 'Meta', 'Control', 'Alt', 'AltGraph', 'CapsLock']);
+const NAVIGATION_KEYS = new Set(['Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']);
+const MARK = 'data-pointer-focus';
 
 /** Elements a pointer can focus; the mark only has to cover what paints a ring. */
 const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex], [role="button"], [role="menuitem"], [role="option"], [role="radio"], [role="checkbox"], [role="switch"], [role="tab"]';
 
 export function installFocusRingPolicy(target: Window = window): () => void {
-  const marked = new Set<Element>();
-  // Whether the last interaction was a pointer press rather than a navigating key.
-  let pointer = false;
-  const mark = (element: Element) => {
-    element.setAttribute('data-pointer-focus', '');
-    marked.add(element);
-  };
-  const clear = () => {
-    for (const element of marked) element.removeAttribute('data-pointer-focus');
-    marked.clear();
-  };
+  // Whether the key being handled right now moves focus. Roving lists move it inside their keydown
+  // handler and Tab moves it as the keydown's default action, both before the key comes back up.
+  let navigating = false;
   const onPointerDown = (event: Event) => {
-    clear();
-    pointer = true;
-    const node = event.target;
-    const focusable = node instanceof Element ? node.closest(FOCUSABLE) : null;
-    if (focusable) mark(focusable);
+    navigating = false;
+    // A press on an element that already has focus fires no focusin, so mark it here too.
+    const focusable = event.target instanceof Element ? event.target.closest(FOCUSABLE) : null;
+    if (focusable) focusable.setAttribute(MARK, '');
   };
   const onFocusIn = (event: FocusEvent) => {
     const node = event.target;
-    if (pointer && node instanceof Element && node.matches(FOCUSABLE) && !isTextField(node)) mark(node);
+    if (!(node instanceof Element) || isTextField(node)) return;
+    if (navigating) node.removeAttribute(MARK);
+    else node.setAttribute(MARK, '');
   };
   const onKeyDown = (event: KeyboardEvent) => {
-    // Only plain keys navigate: a bare modifier, or a key held with a command modifier (⇧⌘A for a
-    // screenshot, ⌘C for a copy) is a shortcut and must leave the mark alone.
-    if (MODIFIER_KEYS.has(event.key)) return;
-    // A shortcut is still keyboard use: a surface it opens rings its first item.
-    pointer = false;
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
-    clear();
+    navigating = NAVIGATION_KEYS.has(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey;
   };
+  const onKeyUp = () => { navigating = false; };
   target.addEventListener('pointerdown', onPointerDown, true);
   target.addEventListener('focusin', onFocusIn, true);
   target.addEventListener('keydown', onKeyDown, true);
+  target.addEventListener('keyup', onKeyUp, true);
   return () => {
     target.removeEventListener('pointerdown', onPointerDown, true);
     target.removeEventListener('focusin', onFocusIn, true);
     target.removeEventListener('keydown', onKeyDown, true);
-    clear();
+    target.removeEventListener('keyup', onKeyUp, true);
+    for (const element of target.document.querySelectorAll(`[${MARK}]`)) element.removeAttribute(MARK);
   };
 }

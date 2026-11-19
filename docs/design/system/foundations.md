@@ -272,7 +272,7 @@
 | 禁用 | `disabled:opacity-50`，`pointer-events-none` | `opacity-50` | `disabled:opacity-50` | `disabled:opacity-50` |
 | 加载 | 文字换成 `Spinner`，宽度固定 | 行尾换成 `Spinner` | 无 | 无 |
 
-- 全局的 `:focus-visible` 是 `outline: 2px solid var(--focus-ring)`、偏移 1px（`index.css`）；输入框和文本域去掉轮廓，改用边框加光晕。组件的 `ring-2 ring-focus` 覆盖全局的轮廓。`lib/focus-ring.ts` 保证只按修饰键（⇧⌘ 截图、⌘ 选菜单）时不在指针刚聚焦的元素上画环，Tab、回车、输入仍显示。
+- 全局的 `:focus-visible` 是 `outline: 2px solid var(--focus-ring)`、偏移 1px（`index.css`）；输入框和文本域去掉轮廓，改用边框加光晕。组件的 `ring-2 ring-focus` 覆盖全局的轮廓。`lib/focus-ring.ts` 让环只出现在导航键（Tab、方向键、Home/End、Page Up/Down）移过去的元素上：点击、脚本、快捷键得到的焦点不画，之后按空格、Esc 或打字也不画（[设计决定](../DECISIONS.md) 2026-11-19）。
 - 贴着容器边缘的整行（`SettingsLinkRow`）用 `ring-inset`，环画在行内。
 - `Spinner` 是 14 的 `IconLoaderCircle`，颜色 `fg-3`，放在按钮里时用 `text-current`。
 
