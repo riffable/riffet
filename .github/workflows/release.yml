@@ -322,11 +322,12 @@ jobs:
             .node-version
             apps/macos/packaging/homebrew
           sparse-checkout-cone-mode: false
+      # Do not pass `registry-url` here: setup-node writes a placeholder NODE_AUTH_TOKEN `.npmrc`
+      # (`XXXXX-...`), which stops npm from exchanging the job's OIDC token for Trusted Publishing.
       - uses: actions/setup-node@v4
         if: ${{ !github.event.repository.private }}
         with:
           node-version-file: .node-version
-          registry-url: https://registry.npmjs.org
       # npm first: once the release page is public, people start installing.
       - name: npm
         # Trusted publishing: npm exchanges this job's OIDC token, so no npm token is stored here.
