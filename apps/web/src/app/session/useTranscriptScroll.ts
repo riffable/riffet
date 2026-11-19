@@ -183,7 +183,9 @@ export function useTranscriptScroll(options: Options) {
         const contentHeight = naturalContent(element);
         const deficit = spacerNeeded(element, desired);
         const contentShrank = state.current.naturalContent !== undefined && contentHeight < state.current.naturalContent - 0.5;
-        if (state.current.held || contentShrank) setSpacer(deficit);
+        // A fold the reader clicked near the end lets the content above come down instead of leaving
+        // a blank tail under the held row; only folds nobody clicked keep the view with the spacer.
+        if (contentShrank && !state.current.held) setSpacer(deficit);
         else if (spacerHeight() > 0) setSpacer(Math.min(spacerHeight(), deficit));
       } else if (following.current) {
         setSpacer(0);
