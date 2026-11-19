@@ -1,0 +1,142 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "stops": [
+    "ok"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Say hello in one short sentence. Then run `sleep 120` with the Bash tool."
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "commentary",
+          "content": {
+            "type": "text",
+            "text": "Hello! Ready when you are."
+          }
+        }
+      }
+    },
+    {
+      "kind": "tool_call",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_00_gdw4u8jsbe11h6dmo6dctchz",
+          "toolName": "Bash",
+          "status": "in_progress",
+          "kind": "execute",
+          "title": "Wait 120 seconds",
+          "rawInput": {
+            "command": "sleep 120",
+            "description": "Wait 120 seconds",
+            "timeout": 130000
+          },
+          "command": "sleep 120"
+        }
+      }
+    },
+    {
+      "kind": "tool_call_update",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "createdAt": "<time>",
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_00_gdw4u8jsbe11h6dmo6dctchz",
+          "status": "failed",
+          "toolName": "Bash",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "<tool_use_error>Blocked: standalone sleep 120. To wait for a condition, use Monitor with an until-loop (e.g. `until <check>; do sleep 2; done`). To wait for a command you started, use run_in_background: true. Do not chain shorter sleeps to work around this block.</tool_use_error>"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "cancelled"
+      }
+    }
+  ],
+  "lanes": {}
+}

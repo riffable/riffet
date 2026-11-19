@@ -1,0 +1,164 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "attention",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Create a file named hello.txt containing the word hello, using the Bash tool (echo hello > hello.txt). Then reply with only: done"
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "commentary",
+          "content": {
+            "type": "text",
+            "text": "I'll create the file."
+          }
+        }
+      }
+    },
+    {
+      "kind": "tool_call",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_00_2aiihvzfabd7it0e0fppk4nv",
+          "toolName": "Bash",
+          "status": "in_progress",
+          "kind": "execute",
+          "title": "Create hello.txt with the word hello",
+          "rawInput": {
+            "command": "echo hello > hello.txt",
+            "description": "Create hello.txt with the word hello"
+          },
+          "command": "echo hello > hello.txt"
+        }
+      }
+    },
+    {
+      "kind": "tool_call_update",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "createdAt": "<time>",
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_00_2aiihvzfabd7it0e0fppk4nv",
+          "status": "completed",
+          "toolName": "Bash",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "(Bash completed with no output)"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-7>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-7>:0",
+        "nativeAliases": [
+          "<id-7>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "done"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {}
+}

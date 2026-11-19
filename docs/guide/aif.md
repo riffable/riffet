@@ -296,7 +296,9 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 - Codex 拆分方案：[codex-runtime-split.md](codex-runtime-split.md)，待评审。
 - Codex hook 录制：载荷与 App Server 消息录在同一份录制里，`hookProblems` 在回放测试和漂移检测里检查观察依赖的约定；录制改写的 hook 信任在结束后写回。漂移检测在已录制的版本上把本次才出现的方法记为提示而不是漂移：同一版本下这只是本次运行的时序（命令输出是否流式）。
 - TRAE（`traex`，与 Codex 同一套驱动）录了问答与命令场景，放在 `fixtures/traex/`。与 Codex 相比，它多发 `thread/contextUsage`、`thread/inboxStatus/updated`、`skills/changed` 和推理增量，少发 `thread/readState/changed`。
-- 未完成：Claude 的场景矩阵；Codex runtime 拆分（方案评审后实施）。
+- Claude 录制：会话记录文件的增量、hook 与屏幕录在同一条时间线上（`backends/claude/fixtures/transcript-hooks/`），回放经过真实的 hook 端点与运行时，对照日志行、子 agent 车道与状态序列。场景为问答、命令、审批、打断、子 agent；`pnpm record claude <场景> [--check]`。会话记录只保留解析器读取的行类型，用户的全局指令和记忆不进仓库。
+- 录制当天就发现一个缺陷：带 `turnId` 的停止全部被拒（87483f3）。回放按客户端的方式停止并检查结果，回归会直接出现在 `interrupt` 场景里。
+- 未完成：Claude 的恢复、压缩、StopFailure、`/clear` 场景；Codex runtime 拆分（方案评审后实施）。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 

@@ -2,6 +2,7 @@
  * Records a scenario against a real agent CLI for the replay tests (docs/guide/aif.md §5.4).
  *
  *   pnpm record <codex|traex> <scenario|all> [--out <dir> | --check]
+ *   pnpm record claude <scenario|all> [--profile <name>] [--model <id>] [--out <dir> | --check]   (scripts/record-claude.ts)
  *
  * `traex` is TRAE CLI, a fork of Codex that runs through the same driver (`traexFlavor`); it records the
  * scenarios listed for it in `RECORDED_CLIS`, into fixtures/traex/. It has no observation, so no hooks.
@@ -33,7 +34,7 @@
  * ids are replaced with synthetic text, and accounts, rate limits and provider configuration are
  * dropped (`redact`). Read the diff before committing; `pnpm check:privacy` scans it too.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, tmpdir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -46,6 +47,10 @@ import type { JournalRow } from '../apps/server/src/journal/journal.js';
 
 const root = join(import.meta.dirname, '..');
 const [backend, scenarioName, ...rest] = process.argv.slice(2);
+if (backend === 'claude') {
+  // Claude Code runs as a TUI under tmux, so it records through an isolated server: scripts/record-claude.ts.
+  process.exit(spawnSync(process.execPath, ['--import', 'tsx', join(import.meta.dirname, 'record-claude.ts'), ...process.argv.slice(3)], { stdio: 'inherit' }).status ?? 1);
+}
 const outFlag = rest.indexOf('--out');
 const check = rest.includes('--check');
 if ((backend !== 'codex' && backend !== 'traex') || !scenarioName || (outFlag >= 0 && !rest[outFlag + 1]) || (check && outFlag >= 0)) {

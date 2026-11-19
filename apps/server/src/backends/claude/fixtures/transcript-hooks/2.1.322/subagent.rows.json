@@ -1,0 +1,471 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Use the Agent tool with a general-purpose subagent to read README.md and report its first line. Then reply with that line only."
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "agent_thought_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_thought_chunk",
+        "data": {
+          "sessionUpdate": "agent_thought_chunk",
+          "channel": "thinking",
+          "content": {
+            "type": "text",
+            "text": "The user wants me to use the Agent tool with a general-purpose subagent to read README.md and report its first line. Then reply with that line only.\n\nLet me spawn the agent."
+          }
+        }
+      }
+    },
+    {
+      "kind": "tool_call",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+          "toolName": "Agent",
+          "status": "in_progress",
+          "kind": "agent",
+          "title": "Read README first line",
+          "rawInput": {
+            "description": "Read README first line",
+            "prompt": "Read the file README.md in the current working directory (/workspace/project) and report back ONLY its first line, verbatim. If the file does not exist, say exactly: FILE NOT FOUND.",
+            "subagent_type": "general-purpose"
+          },
+          "subagent": {
+            "description": "Read README first line",
+            "prompt": "Read the file README.md in the current working directory (/workspace/project) and report back ONLY its first line, verbatim. If the file does not exist, say exactly: FILE NOT FOUND.",
+            "type": "general-purpose"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.subagent",
+      "nativeId": "meta:subagent:call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "toolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+        "agentId": "a735b2a0d71553485",
+        "lane": "sub:call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+        "title": "Read README first line",
+        "subagentType": "general-purpose"
+      }
+    },
+    {
+      "kind": "tool_call_update",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "createdAt": "<time>",
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+          "status": "completed",
+          "toolName": "Agent",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a735b2a0d71553485 (internal ID - do not mention to user. Use SendMessage with to: 'a735b2a0d71553485', summary: '<5-10 word recap>' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.\nDo not duplicate this agent's work — avoid working with the same files or topics it is using.\noutput_file: /tmp/claude/-workspace-project/<id-2>/tasks/a735b2a0d71553485.output\nDo NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:a735b2a0d71553485",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:a735b2a0d71553485",
+            "kind": "background_task",
+            "status": "running",
+            "title": "Read README first line",
+            "toolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+            "startedAt": "<time>",
+            "stop": {
+              "via": "session"
+            },
+            "task": {
+              "kind": "agent"
+            }
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:a735b2a0d71553485",
+        "nativeTurnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "agent_thought_chunk",
+      "nativeId": "claude:<id-2>:<id-7>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-7>:0",
+        "nativeAliases": [
+          "<id-7>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_thought_chunk",
+        "data": {
+          "sessionUpdate": "agent_thought_chunk",
+          "channel": "thinking",
+          "content": {
+            "type": "text",
+            "text": "The agent is running in the background. I need to wait for the notification. I shouldn't fabricate results. I'll just wait — but I need to output something. Let me just say I'm waiting.\n\nActually, the user asked me to reply with the line only. I need to wait for the agent result. Let me just note it's running."
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-8>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-8>:0",
+        "nativeAliases": [
+          "<id-8>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "Reading README.md via a subagent now — waiting on its result."
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:a735b2a0d71553485",
+      "rev": 2,
+      "turnId": "<id-1>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:a735b2a0d71553485",
+            "kind": "background_task",
+            "status": "completed",
+            "title": "Read README first line",
+            "toolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+            "startedAt": "<time>",
+            "stop": {
+              "via": "session"
+            },
+            "task": {
+              "kind": "agent"
+            },
+            "endedAt": "<time>",
+            "detail": "# Sample project",
+            "durationMs": "<n>"
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:a735b2a0d71553485",
+        "nativeTurnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:claude-turn:<id-9>:started",
+      "rev": 1,
+      "turnId": "claude-turn:<id-9>",
+      "payload": {
+        "turnId": "claude-turn:<id-9>"
+      }
+    },
+    {
+      "kind": "task_notification",
+      "nativeId": "claude:<id-2>:<id-9>:0",
+      "rev": 1,
+      "turnId": "claude-turn:<id-9>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-9>:0",
+        "nativeAliases": [
+          "<id-9>"
+        ],
+        "runId": "claude-turn:<id-9>",
+        "createdAt": "<time>",
+        "type": "task_notification",
+        "data": {
+          "sessionUpdate": "task_notification",
+          "kind": "subagent",
+          "status": "completed",
+          "sourceStatus": "completed",
+          "title": "Read README first line",
+          "taskId": "a735b2a0d71553485",
+          "subagentToolCallId": "call_00_gfmvmfum6qrf0r4o0bmf5i4m",
+          "outputFile": "/tmp/claude/-workspace-project/<id-2>/tasks/a735b2a0d71553485.output",
+          "detail": "# Sample project",
+          "tokens": 8601,
+          "durationMs": "<n>"
+        },
+        "nativeTurnId": "claude-turn:<id-9>"
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-10>:0",
+      "rev": 1,
+      "turnId": "claude-turn:<id-9>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-10>:0",
+        "nativeAliases": [
+          "<id-10>"
+        ],
+        "runId": "claude-turn:<id-9>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "# Sample project"
+          }
+        },
+        "nativeTurnId": "claude-turn:<id-9>"
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:claude-turn:<id-9>:ended",
+      "rev": 1,
+      "turnId": "claude-turn:<id-9>",
+      "payload": {
+        "turnId": "claude-turn:<id-9>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {
+    "sub:call_00_gfmvmfum6qrf0r4o0bmf5i4m": [
+      {
+        "kind": "meta.turn_started",
+        "nativeId": "meta:turn:claude-turn:<id-1>:started",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "turnId": "claude-turn:<id-1>"
+        }
+      },
+      {
+        "kind": "user_message_chunk",
+        "nativeId": "claude:<id-2>:<id-1>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-1>:0",
+          "nativeAliases": [
+            "<id-1>"
+          ],
+          "runId": "claude-turn:<id-1>",
+          "nativeTurnId": "claude-turn:<id-1>",
+          "createdAt": "<time>",
+          "type": "user_message_chunk",
+          "data": {
+            "sessionUpdate": "user_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "Read the file README.md in the current working directory (/workspace/project) and report back ONLY its first line, verbatim. If the file does not exist, say exactly: FILE NOT FOUND."
+            }
+          }
+        }
+      },
+      {
+        "kind": "tool_call",
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-3>:0",
+          "nativeAliases": [
+            "<id-3>"
+          ],
+          "runId": "claude-turn:<id-1>",
+          "nativeTurnId": "claude-turn:<id-1>",
+          "createdAt": "<time>",
+          "type": "tool_call",
+          "data": {
+            "sessionUpdate": "tool_call",
+            "toolCallId": "call_00_hx3x4wktkqym878ya3jsekl6",
+            "toolName": "Read",
+            "status": "in_progress",
+            "kind": "read",
+            "title": "Read README.md",
+            "locations": [
+              {
+                "path": "/workspace/project/README.md"
+              }
+            ],
+            "rawInput": {
+              "file_path": "/workspace/project/README.md"
+            }
+          }
+        }
+      },
+      {
+        "kind": "tool_call_update",
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-4>:0",
+          "nativeAliases": [
+            "<id-4>"
+          ],
+          "createdAt": "<time>",
+          "runId": "claude-turn:<id-1>",
+          "nativeTurnId": "claude-turn:<id-1>",
+          "type": "tool_call_update",
+          "data": {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": "call_00_hx3x4wktkqym878ya3jsekl6",
+            "status": "completed",
+            "toolName": "Read",
+            "content": [
+              {
+                "type": "content",
+                "content": {
+                  "type": "text",
+                  "text": "1\t# Sample project\n2\t\n3\tTwo files for recording sessions.\n4\t"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "kind": "agent_message_chunk",
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-5>:0",
+          "nativeAliases": [
+            "<id-5>"
+          ],
+          "runId": "claude-turn:<id-1>",
+          "nativeTurnId": "claude-turn:<id-1>",
+          "createdAt": "<time>",
+          "type": "agent_message_chunk",
+          "data": {
+            "sessionUpdate": "agent_message_chunk",
+            "phase": "final_answer",
+            "content": {
+              "type": "text",
+              "text": "# Sample project"
+            }
+          }
+        }
+      },
+      {
+        "kind": "meta.turn_ended",
+        "nativeId": "meta:turn:claude-turn:<id-1>:ended",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "turnId": "claude-turn:<id-1>",
+          "status": "completed"
+        }
+      }
+    ]
+  }
+}
