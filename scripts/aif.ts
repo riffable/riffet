@@ -8,6 +8,7 @@
  *   pnpm check:modules [--update]       validate declarations, anchors and the file size ratchet
  *   pnpm aif commits <base>..<head>     CI: warn on fix commits without `Missed:` or without recordings
  *   pnpm aif coupling [--days 90]       file pairs in different modules that change together without importing each other
+ *   pnpm aif sizes [--days 90]          fix share by file size per language, the hotspots, and the size exemptions
  *
  * A module is a directory whose AGENTS.md starts with front matter carrying `module:`. Its files are the
  * directory minus deeper modules. The scope is the paths given, else the working tree's changes (which
@@ -16,6 +17,9 @@
  * The size ratchet lives in scripts/aif-baseline.json: a non-test source file in a module may not grow
  * past its entry, and a file new to it may not pass LINE_LIMIT. `--update` lowers entries and drops the
  * ones back under the limit; `--update --add <path>` also records <path> at its current size.
+ * LINE_LIMIT is a line to start watching, not a target to split to (docs/guide/aif.md §5.1): whether a
+ * file is split follows `sizes`, and a file kept large on purpose is listed under `exempt` with its own
+ * limit and the reason, which `sizes` prints for review.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -378,7 +382,10 @@ function check(args: string[]) {
   for (const file of files) {
     if (COVERED.some((prefix) => file.startsWith(prefix)) && SOURCE.test(file) && !TEST.test(file) && !moduleOf(modules, file)) problems.push(`${file}: belongs to no module; declare one in an enclosing directory's AGENTS.md`);
   }
-  const baseline = existsSync(baselinePath) ? (JSON.parse(readFileSync(baselinePath, 'utf8')) as { lines: Record<string, number> }) : { lines: {} };
+  const baseline = readBaseline();
+  for (const [file, entry] of Object.entries(baseline.exempt)) {
+    if (!(entry.limit > LINE_LIMIT) || !entry.reason?.trim()) problems.push(`scripts/aif-baseline.json: the exemption of ${file} needs a limit above ${LINE_LIMIT} and a reason`);
+  }
   const sizes = new Map<string, number>();
   for (const file of files) {
     if (!SOURCE.test(file) || TEST.test(file) || !moduleOf(modules, file) || !existsSync(join(root, file))) continue;
@@ -387,8 +394,9 @@ function check(args: string[]) {
   }
   const over: string[] = [];
   for (const [file, lines] of sizes) {
-    const allowed = baseline.lines[file] ?? LINE_LIMIT;
-    if (lines > allowed && !(update && added.has(file))) over.push(`${file}: ${lines} lines, ${baseline.lines[file] ? `the baseline is ${allowed}` : `the limit is ${LINE_LIMIT}`}`);
+    const exempt = baseline.exempt[file];
+    const allowed = exempt?.limit ?? baseline.lines[file] ?? LINE_LIMIT;
+    if (lines > allowed && !(update && added.has(file))) over.push(`${file}: ${lines} lines, ${exempt ? `its exemption allows ${allowed}` : baseline.lines[file] ? `the baseline is ${allowed}` : `the limit is ${LINE_LIMIT}`}`);
   }
   if (update) {
     const next: Record<string, number> = {};
@@ -397,7 +405,8 @@ function check(args: string[]) {
       if (lines !== undefined && lines > LINE_LIMIT) next[file] = Math.min(allowed, lines);
     }
     for (const file of added) if ((sizes.get(file) ?? 0) > LINE_LIMIT) next[file] = sizes.get(file)!;
-    writeFileSync(baselinePath, `${JSON.stringify({ lines: Object.fromEntries(Object.entries(next).sort()) }, null, 2)}\n`);
+    const exempt = Object.keys(baseline.exempt).length ? { exempt: baseline.exempt } : {};
+    writeFileSync(baselinePath, `${JSON.stringify({ lines: Object.fromEntries(Object.entries(next).sort()), ...exempt }, null, 2)}\n`);
   }
   problems.push(...over);
   if (problems.length) {
@@ -479,6 +488,59 @@ function coupling(args: string[]) {
   console.log('\n跨端契约（服务端 ↔ 客户端）的耦合是预期的；其余每一对先找原因：能从结构上消除就消除，消除不了写成同改规则，找不到原因就复核模块边界。');
 }
 
+interface Baseline { lines: Record<string, number>; exempt: Record<string, { limit: number; reason: string }> }
+function readBaseline(): Baseline {
+  const read = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) as Partial<Baseline> : {};
+  return { lines: read.lines ?? {}, exempt: read.exempt ?? {} };
+}
+
+/**
+ * Whether size goes with rework here, per language, so LINE_LIMIT stays a measured line rather than a
+ * guess: for files changed at least three times in the window, the share of fix commits by size bucket.
+ * It is a correlation (the large files are also the central ones), read as a trend. Then the hotspots,
+ * changes × lines, which decide what to split, and the exemptions with their reasons.
+ */
+function sizes(args: string[]) {
+  const days = Number(args[args.indexOf('--days') + 1]) || 90;
+  const log = git('log', `--since=${days}.days`, '--no-merges', '--format=@@%s', '--name-only');
+  const touched = new Map<string, { changes: number; fixes: number }>();
+  for (const block of log.split('@@').slice(1)) {
+    const [subject = '', ...files] = block.split('\n');
+    const fix = /^fix[(!:]/.test(subject);
+    for (const file of new Set(files)) {
+      if (!SOURCE.test(file) || TEST.test(file) || !existsSync(join(root, file))) continue;
+      const entry = touched.get(file) ?? { changes: 0, fixes: 0 };
+      entry.changes += 1; entry.fixes += fix ? 1 : 0;
+      touched.set(file, entry);
+    }
+  }
+  const rows = [...touched].filter(([, entry]) => entry.changes >= 3).map(([file, entry]) => {
+    const text = readFileSync(join(root, file), 'utf8');
+    return { file, lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0), ...entry, language: /\.swift$/.test(file) ? 'Swift' : /\.kt$/.test(file) ? 'Kotlin' : 'TypeScript' };
+  });
+  const buckets: Array<[string, number, number]> = [['< 300', 0, 300], ['300–800', 300, LINE_LIMIT], ['800–1500', LINE_LIMIT, 1500], ['≥ 1500', 1500, Infinity]];
+  console.log(`文件大小与修复比例（近 ${days} 天，改动 ≥ 3 次的非测试文件；相关不等于因果）：`);
+  for (const language of ['TypeScript', 'Swift', 'Kotlin']) {
+    const own = rows.filter((row) => row.language === language);
+    if (!own.length) continue;
+    console.log(`  ${language}`);
+    for (const [label, low, high] of buckets) {
+      const group = own.filter((row) => row.lines >= low && row.lines < high);
+      if (!group.length) continue;
+      const share = group.reduce((sum, row) => sum + row.fixes, 0) / group.reduce((sum, row) => sum + row.changes, 0);
+      console.log(`    ${label.padEnd(9)} ${String(group.length).padStart(4)} 个文件  修复占比 ${(share * 100).toFixed(0).padStart(3)}%`);
+    }
+  }
+  console.log('\n热点（改动次数 × 行数，前 15；拆分按这里排，而不是按行数）：');
+  for (const row of [...rows].sort((a, b) => b.changes * b.lines - a.changes * a.lines).slice(0, 15)) {
+    console.log(`  ${String(row.changes).padStart(3)} 次  ${String(row.fixes).padStart(3)} fix  ${String(row.lines).padStart(5)} 行  ${row.file}`);
+  }
+  const { exempt } = readBaseline();
+  console.log('\n豁免（复核原因是否仍成立）：');
+  for (const [file, entry] of Object.entries(exempt)) console.log(`  ${file}（上限 ${entry.limit}）：${entry.reason}`);
+  if (!Object.keys(exempt).length) console.log('  （无）');
+}
+
 const [command, ...rest] = process.argv.slice(2);
 if (command === 'modules') {
   const { modules, problems } = loadModules();
@@ -493,7 +555,8 @@ else if (command === 'verify') verify(rest);
 else if (command === 'check') check(rest);
 else if (command === 'commits') commits(rest[0]);
 else if (command === 'coupling') coupling(rest);
+else if (command === 'sizes') sizes(rest);
 else {
-  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head> | coupling [--days N]');
+  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head> | coupling [--days N] | sizes [--days N]');
   process.exit(2);
 }
