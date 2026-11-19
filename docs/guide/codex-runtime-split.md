@@ -101,4 +101,5 @@ CodexSessionRuntime（协调者：持有各组对象，分发通知，推导状�
 | 0 | 01278ec | 录制可跨多次连接；补恢复、重连、切换模型三个场景 |
 | 1 | 30972e5 | 状态由 `refreshStatus` 从事实推导，phase 只在 `livePhase` 计算 |
 | 2 | 8af558c | `CodexTurns`（`turns.ts`，378 行）独占当前回合；`runtime.ts` 3933 → 3770 行 |
-| 3 | （本提交） | `CodexConnection`（576 行）、`CodexTerminal`（262 行）；适配器的配置切换与复用判断移入运行时（`switchProfile`、`probeEndpoint`、`reuseVerdict`）；`runtime.ts` 3770 → 3275，`index.ts` 1515 → 1470 |
+| 3 | 6031ab6 | `CodexConnection`（576 行）、`CodexTerminal`（262 行）；适配器的配置切换与复用判断移入运行时（`switchProfile`、`probeEndpoint`、`reuseVerdict`）；`runtime.ts` 3770 → 3275，`index.ts` 1515 → 1470 |
+| 4 | （本提交） | `CodexThread`（`thread.ts`，421 行）、`CodexInteractions`（`pending.ts`，509 行）；`runtime.ts` 3275 → 2592 |

@@ -6,7 +6,7 @@
     "apps/server/src/backends/claude/runtime.ts": 2756,
     "apps/server/src/backends/claude/transcript-source.ts": 1252,
     "apps/server/src/backends/codex/index.ts": 1470,
-    "apps/server/src/backends/codex/runtime.ts": 3275,
+    "apps/server/src/backends/codex/runtime.ts": 2592,
     "apps/server/src/backends/codex/transcript-source.ts": 1068,
     "apps/server/src/backends/droid/runtime.ts": 1805,
     "apps/server/src/backends/dsh/bridge-runtime/index.mjs": 981,

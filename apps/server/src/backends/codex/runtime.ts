@@ -1,26 +1,22 @@
 import { isDeepStrictEqual } from 'node:util';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
 import type {
   ModelInfo, NativeActivity, NativeBackendId, NativeContext, NativeInteraction, NativeInteractionResponse,
   NativeInteractionResult, NativeRunConfig, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget, Project, Run, Session, SessionGoal,
 } from '../../../../../packages/contracts/src/index.js';
 import type { CodexAppServerClient, CodexAppServerFactory, JsonRpcServerRequest } from '../shared/codex-app-server.js';
-import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
 import { CodexDraftStream, messagePhase, type CodexDraftOptions } from './drafts.js';
 import { codexFlavor, type CodexFlavor } from './flavors.js';
 import type { CodexObservation } from './observation.js';
-import { findCodexRollout } from './rollout-usage.js';
 import { normalizePlanEntries, parseRolloutPlan, type RolloutPlanSnapshot } from './rollout-plan.js';
 import { notificationSpan, rolloutItemSpans, type ItemSpans } from './item-spans.js';
-import { nativeModelEffort, nativeModelFast, parseNativeModelSelection, type NativeModelSelection } from '../shared/model-selection.js';
-import { modelSourceOf, resolveSource } from '../shared/model-source.js';
+import { nativeModelEffort, nativeModelFast, parseNativeModelSelection } from '../shared/model-selection.js';
 import { TurnTracker, turnPhaseOf } from '../shared/turn-tracker.js';
 import { DORMANT_POLL_MS, DormancyClock } from '../shared/dormancy.js';
 import { turnMarkers } from './event-diff.js';
 import { AppError } from '../../errors.js';
 import { firstHumanMessage, firstMessageTitlePatch, isPromptTitle, nativeTitlePatch } from '../../session-title.js';
-import type { NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding, NativeInteractionReceipt } from '../types.js';
+import type { NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding } from '../types.js';
 import { turnMetaId } from '../../journal/ingest.js';
 import { activityEvent, isLiveActivity, withActivity } from '../../journal/activity.js';
 import { CodexActivities } from './activities.js';
@@ -30,46 +26,32 @@ import { CodexTurnMetering, CodexContextMeter, noteItemMeter, noteRequestWaitSta
 import { CodexTurns } from './turns.js';
 import { CodexConnection, type NativeRuntimeHooks } from './connection.js';
 import { CodexTerminal } from './terminal.js';
+import { CodexThread } from './thread.js';
+import { CodexInteractions } from './pending.js';
 import { CodexSubagents, type CodexSubagentFrame } from './subagents.js';
 import { CodexJournalSpace, journalOf, type CodexIngestState } from './journal-space.js';
 import type { CodexLiveFeed, CodexThreadReader, CodexTurnPage, CodexTurnsRequest } from './transcript-source.js';
-import type {
-  TerminalEndpointState, CodexPendingInteraction, RpcThread, RpcTurn, RpcItem, RpcQuestion,
-} from './types.js';
-import {
-  RESIDENT_EVENTS, MAX_EVENTS, ROUTINE_TURNS, IMPORT_PAGE_TURNS, TAIL_TURNS, TURN_CACHE_THREADS,
-  THREAD_MATERIALIZATION_GRACE_MS, HISTORY_POLL_MS, HISTORY_FALLBACK_POLL_MS, ANSWER_CONFIRM_MS,
-} from './runtime-limits.js';
+import type { TerminalEndpointState, RpcThread, RpcTurn, RpcItem } from './types.js';
+import { RESIDENT_EVENTS, MAX_EVENTS, ROUTINE_TURNS, IMPORT_PAGE_TURNS, TAIL_TURNS, TURN_CACHE_THREADS, THREAD_MATERIALIZATION_GRACE_MS, HISTORY_POLL_MS, HISTORY_FALLBACK_POLL_MS } from './runtime-limits.js';
 import {
   stableTurnIdsOf, insertPlanEvent, mergeResidentEvents, shownTextRowsOf, extendCachedTurns, settleTurnPages, withinMaterializationGrace,
   planSnapshotForTurns, latestPlanTextOf, CodexHistoryReader,
 } from './history-read.js';
 import { threadStatusUpdate } from './thread-status.js';
 import { codexGoal, sameGoal } from './goal.js';
-import { requestIdString, toIso, str, finiteToken, asRecord, asArray, canonicalJson } from './util.js';
-import {
-  MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, matchesRuntimeFingerprint, providerEnv, collaborationModeOf,
-  STEER_MIN_VERSIONS, supportsSteerVersion, permissionParamsOf, hasNativePermissions, riffetMcpOverride,
-} from './config.js';
+import { toIso, str, finiteToken, asRecord, asArray, canonicalJson } from './util.js';
+import { MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, matchesRuntimeFingerprint, providerEnv, collaborationModeOf, STEER_MIN_VERSIONS, supportsSteerVersion, permissionParamsOf, hasNativePermissions } from './config.js';
 import { fastServiceTier, listModels, modelBackendVariant, resolveModelSelection } from './catalog.js';
-import { extensionsOffNames } from '../../extensions/toggles.js';
-import { codexStanding, standingProtects, standingThreadConfig, useStandingSkillRoots, type CodexStanding } from './standing.js';
-import { readConfiguredMcpNames } from './extensions.js';
-import { newThreadRequest, type CodexWarm, type ThreadStart } from './launch.js';
-import {
-  makePendingInteraction, commandApprovalDecision, questionInteraction, answerValues, elicitationContent, interactionFingerprint, asyncQuestionsOf, asyncQuestionInteraction,
-  asyncAnswerText, modeChangeInteraction, asyncQuestionReply, isAsyncQuestionInteraction, parseAsyncQuestionReplies, type CodexAsyncQuestion,
-} from './interactions.js';
-import { CodexQuestionHistory, isCodexQuestionTool } from './question-history.js';
+import { standingProtects } from './standing.js';
+import { type CodexWarm } from './launch.js';
+import { parseAsyncQuestionReplies } from './interactions.js';
+import { isCodexQuestionTool } from './question-history.js';
 import {
   isCodexToolItem, projectStartedTool, projectCompletedTool, codexPlanNativeId,
   turnStatus, isFinalTurnStatus,
   isProvisionalItemId, buildEvent, rolloutPlanNativeId, nativeTurnIdOf, type ItemSpan,
 } from './transcript.js';
-import {
-  isUnmaterializedThreadError, isActiveWriterError, isTurnsListUnsupportedError,
-  isEmptyThreadRolloutError, safeTurnError, safeProviderError,
-} from './errors.js';
+import { isUnmaterializedThreadError, isTurnsListUnsupportedError, isEmptyThreadRolloutError, safeTurnError, safeProviderError } from './errors.js';
 import { MESSAGE_ID_PREFIX, STEER_ELEMENT_PREFIX, commandIdOfMessageId, commandIdOfSteerPlaceholder, isTaggedMessageId } from './message-tag.js';
 
 
@@ -92,11 +74,14 @@ export interface ProfileSwitchSteps {
 }
 
 export class CodexSessionRuntime implements CodexThreadReader {
-  nativeSessionId: string | undefined;
   /** The link to the app-server: transport, endpoint and binding conflicts, profile identity (`connection.ts`). */
   readonly connection: CodexConnection;
   /** The terminal client sharing the app-server (`terminal.ts`). */
   readonly terminal: CodexTerminal;
+  /** The thread on the app-server: opening it, its standing configuration, who owns it while loaded (`thread.ts`). */
+  private readonly thread: CodexThread;
+  /** What the app-server waits on the reader for: requests, questions, mode changes (`pending.ts`). */
+  private readonly interactions: CodexInteractions;
   /** Turn bookkeeping: the current turn, and which command and run each turn belongs to. */
   private readonly turns: CodexTurns;
   /** A written operation without a receipted turn may still start, even after its local wait ends. */
@@ -122,13 +107,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   };
   private readonly turn = new TurnTracker('starting', { activePollMs: HISTORY_POLL_MS, fallbackPollMs: HISTORY_FALLBACK_POLL_MS });
   status: NativeStatus = { phase: 'starting', connection: { state: 'reconnecting' }, history: { state: 'loading' } };
-  interaction: NativeInteraction | undefined;
-  private readonly pending = new Map<string, CodexPendingInteraction>();
-  /** Questions the running turn asked without waiting; shown after any blocking request. */
-  private asyncQuestions: CodexAsyncQuestion[] = [];
-  private readonly seenAsyncItems = new Set<string>();
-  private readonly sendingAsyncAnswers = new Set<string>();
-  private readonly questionHistory = new CodexQuestionHistory();
   private readonly listeners = new Set<(message: NativeControlMessage) => void>();
   private historyPoll: NodeJS.Timeout | undefined;
   private pollHealthy?: boolean;
@@ -156,12 +134,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private stableTurnIds: ReadonlySet<string> = new Set();
   private transcriptLoaded = false;
   private historySnapshotReady = false;
-  /** The name the thread itself last reported, or was last given. */
-  private threadName: string | undefined;
   /** The name a `thread/name/set` in flight is giving the thread. */
   private pushingTitle: string | undefined;
-  private opening?: Promise<string | undefined>;
-  private attachAttemptAt = 0;
   private readonly metering: CodexTurnMetering;
   private readonly drafts = new CodexDraftStream({
     ...(process.env.RIFFET_CODEX_STREAM_TIMING === '1' ? {
@@ -191,10 +165,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** Marker of each turn as of the last read, for telling which settled turns cannot have changed. */
   private turnMarkersSeen = new Map<string, string>();
   private readonly history: CodexHistoryReader;
-  /** The rollout the provider itself reported for this thread (`thread.path`), when it did. */
-  private rolloutPath: string | undefined;
-  /** The model the thread last reported; Plan mode settings must name one. */
-  private threadModel: string | undefined;
   private configuring = false;
   /** The recorded mode corresponding to the last observed native permissions, including customizations. */
   private nativeApproval: string | undefined;
@@ -202,13 +172,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private nativeMode: string | undefined;
   private modeObservation = 0;
   private modeReconciliation: Promise<void> | undefined;
-  private readonly modeRequests = new WeakMap<CodexPendingInteraction, { observation: number; decision?: string }>();
   private permissionObservation = 0;
-  /** A sandbox other than the 助理's profile was named on the loaded thread (`standingProfile`). */
-  private standingSandboxNamed = false;
-  private readonly standingMoments = new Set<'start' | 'compact'>();
-  /** The files each of the 助理's open file changes writes, by item: an approval request names only the item. */
-  private readonly standingWrites = new Map<string, string[]>();
   private commandConfigObserver?: (settings: Record<string, unknown>) => void;
   private permissionSettings: Record<string, unknown> | undefined;
   /**
@@ -251,11 +215,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.project = { ...project };
     this.session = { ...session };
     this.profile = { ...profile, config: structuredClone(profile.config) };
-    this.nativeSessionId = session.nativeSessionId;
     // Sync v3 reads the thread into the journal (`transcript-source.ts`) once its ingest is attached to the
     // host; then this runtime writes nothing there and numbers in memory for its own bookkeeping.
     this.journalRead = host.transcript !== undefined && host.journal !== undefined;
-    this.space = new CodexJournalSpace(journalOf(host), session.id, this.nativeSessionId, this.journalRead);
+    this.space = new CodexJournalSpace(journalOf(host), session.id, session.nativeSessionId, this.journalRead);
     // A complete log is ready the moment the runtime exists: numbering is known, and the newest
     // events are at hand before the app-server has answered anything.
     if (this.space.ready) {
@@ -290,6 +253,63 @@ export class CodexSessionRuntime implements CodexThreadReader {
       onServerRequest: request => this.onServerRequest(request),
       onExit: error => this.onExit(error),
     });
+    this.thread = new CodexThread({
+      host,
+      project: this.project,
+      profile: this.profile,
+      flavor: this.flavor,
+      session: () => this.session,
+      terminal: () => this.terminal,
+      canSwitchProfile: () => this.canSwitchProfile,
+      busy: () => this.activeTurnId !== undefined || this.status.phase === 'busy',
+      readThread: threadId => this.history.readThread(threadId, false),
+      permissionObservation: () => this.permissionObservation,
+      modeObservation: () => this.modeObservation,
+      permissionParams: (permission, sandboxField, force) => this.permissionParams(permission, sandboxField, force),
+      adoptApproval: settings => this.adoptApproval(settings),
+      adoptSettingsMode: settings => this.adoptSettingsMode(settings),
+      adoptProviderTitle: name => this.adoptProviderTitle(name),
+      startedThread: threadId => {
+        this.history.startMaterialization(threadId);
+        this.space.adoptThread(threadId);
+        if (!this.space.initialized) { this.space.bind('real'); this.space.writeState({ phase: 'ready', turns: 0 }); this.space.markInitialized(); }
+      },
+      resetUsage: () => this.usage.reset(),
+      readGoal: threadId => { void this.readGoal(threadId); },
+      applyThreadStatus: status => this.applyThreadStatus(status),
+      markQuiet: () => { if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' }); },
+      refreshEvents: () => this.refreshEvents(),
+      noteHistoryFailure: error => this.noteHistoryFailure(error),
+    }, this.connection, session.nativeSessionId);
+    this.interactions = new CodexInteractions({
+      host,
+      profile: this.profile,
+      flavor: this.flavor,
+      session: () => this.session,
+      threadId: () => this.nativeSessionId,
+      activeTurnId: () => this.activeTurnId,
+      status: () => this.status,
+      modeObservation: () => this.modeObservation,
+      emit: message => this.emit(message),
+      interrupt: (turnId, threadId) => this.interrupt(turnId, threadId),
+      scopedRequestId: (threadId, id) => this.scopedRequestId(threadId, id),
+      refreshStatus: () => this.refreshStatus(),
+      requestRaised: () => this.refreshStatus({ link: this.resumed(), notice: undefined }),
+      requestSettled: notice => this.refreshStatus({ link: 'quiet', notice: notice ? { text: notice, level: 'warning', source: 'other' } : undefined }),
+      adoptMode: mode => this.adoptMode(mode),
+      reconcileMode: threadId => this.startModeReconciliation(threadId),
+      latestPlanText: (turnId, threadId) => this.latestPlanText(turnId, threadId),
+      projectAnswered: (item, turnId) => { for (const event of this.projectItem(item, { id: turnId })) this.pushEvent(event); },
+      // A child's output-only history still needs this native metadata, as does a v3 reader with
+      // its own question tracker. Forward metadata, never candidate answers or a child main row.
+      forwardQuestion: (method, params) => { try { this.feed?.notification(method, params); } catch { /* as for notifications */ } },
+      projectQuestion: (item, turnId) => { for (const event of this.projectItem(item, { id: turnId })) this.pushEvent(event, true); },
+      requestWaitStarted: (turnId, requestId) => noteRequestWaitStart(this.metering, turnId, requestId),
+      requestWaitEnded: (turnId, requestId) => {
+        const meter = this.metering.active(turnId);
+        if (meter) noteRequestWaitEnd(meter, requestId);
+      },
+    }, this.connection);
     this.terminal = new CodexTerminal({
       host,
       project: this.project,
@@ -328,7 +348,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       threadId: () => this.nativeSessionId,
       transport: () => this.transport,
       bindingScopeMismatch: () => this.connection.bindingScopeMismatch,
-      rolloutFile: threadId => this.rolloutFile(threadId),
+      rolloutFile: threadId => this.thread.rolloutFile(threadId),
       contextUsed: used => this.activities.noteContext(used),
     });
     this.metering = new CodexTurnMetering({
@@ -347,7 +367,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       transport: () => this.transport?.isOnline ? this.transport : undefined,
       journal: () => journalOf(this.host),
       contextUsed: () => this.usage.context?.used,
-      rolloutFile: threadId => this.rolloutFile(threadId),
+      rolloutFile: threadId => this.thread.rolloutFile(threadId),
       write: (activity, turnId) => this.writeActivity(activity, turnId),
       // The journal's reader follows background terminals too, whether or not a v2 client listens.
       hasListeners: () => this.listeners.size > 0 || (this.feed !== undefined && this.feed.active?.() !== false),
@@ -357,6 +377,18 @@ export class CodexSessionRuntime implements CodexThreadReader {
   get label(): string { return this.flavor.label; }
 
   get transport(): CodexAppServerClient | undefined { return this.connection.transport; }
+  /** The id of the thread this runtime drives; it changes only when `openOrResume` creates one. */
+  get nativeSessionId(): string | undefined { return this.thread.id; }
+  openOrResume(override?: { model?: string; approval?: string }): Promise<string> { return this.thread.openOrResume(override); }
+  leaveThread(): Promise<string> { return this.thread.leaveThread(); }
+  attachLoadedOwner(): Promise<void> { return this.thread.attachLoadedOwner(); }
+  takeStandingMoments(): Array<'start' | 'compact'> { return this.thread.takeStandingMoments(); }
+  /** The blocking request the card shows; public because the status carries it. */
+  get interaction(): NativeInteraction | undefined { return this.interactions.blocking; }
+  /** What the card shows: a blocking request first, then the oldest unanswered async question. */
+  get currentInteraction(): NativeInteraction | undefined { return this.interactions.current; }
+  respond(response: NativeInteractionResponse): Promise<NativeInteractionResult> { return this.interactions.respond(response); }
+  holdsInteraction(interactionId: string): boolean { return this.interactions.holdsInteraction(interactionId); }
   get terminalId(): string | undefined { return this.terminal.id; }
   set terminalId(id: string | undefined) { this.terminal.bind(id); }
 
@@ -401,15 +433,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return this.turns.claimSteeredItem(id, turnId, item);
   }
 
-  /** Keeps what a thread record says about itself: where its rollout is, which model it runs. */
-  private noteThread(thread: RpcThread | undefined, settings?: Record<string, unknown>): void {
-    if (!thread) return;
-    if (str(thread.path) && isAbsolute(thread.path!)) this.rolloutPath = thread.path!;
-    // start/resume report the effective model at the response's top level, not inside Thread.
-    const model = str(settings?.model) ?? str(thread.model);
-    if (model) this.threadModel = model;
-  }
-
   private adoptApproval(settings: Record<string, unknown> | undefined): void {
     if (this.flavor.id !== 'traex' || this.configuring) return;
     const session = this.host.getSession(this.session.id);
@@ -451,8 +474,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private adoptSettingsMode(settings: Record<string, unknown> | undefined): void {
     const model = str(settings?.model);
-    if (model) this.threadModel = model;
+    this.thread.noteModel(model);
     this.adoptMode(str(asRecord(settings?.collaborationMode)?.mode));
+  }
+
+  /** Reads the settings back after a mode change whose winner cannot be told from observation counts alone. */
+  private startModeReconciliation(threadId: string): void {
+    const task = this.reconcileMode(threadId).finally(() => {
+      if (this.modeReconciliation === task) this.modeReconciliation = undefined;
+    });
+    this.modeReconciliation = task;
   }
 
   /** Read effective settings without selecting a mode/model or resuming the native execution. */
@@ -473,10 +504,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
   }
 
-  private async rolloutFile(threadId: string): Promise<string | undefined> {
-    return this.rolloutPath ?? await findCodexRollout(this.flavor.stateHome(this.profileConfig), threadId);
-  }
-
   get projectCwd(): string { return this.project.cwd; }
 
   /** The actual writer's launch profile, independent of the next provider the user selected. */
@@ -485,8 +512,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** The source model for rollback, including saved dimensions when they still name that model. */
   get currentModel(): string | undefined {
     const selected = this.status.model ?? (!this.session.backendProfileId || this.session.backendProfileId === this.profile.id ? this.session.model : undefined);
-    return selected && (!this.threadModel || parseNativeModelSelection(selected).model === this.threadModel)
-      ? selected : this.threadModel ?? str(this.profileConfig.defaultModel);
+    return selected && (!this.thread.model || parseNativeModelSelection(selected).model === this.thread.model)
+      ? selected : this.thread.model ?? str(this.profileConfig.defaultModel);
   }
 
   get canSwitchProfile(): boolean {
@@ -589,30 +616,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   /**
-   * Lets go of the thread for a new topic (docs/ASSISTANT.md §5.5): what it wrote is read into the journal, the TUI
-   * that shows it stops and the app-server unloads it. The app-server stays, for the thread that follows. Only an idle
-   * thread is left; the caller holds the session lock and replaces this runtime afterwards.
-   */
-  async leaveThread(): Promise<string> {
-    const busy = () => new AppError('CLI_BUSY', 'The current task is still running; start a new topic when it finishes.', 409);
-    const threadId = this.nativeSessionId;
-    if (!threadId || !this.connection.attached) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
-    if (!this.canSwitchProfile) throw busy();
-    this.connection.assertWritable();
-    const transport = this.connection.requireTransport();
-    await this.host.transcript?.drain(this.session.id);
-    if (!this.canSwitchProfile) throw busy();
-    if (this.terminalId) {
-      const terminalId = this.terminalId;
-      this.terminalId = undefined;
-      this.host.updateSession(this.session.id, { terminalId: undefined });
-      await this.host.terminal.stop(terminalId).catch(() => undefined);
-    }
-    await transport.request('thread/unsubscribe', { threadId }).catch(() => undefined);
-    return threadId;
-  }
-
-  /**
    * `warm` hands over an app-server with a new thread started ahead of this conversation (`launch.ts`);
    * it is asked only by a conversation that has no thread and no process of its own yet.
    */
@@ -641,7 +644,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** The model the sidecar's control is shown for. */
   private controlModel(status: NativeStatus = this.status): string | undefined {
-    return parseNativeModelSelection(status.model ?? this.threadModel ?? this.session.model).model || undefined;
+    return parseNativeModelSelection(status.model ?? this.thread.model ?? this.session.model).model || undefined;
   }
 
   /** The sidecar's control on this conversation. Plugin code: one that throws shows nothing. */
@@ -666,279 +669,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     } finally {
       this.refreshStatus();
     }
-  }
-
-  /**
-   * `override` carries a configuration change that has not reached `this.session` yet: the runtime
-   * only ever holds the snapshot it was constructed with, while `configure` merges its patch with
-   * the store's current intent. Without it, opening first on the snapshot would create or resume the
-   * thread on the previous model/approval and only correct it with a follow-up request — wrong on
-   * the wire, and a real defect for any reader that adopts what the first response reported.
-   */
-  async openOrResume(override?: { model?: string; approval?: string }): Promise<string> {
-    const source = modelSourceOf(this.profileConfig);
-    const reason = source && resolveSource(source, this.profileConfig).reason;
-    if (reason && !this.connection.transportBorrowed) throw new AppError('NATIVE_MODEL_SOURCE_UNAVAILABLE', reason, 409);
-    this.connection.assertWritable();
-    while (this.opening) {
-      const opened = await this.opening;
-      if (opened) return opened;
-    }
-    this.connection.assertWritable();
-    if (this.nativeSessionId && this.transport?.isOnline && this.connection.attached) return this.nativeSessionId;
-    const task = (async () => {
-      const transport = this.connection.requireTransport();
-      const existingId = this.nativeSessionId;
-      const current = this.host.getSession(this.session.id);
-      const requestedModel = override?.model ?? current.model ?? str(this.profileConfig.defaultModel);
-      // A saved selector may predate a provider rename; resolve it against the live catalog before
-      // the thread is created or resumed, so the provider never sees the retired spelling.
-      const selection = await resolveModelSelection(transport, this.flavor, parseNativeModelSelection(requestedModel));
-      const permission = permissionOf(override?.approval ?? current.approval, this.flavor.id);
-      let thread: RpcThread;
-      let settings: Record<string, unknown> | undefined;
-      let permissionObservation = this.permissionObservation;
-      const modeObservation = this.modeObservation;
-      if (existingId) {
-        const observed = await this.history.readThread(existingId, false).catch(() => undefined);
-        const active = this.activeTurnId !== undefined || this.status.phase === 'busy' || observed?.status?.type === 'active';
-        try {
-          permissionObservation = this.permissionObservation;
-          const response = active
-            ? await transport.request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
-              threadId: existingId, cwd: this.project.cwd, excludeTurns: true,
-            })
-            : await this.resumeWithConfiguration(existingId, selection,
-              this.flavor.id === 'traex' && override?.approval === undefined && !current.configPending ? undefined : permission);
-          thread = response.thread;
-          settings = response;
-        } catch (error) {
-          this.connection.noteConnectionFailure(error);
-          this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
-          await this.connection.discardFailedTransport();
-          throw error;
-        }
-      } else {
-        // A warm thread started for the same model and permission is this conversation's first thread.
-        const warm = this.connection.takeWarm();
-        try {
-          const response = warm && warm.model === requestedModel && warm.approval === permission.id ? warm.thread : await this.startThread(selection, permission);
-          thread = response.thread;
-          settings = response;
-        } catch (error) {
-          this.connection.noteConnectionFailure(error);
-          this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'start', isActiveWriterError(error) ? 'conflict' : 'failed', false);
-          await this.connection.discardFailedTransport();
-          throw error;
-        }
-      }
-      if (!thread?.id) {
-        const error = new Error(`${this.label} app-server did not return a thread id`);
-        this.connection.noteConnectionFailure(error);
-        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'missing-thread-id', false);
-        await this.connection.discardFailedTransport();
-        throw error;
-      }
-      if (existingId && thread.id !== existingId) {
-        const error = new Error(`${this.label} app-server resumed a different thread`);
-        this.connection.noteConnectionFailure(error);
-        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'resume', 'wrong-thread', false);
-        await this.connection.discardFailedTransport();
-        throw error;
-      }
-      this.connection.markAttached();
-      this.nativeSessionId = thread.id;
-      // A newly created thread has no older transcript to seed before accepting live events.
-      if (!existingId) {
-        // A new thread of a conversation that may have had others: the 助理 is told what it lacks (§5.1).
-        if (this.isStanding()) this.standingMoments.add('start');
-        this.history.startMaterialization(thread.id);
-        this.space.adoptThread(thread.id);
-        if (!this.space.initialized) { this.space.bind('real'); this.space.writeState({ phase: 'ready', turns: 0 }); this.space.markInitialized(); }
-      }
-      this.noteThread(thread, this.modeObservation === modeObservation ? settings : undefined);
-      if (this.permissionObservation === permissionObservation) this.adoptApproval(settings);
-      if (this.modeObservation === modeObservation) this.adoptSettingsMode(settings);
-      // A different thread is a different window: the old numbers must not be repainted under it.
-      this.usage.reset();
-      this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
-      this.host.setNativeSessionId(this.session.id, thread.id);
-      void this.readGoal(thread.id);
-      this.applyThreadStatus(thread.status);
-      if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
-      // Commit the durable endpoint only after Codex confirms the requested thread id. History is
-      // a separate read path: a transcript error must not undo an established writer binding.
-      await this.connection.commitBinding(transport, thread.id);
-      this.connection.setConnection({ state: 'connected' });
-      this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'confirmed', true);
-      await this.refreshEvents().catch(error => this.noteHistoryFailure(error));
-      return thread.id;
-    })();
-    this.opening = task;
-    try { return await task; }
-    finally { if (this.opening === task) this.opening = undefined; }
-  }
-
-  private async resumeWithConfiguration(threadId: string, selection: NativeModelSelection, permission: ReturnType<typeof permissionOf> | undefined): Promise<{ thread: RpcThread } & Record<string, unknown>> {
-    const standing = await this.standingThread();
-    const effort = nativeModelEffort(selection);
-    const serviceTier = fastServiceTier(this.flavor, selection.model, nativeModelFast(selection));
-    const backendVariant = modelBackendVariant(this.flavor, selection);
-    const config = {
-      ...(effort && effort !== 'default' ? { model_reasoning_effort: effort } : {}),
-      ...(backendVariant ? { model_backend_variant: backendVariant } : {}),
-      ...this.riffetMcpConfig(),
-      ...await this.extensionsOffConfig(),
-      ...standing?.config,
-    };
-    return await this.connection.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
-      ...standing?.instructions,
-      threadId,
-      cwd: this.project.cwd,
-      model: selection.model || null,
-      ...(permission ? this.permissionParams(permission, 'sandbox', true) : {}),
-      ...(serviceTier ? { serviceTier } : {}),
-      ...(Object.keys(config).length ? { config } : {}),
-      excludeTurns: true,
-    });
-  }
-
-  /**
-   * The 助理's isolation (`standing.ts`), given again at every start and resume: a resumed thread keeps nothing of the
-   * last one's overrides, and the directory's files may have changed since. Undefined for any other conversation.
-   */
-  private async standingThread(): Promise<{ instructions: { baseInstructions: string; developerInstructions: string }; config: Record<string, unknown> } | undefined> {
-    const standing = this.standing();
-    if (!standing) return undefined;
-    const transport = this.connection.requireTransport();
-    await useStandingSkillRoots(transport, standing);
-    const riffet = Object.keys(this.riffetMcpConfig()).map(key => key.slice('mcp_servers.'.length));
-    return {
-      instructions: { baseInstructions: standing.baseInstructions, developerInstructions: standing.developerInstructions },
-      config: await standingThreadConfig(transport, this.project.cwd, standing, riffet),
-    };
-  }
-
-  private isStanding(): boolean {
-    return this.flavor.id === 'codex' && Boolean(this.host.standing?.launch(this.project, this.host.getSession(this.session.id)));
-  }
-
-  /** The 助理's isolation when this is one of its conversations (`standing.ts`); TRAE's app-server is not isolated. */
-  private standing(): CodexStanding | undefined {
-    return this.flavor.id === 'codex' ? codexStanding(this.host.standing?.launch(this.project, this.host.getSession(this.session.id))) : undefined;
-  }
-
-  /**
-   * Whether the 助理's permission profile is the sandbox in force: in the workspace-write preset, until a sandbox of
-   * another mode was named on the loaded thread, which stays in force over the profile until the thread is loaded
-   * again. Then the preset is named instead, without the profile's read-only files (docs/ASSISTANT.md §4.1).
-   */
-  private standingProfile(permission: ReturnType<typeof permissionOf>): boolean {
-    if (!this.isStanding()) return false;
-    if (permission.sandbox !== 'workspace-write') { this.standingSandboxNamed = true; return false; }
-    return !this.standingSandboxNamed;
-  }
-
-  /** The moments the 助理 has not been told of yet (`StandingMoment`): a new thread, a summarized one. Taken once. */
-  takeStandingMoments(): Array<'start' | 'compact'> {
-    const moments = [...this.standingMoments];
-    this.standingMoments.clear();
-    return moments;
-  }
-
-  /**
-   * The conversation's Riffet MCP server as a per-thread override (docs/DEVICES.md §2). The dotted
-   * key adds one server beside the reader's own; the CLI's config files are never written. The
-   * app-server starts MCP servers itself, outside the command sandbox, so no network opening is needed.
-   */
-  private riffetMcpConfig(): Record<string, unknown> {
-    const server = this.host.riffetMcp?.server(this.session.id);
-    return riffetMcpOverride(server);
-  }
-
-  /**
-   * The MCP servers this conversation switched off (docs/EXTENSIONS.md), as per-thread overrides. Skills the owner
-   * switched off stay in the CLI's own configuration; only the 助理's thread switches skills off itself (`standing.ts`).
-   */
-  private async extensionsOffConfig(): Promise<Record<string, unknown>> {
-    // A dotted key cannot carry a dot inside a server name; the CLI's own names never have one.
-    const names = extensionsOffNames(this.host.getSession(this.session.id).extensionsOff, 'mcp').filter(name => /^[\w-]+$/.test(name));
-    if (!names.length) return {};
-    // The app-server refuses a thread whose config names an MCP server the configuration does not define (a stale or
-    // handed-over name, or a plugin's server), so only defined names reach it. If the config cannot be read, nothing
-    // is switched off rather than risking the launch.
-    let known: Set<string>;
-    try { known = await readConfiguredMcpNames(this.connection.requireTransport(), this.project.cwd); }
-    catch { return {}; }
-    return Object.fromEntries(names.filter(name => known.has(name)).map(name => [`mcp_servers.${name}.enabled`, false]));
-  }
-
-  private async startThread(selection: NativeModelSelection, permission: ReturnType<typeof permissionOf>): Promise<{ thread: RpcThread } & Record<string, unknown>> {
-    const standing = await this.standingThread();
-    const config = { ...this.riffetMcpConfig(), ...await this.extensionsOffConfig(), ...standing?.config };
-    return await this.connection.requireTransport().request<ThreadStart>('thread/start',
-      newThreadRequest(this.flavor, this.project.cwd, selection, this.permissionParams(permission, 'sandbox', true), config, standing?.instructions));
-  }
-
-  /** Attach only when the selected endpoint already proves it owns this loaded thread. */
-  async attachLoadedOwner(): Promise<void> {
-    const threadId = this.nativeSessionId;
-    if (!threadId || this.connection.attached || !this.transport?.isOnline) return;
-    if (this.connection.bindingScopeMismatch) {
-      this.connection.deferForProfileChange();
-      return;
-    }
-    if (this.connection.endpointBlocked) {
-      this.connection.deferForEndpointConflict();
-      return;
-    }
-    if (this.opening) {
-      // An explicit open owns the same resume gate. Its error is already reported to its caller;
-      // the observer must not issue a competing resume after that operation settles.
-      await this.opening.catch(() => undefined);
-      return;
-    }
-    const task = (async (): Promise<string | undefined> => {
-      const loaded = await this.connection.loadedThread(threadId, true);
-      if (loaded !== true || this.connection.attached || !this.transport?.isOnline) return undefined;
-      if (this.connection.bindingScopeMismatch) {
-        this.connection.deferForProfileChange();
-        return undefined;
-      }
-      if (this.connection.endpointBlocked) {
-        this.connection.deferForEndpointConflict();
-        return undefined;
-      }
-      if (Date.now() - this.attachAttemptAt < 15_000) return undefined;
-      this.attachAttemptAt = Date.now();
-      try {
-        const transport = this.connection.requireTransport();
-        const permissionObservation = this.permissionObservation;
-        const modeObservation = this.modeObservation;
-        const response = await transport.request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
-          threadId, cwd: this.project.cwd, excludeTurns: true,
-        });
-        if (!response.thread?.id || response.thread.id !== threadId) throw new Error(`${this.label} app-server resumed a different thread`);
-        this.noteThread(response.thread, this.modeObservation === modeObservation ? response : undefined);
-        if (this.permissionObservation === permissionObservation) this.adoptApproval(response);
-        if (this.modeObservation === modeObservation) this.adoptSettingsMode(response);
-        this.connection.markAttached();
-        this.applyThreadStatus(response.thread.status);
-        if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
-        await this.connection.commitBinding(transport, threadId);
-        this.connection.setConnection({ state: 'connected' });
-        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'observer-resume', 'confirmed', true);
-        return threadId;
-      } catch (error) {
-        this.connection.noteConnectionFailure(error);
-        this.connection.logRecovery(this.connection.endpointSource, this.transport?.remoteAddress ?? 'unknown', 'observer-resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
-        return undefined;
-      }
-    })();
-    this.opening = task;
-    try { await task; }
-    catch { /* Only an explicit open can reject the shared opening gate. */ }
-    finally { if (this.opening === task) this.opening = undefined; }
   }
 
   /** Local evidence of a live turn on the attached owner connection. */
@@ -1085,7 +815,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // Codex states the sandbox per turn. TRAE inherits its observed native permissions unless
     // the requested mode changed, preserving profile modifications made in the TUI.
     const mode = this.flavor.modes.length ? collaborationModeOf(input.config.mode) : undefined;
-    const modeModel = modelSelection.model || this.threadModel;
+    const modeModel = modelSelection.model || this.thread.model;
     const collaborationMode = mode && modeModel ? { mode, settings: { model: modeModel, reasoning_effort: effort === 'default' ? null : effort ?? null } } : undefined;
     const params = {
       threadId: input.nativeSessionId,
@@ -1143,7 +873,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         }
       }
       // A new message supersedes the questions still open, as a TUI submission does.
-      this.asyncQuestions = [];
+      this.interactions.supersedeAsyncQuestions();
       this.turns.rememberCommand(turnId, input.commandId, !activeTurnId);
       if (!activeTurnId) this.turns.setTurnConfig(turnId, structuredClone(binding.resolvedConfig));
       const completedBeforeAck = this.turns.takePendingOutcome(turnId);
@@ -1239,7 +969,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     };
     this.commandConfigObserver = observe;
     try {
-      const requested = config.model ?? str(this.profileConfig.defaultModel) ?? this.threadModel;
+      const requested = config.model ?? str(this.profileConfig.defaultModel) ?? this.thread.model;
       const selection = await resolveModelSelection(transport, this.flavor, parseNativeModelSelection(requested));
       let effort = nativeModelEffort(selection);
       if (!selection.model) throw fail('model');
@@ -1276,7 +1006,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         // Unlike resume overrides, this applies to an already loaded thread. Null effort preserves
         // the old effort, so an explicit default above resolves to the model catalog's actual value.
         await transport.request('thread/settings/update', { threadId, cwd: this.project.cwd, model: selection.model,
-          approvalPolicy: permission.approvalPolicy, approvalsReviewer: 'user', ...(this.standingProfile(permission) ? {} : { sandboxPolicy: sandbox }),
+          approvalPolicy: permission.approvalPolicy, approvalsReviewer: 'user', ...(this.thread.standingProfile(permission) ? {} : { sandboxPolicy: sandbox }),
           ...(effort !== undefined ? { effort } : {}), ...(tier !== undefined ? { serviceTier: tier } : {}),
         });
         const deadline = Date.now() + 5_000;
@@ -1290,7 +1020,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
           if (thread?.id !== threadId) throw fail('thread');
           if (asRecord(thread.status)?.type === 'active' || this.activeTurnId) throw new AppError('CLI_BUSY', 'Finish or stop the current turn before running this command.', 409);
           if (asRecord(thread.status)?.type === 'idle' && observation === this.permissionObservation && matches(actual)) {
-            this.noteThread(thread as unknown as RpcThread, actual);
+            this.thread.noteThread(thread as unknown as RpcThread, actual);
             const suffix = requested?.trim().slice(parseNativeModelSelection(requested).model.length) ?? '';
             return { config: { ...config, model: selection.model + suffix, approval: permission.id }, observation };
           }
@@ -1404,7 +1134,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // An unchanged TRAE mode inherits the actual native profile, including additional roots and
     // custom restrictions. Only an explicit switch may replace it with a bare built-in preset.
     if (this.flavor.id === 'traex' && !force && this.nativeApproval === permission.id && !this.host.getSession(this.session.id).configPending) return {};
-    if (this.standingProfile(permission)) return { approvalPolicy: permission.approvalPolicy };
+    if (this.thread.standingProfile(permission)) return { approvalPolicy: permission.approvalPolicy };
     return permissionParamsOf(permission, sandboxField);
   }
 
@@ -1448,11 +1178,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
           ...(Object.keys(modelConfig).length ? { config: modelConfig } : {}),
           excludeTurns: true,
         });
-        this.noteThread(response.thread, response);
+        this.thread.noteThread(response.thread, response);
       }
       // Resume carries no mode; the thread's own settings do, which is also what an attached TUI shows.
       const mode = collaborationModeOf(config.mode);
-      const modeModel = selection.model || this.threadModel;
+      const modeModel = selection.model || this.thread.model;
       const collaborationMode = mode && modeModel && this.flavor.modes.length ? { mode, settings: { model: modeModel, reasoning_effort: effort === 'default' ? null : effort ?? null } } : undefined;
       if (this.flavor.id === 'traex' || collaborationMode) {
         // Keep TRAE's model and variant in one update, including Standard when leaving Max.
@@ -1554,7 +1284,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** Idle, with no client listening, for a while: nothing anyone sees depends on a quick read. */
   private dormant(): boolean {
-    const quiet = !this.activeTurnId && this.pending.size === 0 && this.asyncQuestions.length === 0
+    const quiet = !this.activeTurnId && this.interactions.idle
       && (this.status.phase === 'idle' || this.status.phase === 'offline');
     return this.dormancy.dormant(!quiet || this.listeners.size > 0);
   }
@@ -1581,296 +1311,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (!this.usage.contextBreakdown) await this.usage.refreshContextBreakdown().catch(() => undefined);
   }
 
-  async respond(response: NativeInteractionResponse): Promise<NativeInteractionResult> {
-    if (typeof response.requestId !== 'string' || !response.requestId || response.requestId.length > 200 || /[\0\r\n]/.test(response.requestId)) {
-      throw new AppError('INVALID_INTERACTION_REQUEST_ID', 'Interaction request id is invalid', 400);
-    }
-    const fingerprint = interactionFingerprint(response);
-    const previous = this.host.getInteractionReceipt(this.session.id, response.requestId);
-    if (previous) {
-      if (previous.fingerprint !== fingerprint || previous.interactionId !== response.interactionId || previous.revision !== response.revision) {
-        throw new AppError('NATIVE_INTERACTION_REQUEST_CONFLICT', 'This interaction retry id was already used for a different answer', 409);
-      }
-      return previous.result;
-    }
-    const asked = this.asyncQuestions.find(question => asyncQuestionInteraction(question, this.label).id === response.interactionId);
-    if (asked) return await this.answerAsyncQuestion(asked, response, fingerprint);
-    if (isAsyncQuestionInteraction({ id: response.interactionId } as NativeInteraction)) {
-      return { status: 'uncertain', message: `${this.label} no longer has this question pending.` };
-    }
-    const current = this.interaction;
-    if (!current || current.id !== response.interactionId || current.revision !== response.revision) {
-      return { status: 'uncertain', message: `The ${this.label} request changed before the answer was submitted.` };
-    }
-    const id = current.requestId;
-    if (!id) return { status: 'uncertain', message: `The ${this.label} request has no native request id.` };
-    const pending = this.pending.get(id);
-    if (!pending) return { status: 'uncertain', message: `${this.label} no longer has this request pending.` };
-    if (!current.actions.some(action => action.id === response.action)) {
-      throw new AppError('INVALID_NATIVE_INTERACTION', `The selected action is not available for this ${this.label} request`, 400);
-    }
-    if (pending.candidateSent) {
-      // A fresh retry key is not a license to journal an invalid candidate. Validate against the
-      // still-current request before writing its uncertain receipt; never submit a second choice.
-      if (pending.request.method === 'item/tool/requestUserInput' && response.action !== 'cancel') {
-        const question = asArray<RpcQuestion>(pending.request.params.questions)[pending.currentQuestion];
-        if (!question) throw new AppError('INVALID_NATIVE_INTERACTION', `The ${this.label} question is no longer available.`, 400);
-        answerValues(question, response);
-      } else if (pending.request.method === 'mcpServer/elicitation/request'
-        && (response.action === 'answer' || response.action === 'accept')) {
-        elicitationContent(pending.request.params.requestedSchema, response);
-      }
-      const result = { status: 'uncertain' as const, message: `${this.label} is still resolving this answer.` };
-      this.saveInteractionResponse(response, fingerprint, result);
-      return result;
-    }
-    const method = pending.request.method;
-    let result: Record<string, unknown>;
-    if (method === 'item/tool/requestUserInput') {
-      if (response.action === 'cancel') {
-        const cancellation = { status: 'uncertain' as const, message: `The ${this.label} turn is being interrupted.` };
-        this.saveInteractionResponse(response, fingerprint, cancellation);
-        await this.interrupt(str(pending.request.params.turnId), str(pending.request.params.threadId));
-        return cancellation;
-      }
-      const questions = asArray<RpcQuestion>(pending.request.params.questions);
-      const question = questions[pending.currentQuestion];
-      if (!question) return { status: 'uncertain', message: `The ${this.label} question is no longer available.` };
-      const answer = answerValues(question, response);
-      if (pending.currentQuestion + 1 < questions.length) {
-        const answers = { ...pending.answers, [question.id ?? String(pending.currentQuestion)]: { answers: answer } };
-        const nextIndex = pending.currentQuestion + 1;
-        const nextRevision = `${pending.request.id}:${pending.revisionCounter + 1}`;
-        const nextInteraction = questionInteraction(pending.request, questions[nextIndex]!, nextIndex, questions.length, nextRevision, pending.interaction.id);
-        nextInteraction.requestId = id;
-        const advanced = { status: 'advanced' as const, interaction: nextInteraction };
-        this.saveInteractionResponse(response, fingerprint, advanced);
-        pending.answers = answers;
-        pending.currentQuestion += 1;
-        pending.revisionCounter += 1;
-        pending.interaction = nextInteraction;
-        this.interaction = pending.interaction;
-        this.emit({ type: 'status', status: { ...this.status, phase: 'attention', interaction: this.interaction } });
-        return advanced;
-      }
-      pending.answers[question.id ?? String(pending.currentQuestion)] = { answers: answer };
-      result = { answers: pending.answers };
-    } else if (method === 'mcpServer/elicitation/request') {
-      const mode = str(pending.request.params.mode);
-      if (response.action !== 'answer' && response.action !== 'accept') result = { action: response.action === 'cancel' ? 'cancel' : 'decline', content: null, _meta: null };
-      else {
-        if (mode === 'url') {
-          const unsupported = { status: 'uncertain' as const, message: `This ${this.label} URL request cannot be answered from the current web form.` };
-          this.saveInteractionResponse(response, fingerprint, unsupported);
-          return unsupported;
-        }
-        const content = elicitationContent(pending.request.params.requestedSchema, response);
-        result = { action: 'accept', content, _meta: null };
-      }
-    } else if (method === 'item/permissions/requestApproval') {
-      const permissions = Object.fromEntries(Object.entries(asRecord(pending.request.params.permissions) ?? {}).filter(([, value]) => value != null));
-      result = response.action === 'approve' || response.action === 'approveForSession'
-        ? { permissions, scope: response.action === 'approveForSession' ? 'session' : 'turn' }
-        : { permissions: {}, scope: 'turn' };
-    } else if (method === 'item/commandExecution/requestApproval') {
-      result = { decision: commandApprovalDecision(pending.request, response.action) };
-    } else if (method === 'item/fileChange/requestApproval') {
-      const decision = response.action === 'approveForSession' ? 'acceptForSession'
-        : response.action === 'approve' ? 'accept' : response.action === 'cancel' ? 'cancel' : 'decline';
-      result = { decision };
-    } else if (method === 'mode/changeRequested') {
-      // Answered through its own request rather than a server-request reply; resolved by `mode/changeResolved`.
-      const decision = response.action === 'approve' ? 'approved' : response.action === 'cancel' ? 'cancelled' : 'rejected';
-      const modeRequest = this.modeRequests.get(pending);
-      if (modeRequest) {
-        // Settings before the choice is actually submitted are its baseline, not a later native
-        // override. A model-only update carrying the same Plan mode must not defeat approval.
-        modeRequest.observation = this.modeObservation;
-        modeRequest.decision = decision;
-      }
-      const candidate = { status: 'uncertain' as const, message: `Answer sent; ${this.label} is resolving it.` };
-      this.saveInteractionResponse(response, fingerprint, candidate);
-      pending.candidateResponse = { requestId: response.requestId, fingerprint };
-      pending.candidateSent = true;
-      try {
-        await this.connection.requireTransport().request('mode/change/respond', {
-          threadId: str(pending.request.params.threadId) ?? this.nativeSessionId,
-          requestId: str(pending.request.params.requestId),
-          decision,
-        });
-      } catch (error) {
-        // A resolved notification may win the race with an RPC error. Its durable receipt is
-        // stronger than that error; a missing pending request is terminal, not permission denied.
-        const receipt = this.candidateReceipt(pending);
-        if (receipt && (receipt.result.status === 'completed' || this.pending.get(id) !== pending)) return receipt.result;
-        // Only a protocol rejection proves the choice was not accepted. A timeout/disconnect
-        // leaves it uncertain, so a fresh card must not send a second choice under a new key.
-        const rpcCode = (error as { rpcCode?: number })?.rpcCode;
-        if (typeof rpcCode === 'number') pending.candidateSent = false;
-        const expired = rpcCode === -32600
-          && /No pending mode change found for request_id:/i.test(error instanceof Error ? error.message : '');
-        const failed = { status: 'uncertain' as const, message: expired
-          ? `This ${this.label} mode request has expired; no choice was confirmed. Request a new mode change in the native terminal.`
-          : safeProviderError(error, this.profileConfig) };
-        this.saveInteractionResponse(response, fingerprint, failed);
-        if (expired) this.releaseModeChange(id, pending, failed.message);
-        return failed;
-      }
-      return await this.confirmAnswer(pending, candidate);
-    } else if (method === 'execCommandApproval' || method === 'applyPatchApproval') {
-      const decision = response.action === 'approveForSession' ? 'approved_for_session'
-        : response.action === 'approve' ? 'approved'
-          : response.action === 'cancel' ? 'abort' : { denied: { rejection: 'Rejected from the workbench.' } };
-      result = { decision };
-    } else {
-      return { status: 'uncertain', message: `This ${this.label} request type is not supported by the web controls.` };
-    }
-    const candidate = { status: 'uncertain' as const, message: `Answer sent; ${this.label} is resolving it.` };
-    this.saveInteractionResponse(response, fingerprint, candidate);
-    pending.candidateResponse = { requestId: response.requestId, fingerprint };
-    pending.candidateSent = true;
-    const confirmed = this.confirmAnswer(pending, candidate);
-    pending.resolve?.(result);
-    return await confirmed;
-  }
-
-  /**
-   * Like Claude's acknowledgement wait: the reply has gone out on this socket, and the provider says
-   * `serverRequest/resolved` (or `mode/changeResolved`) right after it. Waiting that moment lets the
-   * card close as answered instead of lingering as unconfirmed with sync controls.
-   */
-  private async confirmAnswer(pending: CodexPendingInteraction, candidate: NativeInteractionResult): Promise<NativeInteractionResult> {
-    // A mode-change notification can arrive before its RPC reply. The durable receipt then already
-    // contains the confirmation, before this waiter has had a chance to subscribe.
-    const receipt = this.candidateReceipt(pending);
-    if (receipt && (receipt.result.status === 'completed' || this.pending.get(pending.interaction.requestId ?? String(pending.request.id)) !== pending)) return receipt.result;
-    const settled = await new Promise<boolean>(resolve => {
-      const timer = setTimeout(() => resolve(false), ANSWER_CONFIRM_MS);
-      timer.unref();
-      pending.onSettled = () => { clearTimeout(timer); resolve(true); };
-    });
-    pending.onSettled = undefined;
-    return settled ? this.candidateReceipt(pending)?.result ?? candidate : candidate;
-  }
-
-  private candidateReceipt(pending: CodexPendingInteraction): NativeInteractionReceipt | undefined {
-    const sent = pending.candidateResponse;
-    const receipt = sent ? this.host.getInteractionReceipt(this.session.id, sent.requestId) : undefined;
-    return receipt?.fingerprint === sent?.fingerprint ? receipt : undefined;
-  }
-
-  /** Whether a blocking request with this interaction id is waiting on this runtime's own live socket. */
-  holdsInteraction(interactionId: string): boolean {
-    if (!this.transport?.isOnline) return false;
-    for (const pending of this.pending.values()) {
-      if (pending.interaction.id === interactionId) return true;
-    }
-    return false;
-  }
-
-  /** What the card shows: a blocking request first, then the oldest unanswered async question. */
-  get currentInteraction(): NativeInteraction | undefined {
-    return this.interaction ?? this.asyncInteraction();
-  }
-
-  private asyncInteraction(): NativeInteraction | undefined {
-    const next = this.asyncQuestions[0];
-    return next ? asyncQuestionInteraction(next, this.label) : undefined;
-  }
-
-  /** A blocking request's interaction is the caller's to set; otherwise the pending async question rides along. */
-  private withAsyncQuestion(status: NativeStatus): NativeStatus {
-    const { interaction, ...rest } = status;
-    const shown = interaction && !isAsyncQuestionInteraction(interaction) ? interaction : this.asyncInteraction();
-    return shown ? { ...rest, interaction: shown } : rest;
-  }
-
-  private noteAsyncQuestions(item: RpcItem, turnId: string): void {
-    const itemId = str(item.id);
-    if (!itemId || this.seenAsyncItems.has(itemId)) return;
-    const questions = asyncQuestionsOf(item as Record<string, unknown>, turnId);
-    if (!questions.length) return;
-    this.seenAsyncItems.add(itemId);
-    if (this.seenAsyncItems.size > 256) this.seenAsyncItems.delete(this.seenAsyncItems.values().next().value!);
-    this.asyncQuestions.push(...questions);
-    this.refreshStatus();
-  }
-
-  private dropAsyncQuestions(drop: (question: CodexAsyncQuestion) => boolean): void {
-    const kept = this.asyncQuestions.filter(question => !drop(question));
-    if (kept.length === this.asyncQuestions.length) return;
-    this.asyncQuestions = kept;
-    this.refreshStatus();
-  }
-
-  private async answerAsyncQuestion(question: CodexAsyncQuestion, response: NativeInteractionResponse, fingerprint: string): Promise<NativeInteractionResult> {
-    const settle = (result: NativeInteractionResult) => { this.saveInteractionResponse(response, fingerprint, result); return result; };
-    const next = (): NativeInteractionResult => {
-      const interaction = this.currentInteraction;
-      return interaction ? { status: 'advanced', interaction } : { status: 'completed' };
-    };
-    if (response.action === 'skip') {
-      this.dropAsyncQuestions(entry => entry.itemId === question.itemId);
-      return settle(next());
-    }
-    if (response.action !== 'answer') throw new AppError('INVALID_NATIVE_INTERACTION', `The selected action is not available for this ${this.label} question`, 400);
-    const answer = asyncAnswerText(question, response);
-    if (!answer) throw new AppError('INVALID_NATIVE_INTERACTION', 'Choose an option or type an answer', 400);
-    if (!this.nativeSessionId || this.activeTurnId !== question.turnId) {
-      this.dropAsyncQuestions(entry => entry.turnId === question.turnId);
-      return { status: 'uncertain', message: `The ${this.label} turn that asked this has ended; send the answer as a message.` };
-    }
-    if (this.sendingAsyncAnswers.has(question.questionItemId)) return { status: 'uncertain', message: `${this.label} is still receiving this answer.` };
-    this.sendingAsyncAnswers.add(question.questionItemId);
-    try {
-      await this.connection.requireTransport().request('turn/steer', {
-        threadId: this.nativeSessionId,
-        input: [{ type: 'text', text: asyncQuestionReply(question, answer), text_elements: [] }],
-        expectedTurnId: question.turnId,
-      });
-    } catch (error) {
-      return { status: 'uncertain', message: safeProviderError(error, this.profileConfig) };
-    } finally {
-      this.sendingAsyncAnswers.delete(question.questionItemId);
-    }
-    this.dropAsyncQuestions(entry => entry.questionItemId === question.questionItemId);
-    return settle(next());
-  }
-
-  private saveInteractionResponse(response: NativeInteractionResponse, fingerprint: string, result: NativeInteractionResult): void {
-    const previous = this.host.getInteractionReceipt(this.session.id, response.requestId);
-    const receipt: NativeInteractionReceipt = {
-      fingerprint,
-      interactionId: response.interactionId,
-      revision: response.revision,
-      result,
-      createdAt: previous?.createdAt ?? new Date().toISOString(),
-    };
-    this.host.saveInteractionReceipt(this.session.id, response.requestId, receipt);
-  }
-
-  private resolveCandidateReceipt(pending: CodexPendingInteraction, result: NativeInteractionResult = { status: 'completed', message: `${this.label} resolved the native request.` }): void {
-    pending.onSettled?.();
-    const candidate = pending.candidateResponse;
-    if (!candidate) return;
-    const previous = this.host.getInteractionReceipt(this.session.id, candidate.requestId);
-    if (!previous || previous.fingerprint !== candidate.fingerprint) return;
-    this.host.saveInteractionReceipt(this.session.id, candidate.requestId, {
-      ...previous,
-      result,
-    });
-  }
-
   async dispose(host: NativeBackendHost, options: { keepRunning?: boolean } = {}): Promise<void> {
     this.detachObservation?.();
     this.detachObservation = undefined;
     this.requestInterrupt();
-    for (const pending of this.pending.values()) {
-      pending.resolve?.(NO_SERVER_RESPONSE);
-    }
-    this.pending.clear();
-    this.interaction = undefined;
-    this.asyncQuestions = [];
+    this.interactions.close();
     await this.connection.releaseTransport(options.keepRunning);
     if (!options.keepRunning && this.terminalId) await host.terminal.stop(this.terminalId).catch(() => undefined);
     this.connection.markClosed();
@@ -1909,7 +1354,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private async readRolloutPlanSnapshot(threadId: string, turns: readonly RpcTurn[]): Promise<RolloutPlanSnapshot | undefined> {
     try {
-      const path = await this.rolloutFile(threadId);
+      const path = await this.thread.rolloutFile(threadId);
       if (!path) return undefined;
       const info = await stat(path);
       const generation = `${threadId}:${path}:${info.size}:${info.mtimeMs}`;
@@ -2110,7 +1555,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // this read's initial evidence even if that page just completed materialization; later reads
     // still start without the grace, and genuine or foreign-thread errors remain failures.
     const thread = await this.history.readThread(threadId, false, materializationBeforeRead);
-    this.noteThread(thread);
+    this.thread.noteThread(thread);
     if (thread) {
       this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
       // `notLoaded` is an observation about this reader connection. It cannot prove that another
@@ -2213,7 +1658,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   commandOf(item: RpcItem, turnId: string): string | undefined { return this.commandIdOf(item, turnId); }
 
   /** Native question requests known before this reader attached; answers are never copied. */
-  questionRequests(threadId: string): RpcItem[] { return this.questionHistory.requests(threadId); }
+  questionRequests(threadId: string): RpcItem[] { return this.interactions.questionHistory.requests(threadId); }
 
   /** Shared with transcript ingest: history can temporarily misreport our executing turn as interrupted. */
   isTurnRunning(threadId: string, turn: RpcTurn): boolean {
@@ -2429,7 +1874,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const main = !options.isolated && !options.childThreadId;
     const span = options.span ?? this.rolloutSpan(threadId, item);
     return projectCodexItem(item, turn, {
-      sessionId: this.session.id, threadId, runId, createdAt, ...(commandId ? { commandId } : {}), questions: this.questionHistory,
+      sessionId: this.session.id, threadId, runId, createdAt, ...(commandId ? { commandId } : {}), questions: this.interactions.questionHistory,
       ...(span ? { span } : {}),
       ...(this.observation ? { observedChanges: (toolCallId: string) => this.observation?.changes(this.session.id, toolCallId) } : {}),
       // A child thread's first message names the child, not this conversation; its compactions are its own.
@@ -2447,9 +1892,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private onChildNotification(method: string, params: Record<string, unknown>, threadId: string): void {
-    if (method === 'mode/changeRequested') this.raiseModeChange(params);
-    else if (method === 'mode/changeResolved') this.settleModeChange(params);
-    else if (method === 'serverRequest/resolved') this.settleServerRequest(params);
+    if (method === 'mode/changeRequested') this.interactions.raiseModeChange(params);
+    else if (method === 'mode/changeResolved') this.interactions.settleModeChange(params);
+    else if (method === 'serverRequest/resolved') this.interactions.settleRequest(params);
     else if (method === 'turn/started' || method === 'turn/completed') {
       const turnId = str(asRecord(params.turn)?.id);
       if (!turnId) return;
@@ -2457,7 +1902,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.subagents.noteTurn(threadId, turnId, completed);
       if (completed) {
         this.turns.completeWaiters(turnId, threadId);
-        this.clearTurnInteractions(turnId, threadId);
+        this.interactions.clearTurnInteractions(turnId, threadId);
         this.refreshStatus({ link: 'quiet', notice: undefined });
       }
       void this.subagents.refresh();
@@ -2542,7 +1987,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const turn = asRecord(params.turn);
       const turnId = str(turn?.id);
       this.observation?.release(this.nativeSessionId);
-      this.standingWrites.clear();
+      this.thread.clearStandingWrites();
       if (turnId && this.nativeCommand?.type === 'compact') {
         const items = asArray<RpcItem>(turn?.items);
         if (items.some(item => item.type === 'userMessage')) this.nativeCommand.userTurns.add(turnId);
@@ -2565,7 +2010,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.projectKnownUserReceipts(completedTurn);
         this.emitTurnOutcome(completedTurn, turnId);
       }
-      if (turnId) this.clearTurnInteractions(turnId);
+      if (turnId) this.interactions.clearTurnInteractions(turnId);
       if (turnId) {
         this.turns.completeWaiters(turnId);
         this.turns.completeForeground(turnId);
@@ -2618,7 +2063,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     if (method === 'thread/settings/updated') {
       const settings = asRecord(params.threadSettings);
-      if (str(settings?.model)) this.threadModel = str(settings?.model);
+      this.thread.noteModel(str(settings?.model));
       if (this.nativeSessionId && params.threadId === this.nativeSessionId) {
         this.commandConfigObserver?.(settings ?? {});
         this.permissionObservation += 1;
@@ -2629,11 +2074,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
       return;
     }
     if (method === 'mode/changeRequested') {
-      this.raiseModeChange(params);
+      this.interactions.raiseModeChange(params);
       return;
     }
     if (method === 'mode/changeResolved') {
-      this.settleModeChange(params);
+      this.interactions.settleModeChange(params);
       return;
     }
     if (method === 'thread/name/updated') {
@@ -2652,16 +2097,17 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const turnId = str(params.turnId);
       if (!item || !turnId) return;
       if (item.type === 'userMessage' && this.nativeCommand?.type === 'compact') this.nativeCommand.userTurns.add(turnId);
-      if (item.type === 'fileChange' && typeof item.id === 'string' && this.isStanding()) {
-        if (method === 'item/started') this.standingWrites.set(item.id, asArray<Record<string, unknown>>(item.changes).flatMap(change => [str(change.path), str(asRecord(change.kind)?.move_path)]).filter((path): path is string => Boolean(path)));
-        else this.standingWrites.delete(item.id);
+      if (item.type === 'fileChange' && typeof item.id === 'string' && this.thread.isStanding()) {
+        this.thread.noteStandingWrites(item.id, method === 'item/started'
+          ? asArray<Record<string, unknown>>(item.changes).flatMap(change => [str(change.path), str(asRecord(change.kind)?.move_path)]).filter((path): path is string => Boolean(path))
+          : undefined);
       }
       if (item.type === 'contextCompaction') {
         if (this.nativeCommand?.type === 'compact') this.confirmNativeCommand(turnId);
-        if (this.isStanding()) {
+        if (this.thread.isStanding()) {
           // As Claude Code's PreCompact and its SessionStart after one: the 助理 saves what matters, and is then told.
           if (method === 'item/started') { try { this.host.standing?.compacting?.(this.session.id); } catch { /* a standing host's trouble is not the turn's */ } }
-          else this.standingMoments.add('compact');
+          else this.thread.noteCompacted();
         }
         if (method === 'item/started') this.activities.compactionStarted(item, turnId, Number(params.startedAtMs));
         else this.activities.compactionCompleted(item, turnId, typeof params.completedAtMs === 'number' ? params.completedAtMs : undefined);
@@ -2694,11 +2140,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
         : this.projectItem(item, itemTurn, { span });
       if (item.type === 'userMessage') this.noteUserMessage(turnId, projected);
       if (method === 'item/completed') this.metering.noteCompletedOutput(turnId, item);
-      if (method === 'item/completed' && item.type === 'agentMessage') this.noteAsyncQuestions(item, turnId);
+      if (method === 'item/completed' && item.type === 'agentMessage') this.interactions.noteAsyncQuestions(item, turnId);
       if (item.type === 'userMessage') {
         // Answered from the TUI or another client: the envelope names the questions it settles.
         const answered = new Set(parseAsyncQuestionReplies(userMessageText(item))?.map(reply => reply.questionItemId));
-        if (answered.size) this.dropAsyncQuestions(question => answered.has(question.questionItemId) || answered.has(question.itemId));
+        if (answered.size) this.interactions.dropAsyncQuestions(question => answered.has(question.questionItemId) || answered.has(question.itemId));
       }
       if (item.type === 'subAgentActivity' || item.type === 'collabAgentToolCall') {
         this.subagents.note([{ ...itemTurn, items: [item] }], true);
@@ -2715,31 +2161,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       for (const event of projected) this.pushEvent(event);
       return;
     }
-    if (method === 'serverRequest/resolved') this.settleServerRequest(params);
-  }
-
-  private settleServerRequest(params: Record<string, unknown>): void {
-      const nativeRequestId = requestIdString(params.requestId);
-      if (!nativeRequestId) return;
-      const threadId = str(params.threadId) ?? this.nativeSessionId;
-      const requestId = this.scopedRequestId(threadId, nativeRequestId);
-      const pending = this.pending.get(requestId);
-      if (!pending || (str(pending.request.params.threadId) ?? this.nativeSessionId) !== threadId) return;
-      this.pending.delete(requestId);
-      if (pending) this.resolveCandidateReceipt(pending);
-      const turnId = pending && str(pending.request.params.turnId);
-      const main = threadId === this.nativeSessionId;
-      if (main && pending && turnId) {
-        const answered = this.questionHistory.answered(pending);
-        if (answered) {
-          for (const event of this.projectItem(answered, { id: turnId })) this.pushEvent(event);
-        }
-      }
-      const meter = main && turnId ? this.metering.active(turnId) : undefined;
-      if (meter) noteRequestWaitEnd(meter, requestId);
-      if (pending) pending.resolve?.(NO_SERVER_RESPONSE);
-      if (pending && this.interaction?.requestId === requestId) this.interaction = this.pending.values().next().value?.interaction;
-      this.refreshStatus({ link: 'quiet', notice: undefined });
+    if (method === 'serverRequest/resolved') this.interactions.settleRequest(params);
   }
 
   private async onServerRequest(request: JsonRpcServerRequest): Promise<unknown> {
@@ -2750,55 +2172,15 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // The owner's files are not the 助理's to change in any mode (docs/ASSISTANT.md §2): the profile has them
     // read-only, and the approval Codex then asks for is declined here, as Claude Code's deny rule does.
     if (request.method === 'item/fileChange/requestApproval') {
-      const writes = this.standingWrites.get(str(request.params.itemId) ?? '');
-      const standing = writes?.length ? this.standing() : undefined;
+      const writes = this.thread.standingWritesOf(str(request.params.itemId) ?? '');
+      const standing = writes?.length ? this.thread.standing() : undefined;
       if (standing && writes!.some(path => standingProtects(path, standing))) return { decision: 'decline' };
     }
     const requestId = this.scopedRequestId(threadId, String(request.id));
     const main = threadId === this.nativeSessionId;
     const requestedTurnId = str(request.params.turnId);
     if (main && requestedTurnId && !this.nativeCommand) this.turns.bindDispatchedTurn(requestedTurnId);
-    const pending = makePendingInteraction(request);
-    if (!pending) throw new Error(`${this.label} request ${request.method} is not supported by the workbench.`);
-    pending.interaction.requestId = requestId;
-    if (main && requestedTurnId) noteRequestWaitStart(this.metering, requestedTurnId, requestId);
-    this.pending.set(requestId, pending);
-    if (request.method === 'item/tool/requestUserInput') {
-      const question = this.questionHistory.request(request.params, threadId);
-      // A child's output-only history still needs this native metadata, as does a v3 reader with
-      // its own question tracker. Forward metadata, never candidate answers or a child main row.
-      try { this.feed?.notification(request.method, { ...request.params, threadId }); } catch { /* as for notifications */ }
-      if (main && requestedTurnId && question) {
-        for (const event of this.projectItem(question, { id: requestedTurnId })) this.pushEvent(event, true);
-      }
-    }
-    this.interaction = pending.interaction;
-    this.refreshStatus({ link: this.resumed(), notice: undefined });
-    return await new Promise(resolve => {
-      // A server request remains pending until a web answer or the shared TUI resolves it.
-      // This promise is intentionally settled by respond() or the protocol's resolved notice.
-      pending.resolve = resolve;
-    });
-  }
-
-  private clearTurnInteractions(turnId: string, threadId = this.nativeSessionId): void {
-    // Like the TUI: a finished turn no longer waits on its questions; a later message answers them.
-    if (threadId === this.nativeSessionId) this.asyncQuestions = this.asyncQuestions.filter(question => question.turnId !== turnId);
-    let changed = false;
-    for (const [id, pending] of this.pending) {
-      if (str(pending.request.params.turnId) !== turnId
-        || (str(pending.request.params.threadId) ?? this.nativeSessionId) !== threadId) continue;
-      this.pending.delete(id);
-      if (pending.request.method === 'mode/changeRequested') {
-        this.modeRequests.delete(pending);
-        this.resolveCandidateReceipt(pending, { status: 'uncertain', message: `${this.label} turn ended without confirming the mode decision.` });
-      } else this.resolveCandidateReceipt(pending);
-      pending.resolve?.(NO_SERVER_RESPONSE);
-      changed = true;
-    }
-    if (!changed) return;
-    const currentId = this.interaction?.requestId;
-    if (currentId && !this.pending.has(currentId)) this.interaction = this.pending.values().next().value?.interaction;
+    return await this.interactions.raise(request, requestId, threadId, main);
   }
 
   private noteUserMessage(turnId: string, events: NativeWorkbenchEvent[]): void {
@@ -3024,7 +2406,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
    */
   private adoptProviderTitle(name: string | undefined): void {
     if (name) {
-      this.threadName = name;
+      this.thread.name = name;
       const message = this.firstTitleMessage();
       const patch = message === undefined ? undefined : nativeTitlePatch(this.host.getSession(this.session.id), name, message);
       if (patch) {
@@ -3048,12 +2430,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const message = this.firstTitleMessage();
       if (message === undefined || isPromptTitle(session.title, message)) return;
     }
-    if (!this.nativeSessionId || !this.transport?.isOnline || session.title === this.threadName) return;
+    if (!this.nativeSessionId || !this.transport?.isOnline || session.title === this.thread.name) return;
     if (this.pushingTitle === session.title) return;
     this.pushingTitle = session.title;
     try {
       await this.transport.request('thread/name/set', { threadId: this.nativeSessionId, name: session.title });
-      this.threadName = session.title;
+      this.thread.name = session.title;
     } finally {
       if (this.pushingTitle === session.title) this.pushingTitle = undefined;
     }
@@ -3087,69 +2469,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     else if (this.facts.notice?.source === 'transient') this.refreshStatus({ notice: undefined });
   }
 
-  /**
-   * TRAE CLI asks to switch collaboration mode with a notification, not a server request, and takes
-   * the answer through `mode/change/respond`. It is still one decision for the reader, so it waits
-   * in the same pending map as approvals and is settled by `mode/changeResolved`.
-   */
-  private raiseModeChange(params: Record<string, unknown>): void {
-    const requestId = str(params.requestId);
-    if (!requestId) return;
-    const key = this.scopedRequestId(str(params.threadId), `mode:${requestId}`);
-    if (this.pending.has(key)) return;
-    const targetMode = str(params.targetMode);
-    const supported = this.flavor.modes.some(mode => mode.id === targetMode);
-    const leavingPlan = targetMode === 'default';
-    const plan = leavingPlan ? this.latestPlanText(str(params.turnId), str(params.threadId)) : undefined;
-    const interaction = modeChangeInteraction(this.flavor.id, key, params, supported, leavingPlan, plan);
-    const pending: CodexPendingInteraction = { request: { id: key, method: 'mode/changeRequested', params }, interaction, currentQuestion: 0, revisionCounter: 0, answers: {}, candidateSent: false };
-    this.modeRequests.set(pending, { observation: this.modeObservation });
-    this.pending.set(key, pending);
-    this.interaction = interaction;
-    this.refreshStatus({ link: this.resumed(), notice: undefined });
-  }
-
-  private settleModeChange(params: Record<string, unknown>): void {
-    const requestId = str(params.requestId);
-    if (!requestId) return;
-    const key = this.scopedRequestId(str(params.threadId), `mode:${requestId}`);
-    const pending = this.pending.get(key);
-    if (!pending || pending.request.method !== 'mode/changeRequested') return;
-    const decision = str(params.decision);
-    if (str(params.threadId) !== str(pending.request.params.threadId)
-      || str(params.turnId) !== str(pending.request.params.turnId)
-      || str(params.targetMode) !== str(pending.request.params.targetMode)
-      || !decision || !['approved', 'rejected', 'cancelled'].includes(decision)) return;
-    const observed = this.modeRequests.get(pending);
-    if (decision === 'approved' && str(params.threadId) === this.nativeSessionId) {
-      if (observed?.observation === this.modeObservation) this.adoptMode(str(params.targetMode));
-      else {
-        // These RPCs/events have no provider revision. A settings event received after our
-        // candidate may be from before or after the actual native mode application: counting
-        // observations cannot tell. Read current settings instead of guessing the winner.
-        const threadId = str(params.threadId);
-        if (threadId) {
-          const task = this.reconcileMode(threadId).finally(() => {
-            if (this.modeReconciliation === task) this.modeReconciliation = undefined;
-          });
-          this.modeReconciliation = task;
-        }
-      }
-    }
-    if (pending.candidateResponse && observed?.decision !== decision) {
-      this.resolveCandidateReceipt(pending, { status: 'uncertain', message: `${this.label} resolved this request as ${decision}; the submitted choice was not confirmed.` });
-    } else this.resolveCandidateReceipt(pending);
-    this.releaseModeChange(key, pending);
-  }
-
-  private releaseModeChange(key: string, pending: CodexPendingInteraction, notice?: string): void {
-    if (this.pending.get(key) !== pending) return;
-    this.pending.delete(key);
-    this.modeRequests.delete(pending);
-    if (this.interaction?.requestId === key) this.interaction = this.pending.values().next().value?.interaction;
-    this.refreshStatus({ link: 'quiet', notice: notice ? { text: notice, level: 'warning', source: 'other' } : undefined });
-  }
-
   /** The newest proposed plan of a turn, from the transcript, so the reader can see what they approve. */
   private latestPlanText(turnId: string | undefined, threadId = this.nativeSessionId): string | undefined {
     const prefix = turnId ? `${threadId ?? 'unknown'}:${turnId}:` : undefined;
@@ -3172,7 +2491,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (this.threadError && (!this.threadErrorTurnId || this.turns.settledType(this.threadErrorTurnId) !== 'run_failed')) {
       facts.notice = { text: `${this.label} reported a thread-level system error.`, level: 'error', source: 'thread' };
     } else if (facts.notice?.source === 'thread') facts.notice = undefined;
-    const requested = this.withAsyncQuestion({
+    const requested = this.interactions.withAsyncQuestion({
       phase: facts.link === 'starting' || facts.link === 'offline' ? facts.link : this.livePhase(facts.link === 'working'),
       ...(facts.model ? { model: facts.model } : {}),
       ...(facts.notice ? { notice: facts.notice.text, noticeLevel: facts.notice.level } : {}),
@@ -3262,9 +2581,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.requestInterrupt();
     this.history.beginMaterialization();
     this.turns.rejectWaiters(turnId => new Error(`${this.label} app-server exited before confirming interruption for turn ${turnId}.`));
-    for (const pending of this.pending.values()) pending.resolve?.(NO_SERVER_RESPONSE);
-    this.pending.clear();
-    this.interaction = undefined;
+    this.interactions.abandon();
     this.drafts.clear();
     this.activities.lost();
     try { this.feed?.lost?.(); } catch { /* as for notifications */ }
