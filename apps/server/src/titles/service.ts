@@ -1,15 +1,16 @@
 import type { AuxiliaryModelRef, Run, Session } from '../../../../packages/contracts/src/index.js';
 import { auxiliaryEndpoint, type GatewayProfiles } from '../auxiliary/models.js';
+import type { CompletionMetrics } from '../auxiliary/gateway.js';
+import type { AuxiliaryCallRecorder } from '../auxiliary/telemetry.js';
 import { generatedTitlePatch, isPlaceholderTitle, isPromptTitle, TITLE_FROM_AGENT, TITLE_FROM_GENERATED, TITLE_FROM_PROMPT, TITLE_FROM_PROVIDER, titleFromMessage } from '../session-title.js';
 import type { Store } from '../store.js';
 import { requestTitle, type TitleRequest } from './request.js';
 
 /**
- * How long a finished first turn waits before the workbench writes a title itself.
+ * How long a start/finished first turn waits before the workbench writes a title itself.
  *
- * Zero: a configured title model can name a conversation as soon as its first answer finishes.
- * The CLI's own name no longer competes with it — the title model replaces that name whichever
- * arrives first — so there is nothing to wait for.
+ * Zero: a configured title model names a conversation as soon as its first turn starts running,
+ * without waiting for the agent to finish.
  */
 const DEFAULT_DELAY_MS = 0;
 
@@ -24,6 +25,7 @@ export interface TitleServiceOptions {
   /** How long after startup the backfill pass runs; zero disables it. */
   backfillDelayMs?: number;
   request?: (request: TitleRequest) => Promise<string>;
+  record?: AuxiliaryCallRecorder;
 }
 
 /**
@@ -110,7 +112,7 @@ export class TitleService {
   /** Writes a title for `message` with `ref` without touching any conversation; for trying a model out. */
   async preview(ref: AuxiliaryModelRef, message: string, signal?: AbortSignal): Promise<string> {
     this.assertOpen();
-    return await this.ask(ref, message, undefined, signal);
+    return (await this.ask(ref, message, undefined, signal)).title;
   }
 
   close(): void {
@@ -122,16 +124,16 @@ export class TitleService {
   }
 
   private onRun(run: Run): void {
-    if (run.state !== 'completed' || this.closed || this.attempted.has(run.sessionId) || !this.options.titleModel()) return;
+    if ((run.state !== 'running' && run.state !== 'completed') || this.closed || this.attempted.has(run.sessionId) || !this.options.titleModel()) return;
     const { store } = this.options;
     let session: Session;
     try { session = store.getSession(run.sessionId); } catch { return; }
     // A discussion's seats are named by it.
     if (session.kind !== 'native' || session.archivedAt || session.origin?.kind === 'council') return;
     const runs = store.listRuns(session.id);
-    if (!runs.some(item => item.state === 'completed')) return;
-    const firstPrompt = store.firstUserMessage(session.id);
-    if (typeof firstPrompt !== 'string' || !replaceable(session, firstPrompt)) return;
+    if (run.state === 'completed' && !runs.some(item => item.state === 'completed')) return;
+    const firstPrompt = store.firstUserMessage(session.id) ?? (!session.resumePicker ? runs[0]?.prompt : undefined);
+    if (typeof firstPrompt !== 'string' || !firstPrompt.trim() || !replaceable(session, firstPrompt)) return;
     this.attempted.add(session.id);
     const delayMs = this.options.delayMs ?? DEFAULT_DELAY_MS;
     if (delayMs <= 0) {
@@ -157,26 +159,106 @@ export class TitleService {
       return !session.archivedAt && replaceable(session, message) ? session : undefined;
     };
     if (!ref || !pending()) return undefined;
-    const title = await this.ask(ref, message, store.firstIndexedText(sessionId, 'assistant'));
+    const result = await this.ask(ref, message, store.firstIndexedText(sessionId, 'assistant'), undefined, true);
     // Re-read: the CLI may have named it, or the reader renamed or archived it, while the model was answering.
     const current = pending();
-    const patch = current && generatedTitlePatch(current, title, message);
-    if (!patch) return undefined;
+    const patch = current && generatedTitlePatch(current, result.title, message);
+    if (!patch) {
+      this.options.record?.({
+        kind: 'title', preset: 'short', source: 'live',
+        backendId: ref.backendId, profileId: ref.profileId, model: ref.model,
+        transport: result.transport, protocol: result.protocol,
+        ok: false, authMs: result.authMs, ttftMs: result.ttftMs, durationMs: result.durationMs,
+        inputTokens: result.inputTokens ?? null, outputTokens: result.outputTokens ?? null,
+        reasoningTokens: result.reasoningTokens ?? null, reasoningChars: result.reasoningChars,
+        thinkingDetected: result.thinkingDetected, streaming: false,
+        errorCode: current ? 'SKIPPED_RULE' : 'SKIPPED_RENAMED',
+        detail: result.title,
+      });
+      return undefined;
+    }
+    this.options.record?.({
+      kind: 'title', preset: 'short', source: 'live',
+      backendId: ref.backendId, profileId: ref.profileId, model: ref.model,
+      transport: result.transport, protocol: result.protocol,
+      ok: true, authMs: result.authMs, ttftMs: result.ttftMs, durationMs: result.durationMs,
+      inputTokens: result.inputTokens ?? null, outputTokens: result.outputTokens ?? null,
+      reasoningTokens: result.reasoningTokens ?? null, reasoningChars: result.reasoningChars,
+      thinkingDetected: result.thinkingDetected, streaming: false,
+      detail: patch.title,
+    });
     const session = store.updateSession(sessionId, patch);
     store.appendEvent(sessionId, 'session', { session });
     try { this.options.onTitled?.(session); } catch { /* the title is already saved */ }
     return session;
   }
 
-  private async ask(ref: AuxiliaryModelRef, message: string, reply?: string, signal?: AbortSignal): Promise<string> {
+  private async ask(
+    ref: AuxiliaryModelRef,
+    message: string,
+    reply?: string,
+    signal?: AbortSignal,
+    deferRecord = false,
+  ): Promise<{
+    title: string;
+    transport: 'http' | 'cli-process';
+    protocol: import('../auxiliary/gateway.js').GatewayProtocol;
+    authMs: number;
+    ttftMs: number | null;
+    durationMs: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    reasoningTokens?: number;
+    reasoningChars: number;
+    thinkingDetected: boolean;
+  }> {
     this.assertOpen();
-    const { profileName: _name, ...endpoint } = await auxiliaryEndpoint(ref, this.options.gatewayProfiles, signal ? AbortSignal.any([this.abortController.signal, signal]) : this.abortController.signal);
-    return await (this.options.request ?? requestTitle)({
-      ...endpoint,
-      message,
-      ...(reply ? { reply } : {}),
-      signal: signal ? AbortSignal.any([this.abortController.signal, signal]) : this.abortController.signal,
-    });
+    const combinedSignal = signal ? AbortSignal.any([this.abortController.signal, signal]) : this.abortController.signal;
+    const authStartedAt = Date.now();
+    const { profileName: _name, ...endpoint } = await auxiliaryEndpoint(ref, this.options.gatewayProfiles, combinedSignal);
+    const authMs = Math.max(0, Date.now() - authStartedAt);
+    const transport: 'http' | 'cli-process' = (endpoint.executeComplete || endpoint.executeStreamChat) ? 'cli-process' : 'http';
+    let metrics: CompletionMetrics | undefined;
+    const startedAt = Date.now();
+    try {
+      const title = await (this.options.request ?? requestTitle)({
+        ...endpoint,
+        message,
+        ...(reply ? { reply } : {}),
+        signal: combinedSignal,
+        onMetrics: recorded => { metrics = recorded; },
+      });
+      return {
+        title,
+        transport,
+        protocol: endpoint.protocol,
+        authMs,
+        ttftMs: metrics?.ttftMs ?? null,
+        durationMs: metrics?.durationMs ?? Math.max(0, Date.now() - startedAt),
+        ...(metrics?.inputTokens !== undefined ? { inputTokens: metrics.inputTokens } : {}),
+        ...(metrics?.outputTokens !== undefined ? { outputTokens: metrics.outputTokens } : {}),
+        ...(metrics?.reasoningTokens !== undefined ? { reasoningTokens: metrics.reasoningTokens } : {}),
+        reasoningChars: metrics?.reasoningChars ?? 0,
+        thinkingDetected: metrics?.thinkingDetected ?? false,
+      };
+    } catch (error) {
+      if (deferRecord && !combinedSignal.aborted) {
+        this.options.record?.({
+          kind: 'title', preset: 'short', source: 'live',
+          backendId: ref.backendId, profileId: ref.profileId, model: ref.model,
+          transport,
+          protocol: endpoint.protocol,
+          ok: false, authMs, ttftMs: metrics?.ttftMs ?? null,
+          durationMs: metrics?.durationMs ?? Math.max(0, Date.now() - startedAt),
+          inputTokens: metrics?.inputTokens ?? null, outputTokens: metrics?.outputTokens ?? null,
+          reasoningTokens: metrics?.reasoningTokens ?? null, reasoningChars: metrics?.reasoningChars ?? 0,
+          thinkingDetected: metrics?.thinkingDetected ?? false, streaming: metrics?.streaming ?? false,
+          errorCode: metrics?.errorCode ?? 'ERROR',
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+      throw error;
+    }
   }
 
   private assertOpen(): void {

@@ -17,7 +17,8 @@ import { Store } from './store.js';
 import { startWalCheckpoints } from './wal-checkpoint.js';
 import { Auth, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
-import { completeForPlugin, type GatewayProfiles } from './auxiliary/models.js';
+import { clearAuxiliaryAuthCache, completeForPlugin, resolveAuxiliaryModel, streamForPlugin, type GatewayProfiles } from './auxiliary/models.js';
+import { AuxiliaryStats } from './stats/auxiliary.js';
 import { PlanFileWriter } from './native/plan-files.js';
 import { TerminalService } from './terminal/index.js';
 import { TitleService } from './titles/service.js';
@@ -189,6 +190,8 @@ export async function createApp(options: AppOptions = {}) {
   // What the journal's logs gain, read back as native events for the dispatcher, the index and statistics (sync v3).
   const journalFeed=new JournalFeed(store.journal);
   const stats=new StatsLedger(store);
+  const auxiliaryStats=new AuxiliaryStats(store.db,{onChanged:()=>stats.notifyChanged()});
+  const recordAuxiliaryCall=(entry:import('./auxiliary/telemetry.js').AuxiliaryCallRecord)=>auxiliaryStats.record(entry);
   const auth=new Auth(stateDir,options);
   // Each conversation's Riffet MCP server (docs/DEVICES.md §2): built before the backends, whose launches carry it.
   const riffetMcpCredentials=new RiffetMcpCredentials(store,stateDir);
@@ -232,9 +235,10 @@ export async function createApp(options: AppOptions = {}) {
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;
-  const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>nativeBackends.catalog.invalidateModelCatalogs(),savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input),
-    // docs/PLUGIN_ARCHITECTURE.md「接口与版本」: a completion on the model chosen for 快速对话, for an in-process plugin.
-    completeModel:(request,uses):Promise<string>=>completeForPlugin(request,uses,{chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details)}),
+  const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>{clearAuxiliaryAuthCache();nativeBackends.catalog.invalidateModelCatalogs();},savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input),
+    // docs/PLUGIN_ARCHITECTURE.md「模型用途」: a completion on the model chosen for the use, else its fallback (`default` or `chat`).
+    completeModel:(request,uses):Promise<string>=>completeForPlugin(request,uses,{default:()=>settings.getSettings().auxiliaryModels?.default,chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details),record:recordAuxiliaryCall}),
+    streamModel:(request,uses):Promise<string>=>streamForPlugin(request,uses,{default:()=>settings.getSettings().auxiliaryModels?.default,chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details),record:recordAuxiliaryCall}),
     // docs/BROWSER.md §2: what a plugin with agent tools or channels may read and do in a conversation.
     sessions:{
       get:id=>{let session;try{session=store.getSession(id);}catch{return undefined;}let projectPath:string|undefined;try{projectPath=store.getProject(session.projectId).cwd;}catch{/* removed project */}return {id:session.id,title:session.title,projectId:session.projectId,...(projectPath?{projectPath}:{}),archived:Boolean(session.archivedAt)};},
@@ -252,7 +256,7 @@ export async function createApp(options: AppOptions = {}) {
     .register(new DroidBackendAdapter())
     .register(new PiBackendAdapter({stateDir}))
     .register(new CodexBackendAdapter(undefined, traexFlavor, plugins))
-    .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS}));
+    .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS,recordAuxiliaryCall}));
   // The 助理's directory is made on first use, like its project; its files are checked once per server.
   let assistantHome:AssistantHome|undefined;
   // The 助理's background work (docs/ASSISTANT.md §7) is made further down; the standing conversation reaches it through these.
@@ -293,7 +297,7 @@ export async function createApp(options: AppOptions = {}) {
   const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn});
   // A provider that keeps names of its own (Codex) is told whenever the workbench or the reader names a conversation.
   const renameNative=(session:import('../../../packages/contracts/src/index.js').Session)=>{void nativeBackends.rename(session).catch(()=>undefined);};
-  const titles=new TitleService({store,titleModel:()=>settings.getSettings().auxiliaryModels?.title,gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative});
+  const titles=new TitleService({store,titleModel:()=>resolveAuxiliaryModel(settings.getSettings(),'title'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative,record:recordAuxiliaryCall});
   /**
    * A plan is mirrored to Markdown beside Claude Code's own plans, so it can be read and grepped
    * without the workbench running. The transcript stays the authority; this copy is a cache that
@@ -306,7 +310,7 @@ export async function createApp(options: AppOptions = {}) {
   const offIndexFeed=journalFeed.subscribe((_sessionId,lane)=>lane==='main',batch=>liveIndex.observeEntities(batch.sessionId,latestEvents(batch.items)));
   const offServiceFeed=nativeBackends.readJournal(journalFeed);
   const sessionCommands=new SessionCommands();
-  const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,notices,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
+  const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,notices,recordAuxiliaryCall,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
   orchestrationRef=orchestration;
   const app=Fastify({logger:options.logger??false,bodyLimit:36*1024*1024,requestTimeout:60_000});
   listening=()=>app.server.address();
@@ -373,7 +377,7 @@ export async function createApp(options: AppOptions = {}) {
     activity:id=>store.sessionActivity(id),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
   // Canvas summaries are written on request, one turn at a time (docs/PLUGIN_ARCHITECTURE.md, canvas).
-  const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>settings.getSettings().auxiliaryModels?.summary,gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);}});
+  const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>resolveAuxiliaryModel(settings.getSettings(),'summary'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);},record:recordAuxiliaryCall});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
     (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside}));
   const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id)});
@@ -452,7 +456,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold()};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.

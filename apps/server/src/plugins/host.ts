@@ -28,6 +28,8 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   ownsSessionSurfaces?: boolean;
   /** `host.models.complete`, given the plugin's own declared model uses; absent for an isolated installed package, which gets none. */
   completeModel?: (request: Parameters<NonNullable<PluginHost['models']>['complete']>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
+  /** `host.models.stream`, given the plugin's own declared model uses; absent for an isolated installed package. */
+  streamModel?: (request: Parameters<NonNullable<NonNullable<PluginHost['models']>['stream']>>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
   /** The model uses this plugin declares: `use` may name these only. */
   ownModelUses?: readonly ModelUseDeclaration[];
 }): PluginHost {
@@ -68,7 +70,10 @@ export function createPluginHost(id: PluginManifest['id'], options: {
     } } : {}),
     ...(options.service ? { services: { get: ((pluginId: string, name: string, range: string) => options.service!(pluginId, name, range)) as NonNullable<PluginHost['services']>['get'] } } : {}),
     ...(options.sessions && options.ownsSessionSurfaces ? { sessions: options.sessions } : {}),
-    ...(options.completeModel ? { models: { complete: request => options.completeModel!(request, options.ownModelUses ?? []) } } : {}),
+    ...(options.completeModel ? { models: {
+      complete: request => options.completeModel!(request, options.ownModelUses ?? []),
+      ...(options.streamModel ? { stream: request => options.streamModel!(request, options.ownModelUses ?? []) } : {}),
+    } } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };
 }

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -243,4 +244,148 @@ export function hasNativePermissions(settings: Record<string, unknown> | undefin
 /** The config override that offers the Riffet MCP server to a thread, or none when the host has no such server. */
 export function riffetMcpOverride(server: { name: string; command: string; args: string[] } | undefined): Record<string, unknown> {
   return server ? { [`mcp_servers.${server.name}`]: { command: server.command, args: server.args, ...RIFFET_MCP_EXPOSURE } } : {};
+}
+
+function unquoteToml(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+    try { return JSON.parse(trimmed) as string; } catch { return trimmed.slice(1, -1); }
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2) {
+    return trimmed.slice(1, -1);
+  }
+  return undefined;
+}
+
+function stripTomlComment(line: string): string {
+  let quote: '"' | "'" | undefined;
+  let escaped = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (escaped) { escaped = false; continue; }
+    if (quote === '"' && ch === '\\') { escaped = true; continue; }
+    if (quote) { if (ch === quote) quote = undefined; continue; }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '#') return line.slice(0, i);
+  }
+  return line;
+}
+
+function splitTomlPath(section: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | undefined;
+  for (let i = 0; i < section.length; i++) {
+    const ch = section[i]!;
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      else current += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '.') {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+function readCodexConfigToml(file: string): {
+  top: Record<string, string>;
+  providers: Record<string, { fields: Record<string, string>; headers: Record<string, string> }>;
+} {
+  const top: Record<string, string> = {};
+  const providers: Record<string, { fields: Record<string, string>; headers: Record<string, string> }> = {};
+  let raw: string;
+  try { raw = readFileSync(file, 'utf8'); } catch { return { top, providers }; }
+  let section: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const clean = stripTomlComment(line).trim();
+    if (!clean) continue;
+    if (clean.startsWith('[') && clean.endsWith(']') && !clean.startsWith('[[')) {
+      section = splitTomlPath(clean.slice(1, -1));
+      continue;
+    }
+    const eq = clean.indexOf('=');
+    if (eq <= 0) continue;
+    const rawKey = clean.slice(0, eq).trim();
+    const key = unquoteToml(rawKey) ?? rawKey;
+    const value = unquoteToml(clean.slice(eq + 1));
+    if (value === undefined) continue;
+    if (section.length === 0) {
+      top[key] = value;
+    } else if (section[0] === 'model_providers' && section[1]) {
+      const entry = providers[section[1]] ??= { fields: {}, headers: {} };
+      if (section.length === 2) entry.fields[key] = value;
+      else if (section.length === 3 && section[2] === 'http_headers') entry.headers[key] = value;
+    }
+  }
+  return { top, providers };
+}
+
+/**
+ * Reads a Codex CLI default profile's HTTP gateway and API key from `~/.codex/config.toml`,
+ * `~/.codex/auth.json` or `OPENAI_*` env vars when Riffet itself has no `apiEndpoint` configured.
+ * ChatGPT OAuth logins without an API key or custom `model_provider` stay excluded.
+ */
+export function readCodexOwnerGateway(profile: NativeBackendProfileConfig, stateHome: string): NativeBackendProfileConfig | undefined {
+  const { top, providers } = readCodexConfigToml(join(stateHome, 'config.toml'));
+  let auth: Record<string, unknown> | undefined;
+  try { auth = asRecord(JSON.parse(readFileSync(join(stateHome, 'auth.json'), 'utf8'))); }
+  catch { auth = undefined; }
+  const authStr = (key: string) => {
+    const envVal = process.env[key]?.trim();
+    if (envVal) return envVal;
+    const authVal = auth?.[key];
+    return typeof authVal === 'string' && authVal.trim() ? authVal.trim() : undefined;
+  };
+  let endpoint: string | undefined;
+  let apiKey: string | undefined;
+  let headers: Record<string, string> | undefined;
+  const providerName = top.model_provider?.trim();
+  if (providerName && providerName !== 'openai') {
+    const custom = providers[providerName];
+    if (!custom?.fields.base_url) return undefined;
+    if (custom.fields.wire_api && custom.fields.wire_api !== 'responses') return undefined;
+    endpoint = custom.fields.base_url;
+    apiKey = custom.fields.experimental_bearer_token?.trim()
+      || (custom.fields.env_key ? authStr(custom.fields.env_key) : undefined);
+    if (Object.keys(custom.headers).length) headers = custom.headers;
+  } else {
+    const rawEndpoint = top.openai_base_url?.trim() || process.env.OPENAI_BASE_URL?.trim();
+    const openAiKey = authStr('OPENAI_API_KEY');
+    if (!rawEndpoint && !openAiKey) return undefined;
+    endpoint = rawEndpoint || 'https://api.openai.com/v1';
+    apiKey = openAiKey;
+  }
+  try {
+    const parsed = new URL(endpoint);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+  } catch { return undefined; }
+  const defaultModel = str(profile.config.defaultModel) || top.model?.trim() || undefined;
+  return {
+    ...profile,
+    config: {
+      ...profile.config,
+      apiEndpoint: endpoint.replace(/\/+$/, ''),
+      ...(apiKey ? { apiKey } : {}),
+      ...(headers ? { gatewayHeaders: headers } : {}),
+      ...(defaultModel ? { defaultModel } : {}),
+    },
+  };
+}
+
+/** Whether `$CODEX_HOME/auth.json` holds a ChatGPT OAuth session for the Codex CLI itself. */
+export function hasCodexChatgptAuth(stateHome: string): boolean {
+  let auth: Record<string, unknown> | undefined;
+  try { auth = asRecord(JSON.parse(readFileSync(join(stateHome, 'auth.json'), 'utf8'))); }
+  catch { return false; }
+  if (!auth) return false;
+  const tokens = asRecord(auth.tokens);
+  return Boolean(tokens && (typeof tokens.access_token === 'string' && tokens.access_token || typeof tokens.refresh_token === 'string' && tokens.refresh_token));
 }

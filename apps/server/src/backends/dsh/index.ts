@@ -103,6 +103,14 @@ export class DshBackendAdapter implements NativeBackendDriver {
 
   profiles(_host: NativeBackendHost): NativeBackendProfileConfig[] { return [defaultProfile()]; }
 
+  gatewayProfile(profile: NativeBackendProfileConfig): NativeBackendProfileConfig | undefined {
+    if (typeof profile.config.apiEndpoint === 'string' && profile.config.apiEndpoint.trim()) return profile;
+    if (typeof profile.config.apiKey === 'string' && profile.config.apiKey.trim()) {
+      return { ...profile, config: { ...profile.config, apiEndpoint: 'https://api.deepseek.com' } };
+    }
+    return undefined;
+  }
+
   private extensionManagementCapabilities(): import('../../../../../packages/contracts/src/index.js').ExtensionManagementCapabilities {
     return { actions: ['install'], installScopes: ['user'], kinds: { plugin: ['install', 'enable', 'disable', 'uninstall'] }, reason: '插件操作使用 DSH profile 的原生管理服务；必要时启动管理连接。' };
   }

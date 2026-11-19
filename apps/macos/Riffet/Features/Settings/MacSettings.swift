@@ -727,6 +727,7 @@ extension AppBuildRecord {
 /// 关于: the version and one update check. A build from a checkout also shows its git release
 /// check and update command.
 struct AboutSettings: View {
+    private static let repositoryURL = URL(string: "https://github.com/riffable/riffet")!
     @State private var updates = GitUpdates()
     @State private var receivesBeta = Updater.shared.receivesBeta
     @Environment(\.palette) private var palette
@@ -739,6 +740,22 @@ struct AboutSettings: View {
             }
             SettingsBlock("更新") {
                 updateCard
+            }
+            Section {
+                Link(destination: Self.repositoryURL) {
+                    SettingsRow("GitHub") {
+                        HStack(spacing: Space.xs) {
+                            Text("riffable/riffet")
+                                .font(RiffetFont.label)
+                                .foregroundStyle(palette.fg3)
+                            Image(icon: "arrow.up.right.square")
+                                .font(RiffetFont.caption)
+                                .foregroundStyle(palette.fg4)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .riffetForm()

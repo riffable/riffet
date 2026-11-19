@@ -2,6 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
 import { AUXILIARY_MODEL_BACKENDS } from '../auxiliary/gateway.js';
 import { auxiliaryEndpoint, listAuxiliaryModels } from '../auxiliary/models.js';
+import { probeAuxiliaryModel } from '../auxiliary/probe.js';
+import { handoffSummaryPrompt, titlePrompt, turnSummaryPrompt } from '../prompts/index.js';
+import { AuxiliaryStats } from '../stats/auxiliary.js';
 import { requestHandoffSummary } from '../orchestration/handoff-summary.js';
 import { createBackup } from '../system.js';
 import { scheduleCompaction } from '../storage/compaction.js';
@@ -10,7 +13,7 @@ import { machineReport } from '../doctor.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { LEGACY_DEFAULT_BACKEND_ID } from '../session-identity.js';
 import { validateBackendDefaults } from '../settings/backend-defaults.js';
-import { backendVisibleToClient, preserveInvisibleSettingsForClient, requireBackendVisibleToClient, visibleBackendsForClient } from '../native/client-features.js';
+import { backendVisibleToClient, hiddenBackendIds, hidesPluginAgents, preserveInvisibleSettingsForClient, requireBackendVisibleToClient, visibleBackendsForClient } from '../native/client-features.js';
 import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { RouteDeps } from './deps.js';
 
@@ -81,10 +84,85 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
         throw new AppError('INVALID_SETTINGS',`${field}.${purpose}.profileId must name a provider with a gateway address`);
     }
     settings.setSettings(body);
-    if(auxiliary.title)void titles.backfill().catch(()=>undefined);
+    if(auxiliary.title||auxiliary.default)void titles.backfill().catch(()=>undefined);
     return effectiveSettings(request.headers);
   });
   app.get('/api/auxiliary-models',async(request)=>({models:visibleBackendsForClient(request.headers,await listAuxiliaryModels(backendId=>nativeBackends.catalog.gatewayProfiles(backendId)))}));
+  app.get('/api/auxiliary-models/inspect',async(request)=>{
+    const currentSettings=effectiveSettings(request.headers);
+    const aux=currentSettings.auxiliaryModels;
+    const formatRef=(ref:import('../../../../packages/contracts/src/index.js').AuxiliaryModelRef|undefined)=>{
+      if(!ref)return undefined;
+      try{
+        const profile=nativeBackends.catalog.gatewayProfiles(ref.backendId).find(item=>item.id===ref.profileId);
+        return `${profile?.name||ref.profileId} · ${ref.model}`;
+      }catch{return `${ref.profileId} · ${ref.model}`;}
+    };
+    const resolvePurpose=(purpose:'title'|'handoff'|'summary')=>{
+      const direct=aux?.[purpose];
+      if(direct)return {effectiveModel:formatRef(direct),fallbackFrom:'direct' as const};
+      if(aux?.default)return {effectiveModel:formatRef(aux.default),fallbackFrom:'default' as const};
+      return {fallbackFrom:'none' as const};
+    };
+    const translateDirect=currentSettings.pluginModels?.['riffet.translate/translation'];
+    const translateResolved=translateDirect
+      ? {effectiveModel:formatRef(translateDirect),fallbackFrom:'direct' as const}
+      : aux?.default ? {effectiveModel:formatRef(aux.default),fallbackFrom:'default' as const} : {fallbackFrom:'none' as const};
+    const hidden=hiddenBackendIds(request.headers);
+    const auxiliaryStats=new AuxiliaryStats(store.db);
+    return {
+      jobs:[
+        {
+          id:'title',
+          title:'会话标题',
+          trigger:'首条消息开始运行（running）或首次完成时触发一次，不等待 Agent 回复完成。',
+          rules:'用户手动重命名或已生成过标题时跳过；若中文对话返回了纯英文标题会被语言校验拦截（日志记为 SKIPPED_RULE）。',
+          prompt:titlePrompt(),
+          ...resolvePurpose('title'),
+        },
+        {
+          id:'handoff',
+          title:'交接摘要',
+          trigger:'发起会话交接并生成交接草稿时触发，支持在设置页流式试用。',
+          rules:'未配置模型或调用失败时退回本地规则简报，不阻塞交接。',
+          prompt:handoffSummaryPrompt(),
+          ...resolvePurpose('handoff'),
+        },
+        {
+          id:'summary',
+          title:'画布摘要',
+          trigger:'在画布打开某轮回答节点时按轮触发一次，结果按回答内容哈希持久化缓存。',
+          rules:'仅总结已结束轮次，输出限制在一句话内（≤ 40 汉字 / 80 英文字符）。',
+          prompt:turnSummaryPrompt(),
+          ...resolvePurpose('summary'),
+        },
+        {
+          id:'translate',
+          title:'翻译（插件）',
+          trigger:'在回答更多菜单或选中文字工具条点击「翻译」时按需流式触发。',
+          rules:'按 6,000 字符在代码块外切分，多片并发预译并按序 SSE 流式吐出；相同译文在内存缓存中直接返回。',
+          prompt:[
+            'You translate a message from a conversation between a person and a coding agent into <target language>.',
+            'If the message is already in <target language>, translate it into <fallback language> instead.',
+            'Keep the Markdown as it is: headings, lists, tables, links, emphasis and line breaks.',
+            'Leave code blocks, inline code, file paths, commands, URLs, identifiers and product names unchanged.',
+            'The message may be one part of a longer one; translate only what you are given.',
+            'Answer with the translation alone: no preface, no notes, no quotation marks around it.',
+          ].join('\n'),
+          ...translateResolved,
+        },
+      ],
+      recent:auxiliaryStats.recentCalls({
+        limit:30,
+        labels:{
+          projectName:()=>undefined,
+          profileLabel:(backendId,profileId)=>{try{return isNativeBackendId(backendId)?nativeBackends.catalog.validateProfile(backendId,profileId).name:undefined;}catch{return undefined;}},
+        },
+        ...(hidden.length?{hiddenBackends:hidden}:{}),
+        ...(hidesPluginAgents(request.headers)?{hidePluginAgents:true}:{}),
+      }),
+    };
+  });
   /** Tries the same writing rules as the real job, without saving a setting or creating a session. */
   app.post<{Body:{purpose?:unknown;backendId?:unknown;profileId?:unknown;model?:unknown;message?:unknown}}>('/api/auxiliary-models/preview',async(request,reply)=>{
     const body=request.body??{};
@@ -96,15 +174,57 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
     const ref={backendId,profileId:requireString(body.profileId,'profileId',200),model:requireString(body.model,'model',200)};
     const message=requireString(body.message,'message',purpose==='title'?2_000:150_000).trim();
     const controller=new AbortController();
-    const close=()=>controller.abort();
+    let hijacked=false;
+    let closed=false;
+    const close=()=>{closed=true;controller.abort();};
     reply.raw.once('close',close);
+    const wantsStream=purpose==='handoff'&&typeof request.headers.accept==='string'&&request.headers.accept.includes('text/event-stream');
+    const writeEvent=(event:string,data:unknown)=>{if(!closed&&!reply.raw.writableEnded)reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);};
     try{
       if(purpose==='title')return {text:await titles.preview(ref,message,controller.signal)};
       const {profileName:_name,...endpoint}=await auxiliaryEndpoint(ref,id=>nativeBackends.catalog.gatewayProfiles(id),controller.signal);
-      return {text:await requestHandoffSummary(endpoint,message,{signal:controller.signal})};
+      if(!wantsStream)return {text:await requestHandoffSummary(endpoint,message,{signal:controller.signal})};
+      const text=await requestHandoffSummary(endpoint,message,{
+        signal:controller.signal,
+        onDelta:delta=>{
+          if(closed)return;
+          if(!hijacked){
+            hijacked=true;
+            request.raw.socket?.setTimeout?.(0);
+            reply.hijack();
+            reply.raw.writeHead(200,{'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform',Connection:'keep-alive','X-Accel-Buffering':'no'});
+          }
+          writeEvent('delta',{delta});
+        },
+      });
+      if(!hijacked)return {text};
+      writeEvent('result',{text});
+      reply.raw.end();
+      return;
     }catch(error){
-      const message=error instanceof Error?error.message:'The auxiliary model returned no result';
-      throw new AppError('AUXILIARY_MODEL_FAILED',message,400,undefined,{message});
+      const msg=error instanceof Error?error.message:'The auxiliary model returned no result';
+      if(!hijacked)throw new AppError('AUXILIARY_MODEL_FAILED',msg,400,undefined,{message:msg});
+      writeEvent('error',{status:400,error:{code:'AUXILIARY_MODEL_FAILED',message:msg,params:{message:msg}}});
+      reply.raw.end();
+      return;
+    }finally{reply.raw.off('close',close);}
+  });
+  app.post<{Body:{backendId?:unknown;profileId?:unknown;model?:unknown;preset?:unknown}}>('/api/auxiliary-models/probe',async(request,reply)=>{
+    const body=request.body??{};
+    const preset=body.preset===undefined?'short':requireString(body.preset,'preset',20);
+    if(preset!=='short'&&preset!=='stream'&&preset!=='long')throw new AppError('INVALID_INPUT','preset must be short, stream or long');
+    const backendId=requireString(body.backendId,'backendId',20);
+    requireBackendVisibleToClient(request.headers,backendId);
+    if(!isNativeBackendId(backendId)||!AUXILIARY_MODEL_BACKENDS.includes(backendId))throw new AppError('INVALID_BACKEND','This backend cannot run auxiliary models');
+    const ref={backendId,profileId:requireString(body.profileId,'profileId',200),model:requireString(body.model,'model',200)};
+    const controller=new AbortController();
+    const close=()=>controller.abort();
+    reply.raw.once('close',close);
+    try{
+      return await probeAuxiliaryModel(ref,preset,id=>nativeBackends.catalog.gatewayProfiles(id),{
+        signal:controller.signal,
+        ...(deps.recordAuxiliaryCall?{record:deps.recordAuxiliaryCall}:{}),
+      });
     }finally{reply.raw.off('close',close);}
   });
   app.post<{Body:{backendId?:unknown;profileId?:unknown;model?:unknown;message?:unknown}}>('/api/auxiliary-models/title-preview',async(request)=>{

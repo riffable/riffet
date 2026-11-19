@@ -4,8 +4,8 @@ import type { PluginHost, PluginPageProvider } from '@riffet/plugin-api';
 import { AUTO, LANGUAGES } from './languages.js';
 
 const WORDS = {
-  en: { target: 'Translate into', auto: 'Language of the app', footer: 'Messages are sent to the model chosen for Translation in Settings › Auxiliary models; until one is, to the default model of Quick chat.' },
-  zh: { target: '译成', auto: '跟随界面语言', footer: '消息会发给「设置 › 辅助模型」里为翻译选择的模型，没有选择时用「快速对话」的默认模型。' },
+  en: { target: 'Translate into', auto: 'Language of the app', footer: 'Messages are sent to the model chosen for Translation in Settings › Auxiliary models; until one is, to the default auxiliary model.' },
+  zh: { target: '译成', auto: '跟随界面语言', footer: '消息会发给「设置 › 辅助模型」里为翻译选择的模型，没有选择时用辅助模型的默认模型。' },
 };
 
 export function translatePage(host: PluginHost): PluginPageProvider {

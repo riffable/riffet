@@ -6,6 +6,7 @@ import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
 import type { Auth } from '../auth.js';
 import { validZone } from './buckets.js';
+import { AuxiliaryStats } from './auxiliary.js';
 import { StatsQuery, type ResolvedFilter, type StatsLabels } from './query.js';
 import { sendsQuickChat } from '../chat/quick-chat.js';
 import { clientSupportsFeature, hiddenBackendIds, hidesPluginAgents } from '../native/client-features.js';
@@ -45,6 +46,11 @@ const SeriesQuery = z.object({
 });
 const BreakdownQuery = z.object({ dimension: z.enum(['backend', 'model', 'profile', 'project', 'mode', 'tool', 'effort']).default('backend') });
 const LatencyQuery = z.object({ dimension: z.enum(['backend', 'model']).default('model') });
+const LeaderboardQuery = z.object({
+  category: z.enum(['short', 'stream', 'long', 'agent']).default('short'),
+  source: z.enum(['all', 'live', 'probe']).default('all'),
+  days: z.coerce.number().int().min(1).max(365).default(30),
+});
 const RunsQuery = z.object({ cursor: z.string().max(500).optional(), limit: z.coerce.number().int().min(1).max(200).default(50) });
 const ExportQuery = z.object({ format: z.enum(['csv', 'json']).default('csv') });
 
@@ -136,6 +142,19 @@ export function registerStatsRoutes(app: FastifyInstance, deps: StatsRouteDeps):
   app.get('/api/stats/latency', async request => {
     const { filter, stats } = context(request);
     return stats.latency(filter, parse(LatencyQuery.passthrough(), request.query).dimension);
+  });
+  app.get('/api/stats/leaderboard', async request => {
+    const { category, source, days } = parse(LeaderboardQuery.passthrough(), request.query);
+    const hidden = [...(sendsQuickChat(request) ? [] : ['chat']), ...hiddenBackendIds(request.headers)];
+    const auxiliaryStats = new AuxiliaryStats(deps.store.db, { now });
+    return auxiliaryStats.leaderboard({
+      category,
+      source,
+      days,
+      labels: labels(),
+      ...(hidden.length ? { hiddenBackends: hidden } : {}),
+      ...(hidesPluginAgents(request.headers) ? { hidePluginAgents: true } : {}),
+    });
   });
   app.get('/api/stats/heatmap', async request => {
     const { filter, stats } = context(request);

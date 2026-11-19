@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/controls';
 import { CopyButton } from '@/components/ui/copy-button';
 import { HttpError } from '@/lib/errors';
-import { localizedText, runPluginCommand, usePlugins } from '@/lib/plugins';
+import { localizedText, runPluginCommandStream, usePlugins } from '@/lib/plugins';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { enabledCommands, type PluginCommand } from '@/plugins/commands';
@@ -26,7 +26,7 @@ const ICONS: Record<CommandIcon, ComponentType<{ className?: string }>> = {
 export const commandIcon = (name: CommandIcon | undefined) => (name && ICONS[name]) || IconPuzzle;
 
 type Shown =
-  | { commandId: string; state: 'running'; controller: AbortController }
+  | { commandId: string; state: 'running'; controller: AbortController; text?: string; title?: LocalizedText }
   | { commandId: string; state: 'shown'; text: string; title?: LocalizedText; settingsKey: string }
   | { commandId: string; state: 'failed'; error: string; chooseModel?: 'auxiliary' | 'quickchat' };
 
@@ -100,14 +100,25 @@ function executeMessageCommand(
   if (known?.state === 'shown' && known.settingsKey === settingsKey) { put(key, known); return; }
   // This run's own entry: a reply is wanted only while it is still the one shown (not closed, not replaced by a rerun).
   const controller = new AbortController();
-  const running: Shown = { commandId: command.id, state: 'running', controller };
+  let running: Extract<Shown, { state: 'running' }> = { commandId: command.id, state: 'running', controller };
   put(key, running);
   void (async () => {
     try {
-      const result = await runPluginCommand(command.id, {
+      const result = await runPluginCommandStream(command.id, {
         requestId: newId(), sessionId, locale,
         message: { role: 'assistant', text, ...(runId ? { runId } : {}) },
-      }, controller.signal);
+      }, {
+        signal: controller.signal,
+        onDelta: (delta, title) => {
+          if (results.get(key) !== running || controller.signal.aborted) return;
+          running = {
+            ...running,
+            text: `${running.text ?? ''}${delta}`,
+            ...(title ? { title } : {}),
+          };
+          put(key, running);
+        },
+      });
       if (results.get(key) !== running) return;
       if (result.kind === 'text') put(key, { commandId: command.id, state: 'shown', text: result.text, ...(result.title ? { title: result.title } : {}), settingsKey });
       else {
@@ -157,7 +168,12 @@ export type SelectionCommandOutcome =
 export function useSelectionCommands(): {
   commands: PluginCommand[];
   openModelSettings?: (section: 'auxiliary' | 'quickchat') => void;
-  run(command: PluginCommand, selection: CommandSelection, signal?: AbortSignal): Promise<SelectionCommandOutcome>;
+  run(
+    command: PluginCommand,
+    selection: CommandSelection,
+    signal?: AbortSignal,
+    onDelta?: (text: string, title?: string) => void,
+  ): Promise<SelectionCommandOutcome>;
 } {
   const { i18n } = useLingui();
   const scope = useContext(MessageCommandsContext);
@@ -165,10 +181,26 @@ export function useSelectionCommands(): {
   const commands = useMemo(() => scope ? enabledCommands(descriptors, i18n.locale, 'selection') : [], [descriptors, i18n.locale, scope]);
   const sessionId = scope?.sessionId;
   const openModelSettings = scope?.openModelSettings;
-  const run = useCallback(async (command: PluginCommand, selection: CommandSelection, signal?: AbortSignal): Promise<SelectionCommandOutcome> => {
+  const run = useCallback(async (
+    command: PluginCommand,
+    selection: CommandSelection,
+    signal?: AbortSignal,
+    onDelta?: (text: string, title?: string) => void,
+  ): Promise<SelectionCommandOutcome> => {
     if (!sessionId || !selection.text.trim() || selection.text.length > PLUGIN_COMMAND_BUDGET.messageChars) return { kind: 'aborted' };
+    let streamedText = '';
     try {
-      const result = await runPluginCommand(command.id, { requestId: newId(), sessionId, locale: i18n.locale, selection }, signal);
+      const result = await runPluginCommandStream(command.id, { requestId: newId(), sessionId, locale: i18n.locale, selection }, {
+        ...(signal ? { signal } : {}),
+        ...(onDelta ? {
+          onDelta: (delta, rawTitle) => {
+            if (signal?.aborted) return;
+            streamedText += delta;
+            const title = localizedText(rawTitle, [i18n.locale]);
+            onDelta(streamedText, title);
+          },
+        } : {}),
+      });
       if (signal?.aborted) return { kind: 'aborted' };
       if (result.kind === 'text') {
         const title = localizedText(result.title, [i18n.locale]);
@@ -187,9 +219,11 @@ export function useSelectionCommands(): {
 }
 
 /** One result under an answer: the command's icon (a spinner while it runs), its title, copy/retry and close, then the Markdown or error. */
-export function MessageCommandBlock({ icon, title, text, error, action, onRetry, onClose, className, style, ref, onAnimationEnd }: {
+export function MessageCommandBlock({ icon, title, running: explicitRunning, text, error, action, onRetry, onClose, className, style, ref, onAnimationEnd }: {
   icon: CommandIcon | undefined;
   title: string;
+  /** True while the command is still running (including while streaming partial text). */
+  running?: boolean;
   /** Absent while the command runs or when it failed. */
   text?: string;
   /** Present when the command failed; the block stays in place so the reader can retry. */
@@ -204,14 +238,14 @@ export function MessageCommandBlock({ icon, title, text, error, action, onRetry,
 }) {
   const { t } = useLingui();
   const Icon = commandIcon(icon);
-  const running = text === undefined && error === undefined;
+  const running = explicitRunning ?? (text === undefined && error === undefined);
   return (
     <section ref={ref} style={style} onAnimationEnd={onAnimationEnd} aria-busy={running || undefined} aria-label={title} className={cn('flex flex-col rounded-xl bg-subtle px-4 py-3', className)}>
       <div className="flex items-center gap-2 text-sm">
         {running ? <Spinner className="size-4 text-fg-3" /> : <Icon className="size-4 text-fg-3" />}
         <span className="font-medium text-fg">{title}</span>
         <div className="-mr-2 ml-auto flex items-center gap-0.5">
-          {text !== undefined && <CopyButton text={text} />}
+          {!running && text !== undefined && <CopyButton text={text} />}
           {error !== undefined && action && <Button variant="ghost" size="xs" onClick={action.onClick}>{action.label}</Button>}
           {error !== undefined && onRetry && <Button variant="ghost" size="xs" onClick={onRetry}>{t`重试`}</Button>}
           <Button variant="ghost" size="icon-xs" aria-label={t`关闭`} title={t`关闭`} onClick={onClose}><IconX /></Button>
@@ -237,14 +271,15 @@ export function MessageCommandResults({ text, runId }: { text: string; runId?: s
   const openSettings = scope.openModelSettings;
   return <>{shown.map(([key, entry]) => {
     const command = commands.find((item) => item.id === entry.commandId);
-    const title = (entry.state === 'shown' ? localizedText(entry.title, [i18n.locale]) : undefined) ?? command?.title ?? '';
+    const title = ((entry.state === 'shown' || entry.state === 'running') ? localizedText(entry.title, [i18n.locale]) : undefined) ?? command?.title ?? '';
     const chooseModel = entry.state === 'failed' ? entry.chooseModel : undefined;
     return (
       <MessageCommandBlock
         key={key}
         icon={command?.icon}
         title={title}
-        {...(entry.state === 'shown' ? { text: entry.text } : {})}
+        running={entry.state === 'running'}
+        {...((entry.state === 'shown' || (entry.state === 'running' && entry.text !== undefined)) ? { text: entry.text } : {})}
         {...(entry.state === 'failed' ? {
           error: entry.error,
           ...(command ? { onRetry: () => executeMessageCommand(command, scope.sessionId, text, runId, i18n.locale, pluginSettingsKey(descriptors, command.id, i18n.locale)) } : {}),

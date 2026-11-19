@@ -163,4 +163,40 @@ describe('the command route', () => {
     const missing = await post('nope', { requestId: 'r3' });
     expect([missing.statusCode, missing.json()]).toEqual([404, expect.objectContaining({ error: expect.objectContaining({ code: 'COMMAND_NOT_FOUND' }) })]);
   });
+
+  it('streams SSE deltas and final result when Accept includes text/event-stream', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-command-sse-'));
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'riffet-command-sse-project-')));
+    const plugin: Plugin = {
+      manifest: {
+        id: 'acme.cmd', vendor: 'Acme', name: 'cmd', apiVersion: 1, defaultEnabled: true,
+        contributes: { commands: [{ id: 'acme.cmd/tr', title, scope: 'session', menus: ['message'] }] },
+      },
+      activate: () => ({ commands: {
+        'acme.cmd/tr': { run: async context => {
+          context.onTextDelta?.('Hel', { en: 'Tr' });
+          context.onTextDelta?.('lo', { en: 'Tr' });
+          return { kind: 'text', text: 'Hello', title: { en: 'Tr' } };
+        } },
+      } }),
+    };
+    const { app, store } = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent', plugins: [plugin] });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); await rm(directory, { recursive: true, force: true }); });
+    const status = await app.inject({ method: 'GET', url: '/api/auth/status', headers: { host: '127.0.0.1:4317' } });
+    const cookie = String(status.headers['set-cookie']).split(';')[0]!;
+    const csrf = (status.json() as { csrfToken: string }).csrfToken;
+    const project = store.createProject(directory, 'sse');
+    const session = store.createSession({ projectId: project.id, kind: 'native' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/integrations/acme.cmd/commands/tr',
+      headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, accept: 'text/event-stream' },
+      payload: { requestId: 'r-sse', sessionId: session.id, message: { role: 'assistant', text: 'Hi' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    expect(res.body).toContain('event: delta\ndata: {"delta":"Hel","title":{"en":"Tr"}}');
+    expect(res.body).toContain('event: delta\ndata: {"delta":"lo","title":{"en":"Tr"}}');
+    expect(res.body).toContain('event: result\ndata: {"kind":"text","text":"Hello","title":{"en":"Tr"}}');
+  });
 });

@@ -531,6 +531,11 @@ export class StatsLedger implements StatsSink {
     } catch (error) { console.error(`[riffet] stats migration ${MIGRATION_MARKER} failed; retrying on next start:`, error); }
   }
 
+  /** Notifies `/api/stats/stream` subscribers when auxiliary telemetry writes new rows. */
+  notifyChanged(): void {
+    this.changed();
+  }
+
   /** Trailing-edge throttle: at most one notification per `notifyMs`. */
   private changed(): void {
     if (this.closed || !this.listeners.size || this.notifyTimer) return;

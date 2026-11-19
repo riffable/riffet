@@ -327,12 +327,15 @@
     <string name="settings_connection_access">连接与访问</string>
     <string name="settings_extensions">扩展</string>
     <string name="settings_theme_summary">%1$s · %2$s</string>
+    <string name="settings_auxiliary_default">默认模型</string>
     <string name="settings_auxiliary_title">会话标题</string>
     <string name="settings_auxiliary_title_off">只用 CLI 标题</string>
     <string name="settings_auxiliary_handoff">交接摘要</string>
     <string name="settings_auxiliary_off">不使用</string>
     <string name="settings_auxiliary_plugins">插件</string>
+    <string name="settings_auxiliary_follow_default">跟随默认</string>
     <string name="settings_auxiliary_follow_chat">跟随快速对话</string>
+    <string name="settings_auxiliary_cli_slow">CLI · 较慢</string>
     <string name="settings_icons">图标</string>
     <string name="settings_interface_style">界面风格</string>
     <string name="settings_style_material">Material 3</string>

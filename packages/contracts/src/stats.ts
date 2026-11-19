@@ -106,3 +106,90 @@ export interface StatsDashboard {
 }
 /** Frames of `GET /api/stats/stream`: a hint to refetch, carrying no data of its own. */
 export type StatsStreamMessage = { type: 'stats_changed'; at: string };
+
+export type AuxiliaryJobKind = 'title' | 'summary' | 'handoff' | 'plugin' | 'chat' | 'probe';
+export type ModelProbePreset = 'short' | 'stream' | 'long';
+export type ModelLeaderboardCategory = 'short' | 'stream' | 'long' | 'agent';
+export type ModelLeaderboardSource = 'all' | 'live' | 'probe';
+
+export interface ModelLeaderboardRow {
+  key: string;
+  label: string;
+  backendId?: NativeBackendId;
+  profileId?: string;
+  profileName?: string;
+  model: string;
+  transport?: 'http' | 'cli-process';
+  samples: number;
+  probeSamples: number;
+  successRate: number | null;
+  thinkingRate: number | null;
+  authMs: StatsPercentiles | null;
+  ttftMs: StatsPercentiles | null;
+  durationMs: StatsPercentiles | null;
+  outputTokensPerSecond: StatsPercentiles | null;
+  lastSampleAt?: string;
+}
+
+export interface ModelLeaderboardResponse {
+  category: ModelLeaderboardCategory;
+  source: ModelLeaderboardSource;
+  generatedAt: string;
+  rows: ModelLeaderboardRow[];
+}
+
+export interface ModelProbeResult {
+  backendId: NativeBackendId;
+  profileId: string;
+  profileName: string;
+  model: string;
+  preset: ModelProbePreset;
+  transport: 'http' | 'cli-process';
+  ok: boolean;
+  error?: string;
+  authMs: number;
+  ttftMs: number | null;
+  durationMs: number;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  reasoningChars: number;
+  thinkingDetected: boolean;
+  streamingSupported: boolean;
+  outputTokensPerSecond: number | null;
+  previewText?: string;
+}
+
+export interface AuxiliaryJobInspect {
+  id: 'title' | 'handoff' | 'summary' | 'translate';
+  title: string;
+  trigger: string;
+  rules: string;
+  prompt: string;
+  effectiveModel?: string;
+  fallbackFrom?: 'default' | 'direct' | 'none';
+}
+
+export interface AuxiliaryCallLogEntry {
+  id: number;
+  at: string;
+  kind: AuxiliaryJobKind;
+  preset?: ModelProbePreset;
+  source: 'live' | 'probe';
+  backendId: NativeBackendId;
+  profileId: string;
+  profileName: string;
+  model: string;
+  transport: 'http' | 'cli-process';
+  ok: boolean;
+  authMs: number;
+  ttftMs: number | null;
+  durationMs: number;
+  thinkingDetected: boolean;
+  errorCode?: string;
+  detail?: string;
+}
+
+export interface AuxiliaryInspectResponse {
+  jobs: AuxiliaryJobInspect[];
+  recent: AuxiliaryCallLogEntry[];
+}

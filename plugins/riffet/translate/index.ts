@@ -2,7 +2,7 @@
 // command listed in a host menu: it declares the menu and an icon, runs on the message the client sends, and answers
 // Markdown the client shows under that message. It has no client code, so every client draws it the same way, and
 // no key of its own: it declares a model use, which the 辅助模型 settings page lists as 翻译, and runs on the model
-// chosen there, or on 快速对话's while none is, through `host.models.complete`.
+// chosen there, or on 辅助模型's default while none is, through `host.models.stream` / `host.models.complete`.
 
 import { PLUGIN_API_VERSION, type Plugin } from '@riffet/plugin-api';
 import { translatePage } from './page.js';
@@ -21,7 +21,7 @@ export const translate: Plugin = {
     activation: ['command'],
     contributes: {
       page: {},
-      modelUses: [{ id: TRANSLATE_MODEL, title: { 'zh-Hans': '翻译', en: 'Translation' }, fallback: 'chat' }],
+      modelUses: [{ id: TRANSLATE_MODEL, title: { 'zh-Hans': '翻译', en: 'Translation' }, fallback: 'default' }],
       commands: [{
         id: TRANSLATE_COMMAND, title: { 'zh-Hans': '翻译', en: 'Translate' },
         scope: 'session', menus: ['message', 'selection'], icon: 'languages',

@@ -232,9 +232,10 @@ data class AppSettings(
         agentDefaults?.get(agent) ?: AgentIds.builtin(agent)?.let { nativeBackendDefaults?.get(it) }
 }
 
-/** One model per side job: [title] writes conversation titles, [handoff] the summary a handoff opens with, [chat] starts new quick chats, [summary] the canvas's turn summaries. */
+/** One model per side job: [default] is the fast fallback for auxiliary tasks, [title] writes conversation titles, [handoff] the summary a handoff opens with, [chat] starts new quick chats, [summary] the canvas's turn summaries. */
 @Serializable
 data class AuxiliaryModels(
+    val default: AuxiliaryModelRef? = null,
     val title: AuxiliaryModelRef? = null,
     val handoff: AuxiliaryModelRef? = null,
     val chat: AuxiliaryModelRef? = null,
@@ -264,9 +265,9 @@ data class QuickChatSettings(
 @Serializable
 data class AuxiliaryModelRef(val backendId: NativeBackendId, val profileId: String, val model: String)
 
-/** One choice for an auxiliary model, with the profile it is listed under. */
+/** One choice for an auxiliary model, with the profile it is listed under and its transport (`http` or `cli-process`). */
 @Serializable
-data class AuxiliaryModelOption(val backendId: NativeBackendId, val profileId: String, val model: String, val profileName: String)
+data class AuxiliaryModelOption(val backendId: NativeBackendId, val profileId: String, val model: String, val profileName: String, val transport: String? = null)
 
 /** `GET /api/projects/:id/archive?check=1`: what a ZIP of [name] would hold. */
 @Serializable

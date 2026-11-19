@@ -109,6 +109,32 @@ export const STATS_SCHEMA = `
     generation TEXT,
     position TEXT,
     updated_at INTEGER NOT NULL);
+
+  CREATE TABLE IF NOT EXISTS auxiliary_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    preset TEXT,
+    source TEXT NOT NULL,
+    backend_id TEXT NOT NULL,
+    profile_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    transport TEXT NOT NULL,
+    protocol TEXT,
+    ok INTEGER NOT NULL,
+    auth_ms INTEGER NOT NULL DEFAULT 0,
+    ttft_ms INTEGER,
+    duration_ms INTEGER NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    reasoning_tokens INTEGER,
+    reasoning_chars INTEGER NOT NULL DEFAULT 0,
+    thinking_detected INTEGER NOT NULL DEFAULT 0,
+    streaming INTEGER NOT NULL DEFAULT 0,
+    error_code TEXT,
+    detail TEXT);
+  CREATE INDEX IF NOT EXISTS auxiliary_calls_created ON auxiliary_calls(created_at);
+  CREATE INDEX IF NOT EXISTS auxiliary_calls_kind_created ON auxiliary_calls(kind, created_at);
 `;
 
 export function ensureStatsSchema(db: DatabaseSync): void {
@@ -123,6 +149,8 @@ export function ensureStatsSchema(db: DatabaseSync): void {
   const facts = new Set((db.prepare('PRAGMA table_info(run_facts)').all() as Array<{ name: string }>).map(column => column.name));
   if (!facts.has('speed_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_output_tokens INTEGER');
   if (!facts.has('speed_estimated_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_estimated_output_tokens INTEGER');
+  const auxCols = new Set((db.prepare('PRAGMA table_info(auxiliary_calls)').all() as Array<{ name: string }>).map(column => column.name));
+  if (!auxCols.has('detail')) db.exec('ALTER TABLE auxiliary_calls ADD COLUMN detail TEXT');
 }
 
 /**

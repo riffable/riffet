@@ -33,6 +33,7 @@ interface Selected {
 /** A plugin command's answer about a selection, beside it; `text` and `error` are absent while the command runs. */
 interface Card {
   command: PluginCommand; selection: CommandSelection; range: Range;
+  running?: boolean;
   text?: string; title?: string;
   error?: string; chooseModel?: 'auxiliary' | 'quickchat';
   /** Chosen when it opens, by the room there was: the card keeps its side while the text scrolls. */
@@ -379,18 +380,24 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     cardAbortRef.current?.abort();
     const controller = new AbortController();
     cardAbortRef.current = controller;
-    const outcome = await selectionCommands.run(command, selectionInput, controller.signal);
+    const outcome = await selectionCommands.run(command, selectionInput, controller.signal, (text, title) => {
+      if (controller.signal.aborted) return;
+      setCard((current) => {
+        if (current?.range !== range || current.closing) return current;
+        return { ...current, running: true, text, ...(title ? { title } : {}) };
+      });
+    });
     if (controller.signal.aborted) return;
     // Closed, or replaced by another, meanwhile: the answer is not wanted.
     setCard((current) => {
       if (current?.range !== range || current.closing) return current;
       if (outcome.kind === 'text') {
         const { error: _error, chooseModel: _chooseModel, ...rest } = current;
-        return { ...rest, text: outcome.text, ...(outcome.title ? { title: outcome.title } : {}) };
+        return { ...rest, running: false, text: outcome.text, ...(outcome.title ? { title: outcome.title } : {}) };
       }
       if (outcome.kind === 'failed') {
         const { text: _text, ...rest } = current;
-        return { ...rest, error: outcome.error, ...(outcome.chooseModel ? { chooseModel: outcome.chooseModel } : { chooseModel: undefined }) };
+        return { ...rest, running: false, error: outcome.error, ...(outcome.chooseModel ? { chooseModel: outcome.chooseModel } : { chooseModel: undefined }) };
       }
       return { ...current, closing: true };
     });
@@ -410,13 +417,13 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     const roomAbove = rect.top - view.top;
     const roomBelow = view.bottom - rect.bottom;
     const above = roomAbove > roomBelow;
-    setCard({ command, range, selection: selectionInput, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
+    setCard({ command, range, selection: selectionInput, running: true, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
     await executeSelectionCommand(command, range, selectionInput);
   };
   const retryCard = () => {
     if (!card || card.closing) return;
     const { command, range, selection: selectionInput, above, room } = card;
-    setCard({ command, range, selection: selectionInput, above, room });
+    setCard({ command, range, selection: selectionInput, running: true, above, room });
     void executeSelectionCommand(command, range, selectionInput);
   };
   // Above the selection, or below it when there was no room above.
@@ -464,6 +471,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
           ref={cardRef}
           icon={card.command.icon}
           title={card.title ?? card.command.title}
+          running={card.running ?? (card.text === undefined && card.error === undefined)}
           {...(card.text !== undefined ? { text: card.text } : {})}
           {...(card.error !== undefined ? {
             error: card.error,

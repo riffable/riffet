@@ -44,19 +44,26 @@ struct AuxiliaryModelsView: View {
     @State private var uses: [ModelUseDeclaration] = []
     var body: some View {
         let models = workbench.settings?.auxiliaryModels
+        let hasDefault = models?.default != nil
+        let followDefault = String(localized: "跟随默认", bundle: .riffet)
+        let off = String(localized: "不使用", bundle: .riffet)
         RiffetForm {
             Section {
+                AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "default", title: String(localized: "默认模型", bundle: .riffet),
+                                  off: off, current: models?.default)
                 AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "title", title: String(localized: "会话标题", bundle: .riffet),
-                                  off: String(localized: "只用 CLI 标题", bundle: .riffet), current: models?.title)
+                                  off: hasDefault ? followDefault : String(localized: "只用 CLI 标题", bundle: .riffet), current: models?.title)
                 AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "handoff", title: String(localized: "交接摘要", bundle: .riffet),
-                                  off: String(localized: "不使用", bundle: .riffet), current: models?.handoff)
+                                  off: hasDefault ? followDefault : off, current: models?.handoff)
             }
             if !uses.isEmpty {
                 Section {
                     ForEach(uses, id: \.id) { use in
+                        let useOff = use.fallback == "default"
+                            ? followDefault
+                            : use.fallback == "chat" ? String(localized: "跟随快速对话", bundle: .riffet) : off
                         AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "chat", title: localizedText(use.title, fallback: use.id),
-                                          off: use.fallback == "chat" ? String(localized: "跟随快速对话", bundle: .riffet) : String(localized: "不使用", bundle: .riffet),
-                                          current: workbench.settings?.pluginModels?[use.id], use: use.id)
+                                          off: useOff, current: workbench.settings?.pluginModels?[use.id], use: use.id)
                     }
                 } header: { RiffetSectionTitle(String(localized: "插件", bundle: .riffet)) }
             }
@@ -142,7 +149,8 @@ private struct AuxiliaryModelChoice: View {
         var order: [String] = []
         var byName: [String: [AuxiliaryModelOption]] = [:]
         for option in catalog.options ?? [] {
-            let name = option.profileName.isEmpty ? managementBackendName(option.backendId, workbench) : option.profileName
+            let base = option.profileName.isEmpty ? managementBackendName(option.backendId, workbench) : option.profileName
+            let name = option.transport == "cli-process" ? "\(base) (\(String(localized: "CLI · 较慢", bundle: .riffet)))" : base
             if byName[name] == nil { order.append(name) }
             byName[name, default: []].append(option)
         }

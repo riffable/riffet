@@ -38,16 +38,25 @@ internal fun rememberAuxiliaryModelOptions(api: RiffetApi): Pair<List<AuxiliaryM
 
 @Composable
 internal fun AuxiliaryModelsSection(controller: SettingsController, options: List<AuxiliaryModelOption>?, error: String?) {
+    val state by controller.state.collectAsState()
+    val hasDefault = state.settings?.auxiliaryModels?.default != null
+    val followDefault = stringResource(Res.string.settings_auxiliary_follow_default)
+    val off = stringResource(Res.string.settings_auxiliary_off)
     SettingsGroup(stringResource(Res.string.settings_auxiliary_models)) {
-        AuxiliaryModelRow(controller, "title", stringResource(Res.string.settings_auxiliary_title), stringResource(Res.string.settings_auxiliary_title_off), options, error)
-        AuxiliaryModelRow(controller, "handoff", stringResource(Res.string.settings_auxiliary_handoff), stringResource(Res.string.settings_auxiliary_off), options, null)
+        AuxiliaryModelRow(controller, "default", stringResource(Res.string.settings_auxiliary_default), off, options, error)
+        AuxiliaryModelRow(controller, "title", stringResource(Res.string.settings_auxiliary_title), if (hasDefault) followDefault else stringResource(Res.string.settings_auxiliary_title_off), options, null)
+        AuxiliaryModelRow(controller, "handoff", stringResource(Res.string.settings_auxiliary_handoff), if (hasDefault) followDefault else off, options, null)
     }
     val uses = rememberPluginModelUses(controller)
     if (uses.isNotEmpty()) {
         SettingsGroup(stringResource(Res.string.settings_auxiliary_plugins)) {
             uses.forEach { use ->
-                val off = if (use.fallback == "chat") stringResource(Res.string.settings_auxiliary_follow_chat) else stringResource(Res.string.settings_auxiliary_off)
-                AuxiliaryModelRow(controller, "chat", localizedAppearanceTitle(use.title).ifBlank { use.id }, off, options, null, pluginUse = use.id)
+                val useOff = when (use.fallback) {
+                    "default" -> followDefault
+                    "chat" -> stringResource(Res.string.settings_auxiliary_follow_chat)
+                    else -> off
+                }
+                AuxiliaryModelRow(controller, "chat", localizedAppearanceTitle(use.title).ifBlank { use.id }, useOff, options, null, pluginUse = use.id)
             }
         }
     }
@@ -72,7 +81,8 @@ internal fun AuxiliaryModelRow(
 ) {
     val state by controller.state.collectAsState()
     val settings = state.settings ?: return
-    val current = if (pluginUse != null) settings.pluginModels?.get(pluginUse) else when (purpose) { "title" -> settings.auxiliaryModels?.title; "handoff" -> settings.auxiliaryModels?.handoff; else -> settings.auxiliaryModels?.chat }
+    val current = if (pluginUse != null) settings.pluginModels?.get(pluginUse) else when (purpose) { "default" -> settings.auxiliaryModels?.default; "title" -> settings.auxiliaryModels?.title; "handoff" -> settings.auxiliaryModels?.handoff; else -> settings.auxiliaryModels?.chat }
+    val cliSlowTag = stringResource(Res.string.settings_auxiliary_cli_slow)
     // The chat catalog names models `<provider> · <model>`; the saved choice repeats that.
     val currentLabel = current?.let { ref ->
         val profile = options.orEmpty()
@@ -103,7 +113,10 @@ internal fun AuxiliaryModelRow(
                 ) {
                     Text(offLabel, style = RiffetMenuText, color = LocalRiffetColors.current.fg)
                 }
-                options.orEmpty().groupBy { it.profileName.ifBlank { backendLabel(it.backendId) } }.forEach { (profile, items) ->
+                options.orEmpty().groupBy {
+                    val base = it.profileName.ifBlank { backendLabel(it.backendId) }
+                    if (it.transport == "cli-process") "$base ($cliSlowTag)" else base
+                }.forEach { (profile, items) ->
                     RiffetMenuLabel(profile)
                     items.forEach { option ->
                         RiffetMenuItem(

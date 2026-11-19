@@ -77,6 +77,12 @@ import type {
   StatsSeries,
   StatsSeriesMetric,
   StatsSplit,
+  AuxiliaryInspectResponse,
+  ModelLeaderboardCategory,
+  ModelLeaderboardResponse,
+  ModelLeaderboardSource,
+  ModelProbePreset,
+  ModelProbeResult,
   LoadedExtensions,
   NativeBackendCatalogEntry,
   NativeBackendProfilesResponse,
@@ -485,6 +491,41 @@ export async function requestResponse(path: string, init: RequestInit = {}): Pro
     );
   }
   return response;
+}
+
+export async function readSseStream(
+  response: Response,
+  onEvent: (event: string, data: string) => void,
+): Promise<void> {
+  if (!response.body) return;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const dispatch = (block: string) => {
+    let event = 'message';
+    const data: string[] = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+    }
+    if (data.length) onEvent(event, data.join('\n'));
+  };
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end: RegExpExecArray | null;
+      while ((end = /\r?\n\r?\n/.exec(buffer))) {
+        dispatch(buffer.slice(0, end.index));
+        buffer = buffer.slice(end.index + end[0].length);
+      }
+    }
+    const rest = buffer + decoder.decode();
+    if (rest.trim()) dispatch(rest);
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
 }
 
 /** One round trip; `response` is kept for callers that need headers (a list's `ETag`). */
@@ -902,8 +943,46 @@ export const api = {
   /** What the enabled plugins contribute to appearance; the device's selection is local. */
   appearance: () => request<AppearanceCatalog>('/api/appearance'),
   auxiliaryModels: (signal?: AbortSignal) => request<{ models: AuxiliaryModelOption[] }>('/api/auxiliary-models', { signal }),
+  inspectAuxiliaryModels: (signal?: AbortSignal) => request<AuxiliaryInspectResponse>('/api/auxiliary-models/inspect', { signal }),
+  probeAuxiliaryModel: (body: AuxiliaryModelRef & { preset: ModelProbePreset }, signal?: AbortSignal) => request<ModelProbeResult>('/api/auxiliary-models/probe', { ...json('POST', body), signal }),
+  modelLeaderboard: (params: { category: ModelLeaderboardCategory; source?: ModelLeaderboardSource; days?: number }, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ category: params.category });
+    if (params.source) query.set('source', params.source);
+    if (params.days !== undefined) query.set('days', String(params.days));
+    return request<ModelLeaderboardResponse>(`/api/stats/leaderboard?${query}`, { signal });
+  },
   /** Runs one auxiliary job without saving settings or creating a session. */
   previewAuxiliaryModel: (body: AuxiliaryModelRef & { purpose: AuxiliaryModelPurpose; message: string }, signal?: AbortSignal) => request<{ text: string }>('/api/auxiliary-models/preview', { ...json('POST', body), signal }),
+  previewAuxiliaryModelStream: async (
+    body: AuxiliaryModelRef & { purpose: AuxiliaryModelPurpose; message: string },
+    options: { onDelta(delta: string): void; signal?: AbortSignal },
+  ): Promise<{ text: string }> => {
+    const init = json('POST', body);
+    const headers = new Headers(init.headers);
+    headers.set('Accept', 'text/event-stream, application/json');
+    const response = await requestResponse('/api/auxiliary-models/preview', { ...init, headers, ...(options.signal ? { signal: options.signal } : {}) });
+    if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+      return await response.json() as { text: string };
+    }
+    let result: { text: string } | undefined;
+    let streamError: HttpError | undefined;
+    await readSseStream(response, (event, data) => {
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(data) as Record<string, unknown>; } catch { return; }
+      if (event === 'delta' && typeof parsed.delta === 'string') {
+        options.onDelta(parsed.delta);
+      } else if (event === 'result' && typeof parsed.text === 'string') {
+        result = { text: parsed.text };
+      } else if (event === 'error') {
+        const err = parsed.error as { code?: string; message?: string; details?: unknown; params?: Record<string, string | number> } | undefined;
+        const status = typeof parsed.status === 'number' ? parsed.status : 400;
+        streamError = new HttpError(status, err?.message ?? 'Auxiliary model failed', err?.code, err?.details, err?.params);
+      }
+    });
+    if (streamError) throw streamError;
+    if (!result) throw new HttpError(502, 'Auxiliary preview stream ended without a result');
+    return result;
+  },
   backup: () => request<unknown>('/api/system/backup', json('POST')),
   serviceMonitor: (signal?: AbortSignal) => request<ServiceMonitorSnapshot>('/api/system/monitor', { signal }),
   storage: (signal?: AbortSignal) => request<StorageReport>('/api/system/storage', { signal }),

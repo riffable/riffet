@@ -27,7 +27,7 @@ import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-so
 import { ClaudeScreenFeed } from './live/feed.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
-import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability , STANDING_ISOLATION } from './launch.js';
+import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability, readClaudeOwnerGateway, STANDING_ISOLATION } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
 import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, rewriteKey, ClaudeSessionRuntime } from './runtime.js';
 import { workspaceObserver, type WorkspaceObserver } from '../shared/workspace-observer.js';
@@ -289,6 +289,10 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
         ...(process.env.CLAUDE_CONFIG_DIR ? { configDir: process.env.CLAUDE_CONFIG_DIR } : {}),
       },
     }];
+  }
+
+  gatewayProfile(profile: NativeBackendProfileConfig): NativeBackendProfileConfig | undefined {
+    return readClaudeOwnerGateway(profile);
   }
 
   capabilities(): NativeBackendCapabilities {

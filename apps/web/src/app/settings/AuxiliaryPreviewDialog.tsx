@@ -13,7 +13,7 @@ import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/utils';
 
 /** The purposes that answer one bounded job, which is what a preview tries. */
-export type PreviewPurpose = Exclude<AuxiliaryModelPurpose, 'chat' | 'summary'>;
+export type PreviewPurpose = Exclude<AuxiliaryModelPurpose, 'default' | 'chat' | 'summary'>;
 const LIMITS: Record<PreviewPurpose, number> = { title: 2_000, handoff: 150_000 };
 
 export function AuxiliaryPreviewDialog({ open, purpose, model, onOpenChange }: {
@@ -75,7 +75,17 @@ export function AuxiliaryPreviewDialog({ open, purpose, model, onOpenChange }: {
     setResult('');
     setError('');
     try {
-      const { text } = await api.previewAuxiliaryModel({ purpose, ...model, message: input.trim() }, controller.signal);
+      const { text } = purpose === 'handoff'
+        ? await api.previewAuxiliaryModelStream(
+          { purpose, ...model, message: input.trim() },
+          {
+            signal: controller.signal,
+            onDelta: (delta) => {
+              if (!controller.signal.aborted) setResult((previous) => `${previous}${delta}`);
+            },
+          },
+        )
+        : await api.previewAuxiliaryModel({ purpose, ...model, message: input.trim() }, controller.signal);
       if (!controller.signal.aborted) setResult(text);
     } catch (cause) {
       if (!controller.signal.aborted) setError(errorMessage(cause));

@@ -40,7 +40,15 @@ export interface CommandServiceOptions {
   timeoutMs?: number;
 }
 
-interface Remembered { fingerprint: string; at: number; result: Promise<PluginCommandResult>; cancel?: () => void; waiters: number }
+interface Remembered {
+  fingerprint: string;
+  at: number;
+  result: Promise<PluginCommandResult>;
+  cancel?: () => void;
+  waiters: number;
+  listeners?: Set<(delta: string, title?: LocalizedText) => void>;
+  streamed?: { text: string; title?: LocalizedText };
+}
 
 export class CommandService {
   private readonly remembered = new Map<string, Remembered>();
@@ -53,7 +61,14 @@ export class CommandService {
    * arguments fit `params` (400 `COMMAND_ARGS_INVALID`). The same request id with the same body within ten minutes returns the same
    * result without running the handler again; with another body it is refused (409 `COMMAND_REQUEST_CONFLICT`).
    */
-  async run(pluginId: string, name: string, body: unknown, headers: IncomingHttpHeaders | undefined, requestSignal?: AbortSignal): Promise<PluginCommandResult> {
+  async run(
+    pluginId: string,
+    name: string,
+    body: unknown,
+    headers: IncomingHttpHeaders | undefined,
+    requestSignal?: AbortSignal,
+    options?: { onTextDelta?: (delta: string, title?: LocalizedText) => void },
+  ): Promise<PluginCommandResult> {
     const commandId = `${pluginId}/${name}`;
     await this.options.registry.ensureContribution?.('command', commandId).catch(() => undefined);
     const { declaration, handler, signal } = this.options.registry.command(pluginId, commandId);
@@ -115,40 +130,61 @@ export class CommandService {
     const known = this.remembered.get(key);
     if (known) {
       if (known.fingerprint !== fingerprint) throw new AppError('COMMAND_REQUEST_CONFLICT', 'This request id was already used for a different command', 409);
-      return this.awaitRemembered(key, known, requestSignal);
+      return this.awaitRemembered(key, known, requestSignal, options?.onTextDelta);
     }
     const callerAbort = new AbortController();
-    const result = this.execute(commandId, pluginId, handler, (message || selection) ? AbortSignal.any([signal, callerAbort.signal]) : signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), ...(message ? { message } : {}), ...(selection ? { selection } : {}), ...(locale ? { locale } : {}), args });
+    const listeners = (message || selection) ? new Set<(delta: string, title?: LocalizedText) => void>() : undefined;
+    const streamed = (message || selection) ? { text: '', title: undefined as LocalizedText | undefined } : undefined;
+    const onTextDelta = listeners && streamed ? (delta: string, title?: LocalizedText) => {
+      if (!delta) return;
+      streamed.text += delta;
+      if (title !== undefined) streamed.title = title;
+      for (const listener of listeners) listener(delta, title);
+    } : undefined;
+    const result = this.execute(commandId, pluginId, handler, (message || selection) ? AbortSignal.any([signal, callerAbort.signal]) : signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), ...(message ? { message } : {}), ...(selection ? { selection } : {}), ...(locale ? { locale } : {}), args }, onTextDelta);
     const entry: Remembered = {
       fingerprint,
       at: now,
       result,
       ...(message || selection ? { cancel: () => { if (this.remembered.get(key) === entry) this.remembered.delete(key); callerAbort.abort(); } } : {}),
       waiters: 0,
+      ...(listeners ? { listeners } : {}),
+      ...(streamed ? { streamed } : {}),
     };
     this.remembered.set(key, entry);
     // A result on a message or selection can be long and the client keeps it: a repeat while it runs shares the run, a later one runs again.
     if (message || selection) void result.then(() => undefined, () => undefined).then(() => { if (this.remembered.get(key) === entry) this.remembered.delete(key); });
-    return this.awaitRemembered(key, entry, requestSignal);
+    return this.awaitRemembered(key, entry, requestSignal, options?.onTextDelta);
   }
 
-  private awaitRemembered(_key: string, entry: Remembered, requestSignal?: AbortSignal): Promise<PluginCommandResult> {
-    if (!requestSignal || !entry.cancel) return entry.result;
-    if (requestSignal.aborted) {
+  private awaitRemembered(_key: string, entry: Remembered, requestSignal?: AbortSignal, onTextDelta?: (delta: string, title?: LocalizedText) => void): Promise<PluginCommandResult> {
+    if (requestSignal?.aborted && entry.cancel) {
       if (entry.waiters <= 0) entry.cancel();
       return Promise.reject(requestSignal.reason ?? new Error('aborted'));
     }
+    const attach = () => {
+      if (!onTextDelta || !entry.listeners) return undefined;
+      if (entry.streamed?.text) onTextDelta(entry.streamed.text, entry.streamed.title);
+      entry.listeners.add(onTextDelta);
+      return () => { entry.listeners?.delete(onTextDelta); };
+    };
+    if (!requestSignal || !entry.cancel) {
+      const detach = attach();
+      return entry.result.finally(() => detach?.());
+    }
+    const detach = attach();
     entry.waiters += 1;
     return new Promise<PluginCommandResult>((resolve, reject) => {
       const onAbort = () => {
+        detach?.();
         entry.waiters -= 1;
         if (entry.waiters <= 0) entry.cancel?.();
         reject(requestSignal.reason ?? new Error('aborted'));
       };
       requestSignal.addEventListener('abort', onAbort, { once: true });
       entry.result.then(
-        value => { requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
-        error => { requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
+        value => { detach?.(); requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
+        error => { detach?.(); requestSignal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
       );
     });
   }
@@ -163,18 +199,20 @@ export class CommandService {
 
   private async execute(
     commandId: string, pluginId: string, handler: CommandHandler, activation: AbortSignal, context: { projectId?: string; sessionId?: string; confirm?: string; message?: CommandMessage; selection?: CommandSelection; locale?: string; args: TaskParams },
+    onTextDelta?: (delta: string, title?: LocalizedText) => void,
   ): Promise<PluginCommandResult> {
     const controller = new AbortController();
     const stop = () => controller.abort();
     activation.addEventListener('abort', stop, { once: true });
     let timer: NodeJS.Timeout | undefined;
     const ms = this.options.timeoutMs ?? COMMAND_TIMEOUT_MS;
+    const onText = Boolean(context.message || context.selection);
     try {
       const outcome = await Promise.race([
-        Promise.resolve().then(() => handler.run({ ...context, signal: controller.signal })),
+        Promise.resolve().then(() => handler.run({ ...context, ...(onText && onTextDelta ? { onTextDelta } : {}), signal: controller.signal })),
         new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error(`did not finish within ${ms / 1000}s`)); }, ms); timer.unref(); }),
       ]);
-      return await this.checked(commandId, pluginId, context.projectId, Boolean(context.message || context.selection), outcome);
+      return await this.checked(commandId, pluginId, context.projectId, onText, outcome);
     } catch (error) {
       if (error instanceof AppError) throw error;
       const reason = describe(error);
@@ -254,7 +292,53 @@ export function registerCommandRoutes(app: FastifyInstance, deps: Pick<RouteDeps
   app.post<{ Params: { id: string; name: string }; Body: unknown }>('/api/integrations/:id/commands/:name', { bodyLimit: BODY_LIMIT },
     async (request, reply) => {
       const controller = new AbortController();
-      reply.raw.once('close', () => { if (!reply.raw.writableFinished) controller.abort(); });
-      return commands.run(request.params.id, request.params.name, request.body, request.headers, controller.signal);
+      let hijacked = false;
+      let closed = false;
+      const onClose = () => { closed = true; if (!reply.raw.writableFinished) controller.abort(); };
+      reply.raw.once('close', onClose);
+      const wantsStream = typeof request.headers.accept === 'string' && request.headers.accept.includes('text/event-stream');
+      const writeEvent = (event: string, data: unknown) => {
+        if (closed || reply.raw.writableEnded) return;
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+      const onTextDelta = wantsStream ? (delta: string, title?: LocalizedText) => {
+        if (closed) return;
+        if (!hijacked) {
+          hijacked = true;
+          request.raw.socket?.setTimeout?.(0);
+          reply.hijack();
+          reply.raw.writeHead(200, {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no',
+          });
+        }
+        writeEvent('delta', { delta, ...(title !== undefined ? { title } : {}) });
+      } : undefined;
+      try {
+        const result = await commands.run(request.params.id, request.params.name, request.body, request.headers, controller.signal, onTextDelta ? { onTextDelta } : undefined);
+        if (!hijacked) return result;
+        writeEvent('result', result);
+        reply.raw.end();
+        return;
+      } catch (error) {
+        if (!hijacked) throw error;
+        const typed = error as AppError;
+        const status = typed.statusCode ?? 500;
+        writeEvent('error', {
+          status,
+          error: {
+            code: typed.code ?? 'INTERNAL_ERROR',
+            message: status < 500 ? typed.message : 'The local service could not complete this operation',
+            ...(error instanceof AppError && typed.params ? { params: typed.params } : {}),
+            ...(typed.details ? { details: typed.details } : {}),
+          },
+        });
+        reply.raw.end();
+        return;
+      } finally {
+        reply.raw.off('close', onClose);
+      }
     });
 }

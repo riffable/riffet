@@ -81,6 +81,23 @@ export interface GatewayEndpoint {
   headers?: Record<string, string>;
   /** The id the gateway serves, see `gatewayModelId`. */
   model: string;
+  /** Non-HTTP executor when a CLI profile serves auxiliary jobs directly without a standalone gateway key. */
+  executeComplete?: (request: CompletionRequest) => Promise<string>;
+  executeStreamChat?: (request: ChatStreamRequest) => Promise<ChatStreamResult>;
+}
+
+export interface CompletionMetrics {
+  ok: boolean;
+  ttftMs: number | null;
+  durationMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  reasoningChars: number;
+  thinkingDetected: boolean;
+  streaming: boolean;
+  outputTokensPerSecond: number | null;
+  errorCode?: string;
 }
 
 export interface CompletionRequest extends GatewayEndpoint {
@@ -90,43 +107,395 @@ export interface CompletionRequest extends GatewayEndpoint {
   timeoutMs: number;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
+  onMetrics?: (metrics: CompletionMetrics) => void;
 }
 
-/**
- * One single-turn completion: a system prompt, one user message, the text back. Thinking is
- * switched off where the protocol allows, since these are bounded writing jobs and a reasoning model
- * left to think can spend the whole budget before answering. Throws with the gateway's reason.
- */
-export async function complete(request: CompletionRequest): Promise<string> {
+export interface StreamCompletionRequest extends CompletionRequest {
+  onDelta: (text: string) => void;
+}
+
+export class GatewayHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = 'GatewayHttpError';
+  }
+}
+
+type FastThinkingMode = 'default' | 'thinking-only' | 'effort-none' | 'effort-minimal' | 'effort-low' | 'omit';
+
+const FAST_MODES: Record<GatewayProtocol, readonly FastThinkingMode[]> = {
+  anthropic: ['default', 'omit'],
+  chat: ['default', 'thinking-only', 'effort-none', 'effort-minimal', 'effort-low', 'omit'],
+  responses: ['effort-none', 'effort-minimal', 'effort-low', 'omit'],
+};
+const MAX_FAST_MODE_CACHE = 128;
+// perf-rules: allow bounded by MAX_FAST_MODE_CACHE, FIFO eviction in rememberFastMode
+const fastModeCache = new Map<string, FastThinkingMode>();
+
+function fastModeKey(protocol: GatewayProtocol, baseUrl: string, model: string): string {
+  return `${protocol}\0${baseUrl}\0${model}`;
+}
+
+function rememberFastMode(key: string, mode: FastThinkingMode): void {
+  fastModeCache.delete(key);
+  fastModeCache.set(key, mode);
+  while (fastModeCache.size > MAX_FAST_MODE_CACHE) {
+    const oldest = fastModeCache.keys().next().value;
+    if (oldest === undefined) break;
+    fastModeCache.delete(oldest);
+  }
+}
+
+function isUnsupportedThinkingError(status: number, reason: string | undefined): boolean {
+  if (status !== 400 || !reason) return false;
+  return /\b(thinking|reasoning(?:_effort)?|effort)\b|unknown parameter|unrecognized request argument|unsupported (?:value|parameter)/i.test(reason);
+}
+
+function buildFastRequest(
+  request: Pick<CompletionRequest, 'protocol' | 'baseUrl' | 'apiKey' | 'headers' | 'model' | 'system' | 'content' | 'maxOutputTokens'>,
+  mode: FastThinkingMode,
+  stream: boolean,
+): { url: URL; headers: Record<string, string>; body: Record<string, unknown> } {
   const { protocol, baseUrl, apiKey, model, system, content, maxOutputTokens } = request;
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': 'application/json', ...(stream ? { accept: 'text/event-stream' } : {}) };
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
   Object.assign(headers, request.headers);
   let url: URL, body: Record<string, unknown>;
   if (protocol === 'anthropic') {
     headers['anthropic-version'] = '2023-06-01';
     url = endpoint(baseUrl, 'messages');
-    body = { model, max_tokens: maxOutputTokens, system, thinking: { type: 'disabled' }, messages: [{ role: 'user', content }] };
+    body = {
+      model, max_tokens: maxOutputTokens, system,
+      ...(mode !== 'omit' ? { thinking: { type: 'disabled' } } : {}),
+      messages: [{ role: 'user', content }],
+      ...(stream ? { stream: true } : {}),
+    };
   } else if (protocol === 'chat') {
     url = endpoint(baseUrl, 'chat/completions');
-    body = { model, max_tokens: maxOutputTokens, thinking: { type: 'disabled' }, messages: [{ role: 'system', content: system }, { role: 'user', content }] };
+    const includeThinking = mode === 'default' || mode === 'thinking-only';
+    const effort = mode === 'default' || mode === 'effort-none' ? 'none'
+      : mode === 'effort-minimal' ? 'minimal'
+      : mode === 'effort-low' ? 'low' : undefined;
+    body = {
+      model, max_tokens: maxOutputTokens,
+      ...(includeThinking ? { thinking: { type: 'disabled' } } : {}),
+      ...(effort ? { reasoning_effort: effort } : {}),
+      messages: [{ role: 'system', content: system }, { role: 'user', content }],
+      ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
+    };
   } else {
     url = endpoint(baseUrl, 'responses');
-    body = { model, max_output_tokens: maxOutputTokens, instructions: system, input: content };
+    const effort = mode === 'effort-none' ? 'none'
+      : mode === 'effort-minimal' ? 'minimal'
+      : mode === 'effort-low' ? 'low' : undefined;
+    body = {
+      model, max_output_tokens: maxOutputTokens, instructions: system, input: content,
+      ...(effort ? { reasoning: { effort } } : {}),
+      ...(stream ? { stream: true } : {}),
+    };
   }
+  return { url, headers, body };
+}
+
+function extractCompletionUsage(protocol: GatewayProtocol, body: unknown): {
+  inputTokens?: number; outputTokens?: number; reasoningTokens?: number; reasoningChars: number;
+} {
+  const value = record(body);
+  const usage = record(value?.usage);
+  if (protocol === 'anthropic') {
+    const blocks = Array.isArray(value?.content) ? value.content as Array<Record<string, unknown>> : [];
+    const reasoningChars = blocks
+      .filter(block => block.type === 'thinking' && typeof block.thinking === 'string')
+      .reduce((sum, block) => sum + String(block.thinking).length, 0);
+    return {
+      ...(count(usage?.input_tokens) !== undefined ? { inputTokens: count(usage?.input_tokens)! } : {}),
+      ...(count(usage?.output_tokens) !== undefined ? { outputTokens: count(usage?.output_tokens)! } : {}),
+      reasoningChars,
+    };
+  }
+  if (protocol === 'chat') {
+    const message = record((Array.isArray(value?.choices) ? value.choices[0] : undefined))?.message;
+    const msg = record(message);
+    const reasoning = typeof msg?.reasoning_content === 'string' ? msg.reasoning_content : typeof msg?.reasoning === 'string' ? msg.reasoning : '';
+    const details = record(usage?.completion_tokens_details);
+    const reasoningTokens = count(details?.reasoning_tokens);
+    return {
+      ...(count(usage?.prompt_tokens) !== undefined ? { inputTokens: count(usage?.prompt_tokens)! } : {}),
+      ...(count(usage?.completion_tokens) !== undefined ? { outputTokens: count(usage?.completion_tokens)! } : {}),
+      ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+      reasoningChars: reasoning.length,
+    };
+  }
+  const output = Array.isArray(value?.output) ? value.output as Array<Record<string, unknown>> : [];
+  let reasoningChars = 0;
+  for (const item of output) {
+    if (item?.type !== 'reasoning') continue;
+    const summary = Array.isArray(item.summary) ? item.summary : [];
+    for (const part of summary) {
+      const text = record(part)?.text;
+      if (typeof text === 'string') reasoningChars += text.length;
+    }
+  }
+  const details = record(usage?.output_tokens_details);
+  const reasoningTokens = count(details?.reasoning_tokens);
+  return {
+    ...(count(usage?.input_tokens) !== undefined ? { inputTokens: count(usage?.input_tokens)! } : {}),
+    ...(count(usage?.output_tokens) !== undefined ? { outputTokens: count(usage?.output_tokens)! } : {}),
+    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
+    reasoningChars,
+  };
+}
+
+function decodeSpeed(outputTokens: number | undefined, text: string, firstTextAt: number | undefined, endedAt: number): number | null {
+  if (firstTextAt === undefined) return null;
+  const genMs = endedAt - firstTextAt;
+  if (genMs < 300) return null;
+  const tokens = outputTokens ?? Math.round(text.length / 4);
+  if (tokens < 8) return null;
+  const speed = tokens / (genMs / 1000);
+  return speed > 0 && speed <= 1_000 ? speed : null;
+}
+
+function errorCodeOf(error: unknown): string {
+  if (error instanceof GatewayHttpError) return `HTTP_${error.status}`;
+  if (error instanceof Error && error.name === 'TimeoutError') return 'TIMEOUT';
+  return 'ERROR';
+}
+
+/**
+ * One single-turn completion: a system prompt, one user message, the text back. Thinking is
+ * switched off or minimized where the protocol allows, since these are bounded writing jobs and a
+ * reasoning model left to think can spend the whole budget before answering. Throws with the gateway's reason.
+ */
+export async function complete(request: CompletionRequest): Promise<string> {
+  const startedAt = Date.now();
+  if (request.executeComplete) {
+    try {
+      const text = await request.executeComplete(request);
+      request.onMetrics?.({
+        ok: true, ttftMs: null, durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: false, outputTokensPerSecond: null,
+      });
+      return text;
+    } catch (error) {
+      request.onMetrics?.({
+        ok: false, ttftMs: null, durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: false, outputTokensPerSecond: null,
+        errorCode: errorCodeOf(error),
+      });
+      throw error;
+    }
+  }
+  const modes = FAST_MODES[request.protocol];
+  const key = fastModeKey(request.protocol, request.baseUrl, request.model);
+  const start = fastModeCache.get(key);
+  const startIndex = start ? Math.max(0, modes.indexOf(start)) : 0;
   const timeout = AbortSignal.timeout(request.timeoutMs);
-  const response = await modelRequest(url, {
-    method: 'POST', headers, body: JSON.stringify(body),
-    signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout,
-  }, request.fetchImpl);
-  if (!response.ok) {
-    const reason = errorOf(await response.text().catch(() => ''));
-    throw new Error(`model returned HTTP ${response.status}${reason ? `: ${reason}` : ''}`);
+  const signal = request.signal ? AbortSignal.any([request.signal, timeout]) : timeout;
+
+  try {
+    for (let index = startIndex; index < modes.length; index += 1) {
+      const mode = modes[index]!;
+      const { url, headers, body } = buildFastRequest(request, mode, false);
+      const response = await modelRequest(url, { method: 'POST', headers, body: JSON.stringify(body), signal }, request.fetchImpl);
+      if (!response.ok) {
+        const reason = errorOf(await response.text().catch(() => ''));
+        if (index + 1 < modes.length && isUnsupportedThinkingError(response.status, reason)) continue;
+        throw new GatewayHttpError(response.status, `model returned HTTP ${response.status}${reason ? `: ${reason}` : ''}`);
+      }
+      if (mode !== modes[0] || start !== undefined) rememberFastMode(key, mode);
+      const answer = await response.json() as unknown;
+      const usage = extractCompletionUsage(request.protocol, answer);
+      const thinkingDetected = (usage.reasoningTokens ?? 0) > 0 || usage.reasoningChars > 0;
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      if (cutOff(request.protocol, answer)) {
+        request.onMetrics?.({
+          ok: false, ttftMs: null, durationMs, ...usage, thinkingDetected, streaming: false, outputTokensPerSecond: null, errorCode: 'CUT_OFF',
+        });
+        throw new Error('model output was cut off at the token limit');
+      }
+      request.onMetrics?.({
+        ok: true, ttftMs: null, durationMs, ...usage, thinkingDetected, streaming: false, outputTokensPerSecond: null,
+      });
+      return textOf(request.protocol, answer) ?? '';
+    }
+    throw new Error('model request failed');
+  } catch (error) {
+    if (!(error instanceof Error && error.message === 'model output was cut off at the token limit')) {
+      request.onMetrics?.({
+        ok: false, ttftMs: null, durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: false, outputTokensPerSecond: null,
+        errorCode: errorCodeOf(error),
+      });
+    }
+    throw error;
   }
-  const answer = await response.json() as unknown;
-  // A reply stopped by the output budget reads as whole but is not; no caller can use half of one.
-  if (cutOff(protocol, answer)) throw new Error('model output was cut off at the token limit');
-  return textOf(protocol, answer) ?? '';
+}
+
+/**
+ * Streaming single-turn completion with thinking disabled/minimized. Calls `onDelta` only for answer
+ * text (reasoning tokens are ignored) and rejects if cut off at `maxOutputTokens`.
+ */
+export async function streamComplete(request: StreamCompletionRequest): Promise<string> {
+  const startedAt = Date.now();
+  let firstTextAt: number | undefined;
+  if (request.executeStreamChat) {
+    try {
+      const result = await request.executeStreamChat({
+        ...request,
+        messages: [{ role: 'user', content: request.content }],
+        idleTimeoutMs: request.timeoutMs,
+        effort: 'low',
+        onDelta: (kind, text) => {
+          if (kind === 'text') {
+            if (firstTextAt === undefined && text) firstTextAt = Date.now();
+            request.onDelta(text);
+          }
+        },
+      });
+      const endedAt = Date.now();
+      const thinkingDetected = (result.reasoningTokens ?? 0) > 0 || result.reasoning.length > 0;
+      const ttftMs = firstTextAt !== undefined ? Math.max(0, firstTextAt - startedAt) : null;
+      const durationMs = Math.max(0, endedAt - startedAt);
+      const outputTokensPerSecond = decodeSpeed(result.outputTokens, result.text, firstTextAt, endedAt);
+      if (result.cutOff) {
+        request.onMetrics?.({
+          ok: false, ttftMs, durationMs,
+          ...(result.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
+          ...(result.outputTokens !== undefined ? { outputTokens: result.outputTokens } : {}),
+          ...(result.reasoningTokens !== undefined ? { reasoningTokens: result.reasoningTokens } : {}),
+          reasoningChars: result.reasoning.length, thinkingDetected, streaming: true, outputTokensPerSecond, errorCode: 'CUT_OFF',
+        });
+        throw new Error('model output was cut off at the token limit');
+      }
+      request.onMetrics?.({
+        ok: true, ttftMs, durationMs,
+        ...(result.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
+        ...(result.outputTokens !== undefined ? { outputTokens: result.outputTokens } : {}),
+        ...(result.reasoningTokens !== undefined ? { reasoningTokens: result.reasoningTokens } : {}),
+        reasoningChars: result.reasoning.length, thinkingDetected, streaming: true, outputTokensPerSecond,
+      });
+      return result.text;
+    } catch (error) {
+      if (!(error instanceof Error && error.message === 'model output was cut off at the token limit')) {
+        request.onMetrics?.({
+          ok: false, ttftMs: firstTextAt !== undefined ? Math.max(0, firstTextAt - startedAt) : null,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          reasoningChars: 0, thinkingDetected: false, streaming: true, outputTokensPerSecond: null, errorCode: errorCodeOf(error),
+        });
+      }
+      throw error;
+    }
+  }
+  if (request.executeComplete) {
+    try {
+      const text = await request.executeComplete(request);
+      if (text) { firstTextAt = Date.now(); request.onDelta(text); }
+      request.onMetrics?.({
+        ok: true, ttftMs: firstTextAt !== undefined ? Math.max(0, firstTextAt - startedAt) : null,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: false, outputTokensPerSecond: null,
+      });
+      return text;
+    } catch (error) {
+      request.onMetrics?.({
+        ok: false, ttftMs: null, durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: false, outputTokensPerSecond: null, errorCode: errorCodeOf(error),
+      });
+      throw error;
+    }
+  }
+  const modes = FAST_MODES[request.protocol];
+  const key = fastModeKey(request.protocol, request.baseUrl, request.model);
+  const start = fastModeCache.get(key);
+  const startIndex = start ? Math.max(0, modes.indexOf(start)) : 0;
+  const timeout = AbortSignal.timeout(request.timeoutMs);
+  const signal = request.signal ? AbortSignal.any([request.signal, timeout]) : timeout;
+
+  try {
+    for (let index = startIndex; index < modes.length; index += 1) {
+      const mode = modes[index]!;
+      const { url, headers, body } = buildFastRequest(request, mode, true);
+      const response = await modelRequest(url, { method: 'POST', headers, body: JSON.stringify(body), signal }, request.fetchImpl);
+      if (!response.ok) {
+        const reason = errorOf(await response.text().catch(() => ''));
+        if (index + 1 < modes.length && isUnsupportedThinkingError(response.status, reason)) continue;
+        throw new GatewayHttpError(response.status, `model returned HTTP ${response.status}${reason ? `: ${reason}` : ''}`);
+      }
+      if (mode !== modes[0] || start !== undefined) rememberFastMode(key, mode);
+      if (!response.body) throw new Error('model returned no stream');
+      const result: ChatStreamResult = { text: '', reasoning: '', cutOff: false };
+      const delta: Delta = (kind, text) => {
+        if (typeof text !== 'string' || !text) return;
+        if (kind === 'text') {
+          if (firstTextAt === undefined) firstTextAt = Date.now();
+          result.text += text;
+          request.onDelta(text);
+        } else {
+          result.reasoning += text;
+        }
+      };
+      let finished = false;
+      try {
+        for await (const { event, data } of serverSentEvents(response.body, () => undefined)) {
+          if (data === '[DONE]') { finished = true; break; }
+          let value: Record<string, unknown>;
+          try { value = JSON.parse(data) as Record<string, unknown>; } catch { continue; }
+          const type = typeof value.type === 'string' ? value.type : event;
+          if (type === 'error' || value.error) throw new Error(errorOf(data) ?? 'model stream failed');
+          if (request.protocol === 'anthropic') readAnthropic(type, value, result, delta);
+          else if (request.protocol === 'chat') readChat(value, result, delta);
+          else readResponses(type, value, result, delta);
+          if (request.protocol === 'anthropic' && type === 'message_stop'
+            || request.protocol === 'responses' && (type === 'response.completed' || type === 'response.incomplete')) {
+            finished = true;
+            break;
+          }
+          if (request.protocol === 'chat') {
+            const choice = record(Array.isArray(value.choices) ? value.choices[0] : undefined);
+            if (typeof choice?.finish_reason === 'string') finished = true;
+          }
+        }
+      } catch (error) {
+        if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('model request was stopped');
+        throw error;
+      }
+      const endedAt = Date.now();
+      const ttftMs = firstTextAt !== undefined ? Math.max(0, firstTextAt - startedAt) : null;
+      const durationMs = Math.max(0, endedAt - startedAt);
+      const thinkingDetected = (result.reasoningTokens ?? 0) > 0 || result.reasoning.length > 0;
+      const outputTokensPerSecond = decodeSpeed(result.outputTokens, result.text, firstTextAt, endedAt);
+      if (!finished) throw new Error('model stream ended before the answer completed');
+      if (result.cutOff) {
+        request.onMetrics?.({
+          ok: false, ttftMs, durationMs,
+          ...(result.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
+          ...(result.outputTokens !== undefined ? { outputTokens: result.outputTokens } : {}),
+          ...(result.reasoningTokens !== undefined ? { reasoningTokens: result.reasoningTokens } : {}),
+          reasoningChars: result.reasoning.length, thinkingDetected, streaming: true, outputTokensPerSecond, errorCode: 'CUT_OFF',
+        });
+        throw new Error('model output was cut off at the token limit');
+      }
+      request.onMetrics?.({
+        ok: true, ttftMs, durationMs,
+        ...(result.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
+        ...(result.outputTokens !== undefined ? { outputTokens: result.outputTokens } : {}),
+        ...(result.reasoningTokens !== undefined ? { reasoningTokens: result.reasoningTokens } : {}),
+        reasoningChars: result.reasoning.length, thinkingDetected, streaming: true, outputTokensPerSecond,
+      });
+      return result.text;
+    }
+    throw new Error('model request failed');
+  } catch (error) {
+    if (!(error instanceof Error && error.message === 'model output was cut off at the token limit')) {
+      request.onMetrics?.({
+        ok: false, ttftMs: firstTextAt !== undefined ? Math.max(0, firstTextAt - startedAt) : null,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        reasoningChars: 0, thinkingDetected: false, streaming: true, outputTokensPerSecond: null, errorCode: errorCodeOf(error),
+      });
+    }
+    throw error;
+  }
 }
 
 /** One piece of a user's turn beyond its text: a picture, or a document the gateway reads itself. */
@@ -197,6 +566,7 @@ export interface ChatStreamResult {
   model?: string;
   inputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
 }
 
 /**
@@ -205,6 +575,7 @@ export interface ChatStreamResult {
  * with the gateway's reason; an abort throws the signal's reason.
  */
 export async function streamChat(request: ChatStreamRequest): Promise<ChatStreamResult> {
+  if (request.executeStreamChat) return await request.executeStreamChat(request);
   const { protocol, baseUrl, apiKey, model, system, messages, maxOutputTokens } = request;
   const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream' };
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
@@ -352,6 +723,7 @@ function readChat(value: Record<string, unknown>, result: ChatStreamResult, delt
   if (usage) {
     result.inputTokens = count(usage.prompt_tokens) ?? result.inputTokens;
     result.outputTokens = count(usage.completion_tokens) ?? result.outputTokens;
+    result.reasoningTokens = count(record(usage.completion_tokens_details)?.reasoning_tokens) ?? result.reasoningTokens;
   }
   const choice = record(Array.isArray(value.choices) ? value.choices[0] : undefined);
   const part = record(choice?.delta);
@@ -371,6 +743,7 @@ function readResponses(type: string | undefined, value: Record<string, unknown>,
     const usage = record(response?.usage);
     result.inputTokens = count(usage?.input_tokens) ?? result.inputTokens;
     result.outputTokens = count(usage?.output_tokens) ?? result.outputTokens;
+    result.reasoningTokens = count(record(usage?.output_tokens_details)?.reasoning_tokens) ?? result.reasoningTokens;
     if (type === 'response.incomplete') result.cutOff = true;
   } else if (type === 'response.failed') {
     const message = record(record(value.response)?.error)?.message;

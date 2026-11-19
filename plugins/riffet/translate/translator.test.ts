@@ -57,4 +57,53 @@ describe('Translator', () => {
     await expect(p1).rejects.toThrow('closed');
     await expect(p2).resolves.toMatchObject({ kind: 'text', text: 'EN:P3' });
   });
+
+  it('streams pieces in order even when a later concurrent piece finishes first', async () => {
+    const deltas: string[] = [];
+    const translator = new Translator({
+      id: 'riffet.translate',
+      stateDir: async () => '/tmp',
+      settings: () => ({ target: 'en' }),
+      secrets: { get: () => undefined, set: async () => undefined },
+      runProcess: async () => ({ stdout: '', stderr: '', code: 0, timedOut: false, truncated: false }),
+      resolveCli: () => undefined,
+      gateway: {} as never,
+      invalidateModelCatalogs: () => undefined,
+      modelSourceInUse: () => false,
+      models: {
+        complete: async () => '',
+        stream: async ({ content, onDelta }) => {
+          if (content.startsWith('P1')) {
+            await new Promise(resolve => setTimeout(resolve, 25));
+            onDelta('First ');
+            onDelta('part');
+            return 'First part';
+          }
+          await new Promise(resolve => setTimeout(resolve, 5));
+          onDelta('Second part');
+          return 'Second part';
+        },
+      },
+      error,
+    });
+    const text = `P1 ${'a'.repeat(6_100)}\n\nP2 tail`;
+    const result = await translator.run({
+      args: {},
+      message: { role: 'assistant', text },
+      signal: new AbortController().signal,
+      onTextDelta: delta => deltas.push(delta),
+    });
+    expect(result).toEqual({ kind: 'text', text: 'First part\n\nSecond part', title: { 'zh-Hans': '译文', en: 'Translation' } });
+    expect(deltas.join('')).toBe('First part\n\nSecond part');
+
+    // A full cache hit returns directly without re-streaming.
+    const cachedDeltas: string[] = [];
+    await expect(translator.run({
+      args: {},
+      message: { role: 'assistant', text },
+      signal: new AbortController().signal,
+      onTextDelta: delta => cachedDeltas.push(delta),
+    })).resolves.toEqual(result);
+    expect(cachedDeltas).toEqual([]);
+  });
 });

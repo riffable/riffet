@@ -19009,6 +19009,26 @@
         }
       }
     },
+    "CLI · 较慢": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI · slower"
+          }
+        }
+      }
+    },
+    "跟随默认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow default"
+          }
+        }
+      }
+    },
     "跟随快速对话": {
       "localizations": {
         "en": {

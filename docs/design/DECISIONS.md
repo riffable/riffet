@@ -636,3 +636,18 @@
 - **否决**：每轮之间的分隔用卡片标题（与记录卡分不清）；势头请裁判直接给比分（多一个要校验的结构化字段，且与它写下的判定可能不一致）；光晕用 `--agent-*` 变量（Codex 的变量是绿色，与它的蓝紫渐变标志不一致，取标志中间那一档）；1v1 启动页在窄屏上下排两方（讲台把输入框挤到首屏以外）。
 - **范围**：Web。Mac 与手机还没有这个页面。
 - **规则**：[界面](system/surfaces.md) §4；`apps/web/src/app/council/`。
+
+## 2026-11-19 · 辅助模型默认位与快速通道
+
+- **决定**：`AUXILIARY_MODEL_PURPOSES` 增加 `default`（「默认模型」），用于标题、交接摘要、画布摘要及声明了 `fallback: 'default'` 的插件用途（`riffet.translate` 从 `'chat'` 改为 `'default'`），与「快速对话（`chat`）」解耦。`AuxiliaryModelOption` 携带 `transport: 'http' | 'cli-process'`，HTTP 直连排在前面，CLI 进程路径在选择器中明确标记。
+- **决定**：非对话类的辅助调用在 `complete` 与 `streamComplete` 中对 `anthropic`、`chat`、`responses` 三协议统一禁用或降至最低思考强度（遇 400 拒收参数时按端点与模型记忆退回），并对命令型凭据与 `prepareSource` 做短 TTL 缓存；消息与选区菜单命令支持经 `Accept: text/event-stream` 按需流式输出增量文本（校验失败与缓存命中仍走普通 JSON），`riffet.translate` 改为多片并发预译、按序流式拼接。
+- **原因**：`chat` 常配置重型主力模型，之前 `translate` 默认回退到它、且全链路非流式、`responses` 未关思考、Codex 无网关态每次冷启动 CLI 子进程、命令凭据每次重跑，叠加起来导致辅助功能普遍慢。将 `default` 与 `chat` 解耦、补齐流式与关思考并暴露传输路径，能在不增加进程预热负担的前提下把等待体感降到首字延迟。
+- **否决**：为 Codex 无网关 CLI 登录态维护常驻辅助进程池（冷启动的根本解法是走 HTTP 网关，明确标出慢路径由用户避开即可，不为此增加进程生命周期复杂度）。
+- **规则**：PLUGIN_ARCHITECTURE「模型用途」「消息菜单」；`apps/server/src/auxiliary/`。
+
+## 2026-11-19 · 辅助模型测速与分类型性能榜单
+
+- **决定**：所有辅助模型调用（标题、画布摘要、交接摘要、插件用途、快速对话）与接口测速（`POST /api/auxiliary-models/probe`）统一记录分段耗时与思考检测（`authMs`、`ttftMs`、`durationMs`、`outputTokensPerSecond`、`thinkingDetected`）到 `auxiliary_calls`（90 天 / 2 万行上限）；统计页「模型性能榜单」（`GET /api/stats/leaderboard`）按场景拆分为「极速短任务」「流式生成」「长上下文」「Agent 对话」四个维度展示，并在「设置 › 辅助模型」与「快速对话」中内联透出实测延迟。
+- **原因**：不同任务对延迟的敏感点不同（短任务看端到端耗时和鉴权开销，流式与翻译看 TTFT 和输出速度，长上下文看高 Input 下的 TTFT），混在同一张表或只依赖主对话采样会导致选模型仍旧盲目；接口测速仅在用户显式点击时发送极小测试请求，不后台自动烧额度。
+- **否决**：后台定时轮询自动跑测所有模型（未经操作持续消耗用户 Token 不可接受）；只做单榜总排行（快但吞吐一般的短任务模型和长上下文模型会被同一套权重误判）。
+- **规则**：`apps/server/src/auxiliary/probe.ts`、`apps/server/src/stats/auxiliary.ts`、`apps/web/src/app/stats/ModelLeaderboard.tsx`。

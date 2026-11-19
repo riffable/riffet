@@ -141,7 +141,6 @@ msgid "{0} 风格的窗口缩样"
 msgstr "{0} 风格的窗口缩样"
 
 #. placeholder {0}: current.model
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "{0}（提供商里已不可用）"
 msgstr "{0}（提供商里已不可用）"
@@ -340,6 +339,12 @@ msgstr "Android 不手写这些值：改源文件，运行生成器，再用 --c
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
 msgstr "bg-active，文字 fg；调用方传对应的 ARIA。"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "CLI · 较慢"
+msgstr "CLI · 较慢"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
 msgstr "CLI 入口"
@@ -448,6 +453,14 @@ msgstr "material3 风格的取值；其他风格的导航栏与底栏高度见�
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
 msgstr "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "Prompt"
+msgstr "Prompt"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "Prompt 与日志"
+msgstr "Prompt 与日志"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "px，随「文字大小」整体缩放"
@@ -1064,6 +1077,7 @@ msgstr "五种风格只在 themePreset() 里按名字分派一次；组件读 Lo
 msgid "五种风格的数值、配方与缩样"
 msgstr "五种风格的数值、配方与缩样"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "交接摘要"
@@ -1289,6 +1303,7 @@ msgid "会话标签页"
 msgstr "会话标签页"
 
 #: src/app/design/components/InputsChapter.tsx
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "会话标题"
@@ -1545,6 +1560,10 @@ msgstr "修改 3 个文件"
 msgid "值"
 msgstr "值"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "停止"
+msgstr "停止"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
 msgstr "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
@@ -1663,6 +1682,10 @@ msgstr "全角标点旁"
 msgid "全选"
 msgstr "全选"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "全选 HTTP"
+msgstr "全选 HTTP"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "全选本页"
 msgstr "全选本页"
@@ -1721,7 +1744,9 @@ msgstr "关于 Riffet"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
+#: src/app/settings/ModelProbeDialog.tsx
 msgid "关闭"
 msgstr "关闭"
 
@@ -1840,6 +1865,10 @@ msgstr "内置官方插件"
 msgid "内置插件"
 msgstr "内置插件"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "内置用途"
+msgstr "内置用途"
+
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "内边距"
 msgstr "内边距"
@@ -1896,6 +1925,11 @@ msgstr "最近会话"
 #: src/app/settings/StorageSection.tsx
 msgid "最近活动"
 msgstr "最近活动"
+
+#. placeholder {0}: data?.recent.length ?? 0
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "最近调用 ({0})"
+msgstr "最近调用 ({0})"
 
 #. placeholder {0}: Math.round(ANDROID.sheetHeight * 100)
 #: src/app/design/android/OverlayChapter.tsx
@@ -2183,6 +2217,7 @@ msgstr "利用率 {0} · p99 {1}"
 msgid "到下一回合"
 msgstr "到下一回合"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "刷新"
 msgstr "刷新"
@@ -2443,6 +2478,10 @@ msgstr "发言、轮次、裁判记录"
 msgid "发言中"
 msgstr "发言中"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "发起会话交接时生成"
+msgstr "发起会话交接时生成"
+
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -2461,6 +2500,10 @@ msgstr "发送失败，可恢复内容后重试"
 #: src/app/design/android/StylesChapter.tsx
 msgid "发送按钮"
 msgstr "发送按钮"
+
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "发送真实测试请求，检测首字延迟、生成速度与是否已关闭思考。"
+msgstr "发送真实测试请求，检测首字延迟、生成速度与是否已关闭思考。"
 
 #: src/app/settings/SupportSections.tsx
 msgid "发送诊断"
@@ -3238,6 +3281,7 @@ msgstr "太棒了，设置已成功保存！"
 #: src/app/design/components/DisplayChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 msgid "失败"
 msgstr "失败"
 
@@ -3819,6 +3863,10 @@ msgstr "已停止"
 msgid "已停用"
 msgstr "已停用"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "已关思考"
+msgstr "已关思考"
+
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "已切换到 Codex"
 msgstr "已切换到 Codex"
@@ -3949,6 +3997,10 @@ msgstr "已结束"
 #: src/app/settings/channels/CardSettings.tsx
 msgid "已调用 2 次工具"
 msgstr "已调用 2 次工具"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "已跳过"
+msgstr "已跳过"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
@@ -4178,6 +4230,11 @@ msgstr "开始任务前"
 msgid "开始新会话"
 msgstr "开始新会话"
 
+#. placeholder {0}: selectedKeys.length
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "开始测速 ({0})"
+msgstr "开始测速 ({0})"
+
 #: src/app/settings/SupportSections.tsx
 msgid "开始记录"
 msgstr "开始记录"
@@ -4351,6 +4408,7 @@ msgstr "快捷键"
 msgid "快捷键、焦点顺序"
 msgstr "快捷键、焦点顺序"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/settingsSections.ts
 msgid "快速对话"
 msgstr "快速对话"
@@ -4375,6 +4433,11 @@ msgstr "思考过程"
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "总宽超过所在行的一半，就换成 Select。"
 msgstr "总宽超过所在行的一半，就换成 Select。"
+
+#. placeholder {0}: formatDuration(item.durationMs)
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "总耗时 {0}"
+msgstr "总耗时 {0}"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/overview/SystemChapter.tsx
@@ -4459,6 +4522,10 @@ msgstr "悬浮是全局偏好，位置跨会话记住；是否打开仍按会话
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "悬浮面板、全屏预览"
 msgstr "悬浮面板、全屏预览"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "成功"
+msgstr "成功"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "我的主题"
@@ -4546,6 +4613,10 @@ msgstr "打开会话时"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "打开开发者后台"
 msgstr "打开开发者后台"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "打开画布查看节点时按轮生成"
+msgstr "打开画布查看节点时按轮生成"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "托管堆"
@@ -4833,6 +4904,10 @@ msgstr "排队"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "接入方式"
 msgstr "接入方式"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "接口测速"
+msgstr "接口测速"
 
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -5595,6 +5670,10 @@ msgstr "无法读取模型"
 msgid "无法读取设备"
 msgstr "无法读取设备"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "无法读取辅助模型详情"
+msgstr "无法读取辅助模型详情"
+
 #: src/app/settings/ProfileSection.tsx
 msgid "无法读取这张图片"
 msgstr "无法读取这张图片"
@@ -5614,6 +5693,10 @@ msgstr "无法连接到服务器。"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "无法连接服务器"
 msgstr "无法连接服务器"
+
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "无流式分片"
+msgstr "无流式分片"
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "无结果"
@@ -5863,6 +5946,16 @@ msgstr "服务管理"
 msgid "未下载模型"
 msgstr "未下载模型"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "未关思考"
+msgstr "未关思考"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "未单独设置的用途回退到此模型"
+msgstr "未单独设置的用途回退到此模型"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "未命名会话"
 msgstr "未命名会话"
@@ -5906,6 +5999,10 @@ msgstr "未设置"
 #: src/app/design/components/InputsChapter.tsx
 msgid "未选"
 msgstr "未选"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "未配置"
+msgstr "未配置"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "未配置 Key"
@@ -6003,6 +6100,10 @@ msgstr "查看"
 #: src/app/design/patterns/ListsChapter.tsx
 msgid "查看会话"
 msgstr "查看会话"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "查看各辅助用途的触发时机、系统 Prompt 与最近实际调用结果。"
+msgstr "查看各辅助用途的触发时机、系统 Prompt 与最近实际调用结果。"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "查看项目、会话和模型"
@@ -6237,6 +6338,10 @@ msgstr "模型与工具名"
 msgid "模型协作"
 msgstr "模型协作"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "模型接口测速"
+msgstr "模型接口测速"
+
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
@@ -6459,6 +6564,10 @@ msgstr "没有匹配的模型。"
 msgid "没有半档字号：11.5 并入 12，12.5 并入 13"
 msgstr "没有半档字号：11.5 并入 12，12.5 并入 13"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "没有可用的辅助模型"
+msgstr "没有可用的辅助模型"
+
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/settings/DevicesSection.tsx
 msgid "没有已配对的设备"
@@ -6493,6 +6602,10 @@ msgstr "注脚"
 msgid "注释斜体"
 msgstr "注释斜体"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "流式生成"
+msgstr "流式生成"
+
 #: src/app/design/mac/notes.ts
 msgid "浅底"
 msgstr "浅底"
@@ -6514,6 +6627,14 @@ msgstr "浅色"
 #: src/app/design/android/StylesChapter.tsx
 msgid "浅色填充"
 msgstr "浅色填充"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "测速"
+msgstr "测速"
+
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "测速类型"
+msgstr "测速类型"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "浏览…"
@@ -6665,7 +6786,12 @@ msgstr "添加飞书机器人"
 msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
 msgstr "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
 
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "清空"
+msgstr "清空"
+
 #: src/app/design/engineering/PluginsChapter.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
@@ -6702,6 +6828,10 @@ msgstr "点击区与控件高"
 #: src/app/design/android/PlatformChapter.tsx
 msgid "点击区至少 48"
 msgstr "点击区至少 48"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "点击翻译回答或选区时生成"
+msgstr "点击翻译回答或选区时生成"
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "点击遮罩"
@@ -6864,6 +6994,7 @@ msgstr "用飞书扫码"
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr "由 Codex 写入 ~/.codex/config.toml"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "画布摘要"
 msgstr "画布摘要"
@@ -6988,6 +7119,10 @@ msgstr "着色文字"
 #: src/app/design/android/StylesChapter.tsx
 msgid "短"
 msgstr "短"
+
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "短任务"
+msgstr "短任务"
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "短暂反馈"
@@ -7410,6 +7545,10 @@ msgstr "系统返回与预测式返回"
 msgid "红色浅底、红字"
 msgstr "红色浅底、红字"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "约束规则"
+msgstr "约束规则"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "素"
 msgstr "素"
@@ -7690,9 +7829,20 @@ msgstr "群里共用一个会话，或按话题分会话"
 msgid "翻译"
 msgstr "翻译"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "翻译/插件"
+msgstr "翻译/插件"
+
 #: src/app/design/DesignPage.tsx
 msgid "翻页"
 msgstr "翻页"
+
+#. placeholder {0}: formatDuration(entry.result.durationMs)
+#. placeholder {0}: formatDuration(row.durationMs.p50)
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "耗时 {0}"
+msgstr "耗时 {0}"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "聊天"
@@ -7962,6 +8112,10 @@ msgstr "规则"
 msgid "规则先于实现：先改规范，再改代码。"
 msgstr "规则先于实现：先改规范，再改代码。"
 
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "规则拦截"
+msgstr "规则拦截"
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "规范从小到大分四层，每层只用前面的层。平台和风格是另外两条轴，换写法与取值，不换分层。"
 msgstr "规范从小到大分四层，每层只用前面的层。平台和风格是另外两条轴，换写法与取值，不换分层。"
@@ -7990,6 +8144,14 @@ msgstr "解绑 {name}？"
 #: src/app/design/components/ActionsChapter.tsx
 msgid "触发一次动作的控件。名称由文字或 Tip 给出，状态通过同一组参数表达。"
 msgstr "触发一次动作的控件。名称由文字或 Tip 给出，状态通过同一组参数表达。"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "触发时机"
+msgstr "触发时机"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "触发时机与 Prompt"
+msgstr "触发时机与 Prompt"
 
 #: src/app/design/android/ComponentChapter.tsx
 msgid "触摸屏上改用菜单或底部面板"
@@ -8024,6 +8186,7 @@ msgid "记忆整理"
 msgstr "记忆整理"
 
 #: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
 msgid "设为默认"
 msgstr "设为默认"
 
@@ -8169,6 +8332,10 @@ msgstr "试用"
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "该 Agent 尚未配置提供商"
 msgstr "该 Agent 尚未配置提供商"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "详情视图"
+msgstr "详情视图"
 
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -8317,6 +8484,11 @@ msgstr "贴在列边缘的导轨"
 msgid "资源回收"
 msgstr "资源回收"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "走 CLI 进程启动，较慢"
+msgstr "走 CLI 进程启动，较慢"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "起始 · 读取中"
 msgstr "起始 · 读取中"
@@ -8417,6 +8589,15 @@ msgstr "跟随系统"
 msgid "跟随系统的深浅色"
 msgstr "跟随系统的深浅色"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随默认"
+msgstr "跟随默认"
+
+#. placeholder {0}: job.effectiveModel
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "跟随默认 · {0}"
+msgstr "跟随默认 · {0}"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "路径"
@@ -8457,6 +8638,10 @@ msgstr "辅助侧栏"
 #: src/app/settings/settingsSections.ts
 msgid "辅助模型"
 msgstr "辅助模型"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "辅助模型规则与调用"
+msgstr "辅助模型规则与调用"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/components/InputsChapter.tsx
@@ -8637,10 +8822,6 @@ msgstr "还没有人"
 msgid "还没有完成的请求"
 msgstr "还没有完成的请求"
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
-msgstr "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
-
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "还没有提供商"
 msgstr "还没有提供商"
@@ -8665,6 +8846,10 @@ msgstr "还没有模型。拉取或在下方手动添加。"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "还没有设备"
 msgstr "还没有设备"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+msgid "还没有辅助模型调用记录"
+msgstr "还没有辅助模型调用记录"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "还没有选择要用的模型"
@@ -9070,6 +9255,15 @@ msgstr "重试"
 msgid "重连中"
 msgstr "重连中"
 
+#. placeholder {0}: formatDuration(entry.result.authMs)
+#. placeholder {0}: formatDuration(item.authMs)
+#. placeholder {0}: formatDuration(row.authMs.p50)
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "鉴权 {0}"
+msgstr "鉴权 {0}"
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "错误"
@@ -9116,6 +9310,10 @@ msgstr "键盘等价"
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "长 URL、路径、无空格的英文串允许在任意处断行。"
 msgstr "长 URL、路径、无空格的英文串允许在任意处断行。"
+
+#: src/app/settings/ModelProbeDialog.tsx
+msgid "长上下文"
+msgstr "长上下文"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "长内容"
@@ -9561,6 +9759,10 @@ msgstr "飞书"
 msgid "飞书里的应用不会被删除"
 msgstr "飞书里的应用不会被删除"
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "首条消息开始时生成"
+msgstr "首条消息开始时生成"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "首版应当先做 Web 端"
 msgstr "首版应当先做 Web 端"
@@ -9629,6 +9831,7 @@ msgstr "墨色实心，每个区域最多一个"
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ModelProbeDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 msgid "默认"
@@ -9665,6 +9868,7 @@ msgstr "默认提供商"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/AssistantSettingsSection.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx

@@ -281,6 +281,12 @@ export interface AgentLaneWriter {
     /** After the source has read what is on disk. `error` is what the Agent said of a failed turn, for whoever settles its run. */
     turnEnded(turnId: string, status: AgentTurnStatus, at: string, error?: string): void;
     turnEndStatus(turnId: string): AgentTurnStatus | undefined;
+    /** The last effective end with its original time and diagnostic, including on a scratch lane. */
+    turnEnd?(turnId: string): {
+        status: AgentTurnStatus;
+        at: string;
+        error?: string;
+    } | undefined;
     /** Retracts an end when the transcript resumes or corrects the turn; `cursor` checkpoints the reread. */
     turnReopened(turnId: string, at: string, cursor?: string): void;
     readonly activities: AgentActivityLedger;
@@ -924,6 +930,12 @@ export interface AgentHost {
          * handed over: `credential` is present only for a static key.
          */
         resolve(profileId: string, protocol: GatewayProtocol): Promise<AgentModelEndpoint | undefined>;
+        /**
+         * The models the profile `profileId` reaches over `protocol`: its source's catalog for that protocol, or what its
+         * own API endpoint (`config.apiEndpoint`, `config.apiKey`) lists in that protocol's standard directory.
+         * `undefined` when the profile names neither; a failed read rejects. A profile of another Agent is refused.
+         */
+        models(profileId: string, protocol: GatewayProtocol): Promise<ModelInfo[] | undefined>;
     };
     terminals: AgentTerminals;
     /** Runs `operation` under the session's lock, the one start, configure, send and stop share. `detached` for work started from timers and events. */

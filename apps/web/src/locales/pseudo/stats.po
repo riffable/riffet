@@ -93,6 +93,14 @@ msgstr ""
 msgid "90 天"
 msgstr ""
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "Agent 对话"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "CLI"
+msgstr ""
+
 #. placeholder {0}: Math.round(autonomy.stepsPerRun.p50)
 #. placeholder {1}: Math.round(autonomy.stepsPerRun.p90)
 #: src/app/stats/SplitBars.tsx
@@ -150,7 +158,12 @@ msgid "低 (low)"
 msgstr ""
 
 #: src/app/stats/FilterBar.tsx
+#: src/app/stats/ModelLeaderboard.tsx
 msgid "全部"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "关闭思考未生效或网关忽略了参数"
 msgstr ""
 
 #: src/app/stats/SplitBars.tsx
@@ -318,6 +331,14 @@ msgctxt "stats-sort-control"
 msgid "排序"
 msgstr ""
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "接口测速"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "数据来源"
+msgstr ""
+
 #: src/app/stats/LatencyChart.tsx
 msgid "整轮耗时"
 msgstr ""
@@ -329,6 +350,10 @@ msgstr ""
 #: src/app/stats/StatsPage.tsx
 #: src/app/stats/use-stats-data.ts
 msgid "无法加载统计"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "无法读取性能榜单"
 msgstr ""
 
 #: src/app/stats/NorthStar.tsx
@@ -395,11 +420,27 @@ msgstr ""
 msgid "极低 (minimal)"
 msgstr ""
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "极速短任务"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "榜单类型"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "榜单还在加载"
+msgstr ""
+
 #: src/app/stats/AreaChart.tsx
 #: src/app/stats/DonutChart.tsx
 #: src/app/stats/FilterBar.tsx
 #: src/app/stats/RunsTable.tsx
 msgid "模型"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "模型性能榜单"
 msgstr ""
 
 #: src/app/stats/RankChart.tsx
@@ -430,6 +471,14 @@ msgstr ""
 msgid "活跃时段"
 msgstr ""
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "流式生成"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "测速"
+msgstr ""
+
 #: src/app/stats/RunsTable.tsx
 msgctxt "stats-state-column"
 msgid "状态"
@@ -441,6 +490,10 @@ msgstr ""
 
 #: src/app/stats/AreaChart.tsx
 msgid "用量趋势。方向键移动十字线，在底部条带上拖动可缩小时间范围。"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "真实调用"
 msgstr ""
 
 #: src/app/stats/RunsTable.tsx
@@ -558,6 +611,14 @@ msgstr ""
 msgid "还没有模型数据"
 msgstr ""
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "还没有该类型的调用或测速记录，点右上角「测速」即可立刻生成对比榜单。"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "还没有足够的对话延迟记录"
+msgstr ""
+
 #: src/app/stats/SplitBars.tsx
 msgid "还没有轮次步数分布"
 msgstr ""
@@ -603,6 +664,15 @@ msgstr ""
 #: src/app/stats/RunsTable.tsx
 #: src/app/stats/StatsPage.tsx
 msgid "重试"
+msgstr ""
+
+#. placeholder {0}: formatDuration(row.authMs?.p50)
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "鉴权 {0}"
+msgstr ""
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "长上下文"
 msgstr ""
 
 #: src/app/stats/AreaChart.tsx

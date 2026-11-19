@@ -93,6 +93,14 @@ msgstr "7 天"
 msgid "90 天"
 msgstr "90 天"
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "Agent 对话"
+msgstr "Agent 对话"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "CLI"
+msgstr "CLI"
+
 #. placeholder {0}: Math.round(autonomy.stepsPerRun.p50)
 #. placeholder {1}: Math.round(autonomy.stepsPerRun.p90)
 #: src/app/stats/SplitBars.tsx
@@ -150,8 +158,13 @@ msgid "低 (low)"
 msgstr "低 (low)"
 
 #: src/app/stats/FilterBar.tsx
+#: src/app/stats/ModelLeaderboard.tsx
 msgid "全部"
 msgstr "全部"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "关闭思考未生效或网关忽略了参数"
+msgstr "关闭思考未生效或网关忽略了参数"
 
 #: src/app/stats/SplitBars.tsx
 msgid "最大 (max)"
@@ -318,6 +331,14 @@ msgctxt "stats-sort-control"
 msgid "排序"
 msgstr "排序"
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "接口测速"
+msgstr "接口测速"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "数据来源"
+msgstr "数据来源"
+
 #: src/app/stats/LatencyChart.tsx
 msgid "整轮耗时"
 msgstr "整轮耗时"
@@ -330,6 +351,10 @@ msgstr "无法加载明细"
 #: src/app/stats/use-stats-data.ts
 msgid "无法加载统计"
 msgstr "无法加载统计"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "无法读取性能榜单"
+msgstr "无法读取性能榜单"
 
 #: src/app/stats/NorthStar.tsx
 msgid "日均待处理"
@@ -395,12 +420,28 @@ msgstr "本页暂无记录，可以返回上一页"
 msgid "极低 (minimal)"
 msgstr "极低 (minimal)"
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "极速短任务"
+msgstr "极速短任务"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "榜单类型"
+msgstr "榜单类型"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "榜单还在加载"
+msgstr "榜单还在加载"
+
 #: src/app/stats/AreaChart.tsx
 #: src/app/stats/DonutChart.tsx
 #: src/app/stats/FilterBar.tsx
 #: src/app/stats/RunsTable.tsx
 msgid "模型"
 msgstr "模型"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "模型性能榜单"
+msgstr "模型性能榜单"
 
 #: src/app/stats/RankChart.tsx
 msgid "模型排行"
@@ -430,6 +471,14 @@ msgstr "没有时段分布"
 msgid "活跃时段"
 msgstr "活跃时段"
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "流式生成"
+msgstr "流式生成"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "测速"
+msgstr "测速"
+
 #: src/app/stats/RunsTable.tsx
 msgctxt "stats-state-column"
 msgid "状态"
@@ -442,6 +491,10 @@ msgstr "用量占比"
 #: src/app/stats/AreaChart.tsx
 msgid "用量趋势。方向键移动十字线，在底部条带上拖动可缩小时间范围。"
 msgstr "用量趋势。方向键移动十字线，在底部条带上拖动可缩小时间范围。"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "真实调用"
+msgstr "真实调用"
 
 #: src/app/stats/RunsTable.tsx
 msgid "第 {firstRow}–{lastRow} 轮"
@@ -558,6 +611,14 @@ msgstr "还没有思考档位记录"
 msgid "还没有模型数据"
 msgstr "还没有模型数据"
 
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "还没有该类型的调用或测速记录，点右上角「测速」即可立刻生成对比榜单。"
+msgstr "还没有该类型的调用或测速记录，点右上角「测速」即可立刻生成对比榜单。"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "还没有足够的对话延迟记录"
+msgstr "还没有足够的对话延迟记录"
+
 #: src/app/stats/SplitBars.tsx
 msgid "还没有轮次步数分布"
 msgstr "还没有轮次步数分布"
@@ -604,6 +665,15 @@ msgstr "部分数字由文本长度估算，不是提供商上报"
 #: src/app/stats/StatsPage.tsx
 msgid "重试"
 msgstr "重试"
+
+#. placeholder {0}: formatDuration(row.authMs?.p50)
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "鉴权 {0}"
+msgstr "鉴权 {0}"
+
+#: src/app/stats/ModelLeaderboard.tsx
+msgid "长上下文"
+msgstr "长上下文"
 
 #: src/app/stats/AreaChart.tsx
 #: src/app/stats/DonutChart.tsx

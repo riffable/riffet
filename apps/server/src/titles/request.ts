@@ -1,4 +1,4 @@
-import { complete, type GatewayEndpoint } from '../auxiliary/gateway.js';
+import { complete, type CompletionMetrics, type GatewayEndpoint } from '../auxiliary/gateway.js';
 import { titlePrompt } from '../prompts/index.js';
 import { cleanGeneratedTitle } from '../session-title.js';
 
@@ -19,6 +19,7 @@ export interface TitleRequest extends GatewayEndpoint {
   timeoutMs?: number;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
+  onMetrics?: (metrics: CompletionMetrics) => void;
 }
 
 function conversation(message: string, reply: string | undefined): string {
@@ -29,10 +30,10 @@ function conversation(message: string, reply: string | undefined): string {
 
 /** Asks the gateway for a title. Resolves to the cleaned title, or throws with the gateway's reason. */
 export async function requestTitle(request: TitleRequest): Promise<string> {
-  const { message, reply, timeoutMs, signal, fetchImpl, ...endpoint } = request;
+  const { message, reply, timeoutMs, signal, fetchImpl, onMetrics, ...endpoint } = request;
   const title = cleanGeneratedTitle(await complete({
     ...endpoint, system: titlePrompt(), content: conversation(message, reply), maxOutputTokens: MAX_OUTPUT_TOKENS,
-    timeoutMs: timeoutMs ?? 30_000, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetchImpl } : {}),
+    timeoutMs: timeoutMs ?? 30_000, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetchImpl } : {}), ...(onMetrics ? { onMetrics } : {}),
   }));
   if (!title) throw new Error('title model returned no title');
   return title;

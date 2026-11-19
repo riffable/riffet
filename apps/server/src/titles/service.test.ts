@@ -63,6 +63,18 @@ describe('TitleService', () => {
     expect(titled.map(item => item.title)).toEqual(['优化统计页面样式']);
   });
 
+  it('names a conversation immediately when its first turn starts running, even if nativeSessionId is already set', async () => {
+    vi.useFakeTimers();
+    const { store, session, requests } = setup();
+    const run = send(store, session.id, '定位 Cursor 会话没有触发标题生成的原因');
+    store.updateSession(session.id, { nativeSessionId: 'cursor-chat-1' });
+    store.transitionNativeRun(run.id, ['queued'], { delivery: 'observed' }, { state: 'running' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.message).toBe('定位 Cursor 会话没有触发标题生成的原因');
+    expect(store.getSession(session.id)).toMatchObject({ title: '优化统计页面样式', titleSource: 'generated' });
+  });
+
   it('passes the first answer along when the transcript has been indexed', async () => {
     vi.useFakeTimers();
     const { store, session, requests } = setup();
@@ -223,8 +235,8 @@ describe('TitleService', () => {
 
   it('lists each gateway profile\'s models by the id the gateway serves', async () => {
     expect(await listAuxiliaryModels(backendId => backendId === 'dsh' ? [PROFILE] : [])).toEqual([
-      { backendId: 'dsh', profileId: 'gateway', profileName: 'Gateway', model: 'deepseek-v4.1-flash' },
-      { backendId: 'dsh', profileId: 'gateway', profileName: 'Gateway', model: 'glm-5.3-flash' },
+      { backendId: 'dsh', profileId: 'gateway', profileName: 'Gateway', model: 'deepseek-v4.1-flash', transport: 'http' },
+      { backendId: 'dsh', profileId: 'gateway', profileName: 'Gateway', model: 'glm-5.3-flash', transport: 'http' },
     ]);
   });
 });

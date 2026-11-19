@@ -13,7 +13,9 @@ import { NativeEventLog } from '../journal/native-log.js';
 import { extractIndexable } from '../search/messages.js';
 import type { SettingsService } from '../settings/index.js';
 import type { Store } from '../store.js';
-import { auxiliaryEndpoint } from '../auxiliary/models.js';
+import { auxiliaryEndpoint, resolveAuxiliaryModel } from '../auxiliary/models.js';
+import type { CompletionMetrics } from '../auxiliary/gateway.js';
+import type { AuxiliaryCallRecorder } from '../auxiliary/telemetry.js';
 import { summaryHeading, writeBrief, writeMaterial, type BriefSource } from './brief.js';
 import { requestHandoffSummary } from './handoff-summary.js';
 import type { SessionCommands } from './session-commands.js';
@@ -50,6 +52,7 @@ const MAX_WAKEUP_AHEAD_MS = 30 * 24 * 60 * 60 * 1000;
 const FOLLOW_UP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface OrchestrationDeps { store: Store; settings: SettingsService; nativeBackends: NativeBackendService; git: GitService; dispatch: NativeDispatcher; sessionCommands: SessionCommands; schedulerIntervalMs?: number; notices?: NoticeLog;
+  recordAuxiliaryCall?: AuxiliaryCallRecorder;
   /** Told of every wake-up that was scheduled or left `pending`; device leases follow it (docs/DEVICES.md §3). */
   onWakeup?: (wakeup: RiffetWakeup) => void; }
 interface Ids { sessionId?: string; commandId?: string }
@@ -334,14 +337,49 @@ export class OrchestrationService {
     if (this.busy(source.id)) throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before handing this conversation off', 409);
     const material = await this.briefSource(source);
     const next = `\n\n## 接下来\n${options.goal?.trim() || HANDOFF_NEXT}`;
-    const ref = settings.getSettings().auxiliaryModels?.handoff;
+    const ref = resolveAuxiliaryModel(settings.getSettings(), 'handoff');
     if (!ref) return { text: `${writeBrief(material)}${next}` };
+    const authStartedAt = Date.now();
+    let endpoint: Awaited<ReturnType<typeof auxiliaryEndpoint>> | undefined;
+    let metrics: CompletionMetrics | undefined;
+    const callStartedAt = Date.now();
     try {
-      const { profileName, ...endpoint } = await auxiliaryEndpoint(ref, backendId => nativeBackends.catalog.gatewayProfiles(backendId), options.signal);
-      const note = await requestHandoffSummary(endpoint, writeMaterial(material), { ...(options.goal?.trim() ? { goal: options.goal.trim() } : {}), ...(options.signal ? { signal: options.signal } : {}) });
+      endpoint = await auxiliaryEndpoint(ref, backendId => nativeBackends.catalog.gatewayProfiles(backendId), options.signal);
+      const authMs = Math.max(0, Date.now() - authStartedAt);
+      const { profileName, ...gateway } = endpoint;
+      const note = await requestHandoffSummary(gateway, writeMaterial(material), {
+        ...(options.goal?.trim() ? { goal: options.goal.trim() } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
+        onMetrics: recorded => { metrics = recorded; },
+      });
+      this.deps.recordAuxiliaryCall?.({
+        kind: 'handoff', preset: 'long', source: 'live',
+        backendId: ref.backendId, profileId: ref.profileId, model: ref.model,
+        transport: (gateway.executeComplete || gateway.executeStreamChat) ? 'cli-process' : 'http',
+        protocol: gateway.protocol,
+        ok: metrics?.ok ?? true, authMs, ttftMs: metrics?.ttftMs ?? null,
+        durationMs: metrics?.durationMs ?? Math.max(0, Date.now() - callStartedAt),
+        inputTokens: metrics?.inputTokens ?? null, outputTokens: metrics?.outputTokens ?? null,
+        reasoningTokens: metrics?.reasoningTokens ?? null, reasoningChars: metrics?.reasoningChars ?? 0,
+        thinkingDetected: metrics?.thinkingDetected ?? false, streaming: metrics?.streaming ?? false,
+      });
       return { text: `${summaryHeading(source)}\n\n${note}${next}`, generatedBy: { ...ref, profileName } };
     } catch (error) {
       if (options.signal?.aborted) throw error;
+      if (endpoint) {
+        this.deps.recordAuxiliaryCall?.({
+          kind: 'handoff', preset: 'long', source: 'live',
+          backendId: ref.backendId, profileId: ref.profileId, model: ref.model,
+          transport: (endpoint.executeComplete || endpoint.executeStreamChat) ? 'cli-process' : 'http',
+          protocol: endpoint.protocol,
+          ok: false, authMs: Math.max(0, Date.now() - authStartedAt), ttftMs: metrics?.ttftMs ?? null,
+          durationMs: metrics?.durationMs ?? Math.max(0, Date.now() - callStartedAt),
+          inputTokens: metrics?.inputTokens ?? null, outputTokens: metrics?.outputTokens ?? null,
+          reasoningTokens: metrics?.reasoningTokens ?? null, reasoningChars: metrics?.reasoningChars ?? 0,
+          thinkingDetected: metrics?.thinkingDetected ?? false, streaming: metrics?.streaming ?? false,
+          errorCode: metrics?.errorCode ?? 'ERROR',
+        });
+      }
       const reason = error instanceof Error && error.name === 'TimeoutError' ? 'timed out' : error instanceof Error ? error.message : String(error);
       return { text: `${writeBrief(material)}${next}`, fallbackReason: reason };
     }

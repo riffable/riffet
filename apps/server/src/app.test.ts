@@ -31,10 +31,16 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 async function boot(savedSettings?: Record<string, unknown>, webHtml?: string, plugins?: Plugin[], authenticated = false) {
   const stateDir = await mkdtemp(join(tmpdir(), 'riffet-app-'));
   const projectDir = await mkdtemp(join(tmpdir(), 'riffet-project-'));
+  const previousClaudeDir = process.env.CLAUDE_CONFIG_DIR;
+  const previousCodexHome = process.env.CODEX_HOME;
+  if (previousClaudeDir === undefined) process.env.CLAUDE_CONFIG_DIR = join(stateDir, 'claude-config');
+  if (previousCodexHome === undefined) process.env.CODEX_HOME = join(stateDir, 'codex-home');
   if (savedSettings) await writeFile(join(stateDir, 'settings.json'), JSON.stringify(savedSettings), { mode: 0o600 });
   if (webHtml !== undefined) await writeFile(join(projectDir, 'index.html'), webHtml);
   const { app, settings, orchestration, store, terminal, nativeBackends, dispatch, git, quickChats, riffetMcp, contextReferences } = await createApp({ stateDir, auth: authenticated, cliPath: '/nonexistent/cursor-agent', ...(webHtml !== undefined ? { webRoot: projectDir } : {}), ...(plugins ? { plugins } : {}) });
   cleanups.push(async () => {
+    if (previousClaudeDir === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = previousClaudeDir;
+    if (previousCodexHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousCodexHome;
     await app.close();
     await rm(stateDir, { recursive: true, force: true });
     await rm(projectDir, { recursive: true, force: true });
@@ -723,7 +729,7 @@ describe('app route surface after ACP removal', () => {
     expect((await call('PATCH', '/api/settings', { auxiliaryModels: { weather: title } })).statusCode).toBe(400);
     expect((await call('PATCH', '/api/settings', { auxiliaryModels: { title: null } })).json().auxiliaryModels).toEqual({ handoff });
     expect((await call('PATCH', '/api/settings', { auxiliaryModels: { handoff: null } })).json()).not.toHaveProperty('auxiliaryModels');
-    expect((await call('GET', '/api/auxiliary-models')).json().models).toContainEqual({ ...title, profileName: 'Gateway' });
+    expect((await call('GET', '/api/auxiliary-models')).json().models).toContainEqual({ ...title, profileName: 'Gateway', transport: 'http' });
     // The canvas's summary model is a purpose of its own.
     expect((await call('PATCH', '/api/settings', { auxiliaryModels: { summary: handoff } })).json().auxiliaryModels).toEqual({ summary: handoff });
     expect((await call('PATCH', '/api/settings', { auxiliaryModels: { summary: null } })).json()).not.toHaveProperty('auxiliaryModels');

@@ -18,6 +18,7 @@ import { FilterBar } from './FilterBar';
 import { WeekHeatmap } from './Heatmaps';
 import { KpiCards } from './KpiCards';
 import { LatencyChart } from './LatencyChart';
+import { ModelLeaderboard } from './ModelLeaderboard';
 import { NorthStar } from './NorthStar';
 import { RankChart } from './RankChart';
 import { RunsTable } from './RunsTable';
@@ -121,6 +122,10 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
             <RankChart breakdown={dashboard.models} rank={state.rank} onRank={(rank) => onStateChange({ ...state, rank })} />
             <LatencyChart latency={data.latency} kind={state.latency} onKind={(latency) => onStateChange({ ...state, latency })} />
           </div>
+          <ModelLeaderboard
+            days={Math.max(1, Math.round((Date.parse(northWindow.to) - Date.parse(northWindow.from)) / 86_400_000))}
+            refreshToken={dashboard.generatedAt}
+          />
           <div className="grid items-stretch gap-3 lg:grid-cols-2">
             <EffortChart efforts={dashboard.efforts} summary={dashboard.summary} />
             <TokenCompositionChart summary={dashboard.summary} models={dashboard.models} />

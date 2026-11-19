@@ -53,7 +53,13 @@ export function systemPrompt(target: Language, fallback: Language): string {
 export class Translator {
   /** Insertion order is age: a hit moves its entry to the end. */
   private readonly kept = new Map<string, { text: string; size: number }>();
-  private readonly pending = new Map<string, { promise: Promise<string>; controller: AbortController; waiters: number }>();
+  private readonly pending = new Map<string, {
+    promise: Promise<string>;
+    controller: AbortController;
+    waiters: number;
+    rawSoFar: string;
+    listeners: Set<(rawSoFar: string) => void>;
+  }>();
   private size = 0;
 
   constructor(private readonly host: PluginHost) {}
@@ -62,7 +68,7 @@ export class Translator {
     const source = context.selection?.text ?? context.message?.text;
     if (!source) throw this.host.error('COMMAND_ARGS_INVALID', 'Translate runs on a message or a selection', 400);
     const target = targetLanguage(this.host.settings().target, context.locale);
-    const text = await this.translate(source, target, context.signal);
+    const text = await this.translate(source, target, context.signal, context.onTextDelta);
     return { kind: 'text', text, title: TITLE };
   }
 
@@ -73,12 +79,42 @@ export class Translator {
     this.size = 0;
   }
 
-  private async translate(text: string, target: Language, signal: AbortSignal): Promise<string> {
+  private pieceKey(target: Language, part: string): string {
+    return createHash('sha256').update(`${target.tag}\0${part}`).digest('hex');
+  }
+
+  private async translate(
+    text: string,
+    target: Language,
+    signal: AbortSignal,
+    onTextDelta?: CommandContext['onTextDelta'],
+  ): Promise<string> {
     const models = this.host.models;
     if (!models) throw this.host.error('COMMAND_UNAVAILABLE', 'This Riffet cannot run a model for plugins', 409);
     const parts = pieces(text);
     if (!parts.length) throw this.host.error('PLUGIN_MODEL_EMPTY_OUTPUT', 'The model returned no translation', 502);
     const system = systemPrompt(target, fallbackLanguage(target));
+    const allCached = parts.every(part => this.kept.has(this.pieceKey(target, part)));
+    const emit = onTextDelta && !allCached;
+    const buffers = emit ? new Array<string>(parts.length).fill('') : undefined;
+    const done = emit ? new Array<boolean>(parts.length).fill(false) : undefined;
+    let nextToEmit = 0;
+    let emittedChars = 0;
+    const flush = () => {
+      if (!emit || !buffers || !done) return;
+      while (nextToEmit < parts.length) {
+        const buf = buffers[nextToEmit]!;
+        if (buf.length > emittedChars) {
+          const delta = buf.slice(emittedChars);
+          emittedChars = buf.length;
+          onTextDelta(delta, TITLE);
+        }
+        if (!done[nextToEmit]) break;
+        nextToEmit += 1;
+        emittedChars = 0;
+        if (nextToEmit < parts.length) onTextDelta('\n\n', TITLE);
+      }
+    };
     const out: string[] = new Array(parts.length);
     let next = 0;
     // One piece failing fails the message, so the others stop instead of spending calls on it.
@@ -87,7 +123,24 @@ export class Translator {
     const worker = async () => {
       while (next < parts.length) {
         const index = next++;
-        out[index] = await this.translatePiece(models, parts[index]!, target, system, pieceSignal);
+        const piece = await this.translatePiece(
+          models,
+          parts[index]!,
+          target,
+          system,
+          pieceSignal,
+          emit ? rawSoFar => {
+            if (!buffers) return;
+            buffers[index] = rawSoFar.trimStart();
+            if (index === nextToEmit) flush();
+          } : undefined,
+        );
+        out[index] = piece;
+        if (emit && buffers && done) {
+          buffers[index] = piece;
+          done[index] = true;
+          if (index === nextToEmit) flush();
+        }
       }
     };
     try { await Promise.all(Array.from({ length: Math.min(CONCURRENCY, parts.length) }, worker)); }
@@ -97,28 +150,60 @@ export class Translator {
     return joined;
   }
 
-  private async translatePiece(models: NonNullable<PluginHost['models']>, part: string, target: Language, system: string, signal: AbortSignal): Promise<string> {
+  private async translatePiece(
+    models: NonNullable<PluginHost['models']>,
+    part: string,
+    target: Language,
+    system: string,
+    signal: AbortSignal,
+    onRawSoFar?: (rawSoFar: string) => void,
+  ): Promise<string> {
     signal.throwIfAborted();
-    const key = createHash('sha256').update(`${target.tag}\0${part}`).digest('hex');
+    const key = this.pieceKey(target, part);
     const hit = this.kept.get(key);
     if (hit) { this.kept.delete(key); this.kept.set(key, hit); return hit.text; }
     let entry = this.pending.get(key);
     if (!entry) {
       const controller = new AbortController();
-      const promise = models.complete({ use: MODEL_USE, system, content: part, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: PIECE_TIMEOUT_MS, signal: controller.signal })
+      const listeners = new Set<(rawSoFar: string) => void>();
+      const created = {
+        promise: undefined as unknown as Promise<string>,
+        controller,
+        waiters: 0,
+        rawSoFar: '',
+        listeners,
+      };
+      const request = { use: MODEL_USE, system, content: part, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: PIECE_TIMEOUT_MS, signal: controller.signal };
+      const run = models.stream
+        ? models.stream({
+          ...request,
+          onDelta: chunk => {
+            if (!chunk) return;
+            created.rawSoFar += chunk;
+            for (const listener of created.listeners) listener(created.rawSoFar);
+          },
+        })
+        : models.complete(request);
+      created.promise = run
         .then(raw => {
           const text = raw.trim();
           if (!text) throw this.host.error('PLUGIN_MODEL_EMPTY_OUTPUT', 'The model returned no translation', 502);
           this.keep(key, text, part.length + text.length);
           return text;
         })
-        .finally(() => { if (this.pending.get(key) === entry) this.pending.delete(key); });
-      entry = { promise, controller, waiters: 0 };
+        .finally(() => { if (this.pending.get(key) === created) this.pending.delete(key); });
+      entry = created;
       this.pending.set(key, entry);
     }
     entry.waiters += 1;
+    if (onRawSoFar) {
+      if (entry.rawSoFar) onRawSoFar(entry.rawSoFar);
+      entry.listeners.add(onRawSoFar);
+    }
     return new Promise<string>((resolve, reject) => {
+      const detach = () => { if (onRawSoFar) entry.listeners.delete(onRawSoFar); };
       const onAbort = () => {
+        detach();
         entry.waiters -= 1;
         if (entry.waiters <= 0) {
           if (this.pending.get(key) === entry) this.pending.delete(key);
@@ -128,8 +213,8 @@ export class Translator {
       };
       signal.addEventListener('abort', onAbort, { once: true });
       entry.promise.then(
-        value => { signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
-        error => { signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
+        value => { detach(); signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); resolve(value); },
+        error => { detach(); signal.removeEventListener('abort', onAbort); entry.waiters = Math.max(0, entry.waiters - 1); reject(error); },
       );
     });
   }

@@ -229,8 +229,8 @@ export interface PluginDeclarations {
   modelUses?: ModelUseDeclaration[];
 }
 
-/** What a use of a model falls back to while the user has chosen none for it: the model of an `AuxiliaryModelPurpose`. */
-export const MODEL_USE_FALLBACKS = ['chat'] as const;
+/** What a use of a model falls back to while the user has chosen none for it: `default` uses the fast auxiliary default, `chat` uses Quick chat's default model. */
+export const MODEL_USE_FALLBACKS = ['default', 'chat'] as const;
 export type ModelUseFallback = typeof MODEL_USE_FALLBACKS[number];
 
 /**

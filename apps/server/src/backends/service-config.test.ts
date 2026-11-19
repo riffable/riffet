@@ -579,7 +579,7 @@ it('keeps auxiliary bindings to the same explicit API profile after adding a gat
   const endpoint = await auxiliaryEndpoint(ref, profiles);
   expect(endpoint).toEqual({ protocol: 'chat', baseUrl: 'https://gateway.example/resolved/v1', apiKey: 'profile-key', headers: { 'X-Adapter': 'resolved' }, model: 'm1', profileName: 'Bound' });
   const listModels = vi.fn(async () => [{ value: 'm1', name: 'M1', configOptions: [] }]);
-  expect(await listAuxiliaryModels(profiles, { listModels })).toEqual([{ ...ref, profileName: 'Bound' }]);
+  expect(await listAuxiliaryModels(profiles, { listModels })).toEqual([{ ...ref, profileName: 'Bound', transport: 'http' }]);
   expect(listModels).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.baseUrl, apiKey: 'profile-key', headers: endpoint.headers, timeoutMs: 5_000 });
   expect(prepare).toHaveBeenCalledTimes(2);
   expect(resolve).toHaveBeenCalledWith({ apiEndpoint: config.apiEndpoint, apiKey: 'profile-key' });

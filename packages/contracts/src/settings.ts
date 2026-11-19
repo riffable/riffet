@@ -233,12 +233,14 @@ export const DEFAULT_QUICK_CHAT_PRESETS: readonly QuickChatPreset[] = [
   { id: 'explain', name: '解释', prompt: '用用户的语言简明解释用户发来的内容：先说它是什么，再说最要紧的一两点。不要开场白。' },
   { id: 'polish', name: '润色', prompt: '改写用户发来的文字，使其清楚自然，保持原有语言、意思和语气。只回复改写后的文字。' },
 ];
+/** How an auxiliary model is invoked: directly over HTTP, or by spawning a CLI child process. */
+export type AuxiliaryModelTransport = 'http' | 'cli-process';
 /** A model behind one backend profile's gateway, as `AppSettings.auxiliaryModels` stores it. */
 export interface AuxiliaryModelRef { backendId: NativeBackendId; profileId: string; model: string; }
 /** One choice for an auxiliary model: a gateway model plus the profile name it is listed under. */
-export interface AuxiliaryModelOption extends AuxiliaryModelRef { profileName: string; }
-/** `chat` is the default model of a new quick chat; `summary` writes the one-sentence turn summaries of the canvas. */
-export const AUXILIARY_MODEL_PURPOSES = ['title', 'handoff', 'chat', 'summary'] as const;
+export interface AuxiliaryModelOption extends AuxiliaryModelRef { profileName: string; transport?: AuxiliaryModelTransport; }
+/** `default` is the fast fallback for bounded auxiliary tasks; `chat` is the default model of a new quick chat; `summary` writes the one-sentence turn summaries of the canvas. */
+export const AUXILIARY_MODEL_PURPOSES = ['default', 'title', 'handoff', 'chat', 'summary'] as const;
 export type AuxiliaryModelPurpose = typeof AUXILIARY_MODEL_PURPOSES[number];
 export type AuxiliaryModels = Partial<Record<AuxiliaryModelPurpose, AuxiliaryModelRef>>;
 /** Only the purposes given change; `null` clears one. */

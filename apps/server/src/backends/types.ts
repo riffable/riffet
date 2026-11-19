@@ -556,6 +556,24 @@ export interface NativeBackendDriver {
   /** Validates an API-supplied persisted provider reference before it is stored. */
   validateNativeSessionId?(nativeSessionId: string): void;
   /**
+   * Server-only gateway view of `profile` when a CLI's default login configures an HTTP gateway
+   * and key in its own config or environment (`~/.claude/settings.json`, `~/.codex/config.toml`, …).
+   */
+  gatewayProfile?(profile: NativeBackendProfileConfig): NativeBackendProfileConfig | undefined;
+  /** Lists models for auxiliary jobs when this driver executes them directly instead of an HTTP gateway. */
+  auxiliaryModels?(profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<ModelInfo[]>;
+  /** Runs a single-turn text completion through this driver when no HTTP gateway exists. */
+  auxiliaryComplete?(profile: NativeBackendProfileConfig, request: {
+    model: string; system: string; content: string; maxOutputTokens: number; timeoutMs: number; signal?: AbortSignal;
+  }): Promise<string>;
+  /** Runs a streamed chat completion through this driver when no HTTP gateway exists. */
+  auxiliaryStreamChat?(profile: NativeBackendProfileConfig, request: {
+    model: string; system?: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+    maxOutputTokens: number; idleTimeoutMs: number; signal?: AbortSignal; effort?: string; fast?: boolean;
+    onDelta(kind: 'text' | 'reasoning', text: string): void;
+  }): Promise<{ text: string; reasoning: string; cutOff: boolean; model?: string; inputTokens?: number; outputTokens?: number }>;
+
+  /**
    * Rejects a profile config this driver could not launch with (a relative directory, a malformed endpoint)
    * before the settings store it; `config` is the merged config `profiles` hands the driver, secrets included.
    * Synchronous and free of I/O. The stored structure itself is checked by the settings.
@@ -672,3 +690,15 @@ export interface NativeBackendDriver {
 }
 
 export type { TerminalInteractionControl, TerminalObserver };
+
+const driverGateways = new WeakMap<NativeBackendProfileConfig, NativeBackendDriver>();
+
+/** Associates a server-only gateway profile with the driver that executes auxiliary jobs for it without adding enumerable fields. */
+export function withDriverGateway(profile: NativeBackendProfileConfig, driver: NativeBackendDriver): NativeBackendProfileConfig {
+  driverGateways.set(profile, driver);
+  return profile;
+}
+
+export function driverGatewayOf(profile: NativeBackendProfileConfig): NativeBackendDriver | undefined {
+  return driverGateways.get(profile);
+}

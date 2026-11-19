@@ -1,4 +1,4 @@
-import { complete, type CompletionRequest, type GatewayEndpoint } from '../auxiliary/gateway.js';
+import { complete, streamComplete, type CompletionMetrics, type CompletionRequest, type GatewayEndpoint, type StreamCompletionRequest } from '../auxiliary/gateway.js';
 import { handoffSummaryPrompt } from '../prompts/index.js';
 
 /**
@@ -11,11 +11,29 @@ const MAX_OUTPUT_TOKENS = 8_192;
 const TIMEOUT_MS = 120_000;
 
 /** Asks the handoff model for a note on `material`; throws with the gateway's reason, or when it wrote nothing. */
-export async function requestHandoffSummary(endpoint: GatewayEndpoint, material: string, options: { goal?: string; signal?: AbortSignal; complete?: (request: CompletionRequest) => Promise<string> } = {}): Promise<string> {
+export async function requestHandoffSummary(
+  endpoint: GatewayEndpoint,
+  material: string,
+  options: {
+    goal?: string;
+    signal?: AbortSignal;
+    onDelta?: (delta: string) => void;
+    onMetrics?: (metrics: CompletionMetrics) => void;
+    complete?: (request: CompletionRequest) => Promise<string>;
+    streamComplete?: (request: StreamCompletionRequest) => Promise<string>;
+  } = {},
+): Promise<string> {
   const content = [material, ...(options.goal ? [`<handoff_goal>\n${options.goal}\n</handoff_goal>`] : []), 'Write the handoff note.'].join('\n\n');
-  const note = (await (options.complete ?? complete)({
-    ...endpoint, system: handoffSummaryPrompt(), content, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, ...(options.signal ? { signal: options.signal } : {}),
-  })).trim();
+  const raw = options.onDelta && !options.complete
+    ? await (options.streamComplete ?? streamComplete)({
+      ...endpoint, system: handoffSummaryPrompt(), content, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, onDelta: options.onDelta,
+      ...(options.onMetrics ? { onMetrics: options.onMetrics } : {}), ...(options.signal ? { signal: options.signal } : {}),
+    })
+    : await (options.complete ?? complete)({
+      ...endpoint, system: handoffSummaryPrompt(), content, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS,
+      ...(options.onMetrics ? { onMetrics: options.onMetrics } : {}), ...(options.signal ? { signal: options.signal } : {}),
+    });
+  const note = raw.trim();
   if (!note) throw new Error('model returned no summary');
   return note;
 }

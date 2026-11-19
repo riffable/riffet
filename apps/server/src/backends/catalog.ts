@@ -14,7 +14,7 @@ import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { FreshCache } from './shared/fresh-cache.js';
 import { cliVersionReport } from './shared/cli-version.js';
 import { backendIdOf } from '../session-identity.js';
-import type { NativeBackendAvailability, NativeBackendDriver, NativeBackendHost, NativeBackendProfileConfig, NativeBackendTraits, NativePrewarmRequest, NativePrewarmResult } from './types.js';
+import { withDriverGateway, type NativeBackendAvailability, type NativeBackendDriver, type NativeBackendHost, type NativeBackendProfileConfig, type NativeBackendTraits, type NativePrewarmRequest, type NativePrewarmResult } from './types.js';
 
 const MODEL_LIST_FRESH_MS = 5 * 60_000;
 const MAX_MODEL_LISTINGS = 64;
@@ -310,11 +310,19 @@ export class BackendCatalog {
    * Sources that supply another connection or credential remain confined to the agent picker.
    */
   gatewayProfiles(backendId: NativeBackendId): NativeBackendProfileConfig[] {
-    return this.profiles(this.registry.require(backendId))
-      .filter(profile => {
-        if (!str(profile.config.apiEndpoint)) return false;
+    const driver = this.registry.require(backendId);
+    return this.profiles(driver)
+      .flatMap(profile => {
         const source = modelSourceOf(profile.config);
-        return !source || modelSourceRole(source) === 'adapter' && Boolean(str(profile.config.apiKey));
+        if (source) {
+          if (modelSourceRole(source) !== 'adapter') return [];
+          return str(profile.config.apiEndpoint) || modelSourceProvider(source) ? [profile] : [];
+        }
+        if (str(profile.config.apiEndpoint)) return [profile];
+        const resolved = driver.gatewayProfile?.(profile);
+        if (!resolved) return [];
+        if (str(resolved.config.apiEndpoint)) return [resolved];
+        return driver.auxiliaryComplete ? [withDriverGateway(resolved, driver)] : [];
       });
   }
 

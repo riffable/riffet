@@ -1,6 +1,6 @@
 import { resolveLocalizedText, type CommandRunRequest, type PluginAction, type PluginDescriptor, type LocalizedText, type ModelSourceDescriptor, type NativeBackendId, type PluginCommandResult } from '@contracts';
 import { i18n } from '@lingui/core';
-import { api, request } from './api';
+import { api, HttpError, readSseStream, request, requestResponse } from './api';
 import { createStore, useStore } from './store';
 import { readStored, writeStored } from './utils';
 
@@ -126,4 +126,41 @@ export function runPluginCommand(commandId: string, body: CommandRunRequest & { 
   const slash = commandId.indexOf('/');
   const path = `/api/integrations/${encodeURIComponent(commandId.slice(0, slash))}/commands/${encodeURIComponent(commandId.slice(slash + 1))}`;
   return request<PluginCommandResult>(path, { method: 'POST', body: JSON.stringify(body), ...(signal ? { signal } : {}) });
+}
+
+/** Runs a plugin command accepting SSE text deltas when the command streams, falling back to plain JSON. */
+export async function runPluginCommandStream(
+  commandId: string,
+  body: CommandRunRequest & { confirm?: string },
+  options: { onDelta?: (delta: string, title?: LocalizedText) => void; signal?: AbortSignal },
+): Promise<PluginCommandResult> {
+  const slash = commandId.indexOf('/');
+  const path = `/api/integrations/${encodeURIComponent(commandId.slice(0, slash))}/commands/${encodeURIComponent(commandId.slice(slash + 1))}`;
+  const response = await requestResponse(path, {
+    method: 'POST',
+    headers: { Accept: 'text/event-stream, application/json' },
+    body: JSON.stringify(body),
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+  if (!response.headers.get('content-type')?.includes('text/event-stream')) {
+    return await response.json() as PluginCommandResult;
+  }
+  let finalResult: PluginCommandResult | undefined;
+  let streamError: HttpError | undefined;
+  await readSseStream(response, (event, data) => {
+    let parsed: Record<string, unknown>;
+    try { parsed = JSON.parse(data) as Record<string, unknown>; } catch { return; }
+    if (event === 'delta' && typeof parsed.delta === 'string') {
+      options.onDelta?.(parsed.delta, parsed.title as LocalizedText | undefined);
+    } else if (event === 'result') {
+      finalResult = parsed as unknown as PluginCommandResult;
+    } else if (event === 'error') {
+      const err = parsed.error as { code?: string; message?: string; details?: unknown; params?: Record<string, string | number> } | undefined;
+      const status = typeof parsed.status === 'number' ? parsed.status : 502;
+      streamError = new HttpError(status, err?.message ?? 'Plugin command failed', err?.code, err?.details, err?.params);
+    }
+  });
+  if (streamError) throw streamError;
+  if (!finalResult) throw new HttpError(502, 'Command stream ended without a result');
+  return finalResult;
 }

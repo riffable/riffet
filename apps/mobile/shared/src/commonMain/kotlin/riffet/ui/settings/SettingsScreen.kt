@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -955,9 +956,27 @@ private fun FilesSettingsSection(controller: SettingsController) {
 @Composable
 internal fun AppAboutSection() {
     val info = remember { appBuildInfo() }
+    val uriHandler = LocalUriHandler.current
+    val colors = LocalRiffetColors.current
+    val metrics = LocalInterfaceStyle.current.metrics
     SettingsGroup("Riffet") {
         SettingsValueRow(stringResource(Res.string.settings_app_version), info.version)
         SettingsValueRow(stringResource(Res.string.settings_build_number), info.build)
         SettingsValueRow(stringResource(Res.string.settings_platform), info.platform)
+    }
+    SettingsGroup("") {
+        GroupRow(
+            title = "GitHub",
+            value = "riffable/riffet",
+            trailing = {
+                Icon(
+                    RiffetIcons.ExternalLink,
+                    contentDescription = null,
+                    tint = colors.fg4,
+                    modifier = Modifier.size(metrics.smallIconSize),
+                )
+            },
+            onClick = { runCatching { uriHandler.openUri("https://github.com/riffable/riffet") } },
+        )
     }
 }

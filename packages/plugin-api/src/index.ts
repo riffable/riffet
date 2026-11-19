@@ -353,12 +353,15 @@ export interface PluginHost {
   /**
    * One completion on a model the user chose in Riffet, so the plugin keeps no key of its own: a system prompt and one
    * user message in, the text back. With `use`, one of the plugin's own `modelUses`, it runs on the model chosen for that
-   * use on the 辅助模型 settings page, or on its declared `fallback`; without, on the model chosen for 快速对话. When
-   * there is none it rejects with 409 `PLUGIN_MODEL_NOT_CHOSEN` (`details.use` names the use), and a client offers to
-   * choose one. The text the plugin sends goes to that model's provider. In-process packages only; absent for isolated
-   * installed packages and on a host that predates it.
+   * use on the 辅助模型 settings page, or on its declared `fallback` (`default` auxiliary model or `chat`); without, on
+   * the model chosen for 快速对话. When there is none it rejects with 409 `PLUGIN_MODEL_NOT_CHOSEN` (`details.use` names
+   * the use), and a client offers to choose one. The text the plugin sends goes to that model's provider. In-process
+   * packages only; absent for isolated installed packages and on a host that predates it.
    */
-  models?: { complete(request: ModelCompletionRequest): Promise<string> };
+  models?: {
+    complete(request: ModelCompletionRequest): Promise<string>;
+    stream?(request: ModelStreamRequest): Promise<string>;
+  };
   /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
   error(code: string, message: string, statusCode?: number): Error;
 }
@@ -374,6 +377,11 @@ export interface ModelCompletionRequest {
   /** Default 60 seconds, at most 120. */
   timeoutMs?: number;
   signal?: AbortSignal;
+}
+
+/** What `host.models.stream` sends: the same completion, with `onDelta` called as answer text arrives. */
+export interface ModelStreamRequest extends ModelCompletionRequest {
+  onDelta(text: string): void;
 }
 
 // ── Commands ─────────────────────────────────────────────────────────────────
@@ -392,6 +400,8 @@ export interface CommandContext {
   readonly selection?: CommandSelection;
   /** The caller's language as a BCP-47 tag, such as `zh-Hans`, when the client sent one. */
   readonly locale?: string;
+  /** Streams incremental Markdown (`text` result) to callers that accept SSE; the final returned `{ kind: 'text', text, title }` remains authoritative. */
+  readonly onTextDelta?: (delta: string, title?: LocalizedText) => void;
   /** Aborts when the plugin is turned off, or the command takes too long. */
   readonly signal: AbortSignal;
 }

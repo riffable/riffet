@@ -125,18 +125,19 @@ private struct AuxiliaryModelSection: View {
 
     @ViewBuilder
     private func picker(_ purpose: AuxiliaryPurpose, settings: AppSettings?) -> some View {
+        let empty = purpose.emptyLabel(hasDefault: settings?.auxiliaryModels?.default != nil)
         if state.options == nil, state.error == nil {
             // The saved choice in a disabled menu of the same size while the list loads, so the row
             // does not change height when the real menu replaces it.
             let key = purpose.ref(in: settings).map(modelKey) ?? ""
             Picker(purpose.title, selection: .constant(key)) {
-                Text(purpose.ref(in: settings)?.model ?? purpose.emptyLabel).tag(key)
+                Text(purpose.ref(in: settings)?.model ?? empty).tag(key)
             }
             .disabled(true)
         } else {
             AuxiliaryModelPicker(
                 title: purpose.title,
-                emptyLabel: purpose.emptyLabel,
+                emptyLabel: empty,
                 current: purpose.ref(in: settings),
                 options: state.options ?? [],
                 selection: Binding(
@@ -164,7 +165,9 @@ private struct PluginModelSection: View {
             Section {
                 ForEach(uses, id: \.id) { use in
                     let title = localizedText(use.title, fallback: use.id)
-                    let empty = use.fallback == "chat" ? String(localized: "跟随快速对话") : String(localized: "不使用")
+                    let empty = use.fallback == "default"
+                        ? String(localized: "跟随默认")
+                        : use.fallback == "chat" ? String(localized: "跟随快速对话") : String(localized: "不使用")
                     let current = settings?.pluginModels?[use.id]
                     SettingsRow(title) {
                         AuxiliaryModelPicker(
@@ -195,37 +198,41 @@ private struct PluginModelSection: View {
 
 /// The purposes `AppSettings.auxiliaryModels` keys its models by; the raw value is the wire key.
 private enum AuxiliaryPurpose: String, CaseIterable {
-    case title, handoff, summary
+    case `default`, title, handoff, summary
 
     var title: String {
         switch self {
+        case .default: String(localized: "默认模型")
         case .title: String(localized: "会话标题")
         case .handoff: String(localized: "交接摘要")
         case .summary: String(localized: "画布摘要")
         }
     }
 
-    var emptyLabel: String {
+    func emptyLabel(hasDefault: Bool) -> String {
         switch self {
-        case .title: String(localized: "只用 CLI 标题")
-        case .handoff, .summary: String(localized: "不使用")
+        case .default: String(localized: "不使用")
+        case .title: hasDefault ? String(localized: "跟随默认") : String(localized: "只用 CLI 标题")
+        case .handoff, .summary: hasDefault ? String(localized: "跟随默认") : String(localized: "不使用")
         }
     }
 
     var inputPlaceholder: String {
         switch self {
+        case .default: ""
         case .title: String(localized: "输入一条会话消息")
         case .handoff, .summary: String(localized: "粘贴对话内容")
         }
     }
 
     /// The server's `/api/auxiliary-models/preview` writes titles and handoff summaries only.
-    var canPreview: Bool { self != .summary }
+    var canPreview: Bool { self == .title || self == .handoff }
 
     var inputLimit: Int { self == .title ? 2_000 : 150_000 }
 
     func ref(in settings: AppSettings?) -> AuxiliaryModelRef? {
         switch self {
+        case .default: settings?.auxiliaryModels?.default
         case .title: settings?.auxiliaryModels?.title
         case .handoff: settings?.auxiliaryModels?.handoff
         case .summary: settings?.auxiliaryModels?.summary
@@ -353,7 +360,8 @@ private struct AuxiliaryModelPicker: View {
         var order: [String] = []
         var buckets: [String: [AuxiliaryModelOption]] = [:]
         for option in options {
-            let name = "\(option.profileName) · \(backendTitle(option.backendId))"
+            let slow = option.transport == "cli-process" ? " (\(String(localized: "CLI · 较慢")))" : ""
+            let name = "\(option.profileName) · \(backendTitle(option.backendId))\(slow)"
             if buckets[name] == nil { order.append(name) }
             buckets[name, default: []].append(option)
         }

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { realpathSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -130,6 +131,70 @@ export async function readOwnerConnection(configDir: string, cwd: string): Promi
     return value && !own.some(item => item[key] !== undefined) ? [[key, value]] : [];
   }));
   return { ...(Object.keys(env).length ? { env } : {}), settings };
+}
+
+const CLAUDE_ALIAS_RE = /^(?:default|opus|sonnet|haiku|fable|opusplan|best)$/i;
+
+/**
+ * Reads a CLI default profile's HTTP gateway and key from the user's Claude `settings.json` or
+ * environment when Riffet itself has no `apiEndpoint` configured. Pure `claude.ai` OAuth logins
+ * have neither and stay excluded.
+ */
+export function readClaudeOwnerGateway(profile: NativeBackendProfileConfig): NativeBackendProfileConfig | undefined {
+  let owner: Record<string, unknown> | undefined;
+  try { owner = record(JSON.parse(readFileSync(join(configDirOf(profile), 'settings.json'), 'utf8'))); }
+  catch { owner = undefined; }
+  const env = record(owner?.env);
+  const envStr = (key: string) => {
+    const value = env?.[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : process.env[key]?.trim() || undefined;
+  };
+  const rawEndpoint = envStr('ANTHROPIC_BASE_URL');
+  const apiKey = envStr('ANTHROPIC_AUTH_TOKEN') ?? envStr('ANTHROPIC_API_KEY');
+  const apiKeyHelper = string(owner?.apiKeyHelper)?.trim() || undefined;
+  const endpoint = rawEndpoint ?? ((apiKey || apiKeyHelper) ? 'https://api.anthropic.com' : undefined);
+  if (!endpoint) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined;
+  } catch { return undefined; }
+  const ownerModels = [
+    envStr('ANTHROPIC_MODEL'),
+    envStr('ANTHROPIC_DEFAULT_OPUS_MODEL'),
+    envStr('ANTHROPIC_DEFAULT_SONNET_MODEL'),
+    envStr('ANTHROPIC_DEFAULT_HAIKU_MODEL'),
+    envStr('ANTHROPIC_SMALL_FAST_MODEL'),
+    string(owner?.model)?.trim() || undefined,
+  ].filter((value): value is string => Boolean(value && !CLAUDE_ALIAS_RE.test(value)));
+  const uniqueOwnerModels = [...new Set(ownerModels)];
+  const defaultModel = string(profile.config.defaultModel)?.trim() || uniqueOwnerModels[0];
+  const isAnthropicDirect = parsed.hostname.toLowerCase() === 'api.anthropic.com';
+  const enabledModels = Array.isArray(profile.config.enabledModels)
+    ? profile.config.enabledModels
+    : (!isAnthropicDirect && uniqueOwnerModels.length ? uniqueOwnerModels : undefined);
+  const fallbackModel = uniqueOwnerModels[0];
+  const sonnetTarget = envStr('ANTHROPIC_DEFAULT_SONNET_MODEL') ?? fallbackModel ?? (isAnthropicDirect ? 'claude-sonnet-4-6' : undefined);
+  const opusTarget = envStr('ANTHROPIC_DEFAULT_OPUS_MODEL') ?? fallbackModel ?? (isAnthropicDirect ? 'claude-opus-4-6' : undefined);
+  const haikuTarget = envStr('ANTHROPIC_DEFAULT_HAIKU_MODEL') ?? envStr('ANTHROPIC_SMALL_FAST_MODEL') ?? fallbackModel ?? (isAnthropicDirect ? 'claude-haiku-4-5' : undefined);
+  const gatewayModelAliases = {
+    ...(sonnetTarget ? { sonnet: sonnetTarget, default: fallbackModel ?? sonnetTarget } : {}),
+    ...(opusTarget ? { opus: opusTarget, opusplan: opusTarget, fable: opusTarget, best: opusTarget } : {}),
+    ...(haikuTarget ? { haiku: haikuTarget } : {}),
+  };
+  return {
+    ...profile,
+    config: {
+      ...profile.config,
+      apiEndpoint: endpoint.replace(/\/+$/, ''),
+      ...(apiKey ? { apiKey } : {}),
+      ...(!apiKey && apiKeyHelper ? { gatewayCredentialCommand: apiKeyHelper } : {}),
+      ...(defaultModel ? { defaultModel } : {}),
+      ...(enabledModels ? { enabledModels } : {}),
+      ...(!enabledModels && !isAnthropicDirect ? { gatewayModelScope: 'claude' } : {}),
+      ...(Object.keys(gatewayModelAliases).length ? { gatewayModelAliases } : {}),
+    },
+  };
 }
 
 export function profileEnv(profile: NativeBackendProfileConfig): Record<string, string> {

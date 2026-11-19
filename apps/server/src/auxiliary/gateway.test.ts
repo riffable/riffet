@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { requestTitle } from '../titles/request.js';
-import { complete, gatewayModelId, streamChat, type GatewayProtocol } from './gateway.js';
+import { complete, gatewayModelId, streamChat, streamComplete, type GatewayProtocol } from './gateway.js';
 
 function fakeFetch(body: unknown, status = 200) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -209,5 +209,49 @@ describe('gatewayModelId', () => {
     expect(gatewayModelId('dsh', 'dsh:deepseek-official:deepseek-v4.1-flash[effort=max]')).toBe('deepseek-v4.1-flash');
     expect(gatewayModelId('claude', 'glm-5.3')).toBe('glm-5.3');
     expect(gatewayModelId('codex', 'gpt-5.5[effort=high]')).toBe('gpt-5.5');
+  });
+});
+
+describe('fast zero-thinking mode and streamComplete', () => {
+  it('disables reasoning on responses with adaptive fallback and remembers the supported level', async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      sent.push(body);
+      const effort = (body.reasoning as { effort?: string } | undefined)?.effort;
+      if (effort === 'none') {
+        return new Response(JSON.stringify({ error: { message: "Unsupported value: 'none' for reasoning.effort" } }), { status: 400 });
+      }
+      return Response.json({ output_text: 'Fast OK' });
+    }) as unknown as typeof fetch;
+
+    const base = { protocol: 'responses' as const, baseUrl: 'https://resp-fallback.example/v1', model: 'gpt-reasoning', system: 'S', content: 'C', maxOutputTokens: 100, timeoutMs: 1_000, fetchImpl };
+    expect(await complete(base)).toBe('Fast OK');
+    expect(sent.map(b => (b.reasoning as { effort?: string } | undefined)?.effort)).toEqual(['none', 'minimal']);
+
+    // Subsequent call reuses the cached 'minimal' level without hitting 400 again.
+    expect(await complete(base)).toBe('Fast OK');
+    expect(sent).toHaveLength(3);
+    expect((sent[2]!.reasoning as { effort?: string } | undefined)?.effort).toBe('minimal');
+  });
+
+  it('streams only answer text deltas in streamComplete and ignores reasoning deltas', async () => {
+    const chunks = [
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"secret"}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"译"}}\n\n',
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"文"}}\n\n',
+      'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+    ];
+    const deltas: string[] = [];
+    const fetchImpl = (async () => new Response(new ReadableStream({
+      start(controller) { for (const c of chunks) controller.enqueue(new TextEncoder().encode(c)); controller.close(); },
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    const full = await streamComplete({
+      protocol: 'anthropic', baseUrl: 'https://gw.example', model: 'm', system: 'S', content: 'C',
+      maxOutputTokens: 100, timeoutMs: 1_000, onDelta: delta => deltas.push(delta), fetchImpl,
+    });
+    expect(full).toBe('译文');
+    expect(deltas).toEqual(['译', '文']);
   });
 });

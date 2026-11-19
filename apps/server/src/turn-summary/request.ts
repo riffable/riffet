@@ -1,4 +1,4 @@
-import { complete, type GatewayEndpoint } from '../auxiliary/gateway.js';
+import { complete, type CompletionMetrics, type GatewayEndpoint } from '../auxiliary/gateway.js';
 import { turnSummaryPrompt } from '../prompts/index.js';
 
 /**
@@ -21,6 +21,7 @@ export interface TurnSummaryRequest extends GatewayEndpoint {
   timeoutMs?: number;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
+  onMetrics?: (metrics: CompletionMetrics) => void;
 }
 
 const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}　-〿＀-￯]/u;
@@ -58,11 +59,11 @@ function clipAnswer(answer: string): string {
 
 /** Asks the gateway for the summary. Resolves to the cleaned sentence, or throws with the gateway's reason. */
 export async function requestTurnSummary(request: TurnSummaryRequest): Promise<string> {
-  const { question, answer, timeoutMs, signal, fetchImpl, ...endpoint } = request;
+  const { question, answer, timeoutMs, signal, fetchImpl, onMetrics, ...endpoint } = request;
   const content = `<user_question>\n${question.slice(0, QUESTION_LIMIT)}\n</user_question>\n\n<agent_answer>\n${clipAnswer(answer)}\n</agent_answer>\n\nSummary:`;
   const summary = cleanTurnSummary(await complete({
     ...endpoint, system: turnSummaryPrompt(), content, maxOutputTokens: MAX_OUTPUT_TOKENS,
-    timeoutMs: timeoutMs ?? 30_000, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetchImpl } : {}),
+    timeoutMs: timeoutMs ?? 30_000, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetchImpl } : {}), ...(onMetrics ? { onMetrics } : {}),
   }));
   if (!summary) throw new Error('summary model returned no summary');
   return summary;

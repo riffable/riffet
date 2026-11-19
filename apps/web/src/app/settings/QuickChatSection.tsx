@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { DEFAULT_QUICK_CHAT_RETENTION_DAYS, type AppSettings, type AuxiliaryModelOption, type AuxiliaryModelRef } from '@contracts';
+import { DEFAULT_QUICK_CHAT_RETENTION_DAYS, type AppSettings, type AuxiliaryModelOption, type AuxiliaryModelRef, type ModelLeaderboardRow } from '@contracts';
 import { IconChevronDown } from '@/components/icons';
 import { Select, Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
+import { formatDuration, formatSpeed } from '@/lib/stats-format';
 import { errorMessage } from '@/lib/utils';
 import { SettingsGroup, SettingsRow } from './SettingsLayout';
 
@@ -22,6 +23,7 @@ type SaveProps = {
 export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
   const { t } = useLingui();
   const [options, setOptions] = useState<AuxiliaryModelOption[]>();
+  const [board, setBoard] = useState<Map<string, ModelLeaderboardRow>>();
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -30,6 +32,9 @@ export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
     void api.auxiliaryModels(controller.signal)
       .then((result) => setOptions(result.models))
       .catch((error) => { if (!controller.signal.aborted) setLoadError(errorMessage(error, t`无法读取可用模型`)); });
+    void api.modelLeaderboard({ category: 'stream', source: 'all', days: 30 }, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setBoard(new Map(result.rows.map((row) => [row.key, row]))); })
+      .catch(() => undefined);
     return () => controller.abort();
   }, []);
 
@@ -61,9 +66,10 @@ export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
 
   const retentionOptions = RETENTION_DAYS.includes(retentionDays) ? RETENTION_DAYS : [...RETENTION_DAYS, retentionDays];
 
+  const description = loadError || (currentOption?.transport === 'cli-process' ? t`走 CLI 进程启动，较慢` : undefined);
   return <SettingsGroup note={t`置顶或有收藏的对话不会归档`}>
-    <SettingsRow title={t`默认模型`} description={loadError || undefined}>
-      <ModelPicker busy={busy} loading={!options && !loadError} current={currentModel} currentOption={currentOption} options={options} onChange={(key) => void saveModel(key)} />
+    <SettingsRow title={t`默认模型`} description={description}>
+      <ModelPicker busy={busy} loading={!options && !loadError} current={currentModel} currentOption={currentOption} options={options} board={board} onChange={(key) => void saveModel(key)} />
     </SettingsRow>
     <SettingsRow title={t`自动归档`}>
       <Select
@@ -78,12 +84,13 @@ export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
   </SettingsGroup>;
 }
 
-function ModelPicker({ busy, loading, current, currentOption, options, onChange }: {
+function ModelPicker({ busy, loading, current, currentOption, options, board, onChange }: {
   busy: boolean;
   loading: boolean;
   current?: AuxiliaryModelRef;
   currentOption?: AuxiliaryModelOption;
   options?: AuxiliaryModelOption[];
+  board?: Map<string, ModelLeaderboardRow>;
   onChange: (key: string) => void;
 }) {
   const { t } = useLingui();
@@ -106,11 +113,19 @@ function ModelPicker({ busy, loading, current, currentOption, options, onChange 
           {current && !currentOption && (
             <DropdownMenuRadioItem value={keyOf(current)}><Trans>{current.model}（提供商里已不可用）</Trans></DropdownMenuRadioItem>
           )}
-          {options?.map((option) => (
-            <DropdownMenuRadioItem key={keyOf(option)} value={keyOf(option)} textValue={`${option.profileName} · ${option.model}`}>
-              <span className="min-w-0 truncate">{option.profileName} · {option.model}</span>
-            </DropdownMenuRadioItem>
-          ))}
+          {options?.map((option) => {
+            const stats = board?.get(`${option.backendId}|${option.profileId}|${option.model}`);
+            const hint = stats?.ttftMs
+              ? `${formatDuration(stats.ttftMs.p50)}${stats.outputTokensPerSecond ? ` · ${formatSpeed(stats.outputTokensPerSecond.p50)}` : ''}`
+              : undefined;
+            return (
+              <DropdownMenuRadioItem key={keyOf(option)} value={keyOf(option)} textValue={`${option.profileName} · ${option.model}`}>
+                <span className="min-w-0 flex-1 truncate">{option.profileName} · {option.model}</span>
+                {hint && <span className="ml-2 shrink-0 text-xs tabular-nums text-fg-3">{hint}</span>}
+                {option.transport === 'cli-process' && <span className="ml-2 shrink-0 text-xs text-fg-3"><Trans>CLI · 较慢</Trans></span>}
+              </DropdownMenuRadioItem>
+            );
+          })}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

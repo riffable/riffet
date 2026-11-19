@@ -9,6 +9,7 @@ import { acceptsPart, AUXILIARY_MODEL_BACKENDS, complete, gatewayEfforts, gatewa
 import { decodePreviewText } from '../../previews/formats.js';
 import { parseNativeModelSelection, type NativeModelSelection } from '../shared/model-selection.js';
 import { auxiliaryEndpoint, profileModelEndpoint, listAuxiliaryModels, type GatewayProfiles } from '../../auxiliary/models.js';
+import type { AuxiliaryCallRecorder } from '../../auxiliary/telemetry.js';
 import type { LaneWriter, TranscriptSource } from '../../journal/ingest.js';
 import { estimatedTokens, estimateTokens } from '../../metrics/tokens.js';
 import { historyCompactionPrompt, quickChatSystemPrompt } from '../../prompts/index.js';
@@ -97,6 +98,7 @@ export interface ChatBackendOptions {
   /** `quickChat.presets` in effect, read on every use. */
   presets(): readonly QuickChatPreset[];
   fetchImpl?: typeof fetch;
+  recordAuxiliaryCall?: AuxiliaryCallRecorder;
 }
 
 /** An answer being written. */
@@ -294,9 +296,16 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     const { dropped, summary } = context;
     const messages = parts.length ? [...context.messages.slice(0, -1), { ...context.messages.at(-1)!, parts }] : context.messages;
     const model = chosen;
+    let endpoint: GatewayEndpoint | undefined;
+    let authMs = 0;
+    let firstTextAt: number | undefined;
+    let requestStartedAt = startedAt;
     try {
       if (!model) throw new Error('No model is available; add a profile with an API endpoint first');
-      const endpoint = inheritedEndpoint ?? await auxiliaryEndpoint(model, this.options.gatewayProfiles, live.abort.signal);
+      const authStartedAt = Date.now();
+      endpoint = inheritedEndpoint ?? await auxiliaryEndpoint(model, this.options.gatewayProfiles, live.abort.signal);
+      authMs = Math.max(0, Date.now() - authStartedAt);
+      requestStartedAt = Date.now();
       result = await streamChat({
         ...endpoint, messages, maxOutputTokens: MAX_OUTPUT_TOKENS, idleTimeoutMs: IDLE_TIMEOUT_MS, signal: live.abort.signal,
         system: summary ? `${system}\n\n<earlier_conversation>\n${summary}\n</earlier_conversation>` : system,
@@ -305,11 +314,39 @@ export class ChatBackendAdapter implements NativeBackendDriver {
         ...(inheritedEndpoint && endpoint.protocol === 'anthropic' ? { adaptiveThinking: true } : {}),
         ...(model.fast && fastens(model.backendId) ? { fast: true } : {}),
         ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
-        onDelta: (kind, piece) => { if (kind === 'text') live.text += piece; else live.reasoning += piece; this.scheduleDraft(host, sessionId); },
+        onDelta: (kind, piece) => {
+          if (kind === 'text') {
+            if (firstTextAt === undefined && piece) firstTextAt = Date.now();
+            live.text += piece;
+          } else {
+            live.reasoning += piece;
+          }
+          this.scheduleDraft(host, sessionId);
+        },
       });
     } catch (failure) {
       if (live.abort.signal.aborted) status = 'cancelled';
       else { status = 'failed'; error = failure instanceof Error ? failure.message : 'The model could not answer'; }
+    }
+    if (model && endpoint && status !== 'cancelled') {
+      const endedAt = Date.now();
+      this.options.recordAuxiliaryCall?.({
+        kind: 'chat', preset: 'stream', source: 'live',
+        backendId: model.backendId, profileId: model.profileId, model: model.model,
+        transport: (endpoint.executeComplete || endpoint.executeStreamChat) ? 'cli-process' : 'http',
+        protocol: endpoint.protocol,
+        ok: status === 'completed',
+        authMs,
+        ttftMs: firstTextAt !== undefined ? Math.max(0, firstTextAt - requestStartedAt) : null,
+        durationMs: Math.max(0, endedAt - requestStartedAt),
+        inputTokens: result?.inputTokens ?? null,
+        outputTokens: result?.outputTokens ?? null,
+        reasoningTokens: result?.reasoningTokens ?? null,
+        reasoningChars: (result?.reasoning ?? live.reasoning).length,
+        thinkingDetected: (result?.reasoningTokens ?? 0) > 0 || Boolean((result?.reasoning ?? live.reasoning).length),
+        streaming: true,
+        ...(status === 'completed' ? {} : { errorCode: result?.cutOff ? 'CUT_OFF' : 'ERROR' }),
+      });
     }
     // An answer the output budget stopped reads as whole but is not; it stays, marked as what it is.
     if (result?.cutOff) { status = 'interrupted'; error = 'The answer reached the output limit and was cut off'; }

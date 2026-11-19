@@ -236,10 +236,10 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 ## 模型用途
 
-插件在静态声明里写它要在模型上做的事：`contributes.modelUses: [{ id, title, fallback? }]`，`id` 是声明 ID（`<插件 id>/<名称>`），`title` 是这件事的名称（如「翻译」），`fallback` 目前只能是 `chat`。参考实现是 `riffet.translate`。
+插件在静态声明里写它要在模型上做的事：`contributes.modelUses: [{ id, title, fallback? }]`，`id` 是声明 ID（`<插件 id>/<名称>`），`title` 是这件事的名称（如「翻译」），`fallback` 可为 `default`（辅助模型的「默认模型」）或 `chat`（快速对话的默认模型）。参考实现是 `riffet.translate`（`fallback: 'default'`）。
 
-- 设置：插件启用时，各客户端的「设置 › 辅助模型」在核心用途下面多一组「插件」，每项用途一行，选项与核心用途相同（已有密钥的网关模型）。选择存在 `AppSettings.pluginModels`，按声明 ID 保存，所有客户端同一份；插件停用或卸载时这一行不显示，选择保留，再启用时还在。更新时只改给出的用途，`null` 清除；`pluginModels` 至多 64 项。
-- 调用：`host.models.complete({ use, … })`。`use` 只能是本插件声明的用途，别的得 403 `PLUGIN_MODEL_USE_FOREIGN`。宿主先取用户为它选的模型，没有就按 `fallback` 取「快速对话」的默认模型；都没有时 409 `PLUGIN_MODEL_NOT_CHOSEN`，`details.use` 是这项用途，客户端的「选择模型」直接打开「辅助模型」。
+- 设置：插件启用时，各客户端的「设置 › 辅助模型」在核心用途下面多一组「插件」，每项用途一行，选项与核心用途相同（已有密钥的网关模型，列表标出 `http` 与较慢的 `cli-process` 路径）。选择存在 `AppSettings.pluginModels`，按声明 ID 保存，所有客户端同一份；插件停用或卸载时这一行不显示，选择保留，再启用时还在。更新时只改给出的用途，`null` 清除；`pluginModels` 至多 64 项。
+- 调用：`host.models.complete({ use, … })` 与流式 `host.models.stream({ use, …, onDelta })`。`use` 只能是本插件声明的用途，别的得 403 `PLUGIN_MODEL_USE_FOREIGN`。宿主先取用户为它选的模型，没有就按 `fallback` 取「辅助模型 › 默认模型」或「快速对话」的默认模型；都没有时 409 `PLUGIN_MODEL_NOT_CHOSEN`，`details.use` 是这项用途，客户端的「选择模型」直接打开「辅助模型」。
 - 核心用途（`AUXILIARY_MODEL_PURPOSES`）不随插件增加：核心不认识任何插件的用途，宿主只按声明画行、按声明 ID 取值。隔离安装的包暂时没有 `models.complete`；开放时会配一项授权能力，安装时列出「会把内容发给你选择的模型」。
 
 ## 消息菜单
@@ -247,7 +247,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 命令可以列在宿主的菜单里：`CommandDeclaration.menus` 取自 `COMMAND_MENUS`，目前有 `message`（回答的更多菜单）和 `selection`（在回答里选中文字时出现的工具条）。列在菜单里的命令只在菜单里出现，命令面板与快捷键不列它，因为那里没有它要处理的消息。界面规则见 [插件界面](design/system/plugins.md) §2.1，参考实现是内置插件 `riffet.translate`（`plugins/riffet/translate/`）。
 
 - 声明：`menus` 含 `message` 或 `selection` 都要求 `scope: 'session'`；`icon` 取自 `COMMAND_ICONS`（如 `languages`），客户端按名字画自己的图标，不认识的画拼图。加载时宿主不认识的菜单值被去掉并写一条说明，全部不认识时整条命令被跳过，不会改为出现在命令面板；不认识的 `icon` 被去掉。`pack`、`check` 对两者严格报错。
-- 执行：客户端照常 `POST /api/integrations/:id/commands/:name`，另带 `message: { role, text, runId? }` 和客户端语言 `locale`。`text` 是客户端显示的 Markdown，至多 `PLUGIN_COMMAND_BUDGET.messageChars`（超过时客户端不列插件项）。列在 `message` 菜单的命令没有 `message` 时得 400 `COMMAND_ARGS_INVALID`，其他命令带了 `message` 同样拒绝；`message` 与 `locale` 计入同一 `requestId` 的幂等比较；在消息上运行的命令只在运行期间共享同一次执行，答复后不保留，避免长结果在服务端常驻十分钟。处理函数从 `CommandContext.message`、`locale` 读取；隔离安装的包经子进程协议的 `command.run` 收到同样两项。
+- 执行：客户端照常 `POST /api/integrations/:id/commands/:name`，另带 `message: { role, text, runId? }` 和客户端语言 `locale`。`text` 是客户端显示的 Markdown，至多 `PLUGIN_COMMAND_BUDGET.messageChars`（超过时客户端不列插件项）。列在 `message` 菜单的命令没有 `message` 时得 400 `COMMAND_ARGS_INVALID`，其他命令带了 `message` 同样拒绝；`message` 与 `locale` 计入同一 `requestId` 的幂等比较；在消息上运行的命令只在运行期间共享同一次执行，答复后不保留，避免长结果在服务端常驻十分钟。处理函数从 `CommandContext.message`、`locale` 读取，支持流式的插件可通过 `CommandContext.onTextDelta(delta, title?)` 增量输出（客户端携带 `Accept: text/event-stream` 时从首段增量起按 SSE `delta` / `result` / `error` 返回，未增量输出或首字前报错仍按 JSON 返回）；隔离安装的包经子进程协议的 `command.run` 收到 `message`、`locale`。
 - 选区菜单：请求改带 `selection: { text, runId? }`（`text` 是选中的文字，至多 `PLUGIN_COMMAND_BUDGET.messageChars`，`runId` 同 `message`），规则与 `message` 对称：一次请求至多带 `message`、`selection` 之一，两者都带得 400 `COMMAND_ARGS_INVALID`；`selection` 只给列在 `selection` 菜单的命令，`message` 只给列在 `message` 菜单的命令，列在菜单里的命令必须收到它所列菜单对应的那一项，没有菜单的命令两者都拒绝；`selection` 计入同一 `requestId` 的幂等比较，在选区上运行的命令与在消息上运行的一样，答复后不保留。处理函数读取 `CommandContext.selection`，隔离安装的包经 `command.run` 收到同一字段。
 - 结果：除 `done`、`open`、`task` 外，在消息或选区上运行的命令可以返回 `{ kind: 'text', text, title? }`：`text` 是 Markdown，1 到 `PLUGIN_COMMAND_BUDGET.resultChars` 个字符；`title` 是至多 16 种语言、各 40 字的标题。不是在消息或选区上运行的命令返回 `text` 是无效结果（502 `COMMAND_FAILED`）。客户端把它显示在那条回答下方，只在内存里保留（`keptResults`），不写进会话、不同步。
 - 承载：`message` 菜单 Web 与 Mac 已实现，结果在回答页脚下方；iOS、Android 尚未列出插件项。`selection` 菜单目前只有 Web，结果显示在锚定于选区的卡片里；Mac、iOS、Android 尚未实现。

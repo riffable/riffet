@@ -181,6 +181,7 @@ struct SettingsView: View {
             SettingsGroup(title: String(localized: "支持", bundle: .riffet), entries: [
                 server(String(localized: "使用统计", bundle: .riffet), "chart.bar") { AnyView(NativeStatsView(workbench: $0)) },
                 SettingsEntry(title: String(localized: "导出日志", bundle: .riffet), icon: "square.and.arrow.up", busy: exporting, kind: .action { Task { await exportLog() } }),
+                SettingsEntry(title: String(localized: "关于 Riffet", bundle: .riffet), icon: "info.circle", value: appVersion, kind: .link { AnyView(AboutSettingsView(version: appVersion)) }),
             ]),
         ]
     }
@@ -939,5 +940,33 @@ private struct DevicesView: View {
         } catch is CancellationError {} catch { self.error = error.riffetMessage }
         await load()
         workbench.refresh()
+    }
+}
+
+private struct AboutSettingsView: View {
+    let version: String
+    @Environment(\.palette) private var palette
+    private static let repositoryURL = URL(string: "https://github.com/riffable/riffet")!
+
+    var body: some View {
+        RiffetForm {
+            Section {
+                SettingsRowLabel(title: String(localized: "版本", bundle: .riffet), value: version)
+            }
+            Section {
+                Link(destination: Self.repositoryURL) {
+                    HStack(spacing: RiffetMetrics.floatingGap) {
+                        SettingsRowLabel(title: "GitHub", value: "riffable/riffet")
+                        Image(systemName: "arrow.up.right")
+                            .riffetFont(.label)
+                            .foregroundStyle(palette.fg4)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .navigationTitle(String(localized: "关于 Riffet", bundle: .riffet))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
