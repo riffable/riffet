@@ -63,6 +63,18 @@ interface Navigation {
 const geometry = (element: HTMLElement): Geometry => ({ height: element.clientHeight, width: element.clientWidth, content: element.scrollHeight });
 const sameGeometry = (a: Geometry | undefined, b: Geometry) => a?.height === b.height && a.width === b.width && a.content === b.content;
 const visible = (element: HTMLElement) => element.clientHeight > 0 && element.clientWidth > 0;
+/** How wide an edge strip counts as the scrollbar when it overlays the content and takes no width. */
+const OVERLAY_SCROLLBAR_HIT = 16;
+/**
+ * Whether a press on the scroller itself landed on its scrollbar. The scroller is wider than the
+ * content column, so a press on the blank beside the column also targets it: that one (focusing the
+ * window, say) is not a reader leaving the end.
+ */
+const onScrollbar = (element: HTMLElement, event: PointerEvent) => {
+  const box = element.getBoundingClientRect();
+  const gutter = box.width - element.clientWidth;
+  return event.clientX >= box.right - Math.max(gutter, OVERLAY_SCROLLBAR_HIT);
+};
 const bottom = (element: HTMLElement) => Math.max(0, element.scrollHeight - element.clientHeight);
 const editable = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 const selecting = (element: HTMLElement) => {
@@ -498,9 +510,9 @@ export function useTranscriptScroll(options: Options) {
         const onPointerDown = (event: PointerEvent) => {
           if (event.button !== 0 || editable(event.target)) return;
           state.current.pointerHeld = true;
-          // A scrollbar drag leaves following immediately. Clicking content only cancels an
-          // old navigation; an actual scroll or text selection decides the reading mode.
-          if (event.target === element) readerInput();
+          // A scrollbar drag leaves following immediately. Clicking content, or the blank beside
+          // it, only cancels an old navigation; an actual scroll or text selection decides the reading mode.
+          if (event.target === element && onScrollbar(element, event)) readerInput();
           else { cancelPending(); capture(); }
         };
         // Before React's handler toggles it, so the place taken is the one the reader clicked at.

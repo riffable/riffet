@@ -873,6 +873,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     const run = queuedRun(runId);
     if (run) void latest.current.native.cancelNativeRun(run);
   }, []);
+  // An answer is the reader acting at the end, as a message is: the card leaving takes the view down with it.
+  const respondInteraction = useCallback((...args: Parameters<typeof native.respondInteraction>) => {
+    transcriptScrollRef.current?.followSent();
+    return latest.current.native.respondInteraction(...args);
+  }, []);
   const submit = useCallback(async (text: string, attachments: Attachment[], context: PromptContextReference[], onStored?: () => boolean) => {
     const { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, assistantMain } = latest.current;
     if (steerUnavailable) { onError(t`当前任务暂不接受补充，输入已保留`); return false; }
@@ -1343,7 +1348,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
                 sessionId={session.id}
                 interaction={interaction}
                 connected={native.connected}
-                onRespond={native.respondInteraction}
+                onRespond={respondInteraction}
                 onSync={native.syncInteraction}
                 onOpenTerminal={supportsTerminal ? () => { autoOpened.current = false; setDrawer(true); } : undefined}
               />
