@@ -158,6 +158,7 @@ msgstr ""
 msgid "关键字"
 msgstr ""
 
+#: src/components/runner/RunnerGame.tsx
 #: src/components/ui/dialog.tsx
 msgid "关闭"
 msgstr ""
@@ -168,6 +169,11 @@ msgstr ""
 
 #: src/lib/extensions.ts
 msgid "内置"
+msgstr ""
+
+#. placeholder {0}: pad(best)
+#: src/components/runner/RunnerGame.tsx
+msgid "最高 {0}"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
@@ -674,6 +680,18 @@ msgstr ""
 msgid "确定"
 msgstr ""
 
+#: src/components/runner/RunnerGame.tsx
+msgid "空格再来"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "空格开始"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "空格继续"
+msgstr ""
+
 #: src/lib/theme-role-labels.ts
 msgid "类型"
 msgstr ""
@@ -765,6 +783,18 @@ msgstr ""
 
 #: src/lib/stats-series.ts
 msgid "轮次"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点再来"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点开始"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点继续"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
@@ -878,6 +908,10 @@ msgstr ""
 
 #: src/lib/theme-role-labels.ts
 msgid "黑"
+msgstr ""
+
+#: src/components/runner/RunnerGame.tsx
+msgid "黑马跑酷"
 msgstr ""
 
 #: src/lib/native-models.ts

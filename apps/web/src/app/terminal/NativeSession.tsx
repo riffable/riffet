@@ -26,6 +26,7 @@ import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
 import { ComposerDock } from '../session/ComposerDock';
+import { RunnerDock } from '@/components/runner/RunnerDock';
 import { PlanDock } from '../work-items/PlanDock';
 import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../automations/SendLater';
 import { pickerBlockReason } from '../session/pickers';
@@ -504,7 +505,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     && (preBusyPhase || phase === 'idle'));
   const causallyBusy = !connectionNotice && (turnOutputActive || runObservedActive);
   const busy = !silentConfigBoot && ((native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy);
-  const working = busy || (!silentConfigBoot && (native.statusKnown ? phase === 'attention' : session.state === 'waiting'));
+  const needsYou = !silentConfigBoot && (native.statusKnown ? phase === 'attention' : session.state === 'waiting');
+  const working = busy || needsYou;
   // The main agent is idle while background agents keep going; only then is there something to stop that `working` does not cover.
   const runningSubagents = useRunningSubagentCount(native.subagents);
   // Background tasks the session reports (`status.activity`) and subagents still running overlap, so the larger count stands.
@@ -1422,6 +1424,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           </ActivityContext.Provider>
         </SubagentContext.Provider>
       )}
+      {/* 黑马跑酷, opened from the palette: in the room right of the composer, measured against this pane. */}
+      {!composerFullscreen && !subagentOpen && <RunnerDock working={working} needsYou={needsYou} />}
       {(discussionMounted || discussionOpen) && discussionAllowed &&
         <DiscussionPanel
           parent={session}

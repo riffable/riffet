@@ -4,6 +4,8 @@ import { IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconH
 import { PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
+import { RunnerGame } from '@/components/runner/RunnerGame';
+import { closeRunner, useRunnerOpen } from '@/components/runner/store';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -569,6 +571,7 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
   const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) });
   // Only the phone's home lists recent conversations; a desktop has them in the sidebar.
   const recent = useMemo(() => mobile ? sortSessionsByActivity(sessions.filter((session) => !session.archivedAt)).slice(0, 5) : [], [mobile, sessions]);
+  const runnerOpen = useRunnerOpen();
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -621,6 +624,10 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
             </>}
           </div>
         </div>
+      </div>
+      {/* 黑马跑酷 from the palette: under the page, so the mark, heading and composer keep their place. */}
+      <div data-runner-bottom className="mx-auto w-full max-w-[720px] shrink-0 px-4 md:px-8">
+        {runnerOpen && <RunnerGame height={150} onClose={closeRunner} className="mb-4" />}
       </div>
     </div>
   );

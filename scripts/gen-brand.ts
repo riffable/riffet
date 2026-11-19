@@ -12,7 +12,7 @@ import sharp from 'sharp';
  * the front colour with a round eye cut out of it, so it shows whatever is behind the mark; the
  * mane is the accent and sits behind the head. Both are filled and stroked in their own colour
  * (head 1 unit, mane 0.6) so the corners come out round. The mane is the cubic neck curve's
- * offsets, a sawtooth of three rounded teeth, baked into `MANE` below. `lib/app-icon.ts` (web),
+ * offsets, a sawtooth of three rounded teeth, baked into `MANE` below. `lib/brand-geometry.ts` (web),
  * `RiffetIcons` (Android) and `BrandMark` (macOS, iOS) carry copies of these paths. Colours, the wordmark and the lockup rule are in `docs/brand/README.md`.
  */
 

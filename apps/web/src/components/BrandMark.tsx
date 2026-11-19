@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type SVGProps } from 'react';
 import { cn } from '@/lib/utils';
-import { APP_ICON_TILE, BRAND_BODY, BRAND_EYE, BRAND_MANE, BRAND_TILE_TRANSFORM, BRAND_VIEWBOX } from '@/lib/app-icon';
+import { APP_ICON_TILE, BRAND_BODY, BRAND_EYE, BRAND_MANE, BRAND_TEETH, BRAND_TILE_TRANSFORM, BRAND_VIEWBOX } from '@/lib/app-icon';
 
 /**
  * The Riffet mark: a solid horse head in `currentColor` with the eye cut out, over a three-tooth
@@ -46,12 +46,6 @@ const pickLiveStyle = (except?: LiveStyle) => {
   const pool = LIVE_STYLES.filter((style) => style !== except);
   return pool[Math.floor(Math.random() * pool.length)]!;
 };
-/** The mane's three teeth as separate shapes, each reaching under the head so it can swing: path, then pivot. */
-const LIVE_TEETH = [
-  ['M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17L9.3 9.2L9.7 6.4Z', 8.9, 7.6],
-  ['M7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68L8.7 11.8L9.1 8.4Z', 8.2, 10.2],
-  ['M6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42L8.2 14.6L8.6 11Z', 7.6, 13],
-] as const;
 const LIVE_EAR = 'M8.8 5.8L9.4 2.6L11.2 5.4L10.6 7.2L9.2 7.2Z';
 
 /** A part that moves about (x, y): the keyframes in `index.css` address it as `[data-part]` with the default origin. */
@@ -125,7 +119,7 @@ export function LiveBrandMark({ fixed, ...props }: SVGProps<SVGSVGElement> & { f
         <path data-part="speed" d="M1 9h3.2" /><path data-part="speed" d="M0 13.5h4" /><path data-part="speed" d="M2 17.5h2.6" />
       </g>
       <LivePart x={9} y={21} part="whole">
-        {LIVE_TEETH.map(([d, x, y]) => <LivePart key={d} x={x} y={y} part="tooth"><path d={d} strokeWidth=".6" className="fill-accent stroke-accent" /></LivePart>)}
+        {BRAND_TEETH.map(([d, x, y]) => <LivePart key={d} x={x} y={y} part="tooth"><path d={d} strokeWidth=".6" className="fill-accent stroke-accent" /></LivePart>)}
         <g mask={`url(#${maskId})`} fill="currentColor" stroke="currentColor">
           <path data-part="head" pathLength={1} d={BRAND_BODY} />
           <LivePart x={10} y={5.9} part="ear"><path d={LIVE_EAR} /></LivePart>

@@ -40,6 +40,8 @@ export interface ListsState {
   status: ListsStatus;
   savedAt: number;
   bootError: string;
+  /** The failed load could not reach the server at all, as opposed to the server refusing it. */
+  bootUnreachable: boolean;
 }
 
 export interface ListsDeps {
@@ -77,6 +79,7 @@ export function createListsStore(deps: ListsDeps) {
     status: cached ? 'syncing' : 'fresh',
     savedAt: cached?.savedAt ?? 0,
     bootError: '',
+    bootUnreachable: false,
   });
   /** Bumped by every local write and around every bootstrap read; an in-flight poll that straddles one is dropped. */
   let revision = 0;
@@ -197,6 +200,7 @@ export function createListsStore(deps: ListsDeps) {
           status: 'fresh',
           savedAt: Date.now(),
           bootError: '',
+          bootUnreachable: false,
         });
         confirmMissing(previousSessions, data.sessions);
         return next;
@@ -237,7 +241,7 @@ export function createListsStore(deps: ListsDeps) {
       store.set((current) => current.owner && current.owner.revision > owner.revision ? current : { owner });
     },
     /** A failed load keeps whatever lists are on screen and labels them as offline. */
-    fail(message: string) { store.set({ bootError: message, status: 'offline' }); },
+    fail(message: string, unreachable = false) { store.set({ bootError: message, bootUnreachable: unreachable, status: 'offline' }); },
 
     /** Updates the local list copy after an out-of-band shell change (e.g. a work-item status change). */
     refreshCache() {

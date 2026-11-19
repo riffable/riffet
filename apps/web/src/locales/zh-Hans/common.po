@@ -158,6 +158,7 @@ msgstr "全部时间"
 msgid "关键字"
 msgstr "关键字"
 
+#: src/components/runner/RunnerGame.tsx
 #: src/components/ui/dialog.tsx
 msgid "关闭"
 msgstr "关闭"
@@ -169,6 +170,11 @@ msgstr "关闭通知"
 #: src/lib/extensions.ts
 msgid "内置"
 msgstr "内置"
+
+#. placeholder {0}: pad(best)
+#: src/components/runner/RunnerGame.tsx
+msgid "最高 {0}"
+msgstr "最高 {0}"
 
 #: src/lib/theme-role-labels.ts
 msgid "函数与声明"
@@ -674,6 +680,18 @@ msgstr "石墨"
 msgid "确定"
 msgstr "确定"
 
+#: src/components/runner/RunnerGame.tsx
+msgid "空格再来"
+msgstr "空格再来"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "空格开始"
+msgstr "空格开始"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "空格继续"
+msgstr "空格继续"
+
 #: src/lib/theme-role-labels.ts
 msgid "类型"
 msgstr "类型"
@@ -766,6 +784,18 @@ msgstr "转义与插值"
 #: src/lib/stats-series.ts
 msgid "轮次"
 msgstr "轮次"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点再来"
+msgstr "轻点再来"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点开始"
+msgstr "轻点开始"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "轻点继续"
+msgstr "轻点继续"
 
 #: src/lib/theme-role-labels.ts
 msgid "辅助文本"
@@ -879,6 +909,10 @@ msgstr "黄色"
 #: src/lib/theme-role-labels.ts
 msgid "黑"
 msgstr "黑"
+
+#: src/components/runner/RunnerGame.tsx
+msgid "黑马跑酷"
+msgstr "黑马跑酷"
 
 #: src/lib/native-models.ts
 msgid "默认"

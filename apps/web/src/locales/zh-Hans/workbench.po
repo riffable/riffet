@@ -2213,6 +2213,10 @@ msgstr "项目标签"
 msgid "首次运行这条命令"
 msgstr "首次运行这条命令"
 
+#: src/app/Workbench.tsx
+msgid "黑马跑酷"
+msgstr "黑马跑酷"
+
 #: src/app/ProjectHome.tsx
 msgid "默认模型"
 msgstr "默认模型"

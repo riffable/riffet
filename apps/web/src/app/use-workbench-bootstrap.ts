@@ -59,7 +59,10 @@ export function useWorkbenchBootstrap({ loaded, project, session, backends, home
     if (start?.link.markId) handlers.openMark(start.link.markId);
     return next;
   }, [lists, catalog, nav, handlers]);
-  const bootstrapFailed = useCallback((error: unknown) => lists.fail(isUnreachable(error) ? t`无法连接 Riffet 服务器` : errorMessage(error, t`请稍后重试`)), [lists, t]);
+  const bootstrapFailed = useCallback((error: unknown) => {
+    const unreachable = isUnreachable(error);
+    lists.fail(unreachable ? t`无法连接 Riffet 服务器` : errorMessage(error, t`请稍后重试`), unreachable);
+  }, [lists, t]);
 
   // For settings, after a write: a read already on its way may predate it.
   const refreshBackends = useCallback(() => catalog.refreshBackends(true), [catalog]);

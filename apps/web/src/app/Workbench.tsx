@@ -9,6 +9,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { IconArchive, IconSquareKanban, IconBookmark, IconBot, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconMessagesSquare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal, IconWrench } from '@/components/icons';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery, useMobileViewport } from '@/lib/use-media-query';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
+import { RunnerGame } from '@/components/runner/RunnerGame';
+import { runnerFits } from '@/components/runner/RunnerDock';
+import { openRunner } from '@/components/runner/store';
 import { api, type PromptContextReference } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, writeStored } from '@/lib/utils';
@@ -90,6 +93,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const listsState = useLists((state) => state.status);
   const listsSavedAt = useLists((state) => state.savedAt);
   const bootError = useLists((state) => state.bootError);
+  const bootUnreachable = useLists((state) => state.bootUnreachable);
   // Whole, because the new-conversation composer takes the settings object; it changes only on save.
   const settings = useSettings((value) => value);
   const selectedProjectId = useNav((state) => state.projectId);
@@ -376,9 +380,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       <main className="flex h-dvh flex-col items-center justify-center gap-4 bg-bg px-6 text-center">
         {bootError ? (
           <>
-            <BrandMark className="size-9 text-fg" />
+            {/* Unreachable, the page keeps retrying by itself; meanwhile the horse runs, as the browser's dinosaur does. */}
+            {!bootUnreachable && <BrandMark className="size-9 text-fg" />}
             <div className="flex max-w-sm flex-col gap-1"><p className="text-base font-medium text-fg"><Trans>无法加载工作台</Trans></p><p className="text-sm text-fg-3">{bootError}</p></div>
             <Button onClick={() => void loadBootstrap().catch(bootstrapFailed)}><Trans>重试</Trans></Button>
+            {bootUnreachable && <RunnerGame globalKeys className="mt-6 max-w-2xl" />}
           </>
         ) : <LiveBrandMark fixed="run" className="size-12 text-fg" />}
       </main>
@@ -674,6 +680,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       ...(sidebarViews.some((view) => view.id === 'changes') ? [{ id: 'toggle-changes', label: panelShows('changes') ? t`收起变更面板` : t`打开变更面板`, keywords: 'git diff changes panel 变更 改动 差异', icon: <IconGitCompare className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'changes', shownTab()) }] : []),
       ...(sidebarViews.some((view) => view.id === 'files') ? [{ id: 'toggle-files', label: panelShows('files') ? t`收起文件面板` : t`打开文件面板`, keywords: 'files explorer panel 文件 目录', icon: <IconFolder className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'files', shownTab()) }] : []),
     ] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
+    ...(!pageOpen && !attemptsGroupId && !session?.archivedAt && runnerFits() ? [{ id: 'open-runner', label: t`黑马跑酷`, keywords: 'game runner horse dino 游戏 小游戏 跑酷 黑马', icon: <BrandMark className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => openRunner() }] : []),
     { id: 'toggle-color-mode', label: t`切换浅色 / 深色`, keywords: 'theme dark light appearance 主题 明暗 深色 浅色', icon: <IconMoon className="size-4 shrink-0 text-fg-3" />, run: () => setThemeMode(document.documentElement.classList.contains('dark') ? 'light' : 'dark') },
     ...(session && !session.archivedAt ? [{ id: 'focus-composer', label: t`聚焦输入框`, keywords: 'composer input focus 输入 消息', icon: <IconPencilLine className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => document.querySelector<HTMLTextAreaElement>('textarea[data-composer-input]')?.focus() }] : []),
     // Opens the composer's model list; `ModelPicker` has no handle on it other than its trigger.

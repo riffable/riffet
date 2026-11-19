@@ -1547,6 +1547,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 
         <div
           ref={cardRef}
+          data-composer-card
           onFocus={onCardFocus}
           onBlur={onCardBlur}
           className={cn(
