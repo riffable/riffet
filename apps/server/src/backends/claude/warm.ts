@@ -10,6 +10,7 @@ import { claudeComposerVisible } from '../../adapters/cli/claude-code.js';
 import { extensionsOffNames } from '../../extensions/toggles.js';
 import { ensureClaudeWorkspaceTrust } from '../shared/cli-trust.js';
 import type { WarmTerminals } from '../shared/warm-terminals.js';
+import { sessionLaunchInput, type LaunchKeyParts } from '../shared/launch-input.js';
 import type { NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
 import type { ClaudeHookBridge } from './hook-bridge.js';
 import { ClaudeHookOverlay } from './hook-overlay.js';
@@ -38,10 +39,18 @@ export function claudeWarmKey(project: Project, profile: NativeBackendProfileCon
 
 /** The key of the conversation `session` would launch. */
 export function sessionClaudeWarmKey(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): string {
+  const input = sessionLaunchInput(host, session);
+  const parts = {
+    model: input.model,
+    approval: input.approval,
+    appearance: input.appearance,
+    tools: input.tools,
+    extensionsOff: input.extensionsOff,
+  } satisfies LaunchKeyParts;
   return claudeWarmKey(project, profile, {
-    ...(session.model ? { model: session.model } : {}), ...(session.approval ? { approval: session.approval } : {}),
-    ...(session.terminalAppearance ? { appearance: session.terminalAppearance } : {}),
-    tools: host.riffetMcp?.signature?.(session.id) ?? '', ...(session.extensionsOff ? { extensionsOff: session.extensionsOff } : {}),
+    ...(parts.model ? { model: parts.model } : {}), ...(parts.approval ? { approval: parts.approval } : {}),
+    ...(parts.appearance ? { appearance: parts.appearance } : {}),
+    tools: parts.tools, ...(parts.extensionsOff ? { extensionsOff: parts.extensionsOff } : {}),
   });
 }
 

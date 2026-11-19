@@ -10,6 +10,7 @@ import { nativeModelEffort, nativeModelFast, parseNativeModelSelection, type Nat
 import { fastServiceTier, modelBackendVariant, resolveModelSelection } from './catalog.js';
 import { credentialDirFor, executableOf, permissionOf, permissionParamsOf, probeAppServer, providerEnv, riffetMcpOverride, runtimeFingerprintFor } from './config.js';
 import { extensionsOffNames } from '../../extensions/toggles.js';
+import { notKeyed, sessionLaunchInput, type LaunchKeyParts } from '../shared/launch-input.js';
 import type { CodexFlavor } from './flavors.js';
 import type { CodexObservation } from './observation.js';
 import type { RpcThread } from './types.js';
@@ -99,7 +100,15 @@ export function warmKey(project: Project, profile: NativeBackendProfileConfig, f
 
 /** The key of the conversation `session` would start: its own model, permission, tools and switched-off servers. */
 export function sessionWarmKey(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, flavor: CodexFlavor): string {
-  return warmKey(project, profile, flavor, session.model, session.approval, host.riffetMcp?.signature?.(session.id), extensionsOffNames(session.extensionsOff, 'mcp'));
+  const input = sessionLaunchInput(host, session);
+  const parts = {
+    model: input.model,
+    approval: input.approval,
+    appearance: notKeyed('the app-server has no terminal; an attached TUI takes its own colours'),
+    tools: input.tools,
+    extensionsOff: extensionsOffNames(input.extensionsOff, 'mcp'),
+  } satisfies LaunchKeyParts;
+  return warmKey(project, profile, flavor, parts.model, parts.approval, parts.tools, parts.extensionsOff);
 }
 
 /**

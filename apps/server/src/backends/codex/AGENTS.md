@@ -3,10 +3,6 @@ module: server.backends.codex
 recordings: fixtures
 verify:
   - npx vitest run apps/server/src/backends/codex
-co-change:
-  - when: launch.ts#warmKey
-    with: [apps/server/src/backends/claude/warm.ts#claudeWarmKey]
-    reason: 影响启动的会话字段要同时进各 Agent 的预热键，否则预热进程静默失配（根 AGENTS.md「服务端」）。
 ---
 
 ## 职责
@@ -26,7 +22,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 - App Server 是线程唯一的读取来源。日志实体按 item 自己的 id 命名（`project-item.ts`），实时通知、重读和重启写的是同一个实体。
 - 回合读到定稿副本才算结束。历史读取暂时返回 `interrupted` 时，`transcript-source.ts#turnReopened` 撤销结束标记，但只恢复最后一个已结算的回合，更早的不回填。
 - 运行时必须在宿主提供 `host.transcript` 之后创建。否则 `runtime.ts#journalRead` 为 false，草稿流把片段写进转写源写的同一个实体。
-- 预热的 App Server 只交给预热键完全一致的新会话（`launch.ts#warmKey`）；不一致时静默冷启动，不报错。
+- 预热的 App Server 只交给预热键完全一致的新会话（`launch.ts#warmKey`）；不一致时静默冷启动，不报错。会话一侧的键由 `launch.ts#sessionWarmKey` 从 `apps/server/src/backends/shared/launch-input.ts#SessionLaunchInput` 派生，新增启动字段时类型检查会要求在这里处理。
 - 能力按 `config.ts#probeAppServer` 的结果和 `initialize` 返回的 userAgent 判断（如 `config.ts#supportsSteerVersion`），不按命令路径缓存。
 
 ## 外部行为

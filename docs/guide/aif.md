@@ -163,7 +163,7 @@ co-change:
   - 跨模块、找不到原因的高频耦合：列为边界复核项，说明模块切分可能不对。
 - **同改规则**写在模块文档头部的 `co-change`：`when` 是触发的文件或符号，`with` 是必须一起检查的文件，`reason` 是原因。`when` 带符号时，只有改动的行或所在函数涉及该符号才触发。改动命中而 `with` 都没动时，`aif context` 列出提醒，`verify` 给出警告。用警告而不拦截，是因为改到 `when` 不一定要改 `with`；规则能精确表达时，应当从结构上消除，而不是升级成拦截。规则的来源是变更耦合的挖掘结果或一次归因为「同改」的修复，不凭印象添加。
 
-预热键是第一个要从结构上消除的规则：Cursor `resourceKey`、Codex `warmKey`、Claude `claudeWarmKey` 改为从同一份启动字段列表派生，删除根 `AGENTS.md` 里对应的提醒。
+预热键是第一个从结构上消除的规则（阶段 1 已完成）：会话里影响启动的字段只在 `apps/server/src/backends/shared/launch-input.ts` 的 `SessionLaunchInput` 列一次，Codex 与 Claude 的会话预热键各自为每个字段写出用法，不用的字段写明原因（`notKeyed`），新增字段时两边都编译不过，直到各自处理。Codex 模块头部那条同改规则随之删除。Cursor 已移到仓库外的插件，它的 `resourceKey` 不在这套检查里。
 
 ### 5.3 知识条目的锚定与过期
 
@@ -325,7 +325,7 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 
 | 文件 | 改动 |
 |---|---|
-| `AGENTS.md` | 已改：「命令」一节的对照表换成 `aif context` 与 `verify`；新增 fix 尾注要求。待改：预热键派生落地后删除对应提醒 |
+| `AGENTS.md` | 已改：「命令」一节的对照表换成 `aif context` 与 `verify`；新增 fix 尾注要求；预热键的提醒改为指向 `SessionLaunchInput` |
 | `scripts/aif.ts`、`scripts/aif-baseline.json` | 已加：模块、上下文、验证、检查、提交归因 |
 | `scripts/record.ts`、`apps/server/src/backends/codex/recording.ts` | 已加：录制入口、录制与回放 |
 | `apps/server/src/backends/codex/AGENTS.md`、`recordings.test.ts`、`fixtures/` | 已加：首个模块文档、回放测试与录制数据 |
