@@ -1536,6 +1536,10 @@ msgstr ""
 msgid "未缓存输入"
 msgstr ""
 
+#: src/app/session/nativeRunCommands.ts
+msgid "未能补充到当前任务，已排为下一条消息"
+msgstr ""
+
 #: src/app/session/TurnRail.tsx
 msgid "本会话"
 msgstr ""

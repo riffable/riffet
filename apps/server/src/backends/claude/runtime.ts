@@ -913,7 +913,6 @@ export class ClaudeSessionRuntime {
     this.noteActivity();
     this.outputPromptId = undefined;
     this.turnSeq += 1;
-    // Guidance is claimed at a hook boundary, so only a turn a hook announced can be steered.
     if (started.source === 'hook' && started.promptId && this.state.process !== 'exited') {
       this.nativeTurn = { nativeSessionId: this.nativeSessionId, turnId: started.promptId, ...(this.activeWebTurn ? { ownerRunId: this.activeWebTurn.runId } : {}) };
     } else if (started.source === 'transcript' && started.promptId && !this.nativeTurn && this.state.process !== 'exited') {
@@ -1402,7 +1401,8 @@ export class ClaudeSessionRuntime {
 
   private steerTarget(): NativeTurnTarget | undefined {
     const current = this.host.getSession(this.session.id);
-    return this.started && !this.disposed && !this.terminalExited && !this.interrupting
+    // Guidance answers this turn's tool hooks: a CLI this service did not launch (a restart) takes it once they arrive here.
+    return (this.started || this.outputPromptId === this.nativeTurn?.turnId) && !this.disposed && !this.terminalExited && !this.interrupting
       && this.overlay.registered && current.terminalId === this.terminalId
       && current.nativeSessionId === this.nativeSessionId
       && (this.status.phase === 'busy' || this.status.phase === 'attention') ? this.nativeTurn : undefined;
@@ -2369,7 +2369,7 @@ export class ClaudeSessionRuntime {
     }
     if (event === 'PreToolUse') {
       const toolId = string(payload.tool_use_id);
-      if (matchesTurn && this.steerTarget() && toolId) this.steerTools.add(toolId);
+      if (mainThread && hookPromptId === this.nativeTurn?.turnId && this.steerTarget() && toolId) this.steerTools.add(toolId);
       // The permission hook that follows does not name the call, so it is found again by what it asks.
       const toolName = string(payload.tool_name);
       if (toolId && toolName) {

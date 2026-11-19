@@ -1536,6 +1536,10 @@ msgstr "未提交改动不在起点内。"
 msgid "未缓存输入"
 msgstr "未缓存输入"
 
+#: src/app/session/nativeRunCommands.ts
+msgid "未能补充到当前任务，已排为下一条消息"
+msgstr "未能补充到当前任务，已排为下一条消息"
+
 #: src/app/session/TurnRail.tsx
 msgid "本会话"
 msgstr "本会话"

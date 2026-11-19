@@ -13,6 +13,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Reading an in-progress reply on the web (including Cursor conversations and long virtualized transcripts) no longer jumps when the turn finishes and its process block folds, even when the prompt or process header is still visible at the top of the screen or right after scrolling; non-virtualized conversations also no longer snap unrendered earlier rows from an 88px estimate, and transcript scrolling now uses one deterministic anchor owner across browsers.
 - In Cursor conversations, a subagent that was interrupted no longer shows as running after it stopped.
 - On the web, answering a question or approval card no longer leaves a blank gap at the bottom of the conversation; clicking the empty area beside the transcript no longer stops it from following new output.
+- In Claude Code conversations, adding a message to the current task now works after Riffet restarts in the middle of a turn; when a message can't be added, you're told it was queued as the next message instead of it silently returning to the queue.
 
 ## 0.9.0 - 2026-11-19
 

@@ -1536,6 +1536,10 @@ msgstr "Uncommitted changes aren't part of the base."
 msgid "未缓存输入"
 msgstr "Uncached input"
 
+#: src/app/session/nativeRunCommands.ts
+msgid "未能补充到当前任务，已排为下一条消息"
+msgstr "Couldn't add this to the current task. It's queued as the next message."
+
 #: src/app/session/TurnRail.tsx
 msgid "本会话"
 msgstr "This session"

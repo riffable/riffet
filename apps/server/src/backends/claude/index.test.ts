@@ -2601,6 +2601,21 @@ describe('Claude hook guidance', () => {
       terminalId: terminal.id, terminalEpoch: terminal.epoch } })).resolves.toBeUndefined();
   });
 
+  it('takes guidance in a turn whose hooks reach a service that did not launch the CLI', async () => {
+    // A service restart mid-turn: the CLI keeps running and its next tool hook wakes a cold runtime.
+    const { h, request, hook, fence } = await prepare();
+    await h.adapter.dispose(h.host, h.getSession().id);
+    await h.attachColdRuntime('idle');
+    const launches = h.launches.length;
+    await hook('PreToolUse', { tool_use_id: 'tool-1', tool_name: 'Bash' });
+    expect(h.adapter.status(h.host, h.getSession())).toMatchObject({ phase: 'busy', activeTurn: request.target });
+    expect(await h.adapter.steer(h.host, request)).toEqual({ deferred: true });
+    expect(await hook('PostToolUse', { tool_use_id: 'tool-1' })).toMatchObject({ hookSpecificOutput: { additionalContext: expect.stringContaining(request.input.text) } });
+    expect(fence).toHaveBeenCalledOnce();
+    expect(h.launches).toHaveLength(launches);
+    expect(h.control.pastes).toEqual([]);
+  });
+
   it('does not fail a receipted guidance input when its observer closes but the CLI stays alive', async () => {
     const { h, hook, request, events, runs } = await prepare();
     await hook('PreToolUse', { tool_use_id: 'tool-1', tool_name: 'Bash' });
