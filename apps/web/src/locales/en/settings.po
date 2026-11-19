@@ -141,6 +141,7 @@ msgid "{0} 风格的窗口缩样"
 msgstr "Window thumbnail in the {0} style"
 
 #. placeholder {0}: current.model
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "{0}（提供商里已不可用）"
 msgstr "{0} (unavailable in the provider)"
@@ -338,11 +339,6 @@ msgstr "Android does not hand-write these values: change the source, run the gen
 #: src/app/design/components/NavigationChapter.tsx
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
 msgstr "bg-active, text fg; the caller passes the matching ARIA."
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "CLI · 较慢"
-msgstr "CLI · slower"
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
@@ -2098,6 +2094,10 @@ msgstr "Row selection"
 #: src/app/design/android/notes.ts
 msgid "列表行高 56，分组之间 24"
 msgstr "Rows 56 high, 24 between groups"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "列表里的摘要先画出席位与题目，进度和发言是骨架。"
+msgstr "The summary in the list draws the seats and the question first; progress and speeches are skeletons."
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
@@ -4018,6 +4018,10 @@ msgstr "With action"
 msgid "带改动统计"
 msgstr "With change stats"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
+msgstr "Until the seats are read, the stage stands with the format's opening seats, skeletons where the Agents and models go."
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "常驻"
 msgstr "Persistent"
@@ -4528,6 +4532,10 @@ msgstr "Bottom panel on phone"
 #: src/app/design/components/ActionsChapter.tsx
 msgid "手机面板专用，二到四格。"
 msgstr "Phone panels only, two to four cells."
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "打开 · 读取中"
+msgstr "Opening · loading"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
@@ -6658,7 +6666,6 @@ msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不�
 msgstr "Clears stale timeline caches, old revisions, and duplicate Checkpoints without stopping the service"
 
 #: src/app/design/engineering/PluginsChapter.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
@@ -8310,10 +8317,9 @@ msgstr "Rail attached to the column edge"
 msgid "资源回收"
 msgstr "Resource reclaim"
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "走 CLI 进程启动，较慢"
-msgstr "Launches via CLI process, slower"
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "起始 · 读取中"
+msgstr "Launch · loading"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
@@ -8410,10 +8416,6 @@ msgstr "System"
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "跟随系统的深浅色"
 msgstr "Follow the system appearance"
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "跟随默认"
-msgstr "Follow default"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -8634,6 +8636,10 @@ msgstr "No one yet"
 #: src/app/settings/ServiceCharts.tsx
 msgid "还没有完成的请求"
 msgstr "No completed requests yet"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
+msgstr "No provider with a gateway yet. Add a custom provider under Claude Code, DSH or Codex first."
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "还没有提供商"
@@ -9659,7 +9665,6 @@ msgstr "Default provider"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/AssistantSettingsSection.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx

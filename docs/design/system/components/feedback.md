@@ -186,11 +186,11 @@
 
 ### 用途
 
-数据到达前占住最终尺寸的块，页面不在数据到达时跳动。`components/ui/skeleton.tsx`。统计页与服务状态页用它。
+数据到达前占住最终尺寸的块，页面不在数据到达时跳动。`components/ui/skeleton.tsx`。统计页、服务状态页与模型协作用它；什么时候用骨架、什么时候用转圈见 [模式](../patterns.md) §5.2。
 
 ### 变体与尺寸
 
-没有变体：尺寸与圆角全由 `className` 给（`h-[132px] rounded-2xl`），写成与真实内容同高，窄屏与宽屏各写各的高。底色 `bg-muted` 到 `bg-subtle` 的流光。
+没有变体：尺寸与圆角全由 `className` 给（`h-[132px] rounded-2xl`），写成与真实内容同高，窄屏与宽屏各写各的高。底色是 `bg-active` 到 `bg-hover` 的流光，两者半透明，放在页面上和 `bg-subtle` 面板里都看得出。
 
 ### 状态
 

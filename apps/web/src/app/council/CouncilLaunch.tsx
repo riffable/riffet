@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Segmented, Select } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
+import { Skeleton } from '@/components/ui/skeleton';
 import { IconPlus, IconX } from '@/components/icons';
 import { Composer } from '../session/Composer';
 import { LEAD_ROLES, useCouncilLabels } from './model';
@@ -116,7 +117,9 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
     });
   }, [format, agentKey, listed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const list = seats[format] ?? [];
+  // Until the seats are drafted, the stage stands with the format's opening seats, their Agents and models skeletons.
+  const pending = seats[format] === undefined;
+  const list = seats[format] ?? ROLES[format].flatMap((rule) => Array.from({ length: rule.initial }, (_, i): DraftSeat => ({ key: `pending-${rule.role}-${i}`, role: rule.role })));
   const setList = (next: DraftSeat[]) => setSeats((current) => ({ ...current, [format]: next }));
   const roundCount = rounds[format] ?? (format === 'ld' ? 4 : 3);
   const rhythm = rhythms[format] ?? 'pause';
@@ -157,10 +160,13 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
   const podium = (seat: DraftSeat | undefined, size: 'lg' | 'md', removable = false) => seat && (
     <div key={seat.key} className={cn('relative isolate flex min-w-0 flex-col items-center overflow-hidden rounded-3xl bg-subtle text-center', size === 'lg' ? 'gap-2.5 px-3 pt-5 pb-4 @lg:px-6 @lg:pt-7 @lg:pb-5' : 'gap-2 px-4 pt-5 pb-4')}>
       {seat.model && <Halo backend={seat.model.backendId} />}
-      {seat.model ? <MarkTile backend={seat.model.backendId} size={size} /> : <span className={cn('rounded-2xl bg-bg', size === 'lg' ? 'size-16' : 'size-11')} />}
+      {pending ? <Skeleton className={size === 'lg' ? 'size-16 rounded-2xl' : 'size-11 rounded-xl'} />
+        : seat.model ? <MarkTile backend={seat.model.backendId} size={size} />
+        : <span className={cn('bg-bg', size === 'lg' ? 'size-16 rounded-2xl' : 'size-11 rounded-xl')} />}
       <span className="text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
-      <SeatPicker {...pickerProps(seat)} stage={size} />
-      {seat.role === 'reviewer' && (
+      {pending ? <Skeleton className={size === 'lg' ? 'h-7 w-full max-w-36 rounded-lg' : 'h-6.5 w-full max-w-28 rounded-lg'} /> : <SeatPicker {...pickerProps(seat)} stage={size} />}
+      {seat.role === 'reviewer' && pending && <Skeleton className="mt-1 h-7 w-full max-w-48 rounded-lg" />}
+      {seat.role === 'reviewer' && !pending && (
         <Segmented
           size="xs"
           ariaLabel={t`审阅角度`}
@@ -170,7 +176,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
           options={TASKS.map((task) => ({ value: task, label: labels.task(task) }))}
         />
       )}
-      {removable && remove(seat)}
+      {removable && !pending && remove(seat)}
     </div>
   );
 
@@ -178,14 +184,14 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
   const bench = (seat: DraftSeat | undefined) => seat && (
     <div key={seat.key} className="mx-auto flex w-full max-w-md min-w-0 items-center justify-center gap-2 rounded-2xl bg-subtle px-4 py-2.5">
       <span className="shrink-0 text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
-      <SeatPicker {...pickerProps(seat)} />
+      {pending ? <Skeleton className="h-7 w-full max-w-32 rounded-md" /> : <SeatPicker {...pickerProps(seat)} />}
     </div>
   );
 
   const leadRule = ROLES[format].find((rule) => LEAD_ROLES.has(rule.role));
   const stage = format === 'ld' ? (
     // LD: the two sides face each other, the judge on the bench below.
-    <div className="@container flex flex-col gap-3">
+    <div className="@container flex flex-col gap-3" aria-busy={pending || undefined}>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 @lg:gap-3">
         {podium(list.find((seat) => seat.role === 'pro'), 'lg')}
         <span className="text-center text-base font-extrabold tracking-tight text-fg-4 italic @lg:text-xl" aria-hidden>VS</span>
@@ -194,7 +200,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
       {bench(list.find((seat) => seat.role === 'judge'))}
     </div>
   ) : (
-    <div className="@container flex flex-col gap-3">
+    <div className="@container flex flex-col gap-3" aria-busy={pending || undefined}>
       <div className="grid gap-3 @md:grid-cols-2 @xl:grid-cols-3">
         {ROLES[format].filter((rule) => rule !== leadRule).flatMap((rule) => {
           const ofRole = list.filter((seat) => seat.role === rule.role);
@@ -204,7 +210,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
               <Button
                 key={`add-${rule.role}`}
                 variant="quiet"
-                disabled={busy}
+                disabled={busy || pending}
                 className="h-auto min-h-40 rounded-3xl border border-dashed border-line"
                 onClick={() => {
                   const model = models[list.length % Math.max(1, models.length)];

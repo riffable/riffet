@@ -1,9 +1,10 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { CouncilDiscussion, CouncilEdits, CouncilLedger, CouncilModeration, CouncilPhase, CouncilProbe, CouncilSeat, CouncilSpeech, CouncilSupplement } from '@contracts';
+import type { CouncilDiscussion, CouncilEdits, CouncilSummary, CouncilLedger, CouncilModeration, CouncilPhase, CouncilProbe, CouncilSeat, CouncilSpeech, CouncilSupplement } from '@contracts';
 import { IconArrowRight } from '@/components/icons';
 import { Badge } from '@/components/ui/controls';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tip } from '@/components/ui/tooltip';
 import { agentTint } from '@/lib/backends';
 import { cn } from '@/lib/utils';
@@ -150,7 +151,7 @@ function Momentum({ score, pro, con }: { score: number; pro: CouncilSeat; con: C
 }
 
 /** LD: the two sides facing each other, what each still owes, and how far the debate has come. */
-function Scoreboard({ discussion }: { discussion: CouncilDiscussion }) {
+function Scoreboard({ discussion, pending }: { discussion: CouncilDiscussion; pending?: boolean }) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
   const stages = useStages(discussion);
@@ -178,7 +179,9 @@ function Scoreboard({ discussion }: { discussion: CouncilDiscussion }) {
       {side(pro, false)}
       <div className="col-span-2 row-start-2 flex flex-col items-center gap-3 @2xl:col-span-1 @2xl:col-start-2 @2xl:row-start-1">
         {score !== undefined && pro && con && <Momentum score={score} pro={pro} con={con} />}
-        <Stages stages={stages} />
+        {/* A debate that has paused or ended has been through the judge at least once, so it will have momentum. */}
+        {pending && (discussion.status === 'paused' || discussion.status === 'done') && <Skeleton className="h-7.5 w-60 rounded-md max-sm:w-48" />}
+        {pending ? <StagesSkeleton /> : <Stages stages={stages} />}
       </div>
       {side(con, true)}
     </div>
@@ -186,7 +189,7 @@ function Scoreboard({ discussion }: { discussion: CouncilDiscussion }) {
 }
 
 /** Every other format: who takes part, and how far the discussion has come. */
-function Cast({ discussion }: { discussion: CouncilDiscussion }) {
+function Cast({ discussion, pending }: { discussion: CouncilDiscussion; pending?: boolean }) {
   const labels = useCouncilLabels();
   const stages = useStages(discussion);
   const members = discussion.seats.filter((seat) => !LEAD_ROLES.has(seat.role));
@@ -205,15 +208,20 @@ function Cast({ discussion }: { discussion: CouncilDiscussion }) {
         ))}
       </ul>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-line pt-4">
-        <Stages stages={stages} />
+        {pending ? <StagesSkeleton /> : <Stages stages={stages} />}
         {moderation && <Convergence value={moderation.convergence} />}
       </div>
     </div>
   );
 }
 
+/** Where the progress goes while the discussion is read: as tall as the stages, which wait on its round. */
+function StagesSkeleton() {
+  return <Skeleton className="h-6 w-48 rounded-md" />;
+}
+
 /** The question itself, under the stage, with the format and who leads it. */
-function Headline({ discussion }: { discussion: CouncilDiscussion }) {
+function Headline({ discussion, pending }: { discussion: CouncilDiscussion; pending?: boolean }) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
   const lead = discussion.seats.find((seat) => LEAD_ROLES.has(seat.role));
@@ -223,7 +231,10 @@ function Headline({ discussion }: { discussion: CouncilDiscussion }) {
   const value = discussion.maxRounds;
   return (
     <header className="flex flex-col items-center gap-2 text-center">
-      <h1 className={cn('max-w-2xl whitespace-pre-wrap text-balance text-fg', long ? 'text-base font-medium leading-7' : 'text-xl font-semibold')}>{title}</h1>
+      {/* Before a review is read its document's title is not known; the summary's is the document's first line. */}
+      {pending && discussion.format === 'review'
+        ? <Skeleton className="h-7 w-full max-w-56 rounded-lg" />
+        : <h1 className={cn('max-w-2xl whitespace-pre-wrap text-balance text-fg', long ? 'text-base font-medium leading-7' : 'text-xl font-semibold')}>{title}</h1>}
       <p className="flex flex-wrap items-center justify-center gap-x-1.5 text-xs text-fg-3">
         <span>{labels.format(discussion.format)}</span>
         {rounds && <span>· {t`最多 ${value} 轮`}</span>}
@@ -443,6 +454,56 @@ export function CouncilStage({ discussion, rows, onLoadRows, onToggleEdit }: {
       {/* A document under review is read in full; a question is the headline. */}
       {discussion.format === 'review' && <div className="timeline-gap-turn"><UserMessage text={prompt} attachments={NO_ATTACHMENTS} time={discussion.createdAt} /></div>}
       {blocks.map(block)}
+    </div>
+  );
+}
+
+/** A discussion as its summary in the list has it: who sits where and the question, nothing said yet. */
+function shellOf(summary: CouncilSummary): CouncilDiscussion {
+  return {
+    ...summary, topic: summary.title, round: 0, version: 0, speeches: [], supplements: [],
+    seats: summary.seats.map((seat, at) => ({ ...seat, id: `seat-${at}`, profileName: '' })),
+  };
+}
+
+/**
+ * The stage while a discussion is read, drawn from its summary: the seats, the question and the format as they will
+ * be, the progress and the first round's speeches as skeletons in their places.
+ */
+export function CouncilStageSkeleton({ summary }: { summary: CouncilSummary }) {
+  const shell = useMemo(() => shellOf(summary), [summary]);
+  const members = shell.seats.filter((seat) => !LEAD_ROLES.has(seat.role));
+  const lines = (
+    <div className="flex flex-col gap-2.5">
+      <Skeleton className="h-4 w-full rounded-md" />
+      <Skeleton className="h-4 w-11/12 rounded-md" />
+      <Skeleton className="h-4 w-2/3 rounded-md" />
+    </div>
+  );
+  const columns = members.length >= 3 ? '@2xl:grid-cols-2 @3xl:grid-cols-3' : members.length === 2 ? '@2xl:grid-cols-2' : '';
+  return (
+    <div className="@container flex flex-col" aria-busy>
+      {shell.format === 'ld' ? <Scoreboard discussion={shell} pending /> : <Cast discussion={shell} pending />}
+      <div className="mt-8"><Headline discussion={shell} pending /></div>
+      <div className="timeline-gap-turn flex items-center gap-3">
+        <span aria-hidden className="h-px flex-1 bg-line" />
+        <Skeleton className="h-4.5 w-20 rounded-md" />
+        <span aria-hidden className="h-px flex-1 bg-line" />
+      </div>
+      {shell.format === 'ld' ? (
+        <div className="timeline-gap-block grid gap-y-8 @2xl:grid-cols-2">
+          {[0, 1].map((side) => (
+            <div key={side} className={cn('flex flex-col gap-3', side === 0 ? '@2xl:pr-6' : '@2xl:border-l @2xl:border-line @2xl:pl-6')}>
+              <Skeleton className="h-5 w-40 rounded-md" />
+              {lines}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className={cn('timeline-gap-block grid items-start gap-3', columns)}>
+          {members.map((seat) => <Skeleton key={seat.id} className="h-40 rounded-3xl" />)}
+        </div>
+      )}
     </div>
   );
 }

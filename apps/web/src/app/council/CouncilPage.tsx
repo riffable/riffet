@@ -16,7 +16,7 @@ import { CouncilAside } from './CouncilAside';
 import { CouncilExportDialog } from './CouncilExportDialog';
 import { CouncilLaunch } from './CouncilLaunch';
 import { CouncilAsideNav, CouncilHistoryMenu } from './CouncilNav';
-import { CouncilStage } from './CouncilStage';
+import { CouncilStage, CouncilStageSkeleton } from './CouncilStage';
 import { conclusionOf, useCouncilLabels } from './model';
 import { useCouncilDiscussion } from './useCouncilDiscussion';
 
@@ -184,6 +184,8 @@ export function CouncilPage({
   };
 
   const active = discussion && discussion.id === activeId ? discussion : undefined;
+  // While a discussion is read, its summary in the list already says what the page will show.
+  const reading = !active && activeId ? items.find((item) => item.id === activeId) : undefined;
   const concluded = active ? Boolean(conclusionOf(active)) : false;
   const tokens = active?.speeches.reduce((sum, s) => sum + (s.metrics?.outputTokens ?? 0), 0) ?? 0;
   const noting = active && active.format !== 'review' && active.status !== 'done';
@@ -192,17 +194,17 @@ export function CouncilPage({
     <PageScaffold
       title={(
         <span className="inline-flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{active ? active.title : t`模型协作`}</span>
+          <span className="truncate">{active?.title ?? reading?.title ?? t`模型协作`}</span>
           <CouncilHistoryMenu items={items} activeId={activeId} onSelect={select} />
         </span>
       )}
-      meta={active ? (
+      meta={active || reading ? (
         <span className="inline-flex items-center gap-2">
-          <Badge>{labels.format(active.format)}</Badge>
+          <Badge>{labels.format((active ?? reading)!.format)}</Badge>
           {tokens > 0 && <span className="text-xs tabular-nums text-fg-3 max-md:hidden">{compactCount(tokens)} tokens</span>}
         </span>
       ) : undefined}
-      actions={active ? (
+      actions={active || reading ? (
         <>
           {concluded && (
             <>
@@ -232,7 +234,15 @@ export function CouncilPage({
       {!activeId ? (
         <CouncilLaunch backends={seatBackends ?? backends} recent={listed && seatsRead ? items : undefined} onCreate={create} onOpenProviderSettings={onOpenProviderSettings} onError={(message) => toast.error(message)} />
       ) : !active ? (
-        <div className="grid h-40 place-items-center"><Spinner /></div>
+        reading ? (
+          // The same column as the discussion's, the aside's place kept, so nothing moves once it is read.
+          <div className="flex min-h-full">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="mx-auto w-full max-w-(--content-width) flex-1 px-3 pt-6 pb-8 sm:px-4 sm:pt-8 md:px-12"><CouncilStageSkeleton summary={reading} /></div>
+            </div>
+            {asideOpen && <div className="w-[248px] shrink-0 max-xl:hidden" />}
+          </div>
+        ) : <div className="grid h-40 place-items-center"><Spinner /></div>
       ) : (
         <div className="flex min-h-full">
           <div className="flex min-w-0 flex-1 flex-col">

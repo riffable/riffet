@@ -141,6 +141,7 @@ msgid "{0} 风格的窗口缩样"
 msgstr ""
 
 #. placeholder {0}: current.model
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "{0}（提供商里已不可用）"
 msgstr ""
@@ -337,11 +338,6 @@ msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
-msgstr ""
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "CLI · 较慢"
 msgstr ""
 
 #: src/app/settings/AgentSettingsSection.tsx
@@ -2097,6 +2093,10 @@ msgstr ""
 
 #: src/app/design/android/notes.ts
 msgid "列表行高 56，分组之间 24"
+msgstr ""
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "列表里的摘要先画出席位与题目，进度和发言是骨架。"
 msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
@@ -4018,6 +4018,10 @@ msgstr ""
 msgid "带改动统计"
 msgstr ""
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "常驻"
 msgstr ""
@@ -4527,6 +4531,10 @@ msgstr ""
 
 #: src/app/design/components/ActionsChapter.tsx
 msgid "手机面板专用，二到四格。"
+msgstr ""
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "打开 · 读取中"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -6658,7 +6666,6 @@ msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不�
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
@@ -8310,9 +8317,8 @@ msgstr ""
 msgid "资源回收"
 msgstr ""
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "走 CLI 进程启动，较慢"
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "起始 · 读取中"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -8409,10 +8415,6 @@ msgstr ""
 
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "跟随系统的深浅色"
-msgstr ""
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "跟随默认"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -8633,6 +8635,10 @@ msgstr ""
 
 #: src/app/settings/ServiceCharts.tsx
 msgid "还没有完成的请求"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
 msgstr ""
 
 #: src/app/settings/AgentSettingsSection.tsx
@@ -9659,7 +9665,6 @@ msgstr ""
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/AssistantSettingsSection.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx

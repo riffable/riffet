@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { CouncilDiscussion, CouncilSeat, TimelineRow } from '@contracts';
+import type { CouncilDiscussion, CouncilSeat, CouncilSummary, TimelineRow } from '@contracts';
 import type { SpeechRows } from '@/app/council/model';
-import { CouncilStage } from '@/app/council/CouncilStage';
+import { CouncilStage, CouncilStageSkeleton } from '@/app/council/CouncilStage';
 import { CouncilControls } from '@/app/council/CouncilPage';
+import { CouncilLaunch } from '@/app/council/CouncilLaunch';
 import { Chapter, Frame, Plate } from '../specimen';
 
 const seat = (id: string, role: CouncilSeat['role'], backendId: CouncilSeat['model']['backendId'], model: string): CouncilSeat =>
@@ -100,6 +101,10 @@ export function CouncilChapter() {
     s1: [row('t1', 1, { kind: 'thought', text: t`先确定论证负担：要证明 Web 优先在首版的成本与覆盖上都更优。`, channel: 'thinking' })],
     live: [row('t2', 1, { kind: 'thought', text: t`对方的质询要先正面回答。`, channel: 'thinking' })],
   }), [t]);
+  const summary = (d: CouncilDiscussion): CouncilSummary => ({
+    id: d.id, format: d.format, title: d.title, status: d.status, createdAt: d.createdAt, updatedAt: d.updatedAt, maxRounds: d.maxRounds, rhythm: d.rhythm,
+    seats: d.seats.map(({ role, model, task }) => ({ role, model, ...(task ? { task } : {}) })),
+  });
   const frame = (d: CouncilDiscussion, controls = false) => (
     <Frame className="px-6 py-8 max-md:px-4">
       <div className="mx-auto max-w-(--content-width)">
@@ -110,10 +115,16 @@ export function CouncilChapter() {
   );
   return (
     <Chapter title={t`模型协作`} tone="canvas" lede={t`几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。`} source="apps/web/src/app/council/CouncilPage.tsx">
-      <Plate number={1} title={t`1v1 辩论`} note={t`质询从发言里分出来，按裁判的记录标出回答情况。`}>{frame(paused, true)}</Plate>
-      <Plate number={2} title={t`发言中`}>{frame(live)}</Plate>
-      <Plate number={3} title={t`圆桌讨论`} note={t`失败的发言写明原因后跳过。`}>{frame(roundtable, true)}</Plate>
-      <Plate number={4} title={t`多视角`}>{frame(prism)}</Plate>
+      <Plate number={1} title={t`起始 · 读取中`} note={t`席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。`}>
+        <Frame className="py-8"><CouncilLaunch backends={[]} recent={undefined} onCreate={async () => false} onOpenProviderSettings={() => {}} onError={() => {}} /></Frame>
+      </Plate>
+      <Plate number={2} title={t`打开 · 读取中`} note={t`列表里的摘要先画出席位与题目，进度和发言是骨架。`}>
+        <Frame className="px-6 py-8 max-md:px-4"><div className="mx-auto max-w-(--content-width)"><CouncilStageSkeleton summary={summary(paused)} /></div></Frame>
+      </Plate>
+      <Plate number={3} title={t`1v1 辩论`} note={t`质询从发言里分出来，按裁判的记录标出回答情况。`}>{frame(paused, true)}</Plate>
+      <Plate number={4} title={t`发言中`}>{frame(live)}</Plate>
+      <Plate number={5} title={t`圆桌讨论`} note={t`失败的发言写明原因后跳过。`}>{frame(roundtable, true)}</Plate>
+      <Plate number={6} title={t`多视角`}>{frame(prism)}</Plate>
     </Chapter>
   );
 }

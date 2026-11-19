@@ -141,6 +141,7 @@ msgid "{0} 风格的窗口缩样"
 msgstr "{0} 风格的窗口缩样"
 
 #. placeholder {0}: current.model
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "{0}（提供商里已不可用）"
 msgstr "{0}（提供商里已不可用）"
@@ -338,11 +339,6 @@ msgstr "Android 不手写这些值：改源文件，运行生成器，再用 --c
 #: src/app/design/components/NavigationChapter.tsx
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
 msgstr "bg-active，文字 fg；调用方传对应的 ARIA。"
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "CLI · 较慢"
-msgstr "CLI · 较慢"
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
@@ -2098,6 +2094,10 @@ msgstr "列表行的选中面"
 #: src/app/design/android/notes.ts
 msgid "列表行高 56，分组之间 24"
 msgstr "列表行高 56，分组之间 24"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "列表里的摘要先画出席位与题目，进度和发言是骨架。"
+msgstr "列表里的摘要先画出席位与题目，进度和发言是骨架。"
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
@@ -4018,6 +4018,10 @@ msgstr "带操作"
 msgid "带改动统计"
 msgstr "带改动统计"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
+msgstr "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "常驻"
 msgstr "常驻"
@@ -4528,6 +4532,10 @@ msgstr "手机上的底部面板"
 #: src/app/design/components/ActionsChapter.tsx
 msgid "手机面板专用，二到四格。"
 msgstr "手机面板专用，二到四格。"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "打开 · 读取中"
+msgstr "打开 · 读取中"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
@@ -6658,7 +6666,6 @@ msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不�
 msgstr "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
 
 #: src/app/design/engineering/PluginsChapter.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
@@ -8310,10 +8317,9 @@ msgstr "贴在列边缘的导轨"
 msgid "资源回收"
 msgstr "资源回收"
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-#: src/app/settings/QuickChatSection.tsx
-msgid "走 CLI 进程启动，较慢"
-msgstr "走 CLI 进程启动，较慢"
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "起始 · 读取中"
+msgstr "起始 · 读取中"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
@@ -8410,10 +8416,6 @@ msgstr "跟随系统"
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "跟随系统的深浅色"
 msgstr "跟随系统的深浅色"
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "跟随默认"
-msgstr "跟随默认"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -8634,6 +8636,10 @@ msgstr "还没有人"
 #: src/app/settings/ServiceCharts.tsx
 msgid "还没有完成的请求"
 msgstr "还没有完成的请求"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
+msgstr "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "还没有提供商"
@@ -9659,7 +9665,6 @@ msgstr "默认提供商"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/AssistantSettingsSection.tsx
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx

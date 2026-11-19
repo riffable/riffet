@@ -3482,7 +3482,8 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
   border-radius: 8px;
 }
 .ui-skeleton {
-  background: linear-gradient(100deg, var(--bg-muted) 30%, var(--bg-subtle) 50%, var(--bg-muted) 70%);
+  /* Translucent tones, so a placeholder reads on the page and on a bg-subtle panel alike. */
+  background: linear-gradient(100deg, var(--bg-active) 30%, var(--bg-hover) 50%, var(--bg-active) 70%);
   background-size: 200% 100%;
   /* motion-loop: loading placeholder shimmer */
   animation: ui-skeleton 1.4s ease-in-out infinite;
