@@ -12,19 +12,22 @@ const pdfRoot = dirname(require.resolve('pdfjs-dist/package.json'));
 export async function buildPreviewAssets(directory: string): Promise<Metafile> {
   const { build } = await import('esbuild');
   const source = root ?? process.cwd();
-  const worker = await readFile(join(pdfRoot, 'legacy/build/pdf.worker.min.mjs'), 'utf8');
   await mkdir(directory, { recursive: true });
   const { metafile } = await build({
-    entryPoints: { pdf: join(source, 'apps/server/src/previews/browser-pdf.ts'), model: join(source, 'apps/server/src/previews/browser-model.ts') },
+    entryPoints: {
+      pdf: join(source, 'apps/server/src/previews/browser-pdf.ts'),
+      model: join(source, 'apps/server/src/previews/browser-model.ts'),
+      structured: join(source, 'apps/server/src/previews/browser-structured.ts'),
+    },
     outdir: directory, bundle: true, platform: 'browser', format: 'iife', target: ['chrome110', 'safari16.4'],
-    minify: true, legalComments: 'eof', metafile: true, define: { __RIFFET_PDF_WORKER__: JSON.stringify(worker) },
+    minify: true, legalComments: 'eof', metafile: true,
   });
   return metafile;
 }
 
 let building: Promise<Metafile> | undefined;
 const browserScripts = new Map<string, Promise<string>>();
-export function browserScript(kind: 'pdf' | 'model'): Promise<string> {
+export function browserScript(kind: 'pdf' | 'model' | 'structured'): Promise<string> {
   let pending = browserScripts.get(kind);
   if (!pending) {
     pending = (async () => {

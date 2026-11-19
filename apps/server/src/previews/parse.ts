@@ -5,6 +5,8 @@ export interface PreviewFragment {
   body: string;
   styles?: string;
   scripts?: string[];
+  asset?: 'structured';
+  data?: unknown;
   /** Image paths are resolved by the parent process, never by the parser worker. */
   images?: { token: string; sources: string[] }[];
 }

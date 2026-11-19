@@ -1,6 +1,9 @@
-import { getDocument, GlobalWorkerOptions, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, TextLayer, type PDFDocumentProxy, type PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import * as pdfjsWorker from 'pdfjs-dist/legacy/build/pdf.worker.mjs';
 
-declare const __RIFFET_PDF_WORKER__: string;
+// Preview documents run under `sandbox allow-scripts` with an opaque origin, where Chromium blocks `blob:` Web Workers.
+// Exposing `pdfjsWorker` lets pdf.js use its built-in in-process `LoopbackPort` transport directly.
+(globalThis as { pdfjsWorker?: typeof pdfjsWorker }).pdfjsWorker = pdfjsWorker;
 
 type PreviewData = {
   data: string;
@@ -48,9 +51,6 @@ async function main() {
   status.style.background = payload.theme.background;
   status.textContent = payload.name;
   root.append(status);
-  const workerURL = URL.createObjectURL(new Blob([__RIFFET_PDF_WORKER__], { type: 'text/javascript' }));
-  const worker = new Worker(workerURL, { type: 'module' });
-  GlobalWorkerOptions.workerPort = worker;
   class EmbeddedBinaryDataFactory {
     async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
       const data = kind === 'cMapUrl' ? payload.assets?.cmaps?.[filename] : kind === 'standardFontDataUrl' ? payload.assets?.standardFonts?.[filename] : undefined;
@@ -71,7 +71,7 @@ async function main() {
   loading.onPassword = () => { locked = true; status.textContent = '此 PDF 需要密码，请下载后打开'; void loading.destroy(); };
   let pdf: PDFDocumentProxy;
   try { pdf = await loading.promise; }
-  catch (error) { worker.terminate(); URL.revokeObjectURL(workerURL); if (locked) return; throw error; }
+  catch (error) { if (locked) return; throw error; }
   const count = Math.min(pdf.numPages, MAX_PAGES);
   status.textContent = pdf.numPages > MAX_PAGES ? `${pdf.numPages} 页 · 预览前 ${MAX_PAGES} 页` : `${pdf.numPages} 页`;
   const first = await pdf.getPage(1);
@@ -149,7 +149,7 @@ async function main() {
       if (state.visible) chain = chain.then(() => render(state));
     }
   }).observe(root);
-  addEventListener('pagehide', () => { observer.disconnect(); for (const state of pages) state.dispose?.(); void loading.destroy(); worker.terminate(); URL.revokeObjectURL(workerURL); }, { once: true });
+  addEventListener('pagehide', () => { observer.disconnect(); for (const state of pages) state.dispose?.(); void loading.destroy(); }, { once: true });
 }
 
 void main().catch(error => {

@@ -11,7 +11,7 @@ import { contentPreviewPage } from './content.js';
 import { escapeHtml, inlineScript, previewDocument, previewTheme, scriptHash, scriptJson, type PreviewTheme, type PreviewQuery } from './document.js';
 import { decodePreviewText, diagramLanguage, extensionOf, MAX_PREVIEW_FILE_BYTES, previewKind, type PreviewKind } from './formats.js';
 
-type Parsed = { body: string; styles?: string; scripts?: string[]; images?: { token: string; sources: string[] }[] };
+type Parsed = { body: string; styles?: string; scripts?: string[]; asset?: 'structured'; data?: unknown; images?: { token: string; sources: string[] }[] };
 type Input = { data: Uint8Array; name: string; kind: PreviewKind; theme: PreviewTheme; databasePath?: string };
 const MAX_CONCURRENT = 2, MAX_QUEUED = 8;
 let active = 0;
@@ -156,6 +156,7 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
     result.body = result.body.replace(/riffet-preview-image-[a-f0-9]{32}/g, token => embeddedByToken.get(token) ?? 'data:,');
   }
   const scripts = [...(result.scripts ?? [])];
+  if (result.asset) scripts.push(await browserScript(result.asset));
   if (kind === 'markdown' || kind === 'notebook') {
     const aliases: Record<string, string> = { mermaid: 'mermaid', mmd: 'mermaid', dot: 'dot', graphviz: 'dot', gv: 'dot', plantuml: 'plantuml', puml: 'plantuml', uml: 'plantuml', wsd: 'plantuml', d2: 'd2', vega: 'vega', 'vega-lite': 'vega', vegalite: 'vega', vl: 'vega' };
     const engines = [...new Set([...result.body.matchAll(/<code\b[^>]*class="language-([\w-]+)"/gi)].map(match => aliases[match[1]!.toLowerCase()]).filter(Boolean))];
@@ -165,7 +166,7 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
     }
   }
   const styles = (result.body.includes('class="katex') ? await mathStyles() : '') + (result.styles ?? '');
-  const page = previewDocument(result.body, theme, scripts, styles, name);
+  const page = previewDocument(result.body, theme, scripts, styles, name, result.data);
   if (Buffer.byteLength(page.html) > MAX_PREVIEW_FILE_BYTES) throw new AppError('PREVIEW_TOO_LARGE', 'Rendered preview exceeds the 32 MB limit; download the original file', 413, undefined, { limit: '32 MB' });
   return page;
 }

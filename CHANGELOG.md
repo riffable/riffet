@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- PDF file previews in the Files panel, message attachments, and shared links now render pages instead of stalling on the file name.
 - On the web, row hover and keyboard focus highlights inside rounded cards (Settings groups, provider cards, Automations lists, and Extension file lists) now clip cleanly to the card's rounded corners.
 - Reading an in-progress reply on the web no longer jumps or flashes when the turn finishes and its process block folds above the viewport, including when scrolling back up past the folded block or manually collapsing a tall block near the end of a conversation.
 - On the web, a newly started turn (such as one woken by a background task) sits cleanly below the previous answer's footer instead of crowding into it, and no longer reuses the finished turn's timer or speed before its first row arrives.
@@ -44,6 +45,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- JSON, JSONL, YAML, TOML, and XML file previews now feature syntax coloring, inline collapsed summaries, live search filtering, expandable multi-line strings, formatted source with line numbers, and a table plus record-inspector split view for JSONL and object arrays.
 - Settings › About Riffet now includes a link to the Riffet GitHub repository (`riffable/riffet`) across Web, Mac, iPhone, and Android.
 - Auxiliary models now prioritize low latency and transparency: Settings › Auxiliary models adds a dedicated "Default model" decoupled from Quick chat, marks slow CLI-process models, disables thinking across protocols, caches short-lived auth credentials, streams message/selection translations and handoff previews, generates session titles as soon as the first turn starts running, and adds an API benchmark dialog, a "Prompt & logs" inspector, and a categorized model leaderboard on Stats (Short jobs, Streaming, Long context, Agent chat).
 - On the web, the context usage popover now includes a "Compact context" action at the bottom for Agents that support manual compaction (Cursor, Claude Code, and Codex), triggering each Agent's native compaction command without disturbing your draft.
