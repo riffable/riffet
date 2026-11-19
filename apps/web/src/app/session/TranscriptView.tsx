@@ -37,7 +37,7 @@ import { NativeJobStoreContext } from './subagents';
 import { isComposingKey } from './composerKeyboard';
 import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
 import { POS_STEP } from '../../../../../packages/timeline/src/rows';
-import { truncationOf } from '@/sync/rows';
+import { laneTurnOf, truncationOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
 import { useViewPrefs, type ProcessFoldTiming } from './viewPrefs';
@@ -426,7 +426,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
  * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
  * whose answer actually changed, instead of invalidating the shared context for all of them.
  */
-const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
+const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; slot: string; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
   const resources = useTranscriptResources();
   const remembered = useContext(RememberedValues);
@@ -448,7 +448,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const runCovered = new Set([...runs].flatMap(([start, end]) => Array.from({ length: end - start - 1 }, (_, offset) => start + 1 + offset)));
     const lastTime = timelineItemTime(items[lastOutputIndex]!);
     return (
-      <div ref={attach} data-row-key={row.key} className={cn(
+      <div ref={attach} data-row-key={row.key} data-row-slot={slot} className={cn(
         // `-mx-2` widens the row by the turn header's own padding so the icon stays on the text
         // column; `TurnProcess` cancels it for the expanded contents.
         '-mx-2 min-w-0',
@@ -522,7 +522,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   if (row.type === 'trigger') {
     return (
-      <div ref={attach} data-row-key={row.key} className={cn('-ml-1.5 min-w-0 pl-1.5', row.gap)}>
+      <div ref={attach} data-row-key={row.key} data-row-slot={slot} className={cn('-ml-1.5 min-w-0 pl-1.5', row.gap)}>
         <TurnTriggerBlock notices={row.notices} root={context.root} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
       </div>
     );
@@ -548,6 +548,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     <div
       ref={attach}
       data-row-key={item.key}
+      data-row-slot={slot}
       data-turn={item.kind === 'user' ? item.key : undefined}
       // `-ml-1.5 pl-1.5` widens the row by 6px on the left without moving its content, matching
       // the footer's outward action pill.
@@ -1254,7 +1255,26 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   }, [timeline, timelineVersion, running, metricsByRun, activeTurnId, turnStatusByTurn, selectionRevision]);
   // Flat, not one parent per turn: older history or a settled slash command can move a turn's
   // boundary, and a row re-parented that way would remount and drop its expanded state.
-  const rowsAll = useMemo(() => rowTurns.flatMap((turn) => turn.rows), [rowTurns]);
+  // Each row also gets a deterministic turn-scoped slot (`turnId:kind:ordinal`) so reading anchors
+  // survive a provisional live draft being replaced by its committed row under a new key.
+  const { rowsAll, slotByKey } = useMemo(() => {
+    const rows: TranscriptRow[] = [];
+    const slots = new Map<string, string>();
+    for (const turn of rowTurns) {
+      const first = turn.rows[0];
+      const firstItem = !first ? undefined : first.type === 'item' ? first.item : first.type === 'process' ? first.items[0] : first.notices[0];
+      const turnId = (firstItem ? laneTurnOf(firstItem) : undefined) ?? turn.key;
+      const counts = new Map<string, number>();
+      for (const row of turn.rows) {
+        rows.push(row);
+        const kind = row.type === 'item' ? row.item.kind : row.type;
+        const ordinal = counts.get(kind) ?? 0;
+        counts.set(kind, ordinal + 1);
+        slots.set(row.key, `${turnId}:${kind}:${ordinal}`);
+      }
+    }
+    return { rowsAll: rows, slotByKey: slots };
+  }, [rowTurns]);
   latestTurn.current = rowTurns.at(-1)?.rows[0]?.key;
   if (heightsSession.current.sessionId !== sessionId || heightsSession.current.resetVersion !== resetVersion) {
     heights.current.clear();
@@ -1357,6 +1377,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     <RememberedScope.Provider key={row.key} value={row.key}>
       <TranscriptRowView
         row={row}
+        slot={slotByKey.get(row.key) ?? row.key}
         highlighted={highlight === row.key}
         reveal={reveal?.row === row.key ? reveal : undefined}
         actionPending={row.type === 'item' && row.item.kind === 'user' && row.item.run ? runActionPending?.(row.item.run) ?? false : false}

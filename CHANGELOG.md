@@ -16,6 +16,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - In Claude Code conversations, adding a message to the current task now works after Riffet restarts in the middle of a turn; when a message can't be added, you're told it was queued as the next message instead of it silently returning to the queue.
 - The conversation outline no longer lists a queued message again each time it is withdrawn or replaced; previously the extra entries stayed until the page was reloaded (Web, Android, iOS).
 - In Claude Code conversations, a table in a reply that is still streaming now shows as a table instead of box-drawing text in a code block.
+- Reading partway through a long streaming reply on the web no longer shifts when the reply finishes and replaces its live draft or re-parses Markdown above the viewport.
 
 ## 0.9.0 - 2026-11-19
 
