@@ -4,6 +4,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Fixes
+
+- After a gateway plugin such as AsterGate is turned off or uninstalled, providers that use it keep working with their own address and key instead of failing to load models; only its quota stops showing.
+
 ## 0.9.0 - 2026-11-19
 
 ### Upgrade notes

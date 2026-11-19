@@ -8,7 +8,7 @@ import type { TerminalLaunchEnv } from '../terminal/service.js';
 import { validateNativeModelApiProtocol, validateNativeModelSource, validateNativeProfileEndpoint } from '../settings/index.js';
 import { piProviderModels } from './pi/provider.js';
 import { fetchGatewayModels } from './shared/gateway-models.js';
-import { modelSourceOf, modelSourceProvider, modelSourceRole, prepareSource, sourceCatalog, sourceUsage } from './shared/model-source.js';
+import { modelSourceOf, modelSourceProvider, modelSourceRole, prepareSource, savedModelSourceOf, sourceCatalog, sourceUsage } from './shared/model-source.js';
 import { modelFamily, parseNativeModelSelection } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { FreshCache } from './shared/fresh-cache.js';
@@ -505,7 +505,8 @@ export class BackendCatalog {
     const selectedProfileId = session ? this.sessionProfile(session).id : profileId;
     const profile = selectedProfileId ? profiles.find(item => item.id === selectedProfileId) : profiles.find(item => item.isDefault) ?? profiles[0];
     if (!profile || (profileId && profile.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
-    const source = modelSourceOf(profile.config);
+    // A saved source that nothing provides shows no quota rather than the CLI login's, even where launches fall back.
+    const source = savedModelSourceOf(profile.config);
     if (source ? !modelSourceProvider(source) : !driver.usage) return undefined;
     const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
     let read = this.usageReads.get(key);
@@ -588,8 +589,9 @@ export class BackendCatalog {
     const normalize = profile ? modelNormalizer(driver, profile) : (id: string) => id;
     // A blank key means "reuse what is already saved" so re-fetching does not force a retype.
     const storedConfig = input.profileId ? this.options.profiles?.getConfig(backendId, input.profileId) : undefined;
-    const storedSource = modelSourceOf(storedConfig ?? {});
-    const storedApiConnection = !storedSource || modelSourceRole(storedSource) === 'adapter';
+    const storedSource = savedModelSourceOf(storedConfig ?? {});
+    // A saved adapter nothing provides any more is the plain API connection it was layered on.
+    const storedApiConnection = !modelSourceOf(storedConfig ?? {}) || modelSourceRole(storedSource!) === 'adapter';
     const targetApiConnection = !input.modelSource || Boolean(modelSourceProvider(input.modelSource)) && modelSourceRole(input.modelSource) === 'adapter';
     // Changing a gateway adapter keeps the same connection. A type change must not forward its key
     // to a different address or to a source that supplies its own connection/credentials.
@@ -602,8 +604,10 @@ export class BackendCatalog {
     const apiKey = input.apiKey?.trim() || stored;
     // A source answers for itself, with its own endpoint and credential; the form only has to say
     // which one, which is what lets a source with no typed address be probed at all.
-    if (input.modelSource) {
-      const source = validateNativeModelSource(input.modelSource);
+    // An adapter nothing provides is probed as the plain API connection it was layered on, as launches use it.
+    const probedSource = input.modelSource ? modelSourceOf({ modelSource: validateNativeModelSource(input.modelSource), apiEndpoint: input.apiEndpoint }) : undefined;
+    if (probedSource) {
+      const source = probedSource;
       await prepareSource({ modelSource: source, ...(apiKey ? { apiKey } : {}), ...(input.apiEndpoint ? { apiEndpoint: input.apiEndpoint } : {}) });
       if (!modelSourceProvider(source)) throw new AppError('INVALID_BACKEND_PROFILE', 'This model source is not available on this server');
       const consumes = driver.traits?.consumesProtocols ?? [];

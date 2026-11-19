@@ -11,7 +11,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AppSettings, PluginAction, ModelContextWindows, ModelInfo, ModelInputModalities, ModelSourceDescriptor, NativeBackendId, NativeBackendProfileSettings, NativeBackendProfileSettingsUpdate, NativeModelApiProtocol, NativeModelSource } from '@contracts';
+import type { AppSettings, PluginAction, ModelContextWindows, ModelInfo, ModelInputModalities, ModelSourceDescriptor, NativeBackendId, NativeBackendProfileSettings, NativeBackendProfileSettingsUpdate, NativeModelApiProtocol, NativeModelSource, PluginDescriptor } from '@contracts';
 import { AgentMark } from '@/components/agent-marks';
 import { IconArrowLeft, IconChevronRight, IconPlus, IconRefreshCw, IconSave, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -136,12 +136,22 @@ function shortLabel(id: NativeBackendId): string {
 }
 
 /**
+ * Mirrors the server's `modelSourceOf`: a saved gateway adapter nothing provides runs as the profile's own API
+ * connection. An uninstalled plugin leaves no declaration behind, so an unknown source falls back too.
+ */
+function runsAsApi(profile: Pick<NativeBackendProfileSettings, 'modelSource' | 'apiEndpoint'> | undefined, plugins: PluginDescriptor[] | undefined): boolean {
+  if (!plugins || !profile?.modelSource || !profile.apiEndpoint?.trim()) return false;
+  const declared = plugins.flatMap((plugin) => plugin.contributes.modelSources ?? []).find((item) => item.id === profile.modelSource);
+  return !declared || declared.role === 'adapter';
+}
+
+/**
  * `sources` is undefined until the plugins load; only then can a saved source be called
  * unavailable, which happens when the plugin providing it is off or not on this server.
  */
-function summarize(profile: NativeBackendProfileSettings, sources: ModelSourceEntry[] | undefined): string {
+function summarize(profile: NativeBackendProfileSettings, sources: ModelSourceEntry[] | undefined, plugins: PluginDescriptor[] | undefined): string {
   const source = profile.modelSource ? sources?.find((entry) => entry.source.id === profile.modelSource) : undefined;
-  const where = profile.modelSource
+  const where = profile.modelSource && !(!source && runsAsApi(profile, plugins))
     ? source?.source.label ?? (sources ? `${profile.modelSource} · ${i18n._(msg`不可用`)}` : profile.modelSource)
     : profile.apiEndpoint || i18n._(msg`${shortLabel(profile.backendId)} CLI 自带登录`);
   const models = profile.enabledModels ? i18n._(msg`${profile.enabledModels.length} 个模型`) : i18n._(msg`全部模型`);
@@ -386,7 +396,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
   const sources = plugins ? modelSourcesFor(plugins, backendId, consumes) : undefined;
   const sourceEntry = (choice: SourceChoice) => sources?.find((entry) => entry.source.id === choice);
   const knownSource = (choice: SourceChoice) => plugins?.flatMap((plugin) => plugin.contributes.modelSources ?? []).find((item) => item.id === choice);
-  const isApi = (choice: SourceChoice) => choice === 'custom' || knownSource(choice)?.role === 'adapter';
+  const isApi = (choice: SourceChoice) => choice === 'custom' || knownSource(choice)?.role === 'adapter' || (choice === open?.modelSource && runsAsApi(open, plugins));
   const savedSource = open?.modelSource ?? (open?.apiEndpoint ? 'custom' : 'login');
   const credentialsSourceChanged = source !== savedSource && !(isApi(source) && isApi(savedSource));
   const needsEndpoint = isApi(source) && !draft.apiEndpoint?.trim() && !(open?.modelSource === source && !open.apiEndpoint);
@@ -474,7 +484,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
                         <span className="truncate">{provider.name}</span>
                         {provider.id === defaultProviderId && <span className="text-xs text-fg-3"><Trans>默认</Trans></span>}
                       </span>
-                      <span className="truncate text-xs text-fg-3">{summarize(provider, sources)}</span>
+                      <span className="truncate text-xs text-fg-3">{summarize(provider, sources, plugins)}</span>
                     </span>
                   </ListRow>}
                   {isOpen && <div className="flex items-center gap-2 px-4 py-3">
@@ -495,7 +505,9 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
                           {isApi(source) && <SettingsRow title={t`网关类型`}>
                             <Select label={t`网关类型`} value={source} options={gatewayChoices} disabled={busy || !plugins} onChange={changeSource} className="w-64 max-md:w-full" />
                           </SettingsRow>}
-                          {named && !namedEntry && plugins && <p role="alert" className="py-3 text-xs text-danger"><Trans>提供此类型的插件不可用</Trans></p>}
+                          {named && !namedEntry && plugins && (isApi(named)
+                            ? <p className="py-3 text-xs text-fg-3"><Trans>插件不可用，暂按通用网关连接</Trans></p>
+                            : <p role="alert" className="py-3 text-xs text-danger"><Trans>提供此类型的插件不可用</Trans></p>)}
                         </>
                       )}
                       {backendId === 'pi' && source === 'custom' && (

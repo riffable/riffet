@@ -540,7 +540,7 @@ it('reuses a disabled adapter key only for its unchanged API connection without 
   const endpoint = 'https://gateway.example/v1';
   const storedConfig: Record<string, unknown> = { modelSource: 'disabled-adapter', apiEndpoint: endpoint, apiKey: 'saved-key' };
   const activate = vi.fn(async () => { throw new Error('A disabled adapter must not activate'); });
-  provideModelSources(() => [], activate, id => id === 'disabled-adapter' ? 'adapter' : undefined);
+  provideModelSources(() => [], activate, id => id === 'disabled-adapter' ? 'adapter' : id === 'disabled-source' ? 'source' : undefined);
   const catalog = new BackendCatalog({ require: () => driver } as never, service.host, {
     profiles: { get: () => undefined, getConfig: () => storedConfig } as never,
   }, () => driver.profiles(service.host)[0]!);
@@ -549,13 +549,17 @@ it('reuses a disabled adapter key only for its unchanged API connection without 
     await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint });
     await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: 'https://other.example/v1' });
     await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, apiKey: '' });
+    // Probed as the plain connection it was layered on, still with its own saved key.
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'disabled-adapter' });
+    // An uninstalled plugin leaves no role behind; the key is the one saved with this same address.
     storedConfig.modelSource = 'unrecognized-source';
     await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint });
+    // A declared connection source supplies its own connection, so its key does not move to a typed address.
+    storedConfig.modelSource = 'disabled-source';
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint });
     expect(fetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).authorization)).toEqual([
-      'Bearer saved-key', undefined, undefined, undefined,
+      'Bearer saved-key', undefined, undefined, 'Bearer saved-key', 'Bearer saved-key', undefined,
     ]);
-    await expect(catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'disabled-adapter' }))
-      .rejects.toMatchObject({ code: 'INVALID_BACKEND_PROFILE' });
     expect(activate).not.toHaveBeenCalled();
   } finally { fetch.mockRestore(); }
 });
@@ -585,5 +589,6 @@ it('keeps auxiliary bindings to the same explicit API profile after adding a gat
   expect(resolve).toHaveBeenCalledWith({ apiEndpoint: config.apiEndpoint, apiKey: 'profile-key' });
   provideModelSources(() => [], undefined, () => 'adapter');
   expect(profiles('dsh').map(item => item.id)).toEqual([ref.profileId]);
-  await expect(auxiliaryEndpoint(ref, profiles)).rejects.toThrow('unavailable');
+  // Without its adapter the binding keeps working over the profile's own connection.
+  expect(await auxiliaryEndpoint(ref, profiles)).toMatchObject({ baseUrl: config.apiEndpoint, apiKey: 'profile-key', profileName: 'Bound' });
 });

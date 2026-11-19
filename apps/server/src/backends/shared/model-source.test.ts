@@ -65,4 +65,13 @@ describe('without integrations', () => {
     expect(codexFlavor.args(config)).toEqual([]);
     expect(codexFlavor.env(config)).toEqual({});
   });
+
+  it('runs a profile whose adapter is gone as its own API connection, but keeps a declared source blocked', () => {
+    const config = { modelSource: 'gateway', apiEndpoint: 'https://gateway.example/v1', apiKey: 'own-key' };
+    expect(modelSourceOf(config)).toBeUndefined();
+    expect(codexFlavor.env(config)).toEqual({ RIFFET_CODEX_API_KEY: 'own-key' });
+    expect(codexFlavor.args(config)).toContain('model_providers.riffet.base_url="https://gateway.example/v1"');
+    provideModelSources(() => [], undefined, () => 'source');
+    expect(modelSourceOf(config)).toBe('gateway');
+  });
 });

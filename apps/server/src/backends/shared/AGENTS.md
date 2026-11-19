@@ -32,6 +32,7 @@ verify:
 
 - 终端屏幕（启动信任、hook 审核、计划审批等对话框）由 `terminal-dialogs.ts#TerminalDialogObserver` 读 `tmux capture-pane`；Claude 的对话框录制见 `apps/server/src/backends/claude/fixtures/screens/`，其余尚无录制。
 - App Server JSON-RPC 的录制在 `apps/server/src/backends/codex/fixtures/app-server/`；`ps` 输出（`process-identity.ts`、`app-server-daemons.ts`）尚无录制。
+- 档案存的网关适配器（`role: "adapter"`）没有插件提供时（停用或卸载），`model-source.ts#modelSourceOf` 让档案按自己的 `apiEndpoint`/`apiKey` 当普通 API 连接用，额度不显示；声明为连接来源的源仍然报不可用。卸载后读不到声明的类型，未知类型按适配器处理。驱动一律经 `modelSourceOf` 判断，只有额度读 `savedModelSourceOf`。
 - Claude 的全局配置与 Codex 的 `trust_level`：见 `cli-trust.ts` 顶部说明，格式随 CLI 版本可能变，尚无录制。
 
 ## 排障

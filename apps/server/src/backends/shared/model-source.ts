@@ -47,8 +47,21 @@ export function modelSourceRole(source: NativeModelSource): ModelSourceProvider[
 }
 
 /** The saved source name, whether or not anything provides it on this server. */
-export function modelSourceOf(config: Record<string, unknown>): NativeModelSource | undefined {
+export function savedModelSourceOf(config: Record<string, unknown>): NativeModelSource | undefined {
   return typeof config.modelSource === 'string' && config.modelSource ? config.modelSource : undefined;
+}
+
+/**
+ * The source a launch or catalog read goes through; quota reads the saved name. An adapter only adds
+ * gateway behavior to the profile's own connection, so once nothing provides it the profile is that
+ * plain API connection again rather than a blocked one. An uninstalled plugin leaves no declared role behind, and the address and key
+ * are the user's own either way, so an unknown role falls back too; a declared connection source never does.
+ */
+export function modelSourceOf(config: Record<string, unknown>): NativeModelSource | undefined {
+  const source = savedModelSourceOf(config);
+  if (!source || modelSourceProvider(source)) return source;
+  const ownEndpoint = typeof config.apiEndpoint === 'string' && config.apiEndpoint.trim();
+  return ownEndpoint && modelSourceRole(source) !== 'source' ? undefined : source;
 }
 
 function overridesOf(config: Record<string, unknown>): SourceOverrides {

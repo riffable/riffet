@@ -66,7 +66,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 | `actions` | 设置页里的操作；`device-flow` 类操作由服务端保管设备码，客户端只拿到 flowId |
 | `status`、`doctorChecks` | 设置页状态与 `riffet doctor` 检查项 |
 
-模型源还可声明 `role: "adapter"`，表示给提供商已存的 API 连接增加网关适配；未声明或 `"source"` 仍是连接与登录来源。客户端分别放在「网关类型」和「接入方式」，均复用 `modelSource`、`resolve/catalog/usage`。`usage: true` 可在 manifest 中静态声明，按需插件尚未激活时也能展示额度入口。普通 API 与 adapter 互换保留档案、连接与模型；未保存的模型探测只在地址相同且两端均为 API/adapter 时沿用已存 Key，切换独立来源、跨地址或显式清空不复用。额度读取失败与模型请求分开处理。插件设置视图可声明 `settingsCategory: "agent" | "providers"` 来区分两个设置入口，未声明时保留旧视图的可达性。
+模型源还可声明 `role: "adapter"`，表示给提供商已存的 API 连接增加网关适配；未声明或 `"source"` 仍是连接与登录来源。客户端分别放在「网关类型」和「接入方式」，均复用 `modelSource`、`resolve/catalog/usage`。`usage: true` 可在 manifest 中静态声明，按需插件尚未激活时也能展示额度入口。普通 API 与 adapter 互换保留档案、连接与模型；未保存的模型探测只在地址相同且两端均为 API/adapter 时沿用已存 Key，切换独立来源、跨地址或显式清空不复用。额度读取失败与模型请求分开处理。适配器停用或卸载后，档案若有自己的地址，就按普通 API 连接继续使用，只是没有额度；连接来源仍报不可用。插件设置视图可声明 `settingsCategory: "agent" | "providers"` 来区分两个设置入口，未声明时保留旧视图的可达性。
 
 插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`；声明了 `agentTools` 或 `channels` 的进程内插件另有 `sessions`（读会话与项目目录、往会话发一轮、发通知）。进程内插件另有 `models.complete`：做一次单轮补全，插件不保管密钥。带 `use` 时用用户为这项模型用途选的模型（见下「模型用途」），不带时用「快速对话」的默认模型（`auxiliaryModels.chat`）；都在每次调用时读取。没有可用模型时以 409 `PLUGIN_MODEL_NOT_CHOSEN` 拒绝，`maxOutputTokens` 至多 16000，超时缺省 60 秒、至多 120 秒，输出因长度截断时报错。插件交给它的文本会发给该模型的提供商；隔离安装的包没有这一项。
 

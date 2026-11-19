@@ -4991,6 +4991,10 @@ msgstr "Tooltips use the system ones"
 msgid "插件"
 msgstr "Plugins"
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "插件不可用，暂按通用网关连接"
+msgstr "Plugin unavailable; connecting as a general gateway"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "插件只拥有分配给它的视图内容；尺寸与排布归工作台。"
 msgstr "A plugin owns only the content of the view assigned to it; size and layout belong to the workbench."
