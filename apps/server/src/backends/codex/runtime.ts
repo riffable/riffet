@@ -30,12 +30,13 @@ import { CodexActivities } from './activities.js';
 import type { CodexNativeCommand } from './commands.js';
 import { projectCodexItem, rowTextKey, userMessageText } from './project-item.js';
 import { CodexTurnMetering, CodexContextMeter, noteItemMeter, noteRequestWaitStart, noteRequestWaitEnd } from './metering.js';
+import { CodexTurns } from './turns.js';
 import { CodexSubagents, type CodexSubagentFrame } from './subagents.js';
 import { codexInvocation, codexInvocationFingerprint, codexTerminalEndpoint } from './endpoint.js';
 import { CodexJournalSpace, journalOf, type CodexIngestState } from './journal-space.js';
 import type { CodexLiveFeed, CodexThreadReader, CodexTurnPage, CodexTurnsRequest } from './transcript-source.js';
 import type {
-  TerminalEndpointState, CodexPendingInteraction, TurnRun, RpcThread, RpcTurn, RpcItem, RpcQuestion,
+  TerminalEndpointState, CodexPendingInteraction, RpcThread, RpcTurn, RpcItem, RpcQuestion,
 } from './types.js';
 import {
   RESIDENT_EVENTS, MAX_EVENTS, ROUTINE_TURNS, IMPORT_PAGE_TURNS, TAIL_TURNS, TURN_CACHE_THREADS,
@@ -66,7 +67,7 @@ import {
 import { CodexQuestionHistory, isCodexQuestionTool } from './question-history.js';
 import {
   isCodexToolItem, projectStartedTool, projectCompletedTool, codexPlanNativeId,
-  turnStatus, isFinalTurnStatus, userItemText,
+  turnStatus, isFinalTurnStatus,
   isProvisionalItemId, buildEvent, rolloutPlanNativeId, nativeTurnIdOf, type ItemSpan,
 } from './transcript.js';
 import {
@@ -84,10 +85,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   transport?: CodexAppServerClient;
   nativeSessionId: string | undefined;
   terminalId: string | undefined;
-  activeTurnId: string | undefined;
-  /** The newest foreground turn observed ended, including native TUI turns with no command mapping. */
-  private foregroundEndedTurnId: string | undefined;
-  private dispatchCommandId: string | undefined;
+  /** Turn bookkeeping: the current turn, and which command and run each turn belongs to. */
+  private readonly turns: CodexTurns;
   /** A written operation without a receipted turn may still start, even after its local wait ends. */
   private unboundNativeCommand: string | undefined;
   private nativeCommand?: {
@@ -118,13 +117,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private readonly seenAsyncItems = new Set<string>();
   private readonly sendingAsyncAnswers = new Set<string>();
   private readonly questionHistory = new CodexQuestionHistory();
-  private readonly turnRuns = new Map<string, TurnRun>();
-  /** Every confirmed input belongs to one execution; the owner remains its first input. */
-  private readonly turnCommands = new Map<string, Set<string>>();
-  private readonly turnConfigs = new Map<string, NativeRunConfig>();
-  private readonly pendingTurnOutcomes = new Map<string, RpcTurn>();
-  private readonly completionWaiters = new Map<string, Set<{ resolve(): void; reject(error: Error): void }>>();
-  private readonly commandRuns = new Map<string, TurnRun>();
   private readonly listeners = new Set<(message: NativeControlMessage) => void>();
   private historyPoll: NodeJS.Timeout | undefined;
   private pollHealthy?: boolean;
@@ -185,7 +177,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     reserveSequence: () => undefined,
     persist: (finalId, event) => this.space.assignDraft(finalId, event),
     eventContext: turnId => {
-      const run = this.turnRuns.get(turnId);
+      const run = this.turns.turnRun(turnId);
       return { sessionId: this.session.id, runId: run?.runId ?? turnId, createdAt: run?.createdAt ?? new Date().toISOString() };
     },
     send: () => undefined,
@@ -224,15 +216,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private readonly standingWrites = new Map<string, string[]>();
   private commandConfigObserver?: (settings: Record<string, unknown>) => void;
   private permissionSettings: Record<string, unknown> | undefined;
-  /**
-   * Messages steered into a running turn when the provider takes no tag for them (TRAE CLI). Each
-   * waits to claim the next user item of its turn with the same text; `claimedItems` remembers the
-   * claim so later reads of the same item resolve to the same command.
-   */
-  private readonly pendingSteers: Array<{ turnId: string; commandId: string; text: string }> = [];
-  private readonly claimedItems = new Map<string, string>();
-  /** The outcome each turn was first settled with; a later, different one is stale. */
-  private readonly settledTurns = new Map<string, string>();
   /**
    * Rows projected from a running turn's positional items (`item-1`, `item-2`, …), by turn id. They
    * are the provider's provisional naming of items the settled read returns under their own ids.
@@ -296,19 +279,26 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.profileConfig = this.profile.config;
     this.profileFingerprint = runtimeFingerprintFor(this.project, this.profile, this.flavor);
     this.scopeFingerprint = runtimeScopeFingerprintFor(this.project, this.profile, this.flavor);
+    this.turns = new CodexTurns({
+      threadId: () => this.nativeSessionId,
+      runsOfTurn: (threadId, turnId) => this.host.findRunsByNativeTurn?.(this.session.id, threadId, turnId) ?? [],
+      runIdOfCommand: commandId => this.host.findRunIdByCommand(this.session.id, commandId),
+      commandIdOf: (item, turnId) => this.commandIdOf(item, turnId),
+      scopedRequestId: (threadId, id) => this.scopedRequestId(threadId, id),
+    });
     this.history = new CodexHistoryReader({
       requireTransport: () => this.requireTransport(),
       label: () => this.label,
       subagents: () => this.subagents,
-      dispatchCommandId: () => this.dispatchCommandId,
-      foregroundEndedTurnId: () => this.foregroundEndedTurnId,
+      dispatchCommandId: () => this.turns.dispatchCommandId,
+      foregroundEndedTurnId: () => this.turns.foregroundEndedTurnId,
       routineWindow: () => this.space.ready || (this.journalRead && this.space.initialized),
     });
     this.subagents = new CodexSubagents({
       readTurns: threadId => this.history.readTurns(threadId),
       readThread: (threadId, includeTurns) => this.history.readThread(threadId, includeTurns),
       projectChildItem: (item, turn, childThreadId) => this.projectChildItem(item, turn, childThreadId),
-      turnCompleted: (threadId, turn) => this.completeTurnWaiters(turn.id, threadId),
+      turnCompleted: (threadId, turn) => this.turns.completeWaiters(turn.id, threadId),
       emit: message => this.emit(message),
     });
     this.usage = new CodexContextMeter({
@@ -323,7 +313,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.metering = new CodexTurnMetering({
       sessionId: session.id,
       host,
-      turnRun: turnId => this.turnRuns.get(turnId),
+      turnRun: turnId => this.turns.turnRun(turnId),
       userMessageId: turnId => this.events.find(event => event.type === 'user_message_chunk'
         && event.nativeId.startsWith(`${this.nativeSessionId ?? 'unknown'}:${turnId}:`))?.nativeId,
       model: () => this.status.model,
@@ -344,6 +334,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   get label(): string { return this.flavor.label; }
+
+  /** The provider turn in the foreground, if any. */
+  get activeTurnId(): string | undefined { return this.turns.activeTurnId; }
+  private get dispatchCommandId(): string | undefined { return this.turns.dispatchCommandId; }
+  private get foregroundEndedTurnId(): string | undefined { return this.turns.foregroundEndedTurnId; }
 
   /** The id a submitted message is tagged with, in the field the provider echoes back. */
   private messageTagOf(commandId: string): string {
@@ -378,15 +373,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         && !['steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
       return run?.commandId;
     }
-    const claimed = this.claimedItems.get(id);
-    if (claimed) return claimed;
-    const text = userItemText(item).trim();
-    const index = this.pendingSteers.findIndex(steer => (!turnId || steer.turnId === turnId) && steer.text.trim() === text);
-    if (index < 0) return undefined;
-    const [steer] = this.pendingSteers.splice(index, 1);
-    this.claimedItems.set(id, steer!.commandId);
-    if (this.claimedItems.size > 256) this.claimedItems.delete(this.claimedItems.keys().next().value!);
-    return steer!.commandId;
+    return this.turns.claimSteeredItem(id, turnId, item);
   }
 
   /** Keeps what a thread record says about itself: where its rollout is, which model it runs. */
@@ -1403,11 +1390,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** Local evidence of a live turn on the attached owner connection. */
   private foregroundTarget(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
+    const turnId = this.turns.unsettledActiveTurnId;
     if (!this.attached || !this.transport?.isOnline || this.bindingScopeMismatch || this.endpointWriteConflict ||
-      !this.nativeSessionId || !this.activeTurnId || this.settledTurns.has(this.activeTurnId) ||
+      !this.nativeSessionId || !turnId ||
       this.status.connection?.state !== 'connected' || this.status.phase !== 'busy' || this.currentInteraction) return undefined;
-    const ownerRunId = this.turnRuns.get(this.activeTurnId)?.runId;
-    return { nativeSessionId: this.nativeSessionId, turnId: this.activeTurnId, ...(ownerRunId ? { ownerRunId } : {}) };
+    const ownerRunId = this.turns.turnRun(turnId)?.runId;
+    return { nativeSessionId: this.nativeSessionId, turnId, ...(ownerRunId ? { ownerRunId } : {}) };
   }
 
   /** Only a mapped Riffet run may authorize a foreground tool. */
@@ -1441,15 +1429,15 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     this.assertSteerTarget(input.target);
     const terminal = this.terminalId ? await this.host.terminal.get(this.terminalId).catch(() => undefined) : undefined;
-    this.restoreTurnCommands(input.target.turnId);
+    this.turns.restoreCommands(input.target.turnId);
     // All asynchronous preparation precedes the final identity check and durable write fence.
     this.assertSteerTarget(input.target);
     const target = input.target;
     // A turn started in the native TUI may have no Riffet owner. Its steering input must not
     // become the execution owner just because it is the first Riffet command we observe.
-    if (!this.turnRuns.has(target.turnId)) this.turnRuns.set(target.turnId, { createdAt: new Date().toISOString() });
-    const ownerRunId = this.turnRuns.get(target.turnId)?.runId;
-    const resolvedConfig = this.turnConfigs.get(target.turnId);
+    this.turns.ensureTurnRun(target.turnId);
+    const ownerRunId = this.turns.turnRun(target.turnId)?.runId;
+    const resolvedConfig = this.turns.turnConfig(target.turnId);
     const transport = this.requireTransport();
     const taggedInput = this.flavor.id === 'traex' ? input.input.map(part => {
       const value = asRecord(part);
@@ -1466,7 +1454,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       baselineSequence: this.headSequence, renderedText: input.renderedText,
       ...(resolvedConfig ? { resolvedConfig } : {}),
     });
-    this.commandRuns.set(input.commandId, { runId: input.runId, commandId: input.commandId, createdAt: new Date().toISOString() });
+    this.turns.submitCommand(input.commandId, input.runId);
     try {
       const result = await transport.request<{ turn?: { id: string }; turnId?: string }>('turn/steer', {
         threadId: target.nativeSessionId, expectedTurnId: target.turnId,
@@ -1475,52 +1463,17 @@ export class CodexSessionRuntime implements CodexThreadReader {
       });
       if ((result.turn?.id ?? result.turnId) !== target.turnId) throw new Error(`${this.label} acknowledged a different turn`);
       // A completion may have arrived before this acknowledgement; never resurrect that turn.
-      const outcome = this.pendingTurnOutcomes.get(target.turnId);
+      const outcome = this.turns.pendingOutcome(target.turnId);
       if (outcome) this.emitTurnOutcome(outcome, target.turnId);
     } catch (error) {
       if ((error as { rpcError?: boolean })?.rpcError) {
-        this.commandRuns.delete(input.commandId);
-        this.turnCommands.get(target.turnId)?.delete(input.commandId);
-        for (const [id, commandId] of this.claimedItems) if (commandId === input.commandId) this.claimedItems.delete(id);
+        this.turns.forgetCommand(target.turnId, input.commandId);
         const message = safeProviderError(error, this.profileConfig);
         const changed = /expected.*turn|turn.*mismatch|no active turn|not.*active|turn.*(?:finished|completed|ended)/i.test(message);
         throw new AppError(changed ? 'STEER_TARGET_CHANGED' : 'STEER_REJECTED', message, 409);
       }
       // A transport failure cannot prove the provider rejected a submitted message.
       throw error;
-    }
-  }
-
-  private rememberTurnCommand(turnId: string, commandId: string, confirmed: boolean): void {
-    const command = this.commandRuns.get(commandId);
-    if (!command) return;
-    const owner = this.turnRuns.get(turnId);
-    if (!owner || owner.commandId === commandId && !owner.runId && command.runId) this.turnRuns.set(turnId, { ...command, commandId });
-    if (confirmed) {
-      const commands = this.turnCommands.get(turnId) ?? new Set<string>();
-      commands.add(commandId);
-      this.turnCommands.set(turnId, commands);
-    }
-  }
-
-  private restoreTurnCommands(turnId: string): void {
-    if (!this.nativeSessionId) return;
-    const runs = this.host.findRunsByNativeTurn?.(this.session.id, this.nativeSessionId, turnId) ?? [];
-    // The first ordinary input owns the execution even if a steer was restored before it.
-    const owner = runs.find(run => run.native?.intent !== 'steer');
-    if (owner) {
-      this.commandRuns.set(owner.commandId, { runId: owner.id, commandId: owner.commandId, createdAt: owner.createdAt });
-      this.turnRuns.set(turnId, this.commandRuns.get(owner.commandId)!);
-      if (owner.native?.resolvedConfig) this.turnConfigs.set(turnId, owner.native.resolvedConfig);
-    }
-    if (!owner && runs.length && !this.turnRuns.has(turnId)) {
-      this.turnRuns.set(turnId, { ...(runs[0]!.native?.ownerRunId ? { runId: runs[0]!.native.ownerRunId } : {}), createdAt: runs[0]!.createdAt });
-    }
-    for (const run of runs) {
-      if (run.native?.delivery === 'failed' || run.native?.delivery === 'cancelled') continue;
-      this.commandRuns.set(run.commandId, { runId: run.id, commandId: run.commandId, createdAt: run.createdAt });
-      // An acceptance alone does not prove the model's original turn received this input.
-      if (run.native?.delivery === 'observed' || Boolean(run.native?.nativeMessageId)) this.rememberTurnCommand(turnId, run.commandId, true);
     }
   }
 
@@ -1539,7 +1492,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const requestedModel = input.config.model ?? str(this.profileConfig.defaultModel);
     const requestedSelection = parseNativeModelSelection(requestedModel);
     const submittedAt = new Date().toISOString();
-    this.commandRuns.set(input.commandId, { runId: input.runId, commandId: input.commandId, createdAt: submittedAt });
+    this.turns.submitCommand(input.commandId, input.runId, submittedAt);
     const transport = this.requireTransport();
     const modeObservation = this.modeObservation;
     const modelSelection = await resolveModelSelection(transport, this.flavor, requestedSelection);
@@ -1553,7 +1506,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // Ordinary send follows the current foreground, unlike an explicit user-targeted steer.
     // Select after the final terminal await; a completed/replaced turn must never be steered.
     this.assertWritable();
-    const activeTurnId = this.activeTurnId && !this.settledTurns.has(this.activeTurnId) ? this.activeTurnId : undefined;
+    const activeTurnId = this.turns.unsettledActiveTurnId;
     // The TUI may tighten permissions or resolve a mode decision during preparation. Fence and
     // submit the same effective config, not the adapter's earlier snapshot.
     if (this.flavor.id === 'traex') input.config = { ...input.config,
@@ -1595,15 +1548,14 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(collaborationMode ? { collaborationMode } : {}),
     };
     const foregroundEndedBeforeSend = this.foregroundEndedTurnId;
-    this.dispatchCommandId = input.commandId;
-    if (activeTurnId) this.rememberTurnCommand(activeTurnId, input.commandId, false);
+    this.turns.beginDispatch(input.commandId);
+    if (activeTurnId) this.turns.rememberCommand(activeTurnId, input.commandId, false);
     try {
       const steerClaim = activeTurnId && this.flavor.messageTag.echo === 'id'
         ? { turnId: activeTurnId, commandId: input.commandId, text: input.renderedText }
         : undefined;
       if (steerClaim) {
-        this.pendingSteers.push(steerClaim);
-        if (this.pendingSteers.length > 32) this.pendingSteers.shift();
+        this.turns.addSteerClaim(steerClaim);
       }
       let response: { turn?: { id: string }; turnId?: string };
       const permissionObservation = this.permissionObservation;
@@ -1620,8 +1572,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         // have started its first turn; native notifications independently supply that evidence.
         if (!(error as { rpcError?: boolean })?.rpcError) this.history.beginMaterialization();
         // A message the provider never took must not claim a TUI message with the same text later.
-        const index = steerClaim ? this.pendingSteers.indexOf(steerClaim) : -1;
-        if (index >= 0) this.pendingSteers.splice(index, 1);
+        if (steerClaim) this.turns.dropSteerClaim(steerClaim);
         throw error;
       }
       this.history.beginMaterialization();
@@ -1640,29 +1591,17 @@ export class CodexSessionRuntime implements CodexThreadReader {
       }
       // A new message supersedes the questions still open, as a TUI submission does.
       this.asyncQuestions = [];
-      this.rememberTurnCommand(turnId, input.commandId, !activeTurnId);
-      if (!activeTurnId) this.turnConfigs.set(turnId, structuredClone(binding.resolvedConfig));
-      const completedBeforeAck = this.pendingTurnOutcomes.get(turnId);
-      if (completedBeforeAck) {
-        this.pendingTurnOutcomes.delete(turnId);
-        this.emitTurnOutcome(completedBeforeAck, turnId);
-      }
+      this.turns.rememberCommand(turnId, input.commandId, !activeTurnId);
+      if (!activeTurnId) this.turns.setTurnConfig(turnId, structuredClone(binding.resolvedConfig));
+      const completedBeforeAck = this.turns.takePendingOutcome(turnId);
+      if (completedBeforeAck) this.emitTurnOutcome(completedBeforeAck, turnId);
       // A fast completion can precede this response. Neither that turn nor a newer native turn
       // which started while the response was pending may be replaced by the acknowledgement.
-      if ((!this.activeTurnId || this.activeTurnId === turnId) &&
-        (!this.foregroundEndedTurnId || this.foregroundEndedTurnId === turnId || this.foregroundEndedTurnId === foregroundEndedBeforeSend)) {
-        if (completedBeforeAck || this.foregroundEndedTurnId === turnId) {
-          this.activeTurnId = undefined;
-          this.foregroundEndedTurnId = turnId;
-        } else {
-          this.activeTurnId = turnId;
-          this.foregroundEndedTurnId = undefined;
-        }
-      }
+      this.turns.settleAcknowledged(turnId, foregroundEndedBeforeSend, Boolean(completedBeforeAck));
       this.refreshStatus({ link: 'quiet', model: input.config.model || undefined, ...(completedBeforeAck ? {} : { notice: undefined }) });
       return { turnId };
     } finally {
-      if (this.dispatchCommandId === input.commandId) this.dispatchCommandId = undefined;
+      this.turns.endDispatch(input.commandId);
     }
   }
 
@@ -1687,8 +1626,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     input.config = verified.config;
     const submittedAt = new Date().toISOString();
-    const previousTurns = new Set([...this.turnRuns.keys(), ...this.settledTurns.keys(), ...this.pendingTurnOutcomes.keys(),
-      ...(this.foregroundEndedTurnId ? [this.foregroundEndedTurnId] : []),
+    const previousTurns = new Set([...this.turns.knownTurnIds(),
       ...this.events.map(event => event.nativeTurnId).filter((id): id is string => Boolean(id))]);
     let resolve!: (turnId: string) => void;
     let reject!: (error: Error) => void;
@@ -1698,10 +1636,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
     input.commitDispatchFence({ backendId: this.flavor.id, nativeSessionId: input.nativeSessionId,
       ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}),
       baselineSequence: this.headSequence, renderedText: input.renderedText, resolvedConfig: input.config, slashCommand: true });
-    this.commandRuns.set(input.commandId, { runId: input.runId, commandId: input.commandId, createdAt: submittedAt });
+    this.turns.submitCommand(input.commandId, input.runId, submittedAt);
     this.nativeCommand = pending;
     this.unboundNativeCommand = input.commandId;
-    this.dispatchCommandId = input.commandId;
+    this.turns.beginDispatch(input.commandId);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const cancelled = observed.then(() => new Promise<never>(() => undefined));
@@ -1729,8 +1667,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
     } finally {
       if (timer) clearTimeout(timer);
       if (this.nativeCommand === pending) this.nativeCommand = undefined;
-      if (this.dispatchCommandId === input.commandId) this.dispatchCommandId = undefined;
-      if (pending.turnId && (this.settledTurns.has(pending.turnId) || this.pendingTurnOutcomes.has(pending.turnId))
+      this.turns.endDispatch(input.commandId);
+      if (pending.turnId && (this.turns.isSettled(pending.turnId) || this.turns.hasPendingOutcome(pending.turnId))
         && transport === this.transport && transport.isOnline && this.status.phase !== 'offline') {
         this.refreshStatus({ link: 'quiet' });
       }
@@ -1833,22 +1771,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (!pending.acknowledged) return;
     pending.turnId = turnId;
     if (this.unboundNativeCommand === pending.commandId) this.unboundNativeCommand = undefined;
-    this.rememberTurnCommand(turnId, pending.commandId, true);
-    this.turnConfigs.set(turnId, structuredClone(pending.config));
+    this.turns.rememberCommand(turnId, pending.commandId, true);
+    this.turns.setTurnConfig(turnId, structuredClone(pending.config));
     const receipt = this.withStableSequence(this.makeEvent(
-      `${this.nativeSessionId}:${turnId}:command:${pending.commandId}`, turnId, this.commandRuns.get(pending.commandId)?.runId,
+      `${this.nativeSessionId}:${turnId}:command:${pending.commandId}`, turnId, this.turns.commandRun(pending.commandId)?.runId,
       'native_input_receipt', { commandId: pending.commandId, receiptKind: 'native_command', nativeSessionId: this.nativeSessionId },
     ));
     this.pushEvent(receipt);
     this.host.emitEvent(this.session.id, receipt);
     this.recordSubmittedTurn(turnId, pending.runId, pending.commandId);
-    if (!this.pendingTurnOutcomes.has(turnId) && !this.settledTurns.has(turnId)
-      && (!this.activeTurnId || this.activeTurnId === turnId)
-      && (!this.foregroundEndedTurnId || this.foregroundEndedTurnId === pending.foregroundEndedBeforeSend)) {
-      this.activeTurnId = turnId;
-      this.foregroundEndedTurnId = undefined;
-      this.refreshStatus({ link: this.resumed() });
-    }
+    if (this.turns.adoptCommandTurn(turnId, pending.foregroundEndedBeforeSend)) this.refreshStatus({ link: this.resumed() });
     pending.resolve(turnId);
   }
 
@@ -1892,18 +1824,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const turnId = targetTurnId ?? (targetThreadId === this.nativeSessionId ? this.activeTurnId : undefined);
     if (!turnId || !targetThreadId) return;
     const waiterId = this.scopedRequestId(targetThreadId, turnId);
-    let resolveCompleted!: () => void;
-    let rejectCompleted!: (error: Error) => void;
-    const completed = new Promise<void>((resolve, reject) => { resolveCompleted = resolve; rejectCompleted = reject; });
-    const waiter = { resolve: resolveCompleted, reject: rejectCompleted };
+    const { completed, release } = this.turns.waitForCompletion(waiterId);
     let rejectTimeout!: (error: Error) => void;
     const timeoutReached = new Promise<never>((_resolve, reject) => { rejectTimeout = reject; });
-    let waiters = this.completionWaiters.get(waiterId);
-    if (!waiters) this.completionWaiters.set(waiterId, waiters = new Set());
-    waiters.add(waiter);
     const timeout = setTimeout(() => {
-      this.completionWaiters.get(waiterId)?.delete(waiter);
-      if (this.completionWaiters.get(waiterId)?.size === 0) this.completionWaiters.delete(waiterId);
+      release();
       rejectTimeout(new Error(`${this.label} acknowledged interruption but did not confirm the turn stopped.`));
     }, 15_000);
     timeout.unref();
@@ -1914,8 +1839,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ]);
     } finally {
       clearTimeout(timeout);
-      this.completionWaiters.get(waiterId)?.delete(waiter);
-      if (this.completionWaiters.get(waiterId)?.size === 0) this.completionWaiters.delete(waiterId);
+      release();
     }
   }
 
@@ -2414,14 +2338,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   recordSubmittedTurn(turnId: string, runId: string, commandId: string): void {
-    const previous = this.commandRuns.get(commandId);
-    this.commandRuns.set(commandId, { ...(previous ?? {}), commandId, runId, createdAt: previous?.createdAt ?? new Date().toISOString() });
-    this.rememberTurnCommand(turnId, commandId, false);
-    const completedBeforeAck = this.pendingTurnOutcomes.get(turnId);
-    if (completedBeforeAck) {
-      this.pendingTurnOutcomes.delete(turnId);
-      this.emitTurnOutcome(completedBeforeAck, turnId);
-    }
+    this.turns.confirmCommand(commandId, runId);
+    this.turns.rememberCommand(turnId, commandId, false);
+    const completedBeforeAck = this.turns.takePendingOutcome(turnId);
+    if (completedBeforeAck) this.emitTurnOutcome(completedBeforeAck, turnId);
   }
 
   /** The highest number handed out so far: a steer's baseline for "events after the input". */
@@ -2497,8 +2417,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private async readEvents(): Promise<NativeWorkbenchEvent[] | undefined> {
     const materializationBeforeRead = this.history.materialization;
     const statusBeforeRead = this.status;
-    const activeTurnBeforeRead = this.activeTurnId;
-    const foregroundEndedBeforeRead = this.foregroundEndedTurnId;
+    const turnsBeforeRead = this.turns.snapshot();
     const threadId = this.nativeSessionId;
     if (!threadId || !this.transport?.isOnline) {
       this.historySnapshotReady = false;
@@ -2539,17 +2458,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // were numbered provisionally and are numbered for good, in conversational order, by this pass.
     const initializing = !this.space.initialized;
     for (const turn of turns) {
-      this.restoreTurnCommands(turn.id);
+      this.turns.restoreCommands(turn.id);
       for (const item of asArray<RpcItem>(turn.items)) {
         const commandId = this.commandIdOf(item, turn.id);
         if (!commandId) continue;
-        const previous = this.commandRuns.get(commandId);
-        const runId = previous?.runId ?? this.host.findRunIdByCommand(this.session.id, commandId);
-        this.commandRuns.set(commandId, {
-          ...(runId ? { runId } : {}), commandId,
-          createdAt: previous?.createdAt ?? toIso(typeof turn.startedAt === 'number' ? turn.startedAt * 1000 : undefined) ?? new Date().toISOString(),
-        });
-        this.rememberTurnCommand(turn.id, commandId, true);
+        this.turns.observeCommand(turn.id, commandId, toIso(typeof turn.startedAt === 'number' ? turn.startedAt * 1000 : undefined));
       }
     }
     const plansByTurn = new Map<string, NativeWorkbenchEvent>();
@@ -2626,8 +2539,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.drafts.resequence(nativeId => this.space.seqOf(nativeId));
       this.space.markInitialized();
     }
-    const phaseStillCurrent = this.status === statusBeforeRead && this.activeTurnId === activeTurnBeforeRead
-      && this.foregroundEndedTurnId === foregroundEndedBeforeRead && !this.dispatchCommandId;
+    const phaseStillCurrent = this.status === statusBeforeRead && this.turns.unchangedSince(turnsBeforeRead);
     if (turns.length && phaseStillCurrent) {
       const latest = turns.at(-1)!;
       const target = this.activeTurnId ? turns.find(turn => turn.id === this.activeTurnId) : undefined;
@@ -2635,8 +2547,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // clears it; an interrupted copy of a turn we still drive may be provisional.
       if (target && isFinalTurnStatus(target.status) &&
         !(turnStatus(target.status) === 'interrupted' && this.isTurnRunning(threadId, target))) {
-        this.activeTurnId = undefined;
-        this.foregroundEndedTurnId = target.id;
+        this.turns.endForeground(target.id);
       }
       // Only an ordered turn after the observed end can provide new foreground work. A read
       // stopping before a newer live end, or its same-turn inProgress copy, cannot undo that fact.
@@ -2645,8 +2556,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const active = turnStatus(latest.status) === 'inProgress' && pastEnd
         && (!this.activeTurnId || target) ? latest : undefined;
       if (active) {
-        this.activeTurnId = active.id;
-        this.foregroundEndedTurnId = undefined;
+        this.turns.startForeground(active.id);
         if (!!!this.metering.active(active.id) && !this.metering.isSettled(active.id)) {
           const meter = this.metering.meterFor(active.id);
           const hasAssistantOrTool = asArray<RpcItem>(active.items).some(item => item.type !== 'userMessage');
@@ -2656,16 +2566,15 @@ export class CodexSessionRuntime implements CodexThreadReader {
         }
       } else if (!this.activeTurnId && (!this.foregroundEndedTurnId || endedIndex >= 0)
         && (turnStatus(latest.status) === 'completed' || turnStatus(latest.status) === 'failed')) {
-        this.foregroundEndedTurnId = latest.id;
+        this.turns.noteForegroundEnded(latest.id);
       } else if (turnStatus(latest.status) === 'interrupted' && pastEnd) {
         // An active TRAE thread can expose a newly starting turn as interrupted before rollout
         // catches up. Without a live end for this turn, aggregate active remains busy.
-        this.foregroundEndedTurnId = undefined;
+        this.turns.clearForegroundEnded();
       }
     }
     const statusBeforeThread = this.status;
-    const activeTurnBeforeThread = this.activeTurnId;
-    const foregroundEndedBeforeThread = this.foregroundEndedTurnId;
+    const turnsBeforeThread = this.turns.snapshot();
     // The first real turn page can arrive before the provider's metadata view catches up. Use
     // this read's initial evidence even if that page just completed materialization; later reads
     // still start without the grace, and genuine or foreign-thread errors remain failures.
@@ -2675,16 +2584,14 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
       // `notLoaded` is an observation about this reader connection. It cannot prove that another
       // Codex endpoint stopped the thread, so only an explicitly attached owner drives phase.
-      if (phaseStillCurrent && this.status === statusBeforeThread && this.activeTurnId === activeTurnBeforeThread &&
-        this.foregroundEndedTurnId === foregroundEndedBeforeThread && !this.dispatchCommandId &&
+      if (phaseStillCurrent && this.status === statusBeforeThread && this.turns.unchangedSince(turnsBeforeThread) &&
         (this.attached || (this.loadedCheck === true && this.loadedCheckThreadId === threadId && Date.now() - this.loadedCheckAt < 5_000))) {
         const target = this.activeTurnId ? turns.find(turn => turn.id === this.activeTurnId) : undefined;
         // Unlike a provisional interrupted copy on an active thread, the same target plus the
         // verified owner's idle/error state confirms a lost interruption completion.
         if (target && turnStatus(target.status) === 'interrupted' &&
           (thread.status?.type === 'idle' || thread.status?.type === 'systemError')) {
-          this.activeTurnId = undefined;
-          this.foregroundEndedTurnId = target.id;
+          this.turns.endForeground(target.id);
           this.emitTurnOutcome(target, target.id);
           this.noteTurnEnd(target);
         }
@@ -2741,10 +2648,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
    * state got), the resident transcript, and the live stream. Settled history being imported is only logged.
    */
   private writeActivity(activity: NativeActivity, turnId: string | undefined): void {
-    const run = turnId ? this.turnRuns.get(turnId) : undefined;
+    const run = turnId ? this.turns.turnRun(turnId) : undefined;
     const event = activityEvent(this.session.id, activity, {
       ...(turnId ? { runId: run?.runId ?? turnId, nativeTurnId: turnId } : {}),
-      createdAt: this.turnRuns.get(turnId ?? '')?.createdAt ?? activity.startedAt,
+      createdAt: this.turns.turnRun(turnId ?? '')?.createdAt ?? activity.startedAt,
     });
     try { this.feed?.activity(activity); } catch { /* as for notifications */ }
     const row = this.space.assignRow(event);
@@ -2780,7 +2687,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** Shared with transcript ingest: history can temporarily misreport our executing turn as interrupted. */
   isTurnRunning(threadId: string, turn: RpcTurn): boolean {
     return this.transport?.isOnline === true && threadId === this.nativeSessionId
-      && !this.pendingTurnOutcomes.has(turn.id) && this.drivesTurn(turn);
+      && !this.turns.hasPendingOutcome(turn.id) && this.turns.drives(turn);
   }
 
   /**
@@ -2861,17 +2768,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
     try {
       space.batch(() => {
         for (const turn of turns) {
-          this.restoreTurnCommands(turn.id);
+          this.turns.restoreCommands(turn.id);
           for (const item of asArray<RpcItem>(turn.items)) {
             const commandId = this.commandIdOf(item, turn.id);
             if (!commandId) continue;
-            const previous = this.commandRuns.get(commandId);
-            const runId = previous?.runId ?? this.host.findRunIdByCommand(this.session.id, commandId);
-            this.commandRuns.set(commandId, {
-              ...(runId ? { runId } : {}), commandId,
-              createdAt: previous?.createdAt ?? this.turnTime(turn.startedAt) ?? new Date().toISOString(),
-            });
-            this.rememberTurnCommand(turn.id, commandId, true);
+            this.turns.observeCommand(turn.id, commandId, this.turnTime(turn.startedAt));
           }
           this.noteTurnStart(turn);
           this.noteCompactions(turn);
@@ -2989,9 +2890,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private projectItem(item: RpcItem, turn: RpcTurn, options: { childThreadId?: string; isolated?: boolean; span?: ItemSpan } = {}): NativeWorkbenchEvent[] {
     const threadId = options.childThreadId ?? this.nativeSessionId ?? 'unknown';
-    const turnRun = options.isolated ? undefined : this.turnRuns.get(turn.id);
+    const turnRun = options.isolated ? undefined : this.turns.turnRun(turn.id);
     const commandId = options.isolated ? undefined : this.commandIdOf(item, turn.id);
-    const commandRun = !options.isolated && commandId ? this.commandRuns.get(commandId) : undefined;
+    const commandRun = !options.isolated && commandId ? this.turns.commandRun(commandId) : undefined;
     const runId = commandRun?.runId ?? turnRun?.runId ?? turn.id;
     const createdAt = toIso(typeof turn.startedAt === 'number' ? turn.startedAt * 1000 : undefined) ?? commandRun?.createdAt ?? turnRun?.createdAt ?? new Date().toISOString();
     const main = !options.isolated && !options.childThreadId;
@@ -3024,7 +2925,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const completed = method === 'turn/completed';
       this.subagents.noteTurn(threadId, turnId, completed);
       if (completed) {
-        this.completeTurnWaiters(turnId, threadId);
+        this.turns.completeWaiters(turnId, threadId);
         this.clearTurnInteractions(turnId, threadId);
         this.refreshStatus({ link: 'quiet', notice: undefined });
       }
@@ -3053,7 +2954,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       || (method.startsWith('item/') && typeof params.turnId === 'string'))) this.history.beginMaterialization();
     if (method === 'turn/started') {
       this.threadError = false;
-      this.foregroundEndedTurnId = undefined;
+      this.turns.clearForegroundEnded();
       const turn = asRecord(params.turn);
       const id = str(turn?.id);
       this.threadErrorTurnId = id;
@@ -3062,16 +2963,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
           this.nativeCommand.startedTurns.add(id);
           if (asArray<RpcItem>(turn?.items).some(item => item.type === 'userMessage')) this.nativeCommand.userTurns.add(id);
         }
-        // An unmapped provisional interrupted history copy is not a completion receipt. A native
-        // start now names its active turn; committed workbench outcomes still keep their first end.
-        if (turnStatus(this.pendingTurnOutcomes.get(id)?.status) === 'interrupted' && !this.settledTurns.has(id)) {
-          this.pendingTurnOutcomes.delete(id);
-        }
-        this.activeTurnId = id;
+        this.turns.dropProvisionalInterrupt(id);
+        this.turns.markActive(id);
         this.noteTurnStart({ id, startedAt: typeof turn?.startedAt === 'number' ? turn.startedAt : undefined });
-        const commandId = this.nativeCommand ? undefined : this.dispatchCommandId;
-        const submitted = commandId ? this.commandRuns.get(commandId) : undefined;
-        if (submitted) this.turnRuns.set(id, { ...submitted, commandId });
+        if (!this.nativeCommand) this.turns.bindDispatchedTurn(id);
         const meter = this.metering.meterFor(id);
         if (typeof turn?.startedAt === 'number') meter.requestStartAt = turn.startedAt * 1000;
         else meter.requestStartAt ??= Date.now();
@@ -3141,13 +3036,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
       }
       if (turnId) this.clearTurnInteractions(turnId);
       if (turnId) {
-        this.completeTurnWaiters(turnId);
-      }
-      if (turnId && this.activeTurnId === turnId) {
-        this.activeTurnId = undefined;
-        this.foregroundEndedTurnId = turnId;
-      } else if (turnId && !this.activeTurnId && !this.foregroundEndedTurnId) {
-        this.foregroundEndedTurnId = turnId;
+        this.turns.completeWaiters(turnId);
+        this.turns.completeForeground(turnId);
       }
       // An interrupted item may never be committed; the reset below drops whatever it streamed.
       if (turnId) this.drafts.dropTurn(turnId);
@@ -3259,11 +3149,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.drafts.note('item/agentMessage/delta', { itemId: item.id, turnId, delta: '', phase: item.phase }, this.nativeSessionId ?? 'unknown');
       }
       noteItemMeter(this.metering, method, item, turnId);
-      const turn = this.turnRuns.get(turnId);
+      const turn = this.turns.turnRun(turnId);
       const commandId = this.commandIdOf(item, turnId);
-      if (commandId && !this.commandRuns.has(commandId)) {
-        this.commandRuns.set(commandId, { commandId, runId: this.host.findRunIdByCommand(this.session.id, commandId), createdAt: toIso(Number(params.startedAtMs)) ?? new Date().toISOString() });
-      }
+      if (commandId) this.turns.noteLiveCommand(commandId, toIso(Number(params.startedAtMs)));
       const itemTurn = { id: turnId, startedAt: Number(params.startedAtMs) / 1000 };
       // The notification states its own times; the rollout, which may not have the line yet, is the fallback.
       const span = notificationSpan(method, params, item) ?? this.rolloutSpan(this.nativeSessionId ?? 'unknown', item);
@@ -3338,10 +3226,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const requestId = this.scopedRequestId(threadId, String(request.id));
     const main = threadId === this.nativeSessionId;
     const requestedTurnId = str(request.params.turnId);
-    if (main && requestedTurnId && this.dispatchCommandId && !this.nativeCommand) {
-      const submitted = this.commandRuns.get(this.dispatchCommandId);
-      if (submitted) this.turnRuns.set(requestedTurnId, { ...submitted, commandId: this.dispatchCommandId });
-    }
+    if (main && requestedTurnId && !this.nativeCommand) this.turns.bindDispatchedTurn(requestedTurnId);
     const pending = makePendingInteraction(request);
     if (!pending) throw new Error(`${this.label} request ${request.method} is not supported by the workbench.`);
     pending.interaction.requestId = requestId;
@@ -3388,9 +3273,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private noteUserMessage(turnId: string, events: NativeWorkbenchEvent[]): void {
     const event = events.find(candidate => candidate.type === 'user_message_chunk');
     const commandId = str(event?.data.commandId);
-    if (commandId) this.rememberTurnCommand(turnId, commandId, true);
+    if (commandId) this.turns.rememberCommand(turnId, commandId, true);
     if (event && !this.metering.isSettled(turnId)) this.metering.meterFor(turnId).nativeMessageId ??= event.nativeId;
-    const outcome = this.pendingTurnOutcomes.get(turnId);
+    const outcome = this.turns.pendingOutcome(turnId);
     if (commandId && outcome) queueMicrotask(() => this.emitTurnOutcome(outcome, turnId));
   }
 
@@ -3398,7 +3283,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const threadId = this.nativeSessionId ?? 'unknown';
     const nativeId = codexPlanNativeId(threadId, turnId);
     const event = this.withStableSequence({
-      ...this.makeEvent(nativeId, turnId, this.turnRuns.get(turnId)?.runId, 'plan', { entries }, raw),
+      ...this.makeEvent(nativeId, turnId, this.turns.turnRun(turnId)?.runId, 'plan', { entries }, raw),
       createdAt: new Date().toISOString(),
     });
     this.livePlanSnapshots.set(turnId, event);
@@ -3420,7 +3305,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const event = this.makeEvent(
       nativeId,
       turnId ?? '',
-      turnId ? this.turnRuns.get(turnId)?.runId : undefined,
+      turnId ? this.turns.turnRun(turnId)?.runId : undefined,
       'plan',
       { entries: snapshot.entries },
     );
@@ -3428,47 +3313,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private makeEvent(nativeId: string, turnId: string, runId: string | undefined, type: string, data: Record<string, unknown>, raw?: unknown): NativeWorkbenchEvent {
-    return buildEvent(this.session.id, this.turnRuns.get(turnId)?.createdAt, nativeId, turnId, runId, type, data, raw);
-  }
-
-  /** Only a reliable turn terminal (live or recovered history), never an offline/unknown state. */
-  private completeTurnWaiters(turnId: string, threadId = this.nativeSessionId): void {
-    const waiterId = this.scopedRequestId(threadId, turnId);
-    for (const waiter of this.completionWaiters.get(waiterId) ?? []) waiter.resolve();
-    this.completionWaiters.delete(waiterId);
+    return buildEvent(this.session.id, this.turns.turnRun(turnId)?.createdAt, nativeId, turnId, runId, type, data, raw);
   }
 
   private emitTurnOutcome(turn: RpcTurn, turnId: string): NativeWorkbenchEvent[] {
-    const status = turnStatus(turn.status);
-    const type = status === 'completed' ? 'run_completed' : status === 'failed' ? 'run_failed' : status === 'interrupted' ? 'run_cancelled' : undefined;
-    if (!type) return [];
-    // A turn ends once. A history read that started before `turn/completed` can return after it with
-    // an older status; settling on that would flip a completed run to cancelled.
-    const settled = this.settledTurns.get(turnId);
-    if (settled && settled !== type) return [];
-    this.completeTurnWaiters(turnId);
-    this.pendingTurnOutcomes.set(turnId, turn);
-    if (this.pendingTurnOutcomes.size > 64) this.pendingTurnOutcomes.delete(this.pendingTurnOutcomes.keys().next().value!);
-    this.restoreTurnCommands(turnId);
-    const ids = new Set([...(this.turnCommands.get(turnId) ?? []), ...asArray<RpcItem>(turn.items)
-      .filter(item => item.type === 'userMessage')
-      .map(item => this.commandIdOf(item, turnId))
-      .filter((id): id is string => Boolean(id))]);
-    const mapped = this.turnRuns.get(turnId);
-    if (mapped?.commandId) ids.add(mapped.commandId);
-    const known = [...ids].filter(commandId => this.commandRuns.has(commandId));
-    if (!known.length) {
-      if (this.dispatchCommandId) {
-        this.pendingTurnOutcomes.set(turnId, turn);
-        if (this.pendingTurnOutcomes.size > 64) this.pendingTurnOutcomes.delete(this.pendingTurnOutcomes.keys().next().value!);
-      }
-      return [];
-    }
-    this.settledTurns.set(turnId, type);
-    if (this.settledTurns.size > 256) this.settledTurns.delete(this.settledTurns.keys().next().value!);
+    const settled = this.turns.settleOutcome(turn, turnId);
+    if (!settled) return [];
+    const { type, status, known, mapped } = settled;
     const outcomes: NativeWorkbenchEvent[] = [];
     for (const commandId of known) {
-      const command = this.commandRuns.get(commandId)!;
+      const command = this.turns.commandRun(commandId)!;
       const nativeMessage = this.events.find(event => event.type === 'user_message_chunk'
         && event.data.commandId === commandId
         && event.nativeId.startsWith(`${this.nativeSessionId ?? 'unknown'}:${turnId}:`));
@@ -3493,24 +3347,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return outcomes;
   }
 
-  /**
-   * Whether this client is driving the turn right now: it is the active turn, or it carries the
-   * message being dispatched. Only an `interrupted` read of such a turn is ignored: a history read
-   * taken while it starts can call it that — TRAE CLI derives the status from a rollout that does not
-   * have the turn's `task_started` yet — whereas `completed` and `failed` only appear once it ended.
-   * A real interruption still arrives live as `turn/completed`.
-   */
-  private drivesTurn(turn: RpcTurn): boolean {
-    if (turn.id === this.activeTurnId) return true;
-    const dispatching = this.dispatchCommandId;
-    return Boolean(dispatching && asArray<RpcItem>(turn.items).some(item => this.commandIdOf(item, turn.id) === dispatching));
-  }
-
   private projectKnownUserReceipts(turn: RpcTurn): void {
     for (const item of asArray<RpcItem>(turn.items)) {
       if (item.type !== 'userMessage') continue;
       const commandId = this.commandIdOf(item, turn.id);
-      if (!commandId || !this.commandRuns.has(commandId)) continue;
+      if (!commandId || !this.turns.commandRun(commandId)) continue;
       for (const event of this.projectItem(item, turn)) this.pushEvent(event);
     }
   }
@@ -3797,7 +3638,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const facts = Object.assign(this.facts, change);
     // Thread failure is a condition, independent of statuses rebuilt by child/interaction events.
     // Once recovered or owned by a failed turn, discard copies of its projected notice.
-    if (this.threadError && (!this.threadErrorTurnId || this.settledTurns.get(this.threadErrorTurnId) !== 'run_failed')) {
+    if (this.threadError && (!this.threadErrorTurnId || this.turns.settledType(this.threadErrorTurnId) !== 'run_failed')) {
       facts.notice = { text: `${this.label} reported a thread-level system error.`, level: 'error', source: 'thread' };
     } else if (facts.notice?.source === 'thread') facts.notice = undefined;
     const requested = this.withAsyncQuestion({
@@ -3815,11 +3656,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...requested,
       profilePending: this.profilePending || undefined,
       phase: this.turnPhase(requested.phase),
-      ...(turnId ? { activeTurnId: this.turnRuns.get(turnId)?.runId ?? turnId } : {}),
+      ...(turnId ? { activeTurnId: this.turns.turnRun(turnId)?.runId ?? turnId } : {}),
       ...(turnId && this.attached && this.transport?.isOnline && !this.bindingScopeMismatch && !this.endpointWriteConflict &&
         facts.connection?.state === 'connected' && requested.phase === 'busy' && !this.currentInteraction && this.nativeSessionId
         && supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)
-        ? { activeTurn: { nativeSessionId: this.nativeSessionId, turnId, ...(this.turnRuns.get(turnId)?.runId ? { ownerRunId: this.turnRuns.get(turnId)!.runId } : {}) } } : {}),
+        ? { activeTurn: { nativeSessionId: this.nativeSessionId, turnId, ...(this.turns.turnRun(turnId)?.runId ? { ownerRunId: this.turns.turnRun(turnId)!.runId } : {}) } } : {}),
       ...(control ? { runtimeControl: control } : {}),
     }, this.activities.ledger.list(), { upgradePhase: false });
     // Compared by content: two paths that build the same status in a different key order (a notice
@@ -3905,8 +3746,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.threadError = false;
       // Recovery ends the previous error's ownership. An active, unsettled turn is fresh evidence;
       // a historical/foreground end is never evidence for a later, unrelated system error.
-      this.threadErrorTurnId = status.type === 'active' && this.activeTurnId && !this.settledTurns.has(this.activeTurnId)
-        ? this.activeTurnId : undefined;
+      this.threadErrorTurnId = status.type === 'active' ? this.turns.unsettledActiveTurnId : undefined;
     } else if (status?.type === 'systemError') this.threadError = true;
     const update = threadStatusUpdate(status, this.status, this.facts.notice?.source === 'thread', this.interaction, phase, foregroundEnded, Boolean(this.transport?.isOnline));
     // The update's phase says whether the thread reports work beyond a tracked turn; an attention phase leaves that as it was.
@@ -3916,10 +3756,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private onExit(error: Error): void {
     this.requestInterrupt();
     this.history.beginMaterialization();
-    for (const [turnId, waiters] of this.completionWaiters) {
-      for (const waiter of waiters) waiter.reject(new Error(`${this.label} app-server exited before confirming interruption for turn ${turnId}.`));
-    }
-    this.completionWaiters.clear();
+    this.turns.rejectWaiters(turnId => new Error(`${this.label} app-server exited before confirming interruption for turn ${turnId}.`));
     for (const pending of this.pending.values()) pending.resolve?.(NO_SERVER_RESPONSE);
     this.pending.clear();
     this.interaction = undefined;
