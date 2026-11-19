@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Reading an in-progress reply on the web no longer jumps or flashes when the turn finishes and its process block folds above the viewport, including when scrolling back up past the folded block or manually collapsing a tall block near the end of a conversation.
 - On the web, a newly started turn (such as one woken by a background task) sits cleanly below the previous answer's footer instead of crowding into it, and no longer reuses the finished turn's timer or speed before its first row arrives.
 - While the web Collaboration page loads, the stage, each seat's role and the discussion's question are in place first, with same-size placeholders for Agents, models, progress and speeches, so nothing jumps once it loads; it no longer shows a lone "VS", and opening a discussion no longer shows just a spinner.
 - Opening or closing an image preview from message attachments, composer thumbnails, diagrams, marks, or the right-hand Files panel on the web now plays its smooth transition animation in production builds too, and clicking an image in the Files panel opens the full-screen lightbox.

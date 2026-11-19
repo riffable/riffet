@@ -33,10 +33,25 @@ interface Props {
 export function Collapse({ open, children, className, keep, onReveal, still, id }: Props) {
   const [mounted, setMounted] = useState(open);
   const [expanded, setExpanded] = useState(open);
-  /** At rest in its current state: open without clipping, or (kept) folded and hidden. */
-  const [settled, setSettled] = useState(open);
-  /** A find-in-page match opened the region: no transition, the browser scrolls to it right away. */
+  /** At rest in its current state: open without clipping, or folded and hidden/unmounted. */
+  const [settled, setSettled] = useState(true);
+  /** A [still] change or find-in-page match opened/closed the region with transitions disabled. */
   const [instant, setInstant] = useState(false);
+  /** Browser find-in-page (`beforematch`) just opened the region before the owner's `open` prop catches up. */
+  const revealing = useRef(false);
+  if (open) revealing.current = false;
+
+  // Commit [still] state changes synchronously during render so the very first commit lands in the
+  // target geometry (`grid-rows-[0fr]` / `grid-rows-[1fr]` + `transition-none`), letting parent
+  // layout effects (such as transcript scroll reconciliation) read the final height before paint.
+  if (still && !revealing.current && (expanded !== open || !settled || (open && !mounted) || (!open && !keep && mounted))) {
+    setExpanded(open);
+    setSettled(true);
+    setInstant(true);
+    if (open) setMounted(true);
+    else if (!keep) setMounted(false);
+  }
+
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
   const latest = useRef({ open, keep, onReveal, still });
@@ -44,26 +59,20 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
   const shown = useRef(open);
   /** The `expanded` the DOM shows, written on commit. */
   const rendered = useRef(expanded);
-  useLayoutEffect(() => { rendered.current = expanded; });
+  useLayoutEffect(() => {
+    rendered.current = expanded;
+    if ((still || instant) && expanded === open && settled) shown.current = open;
+  });
 
   const finish = () => {
     if (latest.current.open || latest.current.keep) setSettled(true);
     else setMounted(false);
   };
-  useLayoutEffect(() => {
-    if (open && expanded && settled) { shown.current = open; return; }
-    if (!still || (shown.current === open && expanded === open && settled)) return;
-    shown.current = open;
-    setInstant(true);
-    setExpanded(open);
-    setSettled(true);
-    if (open) setMounted(true);
-    else if (!keep) setMounted(false);
-  }, [open, still, keep, expanded, settled]);
   useEffect(() => {
-    // Nothing to animate: the first render already shows this state, or a find-in-page match opened it.
+    // Nothing to animate: the first render already shows this state, or a [still] / find-in-page change landed it.
     if (shown.current === open || (open && expanded && settled)) { shown.current = open; return; }
     shown.current = open;
+    setInstant(false);
     if (!open) setExpanded(false);
     else setMounted(true);
     setSettled(false);
@@ -86,14 +95,6 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
-  // The new state is styled with transitions off before they come back, so nothing starts from it.
-  useLayoutEffect(() => {
-    if (!instant) return;
-    void outer.current?.offsetHeight;
-    const frame = requestAnimationFrame(() => setInstant(false));
-    return () => cancelAnimationFrame(frame);
-  }, [instant]);
-
   const hidden = Boolean(keep && !open && !expanded && settled);
   // React only writes `hidden` as a boolean, so `until-found` is set here. A browser without it
   // reads any value as plain `hidden`, which the base styles turn into `display: none`.
@@ -103,21 +104,34 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
     if (hidden) element.setAttribute('hidden', supportsUntilFound() ? 'until-found' : '');
     else element.removeAttribute('hidden');
   }, [hidden, keep, mounted]);
+
+  // Flush the new geometry with transitions off before re-enabling transitions on the next frame,
+  // so no stray CSS transition starts from the synchronous state change.
+  useLayoutEffect(() => {
+    if (!instant) return;
+    void outer.current?.offsetHeight;
+    const frame = requestAnimationFrame(() => setInstant(false));
+    return () => cancelAnimationFrame(frame);
+  }, [instant, expanded, settled]);
   useEffect(() => {
     const element = inner.current;
     if (!element || !keep) return;
     const reveal = () => {
+      revealing.current = true;
       flushSync(() => { setInstant(true); setExpanded(true); setSettled(true); });
       latest.current.onReveal?.();
+      queueMicrotask(() => { revealing.current = false; });
     };
     element.addEventListener('beforematch', reveal);
     return () => element.removeEventListener('beforematch', reveal);
   }, [keep, mounted]);
 
   if (!mounted) return null;
+  const collapseState = settled ? (expanded ? 'open' : 'closed') : (open ? 'opening' : 'closing');
   return (
     <div
       ref={outer}
+      data-collapse-state={collapseState}
       className={cn(
         // The column is pinned to the region's width: with no clip on the settled child, an `auto`
         // track would grow to the child's min-content (a long unbroken line) and push it past the column.

@@ -235,7 +235,6 @@ function Row({ open: initial = false, ...props }: Omit<Parameters<typeof Disclos
 
 function Tools() {
   const { t } = useLingui();
-  const following = useRef(true);
   const [started] = useState(() => Date.now() - 12_000);
   const cell = (node: ReactNode) => <div className="w-full min-w-0 max-w-xl">{node}</div>;
   const inner = (
@@ -260,10 +259,10 @@ function Tools() {
       </Frame>
       <div className="grid gap-6 md:grid-cols-2">
         <Specimen name={t`进行中`} prop="TurnProcess running">
-          <div className="w-full"><TurnProcess running issueCount={0} interrupted={false} startedAt={started} following={following}>{inner}</TurnProcess></div>
+          <div className="w-full"><TurnProcess running issueCount={0} interrupted={false} startedAt={started}>{inner}</TurnProcess></div>
         </Specimen>
         <Specimen name={t`已结束`} prop="TurnProcess">
-          <div className="w-full"><TurnProcess running={false} issueCount={0} interrupted={false} choice={false} startedAt={Date.now() - 101_000} endedAt={Date.now()} footerTime={ISO} footerPinned following={following}>{inner}</TurnProcess></div>
+          <div className="w-full"><TurnProcess running={false} issueCount={0} interrupted={false} choice={false} startedAt={Date.now() - 101_000} endedAt={Date.now()} footerTime={ISO} footerPinned>{inner}</TurnProcess></div>
         </Specimen>
       </div>
     </div>
@@ -358,7 +357,6 @@ function Approvals() {
 
 function States() {
   const { t } = useLingui();
-  const following = useRef(true);
   const [started] = useState(() => Date.now() - 83_000);
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -370,7 +368,7 @@ function States() {
       </Specimen>
       <Specimen name={t`已停止`} prop="stopped">
         <div className="flex w-full flex-col">
-          <TurnProcess running={false} issueCount={0} interrupted stopped choice={false} startedAt={Date.now() - 101_000} endedAt={Date.now()} following={following}>{null}</TurnProcess>
+          <TurnProcess running={false} issueCount={0} interrupted stopped choice={false} startedAt={Date.now() - 101_000} endedAt={Date.now()}>{null}</TurnProcess>
           <MessageFooter showActions={false} time={ISO} stopped footerPinned />
         </div>
       </Specimen>

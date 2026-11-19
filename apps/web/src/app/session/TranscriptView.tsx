@@ -1,5 +1,5 @@
 import { createPortal, flushSync } from 'react-dom';
-import { memo, useCallback, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref, type RefObject } from 'react';
+import { memo, useCallback, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowDown, IconChevronDown, IconChevronRight, IconRefreshCw, IconSearch, IconWrench, IconX } from '@/components/icons';
 import { Input, Spinner } from '@/components/ui/controls';
@@ -399,8 +399,6 @@ interface RowContext {
   measure: (key: string, element: HTMLElement | null) => void;
   /** The list is windowed: rows scroll out of the DOM and come back, so their layout must not depend on staying mounted. */
   virtual: boolean;
-  /** Reader intent, kept independently of scroll position during streamed layout changes. */
-  following: RefObject<boolean>;
   /** Rows that arrived after the transcript first showed, until when their entrance may play. */
   fresh: ReadonlyMap<string, Fresh> | undefined;
   root?: string;
@@ -476,12 +474,11 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const lastTime = timelineItemTime(items[lastOutputIndex]!);
     return (
       <div ref={attach} data-row-key={row.key} className={cn(
-        // `-mx-2` widens the contained row by the turn header's own padding. Paint containment
-        // (from `content-visibility`) clips anything that overhangs it, so the header cannot
-        // reach its padded pill outward from inside — widening the box keeps the pill's padding
-        // and rounded corners while the icon stays on the text column. `TurnProcess` cancels it
-        // for the expanded contents.
-        '-mx-2 min-w-0', contained,
+        // `-mx-2` widens the row by the turn header's own padding so the icon stays on the text
+        // column; `TurnProcess` cancels it for the expanded contents. Process rows never use
+        // `content-visibility: auto`: when folded their body already carries `hidden="until-found"`,
+        // and skipping an open process off-screen would freeze its pre-fold height until scrolled near.
+        '-mx-2 min-w-0',
         hasTurnFooter && 'turn-footer-row can-hover:-mx-6 can-hover:px-4',
         row.spaced ? 'timeline-gap-block' : '',
         highlighted && 'timeline-focus-hit',
@@ -699,6 +696,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const [landingTick, setLandingTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
   const earlierProbe = useRef<HTMLDivElement>(null);
   const headKey = useRef<string | undefined>(undefined);
   /*
@@ -762,7 +760,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const positionChange = useRef<(synchronous: boolean) => void>(() => {});
   const onPositionChange = useCallback((synchronous: boolean) => positionChange.current(synchronous), []);
   const scroll = useTranscriptScroll({
-    scrollRef, contentRef, sessionId, resetVersion, loaded,
+    scrollRef, contentRef, spacerRef, sessionId, resetVersion, loaded,
     resources: Boolean(resources), hasMoreLater: Boolean(hasMoreLater), running,
     locate, modelAnchor, onPositionChange,
   });
@@ -1354,7 +1352,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   }), []);
   const fresh = seen.current?.fresh;
   const rowContext = useMemo<RowContext>(() => ({
-    sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, following: scroll.following,
+    sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual,
     measure: rowObserver.measure,
     ...(onOpenPath ? { onOpenPath: stable.openPath } : {}),
     ...(onOpenInEditor ? { onOpenInEditor: stable.openInEditor } : {}),
@@ -1551,7 +1549,9 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         data-transcript-scroll
         // Never scrolls sideways: a column sliding after a session step (`useSessionLayout`) would
         // otherwise overflow it for the slide's length and flash a horizontal scrollbar.
-        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [overflow-anchor:none]"
+        // `overflow-anchor` is managed dynamically by `useTranscriptScroll` (enabled while reading,
+        // disabled while following, navigating, holding a disclosure, or swapping virtual segments).
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
       >
         <div
           ref={contentRef}
@@ -1577,17 +1577,19 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
             const mounted: ReactNode[] = [];
             let cursor = 0;
             segments.forEach(([from, to], segment) => {
-              mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
+              mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
               for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!));
               cursor = to;
             });
-            mounted.push(<div key="space:end" aria-hidden data-virtual-spacer style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
+            mounted.push(<div key="space:end" aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
             return mounted;
           })() : rowsAll.map(renderRow)}
           </RememberedValues.Provider></TranscriptCatchUp.Provider>
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}
           {progress && !heldFooter && <div className={standaloneProgressGap}>{progress}</div>}
+          {/* Temporary room below closing rows so collapsing near the end never clamps the reader; reclaimed as the reader scrolls or content grows. */}
+          <div ref={spacerRef} aria-hidden data-transcript-spacer className="shrink-0 [overflow-anchor:none]" />
         </div>
       </div>
 

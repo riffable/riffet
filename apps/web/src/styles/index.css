@@ -3136,13 +3136,6 @@ html[data-density='relaxed'] {
   margin-top: var(--timeline-gap-tight);
 }
 
-/* A folded turn process already hides its body with `hidden="until-found"`, leaving only its
- * single-line header. Keeping `content-visibility: auto` on an off-screen folded row would freeze
- * its box at the pre-fold remembered height until the reader scrolls back near it. */
-[data-row-key]:has(> [data-process-open="false"]) {
-  content-visibility: visible;
-}
-
 /* The footer's surrounding whitespace reveals it too: the band from the answer's last line down
  * to the next turn, wider than what it holds. Negative margins keep its 28px layout line and text
  * position; the row's compensated padding contains the full hit area even with content-visibility

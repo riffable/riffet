@@ -85,8 +85,12 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
     const rect = row.getBoundingClientRect();
     if (rect.top >= bounds.bottom) break;
     if (rect.height === 0 || !row.dataset.rowKey) continue;
-    const process = row.querySelector('[data-process-open]');
-    const processOpen = process ? process.getAttribute('data-process-open') === 'true' || !process.querySelector('[hidden]') : undefined;
+    const process = row.querySelector<HTMLElement>('[data-process-open]');
+    const processCollapse = process?.querySelector<HTMLElement>(':scope > [data-collapse-state]');
+    const processOpen = process
+      ? process.getAttribute('data-process-open') === 'true'
+        || (processCollapse !== null && processCollapse !== undefined && processCollapse.dataset.collapseState !== 'closed')
+      : undefined;
     const foldingProcess = rect.top < bounds.top && process?.getAttribute('data-process-open') === 'false';
     // Only a row that starts above the view has something above the reader that could grow.
     const block = !rows.length && rect.top < bounds.top && !foldingProcess ? blockAt(row, bounds.top, bounds.bottom) : undefined;

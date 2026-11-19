@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconSparkles } from '@/components/icons';
 import { Collapse } from '@/components/ui/collapse';
@@ -39,8 +39,6 @@ interface Props {
   onOpenChange?: (open: boolean) => void;
   /** Opens the block, as for a 收藏 jump to something inside it, which then stays open to read. */
   reveal?: number;
-  /** The transcript follows its newest row; its scroll position may lag while an answer arrives. */
-  following?: RefObject<boolean>;
   /** The turn runs and ends on this block for now: the footer's place is held, showing this (the working line, or nothing). */
   progress?: ReactNode;
 }
@@ -55,13 +53,33 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const { quiet } = useContext(TranscriptCatchUp);
-  const [open, setOpen] = useState(choice ?? (defaultOpen || detailOpen || running || interrupted || issueCount > 0));
-  const [offscreenFold, setOffscreenFold] = useState(false);
   /** Explicit reader choices survive completion; automatic expansion never records a choice. */
-  const manuallySet = useRef(choice !== undefined);
+  const [manualChoice, setManualChoice] = useState<boolean | undefined>(() => (reveal !== undefined ? true : choice));
+  const [prevChoice, setPrevChoice] = useState(choice);
+  const [prevReveal, setPrevReveal] = useState(reveal);
   const previousRunning = useRef(running);
   const section = useRef<HTMLElement>(null);
   const contentsId = useId();
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+
+  if (choice !== prevChoice) {
+    setPrevChoice(choice);
+    setManualChoice(choice);
+  }
+  if (reveal !== prevReveal) {
+    setPrevReveal(reveal);
+    if (reveal !== undefined) setManualChoice(true);
+  }
+
+  // Derive disclosure state synchronously during render so completion lands in the same React
+  // commit as the transcript update (and its scroll reconciliation), with no multi-commit lag.
+  const automaticOpen = Boolean(defaultOpen || detailOpen || running || interrupted || issueCount > 0);
+  const completing = previousRunning.current && !running;
+  const keepForReader = completing && manualChoice === undefined && !automaticOpen && beingRead(section.current);
+  const open = manualChoice ?? (keepForReader || automaticOpen);
+  const instantFold = completing && !open && canInstantFold(section.current);
+
   /**
    * Contents that have been shown once stay mounted when folded (`Collapse keep`, hidden with
    * `until-found`): a tool row keeps whether it was expanded, a row coming back does not replay its
@@ -78,36 +96,19 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const onScreen = useLingering(true, ASSEMBLY_MS);
 
   const chooseOpen = (next: boolean) => {
-    manuallySet.current = true;
-    setOffscreenFold(false);
-    setOpen(next);
-    onOpenChange?.(next);
+    setManualChoice(next);
+    onOpenChangeRef.current?.(next);
   };
 
   useEffect(() => {
     if (reveal === undefined) return;
-    chooseOpen(true);
+    onOpenChangeRef.current?.(true);
   }, [reveal]);
 
   useLayoutEffect(() => {
-    const fold = () => {
-      if (detailOpen || beingRead(section.current)) chooseOpen(true);
-      else {
-        setOffscreenFold(isOffscreen(section.current));
-        setOpen(false);
-      }
-    };
-    if (running && !previousRunning.current) {
-      if (!manuallySet.current) { setOffscreenFold(false); setOpen(true); }
-    } else if (!running && previousRunning.current) {
-      if (!manuallySet.current && !defaultOpen && !interrupted && issueCount === 0) fold();
-    }
-    // The stop receipt can arrive after the running flag settled. Restore automatically folded
-    // output then too, while preserving an explicit choice to close it.
-    if ((interrupted || issueCount > 0) && !manuallySet.current) { setOffscreenFold(false); setOpen(true); }
+    if (keepForReader) chooseOpen(true);
     previousRunning.current = running;
-  }, [running, issueCount, interrupted, defaultOpen, detailOpen]);
-
+  }, [running, keepForReader]);
 
   const now = useNow(running);
   const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;
@@ -130,8 +131,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
           // The row hugs its content instead of spanning the column: a full-width band under the
           // answer reads as a stray divider. The pill keeps 8px of padding on both sides, and the
           // enclosing row is widened by that same 8px (see `TranscriptView`) so the icon inside the
-          // padding still lands on the text column — a `-mx-2` here would be clipped, corners and
-          // all, by the row's `content-visibility` paint containment.
+          // padding still lands on the text column.
           'group/tp flex min-h-7 w-fit max-w-full min-w-0 items-center gap-2 self-start rounded-md px-2 text-left text-sm text-fg-3 transition-colors hover:bg-hover hover:text-fg-2 no-hover:min-h-11',
         )}
       >
@@ -139,14 +139,15 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
         <span className={cn('min-w-0 truncate', running && 'text-shimmer')}>{label}</span>
         <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 opacity-70 transition-transform duration-[var(--duration-base)] ease-out-soft', open && 'rotate-90')} />
       </button>
-      {/* Opening and folding, the turn's own fold at its end included, animate their height; the
-          transcript's scroll coordinator keeps the end or the reader's place meanwhile. */}
-      <Collapse open={open} keep still={!onScreen || quiet || offscreenFold} id={contentsId} onReveal={() => chooseOpen(true)}>
+      {/* Opening and on-screen folding animate height; off-screen folds with enough scroll room
+          above land in a single synchronous commit so visible content below never moves.
+          `overflow-anchor: none` keeps native scroll anchoring from pinning inside a collapsing body. */}
+      <Collapse open={open} keep still={!onScreen || quiet || instantFold} id={contentsId} onReveal={() => chooseOpen(true)} className="[overflow-anchor:none]">
         {/* No left rail or indent: a turn's contents line up with its own header. Indentation
             is reserved for genuinely nested detail (a tool row expanding its own payload).
             `mx-2` cancels the row's own widening, so the contents stay on the text column. The
             spacing folds away with the region. */}
-        <div className={cn('mx-2 mt-1 flex min-w-0 flex-col pt-0.5', !hasFooter && 'pb-1')}>
+        <div data-process-body className={cn('mx-2 mt-1 flex min-w-0 flex-col pt-0.5', !hasFooter && 'pb-1')}>
           {children}
         </div>
       </Collapse>
@@ -181,11 +182,24 @@ function beingRead(element: HTMLElement | null): boolean {
   return selection.getRangeAt(0).intersectsNode(element);
 }
 
-function isOffscreen(element: HTMLElement | null): boolean {
+/**
+ * Whether folding [element] can land in a single synchronous commit without moving anything visible:
+ * - below the viewport: invisible to the reader;
+ * - header visible in the viewport: animate so the reader sees the fold;
+ * - header above the viewport: instant only when `scrollTop` can absorb the lost height without
+ *   hitting 0 and snapping content below it upward.
+ */
+function canInstantFold(element: HTMLElement | null): boolean {
   if (!element) return false;
-  const scroller = element.closest('[data-transcript-scroll]');
+  const scroller = element.closest<HTMLElement>('[data-transcript-scroll]');
   if (!scroller) return false;
   const view = scroller.getBoundingClientRect();
-  const box = element.getBoundingClientRect();
-  return box.top < view.top || box.top >= view.bottom;
+  const row = element.closest<HTMLElement>('[data-row-key]') ?? element;
+  const box = row.getBoundingClientRect();
+  if (box.top >= view.bottom) return true;
+  if (box.top >= view.top) return false;
+  const body = element.querySelector<HTMLElement>('[data-process-body]');
+  const header = element.firstElementChild?.getBoundingClientRect().height ?? 0;
+  const collapsible = body ? body.getBoundingClientRect().height : Math.max(0, box.height - header);
+  return scroller.scrollTop >= collapsible - 1;
 }
