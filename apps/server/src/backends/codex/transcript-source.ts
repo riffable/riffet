@@ -1,19 +1,21 @@
-import { createHash } from 'node:crypto';
-import type { NativeActivity, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
+import type { NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
 import { activityId } from '../../journal/activity.js';
-import type { SyncLane } from '../../../../../packages/contracts/src/sync.js';
-import type { LaneWriter, SubagentBinding, TranscriptSource, TurnEndStatus } from '../../journal/ingest.js';
+import type { LaneWriter, TranscriptSource, TurnEndStatus } from '../../journal/ingest.js';
 import { readCompaction } from './activities.js';
+import { CHILD_DEPTH, CodexChildren, type Child } from './children.js';
 import { isMissingThreadError } from './errors.js';
-import { messagePhase } from './drafts.js';
-import { notificationSpan, type ItemSpans } from './item-spans.js';
-import type { CodexIngestState } from './journal-space.js';
-import { projectCodexItem, rowTextKey } from './project-item.js';
+import type { ItemSpans } from './item-spans.js';
+import { copiesOf, cursorThread, decode, encode, planEvent, reconcile, spawnedThread, turnTime, namedThreads, type LaneState } from './lane-state.js';
+import { CodexLiveIntake } from './live-intake.js';
+import { projectCodexItem } from './project-item.js';
 import { CodexQuestionHistory } from './question-history.js';
-import { normalizePlanEntries } from './rollout-plan.js';
-import { codexPlanNativeId, isFinalTurnStatus, isProvisionalItemId, isSpawnAgentItem, isSubagentStart, subagentName, subagentToolCallId, turnStatus, type ItemSpan, type ObservedChanges } from './transcript.js';
+import { isFinalTurnStatus, isProvisionalItemId, isSubagentStart, subagentToolCallId, turnStatus, type ItemSpan } from './transcript.js';
+import type { CodexThreadReader, CodexTranscriptOptions, CodexTurnPage, CodexTurnsRequest } from './transcript-types.js';
 import type { RpcItem, RpcTurn } from './types.js';
-import { asArray, asRecord, str, toIso } from './util.js';
+import { asArray, asRecord, str } from './util.js';
+
+export { newTopicAfter, newTopicBoundary } from './lane-state.js';
+export type { CodexLiveFeed, CodexThreadReader, CodexTranscriptOptions, CodexTurnPage, CodexTurnsRequest } from './transcript-types.js';
 
 /*
  * A Codex / TRAE CLI thread as the session journal reads it (sync v3, journal/ingest.ts).
@@ -48,192 +50,40 @@ const LOCATE_PAGES = 1_000;
 const COMMIT_EVENTS = 200;
 /** A write of turns gives the event loop back after about this long. */
 const SLICE_MS = 20;
-/** Subagents within subagents followed; the app-server's own limit is far below. */
-const CHILD_DEPTH = 8;
 /** A finished subagent is looked at again this often, in case a follow-up woke it. */
 const CHILD_IDLE_MS = 30_000;
 /** While the live feed holds, the thread is read as a backstop this often. */
 const BACKSTOP_MS = 10_000;
 /** Streamed text wakes the reader at most this often. */
 const DRAFT_WAKE_MS = 100;
-/** Live notifications kept between reads; more than this and the next read takes them from the thread. */
-const LIVE_LIMIT = 5_000;
-/** Streamed answer phases remembered for items whose settled copy does not state one. */
-const PHASES_KEPT = 1_000;
-
-export interface CodexTurnPage { data?: RpcTurn[]; nextCursor?: string | null }
-
-export interface CodexTurnsRequest {
-  threadId: string;
-  cursor?: string;
-  limit: number;
-  sortDirection: 'asc' | 'desc';
-  /** `notLoaded` / `summary` leave the items out: a header scan. */
-  itemsView?: 'full' | 'notLoaded' | 'summary';
-}
-
-/** `thread/turns/list` of the app-server the runtime is connected to. */
-export interface CodexThreadReader {
-  /** One page; undefined while the thread cannot be read yet (not materialized). */
-  turnsPage(request: CodexTurnsRequest): Promise<CodexTurnPage | undefined>;
-  /** This reader created the thread empty, before any nonempty history was read. */
-  hasEmptyHistoryBaseline?(threadId: string): boolean;
-  /** Metadata-only native question requests, including requests made before this reader attached. */
-  questionRequests?(threadId: string): RpcItem[];
-  /** Current execution evidence; a history read can temporarily call this turn interrupted. */
-  isTurnRunning?(threadId: string, turn: RpcTurn): boolean;
-}
-
-/** What the connected runtime passes on between reads. */
-export interface CodexLiveFeed {
-  /** A notification of the conversation's own thread. */
-  notification(method: string, params: Record<string, unknown>): void;
-  /** A state of a compaction or background terminal, as the runtime's activity tracker settles it. */
-  activity(activity: NativeActivity): void;
-  /** Whether a reader follows the conversation now; absent means one does. */
-  active?(): boolean;
-  /** The app-server connection that reported turns went away: what it said was running is unproven. */
-  lost?(): void;
-}
-
-export interface CodexTranscriptOptions {
-  /** The workbench session the lanes belong to. */
-  sessionId: string;
-  /** The flavor's id, which prefixes its activity ids. */
-  backend: string;
-  /** What a shell command changed in the working tree, by its tool call id (`observation.ts`). */
-  observedChanges?: ObservedChanges;
-  /** The thread the conversation follows now. */
-  threadId(): string | undefined;
-  /** The threads it followed before, oldest first: each new topic (`/new`) went on in a new thread (`Session.previousNativeSessionIds`). */
-  earlierThreads?(): readonly string[];
-  /** The message that ended `threadId` and started the next thread: the `/new` the owner sent. */
-  topicAfter?(threadId: string): { commandId: string; runId: string; text: string; at: string } | undefined;
-  /** A reader of the thread when one is connected; undefined while offline. */
-  reader(): Promise<CodexThreadReader | undefined>;
-  /** The workbench command a user item answers, by the tag the flavor echoes. */
-  commandOf(item: RpcItem, turnId: string): string | undefined;
-  /** The run of a workbench command. */
-  runOf(commandId: string): string | undefined;
-  /** The runtime's live feed while it is connected; returns how to stop. */
-  observe?(feed: CodexLiveFeed): () => void;
-  /** When the thread's items happened (`item-spans.ts`); a thread's own rollout, the conversation's or a subagent's. Rows keep their turn's start without it. */
-  itemSpans?(threadId: string): Promise<ItemSpans | undefined>;
-  /** What the provider said of a failed turn, fit to show; its end mark carries it to whoever settles the run. */
-  turnError?(turn: RpcTurn): string | undefined;
-}
-
-/** How far a lane has read its thread: the v2 ingest state, and the subagents still running. */
-interface LaneState extends Omit<CodexIngestState, 'v' | 'threadId'> {
-  /** `[toolCallId, threadId]` of subagents spawned in this lane whose own lane has a running turn. */
-  agents?: Array<[string, string]>;
-  /** TRAE's positional rows and lasting text identities, checkpointed with the rows they describe. */
-  copies?: TurnCopies[];
-}
-
-interface TurnCopies {
-  turnId: string;
-  positional: Array<[nativeId: string, text?: string, lastingId?: string]>;
-  shown: Array<[nativeId: string, text: string]>;
-}
-
-/** Keep text identities bounded even when the provider returns a large answer. */
-function textDigest(event: NativeWorkbenchEvent): string | undefined {
-  const text = rowTextKey(event);
-  return text === undefined ? undefined : createHash('sha256').update(text).digest('base64');
-}
-
-function decode(cursor: string | null): LaneState | undefined {
-  if (cursor === null) return undefined;
-  try {
-    const parsed = JSON.parse(cursor) as CodexIngestState & LaneState;
-    if (parsed?.v === 1 && (parsed.phase === 'ready' || parsed.phase === 'importing')) {
-      const { v: _v, threadId: _thread, ...state } = parsed;
-      return state;
-    }
-  } catch { /* not one of ours */ }
-  // A cursor this reader cannot place is read again from the start; what the log holds already writes nothing.
-  return { phase: 'importing' };
-}
-
-/** The thread a lane's cursor was written for. */
-function cursorThread(cursor: string | null): string | undefined {
-  if (cursor === null) return undefined;
-  try { return str((JSON.parse(cursor) as CodexIngestState).threadId); } catch { return undefined; }
-}
-
-const NEW_TOPIC_BOUNDARY = 'codex-new-topic';
-/** The `nativeInputBoundary` of the message that ends `threadId` for a new topic. */
-export function newTopicBoundary(threadId: string): string { return JSON.stringify({ type: NEW_TOPIC_BOUNDARY, after: threadId }); }
-/** The thread a `nativeInputBoundary` says its message ended, when it is a new topic's. */
-export function newTopicAfter(boundary: string | undefined): string | undefined {
-  if (!boundary) return undefined;
-  try {
-    const parsed = asRecord(JSON.parse(boundary));
-    return parsed?.type === NEW_TOPIC_BOUNDARY ? str(parsed.after) : undefined;
-  } catch { return undefined; }
-}
-
-function encode(threadId: string, state: LaneState): string {
-  const { phase, settled, open, turns, agents, copies } = state;
-  return JSON.stringify({
-    v: 1, threadId, phase, ...(settled ? { settled } : {}), ...(open ? { open } : {}), turns: turns ?? 0, ...(agents?.length ? { agents } : {}), ...(copies?.length ? { copies } : {}),
-  });
-}
-
-const turnTime = (seconds: unknown): string | undefined => typeof seconds === 'number' && Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : undefined;
-
-/** The thread a spawning item created. */
-function spawnedThread(item: RpcItem): string | undefined {
-  if (isSubagentStart(item)) return str(item.agentThreadId);
-  if (item.type !== 'collabAgentToolCall' || !isSpawnAgentItem(item)) return undefined;
-  return asArray<unknown>(item.receiverThreadIds).map(str).find(Boolean);
-}
-
-/** Threads a later collaboration call or child notice names: each may have run again. */
-function namedThreads(item: RpcItem): string[] {
-  if (item.type === 'subAgentActivity') return [str(item.agentThreadId)].filter((id): id is string => Boolean(id));
-  if (item.type !== 'collabAgentToolCall') return [];
-  return asArray<unknown>(item.receiverThreadIds).map(str).filter((id): id is string => Boolean(id));
-}
-
-/** A subagent thread and its lane; `owner` names the log that spawned it, resolved against the writers of the current read. */
-interface Child { toolCallId: string; threadId: string; writer: LaneWriter; owner: { lane: SyncLane; scratch: boolean }; depth: number; readAt: number; due: boolean }
-
-type LiveOp =
-  | { kind: 'turn'; turnId: string; at?: string }
-  | { kind: 'item'; turnId: string; item: RpcItem; committed: boolean; at?: string; span?: ItemSpan }
-  | { kind: 'draft'; turnId: string; itemId: string }
-  | { kind: 'plan'; turnId: string; entries: Array<Record<string, unknown>>; at: string }
-  | { kind: 'activity'; activity: NativeActivity };
-
-interface Draft { turnId: string; reasoning: boolean; text: string; phase?: 'commentary' | 'final_answer'; channel?: string; part?: number }
 
 export class CodexTranscriptSource implements TranscriptSource {
   /** The thread everything below is about; another one forgets it all. */
   private thread: string | undefined;
   private questions = new CodexQuestionHistory();
-  /** One observer per native thread, regardless of how many items announce its creation. */
-  private readonly children = new Map<string, Child>();
-  private readonly restoredBindings = new Set<string>();
+  /** The subagent threads and their lanes. */
+  private readonly children: CodexChildren;
+  /** What the live feed said since the last read: queued writes, streamed drafts, phases and turn states. */
+  private readonly intake: CodexLiveIntake;
   /** Where an import continues, per lane: the turn it stopped after and the provider's page there. */
   private readonly imports = new Map<string, { settled?: string; cursor?: string; skip?: string }>();
   /** Turns whose end this source wrote: anything the live feed still says about them is in their settled copy. */
   private readonly ended = new Set<string>();
-  /** Ordered lifecycle notifications, independent of lagging history snapshots. Ephemeral. */
-  private readonly liveTurns = new Map<string, string>();
-  private live: LiveOp[] = [];
-  private readonly drafts = new Map<string, Draft>();
-  /** Phases streamed for answers, for a committed item that does not state its own. */
-  private readonly phases = new Map<string, 'commentary' | 'final_answer'>();
   private feeds = 0;
   /** The main lane's writer of the read in progress. */
   private main: LaneWriter | undefined;
   /** The thread has to be read: on the first pull, at a turn's end, when the feed lost something, and as a backstop. */
   private repairDue = true;
 
-  constructor(private readonly options: CodexTranscriptOptions) {}
-
+  constructor(private readonly options: CodexTranscriptOptions) {
+    this.children = new CodexChildren({ main: () => this.main, thread: () => this.thread });
+    this.intake = new CodexLiveIntake({
+      sessionId: options.sessionId,
+      turnEnded: turnId => this.ended.has(`${this.thread}:${turnId}`),
+      settledTurn: () => decode(this.main?.cursor ?? null)?.settled,
+      repairSoon: () => { this.repairDue = true; },
+    });
+  }
   /**
    * The conversation's first thread: a new topic goes on in another thread (`/new`) without starting the lane over,
    * whose rows of the earlier threads stay. Only a conversation that follows another thread altogether is a new identity.
@@ -269,10 +119,10 @@ export class CodexTranscriptSource implements TranscriptSource {
     };
     const stop = this.options.observe?.({
       notification: (method, params) => { const how = this.note(method, params); if (how === 'now') wake(); else if (how === 'soon') soon(); },
-      activity: activity => { this.push({ kind: 'activity', activity }); wake(); },
+      activity: activity => { this.intake.push({ kind: 'activity', activity }); wake(); },
       lost: () => {
         // A dead app-server sends no turn/completed; history alone decides the turns it was running.
-        for (const [turnId, status] of this.liveTurns) if (status === 'inProgress') this.liveTurns.delete(turnId);
+        this.intake.forgetRunning();
         this.repairDue = true;
         wake();
       },
@@ -315,13 +165,9 @@ export class CodexTranscriptSource implements TranscriptSource {
       this.thread = threadId;
       this.questions = new CodexQuestionHistory();
       this.children.clear();
-      this.restoredBindings.clear();
       this.imports.clear();
       this.ended.clear();
-      this.liveTurns.clear();
-      this.live = [];
-      this.drafts.clear();
-      this.phases.clear();
+      this.intake.reset();
       this.repairDue = true;
     }
     return threadId;
@@ -348,12 +194,12 @@ export class CodexTranscriptSource implements TranscriptSource {
       if (at === current || !earlier.includes(at)) return current ? await this.readMain(w, reader, current, signal) : true;
       if (w.scratch) {
         const window = decode(w.scratch.cursor);
-        this.restoreAgents(w.scratch, window, 0);
+        this.children.restoreAgents(w.scratch, window, 0);
         if (current && this.repairNow() && window?.phase === 'ready') await this.refresh(w.scratch, reader, current, 0, true);
         if (current) this.flushLive(w.scratch, current);
       }
       const state = decode(w.cursor) ?? { phase: 'importing' as const };
-      this.restoreAgents(w, state, 0);
+      this.children.restoreAgents(w, state, 0);
       let done: boolean;
       try {
         done = state.phase === 'importing'
@@ -407,12 +253,12 @@ export class CodexTranscriptSource implements TranscriptSource {
 
   private async readMain(w: LaneWriter, reader: CodexThreadReader, threadId: string, signal: AbortSignal): Promise<boolean> {
     const state = decode(w.cursor);
-    this.restoreAgents(w, state, 0);
+    this.children.restoreAgents(w, state, 0);
     if (!state && !w.scratch) return await this.firstRead(w, reader, threadId);
     const scratch = w.scratch;
     if (scratch) {
       const window = decode(scratch.cursor);
-      this.restoreAgents(scratch, window, 0);
+      this.children.restoreAgents(scratch, window, 0);
       if (this.repairNow() && window?.phase === 'ready') await this.refresh(scratch, reader, threadId, 0, true);
       this.flushLive(scratch, threadId);
     }
@@ -597,7 +443,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     this.seedQuestions(reader, request.threadId);
     if (!page) return undefined;
     return { ...page, data: asArray<RpcTurn>(page.data).map(turn => {
-      const live = request.threadId === this.thread ? this.liveTurns.get(turn.id) : undefined;
+      const live = request.threadId === this.thread ? this.intake.turnState(turn.id) : undefined;
       const running = live === 'inProgress' || live === undefined && reader.isTurnRunning?.(request.threadId, turn);
       const status = turnStatus(turn.status);
       if (live && live !== 'inProgress' && status !== live) {
@@ -632,7 +478,7 @@ export class CodexTranscriptSource implements TranscriptSource {
       const final = await this.writeTurn(w, threadId, turn, state, depth, pause, spans);
       if (final && open === undefined) { settled = turn.id; count += 1; } else open ??= turn.id;
     }
-    Object.assign(state, { ...(settled ? { settled } : {}), turns: count, agents: this.agentsOf(w) });
+    Object.assign(state, { ...(settled ? { settled } : {}), turns: count, agents: this.children.agentsOf(w) });
     if (open) state.open = open; else delete state.open;
     w.commit({ events: [], cursor: encode(threadId, state) });
     return state;
@@ -666,7 +512,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     }
     // TRAE CLI serves a running turn under positional ids it renames once written: a positional copy of
     // text the turn shows under a lasting id is the same row, and the settled read retires the copies.
-    const copies = this.copiesOf(state, turn.id);
+    const copies = copiesOf(state, turn.id);
     let events: NativeWorkbenchEvent[] = [];
     let retire: string[] = [];
     const flush = () => {
@@ -680,10 +526,10 @@ export class CodexTranscriptSource implements TranscriptSource {
         if (main && str(item.id)) { flush(); this.compaction(w, item, turn, final); }
         continue;
       }
-      const rows = this.reconcile(copies, subagentToolCallId(item), projected[index]!);
+      const rows = reconcile(copies, subagentToolCallId(item), projected[index]!);
       events.push(...rows.events);
       retire.push(...rows.retire);
-      this.noteChildren(w, item, depth, flush);
+      this.children.noteChildren(w, item, depth, flush);
       if (events.length >= COMMIT_EVENTS) { flush(); await pause(); }
     }
     flush();
@@ -696,46 +542,12 @@ export class CodexTranscriptSource implements TranscriptSource {
     // A final status does not yet make a positional snapshot durable. More lasting items can
     // arrive with the next read, so keep the turn open until they precede its end mark.
     if (!renamed) return false;
-    for (const [itemId, draft] of this.drafts) if (draft.turnId === turn.id) this.drafts.delete(itemId);
+    this.intake.dropDrafts(turn.id);
     w.turnEnded(turn.id, status as TurnEndStatus, turnTime(turn.completedAt) ?? at, status === 'failed' && main ? this.options.turnError?.(turn) : undefined);
     this.ended.add(key);
     return true;
   }
 
-  private copiesOf(state: LaneState, turnId: string): TurnCopies {
-    state.copies ??= [];
-    let copies = state.copies.find(copy => copy.turnId === turnId);
-    if (!copies) state.copies.push(copies = { turnId, positional: [], shown: [] });
-    return copies;
-  }
-
-  /** Reconcile only positional aliases; two lasting messages may legitimately contain identical text. */
-  private reconcile(copies: TurnCopies, itemId: string | undefined, rows: NativeWorkbenchEvent[]): { events: NativeWorkbenchEvent[]; retire: string[] } {
-    const events: NativeWorkbenchEvent[] = [], retire: string[] = [];
-    for (const event of rows) {
-      const text = textDigest(event);
-      if (isProvisionalItemId(itemId)) {
-        // Tool text is not an identity: the same command can run twice in a turn. Wait for
-        // its lasting id instead of showing an unmatchable copy beside live notifications.
-        if (event.type === 'tool_call' || event.type === 'tool_call_update') { retire.push(event.nativeId); continue; }
-        let entry = copies.positional.find(([id]) => id === event.nativeId);
-        if (!entry) copies.positional.push(entry = [event.nativeId]);
-        entry[1] = text;
-        // Keep claimed aliases in the cursor: history and duplicate notifications must not claim
-        // a second lasting row or spend the same lasting row on another identical message.
-        if (!entry[2] && text) entry[2] = copies.shown.find(([id, shown]) => shown === text && !copies.positional.some(([, , lasting]) => lasting === id))?.[0];
-        if (entry[2]) { retire.push(event.nativeId); continue; }
-      } else if (text) {
-        const shown = copies.shown.find(([id]) => id === event.nativeId);
-        if (shown) shown[1] = text; else copies.shown.push([event.nativeId, text]);
-        const positional = copies.positional.find(([, , lasting]) => lasting === event.nativeId)
-          ?? copies.positional.find(([, previous, lasting]) => !lasting && previous === text);
-        if (positional) { positional[2] = event.nativeId; retire.push(positional[0]); }
-      }
-      events.push(event);
-    }
-    return { events, retire };
-  }
 
   private project(item: RpcItem, turn: RpcTurn, threadId: string, commandId: string | undefined, turnRun: string | undefined, createdAt: string, main: boolean, span?: ItemSpan): NativeWorkbenchEvent[] {
     const childThread = spawnedThread(item);
@@ -748,7 +560,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     return projectCodexItem(item, turn, {
       sessionId: this.options.sessionId, threadId, runId, createdAt, ...(span ? { span } : {}), ...(commandId ? { commandId } : {}), questions: this.questions,
       ...(this.options.observedChanges ? { observedChanges: this.options.observedChanges } : {}),
-      ...(main ? { phase: (itemId: string) => this.phases.get(itemId) } : {}),
+      ...(main ? { phase: (itemId: string) => this.intake.phaseOf(itemId) } : {}),
     });
   }
 
@@ -758,79 +570,6 @@ export class CodexTranscriptSource implements TranscriptSource {
     w.activities.apply(readCompaction(this.options.backend, item, turn, settled, undefined, w.activities.get(id)));
   }
 
-  // ---- subagents -------------------------------------------------------------------------------
-
-  /** A spawning item gets its lane (G9); a later call naming a known child has it read again. */
-  private noteChildren(w: LaneWriter, item: RpcItem, depth: number, flush: () => void): void {
-    const spawned = spawnedThread(item);
-    const toolCallId = subagentToolCallId(item);
-    if (spawned && toolCallId && !isProvisionalItemId(toolCallId) && depth < CHILD_DEPTH) {
-      flush();
-      const known = this.children.get(spawned);
-      const info = item.type === 'collabAgentToolCall'
-        ? { title: str(item.description) ?? str(item.prompt)?.split('\n')[0], model: str(item.model), subagentType: str(item.agentRole) }
-        : known ? {} : { title: subagentName(item), model: str(item.model) };
-      this.adopt(w, toolCallId, spawned, depth + 1, info);
-    }
-    for (const threadId of namedThreads(item)) {
-      const child = this.children.get(threadId);
-      if (child) child.due = true;
-    }
-  }
-
-  private adopt(spawner: LaneWriter, toolCallId: string, threadId: string, depth: number, info: { title?: string; model?: string; subagentType?: string } = {}): Child {
-    const known = this.children.get(threadId);
-    toolCallId = known?.toolCallId ?? toolCallId;
-    const writer = spawner.child(toolCallId, threadId, info);
-    const owner = this.ownerOf(spawner);
-    if (known && known.threadId === threadId) { known.writer = writer; known.owner = owner; known.due = true; return known; }
-    const child: Child = { toolCallId, threadId, writer, owner, depth, readAt: 0, due: true };
-    this.children.set(threadId, child);
-    return child;
-  }
-
-  /** Durable bindings restore finished children too: a later follow-up can wake the same thread. */
-  private restoreAgents(w: LaneWriter, state: LaneState | undefined, depth: number): void {
-    if (depth >= CHILD_DEPTH) return;
-    const owner = this.ownerOf(w);
-    const key = `${owner.lane}:${owner.scratch}:${w.generation}`;
-    if (!this.restoredBindings.has(key)) {
-      const bindings = new Map<string, SubagentBinding[]>();
-      for (const binding of w.subagents) {
-        const group = bindings.get(binding.agentId) ?? [];
-        group.push(binding);
-        bindings.set(binding.agentId, group);
-      }
-      for (const [threadId, group] of bindings) {
-        // Prefer the original spawn when upgrading an older log that stored both announcements.
-        const primary = group.find(binding => !binding.toolCallId.startsWith('subagent-activity:')) ?? group[0]!;
-        const known = this.children.has(threadId);
-        const child = this.adopt(w, primary.toolCallId, threadId, depth + 1, primary);
-        const stored = decode(child.writer.cursor);
-        // A finished child's stored transcript is ready already. Restore its observer so a
-        // follow-up can wake it, without rereading every finished thread on the first pull.
-        if (!known && stored?.phase === 'ready' && !stored.open && !state?.agents?.some(([, id]) => id === threadId)) {
-          child.due = false;
-          child.readAt = Date.now();
-        }
-        for (const binding of group) if (binding.toolCallId !== child.toolCallId) w.retireSubagent(binding.toolCallId, child.toolCallId);
-      }
-      this.restoredBindings.add(key);
-    }
-    for (const [toolCallId, threadId] of state?.agents ?? []) if (!this.children.has(threadId)) this.adopt(w, toolCallId, threadId, depth + 1);
-  }
-
-  /** The subagents spawned in `w` that are still running: their lanes are read again after a restart. */
-  private agentsOf(w: LaneWriter): Array<[string, string]> {
-    const agents: Array<[string, string]> = [];
-    for (const child of this.children.values()) {
-      const owner = this.ownerOf(w);
-      if (child.owner.lane !== owner.lane || child.owner.scratch !== owner.scratch) continue;
-      const state = decode(child.writer.cursor);
-      if (!state || state.phase === 'importing' || state.open) agents.push([child.toolCallId, child.threadId]);
-    }
-    return agents;
-  }
 
   private async readChildren(reader: CodexThreadReader, signal: AbortSignal): Promise<boolean> {
     let caughtUp = true;
@@ -838,24 +577,24 @@ export class CodexTranscriptSource implements TranscriptSource {
     const read = new Set<Child>();
     // A child read can spawn grandchildren: they are read in the same pull, a level per pass.
     for (let pass = 0; pass <= CHILD_DEPTH; pass += 1) {
-      const pending = [...this.children.values()].filter(child => !read.has(child));
+      const pending = this.children.values().filter(child => !read.has(child));
       if (!pending.length) break;
       for (const child of pending) {
         read.add(child);
         caughtUp = await this.readChild(child, reader, signal) && caughtUp;
         // A previous retirement may have kept the duplicate until this read copied its contents.
-        if (!child.toolCallId.startsWith('subagent-activity:')) this.writerOf(child.owner)?.retireSubagent(`subagent-activity:${child.toolCallId}`, child.toolCallId);
+        if (!child.toolCallId.startsWith('subagent-activity:')) this.children.writerOf(child.owner)?.retireSubagent(`subagent-activity:${child.toolCallId}`, child.toolCallId);
         owners.set(`${child.owner.lane}:${child.owner.scratch}`, child.owner);
       }
     }
     // Which subagents still run is part of where the spawning lane's next read starts.
     for (const where of owners.values()) {
-      const owner = this.writerOf(where);
+      const owner = this.children.writerOf(where);
       if (!owner) continue;
       const state = decode(owner.cursor);
-      const threadId = this.threadOf(owner);
+      const threadId = this.children.threadOf(owner);
       if (!state || !threadId) continue;
-      const next = encode(threadId, { ...state, agents: this.agentsOf(owner) });
+      const next = encode(threadId, { ...state, agents: this.children.agentsOf(owner) });
       if (next !== owner.cursor) owner.commit({ events: [], cursor: next });
     }
     return caughtUp && !signal.aborted;
@@ -865,7 +604,7 @@ export class CodexTranscriptSource implements TranscriptSource {
   private async readChild(child: Child, reader: CodexThreadReader, signal: AbortSignal): Promise<boolean> {
     if (signal.aborted) return false;
     const state = decode(child.writer.cursor);
-    this.restoreAgents(child.writer, state, child.depth);
+    this.children.restoreAgents(child.writer, state, child.depth);
     const running = !state || state.phase === 'importing' || Boolean(state.open);
     if (!child.due && !running && Date.now() - child.readAt < CHILD_IDLE_MS) return true;
     child.due = false;
@@ -875,130 +614,32 @@ export class CodexTranscriptSource implements TranscriptSource {
       : await this.refresh(child.writer, reader, child.threadId, child.depth);
   }
 
-  /** Which log `w` is: a lane's own, or main's scratch window. */
-  private ownerOf(w: LaneWriter): Child['owner'] {
-    return { lane: w.lane, scratch: w.lane === 'main' && this.main !== undefined && this.main !== w && this.main.scratch === w };
-  }
-
-  /** The writer of a log in the current read. */
-  private writerOf(where: Child['owner']): LaneWriter | undefined {
-    if (where.lane === 'main') return where.scratch ? this.main?.scratch : this.main;
-    for (const child of this.children.values()) if (child.writer.lane === where.lane) return child.writer;
-    return undefined;
-  }
-
-  /** The thread a lane reads: the conversation's for main and its window, the subagent's for a child lane. */
-  private threadOf(w: LaneWriter): string | undefined {
-    for (const child of this.children.values()) if (child.writer === w) return child.threadId;
-    return this.thread;
-  }
 
   // ---- live feed -------------------------------------------------------------------------------
-
-  private push(op: LiveOp): void {
-    if (this.live.length >= LIVE_LIMIT) {
-      // More than a read can be bothered to replay: the thread has it all, and the next read takes it from there.
-      this.live = [];
-      this.drafts.clear();
-      this.repairDue = true;
-    }
-    this.live.push(op);
-    if (op.kind !== 'activity' && (op.turnId === decode(this.main?.cursor ?? null)?.settled || this.ended.has(`${this.thread}:${op.turnId}`))) this.repairDue = true;
-  }
 
   /** Takes one notification in; says whether the reader should wake now, soon (streamed text), or not at all. */
   private note(method: string, params: Record<string, unknown>): 'now' | 'soon' | undefined {
     this.follow();
-    if (method === 'item/tool/requestUserInput') {
-      const threadId = str(params.threadId) ?? this.thread;
-      if (threadId) {
-        this.questions.request(params, threadId);
-        const child = this.children.get(threadId);
-        if (child) child.due = true;
-      }
-      return 'now';
+    if (method !== 'item/tool/requestUserInput') return this.intake.note(method, params);
+    const threadId = str(params.threadId) ?? this.thread;
+    if (threadId) {
+      this.questions.request(params, threadId);
+      this.children.markDue(threadId);
     }
-    const turnId = str(params.turnId);
-    if (method === 'item/agentMessage/delta' || method === 'item/reasoning/textDelta' || method === 'item/reasoning/summaryTextDelta') {
-      const itemId = str(params.itemId);
-      const delta = params.delta;
-      if (!turnId || !itemId || typeof delta !== 'string') return undefined;
-      const reasoning = method !== 'item/agentMessage/delta';
-      const channel = method === 'item/reasoning/summaryTextDelta' ? 'summary' : method === 'item/reasoning/textDelta' ? 'raw' : undefined;
-      let draft = this.drafts.get(itemId);
-      if (!draft) this.drafts.set(itemId, draft = { turnId, reasoning, text: '', ...(channel ? { channel } : {}) });
-      // Raw reasoning and its summary are one thought; the draft follows the channel that streamed first.
-      if (draft.channel !== channel) return undefined;
-      const index = reasoning ? (channel === 'summary' ? params.summaryIndex : params.contentIndex) : undefined;
-      const part = typeof index === 'number' && Number.isSafeInteger(index) ? index : undefined;
-      if (part !== undefined && draft.part !== undefined && part !== draft.part && draft.text) draft.text += '\n\n';
-      if (part !== undefined) draft.part = part;
-      draft.text += delta;
-      const phase = messagePhase(params.phase);
-      if (phase) { draft.phase = phase; this.notePhase(itemId, phase); }
-      const last = this.live.at(-1);
-      if (!(last?.kind === 'draft' && last.itemId === itemId)) this.push({ kind: 'draft', turnId, itemId });
-      return 'soon';
-    }
-    if (method === 'turn/started') {
-      const turn = asRecord(params.turn);
-      const id = str(turn?.id);
-      if (!id) return undefined;
-      // Duplicate starts delivered after a known live end do not restart an immutable turn id.
-      if (!this.liveTurns.has(id)) this.liveTurns.set(id, 'inProgress');
-      const at = turnTime(turn?.startedAt);
-      this.push({ kind: 'turn', turnId: id, ...(at ? { at } : {}) });
-      return 'now';
-    }
-    if (method === 'turn/completed') {
-      const turn = asRecord(params.turn) as RpcTurn | undefined;
-      if (turn?.id && isFinalTurnStatus(turn.status)) {
-        this.liveTurns.set(turn.id, turnStatus(turn.status));
-        if (this.liveTurns.size > PHASES_KEPT) this.liveTurns.delete(this.liveTurns.keys().next().value!);
-      }
-      // The settled copy of the turn is read before its end is written (G6).
-      this.repairDue = true;
-      return 'now';
-    }
-    if (method === 'turn/plan/updated') {
-      const entries = normalizePlanEntries(params.plan);
-      if (!turnId || !entries) return undefined;
-      this.push({ kind: 'plan', turnId, entries, at: new Date().toISOString() });
-      return 'now';
-    }
-    if (method === 'item/started' || method === 'item/completed') {
-      const item = asRecord(params.item) as RpcItem | undefined;
-      if (!item || !turnId) return undefined;
-      const phase = item.type === 'agentMessage' ? messagePhase(item.phase) : undefined;
-      if (phase && item.id) this.notePhase(item.id, phase);
-      // A compaction's states reach the ledger from the runtime's tracker (`activity`), which also knows its tokens and summary.
-      if (item.type === 'contextCompaction') return undefined;
-      const at = toIso(Number(params.startedAtMs));
-      const span = notificationSpan(method, params, item);
-      this.push({ kind: 'item', turnId, item, committed: method === 'item/completed', ...(at ? { at } : {}), ...(span ? { span } : {}) });
-      if (method === 'item/completed' && item.id) this.drafts.delete(item.id);
-      return 'now';
-    }
-    return undefined;
-  }
-
-  private notePhase(itemId: string, phase: 'commentary' | 'final_answer'): void {
-    this.phases.set(itemId, phase);
-    if (this.phases.size > PHASES_KEPT) this.phases.delete(this.phases.keys().next().value!);
+    return 'now';
   }
 
   /** Writes what the live feed said since the last read into `w`, which serves; a lane being imported reads it from the thread instead. */
   private flushLive(w: LaneWriter, threadId: string): void {
-    const ops = this.live;
     // The live feed is of the thread followed now; a read of a thread it has since left must not write it.
-    if (!ops.length || threadId !== this.thread) return;
-    this.live = [];
+    if (!this.intake.queued || threadId !== this.thread) return;
+    const ops = this.intake.take();
     const state = decode(w.cursor);
-    if (state?.phase !== 'ready') { this.drafts.clear(); this.repairDue = true; return; }
+    if (state?.phase !== 'ready') { this.intake.clearDrafts(); this.repairDue = true; return; }
     let open = state.open;
     let batch: { events: NativeWorkbenchEvent[]; drafts: Array<{ finalId: string; event: NativeWorkbenchEvent }>; retire: string[] } = { events: [], drafts: [], retire: [] };
     const flush = () => {
-      const cursor = encode(threadId, { ...state, ...(open ? { open } : {}), agents: this.agentsOf(w) });
+      const cursor = encode(threadId, { ...state, ...(open ? { open } : {}), agents: this.children.agentsOf(w) });
       if (batch.events.length || batch.drafts.length || batch.retire.length || cursor !== w.cursor) w.commit({ ...batch, events: batch.events.filter(event => !batch.retire.includes(event.nativeId!)), cursor });
       batch = { events: [], drafts: [], retire: [] };
     };
@@ -1012,10 +653,10 @@ export class CodexTranscriptSource implements TranscriptSource {
       // A turn the feed shows running is where a restarted read starts again.
       if (!ended) open ??= op.turnId;
       if (op.kind === 'turn') { flush(); w.turnStarted(op.turnId, op.at ?? new Date().toISOString()); continue; }
-      if (op.kind === 'plan') { batch.events.push(this.planEvent(threadId, op.turnId, op.entries, op.at, runs.get(op.turnId))); continue; }
+      if (op.kind === 'plan') { batch.events.push(planEvent(this.options.sessionId, threadId, op.turnId, op.entries, op.at, runs.get(op.turnId))); continue; }
       if (op.kind === 'draft') {
-        const draft = this.drafts.get(op.itemId);
-        if (draft) batch.drafts.push(this.draftEvent(threadId, op.itemId, draft, runs.get(op.turnId)));
+        const draft = this.intake.draftRow(threadId, op.itemId, runs.get(op.turnId));
+        if (draft) batch.drafts.push(draft);
         continue;
       }
       const turn: RpcTurn = { id: op.turnId, ...(op.at ? { startedAt: Date.parse(op.at) / 1000 } : {}) };
@@ -1026,43 +667,19 @@ export class CodexTranscriptSource implements TranscriptSource {
         flush();
         w.turnStarted(op.turnId, op.at ?? new Date().toISOString(), run);
       }
-      const copies = this.copiesOf(state, op.turnId);
-      const rows = this.reconcile(copies, subagentToolCallId(op.item), this.project(op.item, turn, threadId, commandId, runs.get(op.turnId), op.at ?? new Date().toISOString(), true, op.span));
+      const copies = copiesOf(state, op.turnId);
+      const rows = reconcile(copies, subagentToolCallId(op.item), this.project(op.item, turn, threadId, commandId, runs.get(op.turnId), op.at ?? new Date().toISOString(), true, op.span));
       batch.events.push(...rows.events);
       batch.retire.push(...rows.retire);
       if (ended && !copies.positional.length) state.copies = state.copies?.filter(copy => copy !== copies);
       const spawned = spawnedThread(op.item);
       const toolCallId = subagentToolCallId(op.item);
       if (spawned && toolCallId && !isProvisionalItemId(toolCallId)) {
-        this.noteChildren(w, op.item, 0, flush);
-      } else for (const named of namedThreads(op.item)) {
-        const child = this.children.get(named);
-        if (child) child.due = true;
-      }
+        this.children.noteChildren(w, op.item, 0, flush);
+      } else for (const named of namedThreads(op.item)) this.children.markDue(named);
       if (batch.events.length >= COMMIT_EVENTS) flush();
     }
     flush();
   }
 
-  private draftEvent(threadId: string, itemId: string, draft: Draft, runId: string | undefined): { finalId: string; event: NativeWorkbenchEvent } {
-    const kind = draft.reasoning ? 'thinking' : 'assistant';
-    const type = draft.reasoning ? 'agent_thought_chunk' : 'agent_message_chunk';
-    const finalId = `${threadId}:${draft.turnId}:${itemId}:${kind}`;
-    // Deltas carry no phase; `item/started` named it, and the committed copy will say the same.
-    const phase = draft.phase ?? this.phases.get(itemId);
-    return {
-      finalId,
-      event: {
-        sequence: 0, sessionId: this.options.sessionId, runId: runId ?? draft.turnId, type, nativeId: finalId, nativeTurnId: draft.turnId, createdAt: new Date().toISOString(),
-        data: { sessionUpdate: type, ...(draft.reasoning ? { channel: draft.channel === 'summary' ? 'narration' : 'thinking' } : phase ? { phase } : {}), content: { type: 'text', text: draft.text } },
-      },
-    };
-  }
-
-  private planEvent(threadId: string, turnId: string, entries: Array<Record<string, unknown>>, at: string, runId: string | undefined): NativeWorkbenchEvent {
-    return {
-      sequence: 0, sessionId: this.options.sessionId, runId: runId ?? turnId, type: 'plan', nativeId: codexPlanNativeId(threadId, turnId), nativeTurnId: turnId,
-      createdAt: at, data: { sessionUpdate: 'plan', entries },
-    };
-  }
 }
