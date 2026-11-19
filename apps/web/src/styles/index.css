@@ -3136,16 +3136,18 @@ html[data-density='relaxed'] {
   margin-top: var(--timeline-gap-tight);
 }
 
-/* A turn that ends in a footer is set off by the footer's own line and a block gap, not a turn
- * gap on top of it: the footer stands in the space between turns rather than adding to it. */
-.turn-footer-row {
-  margin-bottom: calc(var(--timeline-gap-block) - var(--timeline-gap-turn));
+/* A folded turn process already hides its body with `hidden="until-found"`, leaving only its
+ * single-line header. Keeping `content-visibility: auto` on an off-screen folded row would freeze
+ * its box at the pre-fold remembered height until the reader scrolls back near it. */
+[data-row-key]:has(> [data-process-open="false"]) {
+  content-visibility: visible;
 }
 
 /* The footer's surrounding whitespace reveals it too: the band from the answer's last line down
  * to the next turn, wider than what it holds. Negative margins keep its 28px layout line and text
  * position; the row's compensated padding contains the full hit area even with content-visibility
- * paint containment. Hover changes opacity only, never this geometry. */
+ * paint containment without changing the row's outer box. Row gaps themselves are decided in
+ * `transcriptRows.ts`. Hover changes opacity only, never this geometry. */
 @media (hover: hover) {
   .turn-footer {
     min-height: calc(28px + 16px + var(--timeline-gap-block));
@@ -3165,7 +3167,7 @@ html[data-density='relaxed'] {
   }
   .turn-footer-row {
     padding-bottom: var(--timeline-gap-block);
-    margin-bottom: calc(-1 * var(--timeline-gap-turn));
+    margin-bottom: calc(-1 * var(--timeline-gap-block));
   }
   /* A message's own line (time, delivery) under its bubble: reached from the gap above and from the
    * left of it as well, inside the row so containment does not clip it. */

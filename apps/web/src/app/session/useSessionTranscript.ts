@@ -8,6 +8,8 @@ import { sameMap, sameSet, useStable } from './stable';
 import type { SubagentBrief } from './SessionWorkActions';
 import { toolView } from './toolView';
 import { isRecord, str } from '@/lib/utils';
+import { withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
+import { activeTurnState, analyzeTimelineTurns, type ActiveTurnState } from './timelineTurns';
 import type { useSessionSync } from './useSessionSync';
 
 const noKeys: ReadonlySet<string> = new Set();
@@ -50,7 +52,7 @@ function digestTimeline(timeline: readonly TimelineItem[], digestOf: (event: Tim
  * The session page and the transcript replay (`replay/`) both read it here, so the replay measures
  * the same transcript the reader gets.
  */
-export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, { working, busy, compacting, root, goal: sessionGoal }: { working: boolean; busy: boolean; compacting: boolean; root?: string; goal?: SessionGoal }) {
+export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, { working, busy, compacting, root, goal: sessionGoal, activeSince }: { working: boolean; busy: boolean; compacting: boolean; root?: string; goal?: SessionGoal; activeSince?: string }) {
   const timeline = native.timeline;
   // `NativeTimelineModel` patches job rows in place, so the version counters below are what signal
   // a change to these derived snapshots. Each snapshot that has an identity of its own is held
@@ -124,24 +126,16 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   const resumingTurn = sendingTurn && latestVisibleUserRun?.native?.delivery === 'preparing' && latestVisibleUserRun.native.stage === 'resuming';
   const showWorking = (busy || sendingTurn) && !(compacting && showsRunningCompaction(visibleTimeline));
   /**
-   * When the turn being worked on was prompted, so the indicator can count from it. A turn a hidden
-   * prompt opened (a peer's message, a scheduled wake-up) has no prompt row: it counts from its first
-   * row, never from an earlier turn's prompt.
+   * The active turn's presence in `visibleTimeline` and its start time, derived from the same
+   * `analyzeTimelineTurns` analysis that owns `TurnProcess` and `heldFooter`. When every visible
+   * turn is settled and a new autonomous turn is starting before its first row lands, we never
+   * borrow the settled turn's start time or attribute the session's previous rolling speed to it.
    */
-  const workingSince = useMemo(() => {
-    if (!showWorking || sendingTurn) return undefined;
-    const turn = visibleTimeline.findLast(item => item.kind !== 'activity')?.turn;
-    let start: TimelineItem | undefined;
-    for (let index = visibleTimeline.length - 1; index >= 0; index -= 1) {
-      const item = visibleTimeline[index]!;
-      if (turn && item.turn && item.turn !== turn && item.kind !== 'activity') break;
-      if (item.kind === 'activity') continue;
-      start = item;
-      if (item.kind === 'user' || item.kind === 'task_notification') break;
-    }
-    if (!start || (!turn && start.kind !== 'user' && start.kind !== 'task_notification')) return undefined;
-    const at = Date.parse(start.event.createdAt);
-    return Number.isFinite(at) ? at : undefined;
-  }, [showWorking, sendingTurn, visibleTimeline, timelineVersion]);
-  return { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince };
+  const activeTurnId = native.status.activeTurnId;
+  const activeTurn = useMemo<ActiveTurnState>(() => {
+    if (!showWorking || sendingTurn) return { inTimeline: false, startedAt: undefined };
+    const items = withoutLinkedActivities(visibleTimeline);
+    return activeTurnState(items, analyzeTimelineTurns(items, working, activeTurnId), activeSince);
+  }, [showWorking, sendingTurn, visibleTimeline, timelineVersion, working, activeTurnId, activeSince]);
+  return { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince: activeTurn.startedAt, workingInTimeline: activeTurn.inTimeline };
 }

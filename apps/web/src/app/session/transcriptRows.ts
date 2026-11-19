@@ -45,6 +45,21 @@ function gap(previous: TimelineItem | undefined, item: TimelineItem): string {
   return 'timeline-gap-block';
 }
 
+function hasRowFooter(row: TranscriptRow | undefined): boolean {
+  return Boolean(row && row.type !== 'trigger' && row.footer !== 'none');
+}
+
+/**
+ * Top-level row gap, single source of truth aligned with Mac's `RowGap.between`: a turn ending in
+ * a footer already places that 28px line between turns, so the next turn adds only a block gap
+ * rather than relying on negative bottom margin on the previous row.
+ */
+function rowGap(previous: TimelineItem | undefined, item: TimelineItem, previousFooter: boolean, turnStart = item.kind === 'user'): string {
+  if (!previous) return '';
+  if (turnStart) return previousFooter ? 'timeline-gap-block' : 'timeline-gap-turn';
+  return gap(previous, item);
+}
+
 /**
  * One rendered row of the transcript, as data: everything it shows is decided here, so a row whose
  * fields compare equal renders the same and keeps its object from one frame to the next.
@@ -251,6 +266,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   const keyBefore: string[] = [];
   let rows: TranscriptRow[] = [];
   let previousItem: TimelineItem | undefined = startIndex > 0 ? timeline[startIndex - 1] : undefined;
+  let previousRowFooter = resume > 0 ? hasRowFooter(previous![resume - 1]!.rows.at(-1)) : false;
   // A turn starts at a prompt, or at the first of a batch of notices the CLI woke a turn with.
   // Callers pass the first item's turn key along with it, rather than this looking it up in a map
   // of the whole timeline rebuilt on every streamed frame.
@@ -265,6 +281,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     rows.push(row);
     rowTurnKey = firstTurn;
     previousItem = last;
+    previousRowFooter = hasRowFooter(row);
   };
 
   let group: TimelineItem[] = [];
@@ -327,7 +344,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       }
       index -= 1;
       flushGroup();
-      add({ type: 'trigger', key: `trigger:${notices[0]!.key}`, notices, gap: gap(previousItem, notices[0]!) }, notices[0]!, turnKey, notices.at(-1)!, rowStart, before);
+      add({ type: 'trigger', key: `trigger:${notices[0]!.key}`, notices, gap: rowGap(previousItem, notices[0]!, previousRowFooter, true) }, notices[0]!, turnKey, notices.at(-1)!, rowStart, before);
       lastTurnKey = turnKey;
       continue;
     }
@@ -356,7 +373,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const answerText = settled && item.kind === 'status' ? answerBefore(index) : undefined;
     // A status row (run_cancelled) already says it stopped; an answer or a prompt left last says it here.
     const stopped = interruptedTurns.has(turnKey) && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user');
-    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: carries && settled ? metricsForTurn(turnKey) : undefined, runId: carries && settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
+    add({ type: 'item', key: item.key, item, gap: rowGap(previousItem, item, previousRowFooter), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: carries && settled ? metricsForTurn(turnKey) : undefined, runId: carries && settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
   }
   flushGroup();
   if (rows.length) grouped.push(rows);

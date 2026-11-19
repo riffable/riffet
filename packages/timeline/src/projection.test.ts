@@ -3,7 +3,7 @@ import { PENDING_ROW_POS, type NativeJob, type NativeRunDetails, type NativeWork
 import { buildTimeline, IncrementalTimeline } from './buildTimeline.js';
 import { appendProjectedEvents, projectEvents, projectionIndexes } from './projectEvents.js';
 import { timelineRows, type RowContent } from './rows.js';
-import { analyzeTimelineTurns, timelineTurnKeys } from './timelineTurns.js';
+import { activeTurnState, analyzeTimelineTurns, timelineTurnKeys } from './timelineTurns.js';
 import type { TimelineItem } from './model.js';
 
 /*
@@ -657,5 +657,50 @@ describe('timeline projection contract', () => {
     if (before.kind !== 'user' || after.kind !== 'user') throw new Error('expected user rows');
     expect(after.attachments).toEqual([{ name: 'shot.png', path: '/tmp/cursor/shot.png', type: 'image', mimeType: 'image/png' }]);
     expect(after).not.toBe(before);
+  });
+
+  it('derives active turn presence and start time without borrowing a settled turn', () => {
+    const completed = nativeRun('turn-1', 'completed', 'first', 1, {
+      nativeMessageId: 'u1', nativeTurnId: 't1', timings: { completedAt: ms(10) },
+    });
+    const settledProjected = projectEvents([
+      ev(1, 'user_message_chunk', text('first'), { runId: 'turn-1', nativeId: 'u1', nativeTurnId: 't1' }),
+      ev(8, 'agent_message_chunk', text('done'), { runId: 'turn-1', nativeId: 'a1', nativeTurnId: 't1' }),
+    ]);
+    const settledItems: TimelineItem[] = [
+      { kind: 'user', key: 'u1', text: 'first', attachments: [], run: completed, event: settledProjected[0]!, turn: 'run:turn-1' },
+      { kind: 'assistant', key: 'a1', text: 'done', event: settledProjected[1]!, turn: 'run:turn-1' },
+    ];
+    // New turn woke up while its first row has not landed yet: never borrow the settled turn's clock.
+    expect(activeTurnState(settledItems, analyzeTimelineTurns(settledItems, true), at(12))).toEqual({ inTimeline: false, startedAt: ms(12) });
+    expect(activeTurnState(settledItems, analyzeTimelineTurns(settledItems, true, 't2'), at(12))).toEqual({ inTimeline: false, startedAt: ms(12) });
+    // Stale activeSince from the previous turn is rejected, even when it falls after the last
+    // message's coarse event timestamp (before the Run's own completion time).
+    expect(activeTurnState(settledItems, analyzeTimelineTurns(settledItems, true), at(2))).toEqual({ inTimeline: false, startedAt: undefined });
+    expect(activeTurnState(settledItems, analyzeTimelineTurns(settledItems, true), at(9))).toEqual({ inTimeline: false, startedAt: undefined });
+    expect(activeTurnState(settledItems, analyzeTimelineTurns(settledItems, true))).toEqual({ inTimeline: false, startedAt: undefined });
+
+    // Once the wake-up notice lands, the active turn is in the timeline and counts from that notice.
+    const wokenProjected = projectEvents([
+      ev(15, 'task_notification', { sessionUpdate: 'task_notification', taskId: 'bg-1', kind: 'shell', status: 'failed', title: 'bg' }, { runId: 'turn:bg', nativeTurnId: 'turn:bg' }),
+    ]);
+    const withWake: TimelineItem[] = [
+      ...settledItems,
+      { kind: 'task_notification', key: 'n1', taskId: 'bg-1', taskKind: 'shell', status: 'failed', title: 'bg', event: wokenProjected[0]!, turn: 'native:session-1:turn:bg' },
+    ];
+    expect(activeTurnState(withWake, analyzeTimelineTurns(withWake, true), at(12))).toEqual({ inTimeline: true, startedAt: ms(15) });
+
+    // A live steered turn keeps counting from its opening prompt rather than resetting on the steer.
+    const running = nativeRun('turn-2', 'running', 'go', 20, { nativeMessageId: 'u2', nativeTurnId: 't2' });
+    const steer = nativeRun('steer-2', 'running', 'also check', 25, { nativeMessageId: 'u2s', nativeTurnId: 't2', intent: 'steer', ownerRunId: 'turn-2' });
+    const steeredProjected = projectEvents([
+      ev(20, 'user_message_chunk', text('go'), { runId: 'turn-2', nativeId: 'u2', nativeTurnId: 't2' }),
+      ev(25, 'user_message_chunk', text('also check'), { runId: 'steer-2', nativeId: 'u2s', nativeTurnId: 't2' }),
+    ]);
+    const steeredItems: TimelineItem[] = [
+      { kind: 'user', key: 'u2', text: 'go', attachments: [], run: running, event: steeredProjected[0]!, turn: 'run:turn-2' },
+      { kind: 'user', key: 'u2s', text: 'also check', attachments: [], run: steer, event: steeredProjected[1]!, turn: 'run:turn-2' },
+    ];
+    expect(activeTurnState(steeredItems, analyzeTimelineTurns(steeredItems, true), at(20))).toEqual({ inTimeline: true, startedAt: ms(20) });
   });
 });

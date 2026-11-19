@@ -1372,6 +1372,10 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);
+  const lastRow = rowsAll.at(-1);
+  // Under a prompt, the standalone working line follows its meta row; after a settled turn or
+  // activity, it starts a new block at the density-scaled block gap (matching turn-after-footer).
+  const standaloneProgressGap = !lastRow ? '' : lastRow.type === 'item' && lastRow.item.kind === 'user' ? 'mt-3' : 'timeline-gap-block';
   // A pending interaction or a visible compaction row already explains the pause.
   const suppressHeldFooter = !progress && (pendingConfirmationCount > 0 || (running && showsRunningCompaction(timeline)));
   const latestRows = rowTurns.at(-1)?.rows;
@@ -1583,7 +1587,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           </RememberedValues.Provider></TranscriptCatchUp.Provider>
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}
-          {progress && !heldFooter && <div className={timeline.length ? 'mt-3' : ''}>{progress}</div>}
+          {progress && !heldFooter && <div className={standaloneProgressGap}>{progress}</div>}
         </div>
       </div>
 

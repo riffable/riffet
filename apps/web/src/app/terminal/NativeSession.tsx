@@ -589,7 +589,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   }, [session.id, onSessionChanged, onError, t]);
 
   const timeline = native.timeline;
-  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
+  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, sendingTurn, resumingTurn, workingSince, workingInTimeline } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal, activeSince: session.activeSince });
   const timelineRef = useRef(visibleTimeline);
   timelineRef.current = visibleTimeline;
   const stores = useStores();
@@ -1276,7 +1276,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           runActionPending={runActionPending}
           focus={discussionFocus ?? focus}
           progress={native.interrupting || showWorking
-            ? <WorkingIndicator startedAt={native.interrupting || sendingTurn ? undefined : workingSince} outputRate={native.interrupting || sendingTurn ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : resumingTurn ? t`恢复中` : sendingTurn ? t`正在发送` : undefined} />
+            ? <WorkingIndicator startedAt={native.interrupting || sendingTurn ? undefined : workingSince} outputRate={native.interrupting || sendingTurn || !workingInTimeline ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : resumingTurn ? t`恢复中` : sendingTurn ? t`正在发送` : undefined} />
             : delegatedAgents + delegatedWorkflows > 0 && visibleTimeline.length > 0
               ? <BackgroundWorkIndicator
                   agents={delegatedAgents}

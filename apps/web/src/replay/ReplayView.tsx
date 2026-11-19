@@ -20,7 +20,7 @@ export function ReplayView({ session, transport }: { session: Session; transport
   const busy = phase === 'busy';
   const working = busy || phase === 'attention';
   const compacting = Boolean(native.status.activity?.compacting);
-  const view = useSessionTranscript(native, { working, busy, compacting });
+  const view = useSessionTranscript(native, { working, busy, compacting, activeSince: session.activeSince });
   return (
     <div className="flex h-dvh min-h-0 flex-col bg-bg">
       <TranscriptView
@@ -49,7 +49,7 @@ export function ReplayView({ session, transport }: { session: Session; transport
         onJumpToLatest={native.jumpToLatest}
         onLoadTurn={native.loadTurn}
         onExpandRow={native.expandRow}
-        progress={view.showWorking ? <WorkingIndicator startedAt={view.workingSince} outputRate={native.status.outputRate} connected={native.connected} /> : undefined}
+        progress={view.showWorking ? <WorkingIndicator startedAt={view.workingSince} outputRate={view.workingInTimeline ? native.status.outputRate : undefined} connected={native.connected} /> : undefined}
       />
     </div>
   );

@@ -210,3 +210,79 @@ export function analyzeTimelineTurns(timeline: TimelineItem[], sessionRunning: b
   }
   return { turnKeys, activeTurns, lastIndexByTurn };
 }
+
+export interface ActiveTurnState {
+  /** Whether the currently running turn already has a non-activity row in `timeline`. */
+  inTimeline: boolean;
+  /** Epoch ms when the running turn started, or undefined when no honest start is known. */
+  startedAt: number | undefined;
+}
+
+/**
+ * Resolves the running turn's presence and start time from the same `analyzeTimelineTurns` result
+ * that decides `TurnProcess` and `heldFooter`:
+ * - When an active turn already has non-activity rows in `timeline`, its start is its first
+ *   non-activity row (so steering mid-turn keeps counting from the opening prompt, and an orphan
+ *   turn still requires an explicit prompt or wake-up notice).
+ * - When every visible turn is already settled (for instance, a background task woke a new turn
+ *   whose first row has not landed yet), never borrow a settled turn's start time; use
+ *   `activeSince` only when it is not earlier than the last settled turn's end.
+ */
+export function activeTurnState(
+  timeline: readonly TimelineItem[],
+  analysis: TimelineTurnAnalysis,
+  activeSince?: string,
+): ActiveTurnState {
+  let activeTurnKey: string | undefined;
+  let activeEnd = -1;
+  for (let index = timeline.length - 1; index >= 0; index -= 1) {
+    const item = timeline[index]!;
+    if (item.kind === 'activity') continue;
+    const key = analysis.turnKeys[index]!;
+    if (analysis.activeTurns.has(key)) {
+      activeTurnKey = key;
+      activeEnd = index;
+      break;
+    }
+  }
+  if (activeTurnKey !== undefined) {
+    let start: TimelineItem | undefined;
+    for (let index = activeEnd; index >= 0; index -= 1) {
+      const item = timeline[index]!;
+      if (item.kind === 'activity') continue;
+      if (analysis.turnKeys[index] !== activeTurnKey) {
+        if (activeTurnKey === 'turn:orphan') break;
+        continue;
+      }
+      start = item;
+    }
+    if (!start || (activeTurnKey === 'turn:orphan' && start.kind !== 'user' && start.kind !== 'task_notification')) {
+      return { inTimeline: true, startedAt: undefined };
+    }
+    const at = Date.parse(start.event.createdAt);
+    return { inTimeline: true, startedAt: Number.isFinite(at) ? at : undefined };
+  }
+  const since = activeSince ? Date.parse(activeSince) : NaN;
+  if (!Number.isFinite(since)) return { inTimeline: false, startedAt: undefined };
+  let lastIndex = -1;
+  for (let index = timeline.length - 1; index >= 0; index -= 1) {
+    if (timeline[index]!.kind !== 'activity') { lastIndex = index; break; }
+  }
+  if (lastIndex >= 0) {
+    const lastSettled = timeline[lastIndex]!;
+    const lastTurnKey = analysis.turnKeys[lastIndex]!;
+    let settledAt = Date.parse(timelineItemTime(lastSettled));
+    for (let index = lastIndex; index >= 0; index -= 1) {
+      if (analysis.turnKeys[index] !== lastTurnKey) continue;
+      const item = timeline[index]!;
+      if (item.kind !== 'user' || !item.run) continue;
+      const completed = item.run.native?.timings?.completedAt;
+      const runEnd = typeof completed === 'number' && Number.isFinite(completed)
+        ? completed
+        : Date.parse(item.run.updatedAt);
+      if (Number.isFinite(runEnd) && (!Number.isFinite(settledAt) || runEnd > settledAt)) settledAt = runEnd;
+    }
+    if (Number.isFinite(settledAt) && since < settledAt) return { inTimeline: false, startedAt: undefined };
+  }
+  return { inTimeline: false, startedAt: since };
+}
