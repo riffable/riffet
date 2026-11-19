@@ -27,7 +27,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 
 ## 外部行为
 
-- App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`。
+- App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`；TRAE CLI（`traex`）录制 answer 与 command，放在 `fixtures/traex/`，不含 hook，用 `pnpm record traex <场景>`。
 - rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。录制数据在 `fixtures/rollout/`，只保留解析器读取的记录类型。
 - 打断后，未完成的回答不在 CLI 的定稿副本里（`thread/turns/list` 只返回用户消息），会话日志里也就没有这段回答。
 - hook（PreToolUse / PostToolUse，只处理 Bash）：`observation.ts#CodexObservation`，记录命令改动的文件。hook 载荷与 App Server 消息录在同一份录制里；回放不投递它们（算改动需要真实的工作区），由 `recording.ts#hookProblems` 检查观察依赖的约定：每条命令有一对 hook，`tool_use_id` 是 item id，`session_id` 是线程，PreToolUse 先于 item 完成。

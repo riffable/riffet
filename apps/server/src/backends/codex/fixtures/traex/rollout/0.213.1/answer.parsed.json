@@ -1,0 +1,57 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 8521,
+      "cacheReadTokens": 8192,
+      "outputTokens": 20,
+      "reasoningTokens": 18,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 16733,
+    "size": 190000,
+    "breakdown": [
+      {
+        "id": "cached_input",
+        "label": "缓存输入",
+        "tokens": 8192
+      },
+      {
+        "id": "input",
+        "label": "未缓存输入",
+        "tokens": 8521
+      },
+      {
+        "id": "output",
+        "label": "回复输出",
+        "tokens": 2
+      },
+      {
+        "id": "reasoning_output",
+        "label": "思考输出",
+        "tokens": 18
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}

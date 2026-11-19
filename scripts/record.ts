@@ -1,7 +1,10 @@
 /**
  * Records a scenario against a real agent CLI for the replay tests (docs/guide/aif.md §5.4).
  *
- *   pnpm record codex <scenario|all> [--out <dir>]
+ *   pnpm record <codex|traex> <scenario|all> [--out <dir> | --check]
+ *
+ * `traex` is TRAE CLI, a fork of Codex that runs through the same driver (`traexFlavor`); it records the
+ * scenarios listed for it in `RECORDED_CLIS`, into fixtures/traex/. It has no observation, so no hooks.
  *
  * Codex: drives `CodexBackendAdapter` over the App Server with an in-memory host and keeps every
  * message that crossed the `CodexAppServerClient` seam, in a scratch project with two small files.
@@ -38,29 +41,32 @@ import { CodexAppServer } from '../apps/server/src/backends/shared/codex-app-ser
 import { resolveCliExecutable } from '../apps/server/src/backends/shared/cli-resolve.js';
 import { probeAppServer } from '../apps/server/src/backends/codex/config.js';
 import type { CodexAppServerClient } from '../apps/server/src/backends/shared/codex-app-server.js';
-import { CODEX_SCENARIOS, formatRecording, hookProblems, parseRecording, recordHooks, recordingFactory, recordingHarness, replayFactory, runScenario, scenarioProblems, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
+import { CODEX_SCENARIOS, RECORDED_CLIS, formatRecording, hookProblems, parseRecording, recordHooks, recordingFactory, recordingHarness, replayFactory, runScenario, scenarioProblems, type RecordedCli, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
 import type { JournalRow } from '../apps/server/src/journal/journal.js';
 
 const root = join(import.meta.dirname, '..');
 const [backend, scenarioName, ...rest] = process.argv.slice(2);
 const outFlag = rest.indexOf('--out');
 const check = rest.includes('--check');
-if (backend !== 'codex' || !scenarioName || (outFlag >= 0 && !rest[outFlag + 1]) || (check && outFlag >= 0)) {
-  console.error(`usage: pnpm record codex <${Object.keys(CODEX_SCENARIOS).join('|')}|all> [--out <dir> | --check]`);
+if ((backend !== 'codex' && backend !== 'traex') || !scenarioName || (outFlag >= 0 && !rest[outFlag + 1]) || (check && outFlag >= 0)) {
+  console.error(`usage: pnpm record <codex|traex> <scenario|all> [--out <dir> | --check]; codex: ${RECORDED_CLIS.codex.scenarios.join('|')}; traex: ${RECORDED_CLIS.traex.scenarios.join('|')}`);
   process.exit(2);
 }
-const names = scenarioName === 'all' ? Object.keys(CODEX_SCENARIOS) : [scenarioName];
-for (const name of names) if (!CODEX_SCENARIOS[name]) {
-  console.error(`unknown scenario ${name}; known: ${Object.keys(CODEX_SCENARIOS).join(', ')}`);
+const cli: RecordedCli = backend;
+const known: readonly string[] = RECORDED_CLIS[cli].scenarios;
+const names = scenarioName === 'all' ? [...known] : [scenarioName];
+for (const name of names) if (!known.includes(name)) {
+  console.error(`unknown scenario ${name} for ${cli}; known: ${known.join(', ')}`);
   process.exit(2);
 }
 
-const executable = resolveCliExecutable({ command: process.env.CODEX_CLI?.trim() || 'codex' }).executable;
+const { flavor } = RECORDED_CLIS[cli];
+const executable = resolveCliExecutable({ command: process.env[flavor.executableEnv]?.trim() || flavor.command }).executable;
 const version = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
 const versionDir = /(\d+\.\d+\.\d+)/.exec(version)?.[1] ?? 'unknown';
 const probe = await probeAppServer(executable);
-const committed = join(root, 'apps/server/src/backends/codex/fixtures');
-const outBase = check ? mkdtempSync(join(tmpdir(), 'riffet-drift-')) : outFlag >= 0 ? rest[outFlag + 1]! : committed;
+const committed = join(root, 'apps/server/src/backends/codex/fixtures', ...(cli === 'codex' ? [] : [cli]));
+const outBase = check ? mkdtempSync(join(tmpdir(), 'riffet-drift-')) : outFlag >= 0 ? join(rest[outFlag + 1]!, ...(cli === 'codex' ? [] : [cli])) : committed;
 const realRows = new Map<string, JournalRow[]>();
 
 /** Keys whose values describe the account, the provider or the machine rather than the protocol. */
@@ -187,9 +193,9 @@ for (const name of names) {
   let serverUserAgent: string | undefined;
   let client: CodexAppServerClient | undefined;
   const factory = recordingFactory(options => CodexAppServer.start(options), sink, opened => { serverUserAgent ??= opened.serverUserAgent; client = opened; });
-  const harness = recordingHarness({ factory, cwd: project, executable, approval: scenario.approval, stateDir });
+  const harness = recordingHarness({ factory, cwd: project, executable, approval: scenario.approval, cli, stateDir: cli === 'codex' ? stateDir : undefined });
   if (harness.adapter.observation) recordHooks(harness.adapter.observation, sink);
-  const trust = sessionFlagTrust();
+  const trust = cli === 'codex' ? sessionFlagTrust() : {};
   try {
     for (const prompt of scenario.prompts) console.log(`[${name}] > ${prompt}`);
     await runScenario(harness, scenario, { sink });
@@ -210,7 +216,7 @@ for (const name of names) {
   }
   // One redactor per scenario, so a model id maps to the same synthetic name in both channels.
   const redaction = redactor(project, projectReal);
-  const recording = redact({ meta: { cli: 'codex', version, serverUserAgent, probe, scenario: name, prompts: scenario.prompts, approval: scenario.approval }, messages: sink }, redaction);
+  const recording = redact({ meta: { cli, version, serverUserAgent, probe, scenario: name, prompts: scenario.prompts, approval: scenario.approval }, messages: sink }, redaction);
   const write = (channel: string, content: string) => {
     const file = join(outBase, channel, versionDir, `${name}.jsonl`);
     mkdirSync(dirname(file), { recursive: true });
@@ -235,7 +241,7 @@ async function drift(): Promise<boolean> {
   const recorded = existsSync(join(committed, 'app-server')) ? readdirSync(join(committed, 'app-server')).sort((a, b) => (newer(a, b) ? 1 : -1)) : [];
   const newest = recorded.at(-1);
   if (!newest) findings.push('no committed recordings');
-  else if (newer(versionDir, newest)) findings.push(`installed CLI ${versionDir} is newer than the newest recording ${newest}: re-record (pnpm record codex all) and review the row diff`);
+  else if (newer(versionDir, newest)) findings.push(`installed CLI ${versionDir} is newer than the newest recording ${newest}: re-record (pnpm record ${cli} all) and review the row diff`);
   const vocabulary = (recording: Recording) => new Set(recording.messages.flatMap(message => message.dir === 'in' && (message.kind === 'notification' || message.kind === 'serverRequest')
     ? [message.method, ...(typeof (message.params as { item?: { type?: unknown } }).item?.type === 'string' ? [`item:${(message.params as { item: { type: string } }).item.type}`] : [])]
     : []));
@@ -253,10 +259,10 @@ async function drift(): Promise<boolean> {
     }
     const problems = scenarioProblems(CODEX_SCENARIOS[name]!, realRows.get(name) ?? []);
     if (problems.length) findings.push(`${name}: the real run broke the scenario: ${problems.join('; ')}`);
-    const hooks = hookProblems(fresh);
+    const hooks = cli === 'codex' ? hookProblems(fresh) : [];
     if (hooks.length) findings.push(`${name}: the hooks no longer match observation.ts: ${hooks.join('; ')}`);
     const replay = replayFactory(fresh);
-    const harness = recordingHarness({ factory: replay.factory, cwd: '/workspace/project', executable, approval: fresh.meta.approval });
+    const harness = recordingHarness({ factory: replay.factory, cwd: '/workspace/project', executable, approval: fresh.meta.approval, cli });
     try {
       await runScenario(harness, CODEX_SCENARIOS[name]!, { replay });
       const kinds = (rows: JournalRow[]) => rows.map(row => row.kind).join(' ');

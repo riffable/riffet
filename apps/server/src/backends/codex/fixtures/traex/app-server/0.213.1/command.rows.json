@@ -1,0 +1,180 @@
+[
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-1>:started",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-1>:web:command-1:user",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Run `ls` in the current directory, then reply with the number of entries only."
+        },
+        "commandId": "command-1"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:web:command-1:user",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_thought_chunk",
+    "nativeId": "<id-2>:<id-1>:rs_1:thinking",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_thought_chunk",
+      "data": {
+        "sessionUpdate": "agent_thought_chunk",
+        "channel": "thinking",
+        "content": {
+          "type": "text",
+          "text": "The user wants me to run `ls` in the current directory and reply with the number of entries only.\n\nLet me do that."
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:rs_1:thinking",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call",
+    "nativeId": "<id-2>:<id-1>:call_00_g4r56qob3yuon7kpi33j6d2t:call",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call",
+      "data": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "call_00_g4r56qob3yuon7kpi33j6d2t",
+        "toolName": "List files",
+        "kind": "search",
+        "title": "List files",
+        "status": "in_progress",
+        "rawInput": {
+          "command": "ls -1 | wc -l",
+          "cwd": "/workspace/project",
+          "commandActions": [
+            {
+              "type": "listFiles",
+              "command": "ls -1",
+              "path": null,
+              "input": {
+                "type": "shell",
+                "command": [
+                  "/bin/zsh",
+                  "-lc",
+                  "ls -1 | wc -l"
+                ],
+                "parsedCmd": [
+                  {
+                    "type": "list_files",
+                    "cmd": "ls -1",
+                    "path": null
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:call_00_g4r56qob3yuon7kpi33j6d2t:call",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call_update",
+    "nativeId": "<id-2>:<id-1>:call_00_g4r56qob3yuon7kpi33j6d2t:result",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call_update",
+      "data": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "call_00_g4r56qob3yuon7kpi33j6d2t",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "       2\n"
+            }
+          }
+        ],
+        "exitCode": 0
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:call_00_g4r56qob3yuon7kpi33j6d2t:result",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_thought_chunk",
+    "nativeId": "<id-2>:<id-1>:rs_4:thinking",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_thought_chunk",
+      "data": {
+        "sessionUpdate": "agent_thought_chunk",
+        "channel": "thinking",
+        "content": {
+          "type": "text",
+          "text": "The count is 2. But `ls -1 | wc -l` counts entries; if ls produces no trailing newline issues... it's fine. Let me verify what entries there are to be sure hidden files aren't counted (ls without -a doesn't show hidden). The user asked `ls`, so standard ls = non-hidden entries. Count = 2.\n\nReply with number only."
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:rs_4:thinking",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_3:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "phase": "final_answer",
+        "content": {
+          "type": "text",
+          "text": "2"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_3:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-1>:ended",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>",
+      "status": "completed"
+    }
+  }
+]

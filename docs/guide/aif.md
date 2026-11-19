@@ -295,7 +295,8 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 - 首次耦合挖掘（90 天）：Codex 的 `index.ts`、`runtime.ts` 与 `backends/service.ts` 分别同改 36 次和 29 次，Codex 与 droid、dsh 的 runtime 同改 11–12 次。按提交类型看，两项多数是穿过驱动接口、改到每个后端的新功能和改名，不是漏抽的公共机制，留给 §6 的「后端公共层」。`adapters/cli/claude-code.ts` 与 `backends/claude/index.ts` 每次都一起改，模块边界可能放错，在 Claude 拆分时复核。
 - Codex 拆分方案：[codex-runtime-split.md](codex-runtime-split.md)，待评审。
 - Codex hook 录制：载荷与 App Server 消息录在同一份录制里，`hookProblems` 在回放测试和漂移检测里检查观察依赖的约定；录制改写的 hook 信任在结束后写回。漂移检测在已录制的版本上把本次才出现的方法记为提示而不是漂移：同一版本下这只是本次运行的时序（命令输出是否流式）。
-- 未完成：Claude 的场景矩阵；TRAE（与 Codex 同一套驱动）的问答与命令场景；Codex runtime 拆分（方案评审后实施）。
+- TRAE（`traex`，与 Codex 同一套驱动）录了问答与命令场景，放在 `fixtures/traex/`。与 Codex 相比，它多发 `thread/contextUsage`、`thread/inboxStatus/updated`、`skills/changed` 和推理增量，少发 `thread/readState/changed`。
+- 未完成：Claude 的场景矩阵；Codex runtime 拆分（方案评审后实施）。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 

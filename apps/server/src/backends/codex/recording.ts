@@ -28,12 +28,12 @@ import type { CodexAppServerClient, CodexAppServerFactory, CodexAppServerOptions
 import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRequest } from '../types.js';
 import { CodexBackendAdapter } from './index.js';
-import type { AppServerProbe } from './flavors.js';
+import { codexFlavor, traexFlavor, type AppServerProbe } from './flavors.js';
 import type { CodexObservation } from './observation.js';
 
 export interface RecordingMeta {
-  cli: 'codex';
-  /** `codex --version`, e.g. `codex-cli 0.167.2`. */
+  cli: 'codex' | 'traex';
+  /** `<cli> --version`, e.g. `codex-cli 0.167.2`. */
   version: string;
   serverUserAgent?: string;
   /** What `probeAppServer` found, so the replay takes the same launch path as the recording. */
@@ -77,6 +77,13 @@ export const CODEX_SCENARIOS: Record<string, Scenario> = {
   approval: { prompts: ['Create a file named hello.txt containing the single word hi, then reply with: done'], approval: 'read-only', tool: true, approve: true },
   interrupt: { prompts: ['Count from 1 to 300, one number per line, with no other text.'], approval: 'on-request', interrupt: true },
 };
+
+/** The CLIs that run through this driver, with the scenarios recorded for each (TRAE's fork has no observation and no approval scenario). */
+export const RECORDED_CLIS = {
+  codex: { flavor: codexFlavor, scenarios: Object.keys(CODEX_SCENARIOS) },
+  traex: { flavor: traexFlavor, scenarios: ['answer', 'command'] },
+} as const;
+export type RecordedCli = keyof typeof RECORDED_CLIS;
 
 /**
  * What every run of a scenario must produce whatever the model says: a start and a completed end
@@ -321,16 +328,17 @@ export function replayFactory(recording: Recording): Replay {
 }
 
 /** A driver with an in-memory host, enough to run turns over the App Server without a terminal. */
-export function recordingHarness(options: { factory: CodexAppServerFactory; cwd: string; executable: string; approval: string; stateDir?: string }) {
+export function recordingHarness(options: { factory: CodexAppServerFactory; cwd: string; executable: string; approval: string; stateDir?: string; cli?: RecordedCli }) {
+  const cli = options.cli ?? 'codex';
   const id = 'recording-session';
   const project: Project = { id: 'recording-project', name: 'Project', cwd: options.cwd, createdAt: '', updatedAt: '' };
   const session: Session = {
     id, projectId: project.id, kind: 'native', title: 'Recording', tags: [], state: 'idle',
-    mode: 'code', approval: options.approval, backendId: 'codex' satisfies NativeBackendId, createdAt: '', updatedAt: '',
+    mode: 'code', approval: options.approval, backendId: cli satisfies NativeBackendId, createdAt: '', updatedAt: '',
   };
-  const profile: NativeBackendProfileConfig = { id: 'local', backendId: 'codex', name: 'Codex', config: { executable: options.executable } };
+  const profile: NativeBackendProfileConfig = { id: 'local', backendId: cli, name: cli === 'codex' ? 'Codex' : 'TRAE', config: { executable: options.executable } };
   // With a state directory the hooks run (`observation.ts`); a replay has none.
-  const adapter = new CodexBackendAdapter(options.factory, undefined, undefined, options.stateDir ? { stateDir: options.stateDir } : {});
+  const adapter = new CodexBackendAdapter(options.factory, RECORDED_CLIS[cli].flavor, undefined, options.stateDir ? { stateDir: options.stateDir } : {});
   const host = {
     getSession: () => session,
     getProject: () => project,
