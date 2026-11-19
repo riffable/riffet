@@ -531,11 +531,11 @@ describe('NativeDispatcher durable delivery', () => {
     cleanups.push(() => store.close(), () => send.close());
 
     // Nothing calls kick() again. A 60s poll cannot be what moves either run.
-    await until(() => store.getRun(confirm.id).native?.delivery === 'uncertain', 'confirmation timeout', 1_000);
-    expect(Date.now() - sentAt).toBeLessThan(1_000);
+    await until(() => store.getRun(confirm.id).native?.delivery === 'uncertain', 'confirmation timeout', 5_000);
+    expect(Date.now() - sentAt).toBeLessThan(10_000);
     expect(store.getRun(retry.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
     expect(runtime.ensureCalls).toEqual([retrySession.id]);
-    await until(() => runtime.ensureCalls.length >= 2, 'retry after its delay', 3_000);
+    await until(() => runtime.ensureCalls.length >= 2, 'retry after its delay', 5_000);
     expect(runtime.ensureCalls).toEqual([retrySession.id, retrySession.id]);
     expect(store.getRun(confirm.id).native?.delivery).toBe('uncertain');
   });

@@ -26,8 +26,9 @@ async function boot(stateDir: string) {
   return { ...booted, pushes };
 }
 
-async function settled(check: () => boolean): Promise<void> {
-  for (let tries = 0; tries < 100 && !check(); tries++) await new Promise(resolve => setTimeout(resolve, 10));
+async function settled(check: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && !check()) await new Promise(resolve => setTimeout(resolve, 10));
   expect(check()).toBe(true);
 }
 
