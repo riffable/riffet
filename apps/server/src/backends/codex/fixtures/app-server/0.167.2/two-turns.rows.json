@@ -31,7 +31,7 @@
   },
   {
     "kind": "agent_message_chunk",
-    "nativeId": "<id-2>:<id-1>:msg_0bd6dc26e618c30a016afe81cbcb3087d0a3ef631da9df1846:assistant",
+    "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
     "rev": 1,
     "turnId": "<id-1>",
     "payload": {
@@ -46,7 +46,7 @@
         }
       },
       "createdAt": "<time>",
-      "nativeId": "<id-2>:<id-1>:msg_0bd6dc26e618c30a016afe81cbcb3087d0a3ef631da9df1846:assistant",
+      "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
       "nativeTurnId": "<id-1>"
     }
   },
@@ -62,20 +62,20 @@
   },
   {
     "kind": "meta.turn_started",
-    "nativeId": "meta:turn:<id-3>:started",
+    "nativeId": "meta:turn:<id-4>:started",
     "rev": 1,
-    "turnId": "<id-3>",
+    "turnId": "<id-4>",
     "payload": {
-      "turnId": "<id-3>"
+      "turnId": "<id-4>"
     }
   },
   {
     "kind": "user_message_chunk",
-    "nativeId": "<id-2>:<id-3>:web:command-2:user",
+    "nativeId": "<id-2>:<id-4>:web:command-2:user",
     "rev": 1,
-    "turnId": "<id-3>",
+    "turnId": "<id-4>",
     "payload": {
-      "runId": "<id-3>",
+      "runId": "<id-4>",
       "type": "user_message_chunk",
       "data": {
         "sessionUpdate": "user_message_chunk",
@@ -86,17 +86,17 @@
         "commandId": "command-2"
       },
       "createdAt": "<time>",
-      "nativeId": "<id-2>:<id-3>:web:command-2:user",
-      "nativeTurnId": "<id-3>"
+      "nativeId": "<id-2>:<id-4>:web:command-2:user",
+      "nativeTurnId": "<id-4>"
     }
   },
   {
     "kind": "agent_message_chunk",
-    "nativeId": "<id-2>:<id-3>:msg_0bd6dc26e618c30a016afe81d12cb887d096f7af0e66bdcf11:assistant",
+    "nativeId": "<id-2>:<id-4>:<id-5>:assistant",
     "rev": 1,
-    "turnId": "<id-3>",
+    "turnId": "<id-4>",
     "payload": {
-      "runId": "<id-3>",
+      "runId": "<id-4>",
       "type": "agent_message_chunk",
       "data": {
         "sessionUpdate": "agent_message_chunk",
@@ -107,17 +107,17 @@
         }
       },
       "createdAt": "<time>",
-      "nativeId": "<id-2>:<id-3>:msg_0bd6dc26e618c30a016afe81d12cb887d096f7af0e66bdcf11:assistant",
-      "nativeTurnId": "<id-3>"
+      "nativeId": "<id-2>:<id-4>:<id-5>:assistant",
+      "nativeTurnId": "<id-4>"
     }
   },
   {
     "kind": "meta.turn_ended",
-    "nativeId": "meta:turn:<id-3>:ended",
+    "nativeId": "meta:turn:<id-4>:ended",
     "rev": 1,
-    "turnId": "<id-3>",
+    "turnId": "<id-4>",
     "payload": {
-      "turnId": "<id-3>",
+      "turnId": "<id-4>",
       "status": "completed"
     }
   }

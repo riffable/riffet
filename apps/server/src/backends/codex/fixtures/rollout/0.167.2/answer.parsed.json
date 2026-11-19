@@ -4,7 +4,7 @@
       "stepId": "turn:<id-1>",
       "model": "synthetic-model-001",
       "startedAt": "<n>",
-      "inputTokens": 8919,
+      "inputTokens": 8820,
       "cacheReadTokens": 15232,
       "cacheWriteTokens": 0,
       "outputTokens": 5,
@@ -13,7 +13,7 @@
     }
   ],
   "context": {
-    "used": 24156,
+    "used": 24057,
     "size": 486400,
     "breakdown": [
       {
@@ -24,7 +24,7 @@
       {
         "id": "input",
         "label": "未缓存输入",
-        "tokens": 8919
+        "tokens": 8820
       },
       {
         "id": "output",
@@ -59,7 +59,7 @@
         "sessionId": "recording-session",
         "runId": "<id-1>",
         "nativeTurnId": "<id-1>",
-        "nativeId": "<id-2>:<id-1>:msg_01e6489c6b0ec369016afe8365c25487d0bac1b4bf026d45f6:assistant",
+        "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
         "type": "agent_message_chunk",
         "data": {
           "sessionUpdate": "agent_message_chunk",

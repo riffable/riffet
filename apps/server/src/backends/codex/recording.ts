@@ -13,6 +13,11 @@
  * hang. Approvals are answered by the harness with the card's primary action, as a person would;
  * the runtime's answer then releases what the CLI sent after it. An interrupt is sent where the
  * recording sent it: the replay holds its stall release until that point (`reached`).
+ *
+ * The hook channel (`observation.ts`) is recorded in the same stream, as `hook` messages in the
+ * order they reached Riffet's hook endpoint. The replay delivers them to nothing: what a command
+ * changed needs a real working tree. `hookProblems` checks the contract observation depends on
+ * instead, on every recording and on each drift run.
  */
 import { DatabaseSync } from 'node:sqlite';
 import { Journal, type JournalRow } from '../../journal/journal.js';
@@ -24,6 +29,7 @@ import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRequest } from '../types.js';
 import { CodexBackendAdapter } from './index.js';
 import type { AppServerProbe } from './flavors.js';
+import type { CodexObservation } from './observation.js';
 
 export interface RecordingMeta {
   cli: 'codex';
@@ -43,7 +49,9 @@ export type RecordedMessage =
   | { dir: 'out'; kind: 'notification'; method: string; params?: unknown }
   | { dir: 'in'; kind: 'notification'; method: string; params: Record<string, unknown> }
   | { dir: 'in'; kind: 'serverRequest'; id: JsonRpcId; method: string; params: Record<string, unknown> }
-  | { dir: 'out'; kind: 'serverResponse'; id: JsonRpcId; result: unknown };
+  | { dir: 'out'; kind: 'serverResponse'; id: JsonRpcId; result: unknown }
+  /** A payload the CLI's hook command delivered to Riffet's hook endpoint. */
+  | { dir: 'in'; kind: 'hook'; payload: Record<string, unknown> };
 
 export interface Recording { meta: RecordingMeta; messages: RecordedMessage[] }
 
@@ -88,6 +96,45 @@ export function scenarioProblems(scenario: Scenario, rows: JournalRow[]): string
   if (count('user_message_chunk') < turns) problems.push(`${count('user_message_chunk')} prompts, expected ${turns}`);
   if (!scenario.interrupt && count('agent_message_chunk') < turns) problems.push(`${count('agent_message_chunk')} answers, expected at least ${turns}`);
   if (scenario.tool && !count('tool_call')) problems.push('no tool call');
+  return problems;
+}
+
+/** Appends every hook payload `observation` receives to `sink`, before it is handled. */
+export function recordHooks(observation: CodexObservation, sink: RecordedMessage[]): void {
+  const handle = observation['onHook'].bind(observation);
+  Object.assign(observation, {
+    onHook: (payload: Record<string, unknown>) => { sink.push({ dir: 'in', kind: 'hook', payload: structuredClone(payload) }); return handle(payload); },
+  });
+}
+
+/**
+ * What `observation.ts` relies on, checked against a recording: each command item has a PreToolUse
+ * and a PostToolUse for `Bash` whose `tool_use_id` is the item's id and whose `session_id` is the
+ * thread, and the PreToolUse arrives before the item completes (it blocks the command).
+ */
+export function hookProblems(recording: Recording): string[] {
+  const problems: string[] = [];
+  const messages = recording.messages;
+  const thread = messages.map(message => message.kind === 'response' ? (message.result as { thread?: { id?: unknown } } | undefined)?.thread?.id : undefined).find(id => typeof id === 'string');
+  const completedAt = new Map<string, number>();
+  messages.forEach((message, index) => {
+    if (message.kind !== 'notification' || message.dir !== 'in') return;
+    const item = (message.params as { item?: { type?: unknown; id?: unknown } }).item;
+    if (item?.type !== 'commandExecution' || typeof item.id !== 'string') return;
+    if (message.method === 'item/started' && !completedAt.has(item.id)) completedAt.set(item.id, Infinity);
+    if (message.method === 'item/completed') completedAt.set(item.id, index);
+  });
+  const hooks = messages.flatMap((message, index) => message.kind === 'hook' ? [{ index, payload: message.payload }] : []);
+  for (const [id, completed] of completedAt) {
+    for (const event of ['PreToolUse', 'PostToolUse']) {
+      const hook = hooks.find(entry => entry.payload.hook_event_name === event && entry.payload.tool_use_id === id);
+      if (!hook) { problems.push(`command ${id}: no ${event} hook`); continue; }
+      if (hook.payload.tool_name !== 'Bash') problems.push(`command ${id}: ${event} tool_name is ${JSON.stringify(hook.payload.tool_name)}, expected "Bash"`);
+      if (hook.payload.session_id !== thread) problems.push(`command ${id}: ${event} session_id is not the thread id`);
+      if (typeof hook.payload.cwd !== 'string') problems.push(`command ${id}: ${event} has no cwd`);
+      if (event === 'PreToolUse' && hook.index > completed) problems.push(`command ${id}: PreToolUse arrived after the item completed`);
+    }
+  }
   return problems;
 }
 
@@ -274,7 +321,7 @@ export function replayFactory(recording: Recording): Replay {
 }
 
 /** A driver with an in-memory host, enough to run turns over the App Server without a terminal. */
-export function recordingHarness(options: { factory: CodexAppServerFactory; cwd: string; executable: string; approval: string }) {
+export function recordingHarness(options: { factory: CodexAppServerFactory; cwd: string; executable: string; approval: string; stateDir?: string }) {
   const id = 'recording-session';
   const project: Project = { id: 'recording-project', name: 'Project', cwd: options.cwd, createdAt: '', updatedAt: '' };
   const session: Session = {
@@ -282,7 +329,8 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
     mode: 'code', approval: options.approval, backendId: 'codex' satisfies NativeBackendId, createdAt: '', updatedAt: '',
   };
   const profile: NativeBackendProfileConfig = { id: 'local', backendId: 'codex', name: 'Codex', config: { executable: options.executable } };
-  const adapter = new CodexBackendAdapter(options.factory);
+  // With a state directory the hooks run (`observation.ts`); a replay has none.
+  const adapter = new CodexBackendAdapter(options.factory, undefined, undefined, options.stateDir ? { stateDir: options.stateDir } : {});
   const host = {
     getSession: () => session,
     getProject: () => project,
@@ -387,7 +435,8 @@ export async function runScenario(h: RecordingHarness, scenario: Scenario, mode:
   }
 }
 
-const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+/** Generated ids: uuids, and the provider's message ids (`msg_` and hex), which change on every re-record. */
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|\bmsg_[0-9a-f]{20,}\b/gi;
 const ISO_TIME = /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})\b/g;
 const VOLATILE_KEY = /^(at|ts|time|timestamp|duration|elapsed)$|(At|Ms|Time|Duration)$/;
 
@@ -396,7 +445,7 @@ export function stableRows(rows: JournalRow[]): unknown[] {
   return stable(rows.map(row => ({ kind: row.kind, nativeId: row.nativeId, rev: row.rev, ...(row.turnId ? { turnId: row.turnId } : {}), payload: row.payload }))) as unknown[];
 }
 
-/** Any value without clocks and generated ids: uuids become `<id-n>` in order of appearance. */
+/** Any value without clocks and generated ids: ids become `<id-n>` in order of appearance. */
 export function stable(value: unknown): unknown {
   const ids = new Map<string, string>();
   const id = (value: string) => value.replace(UUID, match => {

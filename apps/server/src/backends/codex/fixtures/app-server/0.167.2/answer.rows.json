@@ -31,7 +31,7 @@
   },
   {
     "kind": "agent_message_chunk",
-    "nativeId": "<id-2>:<id-1>:msg_010b875fd65bd4f5016afe8159cfa087d0848dfb2335b1e913:assistant",
+    "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
     "rev": 1,
     "turnId": "<id-1>",
     "payload": {
@@ -46,7 +46,7 @@
         }
       },
       "createdAt": "<time>",
-      "nativeId": "<id-2>:<id-1>:msg_010b875fd65bd4f5016afe8159cfa087d0848dfb2335b1e913:assistant",
+      "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
       "nativeTurnId": "<id-1>"
     }
   },

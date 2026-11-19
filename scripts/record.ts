@@ -15,10 +15,16 @@
  *
  * `--check` is the drift check (docs/guide/aif.md §5.4): it records into a scratch directory instead and
  * reports, without writing to the repository, whether the installed CLI is newer than the newest
- * recording, which notification methods and item types appeared (drift) or were not sent this run
- * (a note: short output sends no delta), whether every
- * scenario still produced its required rows (`scenarioProblems`), and whether replaying the fresh
+ * recording, which notification methods and item types appeared (drift on a newer CLI, a note on the
+ * recorded one, where it is only this run's timing) or were not sent this run (a note), whether every
+ * scenario still produced its required rows (`scenarioProblems`), whether the hooks still match what
+ * `observation.ts` relies on (`hookProblems`), and whether replaying the fresh
  * recording yields the rows the real run did. Exit 1 on any drift.
+ *
+ * The hooks run as in Riffet (`observation.ts`), from a scratch state directory, and their payloads are
+ * recorded with the App Server messages. Confirming them writes the CLI's hook trust to the user's
+ * `config.toml`, under the same keys the running Riffet's hooks use, so the confirmations found there
+ * before the run are written back afterwards through the CLI's own `config/batchWrite`.
  *
  * Recordings are committed to a public repository, so machine paths, the user name, URLs and model
  * ids are replaced with synthetic text, and accounts, rate limits and provider configuration are
@@ -31,7 +37,8 @@ import { dirname, join } from 'node:path';
 import { CodexAppServer } from '../apps/server/src/backends/shared/codex-app-server.js';
 import { resolveCliExecutable } from '../apps/server/src/backends/shared/cli-resolve.js';
 import { probeAppServer } from '../apps/server/src/backends/codex/config.js';
-import { CODEX_SCENARIOS, formatRecording, parseRecording, recordingFactory, recordingHarness, replayFactory, runScenario, scenarioProblems, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
+import type { CodexAppServerClient } from '../apps/server/src/backends/shared/codex-app-server.js';
+import { CODEX_SCENARIOS, formatRecording, hookProblems, parseRecording, recordHooks, recordingFactory, recordingHarness, replayFactory, runScenario, scenarioProblems, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
 import type { JournalRow } from '../apps/server/src/journal/journal.js';
 
 const root = join(import.meta.dirname, '..');
@@ -101,7 +108,13 @@ function redactor(project: string, projectReal: string) {
 function redact(recording: Recording, { walk }: ReturnType<typeof redactor>): Recording {
   const emptied = new Set<number>();
   const messages: RecordedMessage[] = [];
+  const threads = new Set(recording.messages.flatMap(message => {
+    const id = message.kind === 'response' ? (message.result as { thread?: { id?: unknown } } | undefined)?.thread?.id : undefined;
+    return typeof id === 'string' ? [id] : [];
+  }));
   for (const message of recording.messages) {
+    // The endpoint also hears the hooks of threads this run did not start.
+    if (message.kind === 'hook' && !threads.has(String(message.payload.session_id))) continue;
     if (message.kind === 'request' && EMPTIED_METHODS.test(message.method)) { emptied.add(message.id); messages.push({ ...message, params: {} }); continue; }
     if (message.kind === 'response' && emptied.has(message.id)) { messages.push({ dir: 'in', kind: 'response', id: message.id, result: {} }); continue; }
     if (message.kind === 'notification' && message.dir === 'in' && DROPPED_NOTIFICATIONS.test(message.method)) continue;
@@ -145,6 +158,16 @@ function redactRollout(content: string, { walk }: ReturnType<typeof redactor>): 
   return out.join('\n') + '\n';
 }
 
+const codexHome = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
+/** The hook confirmations for `-c` hooks in the user's config, keyed as the CLI keys them. */
+function sessionFlagTrust(): Record<string, { trusted_hash: string }> {
+  const file = join(codexHome, 'config.toml');
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const found: Record<string, { trusted_hash: string }> = {};
+  for (const match of text.matchAll(/^\[hooks\.state\."(\/<session-flags>\/[^"]+)"\]\s*\ntrusted_hash\s*=\s*"([^"]+)"/gm)) found[match[1]!] = { trusted_hash: match[2]! };
+  return found;
+}
+
 const threadPathOf = (sink: RecordedMessage[]) => {
   for (const message of sink) {
     const thread = message.kind === 'response' ? (message.result as { thread?: { path?: unknown } } | undefined)?.thread : undefined;
@@ -159,10 +182,14 @@ for (const name of names) {
   const projectReal = realpathSync(project);
   writeFileSync(join(project, 'README.md'), '# Sample project\n\nTwo files for recording sessions.\n');
   writeFileSync(join(project, 'notes.txt'), 'alpha\nbeta\ngamma\n');
+  const stateDir = mkdtempSync(join(tmpdir(), 'riffet-record-state-'));
   const sink: RecordedMessage[] = [];
   let serverUserAgent: string | undefined;
-  const factory = recordingFactory(options => CodexAppServer.start(options), sink, client => { serverUserAgent ??= client.serverUserAgent; });
-  const harness = recordingHarness({ factory, cwd: project, executable, approval: scenario.approval });
+  let client: CodexAppServerClient | undefined;
+  const factory = recordingFactory(options => CodexAppServer.start(options), sink, opened => { serverUserAgent ??= opened.serverUserAgent; client = opened; });
+  const harness = recordingHarness({ factory, cwd: project, executable, approval: scenario.approval, stateDir });
+  if (harness.adapter.observation) recordHooks(harness.adapter.observation, sink);
+  const trust = sessionFlagTrust();
   try {
     for (const prompt of scenario.prompts) console.log(`[${name}] > ${prompt}`);
     await runScenario(harness, scenario, { sink });
@@ -170,8 +197,16 @@ for (const name of names) {
     realRows.set(name, rows);
     console.log(`[${name}] ${sink.length} messages, ${rows.length} journal rows`);
   } finally {
+    if (Object.keys(trust).length && client) {
+      // Not through the recorded client: the write-back is not part of the scenario.
+      await client.request('config/batchWrite', { edits: [{ keyPath: 'hooks.state', value: trust, mergeStrategy: 'upsert' }] })
+        .catch(error => console.error(`[${name}] could not restore the hook trust in ${codexHome}/config.toml:`, error));
+      if (JSON.stringify(sessionFlagTrust()) !== JSON.stringify(trust)) console.error(`[${name}] the hook trust in ${codexHome}/config.toml differs from before the run`);
+    }
     await harness.dispose();
+    await harness.adapter.observation?.close();
     rmSync(project, { recursive: true, force: true });
+    rmSync(stateDir, { recursive: true, force: true });
   }
   // One redactor per scenario, so a model id maps to the same synthetic name in both channels.
   const redaction = redactor(project, projectReal);
@@ -211,11 +246,15 @@ async function drift(): Promise<boolean> {
       const [before, after] = [vocabulary(parseRecording(readFileSync(oldFile, 'utf8'))), vocabulary(fresh)];
       const added = [...after].filter(item => !before.has(item));
       const removed = [...before].filter(item => !after.has(item));
-      if (added.length) findings.push(`${name}: new from the CLI: ${added.join(', ')}`);
+      // At the recorded version the protocol is the same; a method seen only now is this run's timing
+      // (a command's output streamed or not), worth a re-record but not drift.
+      if (added.length) (versionDir === newest ? notes : findings).push(`${name}: not in the recording: ${added.join(', ')}`);
       if (removed.length) notes.push(`${name}: not sent this run: ${removed.join(', ')}`);
     }
     const problems = scenarioProblems(CODEX_SCENARIOS[name]!, realRows.get(name) ?? []);
     if (problems.length) findings.push(`${name}: the real run broke the scenario: ${problems.join('; ')}`);
+    const hooks = hookProblems(fresh);
+    if (hooks.length) findings.push(`${name}: the hooks no longer match observation.ts: ${hooks.join('; ')}`);
     const replay = replayFactory(fresh);
     const harness = recordingHarness({ factory: replay.factory, cwd: '/workspace/project', executable, approval: fresh.meta.approval });
     try {

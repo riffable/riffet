@@ -4,16 +4,16 @@
       "stepId": "turn:<id-1>",
       "model": "synthetic-model-001",
       "startedAt": "<n>",
-      "inputTokens": 23438,
-      "cacheReadTokens": 23296,
+      "inputTokens": 8406,
+      "cacheReadTokens": 38528,
       "cacheWriteTokens": 0,
-      "outputTokens": 43,
+      "outputTokens": 48,
       "reasoningTokens": 0,
       "tokenSource": "provider"
     }
   ],
   "context": {
-    "used": 23422,
+    "used": 23523,
     "size": 486400,
     "breakdown": [
       {
@@ -24,7 +24,7 @@
       {
         "id": "input",
         "label": "未缓存输入",
-        "tokens": 121
+        "tokens": 222
       },
       {
         "id": "output",
@@ -59,13 +59,13 @@
         "sessionId": "recording-session",
         "runId": "<id-1>",
         "nativeTurnId": "<id-1>",
-        "nativeId": "<id-2>:<id-1>:msg_042ed56d2edc98fd016afe8393d3c087d085c9cf6cf5c1437f:assistant",
+        "nativeId": "<id-2>:<id-1>:<id-3>:assistant",
         "type": "agent_message_chunk",
         "data": {
           "sessionUpdate": "agent_message_chunk",
           "content": {
             "type": "text",
-            "text": "Running `ls`."
+            "text": "I’ll run `ls` and count its entries."
           },
           "phase": "commentary"
         },
@@ -76,18 +76,18 @@
         "sessionId": "recording-session",
         "runId": "<id-1>",
         "nativeTurnId": "<id-1>",
-        "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+        "nativeId": "<id-2>:<id-1>:exec-<id-4>:call",
         "type": "tool_call",
         "data": {
           "sessionUpdate": "tool_call",
-          "toolCallId": "exec-<id-3>",
+          "toolCallId": "exec-<id-4>",
           "toolName": "List files",
           "kind": "search",
           "title": "List files",
           "status": "in_progress",
           "rawInput": {
-            "command": "ls",
-            "originalCommand": "/bin/zsh -lc ls",
+            "command": "ls | wc -l",
+            "originalCommand": "/bin/zsh -lc 'ls | wc -l'",
             "cwd": "/workspace/project",
             "commandActions": [
               {
@@ -100,7 +100,7 @@
                   "command": [
                     "/bin/zsh",
                     "-lc",
-                    "ls"
+                    "ls | wc -l"
                   ]
                 }
               }
@@ -114,18 +114,18 @@
         "sessionId": "recording-session",
         "runId": "<id-1>",
         "nativeTurnId": "<id-1>",
-        "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+        "nativeId": "<id-2>:<id-1>:exec-<id-4>:result",
         "type": "tool_call_update",
         "data": {
           "sessionUpdate": "tool_call_update",
-          "toolCallId": "exec-<id-3>",
+          "toolCallId": "exec-<id-4>",
           "status": "completed",
           "content": [
             {
               "type": "content",
               "content": {
                 "type": "text",
-                "text": "README.md\nnotes.txt\n"
+                "text": "       2\n"
               }
             }
           ],
@@ -138,7 +138,7 @@
         "sessionId": "recording-session",
         "runId": "<id-1>",
         "nativeTurnId": "<id-1>",
-        "nativeId": "<id-2>:<id-1>:msg_042ed56d2edc98fd016afe83addb5887d0a8999301ef843285:assistant",
+        "nativeId": "<id-2>:<id-1>:<id-5>:assistant",
         "type": "agent_message_chunk",
         "data": {
           "sessionUpdate": "agent_message_chunk",

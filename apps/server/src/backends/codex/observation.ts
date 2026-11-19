@@ -19,7 +19,7 @@ import { asArray, asRecord, str } from './util.js';
  * process (`shared/hook-cli.mjs`, the transport Claude's hooks use). The snapshots themselves are
  * `WorkspaceObserver`'s.
  *
- * Verified on codex-cli 0.167.2:
+ * Verified on codex-cli 0.167.2, and checked on every recording and drift run (`recording.ts#hookProblems`):
  * - The hook payload's `tool_use_id` is the `commandExecution` item's `id`, and it carries `cwd` and
  *   the thread as `session_id`.
  * - PostToolUse runs after `item/completed` has been sent, and the model waits for it. So a completion
