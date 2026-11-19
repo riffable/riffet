@@ -240,8 +240,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private provisionalRows = new Map<string, string[]>();
   /** A provider notice that holds only while its condition does, such as a queue position. */
   private transientNotice: string | undefined;
-  /** Ownership stays local: transport/history diagnostics have their own structured status. */
-  private noticeSource?: 'thread' | 'transient' | 'other';
+  /**
+   * The facts `refreshStatus` derives the published status from. `link` is what the app-server last
+   * said about work outside a tracked turn; the phase is that, the interaction and the active turn.
+   * The notice's source stays local: transport/history diagnostics have their own structured status.
+   */
+  private facts: {
+    link: 'starting' | 'offline' | 'quiet' | 'working';
+    connection?: NativeStatus['connection']; history?: NativeStatus['history']; approval?: string; model?: string;
+    notice?: { text: string; level: NativeStatus['noticeLevel']; source: 'thread' | 'transient' | 'other' };
+  } = { link: 'starting', connection: { state: 'reconnecting' }, history: { state: 'loading' } };
   private threadError = false;
   /** Only a root turn observed in the current activity can explain its thread's generic error. */
   private threadErrorTurnId: string | undefined;
@@ -401,7 +409,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (!approval) {
       // Keep the configured intent as the inheritance fence, but do not label extended/native
       // permission profiles as a bare built-in preset. Only an explicit picker change replaces it.
-      if (this.hasNativePermissions(settings)) this.setStatus({ ...this.status, approval: 'custom' });
+      if (this.hasNativePermissions(settings)) this.refreshStatus({ approval: 'custom' });
       return;
     }
     if (approval !== session.approval) {
@@ -409,7 +417,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.emit({ type: 'session', session: updated });
     }
     this.session = this.host.getSession(this.session.id);
-    this.setStatus({ ...this.status, approval });
+    this.refreshStatus({ approval });
   }
 
   private hasNativePermissions(settings: Record<string, unknown> | undefined): boolean {
@@ -483,7 +491,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.setConnection({ state: this.attached ? 'connected' : 'disconnected' });
       return;
     }
-    this.setStatus(this.status);
+    this.refreshStatus();
   }
 
   /** The session's saved endpoint names another app-server than this one, and not the one it already found gone. */
@@ -563,7 +571,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   profileSwitchFailed(message: string): void {
-    this.setStatus({ ...this.status, notice: message, noticeLevel: 'error' }, 'other');
+    this.refreshStatus({ notice: { text: message, level: 'error', source: 'other' } });
   }
 
   /**
@@ -735,7 +743,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (optionsOnly.reconnectOnly) throw new AppError('STEER_TARGET_CHANGED', `The existing ${this.label} endpoint is unavailable; the instruction was not sent.`, 409);
       if (terminalAddress) {
         const error = lastAttachError ?? new Error(`The verified ${this.label} terminal endpoint is unavailable`);
-        this.status = { phase: this.turnPhase('offline'), connection: { state: 'failed', message: `The ${this.label} terminal endpoint could not be reached.` }, history: { state: 'error', message: `${this.label} history could not be loaded from the running terminal.` } };
+        this.facts = { link: 'offline', connection: { state: 'failed', message: `The ${this.label} terminal endpoint could not be reached.` }, history: { state: 'error', message: `${this.label} history could not be loaded from the running terminal.` } };
+        this.status = { phase: this.turnPhase('offline'), connection: this.facts.connection, history: this.facts.history };
         throw error;
       }
       // Only a definitively gone endpoint permits a replacement. Its binding is retained until
@@ -785,16 +794,21 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // Riffet's observation hooks run only once confirmed; a conversation without a TUI is confirmed here.
     await this.observation?.trust(this.transport, this.project.cwd).catch(() => undefined);
     await this.terminalEndpointState(true);
-    this.status = {
-      // Opening the app-server socket is not proof that this client owns the native thread. A
-      // cold history reader remains offline until it explicitly resumes a confirmed loaded owner.
-      phase: this.turnPhase('offline'),
+    // Opening the app-server socket is not proof that this client owns the native thread. A
+    // cold history reader remains offline until it explicitly resumes a confirmed loaded owner.
+    this.facts = {
+      link: 'offline',
       connection: this.endpointWriteConflict
         ? this.endpointConnection()
         : this.bindingScopeMismatch
         ? { state: 'conflict', message: `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.` }
         : { state: 'disconnected' },
       history: { state: 'loading' },
+    };
+    this.status = {
+      phase: this.turnPhase('offline'),
+      connection: this.facts.connection,
+      history: this.facts.history,
       ...(this.profilePending ? { profilePending: true } : {}),
     };
     const control = this.runtimeControl();
@@ -806,7 +820,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       sessionId: this.session.id, fingerprint, profileConfig: this.profileConfig,
       // `<backend>/routes` predates hooks; routes already running are found there.
       directory: join(credentialDirFor(this.flavor), '..', 'routes'),
-      onChange: () => this.setStatus({ ...this.status }),
+      onChange: () => this.refreshStatus(),
     };
   }
 
@@ -857,7 +871,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (error instanceof AppError) throw error;
       throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'The sidecar cannot be reached', 503);
     } finally {
-      this.setStatus({ ...this.status });
+      this.refreshStatus();
     }
   }
 
@@ -963,7 +977,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.host.setNativeSessionId(this.session.id, thread.id);
       void this.readGoal(thread.id);
       this.applyThreadStatus(thread.status);
-      if (this.status.phase === 'offline' || this.status.phase === 'starting') this.setStatus({ ...this.status, phase: 'idle' });
+      if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
       // Commit the durable endpoint only after Codex confirms the requested thread id. History is
       // a separate read path: a transcript error must not undo an established writer binding.
       await this.commitRuntimeBinding(transport, thread.id);
@@ -1273,13 +1287,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (this.bindingScopeMismatch || (this.status.connection?.state === 'conflict' && this.connectionConflictSource !== 'endpoint')) return state;
     this.connectionConflictSource = undefined;
     if (this.attached) {
-      this.setStatus({
-        ...this.status,
-        phase: this.status.phase === 'offline' || this.status.phase === 'starting' ? this.activeTurnId ? 'busy' : 'idle' : this.status.phase,
-        connection: { state: 'connected' },
-      });
+      this.refreshStatus({ link: this.resumed(), connection: { state: 'connected' } });
     } else if (this.status.connection?.state === 'conflict' || wasBlocked) {
-      this.setStatus({ ...this.status, phase: 'offline', connection: { state: 'disconnected' } });
+      this.refreshStatus({ link: 'offline', connection: { state: 'disconnected' } });
     }
     return state;
   }
@@ -1374,7 +1384,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         if (this.modeObservation === modeObservation) this.adoptSettingsMode(response);
         this.attached = true;
         this.applyThreadStatus(response.thread.status);
-        if (this.status.phase === 'offline' || this.status.phase === 'starting') this.setStatus({ ...this.status, phase: 'idle' });
+        if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
         await this.commitRuntimeBinding(transport, threadId);
         this.setConnection({ state: 'connected' });
         this.logRecovery(this.endpointSource, transport.remoteAddress, 'observer-resume', 'confirmed', true);
@@ -1625,7 +1635,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         if (this.permissionObservation !== permissionObservation) this.adoptApproval(this.permissionSettings);
         else {
           this.nativeApproval = permission.id;
-          this.setStatus({ ...this.status, approval: permission.id });
+          this.refreshStatus({ approval: permission.id });
         }
       }
       // A new message supersedes the questions still open, as a TUI submission does.
@@ -1649,7 +1659,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
           this.foregroundEndedTurnId = undefined;
         }
       }
-      this.setStatus({ phase: this.interaction ? 'attention' : this.activeTurnId ? 'busy' : 'idle', ...(input.config.model ? { model: input.config.model } : {}), ...(completedBeforeAck && this.status.notice ? { notice: this.status.notice, noticeLevel: this.status.noticeLevel } : {}), ...(this.interaction ? { interaction: this.interaction } : {}) });
+      this.refreshStatus({ link: 'quiet', model: input.config.model || undefined, ...(completedBeforeAck ? {} : { notice: undefined }) });
       return { turnId };
     } finally {
       if (this.dispatchCommandId === input.commandId) this.dispatchCommandId = undefined;
@@ -1722,7 +1732,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (this.dispatchCommandId === input.commandId) this.dispatchCommandId = undefined;
       if (pending.turnId && (this.settledTurns.has(pending.turnId) || this.pendingTurnOutcomes.has(pending.turnId))
         && transport === this.transport && transport.isOnline && this.status.phase !== 'offline') {
-        this.setStatus({ ...this.status, phase: this.interaction ? 'attention' : this.activeTurnId ? 'busy' : 'idle' });
+        this.refreshStatus({ link: 'quiet' });
       }
     }
   }
@@ -1837,7 +1847,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       && (!this.foregroundEndedTurnId || this.foregroundEndedTurnId === pending.foregroundEndedBeforeSend)) {
       this.activeTurnId = turnId;
       this.foregroundEndedTurnId = undefined;
-      this.setStatus({ ...this.status, phase: this.interaction ? 'attention' : 'busy' });
+      this.refreshStatus({ link: this.resumed() });
     }
     pending.resolve(turnId);
   }
@@ -1994,7 +2004,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
             const reported = reportedTraePermission(effectiveSettings);
             effectiveApproval = reported ?? (newerSettings ? normalizePermission(this.host.getSession(this.session.id).approval, this.flavor.id) : permission.id);
             this.nativeApproval = effectiveApproval;
-            this.setStatus({ ...this.status, approval: !reported && this.hasNativePermissions(effectiveSettings) ? 'custom' : this.nativeApproval });
+            this.refreshStatus({ approval: !reported && this.hasNativePermissions(effectiveSettings) ? 'custom' : this.nativeApproval });
           }
         }
       }
@@ -2085,10 +2095,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     if (!this.attached && this.nativeSessionId && this.transcriptLoaded) {
       await this.loadedThread(this.nativeSessionId).catch(() => undefined);
-      const connection = this.status.connection?.state === 'conflict' || this.endpointWriteConflict
-        ? this.status.connection
-        : { state: 'disconnected' as const };
-      this.setStatus({ ...this.status, phase: 'offline', connection });
+      this.refreshStatus({ link: 'offline', connection: this.status.connection?.state === 'conflict' || this.endpointWriteConflict ? this.status.connection : { state: 'disconnected' } });
     }
     void this.subagents.refresh();
     // A resumed thread reports nothing until its next turn, so the rollout is consulted once when
@@ -2309,14 +2316,14 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.seenAsyncItems.add(itemId);
     if (this.seenAsyncItems.size > 256) this.seenAsyncItems.delete(this.seenAsyncItems.values().next().value!);
     this.asyncQuestions.push(...questions);
-    this.setStatus({ ...this.status });
+    this.refreshStatus();
   }
 
   private dropAsyncQuestions(drop: (question: CodexAsyncQuestion) => boolean): void {
     const kept = this.asyncQuestions.filter(question => !drop(question));
     if (kept.length === this.asyncQuestions.length) return;
     this.asyncQuestions = kept;
-    this.setStatus({ ...this.status });
+    this.refreshStatus();
   }
 
   private async answerAsyncQuestion(question: CodexAsyncQuestion, response: NativeInteractionResponse, fingerprint: string): Promise<NativeInteractionResult> {
@@ -2403,7 +2410,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.activities.dispose();
     if (this.historyPoll) clearTimeout(this.historyPoll);
     this.historyPoll = undefined;
-    this.setStatus({ phase: 'offline', connection: { state: 'failed', message: `This ${this.label} client is disconnected.` } });
+    this.refreshStatus({ link: 'offline', model: undefined, notice: undefined, connection: { state: 'failed', message: `This ${this.label} client is disconnected.` } });
   }
 
   recordSubmittedTurn(turnId: string, runId: string, commandId: string): void {
@@ -2750,7 +2757,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.seenEvents.add(event.nativeId);
       this.events.splice(this.events.findLastIndex(existing => existing.sequence < sequenced.sequence) + 1, 0, sequenced);
     }
-    this.setStatus({ ...this.status });
+    this.refreshStatus();
   }
 
   /** Stops a background terminal; `stopping` at once, `stopped` when the provider's list or reply says it is gone. */
@@ -3019,9 +3026,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (completed) {
         this.completeTurnWaiters(turnId, threadId);
         this.clearTurnInteractions(turnId, threadId);
-        this.setStatus({ phase: this.interaction ? 'attention' : this.activeTurnId ? 'busy' : 'idle',
-          ...(this.status.model ? { model: this.status.model } : {}), ...(this.interaction ? { interaction: this.interaction } : {}),
-        });
+        this.refreshStatus({ link: 'quiet', notice: undefined });
       }
       void this.subagents.refresh();
     } else if (method === 'item/started' || method === 'item/completed') {
@@ -3071,7 +3076,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         if (typeof turn?.startedAt === 'number') meter.requestStartAt = turn.startedAt * 1000;
         else meter.requestStartAt ??= Date.now();
       }
-      this.setStatus({ phase: 'busy', ...(this.status.model ? { model: this.status.model } : {}) });
+      this.refreshStatus({ link: 'working', notice: undefined });
       try { this.feed?.notification(method, params); } catch { /* the journal's reader must not break the live runtime */ }
       return;
     }
@@ -3146,7 +3151,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       }
       // An interrupted item may never be committed; the reset below drops whatever it streamed.
       if (turnId) this.drafts.dropTurn(turnId);
-      this.setStatus({ phase: this.interaction ? 'attention' : this.activeTurnId || this.dispatchCommandId ? 'busy' : 'idle', ...(this.status.model ? { model: this.status.model } : {}), ...(this.interaction ? { interaction: this.interaction } : {}) });
+      this.refreshStatus({ link: this.dispatchCommandId ? 'working' : 'quiet', notice: undefined });
       if (this.appearancePending && this.status.phase === 'idle') {
         // This handler can inherit the async scope of a locked operation; queue behind it instead.
         const relaunch = () => this.relaunchTuiForAppearance();
@@ -3182,12 +3187,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (type === 'attemptStarted') this.showTransientNotice(`${model('from') ?? 'The model'} is unavailable; trying ${model('to') ?? 'a fallback model'}.`);
       else if (type === 'committed' && model('target')) {
         this.showTransientNotice(undefined);
-        this.setStatus({ ...this.status, model: model('target'), notice: `This turn is answered by ${model('target')} instead.`, noticeLevel: 'info' }, 'other');
+        this.refreshStatus({ model: model('target'), notice: { text: `This turn is answered by ${model('target')} instead.`, level: 'info', source: 'other' } });
       } else if (type === 'exhausted') this.showTransientNotice(undefined);
       return;
     }
     if (method === 'model/loopDetectedRecovering') {
-      this.setStatus({ ...this.status, notice: `The model repeated itself; ${this.label} compacted the context and is retrying.`, noticeLevel: 'info' }, 'other');
+      this.refreshStatus({ notice: { text: `The model repeated itself; ${this.label} compacted the context and is retrying.`, level: 'info', source: 'other' } });
       return;
     }
     if (method === 'thread/settings/updated') {
@@ -3315,11 +3320,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (meter) noteRequestWaitEnd(meter, requestId);
       if (pending) pending.resolve?.(NO_SERVER_RESPONSE);
       if (pending && this.interaction?.requestId === requestId) this.interaction = this.pending.values().next().value?.interaction;
-      this.setStatus({
-        phase: this.interaction ? 'attention' : this.activeTurnId ? 'busy' : 'idle',
-        ...(this.status.model ? { model: this.status.model } : {}),
-        ...(this.interaction ? { interaction: this.interaction } : {}),
-      });
+      this.refreshStatus({ link: 'quiet', notice: undefined });
   }
 
   private async onServerRequest(request: JsonRpcServerRequest): Promise<unknown> {
@@ -3356,7 +3357,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       }
     }
     this.interaction = pending.interaction;
-    this.setStatus({ phase: 'attention', ...(this.status.model ? { model: this.status.model } : {}), interaction: this.interaction });
+    this.refreshStatus({ link: this.resumed(), notice: undefined });
     return await new Promise(resolve => {
       // A server request remains pending until a web answer or the shared TUI resolves it.
       // This promise is intentionally settled by respond() or the protocol's resolved notice.
@@ -3710,11 +3711,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** Shows a notice that lasts only while its condition holds, without clearing an unrelated one. */
   private showTransientNotice(text: string | undefined): void {
     this.transientNotice = text;
-    if (text) this.setStatus({ ...this.status, notice: text, noticeLevel: 'info' }, 'transient');
-    else if (this.noticeSource === 'transient') {
-      const { notice: _notice, noticeLevel: _level, ...rest } = this.status;
-      this.setStatus(rest);
-    }
+    if (text) this.refreshStatus({ notice: { text, level: 'info', source: 'transient' } });
+    else if (this.facts.notice?.source === 'transient') this.refreshStatus({ notice: undefined });
   }
 
   /**
@@ -3736,7 +3734,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.modeRequests.set(pending, { observation: this.modeObservation });
     this.pending.set(key, pending);
     this.interaction = interaction;
-    this.setStatus({ phase: 'attention', ...(this.status.model ? { model: this.status.model } : {}), interaction });
+    this.refreshStatus({ link: this.resumed(), notice: undefined });
   }
 
   private settleModeChange(params: Record<string, unknown>): void {
@@ -3777,12 +3775,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.pending.delete(key);
     this.modeRequests.delete(pending);
     if (this.interaction?.requestId === key) this.interaction = this.pending.values().next().value?.interaction;
-    this.setStatus({
-      phase: this.interaction ? 'attention' : this.activeTurnId ? 'busy' : 'idle',
-      ...(this.status.model ? { model: this.status.model } : {}),
-      ...(this.interaction ? { interaction: this.interaction } : {}),
-      ...(notice ? { notice, noticeLevel: 'warning' } : {}),
-    }, notice ? 'other' : undefined);
+    this.refreshStatus({ link: 'quiet', notice: notice ? { text: notice, level: 'warning', source: 'other' } : undefined });
   }
 
   /** The newest proposed plan of a turn, from the transcript, so the reader can see what they approve. */
@@ -3793,21 +3786,29 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return latestPlanTextOf(events, prefix);
   }
 
-  private setStatus(status: NativeStatus, noticeSource?: 'transient' | 'other'): void {
+  /** Evidence of live traffic ends `starting` and `offline`; a link that already says work is going on stays. */
+  private resumed(): 'quiet' | 'working' { return this.facts.link === 'working' ? 'working' : 'quiet'; }
+
+  /** The only place a phase is computed: an interaction wins, then a tracked turn or other work in progress. */
+  private livePhase(working: boolean): 'attention' | 'busy' | 'idle' { return this.interaction ? 'attention' : this.activeTurnId || working ? 'busy' : 'idle'; }
+
+  /** The one place a status is computed, from `facts` (updated by `change` first), the interaction and the active turn. */
+  private refreshStatus(change: Partial<typeof this.facts> = {}): void {
+    const facts = Object.assign(this.facts, change);
     // Thread failure is a condition, independent of statuses rebuilt by child/interaction events.
     // Once recovered or owned by a failed turn, discard copies of its projected notice.
     if (this.threadError && (!this.threadErrorTurnId || this.settledTurns.get(this.threadErrorTurnId) !== 'run_failed')) {
-      status = { ...status, notice: `${this.label} reported a thread-level system error.`, noticeLevel: 'error' };
-      this.noticeSource = 'thread';
-    } else {
-      if (this.noticeSource === 'thread' && !noticeSource) {
-        const { notice: _notice, noticeLevel: _level, ...rest } = status;
-        status = rest;
-      }
-      if (!status.notice) this.noticeSource = undefined;
-      else if (noticeSource) this.noticeSource = noticeSource;
-    }
-    const { activeTurnId: _previousTurn, activeTurn: _previousTarget, runtimeControl: _previousControl, ...requested } = this.withAsyncQuestion(status);
+      facts.notice = { text: `${this.label} reported a thread-level system error.`, level: 'error', source: 'thread' };
+    } else if (facts.notice?.source === 'thread') facts.notice = undefined;
+    const requested = this.withAsyncQuestion({
+      phase: facts.link === 'starting' || facts.link === 'offline' ? facts.link : this.livePhase(facts.link === 'working'),
+      ...(facts.model ? { model: facts.model } : {}),
+      ...(facts.notice ? { notice: facts.notice.text, noticeLevel: facts.notice.level } : {}),
+      ...(this.interaction ? { interaction: this.interaction } : {}),
+      ...(facts.connection ? { connection: facts.connection } : {}),
+      ...(facts.history ? { history: facts.history } : {}),
+      ...(facts.approval ? { approval: facts.approval } : {}),
+    });
     const control = this.runtimeControl({ ...this.status, ...requested });
     const turnId = requested.phase === 'busy' || requested.phase === 'attention' ? this.activeTurnId : undefined;
     const next: NativeStatus = withActivity({
@@ -3816,12 +3817,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
       phase: this.turnPhase(requested.phase),
       ...(turnId ? { activeTurnId: this.turnRuns.get(turnId)?.runId ?? turnId } : {}),
       ...(turnId && this.attached && this.transport?.isOnline && !this.bindingScopeMismatch && !this.endpointWriteConflict &&
-        (requested.connection ?? this.status.connection)?.state === 'connected' && requested.phase === 'busy' && !this.currentInteraction && this.nativeSessionId
+        facts.connection?.state === 'connected' && requested.phase === 'busy' && !this.currentInteraction && this.nativeSessionId
         && supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)
         ? { activeTurn: { nativeSessionId: this.nativeSessionId, turnId, ...(this.turnRuns.get(turnId)?.runId ? { ownerRunId: this.turnRuns.get(turnId)!.runId } : {}) } } : {}),
-      ...(requested.connection === undefined && this.status.connection ? { connection: this.status.connection } : {}),
-      ...(requested.history === undefined && this.status.history ? { history: this.status.history } : {}),
-      ...(requested.approval === undefined && this.status.approval ? { approval: this.status.approval } : {}),
       ...(control ? { runtimeControl: control } : {}),
     }, this.activities.ledger.list(), { upgradePhase: false });
     // Compared by content: two paths that build the same status in a different key order (a notice
@@ -3841,7 +3839,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private setConnection(connection: NonNullable<NativeStatus['connection']>, source?: 'profile' | 'endpoint'): void {
     this.connectionConflictSource = connection.state === 'conflict' ? source : undefined;
-    this.setStatus({ ...this.status, connection });
+    this.refreshStatus({ connection });
   }
 
   private setHistory(history: NonNullable<NativeStatus['history']>): void {
@@ -3854,7 +3852,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         message: safeProviderError(history.message ?? 'The thread history could not be read.', this.profileConfig),
       }));
     }
-    this.setStatus({ ...this.status, history });
+    this.refreshStatus({ history });
   }
 
   private noteHistoryFailure(error: unknown): void {
@@ -3878,7 +3876,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       return;
     }
     const message = safeProviderError(error, this.profileConfig);
-    this.setStatus({ ...this.status, ...(this.transport?.isOnline ? {} : { phase: 'offline' as const }), connection: { state: 'failed', message } });
+    this.refreshStatus({ ...(this.transport?.isOnline ? {} : { link: 'offline' as const }), connection: { state: 'failed', message } });
   }
 
   private logRecovery(source: string, endpoint: string, attempt: string, result: string, commit: boolean): void {
@@ -3901,7 +3899,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       && !this.activeTurnId && !this.dispatchCommandId;
     // Thread status is aggregate evidence. An observed turn keeps its target until its own
     // completion (or a matching terminal history record) arrives, including during retries.
-    const phase = this.interaction ? 'attention' : this.activeTurnId || this.dispatchCommandId ? 'busy' : 'idle';
+    const phase = this.livePhase(Boolean(this.dispatchCommandId));
     // Only a thread recovery clears its own diagnostic. Transport/history recovery never does.
     if (status?.type === 'active' || status?.type === 'idle') {
       this.threadError = false;
@@ -3910,8 +3908,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.threadErrorTurnId = status.type === 'active' && this.activeTurnId && !this.settledTurns.has(this.activeTurnId)
         ? this.activeTurnId : undefined;
     } else if (status?.type === 'systemError') this.threadError = true;
-    const update = threadStatusUpdate(status, this.status, this.noticeSource === 'thread', this.interaction, phase, foregroundEnded, Boolean(this.transport?.isOnline));
-    if (update) this.setStatus(update);
+    const update = threadStatusUpdate(status, this.status, this.facts.notice?.source === 'thread', this.interaction, phase, foregroundEnded, Boolean(this.transport?.isOnline));
+    // The update's phase says whether the thread reports work beyond a tracked turn; an attention phase leaves that as it was.
+    if (update) this.refreshStatus({ link: update.phase === 'offline' ? 'offline' : update.phase === 'attention' ? this.resumed() : update.phase === 'busy' ? 'working' : 'quiet', ...(update.notice ? {} : { notice: undefined }) });
   }
 
   private onExit(error: Error): void {
@@ -3927,7 +3926,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.drafts.clear();
     this.activities.lost();
     try { this.feed?.lost?.(); } catch { /* as for notifications */ }
-    this.setStatus({ phase: 'offline', connection: { state: 'failed', message: safeProviderError(error, this.profileConfig) }, ...(this.status.notice ? { notice: this.status.notice, noticeLevel: this.status.noticeLevel } : {}) });
+    this.refreshStatus({ link: 'offline', model: undefined, connection: { state: 'failed', message: safeProviderError(error, this.profileConfig) } });
     // A socket disconnect does not prove the child exited. Keep its handle so a
     // subsequent reopen or service shutdown can dispose it before starting another writer.
   }
