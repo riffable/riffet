@@ -10,8 +10,9 @@
  * request (often a timer-driven poll) they followed — the next batch is released in recorded order.
  * A request the recording does not hold is answered with the method's last recorded response, or
  * fails as an unknown method. Either way a changed request pattern shows up as changed rows, not a
- * hang. Server requests (approvals) reach the runtime, but nothing answers them yet: scenarios that
- * need one are not recordable until the harness can respond to interactions.
+ * hang. Approvals are answered by the harness with the card's primary action, as a person would;
+ * the runtime's answer then releases what the CLI sent after it. An interrupt is sent where the
+ * recording sent it: the replay holds its stall release until that point (`reached`).
  */
 import { DatabaseSync } from 'node:sqlite';
 import { Journal, type JournalRow } from '../../journal/journal.js';
@@ -50,11 +51,45 @@ export interface Recording { meta: RecordingMeta; messages: RecordedMessage[] }
  * What `scripts/record.ts` drives; the replay test runs whatever recordings exist. Prompts are short
  * and deterministic so a re-recording differs only where the CLI did.
  */
-export const CODEX_SCENARIOS: Record<string, { prompts: string[]; approval: string }> = {
+export interface Scenario {
+  prompts: string[];
+  approval: string;
+  /** A tool call must appear. */
+  tool?: boolean;
+  /** Approval cards are answered with their primary action. */
+  approve?: boolean;
+  /** The turn is interrupted once the answer streams; it ends `interrupted`. */
+  interrupt?: boolean;
+}
+
+export const CODEX_SCENARIOS: Record<string, Scenario> = {
   answer: { prompts: ['Reply with exactly the word: ready'], approval: 'on-request' },
-  command: { prompts: ['Run `ls` in the current directory, then reply with the number of entries only.'], approval: 'on-request' },
+  command: { prompts: ['Run `ls` in the current directory, then reply with the number of entries only.'], approval: 'on-request', tool: true },
   'two-turns': { prompts: ['Remember the word maple. Reply with exactly: ok', 'Which word did I ask you to remember? Reply with the word only.'], approval: 'on-request' },
+  approval: { prompts: ['Create a file named hello.txt containing the single word hi, then reply with: done'], approval: 'read-only', tool: true, approve: true },
+  interrupt: { prompts: ['Count from 1 to 300, one number per line, with no other text.'], approval: 'on-request', interrupt: true },
 };
+
+/**
+ * What every run of a scenario must produce whatever the model says: a start and a completed end
+ * per prompt, the prompt itself, an answer, and a tool call where the scenario asks for one. Used by
+ * the drift check (`pnpm record codex all --check`); the replay test compares exact rows instead.
+ */
+export function scenarioProblems(scenario: Scenario, rows: JournalRow[]): string[] {
+  const count = (kind: string) => rows.filter(row => row.kind === kind).length;
+  const problems: string[] = [];
+  const turns = scenario.prompts.length;
+  if (count('meta.turn_started') !== turns) problems.push(`${count('meta.turn_started')} turn starts, expected ${turns}`);
+  const ended = rows.filter(row => row.kind === 'meta.turn_ended');
+  const status = scenario.interrupt ? 'interrupted' : 'completed';
+  if (ended.length !== turns || ended.some(row => (row.payload as { status?: string })?.status !== status)) {
+    problems.push(`turn ends ${JSON.stringify(ended.map(row => (row.payload as { status?: string })?.status))}, expected ${turns} × ${status}`);
+  }
+  if (count('user_message_chunk') < turns) problems.push(`${count('user_message_chunk')} prompts, expected ${turns}`);
+  if (!scenario.interrupt && count('agent_message_chunk') < turns) problems.push(`${count('agent_message_chunk')} answers, expected at least ${turns}`);
+  if (scenario.tool && !count('tool_call')) problems.push('no tool call');
+  return problems;
+}
 
 export function parseRecording(text: string): Recording {
   const [head, ...rest] = text.split('\n').filter(line => line.trim());
@@ -147,11 +182,22 @@ class ReplayClient implements CodexAppServerClient {
    * waiting for a turn to settle: after `STALL_MS` without activity it releases the next undelivered
    * batch (see the file comment).
    */
-  async drained(): Promise<void> {
+  async drained(release = true): Promise<void> {
     while (this.pending > 0) { await this.queue; await tick(); }
-    if (Date.now() - this.lastActivity < STALL_MS) return;
+    if (!release || Date.now() - this.lastActivity < STALL_MS) return;
     const first = this.recording.messages.findIndex((message, index) => message.dir === 'in' && message.kind !== 'response' && !this.delivered.has(index));
     if (first >= 0) await this.deliver(this.follow(first - 1));
+  }
+
+  /** Every inbound message recorded before the next `method` request has been delivered and handled. */
+  reached(method: string): boolean {
+    const index = this.requests.get(method)?.[0];
+    if (index === undefined) return true;
+    for (let at = 0; at < index; at++) {
+      const message = this.recording.messages[at]!;
+      if (message.dir === 'in' && message.kind !== 'response' && !this.delivered.has(at)) return false;
+    }
+    return this.pending === 0;
   }
 
   /** Undelivered inbound messages after `from` up to the next outbound one (or `until`), minus responses. */
@@ -216,11 +262,14 @@ class ReplayClient implements CodexAppServerClient {
   async dispose(): Promise<void> { this.isOnline = false; }
 }
 
-export function replayFactory(recording: Recording): { factory: CodexAppServerFactory; drained(): Promise<void> } {
+export interface Replay { factory: CodexAppServerFactory; drained(release?: boolean): Promise<void>; reached(method: string): boolean }
+
+export function replayFactory(recording: Recording): Replay {
   const clients: ReplayClient[] = [];
   return {
     factory: async options => { const client = new ReplayClient(options, recording); clients.push(client); return client; },
-    drained: async () => { for (const client of clients) await client.drained(); },
+    drained: async (release = true) => { for (const client of clients) await client.drained(release); },
+    reached: method => clients.every(client => client.reached(method)),
   };
 }
 
@@ -275,15 +324,35 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
     } as unknown as NativeBackendSendRequest;
     await adapter.send(host, request);
   };
-  const idle = async (timeoutMs: number, settle?: () => Promise<void>) => {
+  let answers = 0;
+  /** Answers a pending approval card with its primary action, as a person accepting it would. */
+  const answer = async () => {
+    const card = adapter.interaction(host, session);
+    if (!card) return;
+    const action = card.actions.find(item => item.tone === 'primary') ?? card.actions[0];
+    if (!action) return;
+    await adapter.respond(host, session, profile, { interactionId: card.id, revision: card.revision, requestId: `recording-answer-${++answers}`, action: action.id });
+  };
+  const until = async (done: () => boolean, timeoutMs: number, settle?: () => Promise<void>) => {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       await settle?.();
+      if (done()) return;
+      if (Date.now() > deadline) throw new Error(`Gave up waiting after ${timeoutMs} ms`);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  };
+  const idle = async (timeoutMs: number, settle?: () => Promise<void>, options: { approve?: boolean } = {}) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      await settle?.();
+      if (options.approve) await answer();
       if (adapter.status(host, session).phase === 'idle') return;
       if (Date.now() > deadline) throw new Error(`The turn did not finish within ${timeoutMs} ms`);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
   };
+  const interrupt = () => adapter.interrupt(host, session, profile);
   /** The rows the service's ingest would write, read into a journal of their own. */
   const rows = async (): Promise<JournalRow[]> => {
     const journal = new Journal(new DatabaseSync(':memory:'));
@@ -292,7 +361,30 @@ export function recordingHarness(options: { factory: CodexAppServerFactory; cwd:
     for (let pulls = 0; pulls < 20; pulls++) if ((await pullLane(source, writer, new AbortController().signal)).caughtUp) break;
     return rowsOf(journal, session.id);
   };
-  return { adapter, host, session, project, profile, send, idle, rows, dispose: () => adapter.dispose(host, session.id) };
+  return { adapter, host, session, project, profile, send, idle, until, interrupt, rows, dispose: () => adapter.dispose(host, session.id) };
+}
+
+export type RecordingHarness = ReturnType<typeof recordingHarness>;
+
+/**
+ * Runs a scenario's steps, the same way when recording (against the CLI, watching `sink`) and when
+ * replaying (driven by `replay`), so the two runs take the same path.
+ */
+export async function runScenario(h: RecordingHarness, scenario: Scenario, mode: { replay: Replay } | { sink: RecordedMessage[] }): Promise<void> {
+  const replay = 'replay' in mode ? mode.replay : undefined;
+  const timeoutMs = replay ? 10_000 : 180_000;
+  for (const prompt of scenario.prompts) {
+    await h.send(prompt);
+    if (scenario.interrupt) {
+      if (replay) await h.until(() => replay.reached('turn/interrupt'), timeoutMs, () => replay.drained(false));
+      else {
+        const sink = (mode as { sink: RecordedMessage[] }).sink;
+        await h.until(() => sink.some(message => message.dir === 'in' && message.kind === 'notification' && message.method === 'item/agentMessage/delta'), timeoutMs);
+      }
+      await h.interrupt();
+    }
+    await h.idle(timeoutMs, replay ? () => replay.drained() : undefined, { approve: scenario.approve });
+  }
 }
 
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;

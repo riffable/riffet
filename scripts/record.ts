@@ -13,24 +13,33 @@
  * Then run `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u` to write the expected
  * rows and parser outputs.
  *
+ * `--check` is the drift check (docs/guide/aif.md §5.4): it records into a scratch directory instead and
+ * reports, without writing to the repository, whether the installed CLI is newer than the newest
+ * recording, which notification methods and item types appeared (drift) or were not sent this run
+ * (a note: short output sends no delta), whether every
+ * scenario still produced its required rows (`scenarioProblems`), and whether replaying the fresh
+ * recording yields the rows the real run did. Exit 1 on any drift.
+ *
  * Recordings are committed to a public repository, so machine paths, the user name, URLs and model
  * ids are replaced with synthetic text, and accounts, rate limits and provider configuration are
  * dropped (`redact`). Read the diff before committing; `pnpm check:privacy` scans it too.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, tmpdir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CodexAppServer } from '../apps/server/src/backends/shared/codex-app-server.js';
 import { resolveCliExecutable } from '../apps/server/src/backends/shared/cli-resolve.js';
 import { probeAppServer } from '../apps/server/src/backends/codex/config.js';
-import { CODEX_SCENARIOS, formatRecording, recordingFactory, recordingHarness, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
+import { CODEX_SCENARIOS, formatRecording, parseRecording, recordingFactory, recordingHarness, replayFactory, runScenario, scenarioProblems, type RecordedMessage, type Recording } from '../apps/server/src/backends/codex/recording.js';
+import type { JournalRow } from '../apps/server/src/journal/journal.js';
 
 const root = join(import.meta.dirname, '..');
 const [backend, scenarioName, ...rest] = process.argv.slice(2);
 const outFlag = rest.indexOf('--out');
-if (backend !== 'codex' || !scenarioName || (outFlag >= 0 && !rest[outFlag + 1])) {
-  console.error(`usage: pnpm record codex <${Object.keys(CODEX_SCENARIOS).join('|')}|all> [--out <dir>]`);
+const check = rest.includes('--check');
+if (backend !== 'codex' || !scenarioName || (outFlag >= 0 && !rest[outFlag + 1]) || (check && outFlag >= 0)) {
+  console.error(`usage: pnpm record codex <${Object.keys(CODEX_SCENARIOS).join('|')}|all> [--out <dir> | --check]`);
   process.exit(2);
 }
 const names = scenarioName === 'all' ? Object.keys(CODEX_SCENARIOS) : [scenarioName];
@@ -43,7 +52,9 @@ const executable = resolveCliExecutable({ command: process.env.CODEX_CLI?.trim()
 const version = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
 const versionDir = /(\d+\.\d+\.\d+)/.exec(version)?.[1] ?? 'unknown';
 const probe = await probeAppServer(executable);
-const outBase = outFlag >= 0 ? rest[outFlag + 1]! : join(root, 'apps/server/src/backends/codex/fixtures');
+const committed = join(root, 'apps/server/src/backends/codex/fixtures');
+const outBase = check ? mkdtempSync(join(tmpdir(), 'riffet-drift-')) : outFlag >= 0 ? rest[outFlag + 1]! : committed;
+const realRows = new Map<string, JournalRow[]>();
 
 /** Keys whose values describe the account, the provider or the machine rather than the protocol. */
 const DROPPED_KEYS = /^(account|accounts|email|planType|rateLimits|rateLimitsByLimitId|rate_limits|credits|authMode|apiKey|baseUrl|base_url|model_providers|modelProviders|env|http_headers|headers|token|accessToken|userAgent|serviceTier|service_tier|instructionSources|creator_account_id|creator_user_id|internal_chat_message_metadata_passthrough|encrypted_content|comp_hash)$|instructions/i;
@@ -153,12 +164,10 @@ for (const name of names) {
   const factory = recordingFactory(options => CodexAppServer.start(options), sink, client => { serverUserAgent ??= client.serverUserAgent; });
   const harness = recordingHarness({ factory, cwd: project, executable, approval: scenario.approval });
   try {
-    for (const prompt of scenario.prompts) {
-      console.log(`[${name}] > ${prompt}`);
-      await harness.send(prompt);
-      await harness.idle(180_000);
-    }
+    for (const prompt of scenario.prompts) console.log(`[${name}] > ${prompt}`);
+    await runScenario(harness, scenario, { sink });
     const rows = await harness.rows();
+    realRows.set(name, rows);
     console.log(`[${name}] ${sink.length} messages, ${rows.length} journal rows`);
   } finally {
     await harness.dispose();
@@ -178,4 +187,50 @@ for (const name of names) {
   if (rollout && existsSync(rollout)) write('rollout', redactRollout(readFileSync(rollout, 'utf8'), redaction));
   else console.log(`[${name}] no rollout file found; the rollout channel is not recorded`);
 }
+if (check) process.exit(await drift() ? 1 : 0);
 process.exit(0);
+
+/** The drift check; true when something changed. Leaves the repository untouched. */
+async function drift(): Promise<boolean> {
+  const findings: string[] = [];
+  /** Reported but not drift: a message type the CLI did not need this time (short output sends no delta). */
+  const notes: string[] = [];
+  const semver = (value: string) => value.split('.').map(Number);
+  const newer = (a: string, b: string) => { const [x, y] = [semver(a), semver(b)]; for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0); return false; };
+  const recorded = existsSync(join(committed, 'app-server')) ? readdirSync(join(committed, 'app-server')).sort((a, b) => (newer(a, b) ? 1 : -1)) : [];
+  const newest = recorded.at(-1);
+  if (!newest) findings.push('no committed recordings');
+  else if (newer(versionDir, newest)) findings.push(`installed CLI ${versionDir} is newer than the newest recording ${newest}: re-record (pnpm record codex all) and review the row diff`);
+  const vocabulary = (recording: Recording) => new Set(recording.messages.flatMap(message => message.dir === 'in' && (message.kind === 'notification' || message.kind === 'serverRequest')
+    ? [message.method, ...(typeof (message.params as { item?: { type?: unknown } }).item?.type === 'string' ? [`item:${(message.params as { item: { type: string } }).item.type}`] : [])]
+    : []));
+  for (const name of names) {
+    const fresh = parseRecording(readFileSync(join(outBase, 'app-server', versionDir, `${name}.jsonl`), 'utf8'));
+    const oldFile = newest ? join(committed, 'app-server', newest, `${name}.jsonl`) : '';
+    if (oldFile && existsSync(oldFile)) {
+      const [before, after] = [vocabulary(parseRecording(readFileSync(oldFile, 'utf8'))), vocabulary(fresh)];
+      const added = [...after].filter(item => !before.has(item));
+      const removed = [...before].filter(item => !after.has(item));
+      if (added.length) findings.push(`${name}: new from the CLI: ${added.join(', ')}`);
+      if (removed.length) notes.push(`${name}: not sent this run: ${removed.join(', ')}`);
+    }
+    const problems = scenarioProblems(CODEX_SCENARIOS[name]!, realRows.get(name) ?? []);
+    if (problems.length) findings.push(`${name}: the real run broke the scenario: ${problems.join('; ')}`);
+    const replay = replayFactory(fresh);
+    const harness = recordingHarness({ factory: replay.factory, cwd: '/workspace/project', executable, approval: fresh.meta.approval });
+    try {
+      await runScenario(harness, CODEX_SCENARIOS[name]!, { replay });
+      const kinds = (rows: JournalRow[]) => rows.map(row => row.kind).join(' ');
+      const [real, replayed] = [kinds(realRows.get(name) ?? []), kinds(await harness.rows())];
+      if (real !== replayed) findings.push(`${name}: the replay of the fresh recording differs from the real run:\n    real:     ${real}\n    replayed: ${replayed}`);
+    } catch (error) {
+      findings.push(`${name}: the fresh recording does not replay: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      await harness.dispose();
+    }
+  }
+  rmSync(outBase, { recursive: true, force: true });
+  if (notes.length) console.log(`\nnotes:\n${notes.map(item => `- ${item}`).join('\n')}`);
+  console.log(findings.length ? `\ndrift (${findings.length}):\n${findings.map(item => `- ${item}`).join('\n')}` : `\nno drift: CLI ${versionDir}, ${names.length} scenario(s) match the recordings.`);
+  return findings.length > 0;
+}

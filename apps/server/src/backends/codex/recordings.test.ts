@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as codexConfig from './config.js';
-import { CODEX_SCENARIOS, parseRecording, recordingHarness, replayFactory, stable, stableRows } from './recording.js';
+import { CODEX_SCENARIOS, parseRecording, recordingHarness, replayFactory, runScenario, stable, stableRows } from './recording.js';
 import { lastRolloutCompaction } from './rollout-records.js';
 import { parseRolloutPlan } from './rollout-plan.js';
 import { parseRolloutContext, parseRolloutUsage } from './rollout-usage.js';
@@ -36,10 +36,7 @@ describe('codex app-server recordings', () => {
         const replay = replayFactory(recording);
         const h = recordingHarness({ factory: replay.factory, cwd: '/workspace/project', executable: 'codex', approval: recording.meta.approval });
         try {
-          for (const prompt of recording.meta.prompts) {
-            await h.send(prompt);
-            await h.idle(5_000, replay.drained);
-          }
+          await runScenario(h, CODEX_SCENARIOS[scenario] ?? { prompts: recording.meta.prompts, approval: recording.meta.approval }, { replay });
           await expect(JSON.stringify(stableRows(await h.rows()), null, 2) + '\n')
             .toMatchFileSnapshot(join(root, version, `${scenario}.rows.json`));
         } finally {

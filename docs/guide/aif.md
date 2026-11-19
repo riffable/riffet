@@ -291,8 +291,9 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 阶段 0 记录的基线：Codex 模块近 30 天 81 个提交，fix 36 个（44%）；全仓库同期 659 个提交，fix 267 个（41%）。Codex 模块超限文件 3 个：`runtime.ts` 3934 行、`index.ts` 1515 行、`transcript-source.ts` 1068 行。首次编辑前调用数要等工具调用记录了路径才能按模块统计（阶段 2）。
 
 阶段 1 进展（2026-11-19）：
-- 已完成：预热键派生；服务端覆盖（14 个模块，其中 13 份新文档，从各目录 90 天内的修复提交、代码注释和功能文档提炼，提交号与日志 scope 已逐条核对）；服务端超限文件进基线（26 个、共 3.8 万行）；Codex rollout 录制与回放；`aif context` 列出上级模块。
-- 未完成：Codex hook 录制；审批与中断场景（需要宿主能答复审批）；其余后端的场景矩阵；每周漂移检测；变更耦合挖掘；Codex runtime 拆分。
+- 已完成：预热键派生；服务端覆盖（14 个模块，其中 13 份新文档，从各目录 90 天内的修复提交、代码注释和功能文档提炼，提交号与日志 scope 已逐条核对）；服务端超限文件进基线（26 个、共 3.8 万行）；Codex rollout 录制与回放；`aif context` 列出上级模块；Codex 审批与中断场景（录制与回放走同一个 `recording.ts#runScenario`，审批由宿主按主操作答复，中断在录制时发出的位置发出）；漂移检测命令 `pnpm record codex all --check`（实测 CLI 与最新录制比较方法集合、场景结果和回放结果，有漂移时退出码为 1，不写入仓库）；变更耦合 `pnpm aif coupling [--days N]`。
+- 首次耦合挖掘（90 天）：Codex 的 `index.ts`、`runtime.ts` 与 `backends/service.ts` 分别同改 36 次和 29 次，驱动接口过宽；Codex 与 droid、dsh 的 runtime 同改 11–12 次，共用机制没有抽出；`adapters/cli/claude-code.ts` 与 `backends/claude/index.ts` 每次都一起改，模块边界可能放错。三项都是 runtime 拆分的输入。
+- 未完成：Codex hook 录制；其余后端的场景矩阵；每周漂移检测的自动化任务（命令已有，任务会消耗 CLI 额度，创建前由维护者确认）；Codex runtime 拆分（先出方案评审）。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 

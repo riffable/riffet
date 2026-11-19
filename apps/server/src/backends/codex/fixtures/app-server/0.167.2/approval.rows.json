@@ -1,0 +1,135 @@
+[
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-1>:started",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-1>:web:command-1:user",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Create a file named hello.txt containing the single word hi, then reply with: done"
+        },
+        "commandId": "command-1"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:web:command-1:user",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe89ec2d4487d087fc21c8dfb0541a:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "phase": "commentary",
+        "content": {
+          "type": "text",
+          "text": "I’ll create `hello.txt` and check its contents."
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe89ec2d4487d087fc21c8dfb0541a:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call",
+    "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call",
+      "data": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "exec-<id-3>",
+        "toolName": "Command",
+        "kind": "execute",
+        "title": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+        "status": "in_progress",
+        "rawInput": {
+          "command": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+          "originalCommand": "/bin/zsh -lc 'printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)'",
+          "cwd": "/workspace/project",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)"
+            }
+          ]
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call_update",
+    "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call_update",
+      "data": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "exec-<id-3>",
+        "status": "completed",
+        "exitCode": 0
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe8a0e165887d0bdfbc043938a53d3:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "phase": "final_answer",
+        "content": {
+          "type": "text",
+          "text": "done"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe8a0e165887d0bdfbc043938a53d3:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-1>:ended",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>",
+      "status": "completed"
+    }
+  }
+]

@@ -28,9 +28,10 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 ## 外部行为
 
 - App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`。
-- rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。尚无录制。
+- rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。录制数据在 `fixtures/rollout/`，只保留解析器读取的记录类型。
+- 打断后，未完成的回答不在 CLI 的定稿副本里（`thread/turns/list` 只返回用户消息），会话日志里也就没有这段回答。
 - hook（PreToolUse / PostToolUse，只处理 Bash）：`observation.ts#CodexObservation`，记录命令改动的文件。尚无录制。
-- CLI 升级后先运行 `pnpm record codex all`，再运行 `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u`，在代码评审中检查行的差异。
+- `pnpm record codex all --check` 用本机 CLI 跑一遍场景并与录制比较，不写入仓库；有漂移时再重录。CLI 升级后先运行 `pnpm record codex all`，再运行 `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u`，在代码评审中检查行的差异。
 
 ## 排障
 

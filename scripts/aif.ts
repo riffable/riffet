@@ -7,6 +7,7 @@
  *   pnpm verify [path...] [--dry-run]   run the module, global and related checks for the scope
  *   pnpm check:modules [--update]       validate declarations, anchors and the file size ratchet
  *   pnpm aif commits <base>..<head>     CI: warn on fix commits without `Missed:` or without recordings
+ *   pnpm aif coupling [--days 90]       file pairs in different modules that change together without importing each other
  *
  * A module is a directory whose AGENTS.md starts with front matter carrying `module:`. Its files are the
  * directory minus deeper modules. The scope is the paths given, else the working tree's changes (which
@@ -432,6 +433,52 @@ function commits(range: string) {
   console.log(`${shas.length} commit(s) in ${range}, ${fixes} fix(es) checked.`);
 }
 
+/** The relative imports of a source file, resolved to repo paths (extension-less and `.js` specifiers included). */
+function importsOf(file: string): Set<string> {
+  const out = new Set<string>();
+  if (!existsSync(join(root, file))) return out;
+  for (const [, spec] of readFileSync(join(root, file), 'utf8').matchAll(/(?:from|import)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g)) {
+    const target = posix.normalize(posix.join(posix.dirname(file), spec!));
+    out.add(target.replace(/\.(js|mjs)$/, ''));
+  }
+  return out;
+}
+
+/**
+ * Change coupling (docs/guide/aif.md §5.2): source files in different modules (or areas outside the
+ * modules) changed by the same commits while neither imports the other. Commits touching more than
+ * 30 source files are left out: a sweep says nothing about a pair.
+ */
+function coupling(args: string[]) {
+  const days = Number(args[args.indexOf('--days') + 1]) || 90;
+  const { modules } = loadModules();
+  const ownerOf = (file: string) => moduleOf(modules, file)?.id ?? file.split('/').slice(0, file.startsWith('apps/') ? 2 : 1).join('/');
+  const log = git('log', `--since=${days}.days`, '--no-merges', '--format=@@%h', '--name-only');
+  const changes = new Map<string, number>();
+  const pairs = new Map<string, number>();
+  for (const block of log.split('@@').slice(1)) {
+    const files = [...new Set(block.split('\n').slice(1).filter((file) => SOURCE.test(file) && !TEST.test(file) && existsSync(join(root, file))))];
+    if (files.length < 2 || files.length > 30) continue;
+    for (const file of files) changes.set(file, (changes.get(file) ?? 0) + 1);
+    for (let a = 0; a < files.length; a++) for (let b = a + 1; b < files.length; b++) {
+      if (ownerOf(files[a]!) === ownerOf(files[b]!)) continue;
+      const key = [files[a], files[b]].sort().join('\0');
+      pairs.set(key, (pairs.get(key) ?? 0) + 1);
+    }
+  }
+  const rows = [...pairs].map(([key, together]) => {
+    const [a, b] = key.split('\0') as [string, string];
+    const strength = together / Math.min(changes.get(a)!, changes.get(b)!);
+    return { a, b, together, strength };
+  }).filter((row) => row.together >= 3 && row.strength >= 0.5)
+    .filter((row) => !importsOf(row.a).has(row.b.replace(/\.(ts|tsx|mts|mjs)$/, '')) && !importsOf(row.b).has(row.a.replace(/\.(ts|tsx|mts|mjs)$/, '')))
+    .sort((x, y) => y.together * y.strength - x.together * x.strength).slice(0, 25);
+  console.log(`变更耦合（近 ${days} 天，跨模块，互不导入，共同修改 ≥ 3 次且占较少一方的一半以上）：`);
+  for (const row of rows) console.log(`${String(row.together).padStart(3)}× ${(row.strength * 100).toFixed(0).padStart(3)}%  ${row.a} [${ownerOf(row.a)}]  ↔  ${row.b} [${ownerOf(row.b)}]`);
+  if (!rows.length) console.log('（无）');
+  console.log('\n跨端契约（服务端 ↔ 客户端）的耦合是预期的；其余每一对先找原因：能从结构上消除就消除，消除不了写成同改规则，找不到原因就复核模块边界。');
+}
+
 const [command, ...rest] = process.argv.slice(2);
 if (command === 'modules') {
   const { modules, problems } = loadModules();
@@ -445,7 +492,8 @@ if (command === 'modules') {
 else if (command === 'verify') verify(rest);
 else if (command === 'check') check(rest);
 else if (command === 'commits') commits(rest[0]);
+else if (command === 'coupling') coupling(rest);
 else {
-  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head>');
+  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head> | coupling [--days N]');
   process.exit(2);
 }

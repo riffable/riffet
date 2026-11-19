@@ -1,0 +1,156 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 7912,
+      "cacheReadTokens": 38144,
+      "cacheWriteTokens": 0,
+      "outputTokens": 88,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 23103,
+    "size": 486400,
+    "breakdown": [
+      {
+        "id": "cached_input",
+        "label": "缓存输入",
+        "tokens": 22912
+      },
+      {
+        "id": "input",
+        "label": "未缓存输入",
+        "tokens": 186
+      },
+      {
+        "id": "output",
+        "label": "输出",
+        "tokens": 5
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:web:command-1:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Create a file named hello.txt containing the single word hi, then reply with: done"
+          },
+          "commandId": "command-1"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 2,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe89ec2d4487d087fc21c8dfb0541a:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "I’ll create `hello.txt` and check its contents."
+          },
+          "phase": "commentary"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 3,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "exec-<id-3>",
+          "toolName": "Command",
+          "kind": "execute",
+          "title": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+          "status": "in_progress",
+          "rawInput": {
+            "command": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+            "originalCommand": "/bin/zsh -lc 'printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)'",
+            "cwd": "/workspace/project",
+            "commandActions": [
+              {
+                "type": "unknown",
+                "cmd": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+                "command": "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)",
+                "input": {
+                  "type": "shell",
+                  "command": [
+                    "/bin/zsh",
+                    "-lc",
+                    "printf %s hi > hello.txt && cmp -s hello.txt <(printf %s hi)"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 4,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "exec-<id-3>",
+          "status": "completed",
+          "exitCode": 0
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 5,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_0ff2566e5dc08783016afe8a0e165887d0bdfbc043938a53d3:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "done"
+          },
+          "phase": "final_answer"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 6,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}
