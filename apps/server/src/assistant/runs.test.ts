@@ -19,8 +19,11 @@ async function boot(stateDir: string) {
   const booted = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent' });
   vi.spyOn(booted.dispatch, 'kick').mockImplementation(() => undefined);
   vi.spyOn(booted.nativeBackends, 'assertAvailable').mockImplementation(() => undefined);
-  const backends = await booted.nativeBackends.catalog.listBackends();
-  vi.spyOn(booted.nativeBackends.catalog, 'listBackends').mockResolvedValue(backends.map(entry => entry.backendId === 'claude' ? { ...entry, available: true } : entry));
+  // Spy synchronously before the first macrotask so `delegations.start()`'s `setImmediate` tick
+  // already sees Claude as available on CI runners without `claude` or `codex` installed.
+  const listBackends = booted.nativeBackends.catalog.listBackends.bind(booted.nativeBackends.catalog);
+  vi.spyOn(booted.nativeBackends.catalog, 'listBackends').mockImplementation(async (...args) =>
+    (await listBackends(...args)).map(entry => entry.backendId === 'claude' ? { ...entry, available: true } : entry));
   const pushes: string[] = [];
   vi.spyOn(booted.push, 'notice').mockImplementation(async (_sessionId, body) => { pushes.push(body); return true; });
   return { ...booted, pushes };
