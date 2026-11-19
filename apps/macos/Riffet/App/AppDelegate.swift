@@ -5,7 +5,13 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let services = ServicesProvider()
 
+    /// Hosting RiffetTests (`TEST_HOST`). The tests need none of the launch work, and on a fresh CI
+    /// runner the install-location alert's modal loop kept the test runner from ever starting.
+    private static let hostingTests = ["XCTestConfigurationFilePath", "XCTestBundlePath"]
+        .contains { ProcessInfo.processInfo.environment[$0] != nil }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard !Self.hostingTests else { return }
         MainActor.assumeIsolated {
             NSApp.servicesProvider = services
             NSUpdateDynamicServices()
