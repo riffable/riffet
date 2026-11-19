@@ -32,7 +32,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { createApp } from '../apps/server/src/app.js';
 import { ClaudeHookBridge } from '../apps/server/src/backends/claude/hook-bridge.js';
 import {
-  CLAUDE_SCENARIOS, RECORDED_MODEL, RECORDED_SESSION_ID, TRANSCRIPTS_TOKEN, formatRecording, parseRecording, recordingVocabulary, replayRecording, scenarioProblems,
+  CLAUDE_SCENARIOS, OWNER_TOKEN, RECORDED_MODEL, RECORDED_SECOND_SESSION_ID, RECORDED_SESSION_ID, SECOND_SESSION_PREFIX, TRANSCRIPTS_TOKEN, formatRecording, parseRecording, recordingVocabulary, replayRecording, scenarioProblems,
   type ClaudeRecordedEvent, type ClaudeRecording,
 } from '../apps/server/src/backends/claude/recording.js';
 import { localRedactions } from './terminal-fixture-guards.js';
@@ -134,12 +134,15 @@ class Timeline {
   lastGrowth = Date.now();
   private size = 0;
 
+  /** The CLI session ids this conversation had, in order: `/clear` moves it to a new one. */
+  readonly known: string[] = [];
+  learn(id: string | undefined): void { if (id && !this.known.includes(id)) this.known.push(id); }
   nativeId(): string | undefined {
     if (!this.riffetId) return undefined;
     try { return services.store.getSession(this.riffetId).nativeSessionId; } catch { return undefined; }
   }
-  directory(): string | undefined {
-    const id = this.nativeId();
+  directory(given = this.nativeId()): string | undefined {
+    const id = given;
     if (!id) return undefined;
     const projects = join(configDir, 'projects');
     for (const candidate of [projectDir, projectDir.replace(/^\/private/, '')]) {
@@ -160,12 +163,16 @@ class Timeline {
     if (phase !== 'none' && this.phases.at(-1) !== phase) this.phases.push(phase);
   }
   private files(): Array<{ key: string; path: string }> {
-    const dir = this.directory();
-    const id = this.nativeId();
-    if (!dir || !id) return [];
-    const found = [{ key: 'main', path: join(dir, `${id}.jsonl`) }];
-    const sub = join(dir, id, 'subagents');
-    if (existsSync(sub)) for (const name of readdirSync(sub).sort()) if (/\.(jsonl|meta\.json)$/.test(name)) found.push({ key: `subagents/${name}`, path: join(sub, name) });
+    this.learn(this.nativeId());
+    const found: Array<{ key: string; path: string }> = [];
+    this.known.forEach((id, index) => {
+      const dir = this.directory(id);
+      if (!dir) return;
+      const prefix = index === 0 ? '' : SECOND_SESSION_PREFIX;
+      found.push({ key: `${prefix}main`, path: join(dir, `${id}.jsonl`) });
+      const sub = join(dir, id, 'subagents');
+      if (existsSync(sub)) for (const name of readdirSync(sub).sort()) if (/\.(jsonl|meta\.json)$/.test(name)) found.push({ key: `${prefix}subagents/${name}`, path: join(sub, name) });
+    });
     return found;
   }
   /** What reached the disk since the last snapshot, as events: whole lines only, a half-written line waits. */
@@ -211,6 +218,7 @@ let current: Timeline | undefined;
   proto.dispatch = async function (this: unknown, payload, deliveryId, signal) {
     const timeline = current;
     if (timeline) {
+      if (payload.hook_event_name === 'SessionStart' && payload.source === 'clear' && payload.riffet_owner === timeline.riffetId) timeline.learn(String(payload.session_id));
       timeline.mark();
       timeline.events.push({ kind: 'hook', payload: structuredClone(payload) });
     }
@@ -226,10 +234,11 @@ const literal = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const paths = (...candidates: string[]) => [...new Set(candidates)].filter(Boolean).sort((a, b) => b.length - a.length);
 
 type Redactor = ReturnType<typeof redactor>;
-function redactor(timeline: Timeline, nativeId: string, transcriptDir: string, model: string) {
+function redactor(timeline: Timeline, nativeIds: string[], transcriptDir: string, models: string[]) {
   const pairs: Array<[RegExp, string]> = [
     ...paths(transcriptDir, transcriptDir.replace(/^\/private/, '')).map(path => [new RegExp(literal(path), 'g'), TRANSCRIPTS_TOKEN] as [RegExp, string]),
-    [new RegExp(literal(nativeId), 'g'), RECORDED_SESSION_ID],
+    ...(timeline.riffetId ? [[new RegExp(literal(timeline.riffetId), 'g'), OWNER_TOKEN] as [RegExp, string]] : []),
+    ...nativeIds.map((id, index) => [new RegExp(literal(id), 'g'), index === 0 ? RECORDED_SESSION_ID : RECORDED_SECOND_SESSION_ID] as [RegExp, string]),
     // The CLI names per-project folders (transcripts, task output) after the path with every other character turned into `-`.
     ...paths(projectDir, projectDir.replace(/^\/private/, '')).map(path => [new RegExp(literal(path.replace(/[^a-zA-Z0-9]/g, '-')), 'g'), '-workspace-project'] as [RegExp, string]),
     ...paths(directory, directory.replace(/^\/private/, '')).map(path => [new RegExp(literal(path.replace(/[^a-zA-Z0-9]/g, '-')), 'g'), '-tmp-riffet-recording'] as [RegExp, string]),
@@ -245,7 +254,7 @@ function redactor(timeline: Timeline, nativeId: string, transcriptDir: string, m
     [/\/Users\/[^/\s"]+/g, '/home/user'],
     // A path the TUI cut short with an ellipsis no longer matches the whole one.
     [/(?:\/private)?\/var\/folders\/[^\s"]*/g, '/tmp/…'],
-    ...(model ? [[new RegExp(literal(model), 'gi'), RECORDED_MODEL] as [RegExp, string], [new RegExp(literal(model.replace(/\[[^\]]*\]$/, '')), 'gi'), RECORDED_MODEL] as [RegExp, string]] : []),
+    ...models.filter(Boolean).flatMap(model => [[new RegExp(literal(model), 'gi'), RECORDED_MODEL] as [RegExp, string], [new RegExp(literal(model.replace(/\[[^\]]*\]$/, '')), 'gi'), RECORDED_MODEL] as [RegExp, string]]),
     [new RegExp(`\\b${literal(userInfo().username)}\\b`, 'g'), 'user'],
     [new RegExp(`\\b${literal(hostname().split('.')[0]!)}\\b`, 'gi'), 'host'],
     [/\b(?:trae\/)?deepseek[-\w.]*/gi, RECORDED_MODEL],
@@ -369,17 +378,18 @@ function redactHook(payload: Record<string, unknown>, r: Redactor): Record<strin
       ...(window ? { context_window: pick(window, ['total_input_tokens', 'context_window_size', 'current_usage']) } : {}),
     }) as Record<string, unknown>;
   }
-  return r.deep(pick(payload, HOOK_KEEP)) as Record<string, unknown>;
+  // The conversation a hook names as its owner routes the CLI's new session after `/clear`.
+  return r.deep({ ...pick(payload, HOOK_KEEP), ...(typeof payload.riffet_owner === 'string' ? { riffet_owner: OWNER_TOKEN } : {}) }) as Record<string, unknown>;
 }
 
-function redactEvents(timeline: Timeline, nativeId: string, transcriptDir: string, model: string): ClaudeRecordedEvent[] {
-  const r = redactor(timeline, nativeId, transcriptDir, model);
+function redactEvents(timeline: Timeline, nativeIds: string[], transcriptDir: string, models: string[]): ClaudeRecordedEvent[] {
+  const r = redactor(timeline, nativeIds, transcriptDir, models);
   const out: ClaudeRecordedEvent[] = [];
   let lastScreen = '';
   for (const event of timeline.events) {
     if (event.kind === 'hook') {
       const id = event.payload.session_id;
-      if (id !== nativeId) continue;
+      if (typeof id !== 'string' || !nativeIds.includes(id)) continue;
       out.push({ kind: 'hook', payload: redactHook(event.payload, r) });
     } else if (event.kind === 'transcript') {
       const text = redactTranscript(event.file, event.text, r);
@@ -431,13 +441,24 @@ async function record(name: string): Promise<{ recording: ClaudeRecording; phase
   const timeline = new Timeline();
   current = timeline;
   const created = await ok('POST', '/api/sessions', {
-    projectId, kind: 'native', backendId: 'claude', backendProfileId: profileId, model: chosenModel, mode: 'agent', approval: scenario.approval, clientSessionId: randomUUID(),
+    projectId, kind: 'native', backendId: 'claude', backendProfileId: profileId, model: scenario.model ?? chosenModel, mode: 'agent', approval: scenario.approval, clientSessionId: randomUUID(),
   });
   const id = (created.session ?? created).id as string;
   timeline.riffetId = id;
   const poll = setInterval(() => timeline.samplePhase(), 100);
   try {
-    for (const prompt of scenario.prompts) {
+    for (const [index, prompt] of scenario.prompts.entries()) {
+      if (scenario.restartBefore?.includes(index)) {
+        // Riffet's runtime goes away and the CLI exits: the send that follows launches it again with --resume.
+        const terminalId = services.store.getSession(id).terminalId;
+        timeline.push({ kind: 'restart' });
+        await services.nativeBackends.dispose(id);
+        timeline.push({ kind: 'exit' });
+        if (terminalId) await services.terminal.stop(terminalId);
+        await sleep(2000);
+        timeline.snapshotTranscript();
+        log(`[${name}] the runtime was disposed and the CLI stopped`);
+      }
       log(`[${name}] > ${prompt}`);
       timeline.push({ kind: 'send', text: prompt });
       sendCounter += 1;
@@ -482,8 +503,10 @@ async function record(name: string): Promise<{ recording: ClaudeRecording; phase
       if (!settled) log(`[${name}] still running: phase ${timeline.phase()}; pane tail: ${timeline.screen().split('\n').filter(line => line.trim()).slice(-8).join(' | ')}`);
       const state = services.store.getRun(run.id);
       log(`[${name}] run ${state.state}${state.error ? `: ${String(state.error).slice(0, 120)}` : ''}`);
-      if (state.error && failedOnAuth(String(state.error))) throw new AuthError(String(state.error));
+      if (!scenario.failure && state.error && failedOnAuth(String(state.error))) throw new AuthError(String(state.error));
       if (!settled) throw new Error('the run did not end');
+      // The CLI reports its new session (SessionStart, source clear) some time after the command; the next send waits for it, as a person would.
+      if (scenario.clear && prompt.trim() === '/clear' && !await until('the CLI to report its new session', () => timeline.known.length > 1, 30_000)) throw new Error('the CLI did not move to a new session after /clear');
       await quiet(timeline, 3000);
     }
   } finally {
@@ -492,17 +515,18 @@ async function record(name: string): Promise<{ recording: ClaudeRecording; phase
   timeline.samplePhase();
   timeline.snapshotTranscript(true);
   timeline.snapshotScreen();
-  const nativeId = timeline.nativeId();
-  const dir = timeline.directory();
+  timeline.learn(timeline.nativeId());
+  const nativeId = timeline.known[0];
+  const dir = timeline.directory(nativeId);
   if (!nativeId || !dir) throw new Error('the session left no transcript');
   const recording: ClaudeRecording = {
     meta: { cli: 'claude', version, scenario: name, prompts: scenario.prompts, approval: scenario.approval, model: RECORDED_MODEL },
-    events: redactEvents(timeline, nativeId, dir, chosenModel),
+    events: redactEvents(timeline, [...timeline.known], dir, [chosenModel, scenario.model ?? '']),
   };
   const raw = process.env.RECORD_CLAUDE_RAW;
   if (raw) { mkdirSync(raw, { recursive: true }); writeFileSync(join(raw, `${name}.raw.json`), JSON.stringify({ events: timeline.events, nativeId, dir })); }
   // A turn that failed on the route reads as an assistant error row.
-  if (timeline.events.some(event => event.kind === 'transcript' && /"isApiErrorMessage":true/.test(event.text) && failedOnAuth(event.text))) throw new AuthError('the transcript holds an authentication error');
+  if (!scenario.failure && timeline.events.some(event => event.kind === 'transcript' && /"isApiErrorMessage":true/.test(event.text) && failedOnAuth(event.text))) throw new AuthError('the transcript holds an authentication error');
   await ok('POST', `/api/sessions/${id}/cancel`, { requestId: randomUUID() }).catch(() => undefined);
   current = undefined;
   return { recording, phases: [...timeline.phases] };

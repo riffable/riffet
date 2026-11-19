@@ -31,6 +31,11 @@ export { stable, stableRows };
 export const RECORDED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
 /** Stands for the directory holding the session's transcript; the replay puts its own in. */
 export const TRANSCRIPTS_TOKEN = '{{transcripts}}';
+/** The session id `/clear` moves the CLI to; transcript files of it are named `2:main`, `2:subagents/...`. */
+export const RECORDED_SECOND_SESSION_ID = '00000000-0000-4000-8000-000000000002';
+export const SECOND_SESSION_PREFIX = '2:';
+/** Stands for the Riffet conversation id a hook names as its owner (`riffet_owner`); the replay puts its own in. */
+export const OWNER_TOKEN = '{{owner}}';
 export const RECORDED_MODEL = 'synthetic-model-001';
 
 export interface ClaudeRecordingMeta {
@@ -49,7 +54,11 @@ export type ClaudeRecordedEvent =
   | { kind: 'hook'; payload: Record<string, unknown> }
   | { kind: 'screen'; text: string }
   | { kind: 'respond'; action: string }
-  | { kind: 'stop' };
+  | { kind: 'stop' }
+  /** Riffet's runtime for the conversation goes away; the next send opens it again. */
+  | { kind: 'restart' }
+  /** The CLI's terminal exits. */
+  | { kind: 'exit' };
 
 export interface ClaudeRecording { meta: ClaudeRecordingMeta; events: ClaudeRecordedEvent[] }
 
@@ -64,6 +73,15 @@ export interface ClaudeScenario {
   approve?: boolean;
   /** The scenario starts a subagent. */
   subagent?: boolean;
+  /** Before these prompts (by index) the runtime is disposed and the CLI exits, so the send resumes the session. */
+  restartBefore?: number[];
+  /** A prompt is the manual `/compact` command. */
+  compact?: boolean;
+  /** The turn ends in StopFailure; `model` is a model id the gateway rejects, for this run only. */
+  failure?: boolean;
+  model?: string;
+  /** A prompt is `/clear`: the CLI moves to a new session id. */
+  clear?: boolean;
 }
 
 export const CLAUDE_SCENARIOS: Record<string, ClaudeScenario> = {
@@ -72,6 +90,10 @@ export const CLAUDE_SCENARIOS: Record<string, ClaudeScenario> = {
   approval: { prompts: ['Create a file named hello.txt containing the word hello, using the Bash tool (echo hello > hello.txt). Then reply with only: done'], approval: 'manual', tool: true, approve: true },
   interrupt: { prompts: ['Say hello in one short sentence. Then run `sleep 120` with the Bash tool.'], approval: 'bypassPermissions', interrupt: true, tool: true },
   subagent: { prompts: ['Use the Agent tool with a general-purpose subagent to read README.md and report its first line. Then reply with that line only.'], approval: 'bypassPermissions', subagent: true },
+  resume: { prompts: ['The secret word is pelican. Reply with exactly: ok', 'What is the secret word? Reply with that word only.'], approval: 'bypassPermissions', restartBefore: [1] },
+  compact: { prompts: ['The secret word is pelican. Reply with exactly: ok', 'The second secret word is walrus. Reply with exactly: ok', '/compact', 'What are the two secret words? Reply with the two words only.'], approval: 'bypassPermissions', compact: true },
+  'stop-failure': { prompts: ['Reply with exactly: ok'], approval: 'bypassPermissions', failure: true, model: 'no-such-model-for-recording' },
+  clear: { prompts: ['The secret word is pelican. Reply with exactly: ok', '/clear', 'Reply with exactly: ok'], approval: 'bypassPermissions', clear: true },
 };
 
 export function parseRecording(text: string): ClaudeRecording {
@@ -101,29 +123,42 @@ export function recordingVocabulary(recording: ClaudeRecording): Set<string> {
   return names;
 }
 
-export interface ReplayResult { rows: JournalRow[]; /** The rows of each subagent lane the main lane names, by lane. */ lanes: Record<string, JournalRow[]>; phases: string[]; stops?: string[] }
+export interface ReplayResult {
+  rows: JournalRow[]; /** The rows of each subagent lane the main lane names, by lane. */ lanes: Record<string, JournalRow[]>; phases: string[]; stops?: string[];
+  /** The session id the conversation ends on, and how many times the CLI was launched. */
+  nativeSessionId?: string; launches?: number;
+}
 
 /** What a scenario has to have produced, from the journal rows of its replay and the phases seen. */
-export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops'> & { responded?: number; stopped?: boolean }): string[] {
+export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops' | 'nativeSessionId' | 'launches'> & { responded?: number; stopped?: boolean }): string[] {
   const { rows, phases } = result;
   const problems: string[] = [];
   const count = (kind: string) => rows.filter(row => row.kind === kind).length;
-  const turns = scenario.prompts.length;
+  // A slash command that makes no turn of its own: `/clear`, and `/compact` (which shows as a compaction activity).
+  const turnPrompts = scenario.prompts.filter(prompt => !(scenario.clear && prompt === '/clear') && !(scenario.compact && prompt === '/compact'));
+  const turns = turnPrompts.length;
   if (count('meta.turn_started') < turns) problems.push(`${count('meta.turn_started')} turn starts, expected ${turns}`);
   const ended = rows.filter(row => row.kind === 'meta.turn_ended');
   // A turn the CLI reports as interrupted is `cancelled` in the journal (`transcript-source.ts` maps the marker so).
-  const status = scenario.interrupt ? 'cancelled' : 'completed';
+  const status = scenario.interrupt ? 'cancelled' : scenario.failure ? 'failed' : 'completed';
   if (ended.length < turns) problems.push(`${ended.length} turn ends, expected ${turns}`);
   else if (scenario.interrupt ? (ended.at(-1)?.payload as { status?: string })?.status !== status : ended.some(row => (row.payload as { status?: string })?.status !== status)) {
     problems.push(`turn ends ${JSON.stringify(ended.map(row => (row.payload as { status?: string })?.status))}, expected ${status}`);
   }
   if (phases.at(-1) !== 'idle') problems.push(`the session ends ${phases.at(-1) ?? 'without a phase'}, expected idle`);
   if (count('user_message_chunk') < turns) problems.push(`${count('user_message_chunk')} prompts, expected ${turns}`);
-  if (!scenario.interrupt && count('agent_message_chunk') < turns) problems.push(`${count('agent_message_chunk')} answers, expected at least ${turns}`);
+  if (scenario.failure && !(ended.at(-1)?.payload as { error?: string })?.error) problems.push('the failed turn carries no failure text');
+  if (!scenario.interrupt && !scenario.failure && count('agent_message_chunk') < turns) problems.push(`${count('agent_message_chunk')} answers, expected at least ${turns}`);
   if (scenario.tool && !count('tool_call')) problems.push('no tool call');
   if (scenario.approve && !phases.includes('attention')) problems.push('no permission card (phase attention) was shown');
   if (scenario.approve && !result.responded) problems.push('the permission card was not answered');
   for (const stop of result.stops ?? []) if (stop !== 'ok') problems.push(`the stop was refused: ${stop}`);
+  if (scenario.restartBefore) {
+    if ((result.launches ?? 0) < 2) problems.push(`${result.launches ?? 0} CLI launches, expected a second one after the restart`);
+    if (result.nativeSessionId !== RECORDED_SESSION_ID) problems.push(`the conversation ends on session ${result.nativeSessionId}, expected the same one`);
+  }
+  if (scenario.compact && !rows.some(row => (row.payload as { data?: { activity?: { kind?: string; status?: string } } })?.data?.activity?.kind === 'compaction' && (row.payload as { data: { activity: { status?: string } } }).data.activity.status === 'completed')) problems.push('no completed compaction in the journal');
+  if (scenario.clear && (!result.nativeSessionId || result.nativeSessionId === RECORDED_SESSION_ID)) problems.push(`the session id did not change (${result.nativeSessionId})`);
   if (scenario.subagent && !rows.some(row => row.kind === 'meta.subagent')) problems.push('no subagent lane');
   return problems;
 }
@@ -143,6 +178,7 @@ const IDLE_SCREEN = ['Welcome back', '', '─'.repeat(60), '❯ ', '─'.repeat(
 
 class FakeTerminals {
   private terminal?: TerminalInfo;
+  private epoch = 0;
   screen = IDLE_SCREEN;
   /** Pasted and not yet submitted: the CLI echoes it into the box. */
   typed?: string;
@@ -150,13 +186,20 @@ class FakeTerminals {
   create(projectId: string, sessionId: string): TerminalInfo {
     this.terminal = {
       id: 'terminal-1', projectId, sessionId, title: 'Claude Agent', kind: 'native',
-      state: 'running', persistent: true, epoch: 1, cols: 120, rows: 40, createdAt: '',
+      state: 'running', persistent: true, epoch: this.epoch += 1, cols: 120, rows: 40, createdAt: '',
     };
     return { ...this.terminal };
   }
   get(): TerminalInfo {
     if (!this.terminal) throw new Error('Terminal not found');
     return { ...this.terminal };
+  }
+  /** The CLI's process ends: the terminal reads exited and its observers are told. */
+  exit(): void {
+    if (!this.terminal) return;
+    this.terminal = { ...this.terminal, state: 'exited' };
+    this.typed = undefined;
+    for (const observer of [...this.observers]) observer({ type: 'exit', terminal: { ...this.terminal } });
   }
   shown(): string {
     return this.typed === undefined ? this.screen : this.screen.replace(/^❯ ?$/m, `❯ ${this.typed.includes('\n') ? `[Pasted text #1 +${this.typed.split('\n').length - 1} lines]` : this.typed}`);
@@ -286,16 +329,26 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
   const opened = await adapter.openOrResume(host, structuredClone(session), project, profile);
   if (opened.terminalId) update({ terminalId: opened.terminalId });
   note();
-  const url = launches.at(-1)?.env?.RIFFET_CLAUDE_HOOK_URL;
-  const token = launches.at(-1)?.env?.RIFFET_CLAUDE_HOOK_TOKEN;
-  if (!url || !token) throw new Error('The stub CLI was not handed a hook bridge');
+  /** Where the newest launch posts its hooks. */
+  const bridge = () => {
+    const url = launches.at(-1)?.env?.RIFFET_CLAUDE_HOOK_URL;
+    const token = launches.at(-1)?.env?.RIFFET_CLAUDE_HOOK_TOKEN;
+    if (!url || !token) throw new Error('The stub CLI was not handed a hook bridge');
+    return { url, token };
+  };
+  bridge();
   let deliveries = 0;
   let responded = 0;
   /** How each stop ended: `ok`, or the error code it was refused with. */
   const stops: string[] = [];
   let turn = 0;
-  const transcriptPath = (file: string) => join(transcripts, file === 'main' ? `${nativeSessionId}.jsonl` : join(nativeSessionId, file));
-  const restore = (text: string) => text.replaceAll(TRANSCRIPTS_TOKEN, transcripts);
+  const transcriptPath = (file: string) => {
+    const second = file.startsWith(SECOND_SESSION_PREFIX);
+    const name = second ? file.slice(SECOND_SESSION_PREFIX.length) : file;
+    const owner = second ? RECORDED_SECOND_SESSION_ID : nativeSessionId;
+    return join(transcripts, name === 'main' ? `${owner}.jsonl` : join(owner, name));
+  };
+  const restore = (text: string) => text.replaceAll(TRANSCRIPTS_TOKEN, transcripts).replaceAll(OWNER_TOKEN, id);
 
   for (const event of recording.events) {
     if (event.kind === 'send') {
@@ -317,6 +370,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
     } else if (event.kind === 'hook') {
       deliveries += 1;
       const payload = JSON.parse(restore(JSON.stringify(event.payload))) as Record<string, unknown>;
+      const { url, token } = bridge();
       const posted = fetch(`${url}/hook`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -345,6 +399,10 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
       void adapter.interrupt(host, structuredClone(session), profile, { expectedStop })
         .then(() => { stops.push('ok'); }, (error: { code?: string }) => { stops.push(error?.code ?? 'error'); });
       await new Promise(resolve => setTimeout(resolve, SETTLE_MS));
+    } else if (event.kind === 'restart') {
+      await adapter.dispose(host, id);
+    } else if (event.kind === 'exit') {
+      terminals.exit();
     }
     await settle(event.kind === 'hook' && event.payload.hook_event_name === 'SessionStart' ? current => current !== 'starting' : undefined);
     options.onStep?.(event, phases.at(-1) ?? '');
@@ -360,7 +418,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
     if (typeof lane === 'string' && lane.startsWith('sub:')) lanes[lane] = rowsOf(journal, laneKey(id, lane as `sub:${string}`));
   }
   return {
-    rows, lanes, phases, responded, stops,
+    rows, lanes, phases, responded, stops, nativeSessionId: session.nativeSessionId, launches: launches.length,
     dispose: async () => { release(); ingest.close(); await adapter.close().catch(() => undefined); await rm(root, { recursive: true, force: true }).catch(() => undefined); },
   };
 }

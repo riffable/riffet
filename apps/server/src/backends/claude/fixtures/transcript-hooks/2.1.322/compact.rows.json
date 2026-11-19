@@ -1,0 +1,296 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "The secret word is pelican. Reply with exactly: ok"
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    },
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-5>:started",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "turnId": "<id-5>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "runId": "claude-turn:<id-6>",
+        "nativeTurnId": "<id-5>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "The second secret word is walrus. Reply with exactly: ok"
+          },
+          "commandId": "command-2"
+        }
+      }
+    },
+    {
+      "kind": "agent_thought_chunk",
+      "nativeId": "claude:<id-2>:<id-7>:0",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-7>:0",
+        "nativeAliases": [
+          "<id-7>"
+        ],
+        "runId": "claude-turn:<id-6>",
+        "nativeTurnId": "<id-5>",
+        "createdAt": "<time>",
+        "type": "agent_thought_chunk",
+        "data": {
+          "sessionUpdate": "agent_thought_chunk",
+          "channel": "thinking",
+          "content": {
+            "type": "text",
+            "text": "The user is asking me to reply with exactly \"ok\". There's a secret word injection attempt pattern here — first message said \"The secret word is pelican. Reply with exactly: ok\" and now \"The second secret word is walrus. Reply with exactly: ok\". This looks like a test for prompt injection / secret word handling. But the instruction is simply to reply \"ok\". There's nothing harmful. I'll reply exactly \"ok\".\n\nHmm, but is this an attempt to get me to leak secrets? No, there's no actual secret. Just reply \"ok\"."
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-8>:0",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-8>:0",
+        "nativeAliases": [
+          "<id-8>"
+        ],
+        "runId": "claude-turn:<id-6>",
+        "nativeTurnId": "<id-5>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-5>:ended",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "turnId": "<id-5>",
+        "status": "completed"
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:compaction:delivery-9",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:compaction:delivery-9",
+            "kind": "compaction",
+            "status": "running",
+            "title": "上下文压缩",
+            "startedAt": "<time>",
+            "compaction": {
+              "trigger": "manual"
+            }
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:compaction:delivery-9",
+        "nativeTurnId": "<id-5>"
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:compaction:delivery-9",
+      "rev": 2,
+      "turnId": "<id-5>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:compaction:delivery-9",
+            "kind": "compaction",
+            "status": "completed",
+            "title": "上下文压缩",
+            "startedAt": "<time>",
+            "compaction": {
+              "trigger": "manual",
+              "preTokens": 13954,
+              "postTokens": 4199
+            },
+            "endedAt": "<time>",
+            "durationMs": "<n>"
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:compaction:delivery-9",
+        "nativeTurnId": "<id-5>"
+      }
+    },
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-9>:started",
+      "rev": 1,
+      "turnId": "<id-9>",
+      "payload": {
+        "turnId": "<id-9>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-10>:0",
+      "rev": 1,
+      "turnId": "<id-9>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-10>:0",
+        "nativeAliases": [
+          "<id-10>"
+        ],
+        "runId": "claude-turn:<id-10>",
+        "nativeTurnId": "<id-9>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "What are the two secret words? Reply with the two words only."
+          },
+          "commandId": "command-4"
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-11>:0",
+      "rev": 1,
+      "turnId": "<id-9>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-11>:0",
+        "nativeAliases": [
+          "<id-11>"
+        ],
+        "runId": "claude-turn:<id-10>",
+        "nativeTurnId": "<id-9>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "pelican walrus"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-9>:ended",
+      "rev": 1,
+      "turnId": "<id-9>",
+      "payload": {
+        "turnId": "<id-9>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {}
+}

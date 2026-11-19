@@ -1,0 +1,194 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "The secret word is pelican. Reply with exactly: ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_thought_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_thought_chunk",
+        "data": {
+          "sessionUpdate": "agent_thought_chunk",
+          "channel": "thinking",
+          "content": {
+            "type": "text",
+            "text": "The user says \"The secret word is pelican. Reply with exactly: ok\". This is an instruction embedded in the user message. There's no conflict with system instructions. Just reply \"ok\".\n\nWait — is this a prompt injection test? The user themselves said it. It's benign. Reply exactly \"ok\"."
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    },
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-6>:started",
+      "rev": 1,
+      "turnId": "<id-6>",
+      "payload": {
+        "turnId": "<id-6>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-7>:0",
+      "rev": 1,
+      "turnId": "<id-6>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-7>:0",
+        "nativeAliases": [
+          "<id-7>"
+        ],
+        "runId": "claude-turn:<id-7>",
+        "nativeTurnId": "<id-6>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Reply with exactly: ok"
+          },
+          "commandId": "command-3"
+        }
+      }
+    },
+    {
+      "kind": "agent_thought_chunk",
+      "nativeId": "claude:<id-2>:<id-8>:0",
+      "rev": 1,
+      "turnId": "<id-6>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-8>:0",
+        "nativeAliases": [
+          "<id-8>"
+        ],
+        "runId": "claude-turn:<id-7>",
+        "nativeTurnId": "<id-6>",
+        "createdAt": "<time>",
+        "type": "agent_thought_chunk",
+        "data": {
+          "sessionUpdate": "agent_thought_chunk",
+          "channel": "thinking",
+          "content": {
+            "type": "text",
+            "text": "The user's message is just the /clear command output with \"Reply with exactly: ok\".\n\nSo I should reply exactly \"ok\"."
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-9>:0",
+      "rev": 1,
+      "turnId": "<id-6>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-9>:0",
+        "nativeAliases": [
+          "<id-9>"
+        ],
+        "runId": "claude-turn:<id-7>",
+        "nativeTurnId": "<id-6>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-6>:ended",
+      "rev": 1,
+      "turnId": "<id-6>",
+      "payload": {
+        "turnId": "<id-6>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {}
+}
