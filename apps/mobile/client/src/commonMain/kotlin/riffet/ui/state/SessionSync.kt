@@ -445,10 +445,11 @@ internal class SessionSync(
             }
             is SyncFrame.Activities -> _liveActivities.value = frame.live
             is SyncFrame.Outline -> _outline.update { held ->
+                // A turn announced with no rows is gone (a queued message withdrawn or replaced).
                 val changed = frame.turns.associateBy { it.turn }
-                val kept = held?.turns.orEmpty().map { changed[it.turn] ?: it }
-                val known = kept.mapTo(HashSet()) { it.turn }
-                SyncOutlineState(frame.turnCount, (kept + frame.turns.filter { it.turn !in known }).sortedBy { it.startPos })
+                val kept = held?.turns.orEmpty().mapNotNull { turn -> changed[turn.turn].let { update -> if (update == null) turn else update.takeIf { it.rows > 0 } } }
+                val known = held?.turns.orEmpty().mapTo(HashSet()) { it.turn }
+                SyncOutlineState(frame.turnCount, (kept + frame.turns.filter { it.turn !in known && it.rows > 0 }).sortedBy { it.startPos })
             }
             is SyncFrame.Context -> {
                 core.reduceDial(token) { it.copy(context = measuredContext(it.selected, it.sessionId, frame.context)) }

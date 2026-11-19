@@ -37,4 +37,5 @@ verify:
 - 行显示不更新或某条车道停住：`riffet logs --scope timeline`，`[timeline] fold of <session> <lane> failed` 是折叠抛错（`service.ts#TimelineService`）。
 - 客户端反复收到快照、不走增量：比较 `timeline_heads` 的 `generation`、`epoch` 与 `fold_version`，常见原因是 `FOLD_VERSION` 变化、日志重建或冷清理。
 - 冷清理失败或磁盘不回收：`riffet logs --scope timeline`（`cold sweep failed`），`riffet doctor --compact` 在服务停止后整理数据库。
+- 大纲里多出重复的提示、刷新后消失：客户端没有按 `outline` 帧里 `rows: 0` 移除回合（`fold.ts` 删除回合时这样宣告）；服务端 `GET /api/v3/sessions/:id/outline` 是准的。
 - 打开旧会话慢：首次折叠要读完整日志，看 `timeline_heads.folded_through` 与 `journal_seq` 的差距。

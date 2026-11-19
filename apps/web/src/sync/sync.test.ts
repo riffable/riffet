@@ -327,6 +327,14 @@ describe('sync v3 stream', () => {
     expect(sync.rows()[0]).toMatchObject({ text: 'b2', seq: 4 });
   });
 
+  it('drops an outline turn the server announces with no rows', async () => {
+    const sync = await synced();
+    const turn = (id: string, rows: number) => ({ turn: `run:${id}`, turnId: id, runId: id, startPos: 2 ** 52, rows, at: '', status: 'running' as const, hasUserMessage: true, preview: 'again' });
+    server.live.send({ type: 'outline', turnCount: 2, turns: [turn('q0', 1), turn('q1', 1)] });
+    server.live.send({ type: 'outline', turnCount: 1, turns: [turn('q0', 0)] });
+    expect(sync.store.get().outline.turns.map(item => item.turn)).toEqual(['run:q1']);
+  });
+
   it('jumps to an outline position and comes back to the live end', async () => {
     const sync = await synced();
     server.answer('around=40960', { generation: 'G1', rows: [row('old1', 40000, 1), row('old2', 41000, 1)], hasBefore: true, hasAfter: true } satisfies TimelinePage);

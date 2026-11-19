@@ -14,6 +14,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - In Cursor conversations, a subagent that was interrupted no longer shows as running after it stopped.
 - On the web, answering a question or approval card no longer leaves a blank gap at the bottom of the conversation; clicking the empty area beside the transcript no longer stops it from following new output.
 - In Claude Code conversations, adding a message to the current task now works after Riffet restarts in the middle of a turn; when a message can't be added, you're told it was queued as the next message instead of it silently returning to the queue.
+- The conversation outline no longer lists a queued message again each time it is withdrawn or replaced; previously the extra entries stayed until the page was reloaded (Web, Android, iOS).
 
 ## 0.9.0 - 2026-11-19
 

@@ -60,7 +60,7 @@ export interface TimelinePage { generation: string; rows: TimelineRow[]; hasBefo
 export interface TimelineChanges { generation: string; headSeq: number; mode: 'delta' | 'snapshot'; from?: number; to?: number; rows: TimelineRow[]; deletes?: string[]; hasBefore?: boolean }
 ```
 
-hello 的 `outline.turns` 为最近 50 个回合；`outline` 帧只带变化的回合；`activities.live` ≤200。SSE `event:` 为帧类型，`id:` 只加在 rows 帧和最后一块 snapshot 上，每 15s 一次 `ping`。
+hello 的 `outline.turns` 为最近 50 个回合；`outline` 帧只带变化的回合，`rows: 0` 表示该回合已不存在（排队消息被撤回或被引导取代），客户端从大纲移除；`activities.live` ≤200。SSE `event:` 为帧类型，`id:` 只加在 rows 帧和最后一块 snapshot 上，每 15s 一次 `ping`。
 
 大纲保留全部执行回合；提示词导航只使用 `hasUserMessage` 为真的回合，纯附件输入由 `hasAttachments` 标识，不把输出或任务通知回合命名为“附件”。两字段可选，旧服务端可按已加载用户行或非空 preview 回退。
 

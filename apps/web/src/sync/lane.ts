@@ -477,7 +477,8 @@ export class LaneSync {
   private mergeOutline(frame: Frame<'outline'>): void {
     if (!Array.isArray(frame.turns)) return;
     const turns = new Map(this.outline.turns.map((turn) => [turn.turn, turn]));
-    for (const turn of frame.turns) turns.set(turn.turn, turn);
+    // A turn announced with no rows is gone (a queued message withdrawn or replaced); the server no longer lists it.
+    for (const turn of frame.turns) if (turn.rows === 0) turns.delete(turn.turn); else turns.set(turn.turn, turn);
     this.outline = { turnCount: frame.turnCount, turns: [...turns.values()].sort((a, b) => a.startPos - b.startPos) };
   }
 

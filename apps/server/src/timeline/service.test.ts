@@ -451,6 +451,34 @@ describe('timeline service', () => {
     env.close();
   });
 
+  it('announces the turn of a queued message replaced by its steer as gone, with no rows', async () => {
+    const env = open();
+    env.writer.turnStarted('t1', stamp(++tick));
+    commit(env, user('u1', 't1', 'hello'));
+    env.runs.push(nativeRun('r0', 'running', 'hello', { nativeMessageId: 'u1', nativeSessionId: 'chat-1', nativeTurnId: 't1' }));
+    await env.ready();
+    env.listen();
+    let queued = nativeRun('q0', 'queued', 'again', { delivery: 'queued' });
+    env.setRun(queued);
+    await env.ready();
+    // Each steer replaces the queued row and, not reaching the turn, comes back as the next message (`requeueSteer`).
+    for (const id of ['s1', 's2']) {
+      const steer = nativeRun(id, 'queued', 'again', { intent: 'steer', delivery: 'queued', stage: 'steer_pending', nativeSessionId: 'chat-1', nativeTurnId: 't1', sourceRunId: queued.id });
+      env.setRun(steer);
+      env.setRun({ ...queued, state: 'cancelled', updatedAt: stamp(++tick), native: { ...queued.native!, delivery: 'cancelled', stage: 'steer_replaced' } });
+      await env.ready();
+      queued = { ...steer, updatedAt: stamp(++tick), native: { ...steer.native!, intent: undefined, nativeTurnId: undefined, delivery: 'queued', stage: 'steer_fallback' } };
+      env.setRun(queued);
+      await env.ready();
+    }
+    const announced = new Map<string, number>();
+    for (const frame of env.frames) if (frame.type === 'outline') for (const turn of frame.turns) announced.set(turn.turn, turn.rows);
+    expect(Object.fromEntries(announced)).toMatchObject({ 'run:q0': 0, 'run:s1': 0 });
+    expect(announced.get('run:s2')).toBeGreaterThan(0);
+    expect(env.service.outline(S, 'main').turns.map(turn => turn.turn)).toEqual(['run:r0', 'run:s2']);
+    env.close();
+  });
+
   it('takes up a run that changed while the lane was not folded (a restart) even in a turn folded for good', async () => {
     const path = join(dir, 'state.db');
     let env = open(path);
