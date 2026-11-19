@@ -298,7 +298,9 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 - TRAE（`traex`，与 Codex 同一套驱动）录了问答与命令场景，放在 `fixtures/traex/`。与 Codex 相比，它多发 `thread/contextUsage`、`thread/inboxStatus/updated`、`skills/changed` 和推理增量，少发 `thread/readState/changed`。
 - Claude 录制：会话记录文件的增量、hook 与屏幕录在同一条时间线上（`backends/claude/fixtures/transcript-hooks/`），回放经过真实的 hook 端点与运行时，对照日志行、子 agent 车道与状态序列。场景为问答、命令、审批、打断、子 agent；`pnpm record claude <场景> [--check]`。会话记录只保留解析器读取的行类型，用户的全局指令和记忆不进仓库。
 - 录制当天就发现一个缺陷：带 `turnId` 的停止全部被拒（87483f3）。回放按客户端的方式停止并检查结果，回归会直接出现在 `interrupt` 场景里。
-- 未完成：Claude 的恢复、压缩、StopFailure、`/clear` 场景；Codex runtime 拆分（方案评审后实施）。
+- Claude 的恢复、压缩、StopFailure、`/clear` 场景已录制（ec38f73）。
+- Codex runtime 拆分五步完成（[进展](codex-runtime-split.md#8-进展)）：`runtime.ts` 3934 → 776 行，拆为 10 个各自持有状态的类；每一步 421 个测试与 24 个回放不改断言通过。
+- 未完成：Codex `index.ts`（1470 行）与 `transcript-source.ts`（1068 行）仍超限；拆分后 30 天的返工率对比；Claude `/clear` 后首条发送得不到确认的疑似问题，待另一会话提交 `index.ts` 的改动后复查。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 

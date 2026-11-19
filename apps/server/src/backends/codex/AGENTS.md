@@ -18,6 +18,11 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 - `turns.ts#CodexTurns`：当前回合与回合、命令、Run 的对应，只能经它的方法改。
 - `thread.ts#CodexThread`：打开或恢复线程、常驻配置、已加载线程的归属。
 - `pending.ts#CodexInteractions`：审批、提问、异步问题与模式变更请求。
+- `settings.ts#CodexSettings`：权限、协作模式、模型、目标、标题。
+- `dispatch.ts#CodexDispatch`：发送、插话、打断、斜杠命令及其围栏。
+- `notifications.ts#CodexNotifications`：通知分发表，按方法名交给负责的对象；顺序由连接的 `NotificationGate` 保证。
+- `event-log.ts#CodexEventLog`：会话事件的常驻窗口、编号与 item 的投影。
+- `history-sync.ts#CodexHistorySync`：读线程、导入历史、轮询。
 - `transcript-source.ts#CodexTranscriptSource`：线程进入 journal 的唯一路径，合并实时通知与 `thread/turns/list`。
 - `apps/server/src/backends/shared/codex-app-server.ts#CodexAppServer`：进程、socket 与 JSON-RPC。
 - `recording.ts#replayFactory`：录制数据的回放，测试在 `recordings.test.ts`。
@@ -26,7 +31,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 
 - App Server 是线程唯一的读取来源。日志实体按 item 自己的 id 命名（`project-item.ts`），实时通知、重读和重启写的是同一个实体。
 - 回合读到定稿副本才算结束。历史读取暂时返回 `interrupted` 时，`transcript-source.ts#turnReopened` 撤销结束标记，但只恢复最后一个已结算的回合，更早的不回填。
-- 运行时必须在宿主提供 `host.transcript` 之后创建。否则 `runtime.ts#journalRead` 为 false，草稿流把片段写进转写源写的同一个实体。
+- 运行时必须在宿主提供 `host.transcript` 之后创建。否则 `event-log.ts#CodexEventLog` 的 `journalRead` 为 false，草稿流把片段写进转写源写的同一个实体。
 - 预热的 App Server 只交给预热键完全一致的新会话（`launch.ts#warmKey`）；不一致时静默冷启动，不报错。会话一侧的键由 `launch.ts#sessionWarmKey` 从 `apps/server/src/backends/shared/launch-input.ts#SessionLaunchInput` 派生，新增启动字段时类型检查会要求在这里处理。
 - 能力按 `config.ts#probeAppServer` 的结果和 `initialize` 返回的 userAgent 判断（如 `config.ts#supportsSteerVersion`），不按命令路径缓存。
 

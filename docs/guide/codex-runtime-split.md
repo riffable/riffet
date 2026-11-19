@@ -102,4 +102,7 @@ CodexSessionRuntime（协调者：持有各组对象，分发通知，推导状�
 | 1 | 30972e5 | 状态由 `refreshStatus` 从事实推导，phase 只在 `livePhase` 计算 |
 | 2 | 8af558c | `CodexTurns`（`turns.ts`，378 行）独占当前回合；`runtime.ts` 3933 → 3770 行 |
 | 3 | 6031ab6 | `CodexConnection`（576 行）、`CodexTerminal`（262 行）；适配器的配置切换与复用判断移入运行时（`switchProfile`、`probeEndpoint`、`reuseVerdict`）；`runtime.ts` 3770 → 3275，`index.ts` 1515 → 1470 |
-| 4 | （本提交） | `CodexThread`（`thread.ts`，421 行）、`CodexInteractions`（`pending.ts`，509 行）；`runtime.ts` 3275 → 2592 |
+| 4 | 3c35f09 | `CodexThread`（`thread.ts`，421 行）、`CodexInteractions`（`pending.ts`，509 行）；`runtime.ts` 3275 → 2592 |
+| 5 | （本提交） | 通知改为分发表 `CodexNotifications`；历史与日志拆为 `CodexEventLog`、`CodexHistorySync`；设置为 `CodexSettings`；发送、插话、打断为 `CodexDispatch`；`runtime.ts` 2592 → 776，移出基线 |
+
+剩余：`index.ts`（1470 行）仍超限，下一步把适配器里按功能划分的部分（辅助模型、外部会话、斜杠命令与扩展）拆出；`transcript-source.ts`（1068 行）不在本方案范围，单独评估。返工率在拆分完成 30 天后对比（§5）。
