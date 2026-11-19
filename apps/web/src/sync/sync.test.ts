@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import type { NativeInteraction, Run, SyncFrame, TimelinePage, TimelineRow } from '@contracts';
+import type { NativeInteraction, Run, SessionControlSnapshot, SyncFrame, TimelinePage, TimelineRow } from '@contracts';
 import { transformSync } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NativeJobStore, SubagentStore, type SubagentTranscript } from '@/app/session/subagents';
@@ -533,6 +533,38 @@ describe('sync v3 session state', () => {
     expect(sync.store.get()).toMatchObject({ status: { phase: 'idle' }, runs: [{ id: 'r1', state: 'completed' }] });
     expect(sync.store.get().metrics.get('r1')).toMatchObject({ outputTokens: 5 });
     expect(frames).toEqual(['hello', 'status', 'run', 'metrics', 'interaction']);
+  });
+
+  it('replaces control from hello and ignores a control frame whose revision went backwards', async () => {
+    const frames: string[] = [];
+    const sync = await started({ onControl: (frame) => frames.push(frame.type) });
+    const control = (revision: number, runtime: SessionControlSnapshot['runtime'] = 'ready'): SessionControlSnapshot => ({
+      revision, runtime, activeTurn: null, inbox: [], interaction: null, activity: { compacting: false, background: 0 },
+      capabilities: { canStop: false, canSteer: false, canSendNow: false },
+    });
+    server.live.open();
+    // No baseline yet: the first control frame is kept, and it is not a transcript delta.
+    server.live.send({ type: 'control', control: control(4) });
+    expect(sync.store.get().control).toMatchObject({ revision: 4, runtime: 'ready' });
+    expect(keys(sync)).toEqual([]);
+    // A hello is the baseline for this connection, even when its revision is older.
+    server.live.send(hello('G1', 1, 'snapshot', { control: control(1), runs: [] }));
+    expect(sync.store.get().control?.revision).toBe(1);
+    server.live.send(snapshot('G1', 1, [row('a', 1024, 1)]));
+    // Equal revision still carries a newer body. An older one does not move the snapshot.
+    server.live.send({ type: 'control', control: control(1, 'failed') });
+    expect(sync.store.get().control).toMatchObject({ revision: 1, runtime: 'failed' });
+    server.live.send({ type: 'control', control: control(0) });
+    expect(sync.store.get().control?.revision).toBe(1);
+    server.live.send({ type: 'control', control: control(2) });
+    expect(sync.store.get().control?.revision).toBe(2);
+    // The next hello clears a snapshot it does not repeat, and live rows still apply.
+    server.live.send(hello('G1', 1, 'delta'));
+    expect(sync.store.get().control).toBeUndefined();
+    server.live.send(rowsFrame('G1', 2, 2, [row('b', 2048, 2)]));
+    expect(keys(sync)).toEqual(['a', 'b']);
+    expect(sync.store.get().status.phase).toBe('idle');
+    expect(frames).toEqual(['control', 'hello', 'control', 'control', 'control', 'hello']);
   });
 
   it('closes the streams after the tab has been hidden a minute and resumes from what it holds', async () => {

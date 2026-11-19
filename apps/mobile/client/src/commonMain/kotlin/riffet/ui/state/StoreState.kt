@@ -5,16 +5,20 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import riffet.contracts.InboxEntry
 import riffet.contracts.NativeContext
 import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeQueueHoldReason
 import riffet.contracts.NativeHistoryState
 import riffet.contracts.NativeInteraction
+import riffet.contracts.NativeRunConfig
+import riffet.contracts.NativeRunDetails
 import riffet.contracts.NativeStatus
 import riffet.contracts.NativeStatusPhase
 import riffet.contracts.Run
 import riffet.contracts.RunState
 import riffet.contracts.Session
+import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.SessionState
 import riffet.core.StoredSubagent
 import riffet.core.TimelineItem
@@ -60,6 +64,8 @@ internal data class StoreState(
     /** Runs whose delivery is unconfirmed; [uncertain] keeps the ones that still hold the conversation. */
     val unconfirmed: List<Run> = emptyList(),
     val status: NativeStatus? = null,
+    /** Authoritative control snapshot. Null until hello or a `control` frame; the queue then falls back to [status]. */
+    val control: SessionControlSnapshot? = null,
     val interaction: NativeInteraction? = null,
     /** HTTP observations expire on any dialog content or native-thread change, including A → B → A. */
     val interactionObservation: Long = 0L,
@@ -94,6 +100,7 @@ internal data class StoreState(
         runs = runs,
         // The rate changes many times a second; it has its own flow.
         status = if (status?.outputRate != null) status.copy(outputRate = null) else status,
+        control = control?.let { snapshot -> if (snapshot.outputRate != null) snapshot.copy(outputRate = null) else snapshot },
         working = isWorking(),
         connection = connection,
         epoch = epoch,
@@ -158,24 +165,106 @@ internal data class StoreState(
             return if (local.size == unconfirmed.size) unconfirmed else local
         }
 
+    /** Foreground stop the server allows. Null when no snapshot has arrived. */
+    val canStop: Boolean? get() = control?.let { it.activeTurn?.canStop == true }
+
+    /** Foreground steer the server allows. Null when no snapshot has arrived. */
+    val canSteer: Boolean? get() = control?.let { it.activeTurn?.canSteer == true }
+
+    /** Whether any queued entry may interrupt the foreground and send. Null when no snapshot has arrived. */
+    val canSendNow: Boolean? get() = control?.capabilities?.canSendNow
+
+    /** Actions for one queued entry. Null when no snapshot has arrived; empty when that entry is not queued. */
+    fun actionsForQueued(runId: String, commandId: String = runId): List<String>? =
+        control?.let { queuedActions(it, runId, commandId) }
+
     /**
      * The dock's messages ([messagePlace]). Where a send still submitting, or the one the server starts
      * next, goes depends on the server's queue answer (else on whether the session is working), so this
      * is read from [status] as well as [deliveries], not kept beside them.
+     *
+     * A [control] snapshot replaces that guess: only inbox entries with `placement == "queued"` are the
+     * queue. A direct send (`sending`), including a new session's first message, never lands here.
+     * A local copy still submitting stays in the dock only while a foreground turn or a hold would
+     * queue it, and only until the inbox names it.
      */
     val queued: List<Run>
-        get() {
-            if (waiting.isEmpty()) return waiting
-            val queue = status?.queue
-            val working = isWorking()
-            if (working && queue == null) return waiting
-            // [runs] is oldest first, inline receipts included: the first one held is the one the server
-            // starts next. None while an earlier send is still on its way into the CLI.
-            val starting = runs.any { sendPhase(it) == SendPhase.STARTING || (it.native?.delivery == NativeDeliveryState.INPUT_SENT && (it.state == RunState.QUEUED || it.state == RunState.RUNNING)) }
-            val next = if (starting) null else runs.firstOrNull { inQueue(it) }
-            val placed = waiting.filter { messagePlace(it, working, next = it === next, queue = queue) == MessagePlace.DOCK }
-            return if (placed.size == waiting.size) waiting else placed
+        get() = control?.let(::queuedFromControl) ?: queuedFromStatus()
+
+    private fun queuedFromStatus(): List<Run> {
+        if (waiting.isEmpty()) return waiting
+        val queue = status?.queue
+        val working = isWorking()
+        if (working && queue == null) return waiting
+        // [runs] is oldest first, inline receipts included: the first one held is the one the server
+        // starts next. None while an earlier send is still on its way into the CLI.
+        val starting = runs.any { sendPhase(it) == SendPhase.STARTING || (it.native?.delivery == NativeDeliveryState.INPUT_SENT && (it.state == RunState.QUEUED || it.state == RunState.RUNNING)) }
+        val next = if (starting) null else runs.firstOrNull { inQueue(it) }
+        val placed = waiting.filter { messagePlace(it, working, next = it === next, queue = queue) == MessagePlace.DOCK }
+        return if (placed.size == waiting.size) waiting else placed
+    }
+
+    private fun queuedFromControl(snapshot: SessionControlSnapshot): List<Run> {
+        val claimed = HashSet<String>()
+        val queued = ArrayList<Run>()
+        for (entry in snapshot.inbox) {
+            if (entry.id.isNotEmpty()) claimed += entry.id
+            if (entry.commandId.isNotEmpty()) claimed += entry.commandId
+            if (entry.placement != "queued") continue
+            val run = runFor(entry)
+            queued += run
+            claimed += run.id
+            if (run.commandId.isNotEmpty()) claimed += run.commandId
         }
+        if (snapshot.activeTurn == null && snapshot.held == null) return queued
+        val pending = waiting.filter { run ->
+            val native = run.native
+            native?.fingerprint == "client-pending" && native.stage == HTTP_PENDING && native.intent != "steer" &&
+                run.id !in claimed && run.commandId !in claimed
+        }
+        return if (pending.isEmpty()) queued else queued + pending
+    }
+
+    /** The tracked run for an inbox entry, or a dock-only copy when this client has not seen the run yet. */
+    private fun runFor(entry: InboxEntry): Run {
+        val known = runs.firstOrNull { run ->
+            (entry.id.isNotEmpty() && (run.id == entry.id || run.commandId == entry.id)) ||
+                (entry.commandId.isNotEmpty() && (run.commandId == entry.commandId || run.id == entry.commandId))
+        }
+        if (known != null) return known
+        val mode = selected?.mode ?: "default"
+        return Run(
+            id = entry.id,
+            sessionId = sessionId.orEmpty(),
+            commandId = entry.commandId,
+            prompt = entry.prompt.text,
+            state = when (entry.status) {
+                "failed" -> RunState.FAILED
+                "uncertain" -> RunState.INTERRUPTED
+                else -> RunState.QUEUED
+            },
+            error = entry.error,
+            native = NativeRunDetails(
+                input = entry.prompt,
+                contextSnapshots = entry.contextSnapshots,
+                config = NativeRunConfig(model = selected?.model, mode = mode, approval = selected?.approval),
+                fingerprint = "control-inbox",
+                delivery = when (entry.status) {
+                    "preparing" -> NativeDeliveryState.PREPARING
+                    "sending" -> NativeDeliveryState.DISPATCHING
+                    "uncertain" -> NativeDeliveryState.UNCERTAIN
+                    "failed" -> NativeDeliveryState.FAILED
+                    else -> NativeDeliveryState.QUEUED
+                },
+                attempt = 0,
+                diagnostic = entry.diagnostic,
+                intent = if (entry.kind == "steer") "steer" else null,
+                configRevision = selected?.configRevision ?: 0,
+            ),
+            createdAt = entry.createdAt,
+            updatedAt = entry.updatedAt,
+        )
+    }
 
     /** The card and waiting strip share the same authority, whether observed through HTTP or SSE. */
     fun withInteraction(next: NativeInteraction?): StoreState {

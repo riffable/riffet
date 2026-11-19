@@ -282,6 +282,8 @@ export interface NativeBackendSendRequest {
   commitDispatchFence(binding?: NativeDispatchBinding): Run;
   /** Replace the running turn with this message, the provider's own way; only for drivers declaring `sendsNow`. */
   now?: boolean;
+  /** Re-check a targeted stop immediately before the provider write. The same guard `interrupt` installs. */
+  beforeWrite?: (allowEnded?: boolean) => void;
 }
 
 export interface NativeBackendConfigurePatch {

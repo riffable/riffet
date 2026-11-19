@@ -393,7 +393,12 @@ export class PluginBackendDriver implements NativeBackendDriver {
   }
 
   async send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void> {
-    await this.delivered(host, request, () => this.backend.send(this.hostFor(host), { ...this.sendRequest(request), ...(request.now ? { now: true } : {}) }));
+    // Same window as interrupt: `host.checkStopTarget` sees the guard for the whole write, then it is gone.
+    const guard = request.now ? request.beforeWrite : undefined;
+    if (guard) this.stopGuards.set(request.session.id, guard);
+    try {
+      await this.delivered(host, request, () => this.backend.send(this.hostFor(host), { ...this.sendRequest(request), ...(request.now ? { now: true } : {}) }));
+    } finally { if (guard) this.stopGuards.delete(request.session.id); }
   }
 
   async interrupt(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: Parameters<NativeBackendDriver['interrupt']>[3]): Promise<void> {

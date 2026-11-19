@@ -17,7 +17,7 @@ import { TerminalDialogObserver } from './shared/terminal-dialogs.js';
 import { BackendCatalog, curateModels, modelNormalizer, profileDefaultModel, safeBackendReason } from './catalog.js';
 import { BackendAdmin } from './admin.js';
 import type { StatsSink, UsageTranscript } from '../stats/types.js';
-import { servingKey, type TranscriptSource } from '../journal/ingest.js';
+import { servingKey, type TranscriptSource, type TurnEndStatus } from '../journal/ingest.js';
 import { backendIdOf } from '../session-identity.js';
 import { activityOfEvent, summarizeActivities } from '../journal/activity.js';
 import type { TranscriptIngest } from '../sync/ingest.js';
@@ -1040,7 +1040,7 @@ export class NativeBackendService {
     return this.registry.list().filter((driver) => driver.stored?.readOnly).map((driver) => driver.id);
   }
 
-  async sendRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options: { now?: boolean } = {}): Promise<void | { settled: true }> {
+  async sendRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options: { now?: boolean; expectedStop?: NativeStopRequest } = {}): Promise<void | { settled: true }> {
     if (!run.native) throw new AppError('NOT_NATIVE_RUN', 'Only native runs can be dispatched', 409);
     await assertTaskWorkspaceAvailable(this.options.store.getProject(session.projectId));
     if (run.native.intent === 'steer') throw new AppError('STEER_REJECTED', 'An in-flight instruction must use the steer endpoint.', 409);
@@ -1058,11 +1058,16 @@ export class NativeBackendService {
       mode: session.mode,
       ...(session.approval !== undefined ? { approval: session.approval } : {}),
     };
+    // A send that replaces a targeted turn re-checks that target before the driver writes, the same
+    // guard interrupt installs. The driver calls it again at the write itself.
+    const beforeWrite = options.now && options.expectedStop ? this.stopTargetGuard(session.id, driver, profile, options.expectedStop) : undefined;
+    beforeWrite?.();
     const outcome = await driver.send(this.host, {
       session, project: this.options.store.getProject(session.projectId), profile,
       commandId: run.commandId, runId: run.id, sourceText: run.native.input.text, input: this.options.prepareContextInput ? await this.options.prepareContextInput(run) : run.native.input, config,
       commitDispatchFence,
       ...(options.now && driver.sendsNow ? { now: true } : {}),
+      ...(beforeWrite ? { beforeWrite } : {}),
     });
     const updated = this.options.store.getSession(session.id);
     this.bindProfile(updated, driver, profile);
@@ -1274,27 +1279,40 @@ export class NativeBackendService {
     this.registry.require(this.backendId(session)).requestInterrupt?.(this.host, session);
   }
 
+  /**
+   * The stop the caller saw, checked again at the write. An absent `terminalEpoch` is not a mismatch:
+   * the lease is only compared when the stop captured one. The run's older dispatch-time epoch is not
+   * this check — that comparison belongs nowhere in target matching.
+   */
+  private stopTargetGuard(sessionId: string, driver: NativeBackendDriver, profile: NativeBackendProfileConfig, expected: NativeStopRequest): (allowEnded?: boolean) => void {
+    return (allowEnded = false) => {
+      const current = this.catalog.currentSession(this.options.store.getSession(sessionId));
+      const status = driver.status(this.host, current, profile);
+      if ((current.nativeSessionId ?? '') !== expected.nativeSessionId
+        || status.activeTurn?.turnId !== expected.turnId && !(allowEnded && !status.activeTurn)
+        || status.activeTurn !== undefined && status.activeTurn.nativeSessionId !== expected.nativeSessionId
+        || expected.terminalId !== undefined && current.terminalId !== expected.terminalId
+        || expected.terminalEpoch !== undefined && (!current.terminalId || this.options.store.getTerminal(current.terminalId).epoch !== expected.terminalEpoch)) {
+        throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'The original task changed before stopping', 409);
+      }
+    };
+  }
+
   async interrupt(sessionId: string, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest }): Promise<void> {
     const session = this.catalog.currentSession(this.options.store.getSession(sessionId));
     const { driver, profile } = await this.resolve(session);
     await this.options.runtime.withSession(session.id, () => {
       const expected = options?.expectedStop;
-      const beforeWrite = (allowEnded = false) => {
-        if (!expected) return;
-        const current = this.catalog.currentSession(this.options.store.getSession(sessionId));
-        const status = driver.status(this.host, current, profile);
-        if ((current.nativeSessionId ?? '') !== expected.nativeSessionId
-          || status.activeTurn?.turnId !== expected.turnId && !(allowEnded && !status.activeTurn)
-          || status.activeTurn !== undefined && status.activeTurn.nativeSessionId !== expected.nativeSessionId
-          || expected.terminalId !== undefined && current.terminalId !== expected.terminalId
-          || expected.terminalEpoch !== undefined && (!current.terminalId || this.options.store.getTerminal(current.terminalId).epoch !== expected.terminalEpoch)) {
-          throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'The original task changed before stopping', 409);
-        }
-      };
-      beforeWrite();
+      const beforeWrite = expected ? this.stopTargetGuard(sessionId, driver, profile, expected) : undefined;
+      beforeWrite?.();
       return driver.interrupt(this.host, this.catalog.currentSession(this.options.store.getSession(sessionId)), profile, expected ? { ...options, beforeWrite } : options);
     });
     if (session.nativeSessionId || session.terminalId) this.bindProfile(session, driver, profile);
+  }
+
+  /** Records a turn end the dispatcher confirmed, on the journal that serves the conversation. */
+  async endTurn(sessionId: string, turnId: string, status: TurnEndStatus, at: string): Promise<void> {
+    await this.host.transcript?.endTurn(sessionId, turnId, status, at);
   }
 
   async runtimeAction(sessionId: string, request: NativeRuntimeActionRequest): Promise<void> {

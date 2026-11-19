@@ -74,6 +74,9 @@ const fixtureJob: NativeJob = { toolCallId: 'bash-1', id: 'shell-3', title: 'npm
  * ignores is still listed when leaving it out could hide a rename.
  */
 type Max<T> = T extends unknown ? Required<T> : never;
+type HelloFrame = Extract<SyncFrame, { type: 'hello' }>;
+/** Hello's `control` snapshot joins this max fixture when clients consume it (M4). */
+type SyncFrameMax = Exclude<Max<SyncFrame>, { type: 'hello' }> | (Required<Omit<HelloFrame, 'control'>> & { control?: HelloFrame['control'] });
 /** Required fields only. */
 type Min<T> = T extends unknown ? { [K in keyof T as {} extends Pick<T, K> ? never : K]: T[K] } : never;
 
@@ -143,7 +146,7 @@ const rowsMin: Array<Min<TimelineRow>> = [
 const turnMax = { turn: 'turn:t1', turnId: 't1', startPos: 1, endPos: 9, status: 'completed', at: at(1), endedAt: at(9), preview: '重构解析器', hasUserMessage: true, hasAttachments: true, rows: 9, runId: 'run-a' } satisfies Required<TurnOutlineV3>;
 const turnMin = { turn: 'turn:t2', turnId: 't2', startPos: 10, status: 'running', at: at(10), rows: 1 } satisfies Min<TurnOutlineV3>;
 
-const framesMax: Array<Max<SyncFrame>> = [
+const framesMax: Array<SyncFrameMax> = [
   {
     type: 'hello', protocol: 3, lane: 'main', generation: 'gen-1', headSeq: 42, mode: 'delta', session: sessionMax, status: fixtureStatus, interaction: fixtureInteraction,
     runs: [...fixtureRuns, queuedRun], activities: [activityMax], context: fixtureContext, outline: { turnCount: 120, turns: [turnMax] }, catchingUp: true,

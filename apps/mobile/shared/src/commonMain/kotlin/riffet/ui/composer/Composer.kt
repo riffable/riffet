@@ -119,6 +119,7 @@ import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeSlashCatalog
 import riffet.contracts.Run
 import riffet.contracts.Session
+import riffet.contracts.SessionControlSnapshot
 import riffet.shared.PromptContextReference
 import riffet.contracts.NativeContext
 import riffet.ui.pickers.ContextGlyph
@@ -130,6 +131,7 @@ import riffet.ui.pickers.RiffetDropdownMenu
 import riffet.ui.pickers.RiffetMenuItem
 import riffet.ui.state.SessionStore
 import riffet.ui.state.inQueue
+import riffet.ui.state.queuedActions
 import riffet.ui.state.RiffetConnectionState
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
@@ -231,6 +233,7 @@ fun Composer(
 
     val working by store.working.collectAsState()
     val status by store.status.collectAsState()
+    val control by store.control.collectAsState()
     val sessionList by store.list.collectAsState()
     val queued by store.queued.collectAsState()
     val uncertain by store.uncertain.collectAsState()
@@ -351,6 +354,9 @@ fun Composer(
     }
 
     val busy = sendState.sending || sendState.interrupting
+    val governed = control != null
+    val turnCanStop = control?.activeTurn?.canStop == true
+    val turnCanSteer = control?.activeTurn?.canSteer == true
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -370,15 +376,23 @@ fun Composer(
             QueueSection(
                 queued = queued,
                 running = working && supportsTargetedStop,
-                unconfirmed = status?.queue?.held?.reason == riffet.contracts.NativeQueueHoldReason.UNCONFIRMED,
+                control = control,
+                unconfirmed = (control?.held ?: status?.queue?.held)?.reason == riffet.contracts.NativeQueueHoldReason.UNCONFIRMED,
                 pendingRunIds = sendState.pendingRunIds,
                 enabled = connected && !busy,
-                onSendNow = { run -> if (supportsTargetedStop) scope.launch { store.sendQueuedNow(run) } },
-                onSteer = if (supportsSteer && status?.activeTurn != null) ({ run ->
-                    val target = status?.activeTurn?.target()
+                onSendNow = { run ->
+                    if (governed && turnCanStop || !governed && supportsTargetedStop) scope.launch { store.sendQueuedNow(run) }
+                },
+                onSteer = if (governed && turnCanSteer || !governed && supportsSteer && status?.activeTurn != null) ({ run ->
+                    val target = status?.activeTurn?.target() ?: control?.activeTurn?.let { turn ->
+                        val sessionId = turn.nativeSessionId
+                        val turnId = turn.nativeTurnId ?: turn.turnId
+                        if (sessionId != null && turnId != null) riffet.contracts.NativeTurnTarget(sessionId, turnId) else null
+                    }
                     if (target != null) { scope.launch { store.steerQueued(run, target) } }
                 }) else null,
-                steerEnabled = connection is RiffetConnectionState.Live && status?.phase == riffet.contracts.NativeStatusPhase.BUSY && status?.interaction == null && uncertain.isEmpty(),
+                steerEnabled = if (governed) turnCanSteer && connection is RiffetConnectionState.Live && uncertain.isEmpty()
+                    else connection is RiffetConnectionState.Live && status?.phase == riffet.contracts.NativeStatusPhase.BUSY && status?.interaction == null && uncertain.isEmpty(),
                 onEdit = { run ->
                     scope.launch {
                         val restored = store.takeBackQueued(run) ?: return@launch
@@ -408,11 +422,11 @@ fun Composer(
             },
             onAttach = if (picker.available) ({ picker.launch() }) else null,
             settings = settings,
-            running = working,
+            running = working || (governed && turnCanStop),
             background = background,
-            onStop = if (supportsTargetedStop) ({ scope.launch { store.interrupt() }; Unit }) else null,
+            onStop = if (sendState.interrupting || (governed && (turnCanStop || (background > 0 && supportsTargetedStop))) || (!governed && supportsTargetedStop)) ({ scope.launch { store.interrupt() } }) else null,
             stopping = sendState.interrupting,
-            stopEnabled = (working || background > 0) && connected && !busy,
+            stopEnabled = connected && !busy && (if (governed) turnCanStop || (background > 0 && supportsTargetedStop) else working || background > 0),
             sendEnabled = connected && text.isNotBlank() && !uploading && !busy && !awaitingSubmission && !dictationState.active,
             sendBusy = sendState.sending,
             onSend = { submit() },
@@ -1069,6 +1083,8 @@ internal fun RoundAction(
 private fun QueueSection(
     queued: List<Run>,
     running: Boolean,
+    /** Authoritative inbox actions. Null keeps the local stop/steer rules. */
+    control: SessionControlSnapshot? = null,
     /** An earlier message whose delivery is unconfirmed holds the queue; it is settled on that message. */
     unconfirmed: Boolean = false,
     pendingRunIds: Set<String>,
@@ -1089,6 +1105,7 @@ private fun QueueSection(
             QueueDock(
                 runs = queued,
                 running = running,
+                control = control,
                 unconfirmed = unconfirmed,
                 pendingRunIds = pendingRunIds,
                 enabled = enabled,
@@ -1172,6 +1189,8 @@ private fun AttachmentChips(
 private fun QueueDock(
     runs: List<Run>,
     running: Boolean,
+    /** When set, each row's buttons are that entry's `actions`. `send_now` stays hidden without it. */
+    control: SessionControlSnapshot? = null,
     /** An earlier message whose delivery is unconfirmed holds the queue; it is settled on that message. */
     unconfirmed: Boolean = false,
     pendingRunIds: Set<String>,
@@ -1235,6 +1254,18 @@ private fun QueueDock(
                 runs.forEach { run ->
                     // A send still submitting has no run on the server to act on yet.
                     val blocked = run.id in pendingRunIds || !enabled || !inQueue(run)
+                    val actions = control?.let { queuedActions(it, run.id, run.commandId) }
+                    // Without a snapshot the row still offers steer or send-now from local rules.
+                    // With one, a missing action is not shown: a direct send never grows "停止并发送".
+                    val showSteer = actions?.contains("steer") ?: (onSteer != null && running && steerEnabled)
+                    val canStopTurn = actions != null && control.activeTurn?.canStop == true
+                    val showSendNow = if (actions != null) "send_now" in actions && canStopTurn else !showSteer
+                    val showEdit = actions?.contains("edit") ?: true
+                    val showCancel = actions?.contains("cancel") ?: true
+                    val menuSend = showSteer && (if (actions != null) "send_now" in actions && canStopTurn else true)
+                    val menuSteer = !showSteer && (actions?.contains("steer") ?: (onSteer != null))
+                    val showMenu = menuSend || menuSteer || showEdit || showCancel
+                    var menuOpen by remember(run.id) { mutableStateOf(false) }
                     Row(
                         modifier = Modifier.fillMaxWidth().heightIn(min = metrics.controlHeight).padding(start = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1251,38 +1282,36 @@ private fun QueueDock(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        val usesSteer = onSteer != null && running && steerEnabled
-                        if (usesSteer) {
-                            IconAction(RiffetIcons.Steer, stringResource(Res.string.composer_steer_action), enabled = !blocked && running && steerEnabled, onClick = { onSteer(run) }, size = 44.dp)
-                        } else {
-                            IconAction(RiffetIcons.Send, stringResource(Res.string.composer_send_now), enabled = !blocked && running, onClick = { onSendNow(run) }, size = 44.dp)
+                        if (showSteer && onSteer != null) {
+                            IconAction(RiffetIcons.Steer, stringResource(Res.string.composer_steer_action), enabled = !blocked && (actions != null || running && steerEnabled), onClick = { onSteer(run) }, size = 44.dp)
+                        } else if (showSendNow) {
+                            IconAction(RiffetIcons.Send, stringResource(Res.string.composer_send_now), enabled = !blocked && (actions != null || running), onClick = { onSendNow(run) }, size = 44.dp)
                         }
-                        var menuOpen by remember(run.id) { mutableStateOf(false) }
-                        Box {
+                        if (showMenu) Box {
                             IconAction(RiffetIcons.Ellipsis, stringResource(Res.string.timeline_more_actions), enabled = !blocked, onClick = { menuOpen = true }, size = 44.dp)
                             RiffetDropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                if (usesSteer) {
+                                if (menuSend) {
                                     RiffetMenuItem(
                                         text = stringResource(Res.string.composer_send_now),
                                         icon = RiffetIcons.Send,
-                                        enabled = !blocked && running,
+                                        enabled = !blocked && (actions != null || running),
                                         onClick = { menuOpen = false; onSendNow(run) },
                                     )
-                                } else if (onSteer != null) {
+                                } else if (menuSteer && onSteer != null) {
                                     RiffetMenuItem(
                                         text = stringResource(Res.string.composer_steer_action),
                                         icon = RiffetIcons.Steer,
-                                        enabled = !blocked && running && steerEnabled,
+                                        enabled = !blocked && (actions != null || running && steerEnabled),
                                         onClick = { menuOpen = false; onSteer(run) },
                                     )
                                 }
-                                RiffetMenuItem(
+                                if (showEdit) RiffetMenuItem(
                                     text = stringResource(Res.string.composer_edit),
                                     icon = RiffetIcons.Pencil,
                                     enabled = !blocked,
                                     onClick = { menuOpen = false; onEdit(run) },
                                 )
-                                RiffetMenuItem(
+                                if (showCancel) RiffetMenuItem(
                                     text = stringResource(Res.string.composer_remove_queued),
                                     icon = RiffetIcons.Trash,
                                     danger = true,

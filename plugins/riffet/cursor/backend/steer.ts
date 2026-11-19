@@ -15,7 +15,7 @@ import { CursorTranscriptSource, type CursorTurnResult } from './transcript-sour
 /** The tools whose hooks name a file they change: the CLI reports every edit, a replacement included, as `Write`. */
 const EDIT_TOOLS = new Set(['Write', 'Delete', 'StrReplace', 'Edit', 'MultiEdit']);
 
-interface ActiveGeneration extends NativeTurnTarget { terminalId: string; epoch: number }
+interface ActiveGeneration extends NativeTurnTarget { terminalId: string }
 interface Entry {
   inputs: DeferredSteerInputs;
   active?: ActiveGeneration;
@@ -135,6 +135,42 @@ export class CursorSteerBridge {
     return { nativeSessionId: active.nativeSessionId, turnId: active.turnId, ...(owner ? { ownerRunId: owner.id } : {}) };
   }
 
+  /**
+   * A restarted process has no hook memory. A foreground run still executing on the live terminal
+   * becomes the active turn again, unless this bridge already ended it or the chat store has.
+   */
+  async hydrate(session: AgentSessionView): Promise<void> {
+    if (this.closed || session.archivedAt || !session.nativeSessionId || !session.terminalId
+      || ['failed', 'interrupted', 'cancelling'].includes(session.state)) return;
+    const entry = this.bind(session.id);
+    if (entry.active) return;
+    const terminal = this.port.findTerminal(session.terminalId);
+    if (!terminal || terminal.state === 'exited') return;
+    const nativeSessionId = session.nativeSessionId;
+    const runs = await this.port.unfinishedRuns(session.id);
+    if (this.closed || entry.active) return;
+    const run = runs.find(candidate => {
+      const bound = (candidate as AgentRunRef & { terminalId?: string }).terminalId;
+      return candidate.intent !== 'steer' && candidate.state === 'running' && candidate.delivery === 'observed'
+        && candidate.nativeSessionId === nativeSessionId && Boolean(candidate.nativeTurnId)
+        && (!bound || bound === terminal.id);
+    });
+    const turnId = run?.nativeTurnId;
+    if (!turnId) return;
+    const target = { nativeSessionId, turnId };
+    if (entry.retired.has(turnId) || entry.ended.has(turnKey(target))) return;
+    const state = this.native.turnState(session.id, target);
+    // `undefined` means the store has not been read yet; `open` means the turn is still in it.
+    if (state !== undefined && state !== 'open') return;
+    const current = this.port.getSession(session.id);
+    const fresh = this.port.findTerminal(terminal.id);
+    if (!fresh || fresh.state === 'exited' || this.closed || entry.active || current.archivedAt
+      || current.terminalId !== fresh.id || current.nativeSessionId !== nativeSessionId
+      || ['failed', 'interrupted', 'cancelling'].includes(current.state)) return;
+    entry.active = { nativeSessionId, turnId, terminalId: fresh.id };
+    this.native.notifyTurnChanged(session.id);
+  }
+
   recordedOutcome(sessionId: string, target: NativeTurnTarget): TurnOutcome | undefined {
     return this.entries.get(sessionId)?.ended.get(turnKey(target));
   }
@@ -152,7 +188,9 @@ export class CursorSteerBridge {
       throw new AppError('STEER_TARGET_CHANGED', 'The Cursor turn ended or has no steer connection', 409);
     }
     const terminal = await this.port.terminals.get(active.terminalId);
-    if (terminal.state === 'exited' || terminal.epoch !== active.epoch || !sameTarget(this.activeTurn(this.port.getSession(sessionId)), request.target)) {
+    // `terminal.epoch` tracks browser write leases (opening or closing the terminal drawer bumps it)
+    // and is not process identity; only terminal exit or rebinding invalidates the live turn.
+    if (terminal.state === 'exited' || terminal.id !== active.terminalId || !sameTarget(this.activeTurn(this.port.getSession(sessionId)), request.target)) {
       throw new AppError('STEER_TARGET_CHANGED', 'The Cursor steer target or terminal connection changed', 409);
     }
     const owner = this.owner(sessionId, request.target);
@@ -220,7 +258,15 @@ export class CursorSteerBridge {
       }
       if (entry.retired.has(turnId)) return {};
       if (event === 'beforeSubmitPrompt') {
+        // The generation exists when the prompt is submitted, which is before the first tool hook.
         if (entry.active && !sameTarget(entry.active, target)) this.reject(session.id, 'Cursor generation changed before the input was consumed');
+        if (current.terminalId) {
+          const terminal = await this.port.terminals.get(current.terminalId);
+          if (!signal.aborted && terminal.state !== 'exited' && this.port.getSession(session.id).terminalId === terminal.id) {
+            entry.active = { ...target, terminalId: terminal.id };
+            this.native.notifyTurnChanged(session.id);
+          }
+        }
         return {};
       }
       if (event === 'preCompact') {
@@ -243,12 +289,12 @@ export class CursorSteerBridge {
           if (previous === 'answered') this.end(entry, session.id, entry.active, { status: 'completed', at: new Date().toISOString() });
           else this.reject(session.id, 'Cursor started another generation');
         }
-        entry.active = { ...target, terminalId: terminal.id, epoch: terminal.epoch };
+        entry.active = { ...target, terminalId: terminal.id };
         this.native.notifyTurnChanged(session.id);
         return {};
       }
       if (event !== 'postToolUse' && event !== 'postToolUseFailure') return {};
-      if (!sameTarget(this.activeTurn(this.port.getSession(session.id)), target) || entry.active?.epoch !== terminal.epoch) return {};
+      if (!sameTarget(this.activeTurn(this.port.getSession(session.id)), target) || entry.active?.terminalId !== terminal.id) return {};
       // claim removes the matching inbox entries before it awaits their fences, and the session lock keeps the
       // other hooks of this conversation out meanwhile. Parallel tool hooks cannot deliver the same input twice,
       // and a stopped/changed generation can never claim it.

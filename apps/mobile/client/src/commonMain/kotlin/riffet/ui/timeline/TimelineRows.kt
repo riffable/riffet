@@ -186,12 +186,17 @@ fun buildTimelineGrouping(
         turnKeys[latestOutputIndex].takeIf { it in activeTurns }
     } else null
     val interruptedTurns = HashSet<String>()
+    val outcomeUnknownTurns = HashSet<String>()
     val finalAnswerIndexByTurn = HashMap<String, Int>()
     items.forEachIndexed { index, item ->
         if (item is TimelineItem.Assistant && item.phase == AssistantPhase.FINAL_ANSWER) finalAnswerIndexByTurn[turnKeys[index]] = index
-        if (item is TimelineItem.User && item.run?.native?.intent != "steer" && (item.run?.state == RunState.INTERRUPTED ||
-                (item.run?.state == RunState.CANCELLED && item.run?.native?.stage != "acknowledged"))) {
-            interruptedTurns.add(turnKeys[index])
+        if (item is TimelineItem.User && item.run?.native?.intent != "steer") {
+            if (item.run?.native?.stage == "turn_outcome_unknown") {
+                outcomeUnknownTurns.add(turnKeys[index])
+            } else if (item.run?.state == RunState.INTERRUPTED ||
+                (item.run?.state == RunState.CANCELLED && item.run?.native?.stage != "acknowledged")) {
+                interruptedTurns.add(turnKeys[index])
+            }
         }
     }
     // A steer shares its execution turn with the preceding answer. Later tool work may collect
@@ -260,7 +265,7 @@ fun buildTimelineGrouping(
         addRow(
             processRow(
                 items, first, groupLastIndex, groupTurnKey, activeTurns, turnKeys, analysis.lastIndexByTurn, processingTurn,
-                groupTurnKey in interruptedTurns, groupTurnKey in finalAnswerIndexByTurn,
+                groupTurnKey in interruptedTurns, groupTurnKey in outcomeUnknownTurns, groupTurnKey in finalAnswerIndexByTurn,
             ),
             first,
             groupLastIndex,
@@ -381,6 +386,7 @@ private fun processRow(
     lastIndexByTurn: Map<String, Int>,
     processingTurn: String?,
     interrupted: Boolean,
+    outcomeUnknown: Boolean = false,
     hasFinalAnswer: Boolean,
 ): TimelineRow.Process {
     val grouped = items.subList(first, last + 1).toList()
@@ -413,8 +419,9 @@ private fun processRow(
         startedAt = timelineItemTime(grouped.first { it !is TimelineItem.Activity }),
         endedAt = timelineItemTime(grouped.last { it !is TimelineItem.Activity }),
         answerText = answerText,
-        interrupted = interrupted,
-        stopped = interrupted && ends,
+        // Both interrupted and outcome-unknown turns stay expanded; only a confirmed stop labels "已停止".
+        interrupted = interrupted || outcomeUnknown,
+        stopped = interrupted && !outcomeUnknown && ends,
         footer = footerOf(carries, settled),
     )
 }
@@ -478,8 +485,10 @@ fun updateTimelineGrouping(
             )
             is TimelineRow.Process -> processRow(
                 items, first, last, row.turnKey,
-                previous.activeTurns, previous.turnKeys, previous.lastIndexByTurn, previous.processingTurn, row.interrupted,
-                row.turnKey in previous.finalAnswerTurns,
+                previous.activeTurns, previous.turnKeys, previous.lastIndexByTurn, previous.processingTurn,
+                interrupted = row.interrupted && (row.stopped || !row.endsTurn),
+                outcomeUnknown = row.interrupted && !row.stopped && row.endsTurn,
+                hasFinalAnswer = row.turnKey in previous.finalAnswerTurns,
             )
             // Notices are never patched (see `patchable`), so a trigger row never gets here.
             is TimelineRow.Trigger -> row

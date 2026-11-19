@@ -195,8 +195,9 @@ fun currentToolActivity(item: TimelineItem.Tool): NativeActivity? {
         TurnOutlineV3.Status.RUNNING -> activity.status.active
         TurnOutlineV3.Status.COMPLETED -> activity.status == NativeActivityStatus.COMPLETED
         TurnOutlineV3.Status.FAILED -> activity.status == NativeActivityStatus.FAILED
-        TurnOutlineV3.Status.CANCELLED -> activity.status == NativeActivityStatus.STOPPED
-        else -> true
+        TurnOutlineV3.Status.CANCELLED, TurnOutlineV3.Status.INTERRUPTED -> activity.status == NativeActivityStatus.STOPPED
+        // An unknown outcome still belongs to this turn; dropping the activity would hide the unfinished call.
+        TurnOutlineV3.Status.OUTCOME_UNKNOWN, TurnOutlineV3.Status.UNKNOWN, null -> true
     }
     return activity.takeIf { matches }
 }

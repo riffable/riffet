@@ -32,6 +32,7 @@ import { ThemeService } from './themes/index.js';
 import { migratePluginStorage } from './compat.js';
 import { SessionLock } from './agent-host/session-lock.js';
 import { NativeDispatcher } from './native/dispatch.js';
+import { buildSessionControlSnapshot } from './native/control.js';
 import { defaultBackendForClient, effectiveSettingsForClient, registerProjectVisibilityHook, registerSessionVisibilityHook } from './native/client-features.js';
 import { ClientLogs } from './clientLogs.js';
 import { ServiceMonitor } from './monitor.js';
@@ -335,9 +336,9 @@ export async function createApp(options: AppOptions = {}) {
       // The Riffet MCP shim presents its conversation-bound credential to its own route only.
       if (route===RIFFET_MCP_ROUTE) return;
       if (auth.sharePreview(request)) return;
-      if (!route || !PUBLIC_API.has(route)) auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
       // The token in the path is the credential; the route refuses a missing or stale one itself.
       if (route===FILE_SITE_ROUTE) return;
+      if (!route || !PUBLIC_API.has(route)) auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
     }
   });
   registerProjectVisibilityHook(app,store);
@@ -382,7 +383,33 @@ export async function createApp(options: AppOptions = {}) {
   const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>resolveAuxiliaryModel(settings.getSettings(),'summary'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);},record:recordAuxiliaryCall});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
     (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside}));
-  const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id)});
+  // Read on the sync tick, which cannot await. A known backend defaults to interrupt and targeted stop until `capabilitiesFor` fills this cache; when it resolves, active sync streams refresh `control`.
+  const controlCapabilityCache=new Map<string,{supportsInterrupt:boolean;supportsTargetedStop:boolean;supportsSteer?:boolean}>();
+  const controlCapabilityPending=new Set<string>();
+  const controlRefreshListeners=new Set<()=>void>();
+  const notifyControlRefresh=()=>{for(const listener of controlRefreshListeners){try{listener();}catch{/* each stream is independent */}}};
+  const controlCapabilities=(session:{backendId?:string;backendProfileId?:string})=>{
+    const backendId=session.backendId;
+    if(!backendId||!isNativeBackendId(backendId))return undefined;
+    const driver=backendRegistry.get(backendId);
+    if(!driver)return undefined;
+    const key=`${backendId}\n${session.backendProfileId??''}`;
+    const cached=controlCapabilityCache.get(key);
+    if(!cached&&!controlCapabilityPending.has(key)){
+      controlCapabilityPending.add(key);
+      void nativeBackends.catalog.capabilitiesFor(backendId,session.backendProfileId).then(caps=>{
+        controlCapabilityCache.set(key,{supportsInterrupt:caps.supportsInterrupt,supportsTargetedStop:caps.supportsTargetedStop!==false,supportsSteer:caps.supportsSteer===true});
+        notifyControlRefresh();
+      }).catch(()=>undefined).finally(()=>{controlCapabilityPending.delete(key);});
+    }
+    return cached??{supportsInterrupt:true,supportsTargetedStop:true};
+  };
+  const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id),controlSnapshot:(sessionId,status,revision)=>{
+    try{
+      const session=store.getSession(sessionId);
+      return buildSessionControlSnapshot({revision,session,status,queue:dispatch.queue(sessionId,status),runs:store.listUnfinishedNativeRuns(sessionId),capabilities:controlCapabilities(session)});
+    }catch{return undefined;}
+  },subscribeControlRefresh:listener=>{controlRefreshListeners.add(listener);return ()=>{controlRefreshListeners.delete(listener);};}});
   // Needs the timeline, so it is built here rather than beside orchestration. Unfinished turn cards are taken over once connected.
   const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,...(options.channelProviders?{providers:()=>options.channelProviders!}:{providers:()=>plugins.imChannels().map(({id,provider})=>channelProvider(id,provider)),onProvidersChanged:listener=>plugins.onChange(listener)})});
   void channels.start().catch(error=>console.warn('[riffet] channels failed to start',error));

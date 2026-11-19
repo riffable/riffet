@@ -1,13 +1,13 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { NativeHistoryState, NativeJob, SyncLane, WorkbenchEvent } from '@contracts';
+import type { NativeHistoryState, NativeJob, SyncLane, TurnOutlineV3, WorkbenchEvent } from '@contracts';
 import { chunkText, type TimelineItem } from './model';
 import type { EarlierLoad } from './useEarlierHistory';
 
 export interface SubagentTranscript { agentId: string; subagentType?: string; title?: string; prompt?: string; model?: string; events: WorkbenchEvent[]; history?: NativeHistoryState; resetVersion?: number; running?: boolean;
   /** The child's live turn (`runId` of its rows) while it runs, when its backend names one. */
-  activeTurnId?: string; status?: 'running' | 'completed' | 'failed' | 'cancelled'; startedAt?: string; endedAt?: string;
+  activeTurnId?: string; status?: TurnOutlineV3['status']; startedAt?: string; endedAt?: string;
   /** Sync v3: the child's lane, and the rows the server folded it into, shown as they are; `synced` once its stream has answered. */
   lane?: SyncLane; timeline?: TimelineItem[]; synced?: boolean; loadingEarlier?: boolean; }
 

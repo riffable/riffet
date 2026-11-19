@@ -143,6 +143,11 @@ const str = (value: unknown) => (typeof value === 'string' ? value : undefined);
  */
 export class NativeService {
   private readonly watches = new Map<string, Watch>();
+  /**
+   * Live-step id abandoned by a confirmed stop. An idle pane must not treat that unsealed stream as
+   * still working; a later step id is a new turn and is not ignored.
+   */
+  private readonly stoppedLiveSteps = new Map<string, string>();
   /** Each chat store's last-read metadata, keyed by path and valid while the store's files are unchanged. */
   private readonly chatMetas = new Map<string, { stamp: string; meta: ChatMeta }>();
   private readonly workspaceChatScans = new Map<string, { expiresAt: number; promise: Promise<Array<{ id: string; mtime: number; meta: ChatMeta }>> }>();
@@ -354,7 +359,10 @@ export class NativeService {
    * and starts this one in a single step of its own, which a Ctrl+C followed by a paste cannot do
    * from outside: Ctrl+C does nothing in the moment after a submit, and quits the CLI if repeated.
    */
-  async deliverNow(session: AgentSessionView, text: string, beforeWrite: (info: DeliveryTarget) => void | Promise<void>): Promise<void> {
+  async deliverNow(
+    session: AgentSessionView, text: string, beforeWrite: (info: DeliveryTarget) => void | Promise<void>,
+    options?: { checkTarget?: () => void | Promise<void> },
+  ): Promise<void> {
     if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'The CLI has not started', 409);
     await this.waitForPrompt(session.id, session.terminalId);
     await this.port.terminals.interact(session.terminalId, async (raw) => {
@@ -374,6 +382,8 @@ export class NativeService {
         screen = await control.screen();
       }
       const idle = parseScreen(screen!).phase === 'idle';
+      // A changed stop target fails before the composer is cleared or the dispatch fence commits.
+      await options?.checkTarget?.();
       if (idle) await this.clearComposerInput(control, screen!);
       await beforeWrite(await this.deliveryTarget(session.id, info));
       await control.paste(text, false);
@@ -529,19 +539,36 @@ export class NativeService {
   async interrupt(session: AgentSessionView, options: { clearPrompt?: boolean; beforeWrite?: (allowEnded?: boolean) => void | Promise<void> } = {}): Promise<void> {
     if (!session.terminalId) return;
     const id = session.terminalId;
-    const deadline = Date.now() + CURSOR_INTERRUPT_TIMEOUT_MS;
+    // A late poll extends the deadline, and the pane is read once more after it. A bare
+    // `while (Date.now() < deadline)` drops the stop that landed while the loop was stalled.
+    let deadline = Date.now() + CURSOR_INTERRUPT_TIMEOUT_MS;
+    let stallUsed = 0;
+    const pause = async (ms: number) => {
+      const sleptFrom = Date.now();
+      await new Promise<void>(resolve => setTimeout(resolve, ms));
+      const late = Date.now() - sleptFrom - ms;
+      if (late > 0 && stallUsed < CURSOR_INTERRUPT_TIMEOUT_MS) {
+        const moved = Math.min(late, CURSOR_INTERRUPT_TIMEOUT_MS - stallUsed);
+        stallUsed += moved;
+        deadline += moved;
+      }
+    };
     let sentInterrupt = false, dismissed = false, idleSamples = 0, clearingPrompt = false, confirmed = false;
     let presses = 0, pressedAt = 0;
     const retryable = new Set(['TERMINAL_INTERACTION_BUSY', 'TERMINAL_INTERACTION_STALE', 'TERMINAL_DETACHED']);
-    while (Date.now() < deadline) {
+    for (;;) {
       const initial = await this.port.terminals.get(id);
       if (initial.state === 'exited') { confirmed = true; break; }
+      if (Date.now() >= deadline) break;
       try {
         await this.port.terminals.interact(id, async control => {
-          while (Date.now() < deadline) {
+          for (;;) {
+            // The read after a sleep that crossed the deadline is the final probe: it can confirm
+            // idle, and it does not press another key.
+            const overdue = Date.now() >= deadline;
             const screen = await control.screen();
             const parsed = screen ? parseScreen(screen) : undefined;
-            if (parsed?.subview) {
+            if (parsed?.subview && !overdue) {
               await options.beforeWrite?.();
               await this.leaveSubview(control, screen);
               continue;
@@ -558,7 +585,7 @@ export class NativeService {
                 }
                 return;
               }
-            } else {
+            } else if (!overdue) {
               idleSamples = 0;
               const controls = parsed?.phase === 'busy' ? turnControls(screen!) : undefined;
               if (controls?.stoppable && (presses === 0 || (presses < 2 && Date.now() - pressedAt >= CURSOR_EXIT_WINDOW_MS))) {
@@ -574,10 +601,12 @@ export class NativeService {
                 await options.beforeWrite?.();
                 await control.keys(['Escape']);
               }
+            } else {
+              idleSamples = 0;
             }
-            await new Promise(resolve => setTimeout(resolve, 150));
+            if (overdue) throw new AppError('CLI_INTERRUPT_TIMEOUT', 'Could not confirm that the turn stopped; try again shortly', 409);
+            await pause(150);
           }
-          throw new AppError('CLI_INTERRUPT_TIMEOUT', 'Could not confirm that the turn stopped; try again shortly', 409);
         });
         confirmed = true;
         break;
@@ -592,13 +621,23 @@ export class NativeService {
         if (clearingPrompt || !retryable.has(code)) throw error;
         idleSamples = 0;
         if (Date.now() + 80 >= deadline) break;
-        await new Promise(resolve => setTimeout(resolve, 80));
+        await pause(80);
       }
     }
+    if (!confirmed) {
+      const latest = await this.port.terminals.get(id).catch(() => undefined);
+      if (latest?.id === id && latest.state === 'exited') confirmed = true;
+    }
     if (!confirmed) throw new AppError('CLI_INTERRUPT_TIMEOUT', 'Could not confirm that the turn stopped; try again shortly', 409);
+    const current = this.port.getSession(session.id);
+    const liveStep = current.nativeSessionId ? this.options.live?.read(current.nativeSessionId) : undefined;
+    if (liveStep) this.stoppedLiveSteps.set(session.id, liveStep.step);
     const watch = this.watches.get(session.id);
+    // Keeps a store write from the aborted turn from satisfying `transcriptWorking`
+    // (`lastActivityAt > paneBusyAt + TRANSCRIPT_SETTLE_MS`). The unsealed live step is remembered
+    // above so that same idle pane is not reported busy.
     if (watch) watch.paneBusyAt = Date.now();
-    if (watch && !watch.closed) await this.updateStatus(watch, this.port.getSession(session.id));
+    if (watch && !watch.closed) await this.updateStatus(watch, current);
   }
 
   /** Native variants constrain capabilities advertised by the shared parameterized catalog. */
@@ -879,6 +918,7 @@ export class NativeService {
     clearInterval(this.sweepTimer);
     for (const watch of this.watches.values()) watch.close();
     this.watches.clear();
+    this.stoppedLiveSteps.clear();
     this.restartingSessions.clear();
     this.configBootTerminals.clear();
     this.workspaceChatScans.clear();
@@ -1080,7 +1120,10 @@ export class NativeService {
           const outcomeKnown = Boolean(effectiveParsedPhase === 'idle' && turnId && nativeSessionId && watch.chat?.chatId === nativeSessionId
             && this.turnObserver?.recordedOutcome?.(session.id, { nativeSessionId, turnId }));
           const liveStep = nativeSessionId ? this.options.live?.read(nativeSessionId) : undefined;
-          const liveStreaming = Boolean(liveStep && ((!liveStep.sealed && liveStep.parts.length > 0)
+          // A stop already confirmed this pane idle. The step file it left unsealed is not a hidden turn.
+          const stoppedLiveStep = this.stoppedLiveSteps.get(session.id);
+          const ignoreStopped = effectiveParsedPhase === 'idle' && stoppedLiveStep !== undefined && liveStep?.step === stoppedLiveStep;
+          const liveStreaming = Boolean(liveStep && !ignoreStopped && ((!liveStep.sealed && liveStep.parts.length > 0)
             || (booting && !configBoot && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
           const hiddenTurn = !configBoot && (effectiveParsedPhase === 'idle' || booting) && !currentError && !outcomeKnown
             && (liveStreaming || (watch.chat !== undefined

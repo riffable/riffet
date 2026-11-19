@@ -9,7 +9,7 @@ import { toast } from '@/lib/toast';
 import { isApplePlatform } from '@/lib/platform';
 import { cn, scrollBehavior, str } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
-import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics } from '@contracts';
+import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics, type TurnOutlineV3 } from '@contracts';
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
@@ -24,7 +24,7 @@ import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
 import { rowKeyForMessage, type MessageFocus } from './focus-message';
 import { captureReadingAnchor, findRow, type ReadingAnchor } from './readingAnchor';
 import { useTranscriptScroll, type TranscriptScrollHandle } from './useTranscriptScroll';
-import { heldFooterRow, transcriptTurns, type TranscriptRow, type TranscriptTurn } from './transcriptRows';
+import { heldFooterRow, toolItemLiveness, transcriptTurns, type TranscriptRow, type TranscriptTurn } from './transcriptRows';
 import { useEarlierHistory, type EarlierLoad } from './useEarlierHistory';
 import { findQuote, rangeAt } from './textQuote';
 import { markedTurns, markTargetOf, MarkSourceContext, SessionMarksContext } from './marks';
@@ -32,7 +32,7 @@ import { MarkLayer } from './MarkLayer';
 import { shareModelKey, shareModelLabel, useTranscriptResources } from './transcriptResources';
 import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
-import { activeToolStates, currentToolActivity, toolKind, toolRunSummary } from './toolView';
+import { toolKind, toolRunSummary } from './toolView';
 import { NativeJobStoreContext } from './subagents';
 import { isComposingKey } from './composerKeyboard';
 import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
@@ -119,14 +119,9 @@ function ToolRun({ items, entries, followedByContent, stale, latestTurn, childre
     let active = false, incomplete = false;
     for (const item of items) {
       const id = str(item.event.data.toolCallId) ?? String(item.event.sequence);
-      const job = jobs?.get(id) ?? item.job;
-      const activity = currentToolActivity(item);
-      const status = job?.status ?? activity?.status ?? str(item.event.data.status) ?? str(item.event.data.state);
-      const reportedActive = status !== undefined && (status === 'stopping' || activeToolStates.has(status));
-      const running = !resources && (job ? job.status === 'running'
-        : reportedActive && (Boolean(activity) || !stale));
-      active ||= running;
-      incomplete ||= status === 'unknown' || reportedActive && !running;
+      const live = toolItemLiveness(item, { stale, resources: Boolean(resources), job: jobs?.get(id) ?? item.job });
+      active ||= live.active;
+      incomplete ||= live.incomplete;
     }
     // Primitive snapshot: one bit for active work, one for unconfirmed work.
     return Number(incomplete) * 2 + Number(active);
@@ -410,7 +405,6 @@ interface RowContext {
   onCheckNativeRun?: (run: Run) => void;
   onContinueNativeRun?: (run: Run) => void;
   nativeRecoveries?: Record<string, NativeRunRecovery>;
-  onSendQueuedNow?: (run: Run) => void;
   onRestoreNativeRun?: (run: Run) => void;
   onTurnAction?: (action: TurnAction, runId: string) => void;
   /** Fetches the whole of a row sent cut to a preview (sync v3). */
@@ -494,6 +488,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
           footerPinned={footerPinned}
           footerActions={<AnswerActions text={row.answerText} runId={row.runId} onTurnAction={context.onTurnAction} at={lastTime} />}
           defaultOpen={context.completedProcessesOpen}
+          canAutoFold={row.canAutoFold}
           detailOpen={detailOpen}
           choice={processChoice}
           onOpenChange={rememberProcessChoice}
@@ -555,7 +550,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   const { item, settled } = row;
   let content: ReactNode = null;
-  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
+  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
   else if (item.kind === 'assistant') {
     const models = resources?.modelInfo
       ? item.event.sourceEvents
@@ -649,7 +644,6 @@ interface Props {
   onCheckNativeRun?: (run: Run) => void;
   onContinueNativeRun?: (run: Run) => void;
   nativeRecoveries?: Record<string, NativeRunRecovery>;
-  onSendQueuedNow?: (run: Run) => void;
   onRestoreNativeRun?: (run: Run) => void;
   /** Rewinding the code to before a turn, or forking a conversation from it. */
   onTurnAction?: (action: TurnAction, runId: string) => void;
@@ -659,6 +653,11 @@ interface Props {
   runActionPending?: (run: Run) => boolean;
   /** Measured output speed per run, keyed by the run id a turn key refers to. */
   metricsByRun?: Map<string, RunMetrics>;
+  /**
+   * Outline status by turn key (`turn`, `turnId`, and `run:<runId>`). Drives whether a process
+   * block may fold. Absent, a block still refuses to fold without a final answer or with a live run.
+   */
+  turnStatusByTurn?: ReadonlyMap<string, TurnOutlineV3['status']>;
   /** A search result asked to see one message: scrolled to, and highlighted briefly. */
   focus?: MessageFocus;
   /**
@@ -668,7 +667,7 @@ interface Props {
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, focus, outlineTarget, progress: suppliedProgress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, turnStatusByTurn, focus, outlineTarget, progress: suppliedProgress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -1271,10 +1270,10 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     // Later tool output can regroup a reply into a process row. Defer that reparenting too,
     // otherwise it unmounts the selected Markdown even when its own text rendering is held.
     if (heldSelection.current && plannedTurns.current) return plannedTurns.current;
-    const next = transcriptTurns(timeline, running, metricsByRun, plannedTurns.current, activeTurnId);
+    const next = transcriptTurns(timeline, running, metricsByRun, plannedTurns.current, activeTurnId, turnStatusByTurn);
     plannedTurns.current = next;
     return next;
-  }, [timeline, timelineVersion, running, metricsByRun, activeTurnId, selectionRevision]);
+  }, [timeline, timelineVersion, running, metricsByRun, activeTurnId, turnStatusByTurn, selectionRevision]);
   // Flat, not one parent per turn: older history or a settled slash command can move a turn's
   // boundary, and a row re-parented that way would remount and drop its expanded state.
   const rowsAll = useMemo(() => rowTurns.flatMap((turn) => turn.rows), [rowTurns]);
@@ -1335,8 +1334,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
 
   // Callers pass fresh closures on every render; the rows reach the latest one through this ref, so
   // a parent render alone never invalidates a memoized turn. Presence still decides what renders.
-  const handlers = useRef({ onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onExpandRow });
-  useLayoutEffect(() => { handlers.current = { onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onExpandRow }; });
+  const handlers = useRef({ onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onExpandRow });
+  useLayoutEffect(() => { handlers.current = { onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onExpandRow }; });
   const stable = useMemo(() => ({
     openPath: (path: string, line?: number) => handlers.current.onOpenPath?.(path, line),
     openInEditor: (path: string, line?: number) => handlers.current.onOpenInEditor?.(path, line),
@@ -1346,7 +1345,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     check: (run: Run) => handlers.current.onCheckNativeRun?.(run),
     continue: (run: Run) => handlers.current.onContinueNativeRun?.(run),
     restore: (run: Run) => handlers.current.onRestoreNativeRun?.(run),
-    sendNow: (run: Run) => handlers.current.onSendQueuedNow?.(run),
     turnAction: (action: TurnAction, runId: string) => handlers.current.onTurnAction?.(action, runId),
     expand: (key: string) => handlers.current.onExpandRow?.(key) ?? Promise.resolve(false),
   }), []);
@@ -1363,10 +1361,9 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     ...(onContinueNativeRun ? { onContinueNativeRun: stable.continue } : {}),
     nativeRecoveries,
     ...(onRestoreNativeRun ? { onRestoreNativeRun: stable.restore } : {}),
-    ...(onSendQueuedNow ? { onSendQueuedNow: stable.sendNow } : {}),
     ...(onTurnAction ? { onTurnAction: stable.turnAction } : {}),
     ...(onExpandRow ? { onExpandRow: stable.expand } : {}),
-  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onSendQueuedNow), Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
+  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);

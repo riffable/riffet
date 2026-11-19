@@ -490,6 +490,56 @@ describe('NativeDispatcher durable delivery', () => {
     expect(store.findRunByCommand(session.id, 'missing-command')).toBeUndefined();
   });
 
+  it('unsubscribes the observer and drops the session actor once its run completes', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), run = accept(session.id, 'actor-evict', '/clear');
+    const native = new FakeNative(store), runtime = makeRuntime();
+    let unsubscribed = 0;
+    const subscribe = native.subscribe.bind(native);
+    native.subscribe = (sessionId, listener) => {
+      const unsubscribe = subscribe(sessionId, listener);
+      return () => { unsubscribed += 1; return unsubscribe(); };
+    };
+    const send = dispatcher(store, native, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+    const actors = () => Reflect.get(send, 'actors') as Map<string, { timer?: NodeJS.Timeout }>;
+
+    send.kick();
+    await until(() => store.getRun(run.id).state === 'completed', 'slash command completion');
+    await until(() => unsubscribed === 1 && actors().size === 0, 'actor eviction');
+    expect(native.listeners.has(session.id)).toBe(false);
+    expect(native.subscribeCalls).toBe(1);
+    expect([...actors().values()].every(actor => actor.timer === undefined)).toBe(true);
+    await pause(40);
+    expect(unsubscribed).toBe(1);
+    expect(native.subscribeCalls).toBe(1);
+    expect(actors().size).toBe(0);
+  });
+
+  it('applies a confirmation timeout and a retry delay from per-session deadlines, with no periodic kick', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const confirmSession = createSession(), retrySession = createSession();
+    const confirm = accept(confirmSession.id, 'confirm-timeout', 'inspect once');
+    const sentAt = Date.now();
+    store.transitionNativeRun(confirm.id, ['queued'], {
+      delivery: 'input_sent', stage: 'confirmation', timings: { inputSentAt: sentAt },
+    }, { state: 'queued' });
+    const retry = accept(retrySession.id, 'retry-delay', '/clear');
+    const native = new FakeNative(store), runtime = makeRuntime();
+    runtime.ensureError = new AppError('CLI_BUSY', 'Try again later', 409);
+    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, confirmationMs: 200, busyLimitMs: 60_000 });
+    cleanups.push(() => store.close(), () => send.close());
+
+    // Nothing calls kick() again. A 60s poll cannot be what moves either run.
+    await until(() => store.getRun(confirm.id).native?.delivery === 'uncertain', 'confirmation timeout', 1_000);
+    expect(Date.now() - sentAt).toBeLessThan(1_000);
+    expect(store.getRun(retry.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
+    expect(runtime.ensureCalls).toEqual([retrySession.id]);
+    await until(() => runtime.ensureCalls.length >= 2, 'retry after its delay', 3_000);
+    expect(runtime.ensureCalls).toEqual([retrySession.id, retrySession.id]);
+    expect(store.getRun(confirm.id).native?.delivery).toBe('uncertain');
+  });
+
   it('leaves a run queued while its backend\'s plugin is still starting, and delivers it once the backend is there', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, 'waits-for-plugin', '/clear');
@@ -840,7 +890,8 @@ describe('NativeDispatcher durable delivery', () => {
     await until(() => store.getRun(run.id).native?.delivery === 'queued', 'stale lease to return to queue');
     expect(store.getRun(run.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'waiting' } });
     expect(native.writes).toEqual([]);
-    (Reflect.get(send, 'nextAttempt') as Map<string, number>).set(run.id, 0);
+    const actor = (Reflect.get(send, 'actors') as Map<string, { nextAttempt: Map<string, number> }>).get(session.id);
+    actor!.nextAttempt.set(run.id, 0);
 
     send.kick();
     await until(() => store.getRun(run.id).state === 'completed', 'retry after the terminal lease settles');
@@ -1969,5 +2020,97 @@ describe('message recovery and targeted stop', () => {
       await dispatcher.interrupt(session.id, stop);
       expect(backend.interruptCalls).toBe(1);
     } finally { await dispatcher.close(); store.close(); }
+  });
+
+  it('settles a running turn and dispatches the queue when the stop has no turn id and a newer terminal epoch', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest(), firstOutputAt: nowForTest() } });
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'live-turn', expectsTurnOutcome: true, terminalEpoch: 8 });
+    const bound = store.getSession(session.id);
+    const terminal = store.getTerminal(bound.terminalId!);
+    const live = store.updateTerminal(terminal.id, { epoch: terminal.epoch + 9 });
+    const queued = accept(session.id, 'queued-next', 'send the next one');
+    const stop = { requestId: 'stop-without-turn', nativeSessionId: bound.nativeSessionId!, terminalId: live.id, terminalEpoch: live.epoch };
+    const ended: Array<{ turnId: string; status: string }> = [];
+    const native = Object.assign(new FakeNative(store), {
+      endTurn: async (_sessionId: string, turnId: string, status: string) => { ended.push({ turnId, status }); },
+    });
+    native.setStatus(session.id, { phase: 'busy' });
+    native.interruptOperation = async () => { native.setStatus(session.id, { phase: 'idle' }); };
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      expect(store.getRun(active.id).native?.terminalEpoch).toBe(8);
+      expect(live.epoch).toBeGreaterThan(8);
+      await send.sendQueuedNow(session.id, queued.id, stop);
+      expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
+      expect(ended).toEqual([{ turnId: 'live-turn', status: 'interrupted' }]);
+      await until(() => native.writes.some(write => write.text === 'send the next one'), 'queued run dispatched');
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('sends a targeted stop through send-now, then settles the old turn', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest() } });
+    const bound = store.getSession(session.id);
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'running-turn', terminalEpoch: 8 });
+    const live = store.updateTerminal(bound.terminalId!, { epoch: store.getTerminal(bound.terminalId!).epoch + 4 });
+    const queued = accept(session.id, 'replacement', 'do this instead');
+    const stop = { requestId: 'send-now-stop', nativeSessionId: bound.nativeSessionId!, turnId: 'running-turn', terminalId: live.id, terminalEpoch: live.epoch };
+    const sends: Array<{ now?: boolean; expectedStop?: { requestId: string } } | undefined> = [];
+    const ended: Array<{ turnId: string; status: string }> = [];
+    const native = Object.assign(new FakeNative(store), {
+      async sendRun(current: Session, run: { native?: { input: { text: string } } }, fence: (binding?: object) => unknown, options?: { now?: boolean; expectedStop?: { requestId: string } }) {
+        sends.push(options);
+        fence({ backendId: 'cursor', nativeSessionId: current.nativeSessionId, terminalId: current.terminalId, terminalEpoch: live.epoch, baselineSequence: 0, renderedText: run.native?.input.text });
+      },
+      endTurn: async (_sessionId: string, turnId: string, status: string) => { ended.push({ turnId, status }); },
+    });
+    native.sendNow = true;
+    native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      const promoted = await send.sendQueuedNow(session.id, queued.id, stop);
+      expect(sends).toEqual([{ now: true, expectedStop: stop }]);
+      expect(native.interruptCalls).toBe(0);
+      expect(promoted.native?.delivery).toBe('input_sent');
+      expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
+      expect(ended).toEqual([{ turnId: 'running-turn', status: 'interrupted' }]);
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('keeps the queued run when send-now rejects a changed stop target before the write', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest() } });
+    const bound = store.getSession(session.id);
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'running-turn' });
+    const queued = accept(session.id, 'replacement', 'do this instead');
+    const stop = { requestId: 'send-now-moved', nativeSessionId: bound.nativeSessionId!, turnId: 'running-turn', terminalId: bound.terminalId, terminalEpoch: store.getTerminal(bound.terminalId!).epoch };
+    let sends = 0;
+    const native = Object.assign(new FakeNative(store), {
+      sendRun: async () => {
+        sends += 1;
+        throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'The original task changed before stopping', 409);
+      },
+    });
+    native.sendNow = true;
+    native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      await expect(send.sendQueuedNow(session.id, queued.id, stop)).rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
+      expect(sends).toBe(1);
+      expect(native.interruptCalls).toBe(0);
+      expect(store.getRun(queued.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
+      expect(store.getRun(queued.id).state).not.toBe('failed');
+      expect(store.getRun(active.id)).toMatchObject({ state: 'running', native: { delivery: 'observed' } });
+    } finally { await send.close(); store.close(); }
   });
 });

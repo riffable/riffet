@@ -1,4 +1,4 @@
-import type { NativeActivity, NativeContext, NativeQueue, NativeStatus, NativeStreamMessage, Run, Session, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import type { NativeActivity, NativeContext, NativeQueue, NativeStatus, NativeStreamMessage, Run, Session, SessionControlSnapshot, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET, type SyncFrame, type SyncLane } from '../../../../packages/contracts/src/sync.js';
 import { isLiveActivity } from '../journal/activity.js';
 import type { Budget, TimelineChange, TimelineService } from '../timeline/service.js';
@@ -14,9 +14,9 @@ import { redactSensitiveText } from '../settings/config-documents.js';
  * nothing in between, so no change can fall between what `hello` says and what follows it. Then the
  * rows a resuming client is missing (`delta`), or the newest rows (`snapshot`), then every change.
  *
- * Status, interaction, runs, context, metrics and session frames describe the whole conversation and
- * go out on the main lane's stream only; a subagent lane's stream carries its own rows, outline and
- * activities after its `hello`.
+ * Status, interaction, runs, context, metrics, session and control frames describe the whole
+ * conversation and go out on the main lane's stream only; a subagent lane's stream carries its own
+ * rows, outline and activities after its `hello`.
  */
 
 export type ControlMessage = Extract<NativeStreamMessage, { type: 'status' | 'context' | 'metrics' }>;
@@ -38,6 +38,13 @@ export interface SyncDeps {
   queue?(sessionId: string, status: NativeStatus): NativeQueue;
   /** The session's measured turns (`StatsLedger.sessionMetrics`), sent after a main lane's `hello`. */
   metrics?(sessionId: string): Extract<ControlMessage, { type: 'metrics' }>[];
+  /**
+   * The authoritative control snapshot. Called on the sync tick, so it must not await: a yield
+   * here opens a gap between `hello` and the frames that follow it.
+   */
+  controlSnapshot?(sessionId: string, status: NativeStatus, revision: number): SessionControlSnapshot | undefined;
+  /** Fires when asynchronous control inputs (such as backend capabilities) settle so open streams refresh `control`. */
+  subscribeControlRefresh?(listener: () => void): () => void;
 }
 
 /** What the client holds: the lane, and with `generation` and `after` where it holds it. */
@@ -96,6 +103,10 @@ export class SyncService {
     let opened = false;
     // What went out last, so an unchanged value is not sent again.
     const sent = { status: '', interaction: '', context: '', session: '', activities: '' };
+    // Control revisions count emitted frames only. Dedup ignores `revision`, so a quiet session
+    // does not repeat the same snapshot under a new number.
+    let controlRevision = 0;
+    let controlBody = '';
     const changed = (key: keyof typeof sent, value: unknown) => {
       const json = JSON.stringify(value ?? null);
       if (json === sent[key]) return false;
@@ -142,12 +153,32 @@ export class SyncService {
       try { queue = this.deps.queue?.(sessionId, status); } catch { /* a conversation deleted meanwhile */ }
       return queue ? { ...status, queue } : status;
     };
+    const takeControl = (): SessionControlSnapshot | undefined => {
+      if (!main || !this.deps.controlSnapshot) return undefined;
+      const revision = controlRevision + 1;
+      let snapshot: SessionControlSnapshot | undefined;
+      try { snapshot = this.deps.controlSnapshot(sessionId, withQueue(provider), revision); }
+      catch { return undefined; }
+      if (!snapshot) return undefined;
+      const { revision: _revision, ...body } = snapshot;
+      const json = JSON.stringify(body);
+      if (json === controlBody) return undefined;
+      controlBody = json;
+      controlRevision = revision;
+      return { ...snapshot, revision };
+    };
+    const sendControl = () => {
+      if (!opened) return;
+      const control = takeControl();
+      if (control) connection.control({ type: 'control', control });
+    };
     const sendStatus = (status: NativeStatus) => {
       provider = status;
       const interaction = status.interaction ?? null;
       if (changed('interaction', interaction)) connection.control({ type: 'interaction', interaction });
       const current = withQueue(status);
       if (changed('status', current)) connection.control({ type: 'status', status: current });
+      sendControl();
     };
     let control: ControlHandle | undefined;
     let controlError: unknown;
@@ -191,11 +222,14 @@ export class SyncService {
     };
     offs.push(this.deps.subscribe(sessionId, event => {
       if (!opened || !main) return;
-      if (event.type === 'session') { sendSession(); return; }
+      if (event.type === 'session') { sendSession(); sendStatus(provider); return; }
       if (event.type !== 'run_updated') return;
       if (!pendingRuns) { pendingRuns = new Set(); queueMicrotask(flushRuns); }
       if (event.runId) pendingRuns.add(event.runId); else allRuns = true;
     }));
+    if (main && this.deps.subscribeControlRefresh) {
+      offs.push(this.deps.subscribeControlRefresh(() => { if (!connection.ended) sendControl(); }));
+    }
     offs.push(this.deps.ingest.onError((failed, error) => { if (opened && failed === sessionId) connection.control(errorFrame(error)); }));
 
     const detach = () => {
@@ -221,6 +255,7 @@ export class SyncService {
       changed('context', context);
       changed('session', session);
       changed('activities', activities);
+      const initialControl = takeControl();
       connection.control({
         type: 'hello', protocol: 3, lane,
         generation: resumed ? resumed.head.generation : snapshot!.generation,
@@ -230,6 +265,7 @@ export class SyncService {
         ...(context ? { context } : {}),
         outline: { turnCount: outline.turnCount, turns: outline.turns },
         ...(catchingUp ? { catchingUp } : {}),
+        ...(initialControl ? { control: initialControl } : {}),
       });
       if (resumed) for (const frame of resumed.frames) connection.rows(rowsFrame(frame));
       else connection.snapshot(snapshot!);

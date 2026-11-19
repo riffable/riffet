@@ -63,13 +63,48 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   // queued behind a previous turn, so it must not also appear in the dock.
   const inlineCommandId = native.inlineRun?.commandId;
   const queue = native.status.queue;
+  const control = native.control;
   const queuedRuns = useMemo(() => {
+    if (control) {
+      const byId = new Map(native.runs.map((run) => [run.id, run]));
+      const byCommand = new Map<string, Run>();
+      for (const run of native.runs) {
+        const prior = byCommand.get(run.commandId);
+        // A server receipt outranks this tab's copy when both still share a command id.
+        if (!prior || prior.native?.fingerprint === 'client-pending') byCommand.set(run.commandId, run);
+      }
+      const inInbox = new Set<string>();
+      for (const entry of control.inbox) {
+        inInbox.add(entry.id);
+        inInbox.add(entry.commandId);
+      }
+      const queued: Run[] = [];
+      const added = new Set<string>();
+      for (const entry of control.inbox) {
+        if (entry.placement !== 'queued') continue;
+        const run = byId.get(entry.id) ?? byCommand.get(entry.commandId);
+        if (!run || added.has(run.id) || run.commandId === inlineCommandId) continue;
+        added.add(run.id);
+        queued.push(run);
+      }
+      // A send this tab drew before the server listed it, and only while a turn or a hold would queue it.
+      if (control.activeTurn !== null || control.held) {
+        for (const run of native.runs) {
+          const details = run.native;
+          if (added.has(run.id) || run.commandId === inlineCommandId || inInbox.has(run.id) || inInbox.has(run.commandId)) continue;
+          if (!details || details.fingerprint !== 'client-pending' || details.stage !== 'http_pending' || details.intent === 'steer') continue;
+          added.add(run.id);
+          queued.push(run);
+        }
+      }
+      return queued;
+    }
     // The run the server starts next when nothing runs: the oldest one it holds. None while an
     // earlier send is still on its way into the CLI: the session is about to work, and the rest wait.
     const starting = native.runs.some((run) => sendPhase(run) === 'starting' || (run.native?.delivery === 'input_sent' && (run.state === 'queued' || run.state === 'running')));
     const next = starting ? undefined : native.runs.reduce<Run | undefined>((first, run) => inQueue(run) && (!first || run.createdAt < first.createdAt) ? run : first, undefined);
     return native.runs.filter((run) => messagePlace(run, working, run === next, queue) === 'dock' && run.commandId !== inlineCommandId);
-  }, [native.runs, working, inlineCommandId, queue]);
+  }, [control, native.runs, working, inlineCommandId, queue]);
   const queuedKeys = useStable(useMemo(() => {
     if (!queuedRuns.length) return noKeys;
     const ids = new Set(queuedRuns.map((run) => run.id));
@@ -115,14 +150,17 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   // in view. A compaction row in the transcript already counts its own time; the line stands down for it.
   const latestVisibleUser = visibleTimeline.findLast((item): item is Extract<TimelineItem, { kind: 'user' }> => item.kind === 'user');
   const latestVisibleUserRun = latestVisibleUser?.run;
-  const sendingTurn = !working && Boolean(latestVisibleUserRun?.native
-    && latestVisibleUserRun.native.intent !== 'steer'
-    && !latestVisibleUserRun.native.queueReleasedAt
-    && latestVisibleUserRun.state === 'queued'
-    && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(latestVisibleUserRun.native.delivery)
-    && !latestVisibleUserRun.native.nativeMessageId
-    && !latestVisibleUserRun.native.timings?.observedAt
-    && !latestVisibleUserRun.native.timings?.providerAcceptedAt);
+  const sendingTurn = !working && (control
+    ? control.inbox.some((entry) => entry.placement === 'sending' && entry.kind === 'message'
+      && (entry.status === 'queued' || entry.status === 'preparing' || entry.status === 'sending'))
+    : Boolean(latestVisibleUserRun?.native
+      && latestVisibleUserRun.native.intent !== 'steer'
+      && !latestVisibleUserRun.native.queueReleasedAt
+      && latestVisibleUserRun.state === 'queued'
+      && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(latestVisibleUserRun.native.delivery)
+      && !latestVisibleUserRun.native.nativeMessageId
+      && !latestVisibleUserRun.native.timings?.observedAt
+      && !latestVisibleUserRun.native.timings?.providerAcceptedAt));
   const resumingTurn = sendingTurn && latestVisibleUserRun?.native?.delivery === 'preparing' && latestVisibleUserRun.native.stage === 'resuming';
   const showWorking = (busy || sendingTurn) && !(compacting && showsRunningCompaction(visibleTimeline));
   /**

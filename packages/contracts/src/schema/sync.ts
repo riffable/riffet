@@ -8,7 +8,7 @@
  * closed: the frames carry them, and a new strict value would fail decoding.
  */
 import { z } from 'zod/v4';
-import { CapturedSessionReferenceSchema, RunMetricsSchema, RunSchema, RunMetricsTokenSourceSchema, StepMetricsSchema, MetricsWindowSchema, TextRefSchema } from './run.js';
+import { CapturedSessionReferenceSchema, NativeRunInputSchema, RunMetricsSchema, RunSchema, RunMetricsTokenSourceSchema, StepMetricsSchema, MetricsWindowSchema, TextRefSchema } from './run.js';
 import { SessionSchema } from './session.js';
 
 /** `main`, or a subagent's lane keyed by the tool call that started it. */
@@ -194,6 +194,7 @@ export const NativeStatusSchema = z.object({
 });
 
 export const FileChangeSchema = z.object({ path: z.string(), added: z.number(), removed: z.number(), created: z.boolean() });
+export const TurnOutlineStatusSchema = z.enum(['running', 'completed', 'failed', 'cancelled', 'interrupted', 'outcome_unknown']).meta({ open: true });
 
 const RowBaseSchema = z.object({
   key: z.string(),
@@ -233,7 +234,7 @@ export const TimelineRowSchema = z.discriminatedUnion('kind', [
       model: z.string().optional(),
       rows: z.number(),
       turnId: z.string().optional(),
-      status: z.enum(['running', 'completed', 'failed', 'cancelled']).meta({ open: true }).optional(),
+      status: TurnOutlineStatusSchema.optional(),
       startedAt: z.string().optional(),
       endedAt: z.string().optional(),
       changes: z.array(FileChangeSchema).optional(),
@@ -264,7 +265,7 @@ export const TurnOutlineV3Schema = z.object({
   turnId: z.string(),
   startPos: z.number(),
   endPos: z.number().optional(),
-  status: z.enum(['running', 'completed', 'failed', 'cancelled']).meta({ open: true }),
+  status: TurnOutlineStatusSchema,
   at: z.string(),
   endedAt: z.string().optional(),
   preview: z.string().optional(),
@@ -275,6 +276,83 @@ export const TurnOutlineV3Schema = z.object({
 });
 
 export const SyncOutlineSchema = z.object({ turnCount: z.number(), turns: z.array(TurnOutlineV3Schema) });
+
+const InboxActionSchema = z.enum(['send_now', 'steer', 'edit', 'cancel', 'retry', 'check', 'continue', 'restore']).meta({ open: true });
+const ControlRuntimeSchema = z.enum(['offline', 'starting', 'ready', 'conflict', 'failed']).meta({ open: true });
+const ActiveTurnPhaseSchema = z.enum(['starting', 'running', 'stopping', 'attention']).meta({ open: true });
+const InboxKindSchema = z.enum(['message', 'steer']).meta({ open: true });
+const InboxPlacementSchema = z.enum(['sending', 'queued']).meta({ open: true });
+const InboxStatusSchema = z.enum(['queued', 'preparing', 'sending', 'uncertain', 'failed']).meta({ open: true });
+const NoticeLevelSchema = z.enum(['info', 'warning', 'error']).meta({ open: true });
+const TranscriptStateSchema = z.enum(['ok', 'unavailable', 'unparsed']).meta({ open: true });
+const StatusActivitySchema = z.object({ compacting: z.boolean(), background: z.number() });
+const NativeConnectionSchema = z.object({
+  state: z.enum(['connected', 'disconnected', 'reconnecting', 'conflict', 'failed']).meta({ open: true }),
+  message: z.string().optional(),
+  messageRef: TextRefSchema.optional(),
+});
+const NativeHistorySchema = z.object({
+  state: z.enum(['loading', 'ready', 'error']).meta({ open: true }),
+  message: z.string().optional(),
+  messageRef: TextRefSchema.optional(),
+});
+const QueueHeldSchema = z.object({
+  reason: z.enum(['turn_running', 'attention', 'stopping', 'sending', 'steering', 'unconfirmed', 'workspace', 'recovering', 'retrying']).meta({ open: true }),
+  runId: z.string().optional(),
+});
+
+export const ActiveTurnStateSchema = z.object({
+  turnId: z.string().optional(),
+  ownerRunId: z.string().optional(),
+  nativeSessionId: z.string().optional(),
+  nativeTurnId: z.string().optional(),
+  phase: ActiveTurnPhaseSchema,
+  startedAt: z.string().optional(),
+  canStop: z.boolean(),
+  canSteer: z.boolean(),
+});
+
+export const InboxEntrySchema = z.object({
+  id: z.string(),
+  commandId: z.string(),
+  kind: InboxKindSchema,
+  placement: InboxPlacementSchema,
+  status: InboxStatusSchema,
+  prompt: NativeRunInputSchema,
+  contextSnapshots: z.array(CapturedSessionReferenceSchema).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  error: z.string().optional(),
+  diagnostic: z.object({
+    code: z.string().optional(),
+    message: z.string(),
+    stage: z.string().optional(),
+    at: z.string(),
+  }).optional(),
+  actions: z.array(InboxActionSchema),
+});
+
+export const SessionControlSnapshotSchema = z.object({
+  revision: z.number(),
+  runtime: ControlRuntimeSchema,
+  activeTurn: ActiveTurnStateSchema.nullable(),
+  inbox: z.array(InboxEntrySchema),
+  held: QueueHeldSchema.optional(),
+  capabilities: z.object({ canStop: z.boolean(), canSteer: z.boolean(), canSendNow: z.boolean() }),
+  interaction: NativeInteractionSchema.nullable(),
+  activity: StatusActivitySchema,
+  outputRate: OutputRateSchema.optional(),
+  connection: NativeConnectionSchema.optional(),
+  history: NativeHistorySchema.optional(),
+  runtimeControl: NativeRuntimeControlSchema.optional(),
+  notice: z.string().optional(),
+  noticeLevel: NoticeLevelSchema.optional(),
+  model: z.string().optional(),
+  permission: z.string().optional(),
+  approval: z.string().optional(),
+  profilePending: z.boolean().optional(),
+  transcript: TranscriptStateSchema.optional(),
+});
 
 export const SyncFrameSchema = z.discriminatedUnion('type', [
   z.object({
@@ -292,6 +370,7 @@ export const SyncFrameSchema = z.discriminatedUnion('type', [
     context: NativeContextSchema.optional(),
     outline: SyncOutlineSchema,
     catchingUp: z.boolean().optional(),
+    control: SessionControlSnapshotSchema.optional(),
   }),
   z.object({ type: z.literal('caughtUp'), generation: z.string(), headSeq: z.number() }),
   z.object({
@@ -331,6 +410,7 @@ export const SyncFrameSchema = z.discriminatedUnion('type', [
     nativeMessageId: z.string().optional(),
   }),
   z.object({ type: z.literal('session'), session: SessionSchema }),
+  z.object({ type: z.literal('control'), control: SessionControlSnapshotSchema }),
   z.object({ type: z.literal('error'), code: z.string(), message: z.string(), retryable: z.boolean() }),
 ]);
 

@@ -126,8 +126,8 @@ internal interface SyncPrefetch {
  * Swift and Compose screens, stay as they are: the timeline is built from the window's rows
  * ([timelineItem]), with each user row's Run attached by `runId`, and the outbox's sends that have
  * no row yet drawn after them under the same key the server's row will have. Control state (status,
- * interaction, runs, context) comes only from hello and the control frames. History paging is
- * reported as a [NativeHistoryState] whose cursor is the oldest row's `pos`.
+ * interaction, runs, context, and the session control snapshot) comes only from hello and the control
+ * frames. History paging is reported as a [NativeHistoryState] whose cursor is the oldest row's `pos`.
  *
  * ## The window
  *
@@ -223,6 +223,7 @@ internal class SessionSync(
                     cachedAt = null,
                     status = null,
                     interaction = null,
+                    control = null,
                     context = measuredContext(session, sessionId, null),
                     subagents = emptyList(),
                     stoppingActivities = emptySet(),
@@ -393,6 +394,9 @@ internal class SessionSync(
                         interactionObservation = state.interactionObservation + if (generationChanged) 1 else 0,
                         status = frame.status.copy(interaction = frame.interaction),
                         interaction = frame.interaction,
+                        // A hello starts the revision over: adopt this snapshot even when its revision
+                        // is lower than the one the previous stream held, and clear it when absent.
+                        control = frame.control,
                         context = frame.context?.let { measuredContext(state.selected, state.sessionId, it) } ?: state.context,
                     )
                 }
@@ -457,6 +461,10 @@ internal class SessionSync(
                 if (runId != null && aggregate != null) hooks.liveMetrics.update { it + (runId to aggregate) }
             }
             is SyncFrame.SessionUpdate -> hooks.applySession(frame.session)
+            is SyncFrame.Control -> core.reduceDial(token) { state ->
+                val held = state.control
+                if (held != null && frame.control.revision < held.revision) state else state.copy(control = frame.control)
+            }
             is SyncFrame.Error, is SyncFrame.CaughtUp -> Unit
             is SyncFrame.Unknown -> if (frame.type == HEARTBEAT && lock.withLock { lane.rows.heartbeat() } && core.value.cachedAt != null) caughtUp(token, lane)
         }
@@ -861,11 +869,12 @@ internal class SessionSync(
     }
 
     private fun describe(frame: SyncFrame): String = when (frame) {
-        is SyncFrame.Hello -> "Hello ${frame.generation} ${frame.mode} head=${frame.headSeq} runs=${frame.runs.size}"
+        is SyncFrame.Hello -> "Hello ${frame.generation} ${frame.mode} head=${frame.headSeq} runs=${frame.runs.size} control=${frame.control?.revision}"
         is SyncFrame.Snapshot -> "Snapshot ${frame.generation} part=${frame.part} final=${frame.final} n=${frame.rows.size} asOf=${frame.asOfSeq}"
         is SyncFrame.Rows -> "Rows ${frame.from}..${frame.to} n=${frame.upserts.size} deletes=${frame.deletes?.size ?: 0}"
         is SyncFrame.Reset -> "Reset ${frame.generation} ${frame.reason}"
         is SyncFrame.Status -> "Status ${frame.status.phase}"
+        is SyncFrame.Control -> "Control rev=${frame.control.revision} runtime=${frame.control.runtime} inbox=${frame.control.inbox.size} turn=${frame.control.activeTurn != null}"
         is SyncFrame.Unknown -> "Unknown ${frame.type}"
         else -> frame::class.simpleName.orEmpty()
     }

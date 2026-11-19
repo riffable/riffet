@@ -5,6 +5,7 @@ export * from './code-theme.js';
 export * from './vscode-code-theme.js';
 export * from './share.js';
 export * from './sync.js';
+export type * from './control.js';
 export * from './model-selection.js';
 export * from './owner.js';
 export type * from './plugin-management.js';

@@ -247,7 +247,7 @@ describe('timeline service', () => {
     env.writer.turnEnded('t1', 'interrupted', stamp(++tick));
     await env.ready();
     expect(env.all().some(row => row.key === first.key)).toBe(false);
-    expect(env.service.outline(S, 'main').turns[0]?.status).toBe('cancelled');
+    expect(env.service.outline(S, 'main').turns[0]?.status).toBe('interrupted');
 
     // No new draft row is needed: a replay of the same native chunk is deduplicated by the journal.
     env.writer.turnReopened('t1', stamp(++tick));

@@ -690,7 +690,11 @@ struct ConversationState {
             requiresLiveTerminal: capabilities?.requiresLiveTerminal?.boolValue == true
         )
         self.status = status
-        canStop = !status.archived && status.live && (capabilities?.supportsInterrupt == true && capabilities?.supportsTargetedStop?.boolValue == true) && !status.starting
+        if let control = workbench.control {
+            canStop = !status.archived && status.live && control.activeTurn?.canStop == true
+        } else {
+            canStop = !status.archived && status.live && (capabilities?.supportsInterrupt == true && capabilities?.supportsTargetedStop?.boolValue == true) && !status.starting
+        }
         var historyWarning: String?
         if native?.history?.state == "error" {
             historyWarning = native?.history?.message ?? String(localized: "历史同步失败")
@@ -927,7 +931,16 @@ struct ComposerDocks: View {
     var recoveryOnly = false
     /// The overview column shows the goal and the todos, so they are not here as well.
     var planInAside = false
-    private var canSteer: Bool { workbench.connection is RiffetConnectionStateLive && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting }
+    private var canSteer: Bool {
+        if let control = workbench.control {
+            return workbench.connection is RiffetConnectionStateLive && control.activeTurn?.canSteer == true && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting
+        }
+        return workbench.connection is RiffetConnectionStateLive && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting
+    }
+    private func allows(_ action: String, on run: Run) -> Bool {
+        guard let control = workbench.control else { return false }
+        return SessionStoreStateKt.allowsQueuedAction(control: control, runId: run.id, commandId: run.commandId, action: action)
+    }
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -956,33 +969,49 @@ struct ComposerDocks: View {
             ForEach(recoveryOnly ? [] : workbench.queued, id: \.id) { run in
                 // A send still submitting has no run on the server to act on yet.
                 let blocked = workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run)
+                let governed = workbench.control != nil
+                let showSteer = governed ? allows("steer", on: run) : (supportsSteer && workbench.status?.activeTurn != nil)
+                let showSendNow = governed ? allows("send_now", on: run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
+                let showEdit = !governed || allows("edit", on: run)
+                let showCancel = !governed || allows("cancel", on: run)
                 DockCard {
                     Image(icon: "clock").font(.riffet(size: S(12))).foregroundStyle(palette.fg4)
                     Text(run.prompt).lineLimit(1).font(.riffet(size: S(13))).foregroundStyle(palette.fg2)
                     Spacer(minLength: Space.sm)
                     HStack(spacing: 0) {
-                        if supportsSteer && workbench.status?.activeTurn != nil {
-                            Button { guard let target = workbench.status?.activeTurn?.target() else { return }; Task { _ = try? await workbench.store.steerQueued(run: run, target: target) } } label: { Image(icon: "arrow.turn.up.right").font(.riffet(size: S(12), weight: .medium)) }
+                        if showSteer {
+                            Button {
+                                let target = workbench.status?.activeTurn?.target() ?? workbench.control?.activeTurn.flatMap { turn in
+                                    guard let nativeSessionId = turn.nativeSessionId, let turnId = turn.nativeTurnId ?? turn.turnId else { return nil }
+                                    return NativeTurnTarget(nativeSessionId: nativeSessionId, turnId: turnId)
+                                }
+                                guard let target else { return }
+                                Task { _ = try? await workbench.store.steerQueued(run: run, target: target) }
+                            } label: { Image(icon: "arrow.turn.up.right").font(.riffet(size: S(12), weight: .medium)) }
                                 .buttonStyle(IconButtonStyle(size: 26))
                                 .disabled(!canSteer || blocked)
                                 .help("补充到当前任务").accessibilityLabel("补充到当前任务")
                         }
-                        if supportsTargetedStop {
+                        if showSendNow {
                         Button { Task { await workbench.sendQueuedNow(run) } } label: { Image(icon: "arrow.up").font(.riffet(size: S(11), weight: .semibold)) }
                             .buttonStyle(IconButtonStyle(size: 26))
                             .disabled(blocked)
                             .help("停止并发送")
                         }
+                        if showEdit {
                         Button {
                             Task { if let draft = await workbench.takeBack(run) { composer.restore(draft) } }
                         } label: { Image(icon: "pencil.line").font(.riffet(size: S(12))) }
                             .buttonStyle(IconButtonStyle(size: 26))
                             .help("移回输入框编辑")
                             .disabled(blocked)
+                        }
+                        if showCancel {
                         Button { Task { await workbench.cancelRun(run) } } label: { Image(icon: "trash").font(.riffet(size: S(11))) }
                             .buttonStyle(IconButtonStyle(size: 26))
                             .help("移出队列")
                             .disabled(blocked)
+                        }
                     }
                     .fixedSize()
                 }

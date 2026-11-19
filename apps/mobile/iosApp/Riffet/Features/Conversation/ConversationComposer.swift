@@ -50,8 +50,17 @@ struct ConversationComposer: View {
     private var hasContent: Bool { !draft.text.isEmpty || !draft.attachments.isEmpty || !draft.references.isEmpty || !draft.pendingFiles.isEmpty }
     /// Focused or holding a draft the card grows its footer; otherwise it stays one line.
     private var expanded: Bool { focused || voice.hasContent(hasContent) || handsFree }
+    /// A control snapshot is the only stop permission. Without one, the catalog and a live background task still offer it.
+    private var canStopTurn: Bool {
+        if let control = workbench.control { return workbench.isConnected && control.activeTurn?.canStop == true }
+        return supportsInterrupt
+    }
     private var showsStop: Bool {
-        supportsInterrupt && (workbench.sendState.interrupting || (workbench.working || workbench.backgroundSubagents > 0) && !draft.canSend)
+        if workbench.control != nil {
+            let canStopBackground = supportsInterrupt && workbench.backgroundSubagents > 0
+            return workbench.sendState.interrupting || ((canStopTurn || canStopBackground) && !draft.canSend)
+        }
+        return supportsInterrupt && (workbench.sendState.interrupting || (workbench.working || workbench.backgroundSubagents > 0) && !draft.canSend)
     }
     private var placeholder: LocalizedStringKey {
         draft.text.isEmpty && !draft.attachments.isEmpty ? "为附件补充说明…" : defaultSendSteers ? "补充当前任务…" : workbench.working ? "输入下一条消息…" : session.backendId == .chat ? "发送消息…" : "给 Agent 发送消息"
@@ -199,7 +208,7 @@ struct ConversationComposer: View {
                     .accessibilityLabel(sendLabel).accessibilityIdentifier("sendMessage")
                     .contextMenu {
                         if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating) }
-                        if workbench.working && supportsInterrupt {
+                        if workbench.working && canStopTurn {
                             Button("停止当前任务") { Task { await workbench.perform { _ = try await workbench.store.interrupt() } } }.disabled(busy)
                             Button("停止并发送") { send(interrupt: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating)
                         }

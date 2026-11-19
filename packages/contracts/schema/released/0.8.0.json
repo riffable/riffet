@@ -4771,7 +4771,9 @@
                             "running",
                             "completed",
                             "failed",
-                            "cancelled"
+                            "cancelled",
+                            "interrupted",
+                            "outcome_unknown"
                           ],
                           "open": true
                         },
@@ -4815,6 +4817,842 @@
               },
               "catchingUp": {
                 "type": "boolean"
+              },
+              "control": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "number"
+                  },
+                  "runtime": {
+                    "type": "string",
+                    "enum": [
+                      "offline",
+                      "starting",
+                      "ready",
+                      "conflict",
+                      "failed"
+                    ],
+                    "open": true
+                  },
+                  "activeTurn": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "turnId": {
+                            "type": "string"
+                          },
+                          "ownerRunId": {
+                            "type": "string"
+                          },
+                          "nativeSessionId": {
+                            "type": "string"
+                          },
+                          "nativeTurnId": {
+                            "type": "string"
+                          },
+                          "phase": {
+                            "type": "string",
+                            "enum": [
+                              "starting",
+                              "running",
+                              "stopping",
+                              "attention"
+                            ],
+                            "open": true
+                          },
+                          "startedAt": {
+                            "type": "string"
+                          },
+                          "canStop": {
+                            "type": "boolean"
+                          },
+                          "canSteer": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "phase",
+                          "canStop",
+                          "canSteer"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "commandId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "message",
+                            "steer"
+                          ],
+                          "open": true
+                        },
+                        "placement": {
+                          "type": "string",
+                          "enum": [
+                            "sending",
+                            "queued"
+                          ],
+                          "open": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "preparing",
+                            "sending",
+                            "uncertain",
+                            "failed"
+                          ],
+                          "open": true
+                        },
+                        "prompt": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "attachmentIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "context": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "line": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "path"
+                                ]
+                              }
+                            },
+                            "references": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "session"
+                                  },
+                                  "sessionId": {
+                                    "type": "string"
+                                  },
+                                  "fromRunId": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "sessionId"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "attachmentIds",
+                            "context"
+                          ]
+                        },
+                        "contextSnapshots": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "backendId": {
+                                "type": "string",
+                                "enum": [
+                                  "cursor",
+                                  "codex",
+                                  "claude",
+                                  "dsh",
+                                  "droid",
+                                  "traex",
+                                  "pi",
+                                  "antigravity",
+                                  "chat"
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
+                              },
+                              "projectName": {
+                                "type": "string"
+                              },
+                              "capturedAt": {
+                                "type": "string"
+                              },
+                              "snapshotRef": {
+                                "type": "string"
+                              },
+                              "excerpt": {
+                                "type": "string"
+                              },
+                              "coverage": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string",
+                                    "enum": [
+                                      "native",
+                                      "journal"
+                                    ],
+                                    "open": true
+                                  },
+                                  "completeness": {
+                                    "type": "string",
+                                    "enum": [
+                                      "complete",
+                                      "partial"
+                                    ],
+                                    "open": true
+                                  },
+                                  "messages": {
+                                    "type": "number"
+                                  },
+                                  "bytes": {
+                                    "type": "number"
+                                  },
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "through": {
+                                    "type": "string"
+                                  },
+                                  "activeTurnIncomplete": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "completeness",
+                                  "messages",
+                                  "bytes"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionId",
+                              "title",
+                              "backendId",
+                              "projectName",
+                              "capturedAt",
+                              "snapshotRef",
+                              "excerpt",
+                              "coverage"
+                            ]
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "diagnostic": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "stage": {
+                              "type": "string"
+                            },
+                            "at": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "message",
+                            "at"
+                          ]
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "send_now",
+                              "steer",
+                              "edit",
+                              "cancel",
+                              "retry",
+                              "check",
+                              "continue",
+                              "restore"
+                            ],
+                            "open": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "commandId",
+                        "kind",
+                        "placement",
+                        "status",
+                        "prompt",
+                        "createdAt",
+                        "updatedAt",
+                        "actions"
+                      ]
+                    }
+                  },
+                  "held": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "turn_running",
+                          "attention",
+                          "stopping",
+                          "sending",
+                          "steering",
+                          "unconfirmed",
+                          "workspace",
+                          "recovering",
+                          "retrying"
+                        ],
+                        "open": true
+                      },
+                      "runId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "properties": {
+                      "canStop": {
+                        "type": "boolean"
+                      },
+                      "canSteer": {
+                        "type": "boolean"
+                      },
+                      "canSendNow": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "canStop",
+                      "canSteer",
+                      "canSendNow"
+                    ]
+                  },
+                  "interaction": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "transport": {
+                            "type": "string",
+                            "enum": [
+                              "terminal",
+                              "protocol"
+                            ],
+                            "open": true
+                          },
+                          "terminalId": {
+                            "type": "string"
+                          },
+                          "epoch": {
+                            "type": "number"
+                          },
+                          "requestId": {
+                            "type": "string"
+                          },
+                          "request": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "question",
+                              "permission",
+                              "plan",
+                              "confirmation",
+                              "choice"
+                            ],
+                            "open": true
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "selected": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label",
+                                "selected"
+                              ]
+                            }
+                          },
+                          "multiple": {
+                            "type": "boolean"
+                          },
+                          "allowOther": {
+                            "type": "boolean"
+                          },
+                          "otherValue": {
+                            "type": "string"
+                          },
+                          "otherSelected": {
+                            "type": "boolean"
+                          },
+                          "questionIndex": {
+                            "type": "number"
+                          },
+                          "questionCount": {
+                            "type": "number"
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "tone": {
+                                  "type": "string",
+                                  "enum": [
+                                    "primary",
+                                    "danger"
+                                  ],
+                                  "open": true
+                                },
+                                "shortLabel": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label"
+                              ]
+                            }
+                          },
+                          "expiresAt": {
+                            "type": "string"
+                          },
+                          "extendableUntil": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision",
+                          "kind",
+                          "title",
+                          "options",
+                          "actions"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "activity": {
+                    "type": "object",
+                    "properties": {
+                      "compacting": {
+                        "type": "boolean"
+                      },
+                      "background": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "compacting",
+                      "background"
+                    ]
+                  },
+                  "outputRate": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "no_data",
+                          "live",
+                          "zero",
+                          "stale"
+                        ],
+                        "open": true
+                      },
+                      "windowSeconds": {
+                        "type": "number"
+                      },
+                      "outputTokens": {
+                        "type": "number"
+                      },
+                      "tokensPerSecond": {
+                        "type": "number"
+                      },
+                      "durationMs": {
+                        "type": "number"
+                      },
+                      "window": {
+                        "type": "string",
+                        "enum": [
+                          "stream",
+                          "transcript",
+                          "observed"
+                        ],
+                        "open": true
+                      },
+                      "tokens": {
+                        "type": "string",
+                        "enum": [
+                          "provider",
+                          "estimated",
+                          "mixed"
+                        ],
+                        "open": true
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "windowSeconds",
+                      "outputTokens",
+                      "tokensPerSecond"
+                    ]
+                  },
+                  "connection": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "connected",
+                          "disconnected",
+                          "reconnecting",
+                          "conflict",
+                          "failed"
+                        ],
+                        "open": true
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "messageRef": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "code"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state"
+                    ]
+                  },
+                  "history": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "loading",
+                          "ready",
+                          "error"
+                        ],
+                        "open": true
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "messageRef": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "code"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state"
+                    ]
+                  },
+                  "runtimeControl": {
+                    "type": "object",
+                    "properties": {
+                      "owner": {
+                        "type": "string"
+                      },
+                      "revision": {
+                        "type": "string"
+                      },
+                      "notice": {
+                        "type": "object",
+                        "properties": {
+                          "tone": {
+                            "type": "string",
+                            "enum": [
+                              "neutral",
+                              "progress",
+                              "danger"
+                            ],
+                            "open": true
+                          },
+                          "label": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "hint": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "disabled": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "tone"
+                        ]
+                      },
+                      "actions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "hint": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "disabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "label"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "revision"
+                    ]
+                  },
+                  "notice": {
+                    "type": "string"
+                  },
+                  "noticeLevel": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ],
+                    "open": true
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "permission": {
+                    "type": "string"
+                  },
+                  "approval": {
+                    "type": "string"
+                  },
+                  "profilePending": {
+                    "type": "boolean"
+                  },
+                  "transcript": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "unavailable",
+                      "unparsed"
+                    ],
+                    "open": true
+                  }
+                },
+                "required": [
+                  "revision",
+                  "runtime",
+                  "activeTurn",
+                  "inbox",
+                  "capabilities",
+                  "interaction",
+                  "activity"
+                ]
               }
             },
             "required": [
@@ -5651,7 +6489,9 @@
                                 "running",
                                 "completed",
                                 "failed",
-                                "cancelled"
+                                "cancelled",
+                                "interrupted",
+                                "outcome_unknown"
                               ],
                               "open": true
                             },
@@ -7219,7 +8059,9 @@
                                 "running",
                                 "completed",
                                 "failed",
-                                "cancelled"
+                                "cancelled",
+                                "interrupted",
+                                "outcome_unknown"
                               ],
                               "open": true
                             },
@@ -9817,7 +10659,9 @@
                         "running",
                         "completed",
                         "failed",
-                        "cancelled"
+                        "cancelled",
+                        "interrupted",
+                        "outcome_unknown"
                       ],
                       "open": true
                     },
@@ -10485,6 +11329,855 @@
             "required": [
               "type",
               "session"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "control"
+              },
+              "control": {
+                "type": "object",
+                "properties": {
+                  "revision": {
+                    "type": "number"
+                  },
+                  "runtime": {
+                    "type": "string",
+                    "enum": [
+                      "offline",
+                      "starting",
+                      "ready",
+                      "conflict",
+                      "failed"
+                    ],
+                    "open": true
+                  },
+                  "activeTurn": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "turnId": {
+                            "type": "string"
+                          },
+                          "ownerRunId": {
+                            "type": "string"
+                          },
+                          "nativeSessionId": {
+                            "type": "string"
+                          },
+                          "nativeTurnId": {
+                            "type": "string"
+                          },
+                          "phase": {
+                            "type": "string",
+                            "enum": [
+                              "starting",
+                              "running",
+                              "stopping",
+                              "attention"
+                            ],
+                            "open": true
+                          },
+                          "startedAt": {
+                            "type": "string"
+                          },
+                          "canStop": {
+                            "type": "boolean"
+                          },
+                          "canSteer": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "phase",
+                          "canStop",
+                          "canSteer"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inbox": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "commandId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "message",
+                            "steer"
+                          ],
+                          "open": true
+                        },
+                        "placement": {
+                          "type": "string",
+                          "enum": [
+                            "sending",
+                            "queued"
+                          ],
+                          "open": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "preparing",
+                            "sending",
+                            "uncertain",
+                            "failed"
+                          ],
+                          "open": true
+                        },
+                        "prompt": {
+                          "type": "object",
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "attachmentIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "context": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "line": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "path"
+                                ]
+                              }
+                            },
+                            "references": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "session"
+                                  },
+                                  "sessionId": {
+                                    "type": "string"
+                                  },
+                                  "fromRunId": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "sessionId"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "text",
+                            "attachmentIds",
+                            "context"
+                          ]
+                        },
+                        "contextSnapshots": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "sessionId": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "backendId": {
+                                "type": "string",
+                                "enum": [
+                                  "cursor",
+                                  "codex",
+                                  "claude",
+                                  "dsh",
+                                  "droid",
+                                  "traex",
+                                  "pi",
+                                  "antigravity",
+                                  "chat"
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
+                              },
+                              "projectName": {
+                                "type": "string"
+                              },
+                              "capturedAt": {
+                                "type": "string"
+                              },
+                              "snapshotRef": {
+                                "type": "string"
+                              },
+                              "excerpt": {
+                                "type": "string"
+                              },
+                              "coverage": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string",
+                                    "enum": [
+                                      "native",
+                                      "journal"
+                                    ],
+                                    "open": true
+                                  },
+                                  "completeness": {
+                                    "type": "string",
+                                    "enum": [
+                                      "complete",
+                                      "partial"
+                                    ],
+                                    "open": true
+                                  },
+                                  "messages": {
+                                    "type": "number"
+                                  },
+                                  "bytes": {
+                                    "type": "number"
+                                  },
+                                  "from": {
+                                    "type": "string"
+                                  },
+                                  "through": {
+                                    "type": "string"
+                                  },
+                                  "activeTurnIncomplete": {
+                                    "type": "boolean"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "completeness",
+                                  "messages",
+                                  "bytes"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "sessionId",
+                              "title",
+                              "backendId",
+                              "projectName",
+                              "capturedAt",
+                              "snapshotRef",
+                              "excerpt",
+                              "coverage"
+                            ]
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "diagnostic": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            },
+                            "stage": {
+                              "type": "string"
+                            },
+                            "at": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "message",
+                            "at"
+                          ]
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "send_now",
+                              "steer",
+                              "edit",
+                              "cancel",
+                              "retry",
+                              "check",
+                              "continue",
+                              "restore"
+                            ],
+                            "open": true
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "commandId",
+                        "kind",
+                        "placement",
+                        "status",
+                        "prompt",
+                        "createdAt",
+                        "updatedAt",
+                        "actions"
+                      ]
+                    }
+                  },
+                  "held": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "turn_running",
+                          "attention",
+                          "stopping",
+                          "sending",
+                          "steering",
+                          "unconfirmed",
+                          "workspace",
+                          "recovering",
+                          "retrying"
+                        ],
+                        "open": true
+                      },
+                      "runId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
+                  },
+                  "capabilities": {
+                    "type": "object",
+                    "properties": {
+                      "canStop": {
+                        "type": "boolean"
+                      },
+                      "canSteer": {
+                        "type": "boolean"
+                      },
+                      "canSendNow": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "canStop",
+                      "canSteer",
+                      "canSendNow"
+                    ]
+                  },
+                  "interaction": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "string"
+                          },
+                          "transport": {
+                            "type": "string",
+                            "enum": [
+                              "terminal",
+                              "protocol"
+                            ],
+                            "open": true
+                          },
+                          "terminalId": {
+                            "type": "string"
+                          },
+                          "epoch": {
+                            "type": "number"
+                          },
+                          "requestId": {
+                            "type": "string"
+                          },
+                          "request": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "question",
+                              "permission",
+                              "plan",
+                              "confirmation",
+                              "choice"
+                            ],
+                            "open": true
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "selected": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label",
+                                "selected"
+                              ]
+                            }
+                          },
+                          "multiple": {
+                            "type": "boolean"
+                          },
+                          "allowOther": {
+                            "type": "boolean"
+                          },
+                          "otherValue": {
+                            "type": "string"
+                          },
+                          "otherSelected": {
+                            "type": "boolean"
+                          },
+                          "questionIndex": {
+                            "type": "number"
+                          },
+                          "questionCount": {
+                            "type": "number"
+                          },
+                          "actions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "tone": {
+                                  "type": "string",
+                                  "enum": [
+                                    "primary",
+                                    "danger"
+                                  ],
+                                  "open": true
+                                },
+                                "shortLabel": {
+                                  "type": "string"
+                                },
+                                "detail": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "label"
+                              ]
+                            }
+                          },
+                          "expiresAt": {
+                            "type": "string"
+                          },
+                          "extendableUntil": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision",
+                          "kind",
+                          "title",
+                          "options",
+                          "actions"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "activity": {
+                    "type": "object",
+                    "properties": {
+                      "compacting": {
+                        "type": "boolean"
+                      },
+                      "background": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "compacting",
+                      "background"
+                    ]
+                  },
+                  "outputRate": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "no_data",
+                          "live",
+                          "zero",
+                          "stale"
+                        ],
+                        "open": true
+                      },
+                      "windowSeconds": {
+                        "type": "number"
+                      },
+                      "outputTokens": {
+                        "type": "number"
+                      },
+                      "tokensPerSecond": {
+                        "type": "number"
+                      },
+                      "durationMs": {
+                        "type": "number"
+                      },
+                      "window": {
+                        "type": "string",
+                        "enum": [
+                          "stream",
+                          "transcript",
+                          "observed"
+                        ],
+                        "open": true
+                      },
+                      "tokens": {
+                        "type": "string",
+                        "enum": [
+                          "provider",
+                          "estimated",
+                          "mixed"
+                        ],
+                        "open": true
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "windowSeconds",
+                      "outputTokens",
+                      "tokensPerSecond"
+                    ]
+                  },
+                  "connection": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "connected",
+                          "disconnected",
+                          "reconnecting",
+                          "conflict",
+                          "failed"
+                        ],
+                        "open": true
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "messageRef": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "code"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state"
+                    ]
+                  },
+                  "history": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "loading",
+                          "ready",
+                          "error"
+                        ],
+                        "open": true
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "messageRef": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "params": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "code"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state"
+                    ]
+                  },
+                  "runtimeControl": {
+                    "type": "object",
+                    "properties": {
+                      "owner": {
+                        "type": "string"
+                      },
+                      "revision": {
+                        "type": "string"
+                      },
+                      "notice": {
+                        "type": "object",
+                        "properties": {
+                          "tone": {
+                            "type": "string",
+                            "enum": [
+                              "neutral",
+                              "progress",
+                              "danger"
+                            ],
+                            "open": true
+                          },
+                          "label": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "detail": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "hint": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "disabled": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "tone"
+                        ]
+                      },
+                      "actions": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "hint": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            },
+                            "disabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "label"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "revision"
+                    ]
+                  },
+                  "notice": {
+                    "type": "string"
+                  },
+                  "noticeLevel": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "warning",
+                      "error"
+                    ],
+                    "open": true
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "permission": {
+                    "type": "string"
+                  },
+                  "approval": {
+                    "type": "string"
+                  },
+                  "profilePending": {
+                    "type": "boolean"
+                  },
+                  "transcript": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "unavailable",
+                      "unparsed"
+                    ],
+                    "open": true
+                  }
+                },
+                "required": [
+                  "revision",
+                  "runtime",
+                  "activeTurn",
+                  "inbox",
+                  "capabilities",
+                  "interaction",
+                  "activity"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "control"
             ]
           },
           {
@@ -11295,7 +12988,9 @@
                       "running",
                       "completed",
                       "failed",
-                      "cancelled"
+                      "cancelled",
+                      "interrupted",
+                      "outcome_unknown"
                     ],
                     "open": true
                   },
@@ -12842,7 +14537,9 @@
                             "running",
                             "completed",
                             "failed",
-                            "cancelled"
+                            "cancelled",
+                            "interrupted",
+                            "outcome_unknown"
                           ],
                           "open": true
                         },
@@ -14421,7 +16118,9 @@
                             "running",
                             "completed",
                             "failed",
-                            "cancelled"
+                            "cancelled",
+                            "interrupted",
+                            "outcome_unknown"
                           ],
                           "open": true
                         },

@@ -27,7 +27,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 11;
+export const FOLD_VERSION = 13;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -703,7 +703,7 @@ export class LaneFold {
     const stored = this.ctx.tables.turnsBefore(this.sessionId, this.lane, this.windowStart * POS_STEP).find(turn => turn.startPos === startPos && turn.outline.turnId === turnId);
     const meta = this.turnMetas.get(turnId);
     if (!stored || !meta?.status) return;
-    const outline: TurnOutlineV3 = { ...stored.outline, status: meta.status === 'interrupted' ? 'cancelled' : meta.status, ...(meta.endedAt ? { endedAt: meta.endedAt } : {}) };
+    const outline: TurnOutlineV3 = { ...stored.outline, status: meta.status, ...(meta.endedAt ? { endedAt: meta.endedAt } : {}) };
     if (JSON.stringify(outline) === JSON.stringify(stored.outline)) return;
     this.tableTx(() => this.ctx.tables.putTurn(this.sessionId, this.lane, outline, null));
     this.out.turns.set(outline.turn, outline);
@@ -910,9 +910,11 @@ export class LaneFold {
       const turnId = tally.nativeTurn ?? tally.runId ?? turn;
       const meta = this.turnMetas.get(turnId);
       const run = tally.runId ? this.runsById(tally.runId) : undefined;
-      const status: TurnOutlineV3['status'] = meta?.status ? (meta.status === 'interrupted' ? 'cancelled' : meta.status)
-        : meta?.reopened ? 'running' : run ? (run.state === 'queued' || run.state === 'running' ? 'running' : run.state === 'interrupted' ? 'cancelled' : run.state)
-          : meta?.started ? 'running' : 'completed';
+      const status: TurnOutlineV3['status'] = meta?.status ? meta.status
+        : meta?.reopened ? 'running'
+          : run ? (run.state === 'queued' || run.state === 'running' ? 'running'
+            : run.native?.stage === 'turn_outcome_unknown' ? 'outcome_unknown' : run.state)
+            : meta?.started ? 'running' : 'completed';
       outlines.set(turn, {
         turn, turnId, startPos: tally.startPos, ...(status !== 'running' ? { endPos: tally.endPos } : {}), status, at: tally.at,
         ...(meta?.endedAt ? { endedAt: meta.endedAt } : {}), ...(tally.preview ? { preview: tally.preview } : {}), hasUserMessage: tally.hasUserMessage, hasAttachments: tally.hasAttachments, rows: tally.rows, ...(tally.runId ? { runId: tally.runId } : {}),

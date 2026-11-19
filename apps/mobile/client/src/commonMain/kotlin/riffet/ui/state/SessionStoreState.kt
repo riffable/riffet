@@ -2,10 +2,12 @@ package riffet.ui.state
 
 import riffet.contracts.AppSettings
 import riffet.contracts.Attachment
+import riffet.contracts.InboxEntry
 import riffet.contracts.NativeContext
 import riffet.contracts.NativeHistoryState
 import riffet.contracts.NativeInteraction
 import riffet.contracts.NativeStatus
+import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.Project
 import riffet.contracts.Run
 import riffet.contracts.Session
@@ -85,6 +87,11 @@ data class OpenSessionState(
     val uncertain: List<Run> = emptyList(),
     val runs: List<Run> = emptyList(),
     val status: NativeStatus? = null,
+    /**
+     * The server's control snapshot. Null until a hello or `control` frame; the composer then keeps
+     * its own rules for stop, steer, and the queue.
+     */
+    val control: SessionControlSnapshot? = null,
     /** The store's `working`: the CLI reports BUSY or ATTENTION. */
     val working: Boolean = false,
     val connection: RiffetConnectionState = RiffetConnectionState.Idle,
@@ -99,4 +106,36 @@ data class OpenSessionState(
     val cachedAt: Long? = null,
     val context: NativeContext? = null,
     val subagents: List<StoredSubagent> = emptyList(),
-)
+) {
+    /** Foreground stop the server allows. Null when no snapshot has arrived. */
+    val canStop: Boolean? get() = control?.let { it.activeTurn?.canStop == true }
+
+    /** Foreground steer the server allows. Null when no snapshot has arrived. */
+    val canSteer: Boolean? get() = control?.let { it.activeTurn?.canSteer == true }
+
+    /** Whether any queued entry may interrupt the foreground and send. Null when no snapshot has arrived. */
+    val canSendNow: Boolean? get() = control?.capabilities?.canSendNow
+
+    /** Actions for one queued entry. Null when no snapshot has arrived; empty when that entry is not queued. */
+    fun actionsForQueued(runId: String, commandId: String = runId): List<String>? =
+        control?.let { queuedActions(it, runId, commandId) }
+}
+
+/**
+ * Actions the server allows for the queued inbox entry matching [runId] or [commandId].
+ * Empty when the entry is absent or is `sending` (a direct send is never a queue row).
+ */
+fun queuedActions(control: SessionControlSnapshot, runId: String, commandId: String): List<String> =
+    control.inbox.firstOrNull { entry ->
+        entry.placement == "queued" && entry.matches(runId, commandId)
+    }?.actions ?: emptyList()
+
+/** True when [control] lists [action] for that queued entry. */
+fun allowsQueuedAction(control: SessionControlSnapshot, runId: String, commandId: String, action: String): Boolean =
+    action in queuedActions(control, runId, commandId)
+
+private fun InboxEntry.matches(runId: String, commandId: String): Boolean {
+    if (id.isNotEmpty() && (id == runId || id == commandId)) return true
+    if (this.commandId.isNotEmpty() && (this.commandId == commandId || this.commandId == runId)) return true
+    return false
+}

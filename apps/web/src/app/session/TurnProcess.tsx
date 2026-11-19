@@ -41,15 +41,21 @@ interface Props {
   reveal?: number;
   /** The turn runs and ends on this block for now: the footer's place is held, showing this (the working line, or nothing). */
   progress?: ReactNode;
+  /**
+   * The block may fold itself: the turn finished normally, with a final answer and no unfinished
+   * tool call. Omitted, a block folds once it is not running, interrupted, or reporting issues,
+   * which is what the design specimens and council speeches pass by leaving this out.
+   */
+  canAutoFold?: boolean;
 }
 
 /**
  * Pi-desktop style "turn process" disclosure: collapses the thoughts and tool calls
- * inside one turn into a single header row. Auto-opens while running, folds back when the
- * turn completes normally, and stays open after interruption, steering or a tool failure.
- * Mirrors the visual language of a single lightweight row instead of a boxed card.
+ * inside one turn into a single header row. Stays open while the turn is running, stopped,
+ * failing, or otherwise not allowed to fold, and folds only when `canAutoFold` becomes true.
+ * A flicker of `running` alone never folds the block. Mirrors one lightweight row, not a card.
  */
-export function TurnProcess({ running, issueCount, interrupted, stopped = false, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, detailOpen = false, choice, onOpenChange, reveal, progress }: Props) {
+export function TurnProcess({ running, issueCount, interrupted, stopped = false, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, detailOpen = false, choice, onOpenChange, reveal, progress, canAutoFold }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const { quiet } = useContext(TranscriptCatchUp);
@@ -57,6 +63,9 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const [manualChoice, setManualChoice] = useState<boolean | undefined>(() => (reveal !== undefined ? true : choice));
   const [prevChoice, setPrevChoice] = useState(choice);
   const [prevReveal, setPrevReveal] = useState(reveal);
+  /** Folding is allowed only for a normal completion. Callers that omit it keep the historical rule. */
+  const autoFold = canAutoFold ?? (!running && !interrupted && issueCount === 0);
+  const previousAutoFold = useRef(autoFold);
   const previousRunning = useRef(running);
   const section = useRef<HTMLElement>(null);
   const contentsId = useId();
@@ -74,11 +83,12 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 
   // Derive disclosure state synchronously during render so completion lands in the same React
   // commit as the transcript update (and its scroll reconciliation), with no multi-commit lag.
-  const automaticOpen = Boolean(defaultOpen || detailOpen || running || interrupted || issueCount > 0);
-  const completing = previousRunning.current && !running;
-  const keepForReader = completing && manualChoice === undefined && !automaticOpen && beingRead(section.current);
+  // `running` falling on its own is not a completion: the block stays open until auto-fold is allowed.
+  const automaticOpen = Boolean(defaultOpen || detailOpen || running || interrupted || issueCount > 0 || !autoFold);
+  const folding = (!previousAutoFold.current && autoFold) || (autoFold && !running && previousRunning.current);
+  const keepForReader = folding && manualChoice === undefined && !automaticOpen && beingRead(section.current);
   const open = manualChoice ?? (keepForReader || automaticOpen);
-  const instantFold = completing && !open && canInstantFold(section.current);
+  const instantFold = folding && !open && canInstantFold(section.current);
 
   /**
    * Contents that have been shown once stay mounted when folded (`Collapse keep`, hidden with
@@ -107,8 +117,9 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 
   useLayoutEffect(() => {
     if (keepForReader) chooseOpen(true);
+    previousAutoFold.current = autoFold;
     previousRunning.current = running;
-  }, [running, keepForReader]);
+  }, [autoFold, running, keepForReader]);
 
   const now = useNow(running);
   const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;

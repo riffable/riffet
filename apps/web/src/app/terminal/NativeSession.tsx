@@ -2,7 +2,7 @@ import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useL
 import { Trans, useLingui } from '@lingui/react/macro';
 import { composerRunningIntent } from '../session/composerRunning';
 import { IconInfo, IconSquare, IconSquareArrowOutUpRight, IconArrowRightLeft, IconPuzzle, IconBookmarkPlus, IconFileText, IconGitFork, IconMessagesSquare, IconRotateCw, IconSquareTerminal } from '@/components/icons';
-import type { Attachment, AttemptGroup, DiscussionSource, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, TerminalInfo, ToolGroupId } from '@contracts';
+import type { Attachment, AttemptGroup, DiscussionSource, InboxAction, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, SessionControlSnapshot, TerminalInfo, ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { FeedbackNotice, FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
@@ -286,6 +286,23 @@ interface Props {
 
 const noCommands: SlashCommand[] = [];
 const NO_CAPABILITIES: ReadonlySet<string> = new Set();
+
+/** Inbox actions keyed by the run id the dock renders. An entry id and its command id can name different copies. */
+function inboxActionsByRun(control: SessionControlSnapshot | undefined, runs: readonly Run[]): ReadonlyMap<string, readonly InboxAction[]> | undefined {
+  if (!control) return undefined;
+  const runIdByCommand = new Map<string, string>();
+  for (const run of runs) {
+    const prior = runIdByCommand.get(run.commandId);
+    if (!prior || run.native?.fingerprint !== 'client-pending') runIdByCommand.set(run.commandId, run.id);
+  }
+  const actions = new Map<string, readonly InboxAction[]>();
+  for (const entry of control.inbox) {
+    actions.set(entry.id, entry.actions);
+    const runId = runIdByCommand.get(entry.commandId);
+    if (runId) actions.set(runId, entry.actions);
+  }
+  return actions;
+}
 
 /**
  * Where the view dots last sat, across sessions: each tab mounts its own session, and starting from
@@ -656,14 +673,16 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const runningTargetKey = `${session.id}:${native.status.activeTurn?.turnId ?? ''}`;
   const preferredSubmitIntent = composerRunningIntent(runningBehavior, {
     running: busy,
-    supportsSteer: backendCapabilities?.supportsSteer,
+    supportsSteer: native.control ? native.control.activeTurn?.canSteer : backendCapabilities?.supportsSteer,
     activeTurn: native.status.activeTurn,
     writable: native.connected && (!connectionState || connectionState === 'connected'),
     blocked: Boolean(interaction) || archived || starting || switchingApproval || switchingModel,
     uncertain: native.hasUncertainSubmission,
   });
   const submitIntent = queueOverride === runningTargetKey ? 'queue' : preferredSubmitIntent;
-  const steerUnavailable = submitIntent === 'steer' && (!backendCapabilities?.supportsSteer || !native.status.activeTurn || native.hasUncertainSubmission || Boolean(interaction));
+  const steerUnavailable = submitIntent === 'steer' && (native.control
+    ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission || Boolean(interaction)
+    : !backendCapabilities?.supportsSteer || !native.status.activeTurn || native.hasUncertainSubmission || Boolean(interaction));
   const storedNativeSelection = backendSelection(backendId, catalog, session.model);
   const correctedNativeSelection = launchSelection(catalog, storedNativeSelection);
   const needsNativeNormalization = Boolean(storedNativeSelection && correctedNativeSelection !== storedNativeSelection);
@@ -881,12 +900,21 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     || !native.connected || Boolean(connectionState && connectionState !== 'connected')
     || native.sending || native.interrupting || native.hasUnknownSubmission;
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
-  const queuedPending = useCallback((runId: string) => archived || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
-    [archived, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
-  const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission || switchingApproval || switchingModel;
-  const canSteerQueued = Boolean(backendCapabilities?.supportsSteer && native.status.activeTurn);
-  const queueUnconfirmed = native.status.queue?.held?.reason === 'unconfirmed';
-  const unconfirmedRunId = queueUnconfirmed ? native.status.queue?.held?.runId : undefined;
+  const queuedPending = useCallback((runId: string) => archived || !native.connected || Boolean(connectionState && connectionState !== 'connected') || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
+    [archived, native.connected, connectionState, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
+  const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || switchingApproval || switchingModel
+    || (native.control ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission
+      : phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission);
+  const inboxActions = useMemo(() => inboxActionsByRun(native.control, native.runs), [native.control, native.runs]);
+  const canSteerQueued = native.control
+    ? native.control.capabilities.canSteer && Boolean(native.control.activeTurn?.canSteer)
+    : Boolean(backendCapabilities?.supportsSteer && native.status.activeTurn);
+  const canSendQueuedNow = native.control
+    ? native.control.capabilities.canSendNow && Boolean(native.control.activeTurn?.canStop)
+    : Boolean(backendCapabilities?.supportsTargetedStop);
+  const heldQueue = native.control ? native.control.held : native.status.queue?.held;
+  const queueUnconfirmed = heldQueue?.reason === 'unconfirmed';
+  const unconfirmedRunId = queueUnconfirmed ? heldQueue?.runId : undefined;
   const revealUnconfirmed = useCallback(() => { if (unconfirmedRunId) transcriptScrollRef.current?.revealRun(unconfirmedRunId); }, [unconfirmedRunId]);
   /** The queue card is on screen, closing included: the composer card keeps its seam until the card has gone. */
   const [queueShown, setQueueShown] = useState(false);
@@ -907,16 +935,19 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       unconfirmed={queueUnconfirmed}
       onRevealUnconfirmed={unconfirmedRunId ? revealUnconfirmed : undefined}
       pending={queuedPending}
-      onSteerQueued={canSteerQueued ? steerQueuedById : undefined}
+      onSteerQueued={inboxActions || canSteerQueued ? steerQueuedById : undefined}
       steerDisabled={steerDisabled}
-      onSendQueuedNow={backendCapabilities?.supportsTargetedStop ? sendQueuedNowById : undefined}
+      steerUnlisted={inboxActions ? canSteerQueued : undefined}
+      onSendQueuedNow={inboxActions || canSendQueuedNow ? sendQueuedNowById : undefined}
+      sendUnlisted={inboxActions ? canSendQueuedNow : undefined}
+      inboxActions={inboxActions}
       onEditQueued={editQueued}
       onRemoveQueued={removeQueued}
       onQueueShown={setQueueShown}
       followUps={followUpList}
       plans={assistant ? <PlanDock /> : undefined}
     />
-  ), [assistant, followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
+    ), [assistant, followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, canSendQueuedNow, inboxActions, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
   // Without the backend's permissions there is no name to show, only an id.
   const approvalSummary = useMemo(() => (backendCapabilities?.permissions.length ? <ApprovalSummary mode={approval} options={backendCapabilities.permissions} /> : undefined), [approval, backendCapabilities]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (
@@ -1159,9 +1190,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     onReferencesChange: onReferencesChange,
     running: working,
     backgroundCount: backgroundCount,
-    onStop: backendCapabilities?.supportsTargetedStop ? stop : undefined,
+    onStop: (native.control ? native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt)) : backendCapabilities?.supportsTargetedStop) ? stop : undefined,
     stopping: native.interrupting,
-    stopDisabled: archived || !live || !backendCapabilities?.supportsInterrupt || starting || native.sending || native.interrupting,
+    stopDisabled: archived || !live || (native.control ? !(native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt))) : !backendCapabilities?.supportsInterrupt) || starting || native.sending || native.interrupting,
     submitIntent: submitIntent,
     onSubmit: submit,
     ...(sendLaterEnabled && !quickChat && !archived ? { onSendLater: sendLater } : {}),
@@ -1277,7 +1308,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             if (await confirmDialog({ title: label, description: t`上一条消息是否已执行仍无法确认`, confirmLabel: label })) await native.continueNativeRun(run);
           }}
           onCancelNativeRun={native.cancelNativeRun}
-          onSendQueuedNow={backendCapabilities?.supportsTargetedStop ? native.sendQueuedNow : undefined}
+          turnStatusByTurn={native.turnStatusByTurn}
           onRestoreNativeRun={async (run) => {
             const draft = await native.recoverNativeRun(run);
             if (!draft || !recipientAlive.current) return;

@@ -66,6 +66,7 @@ interface Checked {
   NativeStopRequest: Drift<'NativeStopRequest', contracts.NativeStopRequest, typeof run.NativeStopRequestSchema>;
   NativeRuntimeActionRequest: Drift<'NativeRuntimeActionRequest', contracts.NativeRuntimeActionRequest, typeof sync.NativeRuntimeActionRequestSchema>;
   SyncFrame: Drift<'SyncFrame', contracts.SyncFrame, typeof sync.SyncFrameSchema>;
+  SessionControlSnapshot: Drift<'SessionControlSnapshot', contracts.SessionControlSnapshot, typeof sync.SessionControlSnapshotSchema>;
   TimelineRow: Drift<'TimelineRow', contracts.TimelineRow, typeof sync.TimelineRowSchema>;
   TimelinePage: Drift<'TimelinePage', contracts.TimelinePage, typeof sync.TimelinePageSchema>;
   TimelineChanges: Drift<'TimelineChanges', contracts.TimelineChanges, typeof sync.TimelineChangesSchema>;

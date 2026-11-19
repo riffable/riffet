@@ -436,7 +436,6 @@ msgid "停止失败：{0}"
 msgstr "停止失败：{0}"
 
 #: src/app/session/ComposerDock.tsx
-#: src/app/session/Timeline.tsx
 msgid "停止并发送"
 msgstr "停止并发送"
 

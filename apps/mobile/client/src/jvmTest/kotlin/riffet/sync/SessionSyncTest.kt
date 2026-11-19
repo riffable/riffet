@@ -113,6 +113,54 @@ class SessionSyncTest {
     }
 
     @Test
+    fun helloControlBeatsABusyQueueGuessAndALowerRevision(): Unit = runBlocking {
+        val server = serve { request ->
+            when (request.path) {
+                "/api/v3/sessions/s1/sync" -> sseOpen(
+                    hello(
+                        "g1",
+                        phase = "busy",
+                        runs = "[${runJson("r1", "c1", state = "queued")}]",
+                        control = controlSnapshotJson(revision = 5, placement = "sending"),
+                    ),
+                    controlFrame(controlSnapshotJson(revision = 4, runtime = "failed", placement = "queued", actions = """["send_now"]""", canStop = true, active = true)),
+                    status("idle"),
+                )
+                else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
+            }
+        }
+        val store = store(server)
+        store.select(session)
+        withTimeout(5_000) { store.status.first { it?.phase == NativeStatusPhase.IDLE } }
+        assertEquals(5L, store.control.value?.revision)
+        assertEquals("ready", store.control.value?.runtime)
+        assertNull(store.control.value?.activeTurn)
+        assertEquals(emptyList(), store.queued.value)
+        assertEquals(emptyList(), store.actionsForQueued("r1", "c1"))
+    }
+
+    @Test
+    fun aLaterControlRevisionReplacesTheHelloSnapshot(): Unit = runBlocking {
+        val server = serve { request ->
+            when (request.path) {
+                "/api/v3/sessions/s1/sync" -> sseOpen(
+                    hello("g1", phase = "busy", runs = "[${runJson("r1", "c1", state = "queued")}]"),
+                    controlFrame(controlSnapshotJson(revision = 1, placement = "queued", actions = """["edit","cancel"]""", active = true, canStop = true)),
+                    controlFrame(controlSnapshotJson(revision = 2, placement = "sending")),
+                    status("idle"),
+                )
+                else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
+            }
+        }
+        val store = store(server)
+        store.select(session)
+        withTimeout(5_000) { store.status.first { it?.phase == NativeStatusPhase.IDLE } }
+        assertEquals(2L, store.control.value?.revision)
+        assertEquals("sending", store.control.value?.inbox?.single()?.placement)
+        assertEquals(emptyList(), store.queued.value)
+    }
+
+    @Test
     fun theDeviceCopyIsDrawnFirstAndResumedFromThenPagedUp(): Unit = runBlocking {
         val server = serve { request ->
             when {

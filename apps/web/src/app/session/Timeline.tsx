@@ -23,7 +23,7 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
-import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
+import { nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
 import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, taskLabel, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
@@ -113,8 +113,8 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at, pluginItems
 
 /**
  * The meta row is always one text line tall, or a finger's height where the pointer is a finger
- * (the copy button there is already that tall), so a queued message gaining 停止并发送 / 取消 and
- * losing them once it is sent changes what the row says, never its height. The actions stay inside
+ * (the copy button there is already that tall), so a message gaining 取消 and
+ * losing it once it is sent changes what the row says, never its height. The actions stay inside
  * that height: a target reaching past it would overlap the next action when the row wraps.
  */
 const statusRow = 'min-h-lh no-hover:min-h-11';
@@ -139,7 +139,7 @@ function MessageQuotes({ quotes }: { quotes: string[] }) {
   );
 }
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
   /** Same-turn agent output already follows this prompt, proving the CLI received it. */
@@ -164,7 +164,6 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   onCheckNativeRun?: (run: Run) => void;
   onContinueNativeRun?: (run: Run) => void;
   nativeRecoveries?: Record<string, NativeRunRecovery>;
-  onSendQueuedNow?: (run: Run) => void;
   onRestoreNativeRun?: (run: Run) => void;
 }) {
   const { t } = useLingui();
@@ -203,7 +202,6 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
           {run?.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown' && onRetryNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRetryNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>重试发送</Trans></button>}
           {!taskOutcome && needsCheck && run && onCheckNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCheckNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>检查状态</Trans></button>}
           {!taskOutcome && continueAction}
-          {run && inQueue(run) && onSendQueuedNow && <button type="button" disabled={runActionPending} title={t`停止并发送`} onClick={() => onSendQueuedNow(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>停止并发送</Trans></button>}
           {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
           {run && canRestoreUnsentRun(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
           {time && !sending && <time dateTime={time} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}

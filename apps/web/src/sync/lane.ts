@@ -4,7 +4,11 @@ import { blobPath, findUrl, outlineUrl, parseFrame, routeMissing, SYNC_PROTOCOL,
 import { isRow, LaneWindow, type PageMode, type WindowLimit } from './window';
 
 type Frame<T extends SyncFrame['type']> = Extract<SyncFrame, { type: T }>;
-/** What a lane hands on as it is: the session's state, not the transcript's. */
+/**
+ * What a lane hands on as it is: the session's state, not the transcript's.
+ * `hello` carries the connection's first `SessionControlSnapshot`; later `{ type: 'control' }` frames
+ * update it. Both reach `events.control`. Transcript frames (`snapshot`, `rows`, `reset`) do not.
+ */
 export type ControlFrame = Exclude<SyncFrame, { type: 'snapshot' | 'rows' | 'reset' | 'error' | 'caughtUp' }>;
 export type LaneConnection = 'connecting' | 'open' | 'retrying' | 'suspended' | 'outdated' | 'failed' | 'closed';
 /** How one page request ended; the same vocabulary as `useEarlierHistory`'s `EarlierLoad`. */
@@ -350,6 +354,8 @@ export class LaneSync {
         this.historyState = state;
         break;
       }
+      // Session control is not a transcript delta. Hello still returns above; this only continues to `events.control`.
+      case 'control': break;
     }
     this.options.events.control?.(frame);
   }

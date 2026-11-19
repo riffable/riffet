@@ -191,7 +191,16 @@ private struct QueueDockCard: View {
     var supportsSteer = false
     var supportsTargetedStop = false
     @Environment(\.palette) private var palette
-    private var canSteer: Bool { workbench.isConnected && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting }
+    private var canSteer: Bool {
+        if let control = workbench.control {
+            return workbench.isConnected && control.activeTurn?.canSteer == true && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting
+        }
+        return workbench.isConnected && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting
+    }
+    private func allows(_ action: String, _ run: Run) -> Bool {
+        guard let control = workbench.control else { return false }
+        return SessionStoreStateKt.allowsQueuedAction(control: control, runId: run.id, commandId: run.commandId, action: action)
+    }
 
     var body: some View {
         DockCard(expanded: true, label: String(localized: "等待发送", bundle: .riffet)) {
@@ -204,7 +213,7 @@ private struct QueueDockCard: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(workbench.queued, id: \.id) { run in queuedRun(run) }
-                    if workbench.status?.queue?.held?.reason == .unconfirmed {
+                    if (workbench.control?.held ?? workbench.status?.queue?.held)?.reason == .unconfirmed {
                         Text("等待上一条消息确认").riffetFont(.caption).foregroundStyle(palette.fg3)
                     }
                 }
@@ -218,21 +227,27 @@ private struct QueueDockCard: View {
         HStack(spacing: 0) {
             Text(run.prompt).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg).lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            let showsSteer = supportsSteer && workbench.status?.activeTurn != nil
+            let governed = workbench.control != nil
+            let showsSteer = governed ? allows("steer", run) : (supportsSteer && workbench.status?.activeTurn != nil)
+            let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
+            let showEdit = !governed || allows("edit", run)
+            let showCancel = !governed || allows("cancel", run)
             let usesSteer = showsSteer && canSteer
             if usesSteer {
                 Button { steer(run) } label: { Image(systemName: "arrow.turn.up.right").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                     .disabled(!canSteer).accessibilityLabel("补充到当前任务")
-            } else if supportsTargetedStop {
+            } else if showSendNow {
                 Button { sendNow(run) } label: { Image(systemName: "arrow.up").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                     .accessibilityLabel("停止并发送")
             }
+            if (usesSteer && showSendNow) || (showsSteer && !usesSteer) || showEdit || showCancel {
             Menu {
-                if usesSteer && supportsTargetedStop {
+                if usesSteer && showSendNow {
                     Button("停止并发送", systemImage: "arrow.up") { sendNow(run) }
                 } else if showsSteer {
                     Button("补充到当前任务", systemImage: "arrow.turn.up.right") { steer(run) }.disabled(!canSteer)
                 }
+                if showEdit {
                 Button("移回输入框", systemImage: "square.and.pencil") { Task { await workbench.perform {
                     if let taken = try await workbench.store.takeBackQueued(run: run) {
                         if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.text = taken.text } else { draft.text += "\n\n" + taken.text }
@@ -240,16 +255,24 @@ private struct QueueDockCard: View {
                         draft.references = mergeRestoredReferences(current: draft.references, restored: taken.context)
                     }
                 } } }
+                }
+                if showCancel {
                 Button("取消", systemImage: "trash", role: .destructive) { Task { await workbench.perform { _ = try await workbench.store.cancelRun(run: run) } } }
+                }
             } label: { Image(systemName: "ellipsis").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                 .accessibilityLabel("更多操作")
+            }
         }
         .riffetFont(.caption).foregroundStyle(palette.fg3)
         .disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run))
     }
 
     private func steer(_ run: Run) {
-        guard let target = workbench.status?.activeTurn?.target() else { return }
+        let target = workbench.status?.activeTurn?.target() ?? workbench.control?.activeTurn.flatMap { turn in
+            guard let nativeSessionId = turn.nativeSessionId, let turnId = turn.nativeTurnId ?? turn.turnId else { return nil }
+            return NativeTurnTarget(nativeSessionId: nativeSessionId, turnId: turnId)
+        }
+        guard let target else { return }
         Task { await workbench.perform { _ = try await workbench.store.steerQueued(run: run, target: target) } }
     }
     private func sendNow(_ run: Run) {

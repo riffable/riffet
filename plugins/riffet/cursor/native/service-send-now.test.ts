@@ -3,7 +3,8 @@ import { AppError } from '@riffet/plugin-api/kit';
 import { type AgentSessionView, type AgentTerminalView } from '@riffet/plugin-api/experimental/agent';
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
-import { NativeService } from './service.js';
+import type { CursorLive, CursorLiveStep } from './live.js';
+import { NativeService, type NativeServiceOptions } from './service.js';
 
 const project = { id: 'project-1', name: 'Project', cwd: '/srv/home/alice/project' };
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -76,7 +77,7 @@ class FakeCursorCli {
 const services: NativeService[] = [];
 afterEach(() => { while (services.length) services.pop()!.closeAll(); });
 
-function harness(cli: FakeCursorCli) {
+function harness(cli: FakeCursorCli, options: Pick<NativeServiceOptions, 'live' | 'pollMs'> = {}) {
   const session: AgentSessionView = {
     id: 'session-1', projectId: project.id, title: 'Conversation', state: 'running',
     model: 'gpt-5', mode: 'agent', approval: 'unrestricted', terminalId: 'terminal-1',
@@ -92,9 +93,19 @@ function harness(cli: FakeCursorCli) {
     keys: async (keys: string[]) => { for (const key of keys) cli.press(key); },
     paste: async (text: string) => { cli.bar += text; },
   };
-  const service = new NativeService(cursorPort(host), { configDir: '/tmp/riffet-test', cliPath: 'cursor-agent', pollMs: 25 });
+  const service = new NativeService(cursorPort(host), {
+    configDir: '/tmp/riffet-test', cliPath: 'cursor-agent', pollMs: options.pollMs ?? 25, ...(options.live ? { live: options.live } : {}),
+  });
   services.push(service);
   return { service, session };
+}
+
+async function settlePhase(service: NativeService, phase: string): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (service.status('session-1').phase === phase) return;
+    await pause(10);
+  }
+  throw new Error(`native status stayed ${service.status('session-1').phase}`);
 }
 
 describe('NativeService.deliverNow', () => {
@@ -158,6 +169,30 @@ describe('NativeService.deliverNow', () => {
     expect(fenced).toBe(0);
     expect(cli.keys).toEqual([]);
   }, 15_000);
+
+  it('checks the stop target before writing and aborts when it changed', async () => {
+    const changed = () => { throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'stop target changed', 409); };
+    const idle = new FakeCursorCli();
+    idle.bar = 'draft';
+    const idleHarness = harness(idle);
+    let fenced = 0;
+    await expect(idleHarness.service.deliverNow(idleHarness.session, 'new task', () => { fenced += 1; }, { checkTarget: changed }))
+      .rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
+    expect(fenced).toBe(0);
+    expect(idle.keys).toEqual([]);
+    expect(idle.bar).toBe('draft');
+    expect(idle.sent).toEqual([]);
+
+    const busy = new FakeCursorCli();
+    busy.submit('old task');
+    await pause(5);
+    const busyHarness = harness(busy);
+    await expect(busyHarness.service.deliverNow(busyHarness.session, 'new task', () => { fenced += 1; }, { checkTarget: changed }))
+      .rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
+    expect(fenced).toBe(0);
+    expect(busy.sent).toEqual(['old task']);
+    expect(busy.keys).toEqual([]);
+  });
 });
 
 describe('NativeService.interrupt', () => {
@@ -185,5 +220,26 @@ describe('NativeService.interrupt', () => {
     expect(cli.keys).toEqual(['C-c']);
     expect(cli.exited).toBe(false);
     expect(cli.turn).toBe('idle');
+  });
+
+  it('does not keep a stopped turn busy from the live step it left unsealed', async () => {
+    const cli = new FakeCursorCli();
+    cli.submit('old task');
+    await pause(5);
+    const step: CursorLiveStep = {
+      turn: 'generation', at: '2026-01-01T00:00:00.000Z', step: 'step-1', sealed: false,
+      parts: [{ type: 'text', text: 'partial answer' }],
+    };
+    const live = { read: () => step } as unknown as CursorLive;
+    const { service, session } = harness(cli, { live, pollMs: 60_000 });
+    session.nativeSessionId = 'chat-1';
+    const stop = service.subscribe(session.id, () => undefined);
+    try {
+      await settlePhase(service, 'busy');
+      await service.interrupt(session);
+      expect(cli.turn).toBe('idle');
+      expect(cli.keys).toEqual(['C-c']);
+      expect(service.status(session.id).phase).toBe('idle');
+    } finally { stop(); }
   });
 });

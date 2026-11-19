@@ -406,11 +406,10 @@ export class CursorBackend implements AgentBackend {
 
   async send(host: AgentHost, request: AgentSendRequest): Promise<void> {
     const { text } = await materializeNativeInput(attachments(host), request.input);
-    const { native, port, receipts } = this.parts(host, request.context.profile);
+    const { native, port, receipts, steering } = this.parts(host, request.context.profile);
     const session = port.getSession(request.context.session.id);
-    const deliver = request.now ? native.deliverNow.bind(native) : native.deliver.bind(native);
     const sentAt = Date.now();
-    await deliver(session, text, async ({ terminalId, epoch, chatId }) => {
+    const fence = async ({ terminalId, epoch, chatId }: { terminalId: string; epoch: number; chatId?: string }) => {
       const nativeSessionId = chatId ?? session.nativeSessionId;
       if (nativeSessionId) await host.setNativeSessionId(session.id, nativeSessionId);
       await host.commitDispatchFence(request.runId, {
@@ -420,7 +419,16 @@ export class CursorBackend implements AgentBackend {
         resolvedConfig: { model: session.model, mode: session.mode, approval: session.approval },
       });
       port.noteInputSent(request.runId);
-    });
+    };
+    if (request.now) {
+      const replaced = steering.activeTurn(session);
+      steering.rejectPending(session.id, 'Current task is stopping');
+      await native.deliverNow(session, text, fence, { checkTarget: () => host.checkStopTarget(session.id) });
+      const remaining = steering.activeTurn(port.getSession(session.id));
+      if (replaced && remaining?.nativeSessionId === replaced.nativeSessionId && remaining.turnId === replaced.turnId) {
+        steering.reject(session.id, 'Current task was replaced');
+      }
+    } else await native.deliver(session, text, fence);
     // The echo in the store can be a whole answer away; the CLI taking the prompt is not.
     const chatId = port.getSession(session.id).nativeSessionId;
     if (chatId) receipts.expect({ host, sessionId: session.id, chatId, runId: request.runId, commandId: request.commandId, text, sentAt });
@@ -515,6 +523,7 @@ export class CursorBackend implements AgentBackend {
     const { native, steering } = this.parts(host, context.profile);
     const sessionId = context.session.id;
     steering.bind(sessionId);
+    void steering.hydrate(context.session).catch(() => undefined);
     void steering.launchArgs().catch(() => undefined);
     const { tracker, listeners } = this.activityEntry(sessionId, native);
     listeners.add(report);

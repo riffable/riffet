@@ -53,6 +53,7 @@ import riffet.contracts.RunMetrics
 import riffet.contracts.RunState
 import riffet.contracts.ExternalSessionImport
 import riffet.contracts.Session
+import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.WorkbenchEvent
 import riffet.cache.createLocalFiles
 import riffet.cache.IndexHit
@@ -207,12 +208,19 @@ class SessionStore(
     val openedTimeline: StateFlow<OpenedTimeline> = Projection(core.state) { OpenedTimeline(it.selected?.id, it.loaded, it.timeline) }
     val status: StateFlow<NativeStatus?> = Projection(core.state) { it.status }
 
+    /**
+     * The server's control snapshot for the open session. Null until hello or a `control` frame.
+     * Queue membership, stop, steer, and per-item actions read this when it is present.
+     */
+    val control: StateFlow<SessionControlSnapshot?> = Projection(core.state) { it.control }
+
     val runs: StateFlow<List<Run>> = Projection(core.state) { it.runs }
 
     /**
-     * Follow-ups waiting for their turn ([messagePlace]): accepted ones, and while the session works,
-     * ones still submitting, whose dock actions wait for the server ([inQueue]). A newly created
-     * session's first prompt stays inline.
+     * Follow-ups waiting for their turn. With a [control] snapshot this is
+     * `inbox` entries whose placement is `queued` (a `sending` entry, including a new session's first
+     * message, stays out). Without one, it is [messagePlace]: accepted ones, and while the session
+     * works, ones still submitting, whose dock actions wait for the server ([inQueue]).
      */
     val queued: StateFlow<List<Run>> = Projection(core.state) { it.queued }
 
@@ -260,7 +268,7 @@ class SessionStore(
     /**
      * The open session's live state as one atomic snapshot: [selected], [interaction], [queued],
      * [uncertain], [runs], [status] (without its output rate), [working], [connection], [sendState],
-     * [history], [loadingHistory], [historyError], [cachedAt], [context], [loaded] and [subagents].
+     * [history], [loadingHistory], [historyError], [cachedAt], [context], [loaded], [control] and [subagents].
      * It is a projection of the single state, so every field belongs to the same moment.
      */
     val openSession: StateFlow<OpenSessionState> = Projection(core.state) { it.toOpenSession() }
@@ -552,7 +560,7 @@ class SessionStore(
                 state.copy(
                     epoch = state.epoch + 1, dial = state.dial + 1, sessionId = null, selected = null,
                     timeline = emptyList(), loaded = false, connection = RiffetConnectionState.Idle,
-                    status = null, interaction = null, subagents = emptyList(),
+                    status = null, interaction = null, control = null, subagents = emptyList(),
                 ).withoutOutputRate().withoutOpenDeliveries()
             }
         }
@@ -942,6 +950,12 @@ class SessionStore(
             current.activeTurn?.target() != target || state.uncertain.isNotEmpty()) return false
         return composer.steerQueued(run, target)
     }
+
+    /**
+     * Actions the control snapshot allows for a queued run. Null when no snapshot has arrived, so the
+     * caller keeps its previous rule; empty when the run is not a queued inbox entry.
+     */
+    fun actionsForQueued(runId: String, commandId: String): List<String>? = core.value.actionsForQueued(runId, commandId)
 
     /** Interrupts the running turn and promotes an already accepted queued run, keeping its keys. */
     @Throws(Exception::class)

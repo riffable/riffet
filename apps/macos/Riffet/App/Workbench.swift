@@ -120,6 +120,8 @@ final class Workbench {
     /// The native status without its live output rate (`outputRate` is its own flow, and the
     /// speed label reads it from the presentation).
     private(set) var status: NativeStatus?
+    /// The server's control snapshot. Nil until hello or a control frame; the composer then keeps its own rules.
+    private(set) var control: SessionControlSnapshot?
     private(set) var runs: [Run] = []
     private(set) var queued: [Run] = []
     private(set) var uncertain: [Run] = []
@@ -411,6 +413,7 @@ final class Workbench {
         let subagents = state.subagents
         if !Self.identical(subagents, self.subagents) { self.subagents = subagents }
         if state.status != status { status = state.status }
+        if state.control != control { control = state.control }
         if state.runs != runs { runs = state.runs }
         if state.queued != queued { queued = state.queued }
         if state.uncertain != uncertain { uncertain = state.uncertain }

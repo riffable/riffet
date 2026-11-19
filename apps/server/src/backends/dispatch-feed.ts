@@ -58,6 +58,7 @@ export class DispatchFeed {
       commitDispatchFence: (runId, binding) => service.commitDispatchFence(runId, binding),
       requestInterrupt: sessionId => service.requestInterrupt(sessionId),
       interrupt: (session, options) => service.interrupt(typeof session === 'string' ? session : session.id, options),
+      endTurn: (sessionId, turnId, status, at) => service.endTurn(sessionId, turnId, status, at),
     };
   }
 

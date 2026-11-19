@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { Run, SessionGoal } from '@contracts';
+import type { InboxAction, Run, SessionGoal } from '@contracts';
 import { IconArrowUp, IconCornerUpRight, IconChevronDown, IconCircle, IconCircleCheck, IconCircleDashed, IconEllipsis, IconListTodo, IconMessagesSquare, IconMinus, IconPencilLine, IconTarget, IconTrash2 } from '@/components/icons';
 import { Tip } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -161,7 +161,12 @@ export function TodoDock({ entries, running }: { entries: Record<string, unknown
 
 const queueAction = 'grid size-11 shrink-0 place-items-center rounded-full text-fg-3 transition-colors hover:bg-hover hover:text-fg disabled:opacity-50 md:size-6.5';
 
-export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendNow, onSteer, steerDisabled, onEdit, onRemove }: {
+/** Whether one queue action is offered. A server entry decides; a run it has not listed keeps the callback. */
+function offersQueueAction(actions: readonly InboxAction[] | undefined, name: InboxAction, fallback: boolean): boolean {
+  return actions ? actions.includes(name) : fallback;
+}
+
+export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendNow, onSteer, steerDisabled, onEdit, onRemove, inboxActions, steerUnlisted, sendUnlisted }: {
   runs: Run[];
   running: boolean;
   /** An earlier message whose delivery is unconfirmed holds the queue; it is settled on that message. */
@@ -174,6 +179,12 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
   steerDisabled?: boolean;
   onEdit?: (runId: string) => void;
   onRemove?: (runId: string) => void;
+  /** Server actions keyed by run id. No entry keeps the unlisted offer below, or `onSteer` / `onSendNow` when those are omitted. */
+  inboxActions?: ReadonlyMap<string, readonly InboxAction[]>;
+  /** Steer for a run `inboxActions` does not list. Omit to follow whether `onSteer` was passed. */
+  steerUnlisted?: boolean;
+  /** Stop-and-send for a run `inboxActions` does not list. Omit to follow whether `onSendNow` was passed. */
+  sendUnlisted?: boolean;
 }) {
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
@@ -184,8 +195,16 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
   const row = (run: Run, showLead: boolean) => {
     const blocked = pending?.(run.id) ?? false;
     const attachments = run.native?.input.attachmentIds.slice(0, 3) ?? [];
-    const steerPrimary = Boolean(onSteer && !steerDisabled);
-    const hasMore = Boolean(onEdit || onRemove || (steerPrimary ? onSendNow : onSteer));
+    const listed = inboxActions?.get(run.id);
+    // A listed action is the server's decision, so the local phase guess does not disable it.
+    const steerOn = offersQueueAction(listed, 'steer', steerUnlisted ?? Boolean(onSteer));
+    const sendOn = offersQueueAction(listed, 'send_now', sendUnlisted ?? Boolean(onSendNow));
+    const serverSteer = Boolean(listed?.includes('steer'));
+    const serverSend = Boolean(listed?.includes('send_now'));
+    const steerLocked = blocked || Boolean(steerDisabled) || (serverSteer ? false : !running);
+    const sendLocked = blocked || (serverSend ? false : !running);
+    const steerPrimary = steerOn && !steerDisabled;
+    const hasMore = Boolean(onEdit || onRemove || (steerPrimary ? sendOn : steerOn));
     return (
       <li key={run.id} className="flex min-h-11 min-w-0 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 md:min-h-9 md:gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -197,22 +216,22 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
           </span>}
           <span className="min-w-0 flex-1 text-sm text-fg-2 max-md:line-clamp-2 max-md:break-words md:truncate">{run.prompt}</span>
         </div>
-        {(onSteer || onSendNow || onEdit || onRemove) && <span className="flex shrink-0 items-center justify-end">
+        {(steerOn || sendOn || onEdit || onRemove) && <span className="flex shrink-0 items-center justify-end">
           {mobile ? <>
-            {steerPrimary && onSteer ? <Tip label={t`补充到当前任务`}><button type="button" aria-label={t`补充到当前任务`} disabled={blocked || !running} onClick={() => onSteer(run.id)} className={queueAction}><IconCornerUpRight className="size-3.5" /></button></Tip>
-              : onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={blocked || !running} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
+            {steerPrimary && onSteer ? <Tip label={t`补充到当前任务`}><button type="button" aria-label={t`补充到当前任务`} disabled={steerLocked} onClick={() => onSteer(run.id)} className={queueAction}><IconCornerUpRight className="size-3.5" /></button></Tip>
+              : sendOn && onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={sendLocked} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
             {hasMore && <DropdownMenu>
               <DropdownMenuTrigger asChild><button type="button" aria-label={t`更多`} disabled={blocked} className={queueAction}><IconEllipsis className="size-3.5" /></button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {!steerPrimary && onSteer && <DropdownMenuItem disabled={blocked || !running || steerDisabled} onSelect={() => onSteer(run.id)}><IconCornerUpRight /><Trans>补充到当前任务</Trans></DropdownMenuItem>}
-                {steerPrimary && onSendNow && <DropdownMenuItem disabled={blocked || !running} onSelect={() => onSendNow(run.id)}><IconArrowUp /><Trans>停止并发送</Trans></DropdownMenuItem>}
+                {!steerPrimary && steerOn && onSteer && <DropdownMenuItem disabled={steerLocked} onSelect={() => onSteer(run.id)}><IconCornerUpRight /><Trans>补充到当前任务</Trans></DropdownMenuItem>}
+                {steerPrimary && sendOn && onSendNow && <DropdownMenuItem disabled={sendLocked} onSelect={() => onSendNow(run.id)}><IconArrowUp /><Trans>停止并发送</Trans></DropdownMenuItem>}
                 {onEdit && <DropdownMenuItem disabled={blocked} onSelect={() => onEdit(run.id)}><IconPencilLine /><Trans>移回输入框编辑</Trans></DropdownMenuItem>}
                 {onRemove && <DropdownMenuItem disabled={blocked} variant="danger" onSelect={() => onRemove(run.id)}><IconTrash2 /><Trans>移出队列</Trans></DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>}
           </> : <>
-            {onSteer && <Tip label={t`补充到当前任务`}><button type="button" aria-label={t`补充到当前任务`} disabled={blocked || !running || steerDisabled} onClick={() => onSteer(run.id)} className={queueAction}><IconCornerUpRight className="size-3.5" /></button></Tip>}
-            {onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={blocked || !running} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
+            {steerOn && onSteer && <Tip label={t`补充到当前任务`}><button type="button" aria-label={t`补充到当前任务`} disabled={steerLocked} onClick={() => onSteer(run.id)} className={queueAction}><IconCornerUpRight className="size-3.5" /></button></Tip>}
+            {sendOn && onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={sendLocked} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
             {onEdit && <Tip label={t`移回输入框编辑`}><button type="button" aria-label={t`编辑`} disabled={blocked} onClick={() => onEdit(run.id)} className={queueAction}><IconPencilLine className="size-3.5" /></button></Tip>}
             {onRemove && <Tip label={t`移出队列`}><button type="button" aria-label={t`移出队列`} disabled={blocked} onClick={() => onRemove(run.id)} className={cn(queueAction, 'hover:text-danger')}><IconTrash2 className="size-3.5" /></button></Tip>}
           </>}
@@ -238,7 +257,7 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
 }
 
 /** Everything rendered above the composer card, in dock order: the goal, the todos, then the queue. */
-export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todos, runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendQueuedNow, onSteerQueued, steerDisabled, onEditQueued, onRemoveQueued, onQueueShown, followUps, plans }: {
+export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todos, runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendQueuedNow, onSteerQueued, steerDisabled, onEditQueued, onRemoveQueued, onQueueShown, followUps, plans, inboxActions, steerUnlisted, sendUnlisted }: {
   /** The session's side column lists the goal and todos whenever it is on screen, so these stand down then. */
   planInAside?: boolean;
   goal?: SessionGoal;
@@ -253,6 +272,12 @@ export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todo
   steerDisabled?: boolean;
   onEditQueued?: (runId: string) => void;
   onRemoveQueued?: (runId: string) => void;
+  /** Server actions keyed by run id. No entry keeps `onSteerQueued` / `onSendQueuedNow`, unless the unlisted flags say otherwise. */
+  inboxActions?: ReadonlyMap<string, readonly InboxAction[]>;
+  /** Steer for a queued run absent from `inboxActions`. Omit to follow whether `onSteerQueued` was passed. */
+  steerUnlisted?: boolean;
+  /** Stop-and-send for a queued run absent from `inboxActions`. Omit to follow whether `onSendQueuedNow` was passed. */
+  sendUnlisted?: boolean;
   /** Whether the queue card is on screen, from when it starts opening until it has finished closing. */
   onQueueShown?: (shown: boolean) => void;
   /** The conversation's pending send-later messages, drawn above the queue. */
@@ -277,7 +302,7 @@ export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todo
       <Collapse open={Boolean(showGoal)}>{heldGoal && <div className="pb-1.5"><GoalDock goal={heldGoal} /></div>}</Collapse>
       <Collapse open={Boolean(showTodos)}>{heldTodos && <div className="pb-1.5"><TodoDock entries={heldTodos} running={running} /></div>}</Collapse>
       <Collapse open={Boolean(followUps)}>{heldFollowUps && <div className="pb-1.5">{heldFollowUps}</div>}</Collapse>
-      <Collapse open={queue.length > 0}>{heldQueue && <div ref={queueRef}><QueueDock runs={queue.length ? queue : heldQueue} running={running} unconfirmed={unconfirmed} onRevealUnconfirmed={onRevealUnconfirmed} pending={pending} onSendNow={onSendQueuedNow} onSteer={onSteerQueued} steerDisabled={steerDisabled} onEdit={onEditQueued} onRemove={onRemoveQueued} /></div>}</Collapse>
+      <Collapse open={queue.length > 0}>{heldQueue && <div ref={queueRef}><QueueDock runs={queue.length ? queue : heldQueue} running={running} unconfirmed={unconfirmed} onRevealUnconfirmed={onRevealUnconfirmed} pending={pending} onSendNow={onSendQueuedNow} onSteer={onSteerQueued} steerDisabled={steerDisabled} onEdit={onEditQueued} onRemove={onRemoveQueued} inboxActions={inboxActions} steerUnlisted={steerUnlisted} sendUnlisted={sendUnlisted} /></div>}</Collapse>
     </div>
   );
 });

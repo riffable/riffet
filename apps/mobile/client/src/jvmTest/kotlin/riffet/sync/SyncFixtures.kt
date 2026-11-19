@@ -137,9 +137,10 @@ internal fun hello(
     runs: String = "[]",
     interaction: String = "null",
     turns: String = "[]",
+    control: String? = null,
 ): Pair<String, String> = "hello" to
     """{"type":"hello","protocol":3,"lane":"main","generation":"$generation","headSeq":$headSeq,"mode":"$mode","session":$SESSION_JSON,""" +
-    """"status":{"phase":"$phase"},"interaction":$interaction,"runs":$runs,"activities":[],"outline":{"turnCount":${if (turns == "[]") 0 else 1},"turns":$turns}}"""
+    """"status":{"phase":"$phase"},"interaction":$interaction,"runs":$runs,"activities":[],"outline":{"turnCount":${if (turns == "[]") 0 else 1},"turns":$turns}${control?.let { ""","control":$it""" } ?: ""}}"""
 
 internal fun row(key: String, pos: Long, seq: Long, text: String = key, kind: String = "assistant", extra: String = "", runId: String? = null, lastAt: String = "2026-10-25T00:00:0${pos % 10}Z"): String =
     """{"key":"$key","pos":$pos,"turn":"run:r1","seq":$seq,"rev":1,${runId?.let { "\"runId\":\"$it\"," } ?: ""}""" +
@@ -158,6 +159,24 @@ internal fun rows(generation: String, from: Long, to: Long, vararg upserts: Stri
 internal fun reset(generation: String): Pair<String, String> = "reset" to """{"type":"reset","generation":"$generation","reason":"rebuilt"}"""
 
 internal fun status(phase: String): Pair<String, String> = "status" to """{"type":"status","status":{"phase":"$phase"}}"""
+
+/** A control snapshot body. `placement` is `sending` or `queued`; the entry names [id] / [commandId]. */
+internal fun controlSnapshotJson(
+    revision: Long,
+    runtime: String = "ready",
+    placement: String = "queued",
+    id: String = "r1",
+    commandId: String = "c1",
+    actions: String = "[]",
+    canStop: Boolean = false,
+    canSteer: Boolean = false,
+    active: Boolean = false,
+): String {
+    val turn = if (active) """{"phase":"running","canStop":$canStop,"canSteer":$canSteer}""" else "null"
+    return """{"revision":$revision,"runtime":"$runtime","activeTurn":$turn,"inbox":[{"id":"$id","commandId":"$commandId","kind":"message","placement":"$placement","status":"$placement","prompt":{"text":"hi","attachmentIds":[],"context":[]},"createdAt":"2026-10-25T00:00:00Z","updatedAt":"2026-10-25T00:00:00Z","actions":$actions}],"capabilities":{"canStop":$canStop,"canSteer":$canSteer,"canSendNow":false},"activity":{}}"""
+}
+
+internal fun controlFrame(body: String): Pair<String, String> = "control" to """{"type":"control","control":$body}"""
 
 internal fun runJson(id: String, commandId: String, state: String = "running", delivery: String = "observed", at: String = "2026-10-25T00:00:00Z", intent: String? = null): String =
     """{"id":"$id","sessionId":"s1","commandId":"$commandId","prompt":"hi $id","state":"$state","createdAt":"$at","updatedAt":"$at",""" +

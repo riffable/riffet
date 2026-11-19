@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@lingui/core/macro';
-import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, LaneFind, Run, Session, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
+import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, LaneFind, Run, Session, SessionControlSnapshot, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
 import { api, listNativeSendRequests, removeNativeSendRequest } from '@/lib/api';
 import { createStore, useStore } from '@/lib/store';
 import { confirmSessionGone } from '@/lib/session-deletion';
@@ -52,11 +52,33 @@ export interface SyncExtras {
 }
 
 /** What the transcript reads of the engine, published at most once per frame. */
-interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; generation?: string }
-const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] } });
+interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; generation?: string; control?: SessionControlSnapshot }
+const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] }, control: undefined });
 
 /** Where an outline turn the rows do not hold stands in the turn list, until its rows are loaded. */
 const OUTLINE_TURN = 'outline-turn:';
+const EMPTY_TURN_STATUS: ReadonlyMap<string, TurnOutlineV3['status']> = new Map();
+
+/**
+ * Outline status keyed so a timeline turn can find it whether the row carries the folded turn key,
+ * the native turn id, or `run:<runId>` before those have been joined.
+ */
+function turnStatusMap(turns: readonly TurnOutlineV3[]): Map<string, TurnOutlineV3['status']> {
+  const map = new Map<string, TurnOutlineV3['status']>();
+  for (const turn of turns) {
+    if (turn.runId) map.set(`run:${turn.runId}`, turn.status);
+    map.set(turn.turnId, turn.status);
+  }
+  // The folded turn key is what timeline rows carry. It wins over an alias that collides with it.
+  for (const turn of turns) map.set(turn.turn, turn.status);
+  return map;
+}
+
+function sameTurnStatus(left: ReadonlyMap<string, TurnOutlineV3['status']>, right: ReadonlyMap<string, TurnOutlineV3['status']>): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, status] of right) if (left.get(key) !== status) return false;
+  return true;
+}
 
 /**
  * The conversation's user prompts for the rail and outline, in order, under
@@ -348,6 +370,8 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
         }
         case 'session': latest.current.onSessionChanged(frame.session); break;
       }
+      // The engine has already dropped a control frame whose revision went backwards. Read that, not the frame.
+      if (frame.type === 'hello' || frame.type === 'control') view.set({ control: sync.store.get().control });
     };
     const sync = new SessionSync({
       sessionId: session.id, transport: source?.transport ?? browserTransport, cache, visibility: documentVisibility, onControl: control, onClosed: () => { void confirmSessionGone(session.id); },
@@ -381,6 +405,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
           rows: sync.rows(), resetVersion: current.resetVersion, hasAfter: current.hasAfter, loadingAfter: current.loadingAfter,
           activities: sameActivities(activities, previous.activities) ? previous.activities : activities,
           outline: current.outline, ...(current.generation ? { generation: current.generation } : {}),
+          control: current.control,
         };
       });
     });
@@ -538,6 +563,14 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
     void engine.current?.loadOutline();
   }, [synced]);
   const { timelineVersion, turns, turnsVersion } = derived.current;
+  const turnStatusHeld = useRef<ReadonlyMap<string, TurnOutlineV3['status']>>(EMPTY_TURN_STATUS);
+  const turnStatusByTurn = useMemo(() => {
+    const next = turnStatusMap(synced.outline.turns);
+    const previous = turnStatusHeld.current;
+    if (sameTurnStatus(previous, next)) return previous;
+    turnStatusHeld.current = next;
+    return next;
+  }, [synced.outline]);
 
   useEffect(() => {
     if (!localRuns.length) return;
@@ -548,7 +581,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   const hasUnknownSubmission = runs.some((run) => run.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown');
   // The server says whether an unconfirmed delivery still holds the conversation (a steer whose turn is over does not); an older server leaves it to the runs.
   const queue = state.status.queue;
-  const hasUncertainSubmission = hasUnknownSubmission || (queue ? queue.held?.reason === 'unconfirmed' : runs.some((run) => run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt));
+  const controlHeld = synced.control?.held;
+  const hasUncertainSubmission = hasUnknownSubmission || (synced.control
+    ? controlHeld?.reason === 'unconfirmed'
+    : queue ? queue.held?.reason === 'unconfirmed' : runs.some((run) => run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt));
   const retryConnection = useCallback(() => engine.current?.retry(), []);
   const loadOlder = useCallback((): Promise<EarlierLoad> => engine.current?.pageUp() ?? Promise.resolve('none'), []);
   const loadLater = useCallback((): Promise<EarlierLoad> => engine.current?.pageDown() ?? Promise.resolve('none'), []);
@@ -611,7 +647,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   const seed = seedFor(session.id);
   const loaded = state.loaded || Boolean(seed && keepsInlineReceipt(seed) && !syncedSeeds.has(seed));
   return {
-    ...state, loaded, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion,
+    ...state, control: synced.control, loaded, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion, turnStatusByTurn,
     inlineRun, hasUnknownSubmission, hasUncertainSubmission, subagents, jobs, retryConnection,
     loadOlder, ...commands, respondInteraction, syncInteraction, ...extras,
   };

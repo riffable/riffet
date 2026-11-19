@@ -23,7 +23,7 @@ export interface SyncTransport {
 }
 
 /** Every frame type this client reads, and the heartbeat. Anything else a newer server sends is skipped. */
-export const FRAME_TYPES = ['hello', 'snapshot', 'rows', 'reset', 'status', 'interaction', 'runs', 'run', 'activities', 'outline', 'context', 'metrics', 'session', 'error', 'caughtUp', 'ping'] as const;
+export const FRAME_TYPES = ['hello', 'snapshot', 'rows', 'reset', 'status', 'interaction', 'runs', 'run', 'activities', 'outline', 'context', 'metrics', 'session', 'control', 'error', 'caughtUp', 'ping'] as const;
 const KNOWN = new Set<string>(FRAME_TYPES);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);

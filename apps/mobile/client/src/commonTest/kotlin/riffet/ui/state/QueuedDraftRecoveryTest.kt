@@ -95,4 +95,69 @@ class QueuedDraftRecoveryTest {
             assertEquals(emptyList(), requests.filter { it.startsWith("/api/attachments/") || it.contains("/native/runs/") })
         } finally { store.clear(); http.close() }
     }
+
+    @Test
+    fun aControlSnapshotQueuesOnlyInboxEntriesPlacedThere() {
+        val submitting = queued.copy(
+            id = "command-two", commandId = "command-two", prompt = "next",
+            native = queued.native!!.copy(fingerprint = "client-pending", stage = HTTP_PENDING),
+            createdAt = "2026-10-15T08:00:01Z",
+        )
+        val sending = snapshot(placement = "sending", id = "command-first", commandId = "command-first")
+        val first = submitting.copy(id = "command-first", commandId = "command-first", prompt = "hello")
+        val direct = StoreState(sessionId = "session-one", status = NativeStatus(NativeStatusPhase.BUSY), control = sending)
+            .withDeliveries(mapOf(first.key() to Delivery(first)))
+        // A brand-new session's first message is `sending`. A busy status must not put it in the dock.
+        assertEquals(emptyList(), direct.queued)
+        assertEquals(false, direct.canStop)
+        assertEquals(emptyList(), direct.actionsForQueued("command-first", "command-first"))
+        assertNull(StoreState().actionsForQueued("command-first", "command-first"))
+        assertNull(StoreState().canStop)
+
+        val queuedSnapshot = snapshot(
+            placement = "queued", id = queued.id, commandId = queued.commandId,
+            actions = listOf("send_now", "steer", "edit", "cancel"), active = true,
+        )
+        val dock = StoreState(sessionId = "session-one", status = NativeStatus(NativeStatusPhase.BUSY), control = queuedSnapshot)
+            .withDeliveries(mapOf(queued.key() to Delivery(queued), submitting.key() to Delivery(submitting)))
+        assertEquals(listOf(queued.id, submitting.id), dock.queued.map { it.id })
+        assertEquals(listOf("send_now", "steer", "edit", "cancel"), dock.actionsForQueued(queued.id, queued.commandId))
+        assertEquals(emptyList(), dock.actionsForQueued(submitting.id, submitting.commandId))
+        assertEquals(true, dock.canStop)
+        assertEquals(true, dock.canSteer)
+        assertTrue(allowsQueuedAction(queuedSnapshot, queued.id, queued.commandId, "send_now"))
+
+        val both = direct.withDeliveries(mapOf(first.key() to Delivery(first), submitting.key() to Delivery(submitting)))
+        val held = sending.copy(held = NativeQueueHold(NativeQueueHoldReason.WORKSPACE))
+        // The inbox already names the first message, so only the unclaimed copy still submitting stays.
+        assertEquals(listOf(submitting.id), both.copy(control = held).queued.map { it.id })
+        val claimed = sending.copy(activeTurn = ActiveTurnState(phase = "running", canStop = true, canSteer = true))
+        assertEquals(listOf(submitting.id), both.copy(control = claimed).queued.map { it.id })
+
+        val unseen = snapshot(placement = "queued", id = "run-x", commandId = "cmd-x", actions = listOf("cancel"))
+        val synthetic = StoreState(sessionId = "session-one", control = unseen).queued.single()
+        assertEquals("run-x", synthetic.id)
+        assertEquals("control-inbox", synthetic.native?.fingerprint)
+    }
+
+    private fun entry(id: String, commandId: String, placement: String, actions: List<String> = emptyList()) = InboxEntry(
+        id = id, commandId = commandId, kind = "message", placement = placement, status = placement,
+        prompt = NativeRunInput("hello", emptyList(), emptyList()),
+        createdAt = "2026-10-15T08:00:00Z", updatedAt = "2026-10-15T08:00:00Z", actions = actions,
+    )
+
+    private fun snapshot(
+        placement: String,
+        id: String,
+        commandId: String,
+        actions: List<String> = emptyList(),
+        active: Boolean = false,
+    ) = SessionControlSnapshot(
+        revision = 1,
+        runtime = "ready",
+        activeTurn = if (active) ActiveTurnState(phase = "running", canStop = true, canSteer = true) else null,
+        inbox = listOf(entry(id, commandId, placement, actions)),
+        capabilities = SessionControlCapabilities(canStop = active, canSteer = active, canSendNow = "send_now" in actions),
+        activity = NativeActivitySummary(),
+    )
 }

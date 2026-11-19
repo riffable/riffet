@@ -238,6 +238,8 @@ internal class SyncGate(initial: SyncCursor?) {
             if (!frame.retryable) throw SyncRejectedException(frame.code, frame.message)
             SyncVerdict(redial = "server error ${frame.code}")
         }
+        // Control is not a lane seq: pass it on, and do not move the cursor.
+        is SyncFrame.Control -> SyncVerdict(listOf(frame))
         is SyncFrame.Unknown -> when (frame.type) {
             HEARTBEAT -> SyncVerdict(listOf(frame), progressed = true)
             // A hello this build cannot read loses its control state; its rows still chain.

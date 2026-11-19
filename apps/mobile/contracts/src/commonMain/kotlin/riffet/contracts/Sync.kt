@@ -3,6 +3,7 @@
 package riffet.contracts
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.builtins.ListSerializer
@@ -183,7 +184,17 @@ data class TurnOutlineV3(
     val runId: String? = null,
 ) {
     @Serializable(with = TurnStatusSerializer::class)
-    enum class Status(val wire: String) { RUNNING("running"), COMPLETED("completed"), FAILED("failed"), CANCELLED("cancelled"), UNKNOWN("") }
+    enum class Status(val wire: String) {
+        RUNNING("running"),
+        COMPLETED("completed"),
+        FAILED("failed"),
+        CANCELLED("cancelled"),
+        /** The user stopped the turn, or a cancelled turn folded into the same end state. */
+        INTERRUPTED("interrupted"),
+        /** The turn ended without a confirmed result. */
+        OUTCOME_UNKNOWN("outcome_unknown"),
+        UNKNOWN(""),
+    }
 }
 
 @Serializable(with = SyncModeSerializer::class)
@@ -213,6 +224,8 @@ sealed interface SyncFrame {
         val outline: SyncOutline,
         /** The transcript is still being read; a [CaughtUp] follows once it is in the lane. */
         val catchingUp: Boolean = false,
+        /** Initial control snapshot. A hello replaces whatever revision the previous stream held. */
+        val control: SessionControlSnapshot? = null,
     ) : SyncFrame
 
     @Serializable
@@ -268,6 +281,11 @@ sealed interface SyncFrame {
 
     @Serializable
     data class SessionUpdate(val session: Session) : SyncFrame
+
+    /** The session's control snapshot. A client keeps it only when [SessionControlSnapshot.revision] did not go backwards. */
+    @Serializable
+    @SerialName("control")
+    data class Control(val control: SessionControlSnapshot) : SyncFrame
 
     @Serializable
     data class Error(val code: String, val message: String, val retryable: Boolean) : SyncFrame
@@ -326,6 +344,7 @@ internal object SyncFrameSerializer : KSerializer<SyncFrame> {
         "context" to SyncFrame.Context.serializer(),
         "metrics" to SyncFrame.Metrics.serializer(),
         "session" to SyncFrame.SessionUpdate.serializer(),
+        "control" to SyncFrame.Control.serializer(),
         "error" to SyncFrame.Error.serializer(),
         "caughtUp" to SyncFrame.CaughtUp.serializer(),
     )
@@ -344,6 +363,7 @@ internal object SyncFrameSerializer : KSerializer<SyncFrame> {
         is SyncFrame.Context -> "context"
         is SyncFrame.Metrics -> "metrics"
         is SyncFrame.SessionUpdate -> "session"
+        is SyncFrame.Control -> "control"
         is SyncFrame.Error -> "error"
         is SyncFrame.CaughtUp -> "caughtUp"
         is SyncFrame.Unknown -> null

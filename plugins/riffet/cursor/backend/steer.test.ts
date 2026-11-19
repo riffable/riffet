@@ -110,14 +110,22 @@ describe('Cursor strict tool-boundary steering', () => {
     expect(await bridge.launchArgs()).toEqual([]);
   });
 
-  it('requires a real tool-generation handshake and rejects stale terminal epochs before writing', async () => {
+  it('requires a real turn handshake, survives terminal epoch lease bumps, and rejects exited terminals', async () => {
     const f = await fixture(), request = f.request('one');
     await expect(f.bridge.enqueue(request, request.input.text)).rejects.toMatchObject({ code: 'STEER_TARGET_CHANGED' });
     await f.hook('preToolUse');
     expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'generation', ownerRunId: 'owner' });
+    // Opening/closing the terminal drawer bumps epoch without changing process identity.
     f.setEpoch(2);
-    await expect(f.bridge.enqueue(request, request.input.text)).rejects.toMatchObject({ code: 'STEER_TARGET_CHANGED' });
-    expect(f.fenced('run-one')).toBe(0);
+    expect(await f.bridge.enqueue(request, request.input.text)).toEqual({ deferred: true });
+    const hookResult = await f.hook('postToolUse');
+    expect(hookResult.additional_context).toContain('guide this tool result');
+    expect(f.fenced('run-one')).toBe(1);
+    // An exited terminal genuinely ends the target.
+    f.host.terminalRecords.set('pty', { ...f.host.terminalRecords.get('pty')!, state: 'exited' });
+    const second = f.request('two');
+    await expect(f.bridge.enqueue(second, second.input.text)).rejects.toMatchObject({ code: 'STEER_TARGET_CHANGED' });
+    expect(f.fenced('run-two')).toBe(0);
   });
 
   it('claims equal-text commands once across parallel hooks and confirms only actual persisted carriers', async () => {
@@ -325,5 +333,105 @@ describe('Cursor strict tool-boundary steering', () => {
     expect(f.events().find(event => event.type === 'run_completed')).toMatchObject({ nativeTurnId: 'generation', data: { nativeSessionId: 'chat', nativeTurnId: 'generation' } });
     await f.hook('sessionEnd');
     expect(f.events().filter(event => event.type === 'run_cancelled')).toHaveLength(0);
+  });
+});
+
+const observedRun = (turnId = 'generation', extra: Record<string, unknown> = {}) => ({
+  id: 'owner', sessionId: 's', commandId: 'original', state: 'running', delivery: 'observed',
+  nativeSessionId: 'chat', nativeTurnId: turnId, ...extra,
+}) as AgentRunRef;
+
+describe('Cursor active turn lifecycle', () => {
+  it('adopts the generation when the prompt is submitted, before any tool hook', async () => {
+    const f = await fixture();
+    expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+    await f.hook('beforeSubmitPrompt');
+    expect(f.bridge.activeTurn(f.session())).toMatchObject({ nativeSessionId: 'chat', turnId: 'generation', ownerRunId: 'owner' });
+    expect(f.native.notifyTurnChanged).toHaveBeenCalledWith('s');
+    const request = f.request('one');
+    await f.bridge.enqueue(request, request.input.text);
+    expect(f.fenced('run-one')).toBe(0);
+  });
+
+  it('replaces a different generation at submit time and does not revive one a stop retired', async () => {
+    const f = await fixture();
+    vi.mocked(f.native.turnState).mockReturnValue('open');
+    await f.hook('beforeSubmitPrompt');
+    const request = f.request('kept');
+    await f.bridge.enqueue(request, request.input.text);
+    await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('next');
+    expect(f.events().find(event => event.type === 'native_input_rejected')).toMatchObject({ data: { beforeWrite: true } });
+    expect(f.fenced('run-kept')).toBe(0);
+    await f.hook('stop', { generation_id: 'next', status: 'completed' });
+    await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
+    expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+  });
+
+  it('ignores a prompt hook from a child or a terminal that has exited', async () => {
+    const f = await fixture();
+    await f.hook('beforeSubmitPrompt', { parent_tool_call_id: 'parent-task' });
+    expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+    f.host.terminalRecords.set('pty', { ...f.host.terminalRecords.get('pty')!, state: 'exited' });
+    await f.hook('beforeSubmitPrompt');
+    expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+  });
+
+  it('restores the running turn after a restart when the store is open or not yet read', async () => {
+    const f = await fixture();
+    f.host.unfinished = [observedRun()];
+    await f.bridge.hydrate(f.session());
+    expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'generation', ownerRunId: 'owner' });
+    expect(f.native.notifyTurnChanged).toHaveBeenCalledWith('s');
+
+    const again = await fixture();
+    again.host.unfinished = [observedRun()];
+    vi.mocked(again.native.turnState).mockReturnValue('open');
+    await again.bridge.hydrate(again.session());
+    expect(again.bridge.activeTurn(again.session())).toMatchObject({ turnId: 'generation' });
+  });
+
+  it('does not restore a turn the store has finished, or one this bridge already ended', async () => {
+    for (const state of ['answered', 'superseded'] as const) {
+      const f = await fixture();
+      f.host.unfinished = [observedRun()];
+      vi.mocked(f.native.turnState).mockReturnValue(state);
+      await f.bridge.hydrate(f.session());
+      expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+    }
+    const ended = await fixture();
+    await ended.hook('beforeSubmitPrompt');
+    await ended.hook('stop', { status: 'completed' });
+    ended.host.unfinished = [observedRun()];
+    await ended.bridge.hydrate(ended.session());
+    expect(ended.bridge.activeTurn(ended.session())).toBeUndefined();
+  });
+
+  it('does not restore a steer, another terminal, or a session that is no longer running that turn', async () => {
+    const cases: Array<(f: Awaited<ReturnType<typeof fixture>>) => void> = [
+      f => { f.host.unfinished = [observedRun('generation', { intent: 'steer' })]; },
+      f => { f.host.unfinished = [observedRun('generation', { terminalId: 'other-pty' })]; },
+      f => { f.host.unfinished = [observedRun('generation', { delivery: 'dispatching' })]; },
+      f => { f.host.unfinished = [observedRun()]; f.host.terminalRecords.set('pty', { ...f.host.terminalRecords.get('pty')!, state: 'exited' }); },
+      f => { f.host.unfinished = [observedRun()]; f.setSession({ state: 'interrupted' }); },
+      f => { f.host.unfinished = [observedRun()]; f.setSession({ archivedAt: '2026-01-01T00:00:00.000Z' }); },
+      f => { f.host.unfinished = [observedRun()]; f.setSession({ terminalId: undefined }); },
+    ];
+    for (const prepare of cases) {
+      const f = await fixture();
+      prepare(f);
+      await f.bridge.hydrate(f.session());
+      expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+    }
+  });
+
+  it('keeps the turn already tracked instead of replacing it from the run record', async () => {
+    const f = await fixture();
+    await f.hook('beforeSubmitPrompt');
+    f.host.unfinished = [observedRun('other-turn')];
+    vi.mocked(f.native.notifyTurnChanged).mockClear();
+    await f.bridge.hydrate(f.session());
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('generation');
+    expect(f.native.notifyTurnChanged).not.toHaveBeenCalled();
   });
 });

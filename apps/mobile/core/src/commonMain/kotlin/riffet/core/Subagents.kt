@@ -89,9 +89,10 @@ private fun SubagentTranscript.state(notification: TimelineItem.TaskNotification
     // after a resume and still describe the old round, regardless of their delivery timestamp.
     when (status) {
         TurnOutlineV3.Status.RUNNING -> return SubagentState.RUNNING
-        TurnOutlineV3.Status.COMPLETED, TurnOutlineV3.Status.CANCELLED -> return SubagentState.DONE
+        TurnOutlineV3.Status.COMPLETED, TurnOutlineV3.Status.CANCELLED, TurnOutlineV3.Status.INTERRUPTED -> return SubagentState.DONE
         TurnOutlineV3.Status.FAILED -> return SubagentState.FAILED
-        else -> Unit
+        // A missing result is not a success. A later notification, or the running flag, still decides.
+        TurnOutlineV3.Status.OUTCOME_UNKNOWN, TurnOutlineV3.Status.UNKNOWN, null -> Unit
     }
     val current = when (running) {
         true -> SubagentState.RUNNING

@@ -29,6 +29,8 @@ final class Workbench {
     private(set) var selected: Session?
     private(set) var timeline: [TimelineItem] = []
     private(set) var status: NativeStatus?
+    /// The server's control snapshot. Nil until hello or a control frame; the composer then keeps its own rules.
+    private(set) var control: SessionControlSnapshot?
     private(set) var runs: [Run] = []
     private(set) var queued: [Run] = []
     private(set) var uncertain: [Run] = []
@@ -93,6 +95,7 @@ final class Workbench {
         subscriptions.observe(store.removedSessions) { [weak self] ids in self?.sessionsRemoved(ids) }
         subscriptions.observe(store.timeline) { [weak self] in self?.timeline = $0 }
         subscriptions.observe(store.status) { [weak self] in self?.status = $0 }
+        subscriptions.observe(store.control) { [weak self] in self?.control = $0 }
         subscriptions.observe(store.runs) { [weak self] in self?.runs = $0 }
         subscriptions.observe(store.queued) { [weak self] in self?.queued = $0 }
         subscriptions.observe(store.uncertain) { [weak self] in self?.uncertain = $0 }

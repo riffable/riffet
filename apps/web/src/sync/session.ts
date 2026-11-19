@@ -1,4 +1,4 @@
-import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, LaneFind, Run, RunMetrics, Session, StepMetrics, SyncLane, TimelineRow } from '@contracts';
+import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, LaneFind, Run, RunMetrics, Session, SessionControlSnapshot, StepMetrics, SyncLane, TimelineRow } from '@contracts';
 import { createStore, type Store } from '@/lib/store';
 import type { SyncCache } from './cache';
 import { LaneSync, type ControlFrame, type LaneConnection, type LaneOutline, type PageResult } from './lane';
@@ -56,6 +56,12 @@ export interface SessionSyncState {
   /** Output speed per run, from `metrics` frames. */
   metrics: ReadonlyMap<string, RunMetrics>;
   step?: StepMetrics;
+  /**
+   * Authoritative foreground turn, inbox, and actions. A `hello` replaces it and is that
+   * connection's revision baseline; a later `control` frame applies only when its revision has not
+   * gone backwards.
+   */
+  control?: SessionControlSnapshot;
 }
 
 export interface SessionSyncOptions {
@@ -276,8 +282,13 @@ export class SessionSync {
         this.store.set({
           status: frame.status, statusKnown: true, interaction: frame.interaction ?? null, runs: Array.isArray(frame.runs) ? frame.runs : [],
           activities: Array.isArray(frame.activities) ? frame.activities : [], context: frame.context, session: frame.session, outline: this.main.outline,
+          // This connection's baseline, including a snapshot that omits control or restarts the revision.
+          control: frame.control,
         });
         this.options.cache?.rememberContext(this.options.sessionId, frame.context, this.cacheEpoch);
+        break;
+      case 'control':
+        this.store.set((state) => !state.control || frame.control.revision >= state.control.revision ? { control: frame.control } : {});
         break;
       case 'status': this.store.set({ status: frame.status, statusKnown: true }); break;
       case 'interaction': this.store.set({ interaction: frame.interaction ?? null }); break;
