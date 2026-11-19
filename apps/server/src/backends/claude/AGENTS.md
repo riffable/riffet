@@ -35,6 +35,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 ## 外部行为
 
 - 屏幕：输入框、页脚 agent 列表与任务入口见 `apps/server/src/adapters/cli/claude-code.ts#claudeComposer`，对话框见 `screen-dialog.ts`。录制在 `fixtures/screens/2.1.302` 与 `2.1.322`，测试 `screen-fixtures.test.ts`。
+- 表格在屏幕上有两种画法（2.1.322 渲染器）：放得下时是框线表，表头居中、单元格按列折行并在行内上下居中；比窗格宽或单元格折行超过 4 行时改成逐条记录，每行 `列名: 值`，续行缩进 2 格，记录间是一行 `─`。流式中途从框线表改成记录时，已滚出的框线行留在上方。`live/markdown.ts#drawnTables` 把两种画法及这种拼接还原成 Markdown 表格，读不出就仍放代码块。
 - 新版本验证：`node --import tsx scripts/probe-claude-e2e.ts --capture apps/server/src/backends/claude/fixtures/screens`，让 `screen-fixtures.test.ts` 在新录制上通过，再提高 `launch.ts#CLAUDE_CLI_VERSIONS` 的 `testedThrough`。多键走屏只在该版本以内进行。
 - 转写 JSONL（`<projects>/<dir>/<sessionId>.jsonl`，子 agent 在 `subagents/agent-<id>.jsonl`）：CLI 成批写入，hook 即时到达，所以 hook 报告的新回合可能早于上一回合的结束行。录制在 `fixtures/transcript-hooks/<版本>`（与 hook 同一条时间线），测试 `recordings.test.ts`，重录用 `pnpm record claude <场景|all>`，漂移检查加 `--check`。场景含 `resume`、`compact`、`clear`、`stop-failure`；`/clear` 之后的新会话转写以 `2:` 为文件名前缀。
 - hook（UserPromptSubmit、Stop、StopFailure、PermissionRequest、PreToolUse、PreCompact 等）：入口 `hook-bridge.ts#ClaudeHookBridge`，改变回合状态的 hook 在会话未就绪时要等其运行时拉起。录制与转写同在 `fixtures/transcript-hooks/<版本>`，重录方式同上。

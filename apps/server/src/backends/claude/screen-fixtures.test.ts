@@ -134,13 +134,14 @@ const expectations: Record<string, (screen: string) => void> = {
     expect(turn.draft).toMatch(/\n1\. 至少一次投递，消费端按业务键去重，保证重复执行不产生重复副作用。\n2\. /);
     expect(turn.draft).toMatch(/\n4\. 超过上限的任务进入死信队列，保留原始载荷和最后一次错误，供人工排查。$/);
   },
-  // A finished answer: the repaint's copy of two code lines is dropped, the table kept as drawn.
+  // A finished answer: the repaint's copy of two code lines is dropped, the box table read back as Markdown.
   'live-seam': screen => {
     const turn = live(screen);
     expect(turn.kinds).toEqual(['text', 'other']);
     const text = screenMarkdown(turn.blocks[0]!.lines, 98);
     expect(text.match(/\} catch \(err\) \{/g)).toHaveLength(1);
-    expect(text).toContain('```\n┌──────────────────┬');
+    expect(text).toContain('\n\n| Guarantee | Behavior on failure | Typical use | Cost |\n| --- | --- | --- | --- |\n| At-most-once | Job may be lost, never duplicated | Metrics, non-critical telemetry | Cheapest, silently lossy |\n');
+    expect(text).toMatch(/\| Dead-lettered \| Parked after retry exhaustion \| Poison messages, bad payloads \| Needs alerting and a replay path \|\n\nNone of this/);
     expect(turn.draft).toBeUndefined();
   },
   // A monitor's page whose output box pushed the hints below a short pane.
@@ -180,4 +181,30 @@ it('keeps a CJK answer\'s own line breaks and its unparsed bold as prose', () =>
   expect(text).toContain('我的立场:**最重要的是 A。**但');
   expect(text).toContain('读法二:技术史层面。\\\nTransformer 的论文标题是 Attention Is All You Need。过去近十年');
   expect(text).toMatch(/短板:\n- X:XLA、XGBoost 之类,不是范式级。\n- W:/);
+});
+
+// A table that outgrew the pane mid-stream, as the TUI's renderer draws it: the box rows that scrolled out stay, and
+// the redraw below is records, its first one cut. Both halves read back as one table; a cell wrapped across lines joins.
+it('reads a table drawn as records, and the box rows a repaint left above them, as one Markdown table', () => {
+  const text = screenMarkdown([
+    '┌──────┬──────────┬──────────┐',
+    '│ 模块 │ 对标项目 │ 最大差距 │',
+    '├──────┼──────────┼──────────┤',
+    '│ 1 调 │ Temporal │ 不是真正 │',
+    '│ 度与 │ / Akka   │ 的串行   │',
+    '└──────┴──────────┴──────────┘',
+    '最大差距: workbench.db 和 journal.db',
+    '  启动时不做完整性检查',
+    '────────────────────────────────────────',
+    '模块: 3 时间线与同步',
+    '对标项目: Replicache / Zero',
+    '最大差距: 只读同步',
+  ], 98);
+  expect(text).toBe([
+    '| 模块 | 对标项目 | 最大差距 |',
+    '| --- | --- | --- |',
+    '| 1 调度与 | Temporal / Akka | 不是真正的串行 |',
+    '|  |  | workbench.db 和 journal.db 启动时不做完整性检查 |',
+    '| 3 时间线与同步 | Replicache / Zero | 只读同步 |',
+  ].join('\n'));
 });
