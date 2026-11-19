@@ -1,32 +1,18 @@
-import { readContextFile } from '../../context-references/read-file.js';
-import { projectShareRollout } from './share-read.js';
+import { resolve as resolvePath } from 'node:path';
 import { queryDirectory } from '../shared/query-directory.js';
-import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
-import { readCodexShare } from './share-read.js';
-import { homedir, tmpdir } from 'node:os';
-import { basename, resolve as resolvePath } from 'node:path';
-import { EXTERNAL_CACHE_MS, holderOf, listExternalThreads, scanProcesses, type ProcessRow } from './external.js';
 import type {
-  CommandObservation, ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendUsage, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest,
-  LoadedExtensions, NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Session,
+  ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendUsage, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest,
+  NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
 import type { CodexAppServerClient, CodexAppServerFactory } from '../shared/codex-app-server.js';
-import { referencedSkills, slashTokens } from '../shared/slash-tokens.js';
-import { commandIdOfMessageId } from './message-tag.js';
-import { asArray, asRecord, str } from './util.js';
+import { str } from './util.js';
 import { CodexAppServer as CodexAppServerProcess } from '../shared/codex-app-server.js';
-import { codexFlavor, usesOwnProvider, type CodexFlavor } from './flavors.js';
-import { fetchGatewayModels } from '../shared/gateway-models.js';
-import { findCodexRollout, RolloutUsageReader } from './rollout-usage.js';
-import type { UsageTranscript } from '../../stats/types.js';
+import { codexFlavor, type CodexFlavor } from './flavors.js';
 import { codexTrustArgs } from '../shared/cli-trust.js';
-import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
+import { resolveCliExecutable } from '../shared/cli-resolve.js';
 import { AppError, sessionInTerminal } from '../../errors.js';
 import { materializeAttachment } from '../attachments.js';
 import type {
-  ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec,
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeDriverCommandObservation, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig,
   NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
   NativeDriverExtensions, NativeDriverExternal, NativeDriverStored, NativePrewarmRequest, NativePrewarmResult,
@@ -37,32 +23,33 @@ import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
   normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, assertSupportedProfile, providerEnv,
-  collaborationModeOf, probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion, readCodexOwnerGateway, hasCodexChatgptAuth,
+  collaborationModeOf, STEER_MIN_VERSIONS, readCodexOwnerGateway, hasCodexChatgptAuth,
 } from './config.js';
-import { listModels, readUsage } from './catalog.js';
-import { parseCodexNativeCommand, codexNativeSlashItems } from './commands.js';
-import { modelSourceOf, prepareSource, resolveSource, sourceCatalog } from '../shared/model-source.js';
+import { CodexAuxiliary } from './auxiliary.js';
+import { CodexExternalSessions } from './external-sessions.js';
+import { capabilitiesOf, availabilityOf } from './availability.js';
+import { commandObservationOf } from './command-observation.js';
+import { CodexJournalFeeds } from './journal-feeds.js';
+import { CodexListeners } from './listeners.js';
+import { CodexSkills } from './skills.js';
+import { CodexExtensionDriver } from './extension-driver.js';
+import { listModelsOf, usageOf } from './model-list.js';
+import { readContextTranscript, readShareTranscript, usageTranscript } from './stored-reads.js';
+import { resumeCommand, terminalLaunch, type TerminalLaunchContext } from './terminal-launch.js';
+import { parseCodexNativeCommand } from './commands.js';
+import { modelSourceOf, prepareSource, resolveSource } from '../shared/model-source.js';
 import { modelFamily } from '../shared/model-selection.js';
-import { extensionDiagnostic, fileRuntimeEntries, readConfiguredMcpNames, readMcpRuntime, readMcpServers } from './extensions.js';
-import { RIFFET_MCP_NAME } from '../../riffet-mcp/service.js';
-import { safeProviderError, safeTurnError } from './errors.js';
+import { safeProviderError } from './errors.js';
 import { isKnownBlockingTitle } from '../../agent-host/interaction-choice.js';
 import { CodexSessionRuntime, type NativeRuntimeHooks } from './runtime.js';
-import { rolloutItemSpans } from './item-spans.js';
-import { CodexTranscriptSource, newTopicAfter, newTopicBoundary, type CodexLiveFeed } from './transcript-source.js';
-import { codexStanding, standingContextItem, standingSkill, useStandingSkillRoots, type CodexStanding } from './standing.js';
+import { newTopicBoundary } from './transcript-source.js';
+import { codexStanding, standingContextItem, type CodexStanding } from './standing.js';
 import { codexObservation, type CodexObservation } from './observation.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
-import type { RpcItem } from './types.js';
-
-/** How long the settings page is answered from the last read of whether commands are observed. */
-const OBSERVATION_READ_MS = 5 * 60_000;
 
 const startNativeAppServer: CodexAppServerFactory = options => CodexAppServerProcess.start(options);
 
 const PROFILE_ID = 'local';
-/** How long a rollout must sit unwritten before its last turn is taken as finished. */
-const ROLLOUT_QUIET_MS = 60_000;
 /**
  * TRAE draws a command approval on its TUI and also reports the same request through a connected
  * app-server. The protocol card is the one to answer then; reading the screen too would keep a copy
@@ -75,15 +62,6 @@ interface PendingRuntime {
   promise: Promise<CodexSessionRuntime>;
 }
 
-type NativeListener = (message: NativeControlMessage) => void;
-
-interface CodexSessionListeners {
-  listeners: Set<NativeListener>;
-  unsubscriptions: Map<NativeListener, () => void>;
-  runtime?: CodexSessionRuntime;
-  binding?: Promise<void>;
-}
-
 /**
  * A Codex turn is settled by its own `turn/completed`, never by an idle status; closing the driver
  * detaches the reusable app-server that per-session disposal would stop.
@@ -92,23 +70,23 @@ export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, s
 
 export class CodexBackendAdapter implements NativeBackendDriver {
   readonly extensions: NativeDriverExtensions = {
-    loaded: (host, project, profile) => this.loadedExtensions(host, project, profile),
-    runtime: (host, project, profile) => this.extensionRuntime(host, project, profile),
-    skillStates: (host, project, profile) => this.skillStates(host, project, profile),
-    setSkillEnabled: (host, project, profile, path, enabled) => this.setSkillEnabled(host, project, profile, path, enabled),
-    reload: (host, project, profile) => this.reloadExtensions(host, project, profile),
-    authorizeMcp: (host, project, profile, name) => this.authorizeMcp(host, project, profile, name),
+    loaded: (host, project, profile) => this.extensionDriver.loaded(host, project, profile),
+    runtime: (host, project, profile) => this.extensionDriver.runtime(host, project, profile),
+    skillStates: (host, project, profile) => this.extensionDriver.skillStates(host, project, profile),
+    setSkillEnabled: (host, project, profile, path, enabled) => this.extensionDriver.setSkillEnabled(host, project, profile, path, enabled),
+    reload: (host, project, profile) => this.extensionDriver.reload(host, project, profile),
+    authorizeMcp: (host, project, profile, name) => this.extensionDriver.authorize(host, project, profile, name),
   };
   readonly external: NativeDriverExternal = {
-    list: (host, profile, options) => this.listExternalSessions(host, profile, options),
-    holder: (host, profile, id) => this.externalHolder(host, profile, id),
-    terminalLaunch: (host, session, project, profile) => this.terminalLaunch(host, session, project, profile),
-    resumeCommand: (session, profile) => this.resumeCommand(session, profile),
+    list: (host, profile, options) => this.externalSessions.list(host, profile, options),
+    holder: (host, profile, id) => this.externalSessions.holder(host, profile, id),
+    terminalLaunch: (host, session, project, profile) => terminalLaunch(this.launchContext(), host, session, project, profile),
+    resumeCommand: (session, profile) => resumeCommand(this.launchContext(), session, profile),
   };
   readonly stored: NativeDriverStored = {
-    usage: (host, session, profile, known) => this.usageTranscript(host, session, profile, known),
-    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
-    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+    usage: (_host, session, profile, known) => usageTranscript(this.flavor, session, profile, known),
+    context: (_host, session, profile, options) => readContextTranscript(this.flavor, session, profile, options),
+    share: (host, session, profile, options) => readShareTranscript(this.flavor, host, session, profile, options),
   };
   readonly id: CodexFlavor['id'];
   readonly label: string;
@@ -119,15 +97,12 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private readonly restarting = new Set<string>();
   private readonly profileSwitchTimers = new Map<string, NodeJS.Timeout>();
   private readonly profileSwitchFailures = new Set<string>();
-  private readonly sessionListeners = new Map<string, CodexSessionListeners>();
-  /** The journal's transcript sources following each session's runtime (`transcript`). */
-  private readonly feeds = new Map<string, Set<CodexLiveFeed>>();
-  /** Last confirmed skill names distinguish inline invocations from prose during a catalog outage. */
-  private readonly knownSkillNames = new Map<string, Set<string>>();
-  /** Recent `listExternalSessions` results: a scan starts a management app-server. */
-  private readonly externalScans = new Map<string, { at: number; entries: ExternalSessionEntry[] }>();
-  /** Cached model list from `codex app-server` for auxiliary pickers (`5m` TTL). */
-  private readonly auxiliaryCatalogs = new Map<string, { at: number; models: ModelInfo[] }>();
+  private readonly listeners: CodexListeners;
+  private readonly journalFeeds: CodexJournalFeeds;
+  private readonly auxiliary: CodexAuxiliary;
+  private readonly externalSessions: CodexExternalSessions;
+  private readonly skills: CodexSkills;
+  private readonly extensionDriver: CodexExtensionDriver;
   private closing = false;
   private closeTask: Promise<void> | undefined;
   /** An app-server with a new thread, started for the next new conversation of the project a page shows (`launch.ts`). */
@@ -146,32 +121,40 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     // Only Codex itself has the hooks that observation runs on; TRAE's fork is not assumed to.
     if (options.stateDir && flavor.id === 'codex') this.observation = codexObservation(options.stateDir);
     if (this.observation) {
-      // Read, and trusted, through a management server started with the same hooks a conversation's server gets:
-      // the trust is keyed by what the hooks are, so it holds for every later launch.
-      const observation = this.observation;
-      // A read starts a server, so a settings page shown again within a few minutes is answered from the last one.
-      const read = new Map<string, { at: number; state: CommandObservation['state'] }>();
-      const cacheKey = (profile: NativeBackendProfileConfig) => JSON.stringify([executableOf(profile, this.flavor), resolvePath(this.flavor.stateHome(profile.config))]);
-      const through = async (profile: NativeBackendProfileConfig, act: (transport: CodexAppServerClient, cwd: string) => Promise<CommandObservation['state']>): Promise<CommandObservation> => {
-        const executable = executableOf(profile, this.flavor);
-        const hooks = await observation.launchArgs(executable);
-        if (!hooks.length) return { state: 'unsupported' };
-        const cwd = await queryDirectory(undefined, profile);
-        const state = await this.withTransport(undefined, profile, undefined, transport => act(transport, cwd), hooks);
-        read.set(cacheKey(profile), { at: Date.now(), state });
-        return { state };
-      };
-      this.commandObservation = {
-        state: async (_host, profile) => {
-          const known = read.get(cacheKey(profile));
-          if (known && Date.now() - known.at < OBSERVATION_READ_MS) return { state: known.state };
-          return await through(profile, (transport, cwd) => observation.probe(transport, cwd));
-        },
-        trust: (_host, profile) => through(profile, (transport, cwd) => observation.trust(transport, cwd)),
-      };
+      this.commandObservation = commandObservationOf({ flavor, observation: this.observation, withTransport: (project, profile, session, read, extraArgs) => this.withTransport(project, profile, session, read, extraArgs) });
     }
     this.id = flavor.id;
     this.label = flavor.label;
+    // Each context reads `withTransport` through the adapter on every call, so a replaced reader is seen.
+    const withTransport = <T>(project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, read: (transport: CodexAppServerClient) => Promise<T>) => this.withTransport(project, profile, session, read);
+    this.auxiliary = new CodexAuxiliary({ flavor, startAppServer, withTransport });
+    this.externalSessions = new CodexExternalSessions({
+      flavor,
+      withManagementTransport: (...args) => this.withManagementTransport(...args),
+      ownAddresses: () => [...this.runtimes.values()].flatMap(runtime => runtime.transport?.remoteAddress ?? []),
+    });
+    this.skills = new CodexSkills({ withTransport, standingOf: (host, project) => this.standingOf(host, project) });
+    this.journalFeeds = new CodexJournalFeeds({
+      flavor,
+      observation: this.observation,
+      runtime: sessionId => this.runtimes.get(sessionId),
+      restarting: sessionId => this.restarting.has(sessionId),
+      profileSwitchPending: session => this.profileSwitchPending(session),
+      activeProfile: (...args) => this.activeProfile(...args),
+      externalHolder: (host, profile, threadId) => this.externalSessions.holder(host, profile, threadId),
+      ensureRuntime: (...args) => this.ensureRuntime(...args),
+    });
+    this.listeners = new CodexListeners({
+      runtime: sessionId => this.runtimes.get(sessionId),
+      ensureRuntime: (...args) => this.ensureRuntime(...args),
+      activeProfile: (...args) => this.activeProfile(...args),
+    });
+    this.extensionDriver = new CodexExtensionDriver({
+      runtimes: this.runtimes,
+      withTransport,
+      withManagementTransport: (...args) => this.withManagementTransport(...args),
+      standingOf: (host, project) => this.standingOf(host, project),
+    });
     this.warm = new WarmPool<CodexWarm>({ label: flavor.id, stop: async warm => { warm.mcp?.revoke(); await warm.transport.dispose(); } });
     // TRAE background children outlive the foreground turn independently. Keep observing them,
     // but their activity alone must not hold the parent session/sidebar in running.
@@ -195,159 +178,21 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   invalidateModels(): void {
-    this.auxiliaryCatalogs.clear();
+    this.auxiliary.invalidate();
   }
 
-  async auxiliaryModels(profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
-    signal?.throwIfAborted();
-    const key = JSON.stringify([profile.id, executableOf(profile, this.flavor), this.flavor.stateHome(profile.config)]);
-    const cached = this.auxiliaryCatalogs.get(key);
-    if (cached && Date.now() - cached.at < 5 * 60_000) return cached.models;
-    const models = await this.withTransport(undefined, profile, undefined, transport => listModels(transport, this.flavor));
-    signal?.throwIfAborted();
-    this.auxiliaryCatalogs.set(key, { at: Date.now(), models });
-    return models;
+  auxiliaryModels(profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<ModelInfo[]> {
+    return this.auxiliary.models(profile, signal);
   }
 
-  async auxiliaryComplete(profile: NativeBackendProfileConfig, request: {
-    model: string; system: string; content: string; maxOutputTokens: number; timeoutMs: number; signal?: AbortSignal;
-  }): Promise<string> {
-    const result = await this.runCodexAuxiliary(profile, {
-      model: request.model,
-      system: request.system,
-      prompt: request.content,
-      timeoutMs: request.timeoutMs,
-      signal: request.signal,
-      effort: 'low',
-    });
-    return result.text;
+  auxiliaryComplete(profile: NativeBackendProfileConfig, request: Parameters<CodexAuxiliary['complete']>[1]): Promise<string> {
+    return this.auxiliary.complete(profile, request);
   }
 
-  async auxiliaryStreamChat(profile: NativeBackendProfileConfig, request: {
-    model: string; system?: string; messages: Array<{ role: 'user' | 'assistant'; content: string }>;
-    maxOutputTokens: number; idleTimeoutMs: number; signal?: AbortSignal; effort?: string; fast?: boolean;
-    onDelta(kind: 'text' | 'reasoning', text: string): void;
-  }): Promise<{ text: string; reasoning: string; cutOff: boolean; model?: string; inputTokens?: number; outputTokens?: number }> {
-    const prompt = request.messages.length <= 1
-      ? request.messages[0]?.content ?? ''
-      : request.messages.map(message => `${message.role === 'user' ? 'User' : 'Assistant'}:\n${message.content}`).join('\n\n');
-    return await this.runCodexAuxiliary(profile, {
-      model: request.model,
-      system: request.system,
-      prompt,
-      timeoutMs: request.idleTimeoutMs,
-      signal: request.signal,
-      effort: request.effort,
-      fast: request.fast,
-      onDelta: request.onDelta,
-    });
+  auxiliaryStreamChat(profile: NativeBackendProfileConfig, request: Parameters<CodexAuxiliary['streamChat']>[1]): ReturnType<CodexAuxiliary['streamChat']> {
+    return this.auxiliary.streamChat(profile, request);
   }
 
-  private async runCodexAuxiliary(profile: NativeBackendProfileConfig, options: {
-    model: string; system?: string; prompt: string; timeoutMs: number; signal?: AbortSignal;
-    effort?: string; fast?: boolean; onDelta?: (kind: 'text' | 'reasoning', text: string) => void;
-  }): Promise<{ text: string; reasoning: string; cutOff: boolean; model?: string; inputTokens?: number; outputTokens?: number }> {
-    options.signal?.throwIfAborted();
-    assertSupportedProfile(profile, this.flavor);
-    const cwd = tmpdir();
-    let threadId: string | undefined;
-    let turnId: string | undefined;
-    let text = '';
-    let reasoning = '';
-    let settled = false;
-    let resolveDone!: () => void;
-    let rejectDone!: (error: Error) => void;
-    const done = new Promise<void>((resolve, reject) => { resolveDone = resolve; rejectDone = reject; });
-    let timer: NodeJS.Timeout | undefined;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (error) rejectDone(error); else resolveDone();
-    };
-    const touch = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => finish(new Error(`Codex did not complete within ${Math.round(options.timeoutMs / 1000)} s`)), options.timeoutMs);
-      timer.unref?.();
-    };
-    const transport = await this.startAppServer({
-      executable: executableOf(profile, this.flavor),
-      args: [...this.flavor.args(profile.config), '-c', 'check_for_update_on_startup=false'],
-      cwd,
-      env: providerEnv(profile, this.flavor),
-      onNotification: (method, params) => {
-        const eventThread = str(params.threadId) ?? str(asRecord(params.turn)?.threadId);
-        if (threadId && eventThread && eventThread !== threadId) return;
-        if (method === 'item/agentMessage/delta') {
-          const delta = typeof params.delta === 'string' ? params.delta : '';
-          if (delta) { touch(); text += delta; options.onDelta?.('text', delta); }
-        } else if (method === 'item/reasoning/summaryTextDelta' || method === 'item/reasoning/textDelta') {
-          const delta = typeof params.delta === 'string' ? params.delta : '';
-          if (delta) { touch(); reasoning += delta; options.onDelta?.('reasoning', delta); }
-        } else if (method === 'turn/completed') {
-          const turn = asRecord(params.turn);
-          const completedId = str(turn?.id);
-          if (turnId && completedId && completedId !== turnId) return;
-          const status = str(turn?.status);
-          if (status === 'failed') {
-            const message = str(asRecord(turn?.error)?.message) ?? 'Codex turn failed';
-            finish(new Error(message));
-          } else {
-            finish();
-          }
-        }
-      },
-      onServerRequest: async request => { throw new Error(`Unsupported auxiliary Codex request: ${request.method}`); },
-      onExit: error => finish(error),
-    });
-    const onAbort = () => {
-      if (threadId && turnId) void transport.request('turn/interrupt', { threadId, turnId }).catch(() => undefined);
-      finish(options.signal?.reason instanceof Error ? options.signal.reason : new Error('Codex auxiliary request aborted'));
-    };
-    options.signal?.addEventListener('abort', onAbort, { once: true });
-    touch();
-    try {
-      const mcpNames = await readConfiguredMcpNames(transport, cwd).catch(() => new Set<string>());
-      const threadConfig: Record<string, unknown> = {
-        project_doc_max_bytes: 0,
-        'features.plugins': false,
-        'features.apps': false,
-        'skills.bundled.enabled': false,
-        ...Object.fromEntries([...mcpNames].filter(name => /^[\w-]+$/.test(name)).map(name => [`mcp_servers.${name}.enabled`, false])),
-      };
-      const baseInstructions = [
-        options.system?.trim(),
-        'Answer directly with text only. Do not run commands, read files, or call tools.',
-      ].filter(Boolean).join('\n\n');
-      const started = await transport.request<{ thread?: { id?: string } }>('thread/start', {
-        cwd,
-        model: options.model || null,
-        approvalPolicy: 'never',
-        sandbox: 'read-only',
-        ephemeral: true,
-        baseInstructions,
-        developerInstructions: '',
-        config: threadConfig,
-      });
-      threadId = started.thread?.id;
-      if (!threadId) throw new Error('Codex did not return a thread id');
-      const turned = await transport.request<{ turn?: { id?: string }; turnId?: string }>('turn/start', {
-        threadId,
-        input: [{ type: 'text', text: options.prompt }],
-        model: options.model || null,
-        sandboxPolicy: { type: 'readOnly', networkAccess: false },
-        effort: options.effort && options.effort !== 'default' ? options.effort : null,
-        ...(options.fast ? { serviceTier: 'priority' } : {}),
-      });
-      turnId = turned.turn?.id ?? str(turned.turnId);
-      await done;
-      return { text, reasoning, cutOff: false, model: options.model };
-    } finally {
-      clearTimeout(timer);
-      options.signal?.removeEventListener('abort', onAbort);
-      await transport.dispose().catch(() => undefined);
-    }
-  }
 
   continuationKey(profile: NativeBackendProfileConfig): string {
     return this.id === 'codex' ? resolvePath(this.flavor.stateHome(profile.config)) : profile.id;
@@ -438,12 +283,12 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const replacement = new CodexSessionRuntime(host, { ...session, nativeRuntime: undefined, terminalId: undefined }, project, target, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
     this.restarting.add(sessionId);
     const task = Promise.resolve().then(() => previous.switchProfile(replacement, {
-      feed: () => this.feedOf(sessionId),
+      feed: () => this.journalFeeds.feedOf(sessionId),
       publish: runtime => { this.runtimes.set(sessionId, runtime); },
-      bind: runtime => this.bindListeners(sessionId, runtime),
+      bind: runtime => this.listeners.bind(sessionId, runtime),
       restore: () => {
         const restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
-        restored.attachFeed(this.feedOf(sessionId));
+        restored.attachFeed(this.journalFeeds.feedOf(sessionId));
         this.runtimes.set(sessionId, restored);
         return restored;
       },
@@ -458,63 +303,12 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     finally { this.restarting.delete(sessionId); if (this.creating.get(sessionId) === entry) this.creating.delete(sessionId); }
   }
 
-  async capabilities(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendCapabilities> {
-    // Probe results are shared with availability/TUI discovery and cached per executable. Never
-    // test steering by writing to a user's live turn; unrecognized or older builds stay disabled.
-    const supportsSteer = supportsSteerVersion((await probeAppServer(executableOf(profile, this.flavor))).version, this.flavor.id);
-    return {
-      supportsSessionReferences: true,
-      backendId: this.id,
-      label: this.label,
-      modes: this.flavor.modes,
-      permissions: this.flavor.id === 'traex' ? [
-        { id: 'on-request', label: 'Workspace Edit' },
-        { id: 'auto-review', label: 'Auto Mode' },
-        { id: 'danger-full-access', label: 'Full Access' },
-        { id: 'read-only', label: 'Read Only' },
-      ] : [
-        { id: 'on-request', label: 'Default', description: 'Edits the workspace freely; asks before going outside it or onto the network' },
-        { id: 'dontAsk', label: 'Deny tools that need permission', shortLabel: 'Deny', description: 'Edits the workspace freely; refuses anything more instead of asking' },
-        { id: 'read-only', label: 'Read only', description: 'Reads anything; asks before every edit or command that needs more' },
-        { id: 'danger-full-access', label: 'Full access', description: 'No sandbox and never asks: edits and network anywhere' },
-      ],
-      interactionTransport: 'protocol',
-      supportsResume: true,
-      supportsInterrupt: true,
-      // Both flavors require a verified version and uniquely attributable native input receipts.
-      supportsSteer,
-      supportsHistory: true,
-      supportsModelSelection: true,
-      supportsModeSelection: this.flavor.modes.length > 0,
-      supportsPermissionSelection: true,
-      supportsTerminal: true,
-      // A plugin's sidecar attaches to a process as it is spawned for its conversation, so none is started ahead.
-      supportsPrewarm: !this.runtimeHooks?.runtimeHooks(this.flavor.id).length,
-      slashCommands: this.flavor.id === 'codex' ? codexNativeSlashItems() : [], ...(this.flavor.id === 'codex' ? { compactCommand: 'compact' } : {}),
-      inlineSkills: true,
-    };
+  capabilities(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendCapabilities> {
+    return capabilitiesOf({ flavor: this.flavor, runtimeHooks: this.runtimeHooks }, profile);
   }
 
-  async available(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
-    const unsupported = this.flavor.unsupportedProfileSetting(profile.config);
-    if (unsupported) return { available: false, reason: unsupported };
-    const source = modelSourceOf(profile.config);
-    const sourceReason = source && resolveSource(source, profile.config).reason;
-    if (sourceReason) return { available: false, reason: sourceReason };
-    const executable = executableOf(profile, this.flavor);
-    let probe;
-    try {
-      probe = await probeAppServer(executable);
-    } catch (error) {
-      const resolution = resolveCliExecutable({ command: configuredCommand(profile, this.flavor) });
-      const code = (error as NodeJS.ErrnoException).code;
-      const detail = resolution.resolved ? ` (${typeof code === 'string' ? code : 'process error'})` : `${describeSearch(resolution)} Set this profile’s executable to an absolute path.`;
-      return { available: false, reason: `${this.label} could not be started from “${executable}”.${detail}` };
-    }
-    const reason = this.flavor.unavailableReason(probe, executable);
-    const version = probe.version ? { version: probe.version } : {};
-    if (reason) return { available: false, reason, ...version };
-    return { available: true, ...version };
+  available(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
+    return availabilityOf(this.flavor, profile);
   }
 
   async openOrResume(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, options: NativeBackendOpenOptions = {}): Promise<NativeBackendOpenResult> {
@@ -536,10 +330,10 @@ export class CodexBackendAdapter implements NativeBackendDriver {
           if (!await previous.connection.restartBackend(options.restartFingerprint!, options.restartAddress!)) return previous;
           this.runtimes.delete(session.id);
           const replacement = new CodexSessionRuntime(host, host.getSession(session.id), project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
-          replacement.attachFeed(this.feedOf(session.id));
+          replacement.attachFeed(this.journalFeeds.feedOf(session.id));
           await replacement.start();
           this.runtimes.set(session.id, replacement);
-          await this.bindListeners(session.id, replacement);
+          await this.listeners.bind(session.id, replacement);
           return replacement;
         });
         const entry = { projectId: project.id, fingerprint: runtimeFingerprintFor(project, profile, this.flavor), promise };
@@ -580,7 +374,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       await runtime.terminal.ensureTui();
       const { input, images, renderedText } = await renderInput(host, request.input);
       const standing = this.standingOf(host, request.project);
-      const skills = command ? [] : await this.skillInputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
+      const skills = command ? [] : await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
       if (host.isRunCancelled(request.runId)) return;
       // The 助理 is told the time and what it missed with each message, ahead of the owner's text (docs/ASSISTANT.md §5.1),
       // and first what it lacks: the conversation's last turns in a new thread, that the thread was just summarized.
@@ -599,6 +393,10 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       });
       runtime.recordSubmittedTurn(result.turnId, request.runId, request.commandId);
     });
+  }
+
+  private launchContext(): TerminalLaunchContext {
+    return { flavor: this.flavor, label: this.label, ensureRuntime: (...args) => this.ensureRuntime(...args) };
   }
 
   /** The 助理's isolation when [project] is its directory (docs/ASSISTANT.md §4); TRAE CLI's app-server is not isolated. */
@@ -674,7 +472,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (!runtime.steerTarget) await runtime.prime();
       await runtime.attachLoadedOwner();
       const { input, images, renderedText } = await renderInput(host, request.input);
-      const skills = await this.skillInputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true, this.standingOf(host, request.project));
+      const skills = await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true, this.standingOf(host, request.project));
       if (host.isRunCancelled(request.runId)) throw new AppError('RUN_CANCELLED', 'Instruction was cancelled before delivery.', 409);
       await runtime.steer({
         runId: request.runId, commandId: request.commandId, target: request.target,
@@ -821,188 +619,20 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     await host.withSessionLock(session.id, async () => { await this.runtimes.get(session.id)?.terminal.relaunchTuiForAppearance(); });
   }
 
-  async listModels(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<ModelInfo[]> {
-    // A named source publishes its own catalog over HTTP, so it is answered without starting an
-    // app-server — and for some sources it is the only answer there is, since their models are not
-    // in any Codex-side listing.
-    const source = modelSourceOf(profile.config);
-    if (source) return await sourceCatalog(source, this.traits.consumesProtocols ?? [], profile.config);
-    const builtIn = () => this.withTransport(project, profile, session, transport => listModels(transport, this.flavor));
-    // A typed endpoint with a key is a provider of its own: the app-server's `model/list` still
-    // answers from Codex's built-in OpenAI catalog and never asks it, so the gateway says which
-    // models exist. Many gateways list bare ids, so a model Codex also knows keeps Codex's effort
-    // ladder and Fast tier; listing it also teaches the driver that tier's request value.
-    if (this.flavor.id === 'codex' && usesOwnProvider(profile.config)) {
-      const apiKey = str(profile.config.apiKey);
-      const [served, known] = await Promise.all([
-        fetchGatewayModels({ baseUrl: str(profile.config.apiEndpoint)!, ...(apiKey ? { apiKey } : {}), reasoningLevels: true }),
-        builtIn().catch(() => [] as ModelInfo[]),
-      ]);
-      const byId = new Map(known.map(model => [model.value, model]));
-      return served.map(model => {
-        const codex = byId.get(model.value);
-        if (!codex) return model;
-        // The gateway's declared ladder is what it accepts; Codex's fills in when it declares none.
-        const own = new Set(model.configOptions.map(option => option.id));
-        return { ...model, name: model.name === model.value ? codex.name : model.name, configOptions: [...model.configOptions, ...codex.configOptions.filter(option => !own.has(option.id))] };
-      });
-    }
-    return await builtIn();
+  listModels(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<ModelInfo[]> {
+    return listModelsOf({ flavor: this.flavor, consumesProtocols: this.traits.consumesProtocols ?? [], withTransport: (project, profile, session, read) => this.withTransport(project, profile, session, read) }, project, profile, session);
   }
 
-  async usage(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeBackendUsage> {
-    // TRAE's managed runtime route stops the CLI from publishing its internal daily bindings, so
-    // usage reads through a fresh read-only CLI with the same profile instead of a live session.
-    // Explicit profile or global configuration still reaches that CLI through the normal env.
-    const live = this.flavor.id === 'traex' ? undefined : session;
-    return await this.withTransport(project, profile, live, transport => readUsage(transport, this.flavor, { account: !usesOwnProvider(profile.config) }));
+  usage(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeBackendUsage> {
+    return usageOf({ flavor: this.flavor, withTransport: (project, profile, session, read) => this.withTransport(project, profile, session, read) }, project, profile, session);
   }
 
-  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
-    const cwd = await queryDirectory(project, profile);
-    const standing = project && this.standingOf(host, project);
-    const items = await this.withTransport(project, profile, undefined, async transport => {
-      if (standing) await useStandingSkillRoots(transport, standing);
-      return await listSkills(transport, cwd, standing);
-    });
-    this.rememberSkillNames(cwd, profile, items);
-    return items;
+  slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
+    return this.skills.slashItems(host, project, profile);
   }
 
-  private async loadedExtensions(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
-    const cwd = await queryDirectory(project, profile);
-    const standing = this.standingOf(host, project);
-    return await this.withTransport(project, profile, undefined, async transport => {
-      if (standing) await useStandingSkillRoots(transport, standing);
-      const [servers, configured, skills] = await Promise.all([readMcpServers(transport), readConfiguredMcpNames(transport, cwd), listSkills(transport, cwd, standing)]);
-      return {
-        // Plugin and app servers are listed by the app-server but cannot be switched off per thread (`readConfiguredMcpNames`).
-        // The 助理's thread switches every configured one off and declares the directory's and the packs' (`standing.ts`).
-        mcp: standing ? Object.keys(standing.mcpServers).map(name => ({ name })) : servers.filter(server => server.name !== RIFFET_MCP_NAME && configured.has(server.name)),
-        skills: skills.map(skill => ({ name: skill.name, ...(skill.description ? { description: skill.description } : {}) })),
-      };
-    });
-  }
 
-  private async extensionRuntime(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport> {
-    const report: import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport = { entries: [], diagnostics: [], checkedAt: new Date().toISOString() };
-    if (!project) { report.diagnostics.push('选择项目以查看已运行会话的 MCP 状态。'); return report; }
-    const matching = [...this.runtimes].filter(([, runtime]) => runtime.transport?.isOnline && runtime.connection.matches(project, profile));
-    await Promise.all(matching.slice(0, 16).map(async ([sessionId, runtime]) => {
-      const transport = runtime.transport!;
-      const results = await Promise.allSettled([
-        readMcpRuntime(transport, sessionId, runtime.nativeSessionId),
-        transport.request('skills/list', { cwds: [project.cwd], forceReload: true }, 10_000).then(value => fileRuntimeEntries(value, 'skill', sessionId)),
-        transport.request('hooks/list', { cwds: [project.cwd] }, 10_000).then(value => fileRuntimeEntries(value, 'hook', sessionId)),
-      ]);
-      for (const result of results) if (result.status === 'fulfilled') report.entries.push(...result.value); else report.diagnostics.push(`${sessionId}: ${extensionDiagnostic(result.reason)}`);
-    }));
-    if (!matching.length) report.diagnostics.push('没有与当前项目和配置匹配的在线连接；运行状态未知。');
-    if (matching.length > 16) report.diagnostics.push('当前仅展示前 16 个匹配的在线会话。');
-    if (report.entries.some(entry => entry.kind === 'hook')) report.diagnostics.push('Hook 目录描述原生发现结果；信任状态不代表用户已在 Riffet 中审核，执行还受会话启动策略影响。');
-    return report;
-  }
 
-  private async skillStates(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<Array<{ path: string; enabled: boolean }>> {
-    return await this.withManagementTransport(project, profile, async transport => {
-      const response = await transport.request<unknown>('skills/list', { cwds: [project?.cwd ?? homedir()], forceReload: true }, 15_000);
-      const states: Array<{ path: string; enabled: boolean }> = [];
-      for (const group of asArray<unknown>(asRecord(response)?.data)) {
-        for (const raw of asArray<unknown>(asRecord(group)?.skills)) {
-          const skill = asRecord(raw);
-          const path = str(skill?.path);
-          // Older or partial responses must leave state unknown rather than infer enabled.
-          if (path && typeof skill?.enabled === 'boolean') states.push({ path, enabled: skill.enabled });
-        }
-      }
-      return states;
-    });
-  }
-
-  private async setSkillEnabled(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, path: string, enabled: boolean): Promise<void> {
-    await this.withManagementTransport(project, profile, async transport => {
-      await transport.request('skills/config/write', { path, enabled }, 15_000);
-    });
-  }
-
-  private async listExternalSessions(host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]> {
-    const key = `${profile.id}:${options.includeNonInteractive}:${options.limit}`;
-    let cached = this.externalScans.get(key);
-    if (!cached || Date.now() - cached.at > EXTERNAL_CACHE_MS) {
-      const entries = await this.withManagementTransport(undefined, profile, async transport => {
-        // A slow start or page must not outlive the caller.
-        const aborted = new Promise<never>((_, reject) => options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true }));
-        aborted.catch(() => undefined);
-        return await Promise.race([
-          listExternalThreads(params => transport.request<unknown>('thread/list', params, 30_000), options),
-          aborted,
-        ]);
-      });
-      cached = { at: Date.now(), entries };
-      this.externalScans.set(key, cached);
-    }
-    // Who holds a thread changes faster than the list, so it is read on every call, in one `ps` scan.
-    const rows = await scanProcesses();
-    return cached.entries.map(entry => {
-      const live = this.holderIn(rows, profile, entry.nativeSessionId);
-      return live ? { ...entry, live } : entry;
-    });
-  }
-
-  private async externalHolder(_host: NativeBackendHost, profile: NativeBackendProfileConfig, threadId: string): Promise<ExternalHolder | undefined> {
-    return this.holderIn(await scanProcesses(), profile, threadId);
-  }
-
-  private holderIn(rows: readonly ProcessRow[], profile: NativeBackendProfileConfig, threadId: string): ExternalHolder | undefined {
-    const executables = new Set([this.flavor.command, basename(executableOf(profile, this.flavor))]);
-    const own = new Set<string>();
-    for (const runtime of this.runtimes.values()) { const address = runtime.transport?.remoteAddress; if (address) own.add(address); }
-    return holderOf(rows, threadId, executables, own);
-  }
-
-  private async terminalLaunch(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec; keepsRuntime?: boolean }> {
-    const threadId = host.getSession(session.id).nativeSessionId;
-    if (!threadId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet, so there is nothing to continue in a terminal.', 409);
-    assertSupportedProfile(profile, this.flavor);
-    if (this.flavor.terminalTransport(await probeAppServer(executableOf(profile, this.flavor))) !== 'none') {
-      // Riffet keeps the app-server and the loaded thread; only its own TUI is left out, so the terminal is the one client.
-      const spec = await host.withSessionLock(session.id, async () => {
-        const runtime = await this.ensureRuntime(host, session, project, profile, true);
-        if (!runtime.connection.canRunWith(project, profile)) return undefined;
-        await runtime.openOrResume();
-        return await runtime.terminal.tuiLaunchSpec();
-      });
-      if (spec) return { spec, keepsRuntime: true };
-    }
-    // No shared transport: a standalone CLI owns the thread and the core stops the runtime first.
-    const own: Record<string, string> = {};
-    const secret: Record<string, string> = {};
-    for (const [name, value] of Object.entries(this.flavor.env(profile.config))) (name === 'CODEX_HOME' || name === 'TRAE_HOME' ? own : secret)[name] = value;
-    return {
-      spec: {
-        command: executableOf(profile, this.flavor),
-        args: [...this.flavor.args(profile.config), ...codexTrustArgs(project.cwd), '-c', 'check_for_update_on_startup=false', '--cd', project.cwd, 'resume', threadId],
-        env: own,
-        ...(Object.keys(secret).length ? { secretEnv: secret } : {}),
-        cwd: project.cwd,
-        title: this.label,
-      },
-    };
-  }
-
-  private resumeCommand(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean } {
-    if (!session.nativeSessionId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
-    const command = typeof profile.config.executable === 'string' && profile.config.executable.trim() || this.flavor.command;
-    const configDir = typeof profile.config.configDir === 'string' && profile.config.configDir.trim();
-    const home = this.flavor.id === 'traex' ? 'TRAE_HOME' : 'CODEX_HOME';
-    // A gateway profile's provider settings carry its credential; the reader's own login is used instead.
-    const gateway = this.flavor.args(profile.config).length > 0 || Object.keys(this.flavor.env(profile.config)).some(name => name !== home);
-    return {
-      argv: [command, 'resume', session.nativeSessionId],
-      env: configDir ? { [home]: configDir } : {},
-      ...(gateway ? { credentialsOmitted: true } : {}),
-    };
-  }
 
   private async withManagementTransport<T>(project: Project | undefined, profile: NativeBackendProfileConfig, action: (transport: CodexAppServerClient) => Promise<T>): Promise<T> {
     assertSupportedProfile(profile, this.flavor);
@@ -1014,76 +644,6 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     });
     try { return await action(transport); }
     finally { await transport.dispose(); }
-  }
-
-  private async reloadExtensions(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<number> {
-    if (!project) return 0;
-    const visited = new Set<string>();
-    for (const runtime of this.runtimes.values()) {
-      const transport = runtime.transport;
-      if (!transport?.isOnline || !runtime.connection.matches(project, profile) || visited.has(transport.remoteAddress)) continue;
-      await transport.request('config/mcpServer/reload', {}, 15_000);
-      visited.add(transport.remoteAddress);
-    }
-    return visited.size;
-  }
-
-  private async authorizeMcp(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string> {
-    if (project) for (const [sessionId, runtime] of this.runtimes) {
-      if (!runtime.transport?.isOnline || !runtime.connection.matches(project, profile)) continue;
-      const servers = await readMcpRuntime(runtime.transport, sessionId, runtime.nativeSessionId);
-      if (!servers.some(server => server.name === name)) continue;
-      const response = await runtime.transport.request<{ authorizationUrl: string }>('mcpServer/oauth/login', { name, threadId: runtime.nativeSessionId, timeoutSecs: 300 }, 15_000);
-      const url = new URL(response.authorizationUrl);
-      if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new AppError('EXTENSION_AUTH_URL_INVALID', 'Agent returned an unsupported authorization URL');
-      return url.toString();
-    }
-    throw new AppError('EXTENSION_RUNTIME_REQUIRED', 'Open a conversation that uses this MCP server before authorizing.', 409);
-  }
-
-  /**
-   * The app-server only loads a skill handed to it as a structured input item; `/name` in the text
-   * is just prose to it. Each token naming an enabled skill becomes one, wherever it sits, and the
-   * text is left as typed. A failed lookup must not silently drop an invoked skill.
-   */
-  private rememberSkillNames(cwd: string, profile: NativeBackendProfileConfig, skills: NativeSlashItem[]): void {
-    const key = JSON.stringify([cwd, profile.id, profile.config]);
-    const names = this.knownSkillNames.get(key) ?? new Set<string>();
-    for (const skill of skills) names.add(skill.name);
-    this.knownSkillNames.delete(key);
-    this.knownSkillNames.set(key, names);
-    if (this.knownSkillNames.size > 64) this.knownSkillNames.delete(this.knownSkillNames.keys().next().value!);
-  }
-
-  private async skillInputs(transport: CodexAppServerClient | undefined, cwd: string, profile: NativeBackendProfileConfig, text: string, strictSteer = false, standing?: CodexStanding): Promise<unknown[]> {
-    const tokens = slashTokens(text);
-    const leading = tokens.find(token => token.start === text.length - text.trimStart().length);
-    const rejectCommand = () => new AppError('STEER_REJECTED', 'Steering accepts only messages or enabled skills; use the matching conversation action for CLI commands.', 409);
-    const unavailable = () => strictSteer ? rejectCommand() : new AppError('NATIVE_SKILL_CATALOG_UNAVAILABLE', 'Could not verify skills; refresh the skill list and try again.', 503);
-    if (!tokens.length) return [];
-    const known = this.knownSkillNames.get(JSON.stringify([cwd, profile.id, profile.config]));
-    const onUnavailable = (): unknown[] => {
-      if (leading || tokens.some(token => known?.has(token.name))) throw unavailable();
-      return []; // An unrecognized inline API path is prose, not an asserted skill invocation.
-    };
-    if (!transport?.isOnline) {
-      return onUnavailable();
-    }
-    let skills: Awaited<ReturnType<typeof listSkills>>;
-    try { skills = await listSkills(transport, cwd, standing); }
-    catch {
-      return onUnavailable();
-    }
-    this.rememberSkillNames(cwd, profile, skills);
-    // The app-server has a skills directory, but no TUI command catalog. Both send paths
-    // admit a remaining leading /name only when that native directory identifies an enabled
-    // skill. This rejects /model, /clear and unknown commands without maintaining a parallel list;
-    // slashTokens excludes full paths such as /usr/bin; inline references remain ordinary prose.
-    if (leading && !skills.some(skill => skill.name === leading.name)
-      || tokens.some(token => known?.has(token.name) && !skills.some(skill => skill.name === token.name))) {
-      throw strictSteer ? rejectCommand() : new AppError('NATIVE_COMMAND_UNSUPPORTED', 'This command or skill is unavailable; use the conversation controls or choose an enabled skill.', 400);
-    }
-    return referencedSkills(text, skills).map(skill => ({ type: 'skill', name: skill.name, path: skill.path }));
   }
 
   /** The session's live app-server when it has one, otherwise a short-lived one for this read. */
@@ -1104,100 +664,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     finally { await transport.dispose(); }
   }
 
-  /**
-   * The thread as the session journal reads it (`transcript-source.ts`), through the session's
-   * runtime: a pull connects it as a snapshot does, and its notifications are the live feed.
-   */
   transcript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): TranscriptSource {
-    const sessionId = session.id;
-    const threadOf = () => host.getSession(sessionId).nativeSessionId;
-    return new CodexTranscriptSource({
-      sessionId,
-      backend: this.flavor.id,
-      ...(this.observation ? { observedChanges: (toolCallId: string) => this.observation?.changes(sessionId, toolCallId) } : {}),
-      threadId: threadOf,
-      earlierThreads: () => host.getSession(sessionId).previousNativeSessionIds ?? [],
-      topicAfter: threadId => {
-        const run = host.listRuns?.(sessionId).find(candidate => candidate.native?.backendId === this.flavor.id && newTopicAfter(candidate.native.nativeInputBoundary) === threadId);
-        return run?.native ? { commandId: run.commandId, runId: run.id, text: run.native.input.text, at: run.createdAt } : undefined;
-      },
-      reader: async () => {
-        if (!threadOf()) return undefined;
-        // The restart drains the old journal before stopping its writer. Do not have that drain
-        // wait on the very restart it belongs to or spawn a reader during the handover.
-        if (this.restarting.has(sessionId)) {
-          const current = this.runtimes.get(sessionId);
-          return current?.transport?.isOnline ? current : undefined;
-        }
-        const current = host.getSession(sessionId);
-        const resolved = this.profileSwitchPending(current)
-          ? this.activeProfile(host, current, profile) : host.getProfile?.(current) ?? profile;
-        // A terminal's own CLI holds the thread without Riffet's app-server (a hold, or a reader's own `codex resume`
-        // after "resume in terminal"); a second app-server loading it here would be a second holder.
-        if (!this.runtimes.get(sessionId)?.transport?.isOnline) {
-          const threadId = current.nativeSessionId;
-          if (current.terminalHold || threadId && await this.externalHolder(host, resolved, threadId)) return undefined;
-        }
-        const runtime = await this.ensureRuntime(host, current, host.getProject(current.projectId), resolved);
-        return runtime.transport?.isOnline ? runtime : undefined;
-      },
-      commandOf: (item, turnId) => this.runtimes.get(sessionId)?.commandOf(item, turnId) ?? taggedCommand(item, this.flavor),
-      itemSpans: threadId => rolloutItemSpans(this.flavor.stateHome(profile.config), threadId),
-      runOf: commandId => host.findRunIdByCommand(sessionId, commandId),
-      turnError: turn => {
-        const actual = this.runtimes.get(sessionId)?.launchProfile.config;
-        return safeTurnError(turn.error, profile.config, actual ?? {});
-      },
-      observe: feed => {
-        let feeds = this.feeds.get(sessionId);
-        if (!feeds) this.feeds.set(sessionId, feeds = new Set());
-        feeds.add(feed);
-        return () => { feeds.delete(feed); if (!feeds.size && this.feeds.get(sessionId) === feeds) this.feeds.delete(sessionId); };
-      },
-    });
-  }
-
-  /** What every runtime of a session tells the transcript sources that follow it. */
-  private feedOf(sessionId: string): CodexLiveFeed {
-    const each = (fn: (feed: CodexLiveFeed) => void) => { for (const feed of this.feeds.get(sessionId) ?? []) fn(feed); };
-    return {
-      notification: (method, params) => each(feed => feed.notification(method, params)), activity: activity => each(feed => feed.activity(activity)),
-      active: () => (this.feeds.get(sessionId)?.size ?? 0) > 0,
-      lost: () => each(feed => feed.lost?.()),
-    };
-  }
-
-  /** Reads the thread's rollout file directly; the app-server is not involved. */
-  private async usageTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
-    const threadId = session.nativeSessionId;
-    const file = threadId ? await findCodexRollout(this.flavor.stateHome(profile.config), threadId) : undefined;
-    if (!threadId || !file) return known === 'none' ? undefined : { generation: 'none', entries: [] };
-    const info = await stat(file);
-    const quiet = Date.now() - info.mtimeMs >= ROLLOUT_QUIET_MS;
-    const generation = `${info.size}:${Math.round(info.mtimeMs)}:${quiet ? 'quiet' : 'busy'}`;
-    if (generation === known) return undefined;
-    // Streamed: a rollout runs to tens of megabytes, and only its usage rows are parsed (docs/guide/performance.md §3.8).
-    const reader = new RolloutUsageReader(threadId);
-    const lines = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
-    for await (const line of lines) reader.line(line);
-    const entries = reader.records(quiet).map(usage => ({ usage }));
-    return { generation, entries };
-  }
-
-  private async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<import('../../../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]> {
-    if (!session.nativeSessionId) return [];
-    // Earlier topics are other threads' rollouts; the journal holds them all in order.
-    if (session.previousNativeSessionIds?.length) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'Use the saved journal for a conversation over several threads', 409);
-    const file = await findCodexRollout(this.flavor.stateHome(profile.config), session.nativeSessionId);
-    if (!file) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'The native history file is unavailable', 409);
-    const content = await readContextFile(file, options.maxBytes, options.signal);
-    const metadata = content.split('\n', 1).map(line => { try { return JSON.parse(line); } catch { return undefined; } })[0]?.payload;
-    if (metadata?.history_base || metadata?.id && metadata.id !== session.nativeSessionId) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'Use the saved journal for inherited native history', 409);
-    return projectShareRollout(content, session.id, session.nativeSessionId, true).events;
-  }
-
-  private readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: import('../types.js').NativeShareReadOptions) {
-    return readCodexShare(host, session, this.flavor.stateHome(profile.config), options);
+    return this.journalFeeds.source(host, session, profile);
   }
 
   interaction(_host: NativeBackendHost, session: Session): NativeInteraction | undefined {
@@ -1234,38 +702,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   subscribe(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, listener: (message: NativeControlMessage) => void): () => void {
-    const subscriptions = this.listenersFor(session.id);
-    subscriptions.listeners.add(listener);
-    const cleanup = () => {
-      subscriptions.listeners.delete(listener);
-      subscriptions.unsubscriptions.get(listener)?.();
-      subscriptions.unsubscriptions.delete(listener);
-      if (subscriptions.listeners.size === 0) {
-        this.sessionListeners.delete(session.id);
-        subscriptions.runtime = undefined;
-      }
-    };
-    if (!session.nativeSessionId) {
-      listener({ type: 'status', status: { phase: 'offline' } });
-      return cleanup;
-    }
-    const project = host.getProject(session.projectId);
-    profile = this.activeProfile(host, host.getSession(session.id), profile);
-    const current = this.runtimes.get(session.id);
-    if (current?.connection.belongsTo(project, profile) && current.transport?.isOnline) {
-      current.connection.syncSessionBinding(session, project, profile);
-      void this.bindListeners(session.id, current).catch(error => {
-        if (subscriptions.listeners.has(listener)) listener({ type: 'status', status: { phase: 'offline', connection: { state: 'failed', message: safeProviderError(error, profile.config) } } });
-      });
-    } else {
-      void this.ensureRuntime(host, session, project, profile).then(runtime => this.bindListeners(session.id, runtime)).catch(error => {
-        if (subscriptions.listeners.has(listener)) {
-          const message = safeProviderError(error, profile.config);
-          listener({ type: 'status', status: { phase: 'offline', connection: { state: 'failed', message }, history: { state: 'error', message } } });
-        }
-      });
-    }
-    return cleanup;
+    return this.listeners.subscribe(host, session, profile, listener);
   }
 
   async dispose(host: NativeBackendHost, sessionId: string): Promise<void> {
@@ -1274,7 +711,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     this.profileSwitchFailures.delete(sessionId);
     const pending = this.creating.get(sessionId);
     if (pending) await pending.promise.catch(() => undefined);
-    this.clearListeners(sessionId);
+    this.listeners.clear(sessionId);
     const runtime = this.runtimes.get(sessionId);
     if (!runtime) return;
     this.runtimes.delete(sessionId);
@@ -1323,7 +760,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // Closing the web service must not stop native turns or their subagents. Their durable
       // socket bindings let the next service instance reconnect to the same writer.
       await Promise.allSettled(runtimes.map(runtime => runtime.dispose(host, { keepRunning: true })));
-      for (const sessionId of this.sessionListeners.keys()) this.clearListeners(sessionId);
+      this.listeners.clearAll();
       await this.observation?.close();
     })();
     await this.closeTask;
@@ -1364,10 +801,10 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         await current.dispose(host, { keepRunning: true });
       }
       const runtime = new CodexSessionRuntime(host, session, project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
-      runtime.attachFeed(this.feedOf(session.id));
+      runtime.attachFeed(this.journalFeeds.feedOf(session.id));
       await runtime.start({ reconnectOnly, warm: () => this.takeWarm(host, session, project, profile) });
       this.runtimes.set(session.id, runtime);
-      await this.bindListeners(session.id, runtime);
+      await this.listeners.bind(session.id, runtime);
       return runtime;
     });
     const entry: PendingRuntime = {
@@ -1379,61 +816,6 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     try { return await task; }
     finally { if (this.creating.get(session.id) === entry) this.creating.delete(session.id); }
   }
-
-  private listenersFor(sessionId: string): CodexSessionListeners {
-    let subscriptions = this.sessionListeners.get(sessionId);
-    if (!subscriptions) {
-      subscriptions = { listeners: new Set(), unsubscriptions: new Map() };
-      this.sessionListeners.set(sessionId, subscriptions);
-    }
-    return subscriptions;
-  }
-
-  private async bindListeners(sessionId: string, runtime: CodexSessionRuntime): Promise<void> {
-    const subscriptions = this.sessionListeners.get(sessionId);
-    if (!subscriptions || subscriptions.listeners.size === 0) return;
-    if (subscriptions.runtime === runtime && subscriptions.listeners.size === subscriptions.unsubscriptions.size) return;
-    if (subscriptions.binding) {
-      await subscriptions.binding;
-      if (subscriptions.runtime === runtime && subscriptions.listeners.size === subscriptions.unsubscriptions.size) return;
-    }
-    const task = (async () => {
-      if (subscriptions.runtime !== runtime) {
-        for (const unsubscribe of subscriptions.unsubscriptions.values()) unsubscribe();
-        subscriptions.unsubscriptions.clear();
-        subscriptions.runtime = runtime;
-        // Prime the read-only transcript first. A loaded owner can then be attached with a
-        // configuration-free resume; a cold stored thread remains a read-only observer.
-        await runtime.prime().catch(() => undefined);
-        await runtime.attachLoadedOwner().catch(() => undefined);
-      }
-      if (subscriptions.runtime !== runtime) return;
-      for (const listener of subscriptions.listeners) {
-        if (!subscriptions.unsubscriptions.has(listener)) subscriptions.unsubscriptions.set(listener, runtime.subscribe(listener));
-      }
-    })();
-    subscriptions.binding = task;
-    try { await task; }
-    finally { if (subscriptions.binding === task) subscriptions.binding = undefined; }
-  }
-
-  private clearListeners(sessionId: string): void {
-    const subscriptions = this.sessionListeners.get(sessionId);
-    if (!subscriptions) return;
-    for (const unsubscribe of subscriptions.unsubscriptions.values()) unsubscribe();
-    subscriptions.unsubscriptions.clear();
-    subscriptions.listeners.clear();
-    subscriptions.runtime = undefined;
-    this.sessionListeners.delete(sessionId);
-  }
-}
-
-/** The workbench command a user item names by the tag the flavor echoes, read without a runtime. */
-function taggedCommand(item: RpcItem, flavor: CodexFlavor): string | undefined {
-  if (item.type !== 'userMessage') return undefined;
-  if (flavor.messageTag.echo === 'clientId') return str(item.clientId);
-  const id = str(item.id);
-  return commandIdOfMessageId(id);
 }
 
 async function renderInput(host: NativeBackendHost, input: NativeBackendSendRequest['input']): Promise<{ input: unknown[]; images: unknown[]; renderedText: string }> {
@@ -1447,24 +829,4 @@ async function renderInput(host: NativeBackendHost, input: NativeBackendSendRequ
   }
   const renderedText = lines.join('\n');
   return { input: [{ type: 'text', text: renderedText, text_elements: [] }], images, renderedText };
-}
-
-/** Enabled skills for `cwd` in the app-server's precedence order, one per name. */
-/** The enabled skills; for the 助理, only its own (`standing.ts`), whatever else the process finds. */
-async function listSkills(transport: CodexAppServerClient, cwd: string, standing?: CodexStanding): Promise<Array<NativeSlashItem & { path: string }>> {
-  const response = await transport.request<{ data?: Array<{ cwd?: string; skills?: unknown[] }> }>('skills/list', { cwds: [cwd] });
-  const seen = new Set<string>();
-  const items: Array<NativeSlashItem & { path: string }> = [];
-  for (const entry of asArray<{ skills?: unknown[] }>(response.data)) {
-    for (const skill of asArray<Record<string, unknown>>(entry.skills)) {
-      const name = str(skill.name);
-      const path = str(skill.path);
-      if (!name || !path || (standing ? !standingSkill(path, standing) : skill.enabled === false) || seen.has(name)) continue;
-      seen.add(name);
-      const face = asRecord(skill.interface) ?? {};
-      const description = str(face.shortDescription) ?? str(skill.shortDescription) ?? str(skill.description);
-      items.push({ name, kind: 'skill', path, ...(description ? { description } : {}) });
-    }
-  }
-  return items;
 }

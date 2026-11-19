@@ -103,6 +103,6 @@ CodexSessionRuntime（协调者：持有各组对象，分发通知，推导状�
 | 2 | 8af558c | `CodexTurns`（`turns.ts`，378 行）独占当前回合；`runtime.ts` 3933 → 3770 行 |
 | 3 | 6031ab6 | `CodexConnection`（576 行）、`CodexTerminal`（262 行）；适配器的配置切换与复用判断移入运行时（`switchProfile`、`probeEndpoint`、`reuseVerdict`）；`runtime.ts` 3770 → 3275，`index.ts` 1515 → 1470 |
 | 4 | 3c35f09 | `CodexThread`（`thread.ts`，421 行）、`CodexInteractions`（`pending.ts`，509 行）；`runtime.ts` 3275 → 2592 |
-| 5 | （本提交） | 通知改为分发表 `CodexNotifications`；历史与日志拆为 `CodexEventLog`、`CodexHistorySync`；设置为 `CodexSettings`；发送、插话、打断为 `CodexDispatch`；`runtime.ts` 2592 → 776，移出基线 |
+| 5 | a34157a | 通知改为分发表 `CodexNotifications`；历史与日志拆为 `CodexEventLog`、`CodexHistorySync`；设置为 `CodexSettings`；发送、插话、打断为 `CodexDispatch`；`runtime.ts` 2592 → 776，移出基线 |
 
-剩余：`index.ts`（1470 行）仍超限，下一步把适配器里按功能划分的部分（辅助模型、外部会话、斜杠命令与扩展）拆出；`transcript-source.ts`（1068 行）不在本方案范围，单独评估。返工率在拆分完成 30 天后对比（§5）。
+之后：`transcript-source.ts` 1068 → 685（82b6493）；`index.ts` 1470 → 832（本提交），按功能拆出辅助模型、外部会话、技能与斜杠命令、扩展、监听、日志 feed、可用性等；配置切换约 100 行与 `ensureRuntime` 是同一段生命周期，留在适配器，按 §5.1 只沿真实边界拆，基线下调到 832。返工率在拆分完成 30 天后对比（§5）。

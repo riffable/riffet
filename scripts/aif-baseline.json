@@ -5,7 +5,7 @@
     "apps/server/src/backends/claude/history.ts": 1916,
     "apps/server/src/backends/claude/runtime.ts": 2756,
     "apps/server/src/backends/claude/transcript-source.ts": 1252,
-    "apps/server/src/backends/codex/index.ts": 1470,
+    "apps/server/src/backends/codex/index.ts": 832,
     "apps/server/src/backends/droid/runtime.ts": 1805,
     "apps/server/src/backends/dsh/bridge-runtime/index.mjs": 981,
     "apps/server/src/backends/dsh/runtime.ts": 1493,
