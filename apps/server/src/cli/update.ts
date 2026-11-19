@@ -6,7 +6,7 @@ import { runProcess } from '../git/exec.js';
 import { xmlEscape, systemdValue } from '../service-files.js';
 import { COMPACTION_WAIT_MS, compactionRunning } from '../storage/compaction.js';
 import { checkForUpdates } from '../update/git.js';
-import { checkNpmUpdate, isNpmInstall, npmInstaller } from '../update/npm.js';
+import { OFFICIAL_NPM_REGISTRY, displayRegistry, inspectNpmUpdate, isMissingNpmTargetOutput, isNpmInstall, npmInstaller } from '../update/npm.js';
 import { writeCachedCheck } from '../update/status.js';
 import { SERVER_BUILD, SOURCE_ROOT } from '../version.js';
 import { APP_MANAGED_HINT, accessToken, active, appAgentLoaded, entry, installRoot, ownsPid, pidExists, readDaemon, serverUrl, stateDir, type DaemonRecord, type Health } from './context.js';
@@ -104,8 +104,12 @@ async function updateNpm(options: UpdateOptions, dir: string, waitSeconds: numbe
   }
   const running = health?.build ?? SERVER_BUILD;
   const checking = options.json ? undefined : spinner('Checking npm for a newer release');
+  let inspected: Awaited<ReturnType<typeof inspectNpmUpdate>>;
   let result: UpdateCheck;
-  try { result = writeCachedCheck(dir, await checkNpmUpdate(running)); } finally { checking?.stop(); }
+  try {
+    inspected = await inspectNpmUpdate(running);
+    result = writeCachedCheck(dir, inspected.check);
+  } finally { checking?.stop(); }
   if (options.check) {
     if (options.json) printJson(result); else printCheck(running, result, health ? 'Running' : 'Installed');
     if (result.status === 'unavailable') process.exitCode = 1;
@@ -119,16 +123,26 @@ async function updateNpm(options: UpdateOptions, dir: string, waitSeconds: numbe
   if (record && !ownsPid(record)) throw new CliError('The server on this state directory comes from another installation; this one cannot update it', ['riffet status']);
   if (health?.managedBy === 'launchd' && !serviceRunsThis(dir)) throw new CliError('The login service runs another installation or state directory; nothing was changed', ['riffet service status']);
 
-  const installer = npmInstaller(target);
+  const installer = npmInstaller(target, undefined, inspected.registry);
   const rollback = `\`${[installer.command, ...npmInstaller(running.version).args].join(' ')}\``;
   process.stderr.write(`Updating v${running.version} ${MARK.arrow} ${err.accent(`v${target}`)}\n`);
   // Installed earlier, but the server still runs the old version: only the restart is left.
   if (SERVER_BUILD.version !== target) {
     if (!installer.writable) throw new CliError(`${tilde(installer.root)} is not writable by you, so ${installer.manager} cannot replace it`, [`\`sudo ${[installer.command, ...installer.args].join(' ')}\`, then \`riffet restart\``]);
     const began = Date.now();
-    const installing = spinner(`Installing riffet@${target} with ${installer.manager}`);
-    let installed;
-    try { installed = await runProcess(installer.command, installer.args, { cwd: dir, timeoutMs: 10 * 60_000 }); } finally { installing.stop(); }
+    const runInstall = async (activeInstaller: ReturnType<typeof npmInstaller>, label: string) => {
+      const installing = spinner(label);
+      try { return await runProcess(activeInstaller.command, activeInstaller.args, { cwd: dir, timeoutMs: 10 * 60_000 }); }
+      finally { installing.stop(); }
+    };
+    let installed = await runInstall(
+      installer,
+      `Installing riffet@${target} with ${installer.manager}${inspected.registry ? ` (${displayRegistry(inspected.registry)})` : ''}`,
+    );
+    if ((installed.code !== 0 || installed.timedOut) && inspected.registry !== OFFICIAL_NPM_REGISTRY && isMissingNpmTargetOutput(`${installed.stderr}\n${installed.stdout}`)) {
+      const fallback = npmInstaller(target, undefined, OFFICIAL_NPM_REGISTRY);
+      installed = await runInstall(fallback, `Mirror does not carry riffet@${target} yet; installing from ${OFFICIAL_NPM_REGISTRY}`);
+    }
     if (installed.code !== 0 || installed.timedOut) {
       const tail = `${installed.stderr || installed.stdout}`.trim().split('\n').slice(-8).join('\n');
       throw new CliError(`${installer.manager} could not install riffet@${target}${tail ? '\n' + err.dim(tail) : ''}`, ['Nothing was restarted; Riffet keeps running the current version']);

@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- `riffet update` on an npm install now checks both your configured registry and `registry.npmjs.org` (plus any `RIFFET_NPM_REGISTRIES`), and installs with `--registry` when a mirror has not synced the new version yet instead of failing with `ETARGET`.
 - After a gateway plugin such as AsterGate is turned off or uninstalled, providers that use it keep working with their own address and key instead of failing to load models; only its quota stops showing.
 - On the web, the composer no longer shows the microphone when the selected voice recognizer's plugin is turned off or uninstalled; Settings › Voice input marks that recognizer as unavailable.
 
