@@ -36,6 +36,9 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
+        # The whole-repo program needs more than the ~2 GB heap Node picks on the 7 GB macOS runner.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
       - name: Generated design tokens are current
         run: pnpm gen:tokens:check
       - name: Generated themes are current
