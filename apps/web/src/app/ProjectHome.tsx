@@ -419,7 +419,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     <div className="relative flex flex-col">
       {/* The session's working directory is the one choice that cannot be changed afterwards, so
           it is offered right where the request is written — and only here, so that clicking
-          "new session" in the sidebar stays a plain navigation step. */}
+          "new session" in the sidebar stays a plain navigation step. Fixed `h-7` keeps the
+          composer in place when switching between 新建任务 and 快速对话. */}
       <div className="mb-1.5 flex h-7 items-center gap-1">
         {!quickChat && !assistant && <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -574,9 +575,12 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
       {header}
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto flex w-full max-w-[720px] flex-col px-4 pb-6 pt-6 md:px-8 md:pb-16 md:pt-[max(48px,14vh)]">
-          <div className="mb-4 flex min-h-7 flex-col items-center gap-2 text-center md:mb-6 md:min-h-8">
+          <div className="mb-4 flex flex-col items-center gap-2 text-center md:mb-6">
             <LiveBrandMark className="mb-1 size-12 text-fg md:mb-2 md:size-16" />
-            {!quickChat && project && !isAssistantProject(project) && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
+            {/* Reserve the heading's own line height so switching 新建任务 / 快速对话 never shifts the composer. */}
+            <div className="flex min-h-(--text-xl--line-height) w-full items-center justify-center md:min-h-(--text-2xl--line-height)">
+              {!quickChat && project && !isAssistantProject(project) && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
+            </div>
           </div>
 
           <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} />
