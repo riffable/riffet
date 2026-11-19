@@ -165,6 +165,7 @@ struct TodoRow: View {
             Image(icon: entry.status == .completed ? "checkmark.circle.fill" : entry.status == .inProgress ? "circle.dotted.circle" : "circle")
                 .foregroundStyle(entry.status == .completed ? palette.success : entry.status == .inProgress ? palette.accent : palette.fg4)
                 .font(.riffet(size: S(12)))
+                .frame(width: 16)
             Text(entry.content)
                 .font(.riffet(size: S(13)))
                 .foregroundStyle(entry.status == .completed ? palette.fg4 : palette.fg2)

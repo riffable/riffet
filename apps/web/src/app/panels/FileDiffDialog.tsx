@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { GitDiff } from '@contracts';
+import { IconArrowUpRight } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Segmented, Spinner } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/utils';
 
@@ -43,7 +45,22 @@ export function FileDiffDialog({ projectId, path, onClose, onOpenPath }: { proje
   return <Dialog open={Boolean(path)} onOpenChange={(open) => { if (!open) close(); }}>
     <DialogContent mobileFullscreen className="h-[min(820px,calc(100dvh-32px))] max-w-5xl">
       <DialogHeader>
-        <DialogTitle className="truncate font-mono text-base">{path}</DialogTitle>
+        <DialogTitle className="flex min-w-0 items-center gap-1.5 font-mono text-base">
+          <span className="min-w-0 truncate text-left [direction:rtl]"><bdi>{path}</bdi></span>
+          {path && onOpenPath && (
+            <Tip label={t`文件预览`}>
+              <Button
+                size="icon-xs"
+                variant="quiet"
+                className="shrink-0 text-fg-3 hover:text-fg max-md:size-10 no-hover:size-11"
+                aria-label={t`文件预览`}
+                onClick={() => { close(); onOpenPath(path); }}
+              >
+                <IconArrowUpRight />
+              </Button>
+            </Tip>
+          )}
+        </DialogTitle>
         <DialogDescription className={current?.bothSides && diff && !diff.binary && !diff.truncated ? 'sr-only' : undefined}>
           {diff?.binary ? t`Binary file` : diff?.truncated ? t`Preview truncated` : current?.staged ? t`Staged` : t`Working tree changes`}
         </DialogDescription>

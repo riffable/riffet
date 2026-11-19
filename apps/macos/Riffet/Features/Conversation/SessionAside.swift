@@ -147,11 +147,17 @@ struct SessionAside: View {
         return InfoSection(title: String(localized: "产出"), count: outputs.count) {
             ForEach(shown, id: \.path) { output in
                 let path = stripRoot(text: output.path, root: root)
+                let name = (path as NSString).lastPathComponent
                 Button {
                     FileOpener.activate(path: path, line: nil, projectId: session.projectId, workbench: workbench)
                 } label: {
                     HStack(spacing: Space.sm) {
-                        Text((path as NSString).lastPathComponent).font(.riffet(size: S(12), design: .monospaced))
+                        Image(icon: FileSymbols.symbol(name))
+                            .font(RiffetFont.caption)
+                            .foregroundStyle(palette.fg4)
+                            .frame(width: 16)
+                            .accessibilityHidden(true)
+                        Text(name).font(.riffet(size: S(12), design: .monospaced))
                             .foregroundStyle(palette.fg2).lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: Space.xs)
                         HStack(spacing: 6) {

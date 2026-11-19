@@ -1175,7 +1175,7 @@ struct SessionWorkActions: View {
                     ForEach(tasks, id: \.id) { task in
                         let view = activityView(activity: task, stopping: workbench.stoppingActivities.contains(task.id), nowMillis: Int64(context.date.timeIntervalSince1970 * 1000))
                         HStack(spacing: Space.sm) {
-                            Spinner(size: .mini)
+                            Spinner(size: .mini).frame(width: 16)
                             Text([view.label, view.subject].compactMap { $0 }.joined(separator: " · ")).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).lineLimit(1)
                             Spacer(minLength: Space.sm)
                             if let stats = view.stats { Text(stats).font(.riffet(size: S(12)).monospacedDigit()).foregroundStyle(palette.fg4) }
@@ -1204,12 +1204,15 @@ struct SessionWorkActions: View {
                 // title's line: a two-line row put the button half a line below the state.
                 HStack(spacing: Space.sm) {
                     HStack(alignment: .top, spacing: Space.sm) {
-                        if entry.state == .running {
-                            Spinner(size: .mini).padding(.top, 4)
-                        } else {
-                            Circle().fill(entry.state == .done ? palette.success : entry.state == .failed ? palette.danger : palette.fg4)
-                                .frame(width: 6, height: 6).padding(.top, 6)
+                        Group {
+                            if entry.state == .running {
+                                Spinner(size: .mini).padding(.top, 4)
+                            } else {
+                                Circle().fill(entry.state == .done ? palette.success : entry.state == .failed ? palette.danger : palette.fg4)
+                                    .frame(width: 6, height: 6).padding(.top, 6)
+                            }
                         }
+                        .frame(width: 16)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.name).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).lineLimit(1)
                             if let detail = entry.detail {

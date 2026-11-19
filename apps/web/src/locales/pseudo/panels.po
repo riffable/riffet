@@ -1113,6 +1113,7 @@ msgstr ""
 msgid "文件过大，仅显示前一部分"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/FilesPanel.tsx
 msgid "文件预览"
 msgstr ""

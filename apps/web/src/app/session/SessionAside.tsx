@@ -5,6 +5,7 @@ import { IconCheck } from '@/components/icons';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import { FileDiffDialog } from '../panels/FileDiffDialog';
+import { FileIcon } from '../panels/fileVisuals';
 import { BackgroundTaskItem, BackgroundTasksNotLoaded } from './Activities';
 import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './ComposerDock';
 import type { TimelineItem } from './model';
@@ -157,6 +158,7 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
           return (
             <li key={output.path}>
               <button type="button" onClick={() => setDiffPath(output.path)} title={output.path} className="flex h-7 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+                <span className="grid w-4 shrink-0 place-items-center"><FileIcon entry={{ kind: 'file', name }} className="size-3.5 text-fg-4" /></span>
                 <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-2">{name}</span>
                 <span className="flex shrink-0 items-center gap-1.5 font-mono text-2xs tabular-nums">
                   {output.created && !output.removed ? <span className="font-sans text-fg-4"><Trans>新建</Trans></span> : null}
@@ -168,7 +170,7 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
           );
         })}
       </ul>
-      {outputs.length > OUTPUT_LIMIT && <button type="button" onClick={() => setExpanded((value) => !value)} className={foldButton}>{expanded ? <Trans>收起</Trans> : <Trans>还有 {outputs.length - OUTPUT_LIMIT} 个文件</Trans>}</button>}
+      {outputs.length > OUTPUT_LIMIT && <button type="button" onClick={() => setExpanded((value) => !value)} className={cn(foldButton, 'pl-8')}>{expanded ? <Trans>收起</Trans> : <Trans>还有 {outputs.length - OUTPUT_LIMIT} 个文件</Trans>}</button>}
       <FileDiffDialog projectId={projectId} path={diffPath} onClose={() => setDiffPath(undefined)} onOpenPath={onOpenPath} />
     </Section>
   );

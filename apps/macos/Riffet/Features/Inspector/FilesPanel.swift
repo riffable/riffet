@@ -529,16 +529,40 @@ private struct SearchHitResult: View {
 
 enum FileSymbols {
     static func symbol(_ name: String) -> String {
+        let lower = name.lowercased()
+        switch lower {
+        case "dockerfile", "makefile", "justfile", "cmakelists.txt", "procfile":
+            return "apple.terminal"
+        case ".gitignore", ".gitattributes", ".gitmodules", ".editorconfig", ".npmrc", ".nvmrc", ".prettierrc", ".eslintrc", ".env":
+            return "curlybraces"
+        default:
+            if lower.hasPrefix(".env.") { return "curlybraces" }
+            if lower.hasPrefix("dockerfile.") { return "apple.terminal" }
+        }
         switch (name as NSString).pathExtension.lowercased() {
-        case "swift", "kt", "kts", "ts", "tsx", "js", "jsx", "mjs", "py", "go", "rs", "java", "c", "h", "cpp", "m", "rb", "sh", "zsh":
-            "chevron.left.forwardslash.chevron.right"
-        case "md", "markdown", "mdown", "mkd", "mdx", "mdc", "txt", "rtf": "doc.text"
-        case "json", "yml", "yaml", "toml", "plist", "xml", "lock": "curlybraces"
-        case "png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "icns": "photo"
-        case "html", "htm": "globe"
-        case "pdf": "doc.richtext"
-        case "zip", "tar", "gz", "xz", "dmg": "archivebox"
-        default: "doc"
+        case "swift", "kt", "kts", "ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts",
+             "py", "pyi", "go", "rs", "java", "c", "cc", "cpp", "cxx", "h", "hpp", "m", "mm",
+             "rb", "php", "cs", "dart", "vue", "svelte", "astro", "css", "scss", "sass", "less",
+             "sql", "proto", "graphql", "gql", "lua", "r", "scala", "zig", "ex", "exs", "gradle":
+            return "chevron.left.forwardslash.chevron.right"
+        case "sh", "zsh", "bash", "fish", "ps1", "bat", "cmd":
+            return "apple.terminal"
+        case "md", "markdown", "mdown", "mkd", "mdx", "mdc", "txt", "rtf", "rst", "adoc", "log", "csv", "tsv":
+            return "doc.text"
+        case "json", "jsonc", "json5", "yml", "yaml", "toml", "plist", "xml", "lock", "ini", "cfg", "conf", "env", "properties", "entitlements", "pbxproj":
+            return "curlybraces"
+        case "png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "ico", "bmp", "heic", "icns", "tiff", "tif":
+            return "photo"
+        case "html", "htm", "xhtml", "po", "pot", "strings", "xcstrings", "xliff":
+            return "globe"
+        case "pdf":
+            return "doc.richtext"
+        case "zip", "tar", "gz", "tgz", "xz", "bz2", "7z", "dmg", "pkg":
+            return "archivebox"
+        case "apk", "ipa", "aab", "whl", "jar", "wasm":
+            return "shippingbox"
+        default:
+            return "doc"
         }
     }
 }
