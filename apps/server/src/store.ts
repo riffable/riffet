@@ -2,7 +2,7 @@ import { DatabaseSync, backup, type StatementSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import type { Project, Session, Run, RunMetrics, NativeBackendId, NativeDeliveryState, NativeRunConfig, NativeRunDetails, NativeRunInput, CapturedSessionReference, NativeSessionInput, NativeContext, NativeInteractionResult, NativeTurnTarget, TerminalInfo, WorkbenchEvent, AppSettings, FolderFavorite } from '../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
 import { sessionReferenceInputs } from './context-references/input.js';
 import { isNativeBackendId } from './backends/registry.js';
@@ -11,11 +11,12 @@ import type { IndexedMessage } from './search/messages.js';
 import { Journal } from './journal/journal.js';
 import { migrateStorageLayout, needsStorageLayoutMigration } from './journal/storage-migration.js';
 import { LEGACY_DEFAULT_BACKEND_ID, applyNativeSessionIdPatch, restartObservation, legacyMirrorFields, normalizeRunIdentity, normalizeSessionIdentity, requestedNativeSessionId, type IdentifiedRun, type IdentifiedSession } from './session-identity.js';
-import { openSqliteDatabase, reclaimFreePages, storageLayoutForControlDb, type StorageLayoutPaths } from './sqlite-storage.js';
+import { eventLoopBusy } from './loop-health.js';
+import { openSqliteDatabase, optimizeDatabase, quickCheckDatabase, reclaimFreePages, storageLayoutForControlDb, type StorageLayoutPaths } from './sqlite-storage.js';
 
 const now = () => new Date().toISOString();
-const SESSION_SNAPSHOTS_KEPT = 50;
-const SESSION_SNAPSHOT_PRUNE_EVERY = 25;
+const SESSION_SNAPSHOTS_KEPT = STORAGE_BUDGET.sessionSnapshotsKept;
+const SESSION_SNAPSHOT_PRUNE_EVERY = 10;
 /** A retry id is only meaningful while its interaction can still be answered. */
 const INTERACTION_RECEIPT_TTL_MS = 7 * 24 * 60 * 60_000;
 const INTERACTION_RECEIPTS_PER_SESSION = 200;
@@ -216,7 +217,7 @@ export class Store {
         try { migrateStorageLayout(path); } catch (error) { console.error('[riffet] storage layout migration failed:', error); throw error; }
       }
     }
-    this.db = openSqliteDatabase(path, { foreignKeys: true });
+    this.db = openSqliteDatabase(path, { foreignKeys: true, role: 'control' });
     const schemaVersion=(this.sql('PRAGMA user_version').get() as {user_version:number}).user_version;
     if(schemaVersion>SCHEMA_VERSION){this.db.close();throw new AppError('DATABASE_VERSION_NEWER','This workbench database requires a newer Riffet version',409);}
     this.db.exec(`
@@ -250,7 +251,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS council_discussions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS council_updated ON council_discussions(updated_at DESC, id);`);
     // L1 journal database (independent write lock + optional Tier-2 external blobs directory).
-    this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:');
+    this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:', { role: 'journal' });
     this.journal = new Journal(
       this.journalDb,
       undefined,
@@ -347,14 +348,17 @@ export class Store {
     };
     let opened: DatabaseSync | undefined;
     try {
-      opened = openSqliteDatabase(derivedPath);
+      opened = openSqliteDatabase(derivedPath, { role: 'derived' });
+      if (derivedPath !== ':memory:' && !quickCheckDatabase(opened)) {
+        throw new Error('derived.db failed PRAGMA quick_check');
+      }
       return init(opened);
     } catch (error) {
       if (opened) { try { opened.close(); } catch { /* ignore */ } }
       if (derivedPath === ':memory:') throw error;
-      console.warn('[riffet] derived.db could not be opened; recreating rebuildable cache:', error);
+      console.warn('[riffet] derived.db could not be opened or failed integrity check; recreating rebuildable cache:', error);
       for (const suffix of ['', '-wal', '-shm']) rmSync(`${derivedPath}${suffix}`, { force: true });
-      return init(openSqliteDatabase(derivedPath));
+      return init(openSqliteDatabase(derivedPath, { role: 'derived' }));
     }
   }
   private sql(text: string): StatementSync {
@@ -409,7 +413,7 @@ export class Store {
   private noteMessageIndexShape(): void {
     try { this.setDerivedMeta('message-index-fts-v1', this.derivedSql('SELECT COUNT(*) AS total, COALESCE(MAX(rowid),0) AS top FROM message_index').get()); } catch { /* checked again next start */ }
   }
-  private pruneAllSnapshots(): void {
+  pruneAllSnapshots(): number {
     const ids = (this.sql('SELECT id FROM sessions').all() as Array<{ id: string }>).map(row => row.id);
     let removed = 0;
     this.transaction(() => {
@@ -418,6 +422,7 @@ export class Store {
     // Freed pages are reused by later writes either way; a database created with incremental
     // auto-vacuum can also give them back to the file system without a blocking full VACUUM.
     if (removed && (this.sql('PRAGMA auto_vacuum').get() as { auto_vacuum: number }).auto_vacuum === 2) this.db.exec('PRAGMA incremental_vacuum(5000)'); // bounded so a start never stalls on a large freed range; `riffet doctor --compact` reclaims the rest
+    return removed;
   }
   private get<T>(table: string, id: string): T | undefined {
     const row = this.sql(`SELECT json FROM ${table} WHERE id=?`).get(id) as {json: string} | undefined;
@@ -803,18 +808,55 @@ export class Store {
     const times = [item.lastActivityAt, item.updatedAt].filter((value): value is string => typeof value === 'string').sort();
     return { ...(times.length ? { at: times.at(-1)! } : {}), running: ACTIVE_SESSION_STATES.has(item.state) };
   }
-  /** Ids of cold conversations archived before `cutoffIso` (skipping any with live hot timeline rows). */
-  archivedSessionsBefore(cutoffIso: string): string[] {
-    let hot = new Set<string>();
+  private hotTimelineSessions(): Set<string> {
+    const hot = new Set<string>();
     try {
       const hasTimeline = this.derivedSql("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='timeline_rows'").get();
       if (hasTimeline) {
-        hot = new Set((this.derivedSql('SELECT DISTINCT session_id FROM timeline_rows').all() as Array<{ session_id: string }>).map(row => row.session_id));
+        for (const row of this.derivedSql('SELECT DISTINCT session_id FROM timeline_rows').all() as Array<{ session_id: string }>) {
+          hot.add(row.session_id);
+        }
       }
     } catch { /* ignore */ }
+    return hot;
+  }
+  /** Ids of cold conversations archived before `cutoffIso` (skipping any with live hot timeline rows). */
+  archivedSessionsBefore(cutoffIso: string): string[] {
+    const hot = this.hotTimelineSessions();
     return this.allSessions()
       .filter(session => typeof session.archivedAt === 'string' && session.archivedAt < cutoffIso && !hot.has(session.id))
       .map(session => session.id);
+  }
+  /**
+   * Ids of cold conversations eligible for oversized tool output head+tail trimming:
+   * - archived earlier than `STORAGE_BUDGET.archivedTrimDays`, OR
+   * - unarchived, idle (not running), and last active earlier than `STORAGE_BUDGET.inactiveTrimDays`.
+   * Sessions with hot `timeline_rows` are always skipped.
+   */
+  coldSessionsForTrimming(nowMs = Date.now()): string[] {
+    const archivedCutoff = STORAGE_BUDGET.archivedTrimDays > 0
+      ? new Date(nowMs - STORAGE_BUDGET.archivedTrimDays * 86_400_000).toISOString()
+      : undefined;
+    const inactiveCutoff = STORAGE_BUDGET.inactiveTrimDays > 0
+      ? new Date(nowMs - STORAGE_BUDGET.inactiveTrimDays * 86_400_000).toISOString()
+      : undefined;
+    if (!archivedCutoff && !inactiveCutoff) return [];
+    const hot = this.hotTimelineSessions();
+    const ids: string[] = [];
+    for (const session of this.allSessions()) {
+      if (hot.has(session.id) || ACTIVE_SESSION_STATES.has(session.state)) continue;
+      if (typeof session.archivedAt === 'string') {
+        if (archivedCutoff && session.archivedAt < archivedCutoff) ids.push(session.id);
+        continue;
+      }
+      if (!inactiveCutoff) continue;
+      const latest = [session.lastActivityAt, session.updatedAt, session.createdAt]
+        .filter((value): value is string => typeof value === 'string')
+        .sort()
+        .at(-1);
+      if (latest && latest < inactiveCutoff) ids.push(session.id);
+    }
+    return ids;
   }
   /** Called once the conversation is deleted: its open streams end, and their clients learn it on reconnecting. */
   onSessionDeleted(id: string, listener: () => void): () => void {
@@ -1173,7 +1215,7 @@ export class Store {
    * Each `session` event is a full snapshot that supersedes every earlier one, so a replay from any
    * sequence still ends on the current record. Only the newest `keep` are retained per session.
    */
-  pruneSessionSnapshots(sessionId: string, keep = SESSION_SNAPSHOTS_KEPT): number {
+  pruneSessionSnapshots(sessionId: string, keep: number = SESSION_SNAPSHOTS_KEPT): number {
     const cutoff = this.sql(`SELECT sequence FROM events WHERE session_id=? AND json_extract(json,'$.type')='session' ORDER BY sequence DESC LIMIT 1 OFFSET ?`).get(sessionId, Math.max(0, keep - 1)) as {sequence:number} | undefined;
     if (!cutoff) return 0;
     return Number(this.sql(`DELETE FROM events WHERE session_id=? AND sequence<? AND json_extract(json,'$.type')='session'`).run(sessionId, cutoff.sequence).changes);
@@ -1504,13 +1546,67 @@ export class Store {
   getSettings(): AppSettings { return this.getSetting('app',{}); }
   async backup(destination: string) { mkdirSync(dirname(destination),{recursive:true,mode:0o700}); await backup(this.db,destination); chmodSync(destination,0o600); }
   async backupJournal(destination: string) { mkdirSync(dirname(destination),{recursive:true,mode:0o700}); await backup(this.journalDb,destination); chmodSync(destination,0o600); }
-  /** Bounded online incremental vacuum across L0, L1 and L2 when the event loop is idle (or forced during explicit maintenance). */
-  reclaimSpace(options: { busy?: () => boolean; checkpoint?: boolean } = {}): { control: number; journal: number; derived: number } {
+  /**
+   * Keeps L2 search index bounded and low-fragmentation: trims any legacy oversized `tool` rows down to
+   * `STORAGE_BUDGET.toolIndexChars` in bounded batches (persisting completion in `derived_meta` so
+   * steady-state maintenance never full-scans `message_index`), and merges FTS5 segments incrementally.
+   */
+  maintainDerivedSearch(options: { maxToolTrims?: number; fullOptimize?: boolean } = {}): { trimmedTools: number } {
+    const maxToolTrims = options.maxToolTrims ?? 2_000;
+    const cap = STORAGE_BUDGET.toolIndexChars;
+    let trimmedTools = 0;
+    try {
+      const doneCap = this.getDerivedMeta<number | undefined>('tool-index-trimmed-cap', undefined);
+      if (maxToolTrims > 0 && cap > 0 && (doneCap === undefined || doneCap > cap)) {
+        const rows = this.derivedSql(`SELECT rowid FROM message_index WHERE kind='tool' AND length(text)>? LIMIT ?`)
+          .all(cap, maxToolTrims) as Array<{ rowid: number }>;
+        if (rows.length) {
+          const trim = this.derivedSql(`UPDATE message_index SET text=substr(text,1,?) WHERE rowid=?`);
+          this.derivedTx(() => {
+            for (const row of rows) trimmedTools += Number(trim.run(cap, row.rowid).changes);
+          });
+          this.noteMessageIndexShape();
+        }
+        if (rows.length < maxToolTrims) this.setDerivedMeta('tool-index-trimmed-cap', cap);
+      }
+      const hasFts = this.derivedSql("SELECT 1 AS found FROM sqlite_master WHERE name='message_index_fts'").get();
+      if (hasFts) {
+        if (options.fullOptimize) {
+          this.derivedDb.exec("INSERT INTO message_index_fts(message_index_fts) VALUES('optimize')");
+        } else {
+          this.derivedDb.exec("INSERT INTO message_index_fts(message_index_fts, rank) VALUES('merge', 64)");
+        }
+      }
+    } catch { /* derived search maintenance is best-effort */ }
+    return { trimmedTools };
+  }
+  /** Bounded online incremental vacuum, planner stats refresh, and incremental maintenance across L0, L1 and L2. */
+  reclaimSpace(options: { busy?: () => boolean; checkpoint?: boolean; vacuumOnly?: boolean } = {}): { control: number; journal: number; derived: number } {
+    const isBusy = options.busy ?? eventLoopBusy;
+    if (!options.vacuumOnly && !isBusy()) {
+      let trimmedBlobs = 0;
+      try {
+        const coldIds = this.coldSessionsForTrimming();
+        if (coldIds.length) trimmedBlobs = this.journal.trimArchivedToolBlobs(coldIds, { limit: 20 });
+      } catch { /* best-effort cold trimming */ }
+      if (trimmedBlobs > 0 && !isBusy()) {
+        try { this.journal.sweepBlobs(); } catch { /* best-effort immediate sweep of newly unreferenced blobs */ }
+      }
+      if (!isBusy()) {
+        try { this.journal.recompressSmallBlobs({ maxBlobs: 200 }); } catch { /* best-effort dict upgrade */ }
+      }
+      if (!isBusy()) this.maintainDerivedSearch({ maxToolTrims: 500 });
+    }
     const result = {
-      control: reclaimFreePages(this.db, options),
-      journal: reclaimFreePages(this.journalDb, options),
-      derived: reclaimFreePages(this.derivedDb, options),
+      control: reclaimFreePages(this.db, { ...options, busy: isBusy }),
+      journal: reclaimFreePages(this.journalDb, { ...options, busy: isBusy }),
+      derived: reclaimFreePages(this.derivedDb, { ...options, busy: isBusy }),
     };
+    if ((!options.vacuumOnly || options.checkpoint) && !isBusy()) {
+      optimizeDatabase(this.db);
+      optimizeDatabase(this.journalDb);
+      optimizeDatabase(this.derivedDb);
+    }
     if (options.checkpoint) {
       for (const db of [this.db, this.journalDb, this.derivedDb]) {
         try { db.exec('PRAGMA wal_checkpoint(PASSIVE)'); } catch { /* ignore */ }
@@ -1559,6 +1655,9 @@ export class Store {
   }
   close() {
     this.noteMessageIndexShape();
+    optimizeDatabase(this.derivedDb);
+    optimizeDatabase(this.journalDb);
+    optimizeDatabase(this.db);
     this.listeners.clear(); this.runListeners.clear(); this.listListeners.clear(); this.deletionListeners.clear();
     this.statements.clear(); this.derivedStatements.clear();
     this.derivedDb.close(); this.journalDb.close(); this.db.close();

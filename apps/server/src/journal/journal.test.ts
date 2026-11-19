@@ -181,7 +181,7 @@ describe('session journal', () => {
     const upgraded = new Store(path);
     upgraded.journal.append('s', [event('a', 'again')]);
     expect(upgraded.journal.range('s', 0, 5)).toHaveLength(1);
-    expect((upgraded.journalDb.prepare("SELECT json FROM settings WHERE key='journal-schema'").get() as { json: string }).json).toBe('3');
+    expect((upgraded.journalDb.prepare("SELECT json FROM settings WHERE key='journal-schema'").get() as { json: string }).json).toBe('4');
     upgraded.close();
   });
 
@@ -208,23 +208,32 @@ describe('session journal', () => {
     expect(journal.projection('s')).toEqual(journal.rebuildProjection('s'));
   });
 
-  it('compresses JSON blobs transparently with Zstd and spills large compressed blobs to Tier-2 external files', async () => {
+  it('compresses JSON blobs transparently with Zstd (dictionary for small JSON, plain for large) and spills large blobs to Tier-2', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'riffet-blobs-'));
     dirs.push(dir);
     const db = new DatabaseSync(':memory:');
     const blobsDir = join(dir, 'blobs');
     const journal = new Journal(db, undefined, undefined, undefined, { blobsDir });
     try {
-      // Compressible text > 2 KiB stays inline in `blobs` (Tier-1) as zstd.
-      const medium = 'hello world repeated line\n'.repeat(400);
+      // Small/medium JSON object (<= 16 KiB) uses static Zstd dictionary (`zstd-d1`).
+      const medium = 'hello world repeated line\n'.repeat(300);
       journal.append('s', [event('m1', medium)]);
       const [mRow] = journal.range('s', 0, 5);
       expect(mRow!.blobRef).toBeDefined();
       expect((mRow!.payload as { data: { content: { text: string } } }).data.content.text).toBe(medium);
       const mMeta = db.prepare('SELECT size, stored_size, codec, external FROM blobs WHERE hash=?').get(mRow!.blobRef!) as { size: number; stored_size: number; codec: string; external: number };
-      expect(mMeta.codec).toBe('zstd');
+      expect(mMeta.codec).toBe('zstd-d1');
       expect(mMeta.external).toBe(0);
       expect(mMeta.stored_size).toBeLessThan(mMeta.size / 4);
+
+      // Large JSON (> 16 KiB) uses standard Zstd (`zstd`).
+      const large = 'larger payload chunk line\n'.repeat(1200);
+      journal.append('s', [event('m2', large)]);
+      const rows = journal.range('s', 0, 5);
+      const lMeta = db.prepare('SELECT codec, external FROM blobs WHERE hash=?').get(rows[1]!.blobRef!) as { codec: string; external: number };
+      expect(lMeta.codec).toBe('zstd');
+      expect(lMeta.external).toBe(0);
+      expect((rows[1]!.payload as { data: { content: { text: string } } }).data.content.text).toBe(large);
 
       // High-entropy payload whose compressed size >= 128 KiB spills to Tier-2 `blobs/aa/<hash>.raw`.
       const incompressible = Buffer.alloc(160 * 1024);
@@ -235,11 +244,62 @@ describe('session journal', () => {
       expect(extMeta.bytes).toBeNull();
       expect(journal.sessionBlob('s', extHash)?.bytes().equals(incompressible)).toBe(true);
 
-      // Sweeping drops both the SQLite row and the external file.
+      // GC fence prevents sweeping referenced/unreferenced blobs while a backup snapshot is running.
       journal.drop('s');
-      expect(journal.sweepBlobs()).toBe(2);
+      const releaseFence = journal.holdBlobGc();
+      try {
+        expect(journal.isBlobGcHeld()).toBe(true);
+        expect(journal.sweepBlobs()).toBe(0);
+        expect(journal.getBlob(extHash)?.equals(incompressible)).toBe(true);
+      } finally {
+        releaseFence();
+      }
+      expect(journal.isBlobGcHeld()).toBe(false);
+      // Once the fence is released, sweeping drops both the SQLite rows and the external file.
+      expect(journal.sweepBlobs()).toBe(3);
       expect(journal.getBlob(extHash)).toBeUndefined();
       expect(journal.sweepExternalFiles()).toBe(0);
+    } finally { db.close(); }
+  });
+
+  it('upgrades legacy raw/zstd small JSON blobs to dictionary-compressed zstd-d1 losslessly', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const legacyJson = Buffer.from(JSON.stringify({
+        type: 'tool_call_update',
+        nativeId: 'claude:abc:1',
+        runId: 'claude-turn:1',
+        createdAt: '2026-11-16T00:00:00.000Z',
+        data: {
+          sessionUpdate: 'tool_call_update',
+          toolCallId: 'toolu_123',
+          kind: 'read',
+          status: 'completed',
+          rawInput: { file_path: 'apps/server/src/store.ts', offset: 1, limit: 200 },
+          content: [{ type: 'content', content: { type: 'text', text: 'export function example() { return 1; }\n'.repeat(25) } }],
+        },
+      }));
+      // Insert a non-JSON prefix blob, a corrupt zstd blob, and a legacy raw JSON blob to verify cursor progress & resilience.
+      const nonJsonHash = '0'.repeat(64);
+      const corruptHash = '1'.repeat(64);
+      const hash = 'f'.repeat(64);
+      db.prepare("INSERT INTO blobs(hash,size,stored_size,codec,external,bytes,created_at) VALUES(?,?,?,'raw',0,?,?)")
+        .run(nonJsonHash, 1024, 1024, Buffer.alloc(1024, 0x41), '2026-01-01T00:00:00.000Z');
+      db.prepare("INSERT INTO blobs(hash,size,stored_size,codec,external,bytes,created_at) VALUES(?,?,?,'zstd',0,?,?)")
+        .run(corruptHash, 1024, 16, Buffer.from('not-valid-zstd!!'), '2026-01-01T00:00:00.000Z');
+      db.prepare("INSERT INTO blobs(hash,size,stored_size,codec,external,bytes,created_at) VALUES(?,?,?,'raw',0,?,?)")
+        .run(hash, legacyJson.length, legacyJson.length, legacyJson, '2026-01-01T00:00:00.000Z');
+      // Small batch limit=2 stops after non-JSON + corrupt rows, persisting cursor so the next pass reaches `hash`.
+      const firstPass = journal.recompressSmallBlobs({ maxBlobs: 2 });
+      expect(firstPass.recompressed).toBe(0);
+      const secondPass = journal.recompressSmallBlobs({ maxBlobs: 10 });
+      expect(secondPass.recompressed).toBe(1);
+      expect(secondPass.savedBytes).toBeGreaterThan(200);
+      expect(db.prepare('SELECT codec FROM blobs WHERE hash=?').get(hash)).toEqual({ codec: 'zstd-d1' });
+      expect(journal.getBlob(hash)?.equals(legacyJson)).toBe(true);
+      // Steady-state call after reaching end is an O(1) no-op.
+      expect(journal.recompressSmallBlobs({ maxBlobs: 10 })).toEqual({ recompressed: 0, savedBytes: 0 });
     } finally { db.close(); }
   });
 

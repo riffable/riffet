@@ -70,6 +70,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Performance
 
+- Storage stays bounded over long-term heavy use and backs up faster with less disk overhead: the rebuildable timeline cache is capped at 256 MB (evicting the oldest idle conversations first) and auto-rebuilds on startup if corrupted; small history records use dictionary compression and leaner indexes, inactive conversations older than 90 days (30 days when archived) trim oversized raw tool logs while keeping all messages and diffs, and repeated backups deduplicate unchanged attachments, blobs and checkpoints via hard links with consistency checks.
 - The server uses less memory while it backfills Claude Code token usage: a long conversation's history is read line by line instead of loaded whole, so peak memory for a 240 MB history drops from about 590 MB to 170 MB. The image library is loaded only when an image is first processed, about 30 MB less at startup.
 
 ## 0.8.0 - 2026-11-17

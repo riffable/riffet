@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { lstat, readdir, readFile, rm } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { exec, ExecError } from '../../exec.js';
 import { splitUnifiedDiff, type DiffHunk } from './unified-diff.js';
@@ -261,6 +262,8 @@ function endsInNewline(file: string): boolean {
 
 export class WorkspaceObserver {
   private readonly repos = new Map<string, Repo>();
+  /** Per shadow-repo directory serialization queue shared by snapshot/prune and `maintain()`. */
+  private readonly dirQueues = new Map<string, Promise<unknown>>();
   private readonly roots = new Map<string, Promise<{ root: string; common: string; index: string } | undefined>>();
   private readonly windows = new Map<string, Promise<Window | undefined>>();
   private readonly logs = new Map<string, Map<string, ObservedDiff[]>>();
@@ -378,6 +381,68 @@ export class WorkspaceObserver {
     rmSync(this.logFile(scope), { force: true });
   }
 
+  /**
+   * Non-destructive housekeeping for `workspace-observer/`:
+   * - removes orphaned `changes/<hash>.jsonl` files older than `minAgeMs` whose conversation no longer exists;
+   * - removes shadow repos whose origin `.git/objects` (from `objects/info/alternates`) no longer exists on disk;
+   * - prunes loose snapshot tree objects from idle shadow repos with no open command windows.
+   */
+  async maintain(
+    liveSessionIds: ReadonlySet<string>,
+    options: { minAgeMs?: number; nowMs?: number } = {},
+  ): Promise<{ prunedChanges: number; prunedRepos: number; prunedShadowRepos: number }> {
+    const minAgeMs = options.minAgeMs ?? 24 * 60 * 60_000;
+    const cutoff = (options.nowMs ?? Date.now()) - minAgeMs;
+    const result = { prunedChanges: 0, prunedRepos: 0, prunedShadowRepos: 0 };
+
+    const liveHashes = new Set<string>();
+    for (const id of liveSessionIds) liveHashes.add(`${hash(id)}.jsonl`);
+    const changesDir = join(this.dir, 'changes');
+    for (const name of await readdir(changesDir).catch(() => [] as string[])) {
+      if (!/^[0-9a-f]{24}\.jsonl$/.test(name) || liveHashes.has(name)) continue;
+      const full = join(changesDir, name);
+      const info = await lstat(full).catch(() => undefined);
+      if (info?.isFile() && info.mtimeMs <= cutoff) {
+        await rm(full, { force: true }).catch(() => undefined);
+        result.prunedChanges += 1;
+      }
+    }
+
+    const reposDir = join(this.dir, 'repos');
+    for (const name of await readdir(reposDir).catch(() => [] as string[])) {
+      if (!/^[0-9a-f]{24}$/.test(name)) continue;
+      const repoDir = join(reposDir, name);
+      await this.queueDir(repoDir, async () => {
+        const tracked = [...this.repos.values()].find(item => item.dir === repoDir);
+        if (tracked && tracked.open.size > 0) return;
+        const info = await lstat(repoDir).catch(() => undefined);
+        if (!info?.isDirectory()) return;
+        const altText = await readFile(join(repoDir, 'objects', 'info', 'alternates'), 'utf8').catch(() => '');
+        const altTarget = altText.split('\n')[0]?.trim();
+        if (altTarget && !existsSync(altTarget) && info.mtimeMs <= cutoff) {
+          await rm(repoDir, { recursive: true, force: true }).catch(() => undefined);
+          if (tracked) this.repos.delete(tracked.root);
+          result.prunedRepos += 1;
+          return;
+        }
+        // Prune loose unreachable tree snapshots from idle shadow repositories (under per-dir lock).
+        if (tracked) {
+          if (await this.prune(tracked)) result.prunedShadowRepos += 1;
+        } else {
+          try {
+            // Use a grace window for untracked on-disk shadow repos so any fresh loose objects stay safe.
+            await exec('git', ['-c', 'core.fsmonitor=false', '-c', 'core.quotepath=false', 'prune', '--expire=1.hour.ago'], {
+              timeout: PRUNE_MS,
+              env: gitEnv({ GIT_DIR: repoDir }),
+            });
+            result.prunedShadowRepos += 1;
+          } catch { /* best-effort shadow repo prune */ }
+        }
+      });
+    }
+    return result;
+  }
+
   private logFile(scope: string): string { return join(this.dir, 'changes', `${hash(scope)}.jsonl`); }
 
   private log(scope: string): Map<string, ObservedDiff[]> {
@@ -414,8 +479,17 @@ export class WorkspaceObserver {
     for (const repo of this.repos.values()) for (const window of [...repo.open.values()]) if (window.startedAt < stale) this.close(window);
   }
 
+  private queueDir<T>(repoDir: string, task: () => Promise<T>): Promise<T> {
+    const prev = this.dirQueues.get(repoDir) ?? Promise.resolve();
+    const run = prev.then(task, task);
+    const settled = run.catch(() => undefined);
+    this.dirQueues.set(repoDir, settled);
+    void settled.finally(() => { if (this.dirQueues.get(repoDir) === settled) this.dirQueues.delete(repoDir); });
+    return run;
+  }
+
   private queue<T>(repo: Repo, task: () => Promise<T>): Promise<T> {
-    const run = repo.tail.then(task, task);
+    const run = this.queueDir(repo.dir, task);
     repo.tail = run.catch(() => undefined);
     return run;
   }
@@ -536,15 +610,16 @@ export class WorkspaceObserver {
     }
   }
 
-  private async prune(repo: Repo): Promise<void> {
-    if (repo.open.size) return;
+  private async prune(repo: Repo): Promise<boolean> {
+    if (repo.open.size) return false;
     try {
       await this.git(repo, ['prune', '--expire=now'], { timeout: PRUNE_MS });
       repo.trees.clear();
       repo.takenAt.clear();
       repo.settled.clear();
       repo.sincePrune = 0;
-    } catch { /* tried again after the next batch */ }
+      return true;
+    } catch { return false; }
   }
 }
 

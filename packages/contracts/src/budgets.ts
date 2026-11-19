@@ -129,10 +129,24 @@ export const STORAGE_BUDGET = {
   journalPreviewChars: 512,
   /** Minimum blob payload size worth running Zstd on; smaller payloads stay raw. */
   blobCompressMinBytes: 512,
+  /** Maximum JSON blob payload size compressed with the built-in static Zstd dictionary (`zstd-d1`); larger blobs use standard Zstd. */
+  blobDictMaxBytes: 16 * KIB,
   /** Compressed blobs at or above this size live as immutable files under `blobs/aa/<hash>.<codec>` instead of SQLite pages. */
   blobExternalBytes: 128 * KIB,
   /** Maximum characters indexed for a `tool` call row in `message_index` / FTS5. */
   toolIndexChars: 256,
+  /** Ceiling on total folded row payload bytes kept in `derived.db` (`timeline_rows`); oldest idle sessions evict first past this cap. */
+  timelineMaxBytes: 256 * MIB,
+  /** Latest full `session` snapshot events retained per conversation in L0 `events`. */
+  sessionSnapshotsKept: 5,
+  /** SQLite per-role page cache size in bytes (L0 control, L1 journal, L2 derived). */
+  controlCacheBytes: 16 * MIB,
+  journalCacheBytes: 32 * MIB,
+  derivedCacheBytes: 16 * MIB,
+  /** SQLite per-role memory-mapped I/O ceiling in bytes on disk-backed databases. */
+  controlMmapBytes: 32 * MIB,
+  journalMmapBytes: 64 * MIB,
+  derivedMmapBytes: 32 * MIB,
   /** Free pages threshold (per database) before background maintenance runs incremental vacuum. */
   vacuumMinFreePages: 256,
   /** Maximum pages reclaimed per incremental vacuum step, so maintenance never blocks the event loop. */
@@ -144,8 +158,10 @@ export const STORAGE_BUDGET = {
   /** Minimum age (ms) after supersession before non-draft journal revisions are stripped by background maintenance. */
   supersededLagMs: 60_000,
   /** Archived conversations older than this (days) have oversized tool text outputs eligible for head+tail cold trimming. */
-  archivedTrimDays: 90,
-  /** Bytes kept at the head and tail (combined) when trimming an oversized archived tool output blob. */
+  archivedTrimDays: 30,
+  /** Unarchived inactive conversations older than this (days) also become eligible for cold tool text output trimming. */
+  inactiveTrimDays: 90,
+  /** Bytes kept at the head and tail (combined) when trimming an oversized archived/inactive tool output blob. */
   archivedTrimKeepBytes: 32 * KIB,
 } as const;
 

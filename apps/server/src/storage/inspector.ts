@@ -7,6 +7,7 @@ import { STORAGE_BUDGET, STORAGE_SCAN_MS } from '../../../../packages/contracts/
 import type { StorageDatabasePart, StorageFolderKind, StorageMaintenanceResult, StorageProjectUsage, StorageReport, StorageScan, StorageScanStep, StorageStoreUsage } from '../../../../packages/contracts/src/index.js';
 import { storageLayoutForStateDir } from '../sqlite-storage.js';
 import type { Store } from '../store.js';
+import { workspaceObserver } from '../backends/shared/workspace-observer.js';
 import { deduplicateCheckpoints } from './checkpoints-dedup.js';
 import { compactionState, databaseBytes, databaseFiles, directoryBytes } from './compaction.js';
 
@@ -190,7 +191,8 @@ export class StorageInspector {
 
   constructor(private readonly options: {
     stateDir: string;
-    store: Pick<Store, 'listSessions' | 'listProjects' | 'archivedSessionsBefore' | 'journal' | 'reclaimSpace'>;
+    store: Pick<Store, 'listSessions' | 'listProjects' | 'archivedSessionsBefore' | 'journal' | 'reclaimSpace'>
+      & Partial<Pick<Store, 'pruneAllSnapshots' | 'coldSessionsForTrimming' | 'maintainDerivedSearch'>>;
     sweepColdTimeline?: () => Promise<number>;
   }) {
     this.finished = readSaved(join(options.stateDir, SAVED));
@@ -221,9 +223,10 @@ export class StorageInspector {
   }
 
   /**
-   * Non-disruptive online maintenance (`POST /api/system/storage/maintain`): sweeps cold timeline
-   * lanes, strips superseded journal revisions, trims old archived tool outputs, reclaims freed
-   * SQLite pages incrementally, and hard-link deduplicates legacy checkpoints.
+   * Non-disruptive online maintenance (`POST /api/system/storage/maintain`): prunes redundant L0 session
+   * snapshots, sweeps cold/over-quota L2 timeline lanes, strips superseded L1 revisions, upgrades small
+   * JSON blobs to Zstd dictionary compression, trims cold tool outputs, merges FTS5 segments, reclaims
+   * freed SQLite pages incrementally, deduplicates checkpoints, and prunes orphaned workspace-observer data.
    */
   maintain(): Promise<StorageReport> {
     if (this.maintaining) return this.maintaining;
@@ -231,27 +234,35 @@ export class StorageInspector {
       const { stateDir, store, sweepColdTimeline } = this.options;
       const started = Date.now();
       const beforeDb = databaseBytes(stateDir);
+      try { store.pruneAllSnapshots?.(); } catch { /* best-effort L0 snapshot prune */ }
       let coldSessionsDropped = 0;
       if (sweepColdTimeline) coldSessionsDropped = await sweepColdTimeline();
-      if (STORAGE_BUDGET.archivedTrimDays > 0) {
-        const archivedBefore = new Date(Date.now() - STORAGE_BUDGET.archivedTrimDays * 86_400_000).toISOString();
-        const archivedIds = store.archivedSessionsBefore(archivedBefore);
-        if (archivedIds.length) {
-          store.journal.trimArchivedToolBlobs(archivedIds, { limit: 40 });
-          await new Promise<void>(resolve => setImmediate(resolve));
-        }
+      const trimIds = store.coldSessionsForTrimming
+        ? store.coldSessionsForTrimming()
+        : (STORAGE_BUDGET.archivedTrimDays > 0
+          ? store.archivedSessionsBefore(new Date(Date.now() - STORAGE_BUDGET.archivedTrimDays * 86_400_000).toISOString())
+          : []);
+      if (trimIds.length) {
+        store.journal.trimArchivedToolBlobs(trimIds, { limit: 40 });
+        await new Promise<void>(resolve => setImmediate(resolve));
       }
       store.journal.maintainAll({ minAgeMs: 0, maxUpdates: 5_000 });
       await new Promise<void>(resolve => setImmediate(resolve));
+      store.journal.recompressSmallBlobs({ maxBlobs: 500 });
+      await new Promise<void>(resolve => setImmediate(resolve));
+      store.maintainDerivedSearch?.({ maxToolTrims: 2_000 });
+      await new Promise<void>(resolve => setImmediate(resolve));
       for (let round = 0; round < MAX_ONLINE_VACUUM_ROUNDS && !this.closed; round += 1) {
         // Explicit user-triggered maintenance bypasses the idle lag gate so just-freed pages are reclaimed.
-        const reclaimed = store.reclaimSpace({ busy: () => false });
+        const reclaimed = store.reclaimSpace({ busy: () => false, vacuumOnly: true });
         if (reclaimed.control + reclaimed.journal + reclaimed.derived === 0) break;
         await new Promise<void>(resolve => setImmediate(resolve));
       }
-      // Checkpoint WALs so reclaimed pages show up accurately in `afterBytes`.
-      store.reclaimSpace({ busy: () => false, checkpoint: true });
+      // Refresh planner statistics and checkpoint WALs so reclaimed pages show up accurately in `afterBytes`.
+      store.reclaimSpace({ busy: () => false, checkpoint: true, vacuumOnly: true });
       const dedup = await deduplicateCheckpoints(stateDir);
+      const liveIds = new Set(store.listSessions().map(session => session.id));
+      await workspaceObserver(stateDir).maintain(liveIds).catch(() => undefined);
       this.externalBlobsCache = undefined;
       const afterDb = databaseBytes(stateDir);
       const result: StorageMaintenanceResult = {

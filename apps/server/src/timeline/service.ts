@@ -405,16 +405,19 @@ export class TimelineService {
   }
 
   /**
-   * Drops the rows of sessions idle longer than `SERVER_BUDGET.coldTimelineDays` that nobody holds open
-   * (docs/guide/performance.md §3.7). Both main and subagent lanes are dropped: each subagent lane's
-   * summary (`rows`, `changes`) is persisted onto its `timeline_heads.summary` before its rows go, so
-   * refolding the main lane later still decorates every parent tool row accurately without refolding children.
-   * Each dropped lane keeps its head under a new epoch, and releases any legacy persisted truncated blobs.
+   * Drops the rows of sessions that are either:
+   * 1. Idle longer than `SERVER_BUDGET.coldTimelineDays` (TTL phase), or
+   * 2. Past the total derived cache quota `STORAGE_BUDGET.timelineMaxBytes` (LRU phase, evicting
+   *    oldest idle sessions first down to 80% of the ceiling so repeated sweeps do not thrash).
+   *
+   * Both main and subagent lanes are dropped: each subagent lane's summary (`rows`, `changes`) is
+   * persisted onto its `timeline_heads.summary` before its rows go, so refolding the main lane later
+   * still decorates every parent tool row accurately without refolding children.
    *
    * Limitation: a background job (`NativeJob`) is held in memory only and decorates stored tool rows, so a
    * session whose rows carry one is not dropped; a refold could not bring it back.
    */
-  sweepCold(now = Date.now()): Promise<number> {
+  sweepCold(now = Date.now(), maxBytes = STORAGE_BUDGET.timelineMaxBytes): Promise<number> {
     if (this.sweeping) return this.sweeping;
     const sweep = (async () => {
       await Promise.resolve();
@@ -429,6 +432,10 @@ export class TimelineService {
           if (await this.dropIfCold(sessionId, now)) dropped++;
           await new Promise<void>(resolve => setImmediate(resolve));
         }
+        // Phase 2: enforce total byte quota on remaining folded rows (oldest idle sessions evicted first).
+        if (!this.closed && maxBytes > 0) {
+          dropped += await this.evictOverQuota(maxBytes);
+        }
         if (dropped > 0 && !this.closed) reclaimFreePages(this.deps.db, { busy: this.deps.busy });
       } catch (error) {
         console.error('[timeline] cold sweep failed:', error);
@@ -438,6 +445,58 @@ export class TimelineService {
     this.sweeping = sweep;
     void sweep.finally(() => { if (this.sweeping === sweep) this.sweeping = undefined; });
     return sweep;
+  }
+
+  /**
+   * Evicts the least recently active eligible sessions until `timeline_rows` falls within 80% of `maxBytes`.
+   * Measures sessions incrementally by PK prefix (yielding between batches and respecting `busy`) instead of
+   * scanning the entire `timeline_rows` table synchronously on the event loop.
+   */
+  private async evictOverQuota(maxBytes: number): Promise<number> {
+    const usages: Array<{ sessionId: string; bytes: number; at: number }> = [];
+    let total = 0;
+    let after = '';
+    while (!this.closed) {
+      while (!this.closed && (this.deps.busy ?? eventLoopBusy)()) await this.pause(COLD_RETRY_MS);
+      if (this.closed) return 0;
+      const batch = this.tables.foldedSessions(after, 16);
+      if (!batch.length) break;
+      for (const sessionId of batch) {
+        after = sessionId;
+        const bytes = this.tables.sessionBytes(sessionId);
+        if (bytes > 0) {
+          total += bytes;
+          usages.push({ sessionId, bytes, at: this.sessionLastActivityMs(sessionId) });
+        }
+      }
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    if (total <= maxBytes) return 0;
+    const target = Math.floor(maxBytes * 0.8);
+    usages.sort((a, b) => a.at - b.at);
+    let dropped = 0;
+    for (const candidate of usages) {
+      if (this.closed || total <= target) break;
+      while (!this.closed && (this.deps.busy ?? eventLoopBusy)()) await this.pause(COLD_RETRY_MS);
+      if (this.closed) break;
+      const completed = await this.dropIfCold(candidate.sessionId, 0, true);
+      const remaining = this.tables.sessionBytes(candidate.sessionId);
+      const actuallyFreed = Math.max(0, candidate.bytes - remaining);
+      total = Math.max(0, total - actuallyFreed);
+      if (completed) dropped += 1;
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    return dropped;
+  }
+
+  private sessionLastActivityMs(sessionId: string): number {
+    const activity = (this.deps.activity ?? ((id: string) => this.storedActivity(id)))(sessionId);
+    const heads = this.tables.lanesOf(sessionId);
+    return Math.max(
+      Date.parse(activity?.at ?? '') || 0,
+      Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0,
+      ...heads.map(head => Date.parse(head.updatedAt ?? '') || 0),
+    );
   }
 
   private pause(ms: number): Promise<void> {
@@ -454,7 +513,7 @@ export class TimelineService {
     return false;
   }
 
-  private async dropIfCold(sessionId: string, now: number): Promise<boolean> {
+  private async dropIfCold(sessionId: string, now: number, ignoreAge = false): Promise<boolean> {
     if (this.held(sessionId) || this.deps.deleted?.(sessionId)) return false;
     const heads = this.tables.lanesOf(sessionId);
     if (!heads.length) return false;
@@ -466,13 +525,15 @@ export class TimelineService {
     if (!resumeOnly) {
       const activity = (this.deps.activity ?? ((id: string) => this.storedActivity(id)))(sessionId);
       if (!activity || activity.running) return false;
-      // The newest sign of use: the session's activity, its log, and any lane's last fold.
-      const at = Math.max(
-        Date.parse(activity.at ?? '') || 0,
-        Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0,
-        ...heads.map(head => Date.parse(head.updatedAt ?? '') || 0),
-      );
-      if (!at || now - at < SERVER_BUDGET.coldTimelineDays * 86_400_000) return false;
+      if (!ignoreAge) {
+        // The newest sign of use: the session's activity, its log, and any lane's last fold.
+        const at = Math.max(
+          Date.parse(activity.at ?? '') || 0,
+          Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0,
+          ...heads.map(head => Date.parse(head.updatedAt ?? '') || 0),
+        );
+        if (!at || now - at < SERVER_BUDGET.coldTimelineDays * 86_400_000) return false;
+      }
       if (this.deps.listRuns(sessionId).some(run => !TERMINAL_RUNS.has(run.state))) return false;
       if (await this.hasJob(sessionId)) return false;
       if (this.closed || this.held(sessionId)) return false;
@@ -480,8 +541,9 @@ export class TimelineService {
     this.clearExpandedFor(sessionId);
     // Drop subagent lanes first (caching their summaries onto `timeline_heads.summary`), then the main lane.
     const ordered = [...activeHeads.filter(h => h.lane !== 'main'), ...activeHeads.filter(h => h.lane === 'main')];
+    let interrupted = false;
     for (const head of ordered) {
-      if (this.closed || this.held(sessionId)) break;
+      if (this.closed || this.held(sessionId)) { interrupted = true; break; }
       const id = laneId(sessionId, head.lane);
       this.dropping.add(id);
       const resume = head.headSeq === 0 && head.journalSeq === 0 && head.epoch > 0 && this.tables.hasRows(sessionId, head.lane);
@@ -507,12 +569,12 @@ export class TimelineService {
       this.forget(sessionId, false);
       while (left) {
         await new Promise<void>(resolve => setImmediate(resolve));
-        if (this.closed || !this.dropping.has(id)) break;
+        if (this.closed || !this.dropping.has(id)) { interrupted = true; break; }
         this.tableTx(() => { left = this.deleteChunk(sessionId, head.lane); });
       }
       this.dropping.delete(id);
     }
-    return true;
+    return !interrupted;
   }
 
   /** Whether a tool row of the main lane carries a background job, read a bounded step at a time. */

@@ -14,7 +14,8 @@ const FOLD_BATCH = 2000;
 const COMPACT_BATCH = 500;
 const PREVIEW_TEXT = STORAGE_BUDGET.journalPreviewChars;
 const SCHEMA_MARKER = 'journal-schema';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
+const DICT_RECOMPRESS_MARKER = 'blob-dict-v1-cursor';
 
 /** Kinds that exist in the log but are not part of the transcript a client sees. */
 export const DRAFT_KIND = 'draft';
@@ -298,6 +299,8 @@ export class Journal {
   /** Legacy tables created `blobs.bytes BLOB NOT NULL`; external rows store empty buffer there instead of NULL. */
   private readonly bytesNotNull: boolean;
   private fallbackBlobResolver: FallbackBlobResolver | undefined;
+  /** Reference count of active backup/snapshot readers holding off blob GC so referenced files are never unlinked mid-copy. */
+  private blobGcHolds = 0;
 
   /**
    * `transaction` lets the owner of the database (the store) make journal writes join its own
@@ -324,7 +327,8 @@ export class Journal {
         turn_id TEXT, at TEXT NOT NULL, digest TEXT NOT NULL, blob_ref TEXT, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, seq));
       CREATE UNIQUE INDEX IF NOT EXISTS journal_native ON journal_events(session_id, native_id, rev);
-      CREATE INDEX IF NOT EXISTS journal_turn ON journal_events(session_id, turn_id) WHERE turn_id IS NOT NULL;
+      -- Exclude compacted '{}' shells so superseded revisions and drained drafts do not bloat the turn index.
+      CREATE INDEX IF NOT EXISTS journal_turn ON journal_events(session_id, turn_id) WHERE turn_id IS NOT NULL AND payload<>'{}';
       CREATE INDEX IF NOT EXISTS journal_blob_ref ON journal_events(blob_ref) WHERE blob_ref IS NOT NULL;
       -- Draft chunks not yet emptied (see compactDrafts): a handful, where the table holds every event ever logged.
       CREATE INDEX IF NOT EXISTS journal_open_drafts ON journal_events(kind) WHERE kind='draft' AND payload<>'{}';
@@ -360,6 +364,7 @@ export class Journal {
    * its marker being written is not run twice.
    * - v2 adds `journal_heads.identity`.
    * - v3 adds `journal_heads.compacted_seq` and compressed/external blob metadata columns on `blobs`.
+   * - v4 narrows `journal_turn` to a partial index excluding compacted `{}` shells.
    */
   private migrate(from: number): void {
     const hasColumn = (table: string, name: string) =>
@@ -372,6 +377,9 @@ export class Journal {
       if (!hasColumn('blobs', 'stored_size')) this.db.exec('ALTER TABLE blobs ADD COLUMN stored_size INTEGER NOT NULL DEFAULT 0');
       if (!hasColumn('blobs', 'codec')) this.db.exec("ALTER TABLE blobs ADD COLUMN codec TEXT NOT NULL DEFAULT 'raw'");
       if (!hasColumn('blobs', 'external')) this.db.exec('ALTER TABLE blobs ADD COLUMN external INTEGER NOT NULL DEFAULT 0');
+    }
+    if (from < 4) {
+      this.db.exec("DROP INDEX IF EXISTS journal_turn; CREATE INDEX IF NOT EXISTS journal_turn ON journal_events(session_id, turn_id) WHERE turn_id IS NOT NULL AND payload<>'{}';");
     }
   }
 
@@ -686,8 +694,29 @@ export class Journal {
     this.tx(() => { for (const hash of hashes) release.run(sessionId, hash); });
   }
 
+  /**
+   * Acquires a GC fence preventing {@link sweepBlobs} and {@link sweepExternalFiles} from deleting
+   * unreferenced blobs or external files while an online backup is snapshotting `journal.db` and `blobs/`.
+   * Call the returned release function in a `finally` block.
+   */
+  holdBlobGc(): () => void {
+    this.blobGcHolds += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.blobGcHolds = Math.max(0, this.blobGcHolds - 1);
+    };
+  }
+
+  /** Whether an active reader (such as an online backup) is holding off blob garbage collection. */
+  isBlobGcHeld(): boolean {
+    return this.blobGcHolds > 0;
+  }
+
   /** Deletes blobs no row refers to any more (and removes any Tier-2 external files after commit); returns how many went. */
   sweepBlobs(): number {
+    if (this.blobGcHolds > 0) return 0;
     const unreferenced = 'hash NOT IN (SELECT blob_ref FROM journal_events WHERE blob_ref IS NOT NULL) AND hash NOT IN (SELECT hash FROM session_blobs)';
     let externalRows: Array<{ hash: string; codec: string | null }> = [];
     const deleted = this.tx(() => {
@@ -713,9 +742,82 @@ export class Journal {
 
   /** Sweeps stale `.tmp` and unreferenced Tier-2 blob files on disk (matching both hash and codec). */
   sweepExternalFiles(): number {
-    if (!this.blobsDir) return 0;
+    if (!this.blobsDir || this.blobGcHolds > 0) return 0;
     const exists = this.sql('SELECT 1 AS found FROM blobs WHERE hash=? AND codec=? AND external=1');
     return sweepOrphanExternalBlobs(this.blobsDir, (hash, codec) => Boolean(exists.get(hash, codec)));
+  }
+
+  /**
+   * Upgrades legacy inline `raw`/`zstd` JSON object blobs (`<= STORAGE_BUDGET.blobDictMaxBytes`) to
+   * dictionary-compressed `zstd-d1` in bounded batches when doing so saves space. Compression runs
+   * strictly outside write locks. Progress is persisted in `settings` (`blob-dict-v1-cursor`) so
+   * incompressible prefix rows never starve later blobs and steady-state calls do O(1) work once complete.
+   */
+  recompressSmallBlobs(options: { maxBlobs?: number; reset?: boolean } = {}): { recompressed: number; savedBytes: number } {
+    const maxBlobs = options.maxBlobs ?? 1_000;
+    if (maxBlobs <= 0) return { recompressed: 0, savedBytes: 0 };
+    type Progress = { cursor?: string; done?: boolean };
+    let progress: Progress = {};
+    if (!options.reset) {
+      const saved = this.sql('SELECT json FROM settings WHERE key=?').get(DICT_RECOMPRESS_MARKER) as { json: string } | undefined;
+      if (saved) {
+        try { progress = JSON.parse(saved.json) as Progress; } catch { progress = {}; }
+      }
+      if (progress.done) return { recompressed: 0, savedBytes: 0 };
+    }
+    const saveProgress = (next: Progress) => {
+      this.sql('INSERT INTO settings(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json')
+        .run(DICT_RECOMPRESS_MARKER, JSON.stringify(next));
+    };
+    const pick = this.sql(`SELECT hash, size, stored_size, codec, external, bytes FROM blobs
+      WHERE external=0 AND codec IN ('raw','zstd') AND size>=? AND size<=? AND hash>?
+      ORDER BY hash LIMIT ?`);
+    const update = this.sql("UPDATE blobs SET stored_size=?, codec=?, bytes=? WHERE hash=? AND external=0 AND codec IN ('raw','zstd')");
+    let cursor = progress.cursor ?? '';
+    let scanned = 0;
+    let recompressed = 0;
+    let savedBytes = 0;
+    let reachedEnd = false;
+    while (scanned < maxBlobs) {
+      const batchSize = Math.min(200, maxBlobs - scanned);
+      const rows = pick.all(STORAGE_BUDGET.blobCompressMinBytes, STORAGE_BUDGET.blobDictMaxBytes, cursor, batchSize) as Array<{
+        hash: string; size: number; stored_size: number; codec: string; external: number; bytes: Uint8Array | null;
+      }>;
+      if (!rows.length) { reachedEnd = true; break; }
+      cursor = rows.at(-1)!.hash;
+      scanned += rows.length;
+      const upgrades: Array<{ hash: string; storedSize: number; codec: string; bytes: Buffer; saved: number }> = [];
+      for (const row of rows) {
+        try {
+          const plain = readStoredBlob(row, this.blobsDir);
+          if (!plain || plain[0] !== 0x7b) continue;
+          const prepared = prepareBlob(plain, { mimeType: 'application/json' });
+          const currentStored = row.stored_size > 0 ? row.stored_size : row.size;
+          if (prepared.codec === 'zstd-d1' && prepared.storedSize + 16 < currentStored) {
+            upgrades.push({
+              hash: row.hash,
+              storedSize: prepared.storedSize,
+              codec: prepared.codec,
+              bytes: prepared.storedBytes,
+              saved: currentStored - prepared.storedSize,
+            });
+          }
+        } catch { /* skip corrupt blob rather than aborting maintenance */ }
+      }
+      const batchEnd = rows.length < batchSize;
+      this.tx(() => {
+        for (const item of upgrades) {
+          const changed = Number(update.run(item.storedSize, item.codec, item.bytes, item.hash).changes);
+          if (changed) { recompressed += 1; savedBytes += item.saved; }
+        }
+        saveProgress(batchEnd ? { done: true } : { cursor });
+      });
+      if (batchEnd) { reachedEnd = true; break; }
+    }
+    if (reachedEnd && scanned === 0) {
+      this.tx(() => saveProgress({ done: true }));
+    }
+    return { recompressed, savedBytes };
   }
 
   // ---- compaction & retention ---------------------------------------------------------------
@@ -898,7 +1000,7 @@ export class Journal {
   /** Current entities of one kind in a turn, newest transcript position first. */
   *turnEntitiesNewestFirst(sessionId: string, turnId: string, kind: string): Generator<JournalRow> {
     const rows = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
-      WHERE e.session_id=? AND e.turn_id=? AND e.kind=?
+      WHERE e.session_id=? AND e.turn_id=? AND e.payload<>'{}' AND e.kind=?
         AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
       ORDER BY (SELECT seq FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id AND rev=1) DESC`)
       .iterate(sessionId, turnId, kind);

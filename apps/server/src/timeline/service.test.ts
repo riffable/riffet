@@ -24,7 +24,7 @@ beforeEach(async () => { dir = await realpath(await mkdtemp(join(tmpdir(), 'riff
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 /** One database, journal, writer and timeline service; `reopen` is a restart. */
-function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs?: NativeJob[]; stepRows?: number; idleSince?: string } = {}) {
+function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs?: NativeJob[]; stepRows?: number; idleSince?: string; activity?: (id: string) => { at?: string; running: boolean } | undefined } = {}) {
   const db = new DatabaseSync(path);
   const journal = new Journal(db);
   const writer = JournalLaneWriter.open(journal, S);
@@ -38,7 +38,7 @@ function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs
     db, journal, listRuns: () => runs, onRunChanged: listener => { runListeners.add(listener); return () => runListeners.delete(listener); },
     nativeChatId: () => 'chat-1', listJobs: () => options.jobs ?? [],
     onJobChanged: listener => { jobListeners.add(listener); return () => jobListeners.delete(listener); },
-    coldSweep: false, busy: () => false, activity: () => ({ at: options.idleSince ?? new Date().toISOString(), running: false }),
+    coldSweep: false, busy: () => false, activity: options.activity ?? (() => ({ at: options.idleSince ?? new Date().toISOString(), running: false })),
     debounceMs: options.debounceMs ?? 5, ...(options.stepRows ? { stepRows: options.stepRows } : {}),
   });
   const frames: TimelineChange[] = [];
@@ -575,6 +575,39 @@ describe('timeline service', () => {
     const after = await env.ready();
     expect(after.generation).not.toBe(before.generation);
     expect(parent()).toEqual(summary);
+    env.close();
+  });
+
+  it('evicts the oldest idle sessions when folded timeline rows exceed the byte quota, even within the TTL window', async () => {
+    const dbPath = join(dir, 'quota.db');
+    const activities = new Map<string, { at: string; running: boolean }>([
+      ['s-old', { at: stamp(1), running: false }],
+      ['s-mid', { at: stamp(2), running: false }],
+      ['s-new', { at: stamp(3), running: false }],
+    ]);
+    let env = open(dbPath, { activity: id => activities.get(id) });
+    const seed = async (id: string, body: string) => {
+      const w = JournalLaneWriter.open(env.journal, id);
+      w.turnStarted('t1', stamp(++tick));
+      w.commit({ events: [user('u1', 't1', 'q'), answer('a1', 't1', body)], cursor: '1' });
+      w.turnEnded('t1', 'completed', stamp(++tick));
+      await env.service.ready(id, 'main');
+    };
+    const body = 'x'.repeat(2000);
+    await seed('s-old', body);
+    await seed('s-mid', body);
+    await seed('s-new', body);
+    const perSession = (env.db.prepare("SELECT SUM(bytes) AS b FROM timeline_rows WHERE session_id='s-old'").get() as { b: number }).b;
+    expect(perSession).toBeGreaterThan(1500);
+    env.close();
+
+    // Reopen with nothing held in memory; now is well within coldTimelineDays, yet quota forces LRU eviction of oldest first.
+    env = open(dbPath, { activity: id => activities.get(id) });
+    const dropped = await env.service.sweepCold(Date.now(), Math.floor(perSession * 1.5));
+    expect(dropped).toBe(2);
+    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE session_id='s-old'").get()).toEqual({ n: 0 });
+    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE session_id='s-mid'").get()).toEqual({ n: 0 });
+    expect((env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE session_id='s-new'").get() as { n: number }).n).toBeGreaterThan(0);
     env.close();
   });
 

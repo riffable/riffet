@@ -218,6 +218,12 @@ export class TimelineTables {
     return Boolean(this.sql('SELECT 1 AS one FROM timeline_rows WHERE session_id=? AND lane=? LIMIT 1').get(sessionId, lane));
   }
 
+  /** Total folded payload bytes of one session across all its lanes (indexed prefix lookup on PK). */
+  sessionBytes(sessionId: string): number {
+    const row = this.sql('SELECT COALESCE(SUM(bytes),0) AS bytes FROM timeline_rows WHERE session_id=?').get(sessionId) as { bytes: number };
+    return Number(row.bytes);
+  }
+
   /**
    * A step of looking for a background job on the main lane's tool rows (`job`): the rows after key `after`, `limit` at a time.
    * A job lives in memory only, so rows refolded without it lose its status. A payload that merely quotes `"job":{` also matches.

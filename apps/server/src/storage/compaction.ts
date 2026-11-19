@@ -2,10 +2,11 @@ import { existsSync, lstatSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { StorageCompaction, StorageCompactionResult } from '../../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import { claimStateDirectory } from '../compat.js';
 import { Journal } from '../journal/journal.js';
 import { migrateStorageLayout, needsStorageLayoutMigration } from '../journal/storage-migration.js';
-import { storageLayoutForStateDir } from '../sqlite-storage.js';
+import { optimizeDatabase, storageLayoutForStateDir } from '../sqlite-storage.js';
 import { deduplicateCheckpointsSync } from './checkpoints-dedup.js';
 
 /*
@@ -162,7 +163,33 @@ export function compactDatabase(stateDir: string, log: (line: string) => void = 
       migrateStorageLayout(layout.control, log);
     }
 
-    // Strip any pending superseded revisions and unreferenced blobs in `journal.db` before vacuuming.
+    // Prune redundant full session snapshots in L0 `events` before vacuuming `workbench.db`.
+    if (existsSync(layout.control)) {
+      const cdb = new DatabaseSync(layout.control);
+      try {
+        const hasEvents = Boolean(cdb.prepare("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='events'").get());
+        const hasSessions = Boolean(cdb.prepare("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='sessions'").get());
+        if (hasEvents && hasSessions) {
+          const keep = STORAGE_BUDGET.sessionSnapshotsKept;
+          const cutoffStmt = cdb.prepare(`SELECT sequence FROM events WHERE session_id=? AND json_extract(json,'$.type')='session' ORDER BY sequence DESC LIMIT 1 OFFSET ?`);
+          const delStmt = cdb.prepare(`DELETE FROM events WHERE session_id=? AND sequence<? AND json_extract(json,'$.type')='session'`);
+          const ids = (cdb.prepare('SELECT id FROM sessions').all() as Array<{ id: string }>).map(row => row.id);
+          let pruned = 0;
+          cdb.exec('BEGIN IMMEDIATE');
+          try {
+            for (const id of ids) {
+              const cutoff = cutoffStmt.get(id, Math.max(0, keep - 1)) as { sequence: number } | undefined;
+              if (cutoff) pruned += Number(delStmt.run(id, cutoff.sequence).changes);
+            }
+            cdb.exec('COMMIT');
+          } catch (error) { cdb.exec('ROLLBACK'); throw error; }
+          if (pruned) log(`Control snapshots: pruned ${pruned} superseded session snapshots.`);
+        }
+        optimizeDatabase(cdb);
+      } finally { cdb.close(); }
+    }
+
+    // Strip superseded revisions, upgrade small JSON blobs to Zstd dictionary compression, and sweep unreferenced blobs before vacuuming `journal.db`.
     if (existsSync(layout.journal)) {
       const jdb = new DatabaseSync(layout.journal);
       try {
@@ -171,7 +198,30 @@ export function compactDatabase(stateDir: string, log: (line: string) => void = 
         if (stats.drafts || stats.superseded || stats.blobs || stats.externalFiles) {
           log(`Journal housekeeping: ${stats.drafts} drafts, ${stats.superseded} superseded revisions, ${stats.blobs} blobs, ${stats.externalFiles} orphan files removed.`);
         }
+        const dict = journal.recompressSmallBlobs({ maxBlobs: 200_000 });
+        if (dict.recompressed) {
+          log(`Journal dictionary compression: upgraded ${dict.recompressed} small JSON blobs (${mib(dict.savedBytes)} saved).`);
+        }
+        optimizeDatabase(jdb);
       } finally { jdb.close(); }
+    }
+
+    // Trim legacy oversized tool search rows and compact FTS5 segments before vacuuming `derived.db`.
+    if (existsSync(layout.derived)) {
+      const ddb = new DatabaseSync(layout.derived);
+      try {
+        const hasIndex = Boolean(ddb.prepare("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='message_index'").get());
+        if (hasIndex && STORAGE_BUDGET.toolIndexChars > 0) {
+          const cap = STORAGE_BUDGET.toolIndexChars;
+          const trimmed = Number(ddb.prepare(`UPDATE message_index SET text=substr(text,1,?) WHERE kind='tool' AND length(text)>?`).run(cap, cap).changes);
+          if (trimmed) log(`Search index: trimmed ${trimmed} legacy oversized tool entries.`);
+        }
+        const hasFts = Boolean(ddb.prepare("SELECT 1 AS found FROM sqlite_master WHERE name='message_index_fts'").get());
+        if (hasFts) {
+          try { ddb.exec("INSERT INTO message_index_fts(message_index_fts) VALUES('optimize')"); } catch { /* ignore */ }
+        }
+        optimizeDatabase(ddb);
+      } finally { ddb.close(); }
     }
 
     for (const file of databaseFiles(stateDir)) vacuumOne(file, log);

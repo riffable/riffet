@@ -42,13 +42,49 @@ export function storageLayoutForControlDb(controlDbPath: string): StorageLayoutP
   };
 }
 
-/** Opens a SQLite database with incremental auto-vacuum, WAL mode and NORMAL durability. */
-export function openSqliteDatabase(path: string, options: { foreignKeys?: boolean; timeout?: number } = {}): DatabaseSync {
-  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+export type SqliteStoreRole = 'control' | 'journal' | 'derived';
+
+/** Per-role page cache (KiB, negative for SQLite PRAGMA cache_size) and mmap ceiling (bytes), sized from `STORAGE_BUDGET`. */
+const ROLE_TUNING: Record<SqliteStoreRole, { cacheKiB: number; mmapBytes: number }> = {
+  control: { cacheKiB: Math.floor(STORAGE_BUDGET.controlCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.controlMmapBytes },
+  journal: { cacheKiB: Math.floor(STORAGE_BUDGET.journalCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.journalMmapBytes },
+  derived: { cacheKiB: Math.floor(STORAGE_BUDGET.derivedCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.derivedMmapBytes },
+};
+
+/** Opens a SQLite database with incremental auto-vacuum, WAL mode, NORMAL durability, and role-tuned cache/mmap settings. */
+export function openSqliteDatabase(
+  path: string,
+  options: { foreignKeys?: boolean; timeout?: number; role?: SqliteStoreRole } = {},
+): DatabaseSync {
+  const isDisk = path !== ':memory:';
+  if (isDisk) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path, { timeout: options.timeout ?? 5000 });
-  if (path !== ':memory:') chmodSync(path, 0o600);
-  db.exec(`PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;${options.foreignKeys ? ' PRAGMA foreign_keys=ON;' : ''}`);
+  if (isDisk) chmodSync(path, 0o600);
+  const tuning = options.role ? ROLE_TUNING[options.role] : undefined;
+  const cachePragma = tuning ? ` PRAGMA cache_size=-${tuning.cacheKiB};` : '';
+  const mmapPragma = isDisk && tuning ? ` PRAGMA mmap_size=${tuning.mmapBytes};` : '';
+  db.exec(
+    `PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;${cachePragma}${mmapPragma}${options.foreignKeys ? ' PRAGMA foreign_keys=ON;' : ''}`,
+  );
   return db;
+}
+
+/** Runs SQLite's lightweight planner statistics refresh (`PRAGMA optimize`); safe to call on idle maintenance and before close. */
+export function optimizeDatabase(db: DatabaseSync): void {
+  try {
+    db.exec('PRAGMA optimize');
+  } catch { /* connection closed or read-only */ }
+}
+
+/** Lightweight structural integrity check (`PRAGMA quick_check(1)`): catches corrupt pages eagerly on startup. */
+export function quickCheckDatabase(db: DatabaseSync): boolean {
+  try {
+    const row = db.prepare('PRAGMA quick_check(1)').get() as Record<string, unknown> | undefined;
+    const value = row ? Object.values(row)[0] : undefined;
+    return value === 'ok';
+  } catch {
+    return false;
+  }
 }
 
 /**

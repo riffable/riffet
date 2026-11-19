@@ -79,6 +79,23 @@ describe('WorkspaceObserver', () => {
     await observer.begin('plain', base);
     expect(await observer.end('plain')).toBeUndefined();
   });
+
+  it('prunes orphaned change logs and shadow repos of deleted git repositories while keeping active ones', async () => {
+    const observer = new WorkspaceObserver(state);
+    await observer.begin('c1', project);
+    await writeFile(join(project, 'a.txt'), 'changed\n');
+    const diffs = await observer.end('c1');
+    observer.record('live-session', 'c1', diffs!);
+    observer.record('dead-session', 'c1', diffs!);
+
+    // Remove the origin repo so its shadow repo becomes orphaned after the age gate.
+    await rm(project, { recursive: true, force: true });
+    const stats = await observer.maintain(new Set(['live-session']), { minAgeMs: 0, nowMs: Date.now() + 10_000 });
+    expect(stats.prunedChanges).toBe(1);
+    expect(stats.prunedRepos).toBe(1);
+    expect(new WorkspaceObserver(state).changes('live-session', 'c1')).toEqual(diffs);
+    expect(new WorkspaceObserver(state).changes('dead-session', 'c1')).toBeUndefined();
+  });
 });
 
 describe('readsOnly', () => {

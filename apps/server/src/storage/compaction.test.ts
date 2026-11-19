@@ -5,6 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { reclaimFreePages } from '../sqlite-storage.js';
 import { Store } from '../store.js';
+import { createBackup, restoreBackup } from '../system.js';
+import { externalBlobPath } from '../journal/blob-store.js';
 import { deduplicateCheckpoints } from './checkpoints-dedup.js';
 import { compactionRunning, compactionState, runRequestedCompaction, scheduleCompaction } from './compaction.js';
 
@@ -174,5 +176,84 @@ describe('a compaction asked for on the settings page', () => {
     // Idempotent second pass does nothing.
     const second = await deduplicateCheckpoints(dir);
     expect(second.linkedFiles).toBe(0);
+  });
+
+  it('recreates a corrupted derived.db eagerly on startup via PRAGMA quick_check', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-derived-corrupt-'));
+    dirs.push(dir);
+    const controlPath = join(dir, 'workbench.db');
+    const first = new Store(controlPath);
+    const project = first.createProject('/tmp/repo', 'Repo');
+    const session = first.createSession({ projectId: project.id, kind: 'native', backendId: 'codex', title: 'Keep' });
+    first.indexMessages([{ sessionId: session.id, messageId: 'm1', kind: 'assistant', text: 'hello world', at: new Date().toISOString() }]);
+    first.close();
+
+    // Corrupt derived.db bytes on disk (valid SQLite header broken in body pages).
+    const derivedPath = join(dir, 'derived.db');
+    const raw = readFileSync(derivedPath);
+    const mangled = Buffer.from(raw);
+    mangled.fill(0xff, Math.min(4096, Math.floor(mangled.length / 2)));
+    writeFileSync(derivedPath, mangled);
+
+    const reopened = new Store(controlPath);
+    try {
+      expect(reopened.getSession(session.id).title).toBe('Keep');
+      expect(reopened.derivedDb.prepare('SELECT COUNT(*) AS n FROM message_index').get()).toEqual({ n: 0 });
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it('hard-link deduplicates immutable files across backups and fails loudly if a referenced Tier-2 blob is missing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-backup-dedup-'));
+    dirs.push(dir);
+    const store = new Store(join(dir, 'workbench.db'));
+    try {
+      const project = store.createProject('/tmp/repo', 'Repo');
+      const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'codex', title: 'Backup' });
+      const big = Buffer.alloc(160 * 1024);
+      for (let i = 0; i < big.length; i++) big[i] = (i * 97 + (i >> 2) * 31 + (i * i)) & 0xff;
+      const hash = store.journal.putSessionBlob(session.id, big, 'application/octet-stream');
+
+      const cp1 = join(dir, 'checkpoints', 'a'.repeat(32), '11111111-1111-4111-8111-111111111111');
+      const cp2 = join(dir, 'checkpoints', 'a'.repeat(32), '22222222-2222-4222-8222-222222222222');
+      mkdirSync(cp1, { recursive: true });
+      mkdirSync(cp2, { recursive: true });
+      const cpBlobName = `blob-${'c'.repeat(64)}`;
+      writeFileSync(join(cp1, cpBlobName), 'same-checkpoint-content\n'.repeat(200));
+      writeFileSync(join(cp2, cpBlobName), 'same-checkpoint-content\n'.repeat(200));
+
+      const first = await createBackup(store, dir);
+      const second = await createBackup(store, dir);
+
+      // Intra-backup checkpoint blobs share inode; cross-backup Tier-2 blob shares inode.
+      const relCp1 = join('checkpoints', 'a'.repeat(32), '11111111-1111-4111-8111-111111111111', cpBlobName);
+      const relCp2 = join('checkpoints', 'a'.repeat(32), '22222222-2222-4222-8222-222222222222', cpBlobName);
+      expect(lstatSync(join(first.path, relCp1)).ino).toBe(lstatSync(join(first.path, relCp2)).ino);
+      const relBlob = join('blobs', hash.slice(0, 2), `${hash}.raw`);
+      expect(lstatSync(join(first.path, relBlob)).ino).toBe(lstatSync(join(second.path, relBlob)).ino);
+
+      // Restoring into a clean directory recovers both L0/L1 and the external Tier-2 blob intact.
+      const restoredDir = mkdtempSync(join(tmpdir(), 'riffet-backup-restore-'));
+      dirs.push(restoredDir);
+      await restoreBackup(second.path, restoredDir);
+      const restoredStore = new Store(join(restoredDir, 'workbench.db'));
+      try {
+        expect(restoredStore.journal.sessionBlob(session.id, hash)?.bytes().equals(big)).toBe(true);
+      } finally { restoredStore.close(); }
+
+      // Same-size corruption in the previous backup must be detected via SHA-256 and copied fresh from live state.
+      const corruptPrev = Buffer.alloc(big.length, 0xaa);
+      writeFileSync(join(second.path, relBlob), corruptPrev);
+      const third = await createBackup(store, dir);
+      expect(lstatSync(join(third.path, relBlob)).ino).not.toBe(lstatSync(join(second.path, relBlob)).ino);
+      expect(readFileSync(join(third.path, relBlob)).equals(big)).toBe(true);
+
+      // Deleting the on-disk Tier-2 blob while journal.db still references it must fail the backup loudly.
+      rmSync(externalBlobPath(join(dir, 'blobs'), hash, 'raw'));
+      await expect(createBackup(store, dir)).rejects.toMatchObject({ code: 'BACKUP_BLOB_MISSING' });
+    } finally {
+      store.close();
+    }
   });
 });

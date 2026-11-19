@@ -28,8 +28,8 @@ verify:
 
 ## 外部行为
 
-- 存储在 `journal.db`（`journal_heads`、`journal_events`、`blobs`、`session_blobs`）与同级的 blobs 目录，上限取自 `packages/contracts/src/budgets.ts#STORAGE_BUDGET`；旧库升级由 `storage-migration.ts#migrateStorageLayout` 完成，磁盘空间不足时拒绝迁移。
-- 后台整理（`journal.ts#compactSuperseded`、`sweepBlobs`）会剥掉旧修订和无引用 blob，只剥超过最小年龄的旧修订。
+- 存储在 `journal.db`（`journal_heads`、`journal_events`、`blobs`、`session_blobs`）与同级的 blobs 目录，上限取自 `packages/contracts/src/budgets.ts#STORAGE_BUDGET`；`<= blobDictMaxBytes` 的 JSON 对象用静态字典 `zstd-d1` 压缩，更大载荷用 `zstd`，`journal_turn` 为排除 `{}` 空壳的部分索引；旧库升级由 `storage-migration.ts#migrateStorageLayout` 完成，磁盘空间不足时拒绝迁移。
+- 后台整理（`journal.ts#compactSuperseded`、`sweepBlobs`、`recompressSmallBlobs`）会剥掉旧修订、将历史中小 JSON blob 升级到字典压缩并清理无引用 blob，只剥超过最小年龄的旧修订；在线备份期间由 `holdBlobGc()` 持有屏障推迟外部文件清理。
 - 契约测试夹具由各后端自带：`apps/server/src/backends/` 下各 `transcript-source` 测试调用 `ingest-contract.ts`。
 
 ## 排障

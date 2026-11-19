@@ -505,12 +505,12 @@ describe('native backend session identity', () => {
       for (let index = 0; index < 120; index += 1) store.appendEvent(session.id, 'session', { session: { ...session, title: `t${index}` } });
       const events = store.getEvents(session.id);
       const snapshots = events.filter(event => event.type === 'session');
-      expect(snapshots.length).toBeLessThanOrEqual(75);
-      expect(snapshots.length).toBeGreaterThanOrEqual(50);
+      expect(snapshots.length).toBeLessThanOrEqual(15);
+      expect(snapshots.length).toBeGreaterThanOrEqual(5);
       expect((snapshots.at(-1)!.data.session as { title: string }).title).toBe('t119');
       expect(events.filter(event => event.type === 'run_updated')).toHaveLength(1);
-      expect(store.pruneSessionSnapshots(session.id, 10)).toBe(snapshots.length - 10);
-      expect(store.getEvents(session.id).filter(event => event.type === 'session')).toHaveLength(10);
+      expect(store.pruneSessionSnapshots(session.id, 3)).toBe(snapshots.length - 3);
+      expect(store.getEvents(session.id).filter(event => event.type === 'session')).toHaveLength(3);
     } finally { store.close(); }
   });
 });
