@@ -284,7 +284,7 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 | 阶段 | 内容 | 完成标准 |
 |---|---|---|
 | 0 首个完整落地（2026-11-19 完成） | Codex 后端的模块文档与声明；`aif modules`、`aif context`、`verify`、`check:modules` 与行数基线；Codex App Server 的录制与回放（三个场景）；fix 尾注与 CI 警告；Codex 模块返工率基线 | `aif context` 输出在上限内；回放测试稳定且能发现行为变化；基线已记录（见下） |
-| 1 服务端 | 服务端热点模块接入；Codex 的 rollout 与 hook 录制（从阶段 0 顺延，见下）；全部后端的场景矩阵（审批、中断、恢复、子 agent、压缩）；每周漂移检测；变更耦合挖掘；预热键派生；P0 Codex 后端拆分 | 服务端每个源文件都属于某个模块；Codex 后端所有输入通道都有录制、没有超限文件；30 天返工率低于基线 |
+| 1 服务端 | 服务端热点模块接入；Codex 的 rollout 与 hook 录制（从阶段 0 顺延，见下）；Claude 的场景矩阵（审批、中断、恢复、子 agent、压缩）；其余后端在出现外部原因的修复（`Missed: external`）或返工率明显上升时，按出问题的场景补录；每周漂移检测；变更耦合挖掘；预热键派生；P0 Codex 后端拆分 | 服务端每个源文件都属于某个模块；Codex 后端所有输入通道都有录制、没有超限文件；30 天返工率低于基线 |
 | 2 Web 与客户端逻辑 | Web 接入；同步测试数据扩展到 TypeScript；P0 Web 会话链改造；`aif report` 与每周自动化；工具调用记录目标路径，用于按模块归因和会话范围；锚点复核与规则触发计数 | 会话链没有超限文件；首次编辑前调用数低于基线；归因分布按周可见 |
 | 3 推广 | Kotlin 与 Swift 接入；插件 SDK 的 agent 说明；引擎可用于插件仓库；会话内注入（可选）；P1、P2 模块 | 全仓库源文件都属于某个模块；超限文件基线持续下降；有规则按 §5.7 完成过升级或退役 |
 
@@ -295,7 +295,7 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 - 首次耦合挖掘（90 天）：Codex 的 `index.ts`、`runtime.ts` 与 `backends/service.ts` 分别同改 36 次和 29 次，Codex 与 droid、dsh 的 runtime 同改 11–12 次。按提交类型看，两项多数是穿过驱动接口、改到每个后端的新功能和改名，不是漏抽的公共机制，留给 §6 的「后端公共层」。`adapters/cli/claude-code.ts` 与 `backends/claude/index.ts` 每次都一起改，模块边界可能放错，在 Claude 拆分时复核。
 - Codex 拆分方案：[codex-runtime-split.md](codex-runtime-split.md)，待评审。
 - Codex hook 录制：载荷与 App Server 消息录在同一份录制里，`hookProblems` 在回放测试和漂移检测里检查观察依赖的约定；录制改写的 hook 信任在结束后写回。漂移检测在已录制的版本上把本次才出现的方法记为提示而不是漂移：同一版本下这只是本次运行的时序（命令输出是否流式）。
-- 未完成：其余后端的场景矩阵；Codex runtime 拆分（方案评审后实施）。
+- 未完成：Claude 的场景矩阵；TRAE（与 Codex 同一套驱动）的问答与命令场景；Codex runtime 拆分（方案评审后实施）。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。
 
