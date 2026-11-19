@@ -10,7 +10,9 @@ import { api } from '@/lib/api';
 import { WEB_BUILD } from '@/lib/build-info';
 import { markUpdateSeen, setUpdateStatus, useAvailableUpdate } from '@/lib/update';
 import { cn, timeAgo } from '@/lib/utils';
-import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
+import { SettingsExternalLinkRow, SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
+
+const GITHUB_REPO_URL = 'https://github.com/riffable/riffet';
 
 const Markdown = lazy(() => import('../session/Markdown').then((module) => ({ default: module.Markdown })));
 
@@ -121,6 +123,9 @@ export function UpdateSection() {
       <Row title={t`终端更新命令`} description={health?.managedBy === 'app' ? t`先停止 App 托管的服务器并退出 App，再在终端执行。` : t`在服务器所在电脑的终端执行。`}>
         <span className="flex items-center gap-1"><code className="select-all text-xs text-fg-2">{updateCommand}</code><CopyButton text={updateCommand} size="xs" /></span>
       </Row>
+    </Group>
+    <Group>
+      <SettingsExternalLinkRow title="GitHub" value="riffable/riffet" href={GITHUB_REPO_URL} />
     </Group>
   </div>;
 }

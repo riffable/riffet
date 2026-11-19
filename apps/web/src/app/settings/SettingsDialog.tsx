@@ -200,7 +200,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {settingsGroupTitle(group) && <h3 className="px-1 pb-1 text-xs font-medium text-fg-3">{settingsGroupTitle(group)}</h3>}
             <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-elevated [&>*+*]:edge-t">
               {navigationItems(group).map((item) => (
-                <button key={item.id} type="button" onClick={() => void selectSection(item.id)} className="flex min-h-12 items-center gap-3 px-3 text-left text-fg hover:bg-hover">
+                <button key={item.id} type="button" onClick={() => void selectSection(item.id)} className="flex min-h-12 items-center gap-3 px-3 text-left text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
                   <item.icon className="size-4 shrink-0 text-fg-3" />
                   <span className="min-w-0 flex-1 text-sm">{item.label}</span>
                   <IconChevronRight className="size-4 shrink-0 text-fg-4" />

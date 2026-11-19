@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { IconChevronRight } from '@/components/icons';
+import { IconChevronRight, IconExternalLink } from '@/components/icons';
 import { Spinner, useRoving } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +26,17 @@ export function SettingsLinkRow({ title, value, onClick }: { title: ReactNode; v
   );
 }
 
+/** A row that opens an external address in a new tab. */
+export function SettingsExternalLinkRow({ title, value, href }: { title: ReactNode; value?: ReactNode; href: string }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" className="-mx-4 flex min-h-12 items-center gap-3 px-4 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus max-md:-mx-3 max-md:px-3">
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{title}</span>
+      {value && <span className="shrink-0 text-sm text-fg-3">{value}</span>}
+      <IconExternalLink className="size-4 shrink-0 text-fg-4" />
+    </a>
+  );
+}
+
 /**
  * Without a title (one that would only repeat the section's) the card starts the section. `note`
  * is the one line under the card, for what the rows cannot show: where it is saved, what it costs.
@@ -48,7 +59,7 @@ export function SettingsGroup({ title, action, note, children, loading }: { titl
         {title && <h3 className="text-xs font-medium text-fg-3">{title}</h3>}
         {action}
       </div>}
-      <div ref={body} aria-busy={loading || undefined} style={loading && settledHeight.current ? { minHeight: settledHeight.current } : undefined} className="flex flex-col [&>*+*]:edge-t rounded-xl border border-line bg-elevated px-4 max-md:px-3">
+      <div ref={body} aria-busy={loading || undefined} style={loading && settledHeight.current ? { minHeight: settledHeight.current } : undefined} className="flex flex-col overflow-hidden [&>*+*]:edge-t rounded-xl border border-line bg-elevated px-4 max-md:px-3">
         {loading ? <div className="flex flex-1 items-center justify-center py-6"><Spinner /></div> : children}
       </div>
       {note && <p className="mt-2 text-xs text-fg-3">{note}</p>}

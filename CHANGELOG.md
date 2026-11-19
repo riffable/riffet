@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On the web, row hover and keyboard focus highlights inside rounded cards (Settings groups, provider cards, Automations lists, and Extension file lists) now clip cleanly to the card's rounded corners.
 - Reading an in-progress reply on the web no longer jumps or flashes when the turn finishes and its process block folds above the viewport, including when scrolling back up past the folded block or manually collapsing a tall block near the end of a conversation.
 - On the web, a newly started turn (such as one woken by a background task) sits cleanly below the previous answer's footer instead of crowding into it, and no longer reuses the finished turn's timer or speed before its first row arrives.
 - While the web Collaboration page loads, the stage, each seat's role and the discussion's question are in place first, with same-size placeholders for Agents, models, progress and speeches, so nothing jumps once it loads; it no longer shows a lone "VS", and opening a discussion no longer shows just a spinner.
@@ -43,6 +44,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Settings › About Riffet now includes a link to the Riffet GitHub repository (`riffable/riffet`) across Web, Mac, iPhone, and Android.
 - Auxiliary models now prioritize low latency and transparency: Settings › Auxiliary models adds a dedicated "Default model" decoupled from Quick chat, marks slow CLI-process models, disables thinking across protocols, caches short-lived auth credentials, streams message/selection translations and handoff previews, generates session titles as soon as the first turn starts running, and adds an API benchmark dialog, a "Prompt & logs" inspector, and a categorized model leaderboard on Stats (Short jobs, Streaming, Long context, Agent chat).
 - On the web, the context usage popover now includes a "Compact context" action at the bottom for Agents that support manual compaction (Cursor, Claude Code, and Codex), triggering each Agent's native compaction command without disturbing your draft.
 - Database and checkpoint disk usage is substantially smaller and space is reclaimed automatically while Riffet runs: history logs and large outputs are compressed, superseded tool revisions and cold subagent timelines are pruned automatically, duplicate project checkpoints share hard links, and Settings › Storage separates control data, history journal, and rebuildable cache with a one-click online cleanup action (Web and Mac).

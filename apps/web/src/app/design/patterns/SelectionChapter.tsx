@@ -48,7 +48,7 @@ function HeadingSelect() {
     <Frame className="flex justify-center p-8 max-md:p-4">
       <div className="flex w-full max-w-md flex-col gap-3">
         <Select appearance="heading" label={t`项目`} value={scope} onChange={setScope} options={[{ value: 'project-a', label: 'Project A' }, { value: 'project-b', label: 'Project B' }]} />
-        <div className="flex flex-col rounded-xl border border-line bg-elevated px-4 text-sm text-fg [&>*+*]:edge-t">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-elevated px-4 text-sm text-fg [&>*+*]:edge-t">
           <span className="flex h-11 items-center justify-between">{t`工作目录`}<span className="font-mono text-xs text-fg-3">~/workspace/{scope}</span></span>
           <span className="flex h-11 items-center justify-between">{t`会话`}<span className="text-fg-3">2</span></span>
         </div>

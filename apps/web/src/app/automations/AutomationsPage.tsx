@@ -35,7 +35,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const listClass = 'flex flex-col [&>*+*]:edge-t rounded-xl border border-line bg-elevated';
+const listClass = 'flex flex-col overflow-hidden [&>*+*]:edge-t rounded-xl border border-line bg-elevated';
 
 function Row({ lead, title, mark, sub, dim, children }: { lead?: React.ReactNode; title: string; mark?: React.ReactNode; sub?: React.ReactNode; dim?: boolean; children?: React.ReactNode }) {
   return (
@@ -280,7 +280,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
                       <span className="shrink-0 text-xs tabular-nums text-fg-3">{formatDateTime(item.at)}</span>
                     </>
                   );
-                  const rowClass = 'flex min-h-12 w-full items-center gap-3 px-4 py-2 max-md:px-3';
+                  const rowClass = 'flex min-h-12 w-full items-center gap-3 px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus max-md:px-3';
                   return openable
                     ? <button key={item.id} type="button" onClick={() => onOpenSession(item.sessionId!)} className={cn(rowClass, 'transition-colors hover:bg-hover')}>{body}</button>
                     : <div key={item.id} className={rowClass}>{body}</div>;

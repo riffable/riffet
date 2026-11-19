@@ -66,7 +66,7 @@ function SortableDemo() {
   const names: Record<string, string> = { changes: t`改动`, files: t`文件`, terminal: t`终端`, browser: t`浏览器` };
   const [order, setOrder] = useState(['changes', 'files', 'terminal', 'browser']);
   return (
-    <div className="flex w-72 flex-col rounded-xl border border-line bg-elevated px-4 [&>*+*]:edge-t">
+    <div className="flex w-72 flex-col overflow-hidden rounded-xl border border-line bg-elevated px-4 [&>*+*]:edge-t">
       <SortableList ids={order} onReorder={setOrder} label={(id) => names[id]!}>
         {(id) => <div className="-ml-1.5 flex h-11 items-center gap-1 text-sm"><SortHandle label={t`调整${names[id]!}的顺序`} />{names[id]}</div>}
       </SortableList>

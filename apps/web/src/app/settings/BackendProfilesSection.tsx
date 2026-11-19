@@ -467,8 +467,8 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
             {providers.filter((provider) => !adding && (!openId || provider.id === openId)).map((provider) => {
               const isOpen = provider.id === openId;
               return (
-                <div key={provider.id} className={cn('rounded-xl border bg-elevated', isOpen ? 'border-line-strong' : 'border-line')}>
-                  {!isOpen && <ListRow disabled={busy} className="min-h-16 py-3" onClick={() => void openProvider(provider.id)} trailing={<IconChevronRight className="size-4 text-fg-3" />}>
+                <div key={provider.id} className={cn('overflow-hidden rounded-xl border bg-elevated', isOpen ? 'border-line-strong' : 'border-line')}>
+                  {!isOpen && <ListRow disabled={busy} className="min-h-16 rounded-none py-3 focus-visible:ring-inset" onClick={() => void openProvider(provider.id)} trailing={<IconChevronRight className="size-4 text-fg-3" />}>
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex items-center gap-2 text-fg">
                         <span className="truncate">{provider.name}</span>
@@ -593,7 +593,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
             })}
 
             {adding && (
-              <div className="flex flex-col [&>*+*]:edge-t rounded-xl border border-line-strong bg-elevated px-4 max-md:px-3">
+              <div className="flex flex-col overflow-hidden [&>*+*]:edge-t rounded-xl border border-line-strong bg-elevated px-4 max-md:px-3">
                 <SettingsRow title={t`接入方式`}>
                   <Select label={t`接入方式`} value={isApi(adding.source) ? 'custom' : adding.source} options={choices()} disabled={busy || !plugins} className="w-64 max-md:w-full"
                     onChange={(value) => setAdding((current) => current && value !== (isApi(current.source) ? 'custom' : current.source) ? { ...current, source: value, apiEndpoint: '', apiKey: '' } : current)} />

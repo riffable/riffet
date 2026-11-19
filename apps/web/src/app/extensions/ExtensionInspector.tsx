@@ -370,8 +370,8 @@ function InspectorContent({
         {runtime?.diagnostics.length ? <details className="mt-3 text-xs text-fg-3"><summary className="cursor-pointer"><Trans>检查说明 · {runtime.diagnostics.length}</Trans></summary><div className="mt-2 space-y-1">{runtime.diagnostics.map((line, index) => <p key={index} className="break-words leading-5">{line}</p>)}</div></details> : null}
       </section> : tab === 'files' ? <>
         {sourceInformation}
-        {detail?.files.length ? <ul className="divide-y divide-line rounded-lg border border-line">{detail.files.map(file => <li key={file.id}>
-          <button type="button" className="flex w-full min-w-0 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-hover disabled:opacity-50" disabled={blocked || readBusy} onClick={() => void changeFile(file.id)}>
+        {detail?.files.length ? <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line">{detail.files.map(file => <li key={file.id}>
+          <button type="button" className="flex w-full min-w-0 items-start gap-3 px-3 py-3 text-left outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus disabled:opacity-50" disabled={blocked || readBusy} onClick={() => void changeFile(file.id)}>
             <IconFileText className="mt-0.5 size-4 shrink-0 text-fg-3" />
             <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-fg">{file.path.split('/').at(-1)}</span><span className="mt-1 block break-all font-mono text-2xs leading-5 text-fg-3">{file.path}</span></span>
             {file.id === detail.item.documentId && <Badge><Trans>主文件</Trans></Badge>}{!file.editable && <Badge><Trans>只读</Trans></Badge>}
