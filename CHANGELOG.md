@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Stopping a running Claude Code turn works again instead of failing with "Could not stop; try again".
 - PDF file previews in the Files panel, message attachments, and shared links now render pages instead of stalling on the file name.
 - On the web, row hover and keyboard focus highlights inside rounded cards (Settings groups, provider cards, Automations lists, and Extension file lists) now clip cleanly to the card's rounded corners.
 - Reading an in-progress reply on the web no longer jumps or flashes when the turn finishes and its process block folds above the viewport, including when scrolling back up past the folded block or manually collapsing a tall block near the end of a conversation.

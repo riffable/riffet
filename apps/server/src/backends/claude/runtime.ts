@@ -1686,13 +1686,16 @@ export class ClaudeSessionRuntime {
   }
 
   /** Recheck immediately before native writes; PTY input has no atomic turn-addressed protocol. */
-  private async assertExpectedStop(stop: NativeStopRequest, terminalId: string, allowEnded = false): Promise<void> {
+  private async assertExpectedStop(stop: NativeStopRequest, terminalId: string, allowEnded = false, stopping?: NativeTurnTarget): Promise<void> {
     const terminal = await this.host.terminal.get(terminalId).catch(() => undefined);
     const current = this.host.getSession(this.session.id);
     const turn = activeTurnOf(this.state.mainTurn);
     // The client can only name the turn the status published (`activeTurn`), which a cold-attached or
     // hook-without-prompt turn leaves unnamed; checking the internal prompt id here refused every stop of it.
-    const turnId = turn ? this.nativeTurn?.turnId : undefined;
+    // A stop under way has already taken the published turn down (`stopMainTurn`) and names it as `stopping`,
+    // which counts only while that prompt is still the one running.
+    const published = this.nativeTurn ?? (stopping && turn?.promptId === stopping.turnId ? stopping : undefined);
+    const turnId = turn ? published?.turnId : undefined;
     if (!terminal || terminal.state !== 'running' || terminal.kind !== 'native' || terminal.sessionId !== current.id
       || terminal.projectId !== current.projectId || current.terminalId !== terminalId || this.terminalId !== terminalId
       || current.nativeSessionId !== stop.nativeSessionId || this.nativeSessionId !== stop.nativeSessionId
@@ -1719,9 +1722,9 @@ export class ClaudeSessionRuntime {
       const promptId = activeTurnOf(this.state.mainTurn)?.promptId;
       const hasOutput = () => Boolean(promptId && this.outputPromptId === promptId) || this.transcript.hasTurnOutput(promptId);
       let alreadyIdle = !hasOutput() && await this.stopIdleScreen(terminalId);
-      if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId);
+      if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
       if (!alreadyIdle) {
-        if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId);
+        if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
         await this.host.terminal.sendKeys(terminalId, ['C-c']);
       }
       let pressedAt = Date.now();
@@ -1739,7 +1742,7 @@ export class ClaudeSessionRuntime {
           idleSince = undefined;
           if (alreadyIdle && !over()) {
             alreadyIdle = false;
-            if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId);
+            if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
             await this.host.terminal.sendKeys(terminalId, ['C-c']);
             pressedAt = Date.now();
           }
@@ -1752,7 +1755,7 @@ export class ClaudeSessionRuntime {
         }
         if (Date.now() - idleSince < 200 || Date.now() - this.lastActivityAt < INTERRUPT_RESTORE_AFTER_MS) return false;
         try {
-          if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, true);
+          if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, true, target);
           await this.clearOwnInput(terminalId, true, expectedStop);
         } catch (error) { failure = error; return false; }
         if (idleActivity !== this.lastActivityAt) { idleSince = undefined; return false; }
