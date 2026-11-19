@@ -121,7 +121,7 @@ function collectMarkdownImages(dark: boolean, images: ImageReference[]) {
 function markdownHtml(source: string, dark: boolean, images: ImageReference[]): string {
   return renderToStaticMarkup(createElement(ReactMarkdown, {
     children: source,
-    remarkPlugins: [remarkGfm, remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath],
+    remarkPlugins: [[remarkGfm, { singleTilde: false }], remarkCjkFriendly, [remarkCjkFriendlyGfmStrikethrough, { singleTilde: false }], remarkMath],
     rehypePlugins: [rehypeRaw, [rehypeSanitize, markdownSchema], () => collectMarkdownImages(dark, images), [rehypeKatex, mathOptions]],
     urlTransform: (url, key) => key === 'src' ? (markdownImageUrl(url) || imageToken(url) ? url : '') : (url.startsWith('#') ? url : ''),
     components: {

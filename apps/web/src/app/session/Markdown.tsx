@@ -1,6 +1,6 @@
 import { createContext, Fragment, lazy, memo, Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components, type ExtraProps, type Options as ReactMarkdownOptions } from 'react-markdown';
 import remarkCjkFriendly from 'remark-cjk-friendly';
 import remarkCjkFriendlyGfmStrikethrough from 'remark-cjk-friendly-gfm-strikethrough';
 import remarkGfm from 'remark-gfm';
@@ -551,8 +551,19 @@ function remarkSafeHtml() {
   };
 }
 
-/** CommonMark leaves `**结论：**正文` as literal asterisks; `remark-cjk-friendly` lets it close. */
-const remarkPlugins = [remarkAlerts, remarkGfm, remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath, remarkSafeHtml];
+/**
+ * CommonMark leaves `**结论：**正文` as literal asterisks; `remark-cjk-friendly` lets it close.
+ * Single-tilde strikethrough (`~…~`) stays off so prose approximations like `~1.18 GiB` do not pair
+ * into accidental `<del>` spans; `~~…~~` remains strikethrough.
+ */
+const remarkPlugins: NonNullable<ReactMarkdownOptions['remarkPlugins']> = [
+  remarkAlerts,
+  [remarkGfm, { singleTilde: false }],
+  remarkCjkFriendly,
+  [remarkCjkFriendlyGfmStrikethrough, { singleTilde: false }],
+  remarkMath,
+  remarkSafeHtml,
+];
 const noPlugins: [] = [];
 
 /**
