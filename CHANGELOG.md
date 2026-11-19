@@ -4,6 +4,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+## 0.9.0 - 2026-11-19
+
 ### Upgrade notes
 
 - On first start, Riffet splits the single `workbench.db` into `workbench.db`, `journal.db`, `derived.db`, and `blobs/`; back up your data directory before upgrading if you may need to roll back to 0.8.0.

@@ -4,6 +4,8 @@
 
 ## 未发布
 
+## 0.9.0 - 2026-11-19
+
 ### 升级须知
 
 - 首次启动时，Riffet 会将单个 `workbench.db` 自动拆分为 `workbench.db`、`journal.db`、`derived.db` 与 `blobs/`；如需保留回退到 0.8.0 的可能，升级前请先备份数据目录。
