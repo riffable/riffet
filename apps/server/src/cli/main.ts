@@ -165,7 +165,7 @@ export function buildProgram(relaunchArgs?: string[]): Command {
   program.commandsGroup('Maintenance:');
   program.command('doctor').description('check Node, tmux, every agent CLI, the port and the state directory')
     .option('--json', 'the full environment and capability report')
-    .option('--compact', 'shrink workbench.db; Riffet must be stopped')
+    .option('--compact', 'compact databases and deduplicate checkpoints; Riffet must be stopped')
     .action(async (_opts, command: Command) => { const launch = savedOrDefaults(command); await doctor({ ...options<{ json?: boolean; compact?: boolean }>(command), host: launch.host, port: launch.port, cli: launch.cli }); });
   program.command('update').description('check for and install a newer release')
     .option('--check', 'only check; change nothing')

@@ -1,4 +1,4 @@
-import type { WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 
 /** One searchable message, as stored. `messageId` is the provider's own id for the message. */
 export interface IndexedMessage {
@@ -10,10 +10,13 @@ export interface IndexedMessage {
 }
 
 /**
- * Longest text kept per message. A single answer can run to megabytes, and nobody searches for a
- * phrase that far into one; the cap keeps the index bounded and every query cheap.
+ * Longest text kept per human/assistant message. A single answer can run to megabytes, and nobody
+ * searches for a phrase that far into one; the cap keeps the index bounded and every query cheap.
  */
 export const MAX_INDEXED_TEXT = 4_000;
+
+/** Longest text kept per tool call signature (name, path, title and command prefix) to avoid FTS bloat. */
+export const MAX_TOOL_INDEXED_TEXT = STORAGE_BUDGET.toolIndexChars;
 
 /**
  * Recorded for a conversation the server read and found nothing to index — never a message, and its
@@ -54,14 +57,18 @@ function textOf(event: WorkbenchEvent): { kind: IndexedMessage['kind']; text: st
     return undefined;
   }
   if (event.type === 'tool_call' || event.type === 'tool_call_update') {
-    const parts = [data?.toolName, data?.title, data?.filePath, data?.command].filter((value): value is string => typeof value === 'string' && Boolean(value.trim()));
-    if (parts.length) return { kind: 'tool', text: parts.join(' ') };
+    // Keep high-signal fields (tool name, path, title) ahead of potentially long inline shell scripts.
+    const parts = [data?.toolName, data?.filePath, data?.title, data?.command]
+      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+      .map(value => value.trim());
+    if (parts.length) return { kind: 'tool', text: parts.join(' ').slice(0, MAX_TOOL_INDEXED_TEXT) };
   }
   return undefined;
 }
 
 /**
- * Turns a transcript window into the rows to store, each text capped at `maxText`.
+ * Turns a transcript window into the rows to store, each text capped at `maxText`
+ * (and tool call signatures asymmetrically capped at `MAX_TOOL_INDEXED_TEXT`).
  *
  * A streamed answer arrives as many chunks under one native message id, so the chunks of a message
  * are joined here: what is indexed then reads exactly like the message on screen, and a later
@@ -72,6 +79,7 @@ export function extractIndexable(sessionId: string, events: readonly WorkbenchEv
   for (const event of events) {
     const found = textOf(event);
     if (!found || !found.text.trim()) continue;
+    const cap = found.kind === 'tool' ? Math.min(maxText, MAX_TOOL_INDEXED_TEXT) : maxText;
     // Provider transcripts carry the native id; anything else still has a stable sequence.
     const nativeId = (event as WorkbenchEvent & { nativeId?: unknown }).nativeId;
     const messageId = typeof nativeId === 'string' && nativeId ? nativeId : `${event.sequence}`;
@@ -79,10 +87,10 @@ export function extractIndexable(sessionId: string, events: readonly WorkbenchEv
     if (existing && existing.kind === found.kind) {
       // Joined raw, not line by line: a phrase can straddle two chunks, and a separator inserted
       // here would put it out of reach of a search for it.
-      existing.text = (existing.text + found.text).slice(0, maxText);
+      existing.text = (existing.text + found.text).slice(0, cap);
       continue;
     }
-    byMessage.set(messageId, { sessionId, messageId, kind: found.kind, text: found.text.slice(0, maxText), at: event.createdAt });
+    byMessage.set(messageId, { sessionId, messageId, kind: found.kind, text: found.text.slice(0, cap), at: event.createdAt });
   }
   return [...byMessage.values()].map((row) => ({ ...row, text: row.text.trim() }));
 }

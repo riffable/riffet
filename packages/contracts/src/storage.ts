@@ -1,7 +1,7 @@
 /**
  * What the service keeps on disk, for the storage page in settings (`GET /api/system/storage`). The
  * cheap figures (file sizes, free pages, free disk) are read on every request; the breakdown needs a
- * full read of the database and the state directory, so it comes from a scan that runs in the
+ * full read of the databases and the state directory, so it comes from a scan that runs in the
  * background. The last finished scan is saved and shown until the next one finishes (`scan`).
  */
 export interface StorageReport {
@@ -19,22 +19,39 @@ export interface StorageReport {
    */
   scanError?: string;
   compaction: StorageCompaction;
+  /** The last online maintenance run (`POST /api/system/storage/maintain`), if any. */
+  maintenance?: StorageMaintenanceResult;
+}
+
+/** The three physical database layers of the state directory. */
+export type StorageStoreKind = 'control' | 'journal' | 'derived';
+
+export interface StorageStoreUsage {
+  kind: StorageStoreKind;
+  /** Bytes on disk (SQLite file + WAL, plus Tier-2 `blobs/` for `journal`). */
+  bytes: number;
+  /** Freed pages inside this SQLite file. */
+  freeBytes: number;
+  /** True for pure materialized caches (`derived.db`) that can be dropped and rebuilt from L0/L1. */
+  rebuildable?: boolean;
 }
 
 export interface StorageDatabase {
-  /** `workbench.db` plus its write-ahead log. */
+  /** Total bytes across `workbench.db`, `journal.db` (+ `blobs/`), `derived.db`, and their WALs. */
   bytes: number;
   walBytes: number;
-  /** Pages SQLite has freed and will reuse; only a compaction returns them to the disk. */
+  /** Pages SQLite has freed; returned automatically in small steps when `incremental` is true, or all at once via VACUUM. */
   freeBytes: number;
-  /** `auto_vacuum=INCREMENTAL`: the service gives freed pages back on its own, a little at a time. */
+  /** `auto_vacuum=INCREMENTAL` across all databases: the service gives freed pages back on its own, a little at a time. */
   incremental: boolean;
+  /** Breakdown across the three physical layers (control, journal, derived cache). */
+  stores?: StorageStoreUsage[];
 }
 
-/** How the database's used pages divide up. */
+/** How the databases' used pages divide up. */
 export type StorageDatabasePart = 'journal' | 'timeline' | 'blobs' | 'search' | 'records' | 'other';
 
-/** Top-level entries of the state directory, grouped by what they hold. The database is not one. */
+/** Top-level entries of the state directory, grouped by what they hold. The databases and `blobs/` are excluded. */
 export type StorageFolderKind = 'checkpoints' | 'worktrees' | 'attachments' | 'tasks' | 'plugins' | 'logs' | 'other';
 
 /** The steps of a scan, which finish in this order. */
@@ -77,10 +94,10 @@ export interface StorageSessionUsage {
 }
 
 export interface StorageCompaction {
-  /** A compaction waits for the service's next start, which it delays: the database is rebuilt before anything opens it. */
+  /** A full rebuild waits for the service's next start, which it delays: each database is vacuumed before anything opens it. */
   scheduledAt?: string;
   last?: StorageCompactionResult;
-  /** Free disk the rebuild needs: a full copy of the database, plus the log it writes on the way. */
+  /** Free disk the rebuild needs: twice the largest SQLite file. */
   requiredBytes: number;
 }
 
@@ -89,6 +106,16 @@ export interface StorageCompactionResult {
   beforeBytes: number;
   afterBytes?: number;
   durationMs: number;
-  /** Why it did not run or did not finish; the database is left as it was. */
+  /** Why it did not run or did not finish; the databases were left as they were. */
   error?: string;
+}
+
+/** Outcome of an online maintenance pass (cold timeline sweep, journal compaction, incremental vacuum, checkpoint dedup). */
+export interface StorageMaintenanceResult {
+  at: string;
+  beforeBytes: number;
+  afterBytes: number;
+  durationMs: number;
+  checkpointsSavedBytes?: number;
+  coldSessionsDropped?: number;
 }

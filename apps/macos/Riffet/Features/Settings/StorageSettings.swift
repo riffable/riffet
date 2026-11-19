@@ -13,6 +13,7 @@ struct StorageSettings: View {
     @State private var error: String?
     @State private var actionError: String?
     @State private var busy = false
+    @State private var maintaining = false
     @State private var confirmCompaction = false
 
     private static let pollInterval: Duration = .milliseconds(Int(BudgetsKt.STORAGE_SCAN_MS_POLL))
@@ -152,18 +153,64 @@ struct StorageSettings: View {
     private func databaseBlock(_ report: StorageReport) -> some View {
         let database = report.database
         let parts = report.scan?.parts ?? []
+        let stores = database.stores
         return SettingsBlock("数据库 · \(bytes(database.bytes))") {
             VStack(alignment: .leading, spacing: Space.md) {
+                if !stores.isEmpty {
+                    FlowLayout(spacing: Space.md) {
+                        ForEach(stores, id: \.kind) { store in
+                            HStack(spacing: Space.xs) {
+                                Text(storeLabel(store.kind))
+                                    .foregroundStyle(palette.fg3)
+                                Text(bytes(store.bytes))
+                                    .foregroundStyle(palette.fg)
+                                    .monospacedDigit()
+                            }
+                            .font(.riffet(size: S(RiffetTextSize.xs.size)))
+                        }
+                    }
+                }
                 if parts.isEmpty && report.scanError == nil {
                     Spinner(size: .small).frame(maxWidth: .infinity)
                 }
                 ForEach(ranked(parts, other: { $0.part == "other" }), id: \.part) { item in
                     ShareRow(label: partLabel(item.part), note: partNote(item.part), bytes: item.bytes, of: database.bytes, color: palette.chart1)
                 }
-                ShareRow(label: String(localized: "可释放"), note: nil, bytes: database.freeBytes, of: database.bytes, color: palette.lineStrong)
+                ShareRow(
+                    label: String(localized: "可释放"),
+                    note: database.incremental ? String(localized: "自动回收") : nil,
+                    bytes: database.freeBytes,
+                    of: database.bytes,
+                    color: palette.lineStrong
+                )
             }
             .padding(.vertical, Space.xs)
+            maintenanceRow(report)
             compactionRow(report)
+        }
+    }
+
+    @ViewBuilder
+    private func maintenanceRow(_ report: StorageReport) -> some View {
+        SettingsRow("在线整理", detail: String(localized: "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务")) {
+            HStack(spacing: Space.sm) {
+                if maintaining { Spinner(size: .small) }
+                SettingsActionButton("立即整理") { Task { await runMaintenance() } }
+                    .disabled(maintaining || busy)
+            }
+            .controlSize(.small)
+        }
+        if let last = report.maintenance {
+            Group {
+                if last.beforeBytes > last.afterBytes {
+                    Text("上次整理 \(ServerTime.relative(last.at) ?? statsUnavailable) · \(bytes(last.beforeBytes)) → \(bytes(last.afterBytes)) · 用时 \(formatDuration(Double(last.durationMs)))")
+                } else {
+                    Text("上次整理 \(ServerTime.relative(last.at) ?? statsUnavailable) · 无可释放空间 · 用时 \(formatDuration(Double(last.durationMs)))")
+                }
+            }
+            .foregroundStyle(palette.fg4)
+            .font(.riffet(size: S(RiffetTextSize.x2xs.size)))
+            .monospacedDigit()
         }
     }
 
@@ -213,6 +260,9 @@ struct StorageSettings: View {
         if short { return String(localized: "磁盘可用空间不足，需要 \(bytes(compaction.requiredBytes))") }
         if report.database.freeBytes >= Self.reclaimWorthNaming {
             return String(localized: "可释放 \(bytes(report.database.freeBytes))，在服务下次启动时进行，期间服务不可用")
+        }
+        if report.database.incremental {
+            return String(localized: "空闲页会自动回收，仅在碎片较多时需要重启重建")
         }
         return String(localized: "在服务下次启动时进行，期间服务不可用")
     }
@@ -329,6 +379,15 @@ struct StorageSettings: View {
 
     // MARK: - Labels
 
+    private func storeLabel(_ kind: String) -> String {
+        switch kind {
+        case "control": String(localized: "控制数据")
+        case "journal": String(localized: "历史日志")
+        case "derived": String(localized: "可重建缓存")
+        default: kind
+        }
+    }
+
     private func partLabel(_ part: String) -> String {
         switch part {
         case "journal": String(localized: "会话记录")
@@ -416,6 +475,14 @@ struct StorageSettings: View {
         } catch {
             self.error = error.riffetMessage
         }
+    }
+
+    private func runMaintenance() async {
+        guard let api = model.workbench?.host.api, !maintaining else { return }
+        maintaining = true
+        actionError = nil
+        do { report = try await api.maintainStorage() } catch { actionError = error.riffetMessage }
+        maintaining = false
     }
 
     private func schedule(_ scheduled: Bool) async {

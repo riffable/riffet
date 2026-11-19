@@ -82,6 +82,10 @@ suspend fun RiffetApi.storage(): StorageReport = get("/api/system/storage").deco
 @Throws(Exception::class)
 suspend fun RiffetApi.scanStorage(): StorageReport = post("/api/system/storage/scan").decode()
 
+/** `POST /api/system/storage/maintain`: runs non-disruptive cold cleanup, journal compaction, incremental vacuum and checkpoint dedup. */
+@Throws(Exception::class)
+suspend fun RiffetApi.maintainStorage(): StorageReport = post("/api/system/storage/maintain").decode()
+
 /** `PUT /api/system/storage/compaction`: schedules (or cancels) rebuilding the database at the service's next start. */
 @Throws(Exception::class)
 suspend fun RiffetApi.scheduleCompaction(scheduled: Boolean): StorageReport =

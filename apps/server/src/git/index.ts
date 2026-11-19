@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { watch as watchFiles, type FSWatcher } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, rmdir, stat, symlink, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, rmdir, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { BranchInfo, Checkpoint, CheckpointChange, CheckState, GitBranchRef, GitCommit, GitCommitDetail, GitDiff, GitEntry, GitLineChange, GitLog, GitRefLabel, GitRefs, GitStatus, MergeResult, PullRequestCheck, PullRequestInfo, PullRequestStatus, PushResult, WorktreeComparison, WorktreeInfo } from '../../../../packages/contracts/src/index.js';
@@ -866,6 +866,7 @@ export class GitService {
       return undefined;
     }
     for (const stale of (await this.listCheckpoints(repo)).filter(item => item.partial).slice(PARTIAL_CHECKPOINTS_KEPT)) await rm(this.checkpointPath(repo, stale.id), { recursive: true, force: true }).catch(() => undefined);
+    await this.pruneOrphanCheckpointObjects(repo);
     return checkpoint;
   }
 
@@ -974,13 +975,52 @@ export class GitService {
     const digest = hash(data);
     const blob = `blob-${digest}`;
     const target = path.join(folder, blob);
+    // Deduplicate identical dirty-file snapshots across a project's checkpoints using a per-project
+    // hard-linked `.objects/` pool. Publish into `.objects/` atomically via a temp file + `link` so a
+    // crash or concurrent write never exposes a truncated file at the canonical object path.
+    const objectsDir = path.join(path.dirname(folder), '.objects');
+    const shared = path.join(objectsDir, blob);
     try {
-      // No fsync: one per blob cost about 5 ms each on macOS, a second for a hundred changes, which a
-      // turn running meanwhile gets to use. The manifest is not synced either, so it bought no crash safety.
+      await mkdir(objectsDir, { recursive: true, mode: 0o700 });
+      if (!await lstat(shared).then(() => true, () => false)) {
+        const temp = path.join(objectsDir, `.${blob}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`);
+        try {
+          // No fsync: one per blob cost about 5 ms each on macOS, a second for a hundred changes, which a
+          // turn running meanwhile gets to use. The manifest is not synced either, so it bought no crash safety.
+          const handle = await open(temp, 'wx', 0o600);
+          try { await handle.writeFile(data); } finally { await handle.close(); }
+          try { await link(temp, shared); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+        } finally {
+          await unlink(temp).catch(() => undefined);
+        }
+      }
+      try {
+        await link(shared, target);
+        return { blob, hash: digest };
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return { blob, hash: digest };
+      }
+    } catch { /* fall back to standalone file below */ }
+    try {
       const handle = await open(target, 'wx', 0o600);
       try { await handle.writeFile(data); } finally { await handle.close(); }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
     return { blob, hash: digest };
+  }
+
+  /** Removes `.objects/` entries no longer hard-linked by any retained checkpoint (nlink <= 1 and past grace). */
+  private async pruneOrphanCheckpointObjects(repo: Repo): Promise<void> {
+    const objectsDir = path.join(this.checkpointFolder(repo), '.objects');
+    const cutoff = Date.now() - 5 * 60_000;
+    for (const name of await readdir(objectsDir).catch(() => [] as string[])) {
+      const isObject = /^blob-[a-f0-9]{64}$/.test(name);
+      const isStaleTmp = name.startsWith('.blob-') && name.endsWith('.tmp');
+      if (!isObject && !isStaleTmp) continue;
+      const entry = path.join(objectsDir, name);
+      const info = await lstat(entry).catch(() => undefined);
+      if (info?.isFile() && info.mtimeMs < cutoff && (isStaleTmp || info.nlink <= 1)) await unlink(entry).catch(() => undefined);
+    }
   }
 
   private async readWorktreeImage(repo: Repo, projectRelative: string, folder?: string): Promise<Image> {
@@ -1275,6 +1315,7 @@ export class GitService {
       const info = await lstat(entry).catch(() => undefined);
       if (info?.isDirectory() && Date.now() - info.mtimeMs > UNFINISHED_CHECKPOINT_MS) await rm(entry, { recursive: true, force: true }).catch(() => undefined);
     }
+    await this.pruneOrphanCheckpointObjects(repo);
   }
 
   private async readManifest(repo: Repo, id: string): Promise<CheckpointManifest> {

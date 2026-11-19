@@ -118,8 +118,17 @@ export class SessionDeletion {
     return Boolean(this.deps.store.db.prepare("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='stats_cursor'").get());
   }
 
-  /** Files of conversations deleted before a crash or a failed cleanup; run at start-up. */
-  async resumeCleanup(): Promise<void> { await this.cleanup(this.deps.store.pendingDeletionCleanups()); }
+  /** Files and companion L1/L2 rows of conversations deleted before a crash or a failed cleanup; run at start-up. */
+  async resumeCleanup(): Promise<void> {
+    const pending = this.deps.store.pendingDeletionCleanups();
+    for (const id of pending) {
+      try {
+        this.deps.timeline.drop(id);
+        this.deps.store.purgeDeletedSessionArtifacts(id);
+      } catch (error) { this.deps.onCleanupError?.(id, error); }
+    }
+    await this.cleanup(pending);
+  }
 
   /** The conversation and its side chats, root first, refused whole if the client cannot see one of them. */
   private scope(rootId: string, headers?: IncomingHttpHeaders): string[] {

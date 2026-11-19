@@ -6,7 +6,8 @@ import kotlinx.serialization.Serializable
  * What the service keeps on disk, for the storage page in settings (`packages/contracts/src/storage.ts`,
  * `GET /api/system/storage`). The kind fields are strings so a kind a newer service adds still decodes:
  * `StorageDatabasePart` is journal, timeline, blobs, search, records or other; `StorageFolderKind` is
- * checkpoints, worktrees, attachments, tasks, plugins, logs or other.
+ * checkpoints, worktrees, attachments, tasks, plugins, logs or other; `StorageStoreKind` is control,
+ * journal or derived.
  */
 
 @Serializable
@@ -20,10 +21,19 @@ data class StorageReport(
     /** Why the last scan did not finish; the page does not start another on its own for a while. */
     val scanError: String? = null,
     val compaction: StorageCompaction,
+    val maintenance: StorageMaintenanceResult? = null,
 )
 
 @Serializable
 data class StorageDisk(val freeBytes: Long, val totalBytes: Long)
+
+@Serializable
+data class StorageStoreUsage(
+    val kind: String,
+    val bytes: Long,
+    val freeBytes: Long,
+    val rebuildable: Boolean = false,
+)
 
 @Serializable
 data class StorageDatabase(
@@ -31,6 +41,7 @@ data class StorageDatabase(
     val walBytes: Long,
     val freeBytes: Long,
     val incremental: Boolean,
+    val stores: List<StorageStoreUsage> = emptyList(),
 )
 
 @Serializable
@@ -84,4 +95,14 @@ data class StorageCompactionResult(
     val afterBytes: Long? = null,
     val durationMs: Long,
     val error: String? = null,
+)
+
+@Serializable
+data class StorageMaintenanceResult(
+    val at: String,
+    val beforeBytes: Long,
+    val afterBytes: Long,
+    val durationMs: Long,
+    val checkpointsSavedBytes: Long? = null,
+    val coldSessionsDropped: Int? = null,
 )

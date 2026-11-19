@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { SYNC_BUDGET } from '../../../../packages/contracts/src/sync.js';
 import type { RowContent } from '../../../../packages/timeline/src/rows.js';
 
@@ -5,6 +6,10 @@ import type { RowContent } from '../../../../packages/timeline/src/rows.js';
  * The row budget (docs/SYNC-V3.md, 预算): a row is at most 64KB. Text over 32KB is sent as a 16KB preview;
  * a tool's output and its diffs keep 16KB each; inline images become blob URLs. A row that was cut names
  * the blob holding all of it (`truncated`), so a client can fetch the rest when it is opened.
+ *
+ * When `persistTruncated` is false (the default for rows reconstructible from the journal), the full row
+ * JSON is NOT duplicated into the `blobs` table: its SHA-256 hash is returned in `truncated.blobRef` and
+ * expanded on demand from the journal when a client requests `/api/sessions/:id/blobs/:hash`.
  */
 
 /** Stores bytes a session's clients fetch from `/api/sessions/:id/blobs/:hash`; returns the hash. */
@@ -24,7 +29,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(v
 /** `text` cut to at most `bytes` of UTF-8, never inside a character. */
 export function utf8Prefix(text: string, bytes: number): string {
   if (text.length <= bytes / 3 || Buffer.byteLength(text) <= bytes) return text;
-  return Buffer.from(text).subarray(0, bytes).toString('utf8').replace(/�+$/, '');
+  return Buffer.from(text).subarray(0, bytes).toString('utf8').replace(/\uFFFD+$/, '');
 }
 
 interface Fit { sessionId: string; put: BlobWriter; cut: boolean }
@@ -53,6 +58,22 @@ function withoutInlineImages(value: unknown, fit: Fit): unknown {
     if (next !== item) (copy ??= { ...value })[key] = next;
   }
   return copy ?? value;
+}
+
+/**
+ * Replaces inline images inside `row` with `/api/sessions/:id/blobs/:hash` URLs without mutating storage
+ * when `put` is read-only (e.g. during on-demand row expansion).
+ */
+export function materializeRowImages(row: RowContent, sessionId: string, put: BlobWriter): RowContent {
+  const fit: Fit = { sessionId, put, cut: false };
+  let full = row as RowContent & Record<string, unknown>;
+  if (full.kind === 'image') {
+    const match = DATA_URL.exec(full.src);
+    if (match) full = { ...full, src: imageBlob(fit, match[1]!, match[2]!) };
+  }
+  const data = withoutInlineImages(full.event.data, fit) as Record<string, unknown>;
+  if (data !== full.event.data) full = { ...full, event: { ...full.event, data } };
+  return full;
 }
 
 /** Long strings under `value` cut so that together they stay within `allowance`; a diff's texts draw on their own. */
@@ -107,22 +128,22 @@ function scalars(data: Record<string, unknown>): Record<string, unknown> {
 const sizeOf = (row: unknown) => Buffer.byteLength(JSON.stringify(row));
 
 /**
- * `row` fitted to the row budget: the payload to store and its size. Blobs it needs (images, the full row
- * of one that was cut) are written through `put`; identical bytes are one blob.
+ * `row` fitted to the row budget: the payload to store and its size. Inline images are always persisted
+ * via `put`. When `persistTruncated` is false, a cut row records its content hash in `truncated.blobRef`
+ * without duplicating the full JSON into the `blobs` table.
  */
-export function fitRow(row: RowContent, sessionId: string, put: BlobWriter): { row: RowContent; json: string; bytes: number } {
+export function fitRow(
+  row: RowContent,
+  sessionId: string,
+  put: BlobWriter,
+  options: { persistTruncated?: boolean | 'auto' } = {},
+): { row: RowContent; json: string; bytes: number; persistedTruncated: boolean } {
   const fit: Fit = { sessionId, put, cut: false };
-  let full = row as RowContent & Record<string, unknown>;
-  if (full.kind === 'image') {
-    const match = DATA_URL.exec(full.src);
-    if (match) full = { ...full, src: imageBlob(fit, match[1]!, match[2]!) };
-  }
-  const data = withoutInlineImages(full.event.data, fit) as Record<string, unknown>;
-  if (data !== full.event.data) full = { ...full, event: { ...full.event, data } };
+  const full = materializeRowImages(row, sessionId, put) as RowContent & Record<string, unknown>;
   const fullJson = JSON.stringify(full);
   const fullBytes = Buffer.byteLength(fullJson);
   // Most rows are small and have nothing long: they are sent as they are.
-  if (fullBytes <= SYNC_BUDGET.toolOutputBytes) return { row: full, json: fullJson, bytes: fullBytes };
+  if (fullBytes <= SYNC_BUDGET.toolOutputBytes) return { row: full, json: fullJson, bytes: fullBytes, persistedTruncated: false };
 
   // A text row's text is cut only past the text limit; anything else's long strings share the output and diff allowances.
   const text = TEXT_KINDS.has(full.kind);
@@ -132,17 +153,25 @@ export function fitRow(row: RowContent, sessionId: string, put: BlobWriter): { r
   let fitted = {
     key, pos, turn, kind, ...(fitValue(fields) as Record<string, unknown>), event: { ...event, data: fitValue(event.data) as Record<string, unknown> },
   } as RowContent & Record<string, unknown>;
+  let fallbackGuarded = false;
   if (sizeOf(fitted) > SYNC_BUDGET.rowBytes) {
     fit.cut = true;
+    fallbackGuarded = true;
     fitted = { ...fitted, event: { ...fitted.event, data: scalars(fitted.event.data), sourceIds: fitted.event.sourceIds.slice(0, GUARD_SOURCES) } };
   }
   if (sizeOf(fitted) > SYNC_BUDGET.rowBytes) {
+    fallbackGuarded = true;
     const { key: k, pos: p, turn: t, kind: kd, event: e, ...rest } = fitted;
     fitted = { key: k, pos: p, turn: t, kind: kd, ...(guarded(rest) as Record<string, unknown>), event: guarded(e) as RowContent['event'] } as RowContent & Record<string, unknown>;
   }
-  if (!fit.cut) return { row: full, json: fullJson, bytes: fullBytes };
-  const blobRef = put(sessionId, Buffer.from(fullJson), 'application/json');
+  if (!fit.cut) return { row: full, json: fullJson, bytes: fullBytes, persistedTruncated: false };
+  // In 'auto' mode, persist only when last-resort guarding truncated `sourceIds` or metadata so on-demand
+  // journal reconstruction can never return a partial row under the full content hash.
+  const mode = options.persistTruncated ?? true;
+  const persist = mode === true || (mode === 'auto' && fallbackGuarded);
+  const fullBuffer = Buffer.from(fullJson);
+  const blobRef = persist ? put(sessionId, fullBuffer, 'application/json') : createHash('sha256').update(fullBuffer).digest('hex');
   const result = { ...fitted, truncated: { blobRef, bytes: fullBytes } } as RowContent;
   const json = JSON.stringify(result);
-  return { row: result, json, bytes: Buffer.byteLength(json) };
+  return { row: result, json, bytes: Buffer.byteLength(json), persistedTruncated: persist };
 }

@@ -3079,7 +3079,7 @@ msgstr "Online"
 
 #: src/app/settings/StorageSection.tsx
 msgid "在线整理"
-msgstr ""
+msgstr "Online maintenance"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "在终端中运行"
@@ -4838,7 +4838,7 @@ msgstr "Control radius 4, groups 8"
 
 #: src/app/settings/StorageSection.tsx
 msgid "控制数据"
-msgstr ""
+msgstr "Control data"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "推翻一条规则"
@@ -5485,7 +5485,7 @@ msgstr "Could not start the scan"
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法整理存储空间"
-msgstr ""
+msgstr "Could not run storage maintenance"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "无法检查更新"
@@ -6655,7 +6655,7 @@ msgstr "Add Feishu bot"
 
 #: src/app/settings/StorageSection.tsx
 msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
-msgstr ""
+msgstr "Clears stale timeline caches, old revisions, and duplicate Checkpoints without stopping the service"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -7186,7 +7186,7 @@ msgstr "Stop CLI when idle"
 
 #: src/app/settings/StorageSection.tsx
 msgid "空闲页会自动回收，仅在碎片较多时需要重启重建"
-msgstr ""
+msgstr "Free pages are reclaimed automatically; a restart rebuild is only needed when heavily fragmented"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "空间弹簧 · 刚度"
@@ -7250,7 +7250,7 @@ msgstr "Runs immediately, with undo in the toast"
 
 #: src/app/settings/StorageSection.tsx
 msgid "立即整理"
-msgstr ""
+msgstr "Clean up now"
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "竖线分别是非文字 3:1 和文字 4.5:1。读自当前主题；占位和快捷键用的 fg-4 不承载需要读清的信息。"
@@ -7732,7 +7732,7 @@ msgstr "Automations"
 
 #: src/app/settings/StorageSection.tsx
 msgid "自动回收"
-msgstr ""
+msgstr "Reclaimed automatically"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "自动增高上限"

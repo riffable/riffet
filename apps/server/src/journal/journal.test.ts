@@ -176,12 +176,12 @@ describe('session journal', () => {
     const path = await dbPath();
     const old = new Store(path);
     old.journal.append('s', [event('a', 'kept')]);
-    old.db.exec('DROP TABLE journal_events; DROP TABLE journal_heads; DROP TABLE blobs; DELETE FROM settings WHERE key=\'journal-schema\'');
+    old.journalDb.exec('DROP TABLE journal_events; DROP TABLE journal_heads; DROP TABLE blobs; DELETE FROM settings WHERE key=\'journal-schema\'');
     old.close();
     const upgraded = new Store(path);
     upgraded.journal.append('s', [event('a', 'again')]);
     expect(upgraded.journal.range('s', 0, 5)).toHaveLength(1);
-    expect(upgraded.getSetting('journal-schema', 0)).toBe(2);
+    expect((upgraded.journalDb.prepare("SELECT json FROM settings WHERE key='journal-schema'").get() as { json: string }).json).toBe('3');
     upgraded.close();
   });
 
@@ -206,5 +206,95 @@ describe('session journal', () => {
     expect(projectedActivity(journal.projection('s'))).toEqual({ compacting: false, background: 1 });
     // The cached projection and a fold from scratch agree.
     expect(journal.projection('s')).toEqual(journal.rebuildProjection('s'));
+  });
+
+  it('compresses JSON blobs transparently with Zstd and spills large compressed blobs to Tier-2 external files', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'riffet-blobs-'));
+    dirs.push(dir);
+    const db = new DatabaseSync(':memory:');
+    const blobsDir = join(dir, 'blobs');
+    const journal = new Journal(db, undefined, undefined, undefined, { blobsDir });
+    try {
+      // Compressible text > 2 KiB stays inline in `blobs` (Tier-1) as zstd.
+      const medium = 'hello world repeated line\n'.repeat(400);
+      journal.append('s', [event('m1', medium)]);
+      const [mRow] = journal.range('s', 0, 5);
+      expect(mRow!.blobRef).toBeDefined();
+      expect((mRow!.payload as { data: { content: { text: string } } }).data.content.text).toBe(medium);
+      const mMeta = db.prepare('SELECT size, stored_size, codec, external FROM blobs WHERE hash=?').get(mRow!.blobRef!) as { size: number; stored_size: number; codec: string; external: number };
+      expect(mMeta.codec).toBe('zstd');
+      expect(mMeta.external).toBe(0);
+      expect(mMeta.stored_size).toBeLessThan(mMeta.size / 4);
+
+      // High-entropy payload whose compressed size >= 128 KiB spills to Tier-2 `blobs/aa/<hash>.raw`.
+      const incompressible = Buffer.alloc(160 * 1024);
+      for (let i = 0; i < incompressible.length; i++) incompressible[i] = (i * 131 + (i >> 3) * 17 + (i * i)) & 0xff;
+      const extHash = journal.putSessionBlob('s', incompressible, 'application/octet-stream');
+      const extMeta = db.prepare('SELECT size, stored_size, codec, external, bytes FROM blobs WHERE hash=?').get(extHash) as { size: number; stored_size: number; codec: string; external: number; bytes: Uint8Array | null };
+      expect(extMeta.external).toBe(1);
+      expect(extMeta.bytes).toBeNull();
+      expect(journal.sessionBlob('s', extHash)?.bytes().equals(incompressible)).toBe(true);
+
+      // Sweeping drops both the SQLite row and the external file.
+      journal.drop('s');
+      expect(journal.sweepBlobs()).toBe(2);
+      expect(journal.getBlob(extHash)).toBeUndefined();
+      expect(journal.sweepExternalFiles()).toBe(0);
+    } finally { db.close(); }
+  });
+
+  it('strips superseded non-draft revisions monotonically via compacted_seq while preserving seq, digest and user previews', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const toolPayload = (status: string, out: string) => ({
+        kind: 'tool_call_update', nativeId: 'call-1', turnId: 't1',
+        payload: { type: 'tool_call_update', nativeId: 'call-1', data: { toolCallId: 'call-1', status, content: [{ type: 'content', content: { type: 'text', text: out } }] } },
+      });
+      const userPayload = (text: string) => ({
+        kind: 'user_message_chunk', nativeId: 'u1', turnId: 't1',
+        payload: { type: 'user_message_chunk', nativeId: 'u1', data: { content: { type: 'text', text } } },
+      });
+      journal.append('s', [userPayload('initial question'), toolPayload('in_progress', 'step 1 '.repeat(600))]);
+      journal.append('s', [userPayload('edited question'), toolPayload('completed', 'final output')]);
+      const beforeDigests = (db.prepare('SELECT seq, rev, digest FROM journal_events WHERE session_id=? ORDER BY seq').all('s') as Array<{ seq: number; rev: number; digest: string }>);
+
+      const stripped = journal.compactSuperseded({ minAgeMs: 0 });
+      expect(stripped).toBe(1);
+      expect(journal.sweepBlobs()).toBe(1);
+      expect(journal.peek('s')!.compactedSeq).toBe(4);
+
+      // seq, rev and digest are untouched; old tool_call_update rev=1 is stripped while user_message_chunk rev=1 stays for projection previews.
+      const after = db.prepare('SELECT seq, kind, rev, digest, payload, blob_ref FROM journal_events WHERE session_id=? ORDER BY seq').all('s') as Array<{ seq: number; kind: string; rev: number; digest: string; payload: string; blob_ref: string | null }>;
+      expect(after.map(r => ({ seq: r.seq, rev: r.rev, digest: r.digest }))).toEqual(beforeDigests);
+      expect(after[0]!.payload).toContain('initial question');
+      expect(after[1]!.payload).toBe('{}');
+      expect(after[1]!.blob_ref).toBeNull();
+      expect((journal.entity('s', 'call-1')!.payload as { data: { status: string } }).data.status).toBe('completed');
+      expect(journal.rebuildProjection('s').turns[0]?.preview).toBe('initial question');
+    } finally { db.close(); }
+  });
+
+  it('head+tail trims oversized archived tool stdout blobs while keeping diffs intact', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const hugeStdout = `HEAD-MARK\n${'line of build log\n'.repeat(6_000)}TAIL-MARK`;
+      const diffBlock = { type: 'diff', path: 'src/app.ts', oldText: 'old', newText: 'new' };
+      journal.append('archived-1', [{
+        kind: 'tool_call_update', nativeId: 'tc-1', turnId: 't1',
+        payload: { type: 'tool_call_update', nativeId: 'tc-1', data: { toolCallId: 'tc-1', status: 'completed', content: [diffBlock, { type: 'content', content: { type: 'text', text: hugeStdout } }] } },
+      }]);
+      const beforeSize = journal.stats().blobBytes;
+      expect(journal.trimArchivedToolBlobs(['archived-1'])).toBe(1);
+      expect(journal.sweepBlobs()).toBe(1);
+      expect(journal.stats().blobBytes).toBeLessThan(beforeSize / 2);
+      const restored = journal.entity('archived-1', 'tc-1')!.payload as { data: { content: Array<Record<string, unknown>> } };
+      expect(restored.data.content[0]).toEqual(diffBlock);
+      const trimmedText = (restored.data.content[1]!.content as { text: string }).text;
+      expect(trimmedText).toContain('HEAD-MARK');
+      expect(trimmedText).toContain('TAIL-MARK');
+      expect(trimmedText).toContain('archived tool output trimmed');
+    } finally { db.close(); }
   });
 });

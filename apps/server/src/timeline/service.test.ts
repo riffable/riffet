@@ -545,7 +545,7 @@ describe('timeline service', () => {
     env.close();
   });
 
-  it('drops only the main lane, and refolds it with its subagent summaries intact, and a second sweep still runs after an empty one', async () => {
+  it('drops both main and subagent lanes when cold, and refolds main with persisted subagent summaries intact', async () => {
     let env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
     const now = Date.now() + 8 * 86_400_000;
     expect(await env.service.sweepCold(now)).toBe(0); // nothing folded yet
@@ -566,9 +566,9 @@ describe('timeline service', () => {
 
     env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
     expect(await env.service.sweepCold(now)).toBe(1);
-    // Only the main lane goes; the subagent lane keeps its rows.
+    // Both main and subagent lanes are cold-dropped; the subagent summary persists on its head.
     expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE lane='main'").get()).toEqual({ n: 0 });
-    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE lane='sub:task-1'").get()).not.toEqual({ n: 0 });
+    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE lane='sub:task-1'").get()).toEqual({ n: 0 });
     env.close();
 
     env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
@@ -657,23 +657,26 @@ describe('timeline service', () => {
     for (const row of rows) expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThanOrEqual(SYNC_BUDGET.rowBytes);
     const text = rows.find(row => row.key === 'event:a1') as Extract<TimelineRow, { kind: 'assistant' }>;
     expect(Buffer.byteLength(text.text)).toBe(SYNC_BUDGET.previewBytes);
+    // Truncated journal-backed rows are expanded on demand without duplicating full row JSON into `blobs`.
+    expect(env.journal.getBlob(text.truncated!.blobRef)).toBeUndefined();
     const blob = env.journal.sessionBlob(S, text.truncated!.blobRef)!;
     expect(JSON.parse(blob.bytes().toString('utf8')).text).toBe(long);
     const output = rows.find(row => row.key === 'tool:call-1')!;
     expect(Buffer.byteLength(JSON.stringify(output.event.data))).toBeLessThan(SYNC_BUDGET.toolOutputBytes + 1024);
     expect(output.truncated).toBeDefined();
+    expect(env.journal.getBlob(output.truncated!.blobRef)).toBeUndefined();
+    expect(JSON.parse(env.journal.sessionBlob(S, output.truncated!.blobRef)!.bytes().toString('utf8')).event.data.content[0].content.text).toBe('y'.repeat(40 * 1024));
     const image = rows.find(row => row.kind === 'image') as Extract<TimelineRow, { kind: 'image' }>;
     const hash = image.src.split('/').at(-1)!;
     expect(image.src).toBe(`/api/sessions/${S}/blobs/${hash}`);
     expect(env.journal.sessionBlob(S, hash)?.bytes().toString()).toBe('png-bytes');
     expect(JSON.stringify(image.event.data)).not.toContain(Buffer.from('png-bytes').toString('base64'));
-    // A cut row that changes names a blob of its own; the one it named before is let go and swept, the image it kept is not.
+    // A cut row that changes invalidates its old truncated hash and expands to the new content, while images stay persisted.
     commit(env, answer('a1', 't1', `${long}more`));
     await env.ready();
     const next = env.all().find(row => row.key === 'event:a1')!;
     expect(next.truncated!.blobRef).not.toBe(text.truncated!.blobRef);
     expect(env.journal.sessionBlob(S, text.truncated!.blobRef)).toBeUndefined();
-    expect(env.journal.sweepBlobs()).toBeGreaterThan(0);
     expect(env.journal.getBlob(text.truncated!.blobRef)).toBeUndefined();
     expect(JSON.parse(env.journal.sessionBlob(S, next.truncated!.blobRef)!.bytes().toString('utf8')).text).toBe(`${long}more`);
     expect(env.journal.sessionBlob(S, hash)?.bytes().toString()).toBe('png-bytes');

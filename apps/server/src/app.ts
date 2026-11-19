@@ -120,7 +120,7 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, STORAGE_BUDGET, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -169,8 +169,12 @@ export async function createApp(options: AppOptions = {}) {
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
   const store=new Store(join(stateDir,'workbench.db')); store.recoverInterruptedRuns();
-  // Checkpoints of the write-ahead log run on a thread of their own, not inside whichever commit crosses the limit.
-  const stopWalCheckpoints=startWalCheckpoints(store.db,store.path);
+  // Checkpoints of all three write-ahead logs run on one worker thread, not inside whichever commit crosses the limit.
+  const stopWalCheckpoints=startWalCheckpoints(
+    store.layout
+      ? [{ db: store.db, path: store.layout.control }, { db: store.journalDb, path: store.layout.journal }, { db: store.derivedDb, path: store.layout.derived }]
+      : [{ db: store.db, path: store.path }],
+  );
   const contextReferences:SessionReferenceService=new SessionReferenceService(store,stateDir,(id,maxBytes,signal):Promise<import('../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]|undefined>=>nativeBackends.contextTranscript(id,maxBytes,signal));
   const taskWorkspaces=new TaskWorkspaceService({store,settings,stateDir,defaultRoot:options.taskWorkspaceDefaultRoot??process.env.RIFFET_TASK_WORKSPACE_ROOT,
     deniedRoots:()=>[
@@ -363,9 +367,10 @@ export async function createApp(options: AppOptions = {}) {
     return {text,attachmentIds,context,...(references?{references}:{})};
   };
   const nativeRuns=(id:string)=>[...new Map([...store.listRecentNativeRuns(id).reverse(),...store.listUnfinishedNativeRuns(id)].map(run=>[run.id,run])).values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
-  // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows, and each backend's transcript read into the journal while a stream needs it.
-  const timeline=new TimelineService({db:store.db,journal:store.journal,listRuns:id=>store.listRuns(id),onRunChanged:listener=>store.onRunChanged(listener),
+  // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows in L2 `derived.db`, and each backend's transcript read into L1 `journal.db`.
+  const timeline=new TimelineService({db:store.derivedDb,journal:store.journal,listRuns:id=>store.listRuns(id),onRunChanged:listener=>store.onRunChanged(listener),
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
+    activity:id=>store.sessionActivity(id),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
   // Canvas summaries are written on request, one turn at a time (docs/PLUGIN_ARCHITECTURE.md, canvas).
   const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>settings.getSettings().auxiliaryModels?.summary,gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);}});
@@ -447,7 +452,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold()};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -617,8 +622,20 @@ export async function createApp(options: AppOptions = {}) {
     void workspace.pruneAttachments({olderThan:Date.now()-RETENTION_MS,keep}).catch(error=>app.log.warn({err:error},'attachment pruning failed'));
   },MAINTENANCE_DELAY_MS);
   maintenance.unref();
-  // The log's own housekeeping (superseded draft chunks, unreferenced blobs): once after start-up, then now and then.
-  const sweepJournal=()=>{void deletion.resumeCleanup();void contextReferences.sweep().catch(error=>app.log.warn({err:error},'context file pruning failed'));try{store.journal.maintain();}catch(error){app.log.warn({err:error},'journal maintenance failed');}};
+  // The log's own housekeeping (superseded revisions, unreferenced blobs, cold archived trimming & incremental vacuum): once after start-up, then now and then.
+  const sweepJournal=()=>{
+    void deletion.resumeCleanup();
+    void contextReferences.sweep().catch(error=>app.log.warn({err:error},'context file pruning failed'));
+    try{
+      if(STORAGE_BUDGET.archivedTrimDays>0){
+        const archivedBefore=new Date(Date.now()-STORAGE_BUDGET.archivedTrimDays*86_400_000).toISOString();
+        const archivedIds=store.archivedSessionsBefore(archivedBefore);
+        if(archivedIds.length)store.journal.trimArchivedToolBlobs(archivedIds);
+      }
+      store.journal.maintainAll();
+      store.reclaimSpace();
+    }catch(error){app.log.warn({err:error},'journal maintenance failed');}
+  };
   const journalSweep=setTimeout(sweepJournal,MAINTENANCE_DELAY_MS*2);journalSweep.unref();
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{

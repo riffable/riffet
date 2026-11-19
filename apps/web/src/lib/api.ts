@@ -908,6 +908,7 @@ export const api = {
   serviceMonitor: (signal?: AbortSignal) => request<ServiceMonitorSnapshot>('/api/system/monitor', { signal }),
   storage: (signal?: AbortSignal) => request<StorageReport>('/api/system/storage', { signal }),
   scanStorage: () => request<StorageReport>('/api/system/storage/scan', json('POST')),
+  maintainStorage: () => request<StorageReport>('/api/system/storage/maintain', json('POST')),
   scheduleCompaction: (scheduled: boolean) => request<StorageReport>('/api/system/storage/compaction', json('PUT', { scheduled })),
   /** SIGTERM to a process in the service's own tree; the server refuses anything without `canTerminate`. */
   terminateServiceProcess: (pid: number) => request<{ ok: true }>(`/api/system/processes/${pid}/terminate`, json('POST')),

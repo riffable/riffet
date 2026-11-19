@@ -180,7 +180,7 @@ export class SessionReferenceService {
     const { key, scratch } = servingKey(this.store.journal, source.id, 'main');
     const head = this.store.journal.peek(key);
     if (!head) throw unavailable();
-    const db = this.store.db, messages: ContextMessage[] = [];
+    const db = this.store.journal.db, messages: ContextMessage[] = [];
     const firsts = db.prepare('SELECT seq,native_id FROM journal_events WHERE session_id=? AND rev=1 AND seq>? AND seq<=? ORDER BY seq LIMIT 128');
     const latest = db.prepare('SELECT kind,turn_id,at,blob_ref,length(CAST(payload AS BLOB)) AS size FROM journal_events WHERE session_id=? AND native_id=? AND seq<=? ORDER BY rev DESC LIMIT 1');
     const payload = db.prepare('SELECT payload FROM journal_events WHERE session_id=? AND native_id=? AND seq<=? ORDER BY rev DESC LIMIT 1');

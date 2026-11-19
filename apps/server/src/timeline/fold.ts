@@ -251,7 +251,7 @@ export class LaneFold {
       let saved = cached.error ?? undefined;
       if (saved === error && !cached.blobRef) continue;
       if (cached.blobRef) {
-        const full = this.ctx.journal.getBlob(cached.blobRef);
+        const full = this.ctx.journal.sessionBlob(this.sessionId, cached.blobRef)?.bytes();
         if (full) saved = str((JSON.parse(full.toString('utf8')) as RowContent).event.data.error);
       }
       if (saved === error) continue;
@@ -348,6 +348,11 @@ export class LaneFold {
 
   // ---- loading -----------------------------------------------------------------------------
 
+  /** Runs timeline table writes atomically on `tables.db` (reusing `journal.tx` when both share one DB). */
+  private tableTx<T>(fn: () => T): T {
+    return this.ctx.tables.db === this.ctx.journal.db ? this.ctx.journal.tx(fn) : this.ctx.tables.tx(fn);
+  }
+
   /** Points the fold at the log that serves; when that is another log, or the fold rules changed, the lane starts over. */
   private attach(): ResetReason | undefined {
     const { journal, tables } = this.ctx;
@@ -361,11 +366,12 @@ export class LaneFold {
     if (stored && stored.generation === this.generation) {
       // A lane dropped as cold whose rows were not all deleted yet (`TimelineService.sweepCold`): nothing is folded under this head, so what is left is stale.
       if (stored.headSeq === 0 && stored.journalSeq === 0 && tables.hasRows(this.sessionId, this.lane)) {
-        journal.tx(() => {
-          const cut = tables.truncatedBlobs(this.sessionId, this.lane);
+        const cut = this.tableTx(() => {
+          const refs = tables.truncatedBlobs(this.sessionId, this.lane);
           tables.clearLane(this.sessionId, this.lane);
-          if (cut.length) this.ctx.release(this.sessionId, cut);
+          return refs;
         });
+        if (cut.length) this.ctx.release(this.sessionId, cut);
       }
       this.headSeq = stored.headSeq;
       this.journalSeq = stored.journalSeq;
@@ -377,21 +383,24 @@ export class LaneFold {
     this.headSeq = 0;
     this.journalSeq = 0;
     this.windowStart = 1;
-    journal.tx(() => {
-      const cut = tables.truncatedBlobs(this.sessionId, this.lane);
+    const cut = this.tableTx(() => {
+      const refs = tables.truncatedBlobs(this.sessionId, this.lane);
       tables.clearLane(this.sessionId, this.lane);
-      if (cut.length) this.ctx.release(this.sessionId, cut);
-      this.putHead();
+      // Clear any previous cached summary on rebuild/promotion/fold-version reset so an empty rebuilt
+      // subagent lane never resurrects stale counts or file changes from before the rebuild.
+      this.putHead({ clearSummary: true });
+      return refs;
     });
+    if (cut.length) this.ctx.release(this.sessionId, cut);
     if (!stored) return undefined;
     return stored.foldVersion !== FOLD_VERSION ? 'fold' : stored.scratch && !this.scratch ? 'promoted' : 'rebuilt';
   }
 
-  private putHead(): void {
+  private putHead(options?: { clearSummary?: boolean }): void {
     this.ctx.tables.putHead({
       sessionId: this.sessionId, lane: this.lane, generation: this.generation, journalGeneration: this.journalGeneration ?? null, scratch: this.scratch, epoch: this.epoch,
       headSeq: this.headSeq, foldVersion: FOLD_VERSION, foldedThrough: this.windowStart - 1, journalSeq: this.journalSeq,
-    });
+    }, options);
   }
 
   /**
@@ -681,10 +690,12 @@ export class LaneFold {
     const json = JSON.stringify(next);
     const digest = sha1(json);
     if (digest === stored.digest) return;
-    this.ctx.journal.tx(() => {
-      this.write(next, digest, stored);
+    const released: string[] = [];
+    this.tableTx(() => {
+      this.write(next, digest, stored, released);
       this.putHead();
     });
+    if (released.length) this.ctx.release(this.sessionId, released);
   }
 
   private patchFrozenOutline(turnId: string): void {
@@ -694,20 +705,27 @@ export class LaneFold {
     if (!stored || !meta?.status) return;
     const outline: TurnOutlineV3 = { ...stored.outline, status: meta.status === 'interrupted' ? 'cancelled' : meta.status, ...(meta.endedAt ? { endedAt: meta.endedAt } : {}) };
     if (JSON.stringify(outline) === JSON.stringify(stored.outline)) return;
-    this.ctx.journal.tx(() => this.ctx.tables.putTurn(this.sessionId, this.lane, outline, null));
+    this.tableTx(() => this.ctx.tables.putTurn(this.sessionId, this.lane, outline, null));
     this.out.turns.set(outline.turn, outline);
   }
 
   /** Stores a changed row under the next seq. */
-  private write(row: RowContent, digest: string, previous: RowState | undefined): RowState {
+  private write(row: RowContent, digest: string, previous: RowState | undefined, released: string[]): RowState {
     const seq = ++this.headSeq;
     const rev = (previous?.rev ?? 0) + 1;
-    const fitted = fitRow(row, this.sessionId, this.ctx.put);
-    const state: RowState = { key: row.key, pos: row.pos, turn: row.turn, seq, rev, ...(row.runId ? { runId: row.runId } : {}), deleted: false, kind: row.kind, digest, bytes: fitted.bytes };
-    // The whole of a cut row is kept for as long as the row is; its next version names a blob of its own.
-    const superseded = previous && !previous.deleted ? this.ctx.tables.truncatedBlobOf(this.sessionId, this.lane, row.key) : undefined;
+    // Rows backed by a bounded set of journal entities can be reconstructed on demand when expanded;
+    // `auto` still persists if last-resort guarding truncates `sourceIds` or metadata.
+    const reconstructible = row.event.sourceIds.length > 0 && row.event.sourceIds.length <= 64 && row.kind !== 'status' && !(row.kind === 'tool' && row.job) && !(row.kind === 'user' && row.pending);
+    const fitted = fitRow(row, this.sessionId, this.ctx.put, { persistTruncated: reconstructible ? 'auto' : true });
+    const truncatedHash = fitted.row.truncated?.blobRef;
+    const state: RowState = {
+      key: row.key, pos: row.pos, turn: row.turn, seq, rev, ...(row.runId ? { runId: row.runId } : {}),
+      deleted: false, kind: row.kind, digest, bytes: fitted.bytes, ...(truncatedHash ? { truncatedHash } : {}),
+    };
+    // Release any legacy persisted truncated blob replaced by this version.
+    const superseded = previous && !previous.deleted ? (previous.truncatedHash ?? this.ctx.tables.truncatedBlobOf(this.sessionId, this.lane, row.key)) : undefined;
     this.ctx.tables.putRow(this.sessionId, this.lane, state, fitted.json);
-    if (superseded && superseded !== fitted.row.truncated?.blobRef) this.ctx.release(this.sessionId, [superseded]);
+    if (superseded && (!fitted.persistedTruncated || superseded !== truncatedHash)) released.push(superseded);
     this.out.upserts.push({ ...fitted.row, seq, rev } as TimelineRow);
     return state;
   }
@@ -836,18 +854,20 @@ export class LaneFold {
     const headMoved = !stored || stored.journalSeq !== this.journalSeq || stored.foldedThrough !== this.windowStart - 1;
     if (!changed.length && !gone.length && !outlineChanges.length && !outlineGone.length && !headMoved) return;
     const { tables } = this.ctx;
-    this.ctx.journal.tx(() => {
+    const released: string[] = [];
+    this.tableTx(() => {
       for (const change of changed) {
         const previous = change.previous?.state ?? tables.rowState(this.sessionId, this.lane, change.row.key);
-        const state = this.write(change.row, change.digest, previous);
+        const state = this.write(change.row, change.digest, previous, released);
         this.emitted.set(change.row.key, { item: change.item, deco: change.deco, state });
       }
       for (const key of gone) {
         const previous = this.emitted.get(key)!.state;
-        const state: RowState = { ...previous, seq: ++this.headSeq, rev: previous.rev + 1, deleted: true, digest: '', bytes: 0 };
-        const superseded = tables.truncatedBlobOf(this.sessionId, this.lane, key);
+        const { truncatedHash: _cleared, ...rest } = previous;
+        const state: RowState = { ...rest, seq: ++this.headSeq, rev: previous.rev + 1, deleted: true, digest: '', bytes: 0 };
+        const superseded = previous.truncatedHash ?? tables.truncatedBlobOf(this.sessionId, this.lane, key);
         tables.putRow(this.sessionId, this.lane, state, '');
-        if (superseded) this.ctx.release(this.sessionId, [superseded]);
+        if (superseded) released.push(superseded);
         this.emitted.delete(key);
         this.out.deletes.push({ key, seq: state.seq });
       }
@@ -861,6 +881,7 @@ export class LaneFold {
       }
       this.putHead();
     });
+    if (released.length) this.ctx.release(this.sessionId, released);
   }
 
   private accumulateTurn(turns: Map<string, TurnTally>, item: TimelineItem, place: RowPlace): void {
@@ -949,7 +970,7 @@ export class LaneFold {
     this.timeline = new IncrementalTimeline(this.seed);
     for (const job of this.jobs.values()) this.timeline.setJob(job);
     const outline = this.outlines.get(turn);
-    this.ctx.journal.tx(() => {
+    this.tableTx(() => {
       if (outline) this.ctx.tables.putTurn(this.sessionId, this.lane, outline, cut);
       this.putHead();
     });

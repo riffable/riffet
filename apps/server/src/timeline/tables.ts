@@ -1,20 +1,25 @@
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
-import type { SyncLane, TimelineRow, TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import type { FileChange, SyncLane, TimelineRow, TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 
 /*
- * Where a lane's folded rows live (docs/SYNC-V3.md, 时间线由服务端折叠). Additive tables beside the journal's,
- * created if missing, so an existing database only gains them.
+ * Where a lane's folded rows live (docs/SYNC-V3.md, 时间线由服务端折叠). Additive tables in `derived.db`
+ * (or alongside the journal in single-db tests), created if missing.
  *
  * - `timeline_rows`: one row per (session, lane, key). `seq` is the lane seq of its latest change and
  *   `rev` counts its changes; a row that left the timeline stays with `deleted=1` so a delta can say so.
  *   `payload` is the row as sent, without `seq` and `rev`; `digest` is of the row before it was fitted
- *   to the row budget, `bytes` the payload's size.
+ *   to the row budget, `bytes` the payload's size, `truncated_hash` indexes cut rows for on-demand expansion.
  * - `timeline_heads`: per lane, the `generation` the rows belong to, `head_seq`, the journal log they
- *   were folded from and how far (`journal_seq`), and `folded_through`: entities up to that journal
- *   identity are folded for good, so a cold start folds only what comes after it.
+ *   were folded from and how far (`journal_seq`), `folded_through`, and for subagent lanes `summary`:
+ *   cached row count and changed files so cold subagent rows can be dropped without breaking parent refolds.
  * - `timeline_turns`: the outline, one `TurnOutlineV3` per turn; `cut` is set on a turn whose start
  *   once was `folded_through + 1`, the only places a fold may start from again.
  */
+
+export interface StoredSubagentSummary {
+  rows: number;
+  changes: FileChange[];
+}
 
 export interface TimelineHead {
   sessionId: string;
@@ -29,24 +34,36 @@ export interface TimelineHead {
   foldVersion: number;
   foldedThrough: number;
   journalSeq: number;
+  /** Persisted subagent summary (rows + file changes) that survives cold dropping of the subagent's rows. */
+  summary?: StoredSubagentSummary;
   /** When the head was last written (a fold); absent on a head not read from the table. */
   updatedAt?: string;
 }
 
 /** A stored row without its payload. */
-export interface RowState { key: string; pos: number; turn: string; seq: number; rev: number; runId?: string; deleted: boolean; kind: string; digest: string; bytes: number }
+export interface RowState { key: string; pos: number; turn: string; seq: number; rev: number; runId?: string; deleted: boolean; kind: string; digest: string; bytes: number; truncatedHash?: string }
 
 export interface StoredTurn { turn: string; startPos: number; cut: number | null; outline: TurnOutlineV3 }
 
-interface HeadRecord { updated_at: string; session_id: string; lane: string; generation: string; journal_generation: string | null; scratch: number; epoch: number; head_seq: number; fold_version: number; folded_through: number; journal_seq: number }
-interface RowRecord { key: string; pos: number; turn: string; seq: number; rev: number; run_id: string | null; deleted: number; kind: string; digest: string; bytes: number }
+interface HeadRecord { updated_at: string; session_id: string; lane: string; generation: string; journal_generation: string | null; scratch: number; epoch: number; head_seq: number; fold_version: number; folded_through: number; journal_seq: number; summary: string | null }
+interface RowRecord { key: string; pos: number; turn: string; seq: number; rev: number; run_id: string | null; deleted: number; kind: string; digest: string; bytes: number; truncated_hash?: string | null }
 
 const rowStateOf = (row: RowRecord): RowState => ({
   key: row.key, pos: row.pos, turn: row.turn, seq: row.seq, rev: row.rev, ...(row.run_id !== null ? { runId: row.run_id } : {}),
   deleted: row.deleted === 1, kind: row.kind, digest: row.digest, bytes: row.bytes,
+  ...(row.truncated_hash ? { truncatedHash: row.truncated_hash } : {}),
 });
 
-const ROW_STATE = 'key,pos,turn,seq,rev,run_id,deleted,kind,digest,bytes';
+function parseSummary(text: string | null | undefined): StoredSubagentSummary | undefined {
+  if (!text) return undefined;
+  try {
+    const parsed = JSON.parse(text) as { rows?: unknown; changes?: unknown };
+    if (typeof parsed.rows !== 'number' || !Array.isArray(parsed.changes)) return undefined;
+    return { rows: parsed.rows, changes: parsed.changes as FileChange[] };
+  } catch { return undefined; }
+}
+
+const ROW_STATE = 'key,pos,turn,seq,rev,run_id,deleted,kind,digest,bytes,truncated_hash';
 /** A live row whose payload names the blob of its whole (`fitRow`); the substring test spares parsing every other payload. */
 const CUT = `deleted=0 AND instr(payload,'"truncated":')>0`;
 const TRUNCATED_REF = `json_extract(payload,'$.truncated.blobRef')`;
@@ -56,17 +73,18 @@ export const rowOf = (payload: string, seq: number, rev: number): TimelineRow =>
 
 export class TimelineTables {
   private readonly statements = new Map<string, StatementSync>();
+  private depth = 0;
 
-  constructor(private readonly db: DatabaseSync) {
+  constructor(readonly db: DatabaseSync) {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS timeline_heads (
         session_id TEXT NOT NULL, lane TEXT NOT NULL, generation TEXT NOT NULL, journal_generation TEXT, scratch INTEGER NOT NULL DEFAULT 0,
-        head_seq INTEGER NOT NULL DEFAULT 0, fold_version INTEGER NOT NULL, folded_through INTEGER NOT NULL DEFAULT 0,
-        journal_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY (session_id, lane));
+        epoch INTEGER NOT NULL DEFAULT 0, head_seq INTEGER NOT NULL DEFAULT 0, fold_version INTEGER NOT NULL, folded_through INTEGER NOT NULL DEFAULT 0,
+        journal_seq INTEGER NOT NULL DEFAULT 0, summary TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (session_id, lane));
       CREATE TABLE IF NOT EXISTS timeline_rows (
         session_id TEXT NOT NULL, lane TEXT NOT NULL, key TEXT NOT NULL, pos INTEGER NOT NULL, turn TEXT NOT NULL,
         seq INTEGER NOT NULL, rev INTEGER NOT NULL, run_id TEXT, deleted INTEGER NOT NULL DEFAULT 0,
-        kind TEXT NOT NULL, digest TEXT NOT NULL, bytes INTEGER NOT NULL, payload TEXT NOT NULL,
+        kind TEXT NOT NULL, digest TEXT NOT NULL, bytes INTEGER NOT NULL, truncated_hash TEXT, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, lane, key));
       CREATE INDEX IF NOT EXISTS timeline_rows_seq ON timeline_rows(session_id, lane, seq);
       CREATE INDEX IF NOT EXISTS timeline_rows_pos ON timeline_rows(session_id, lane, pos);
@@ -76,9 +94,12 @@ export class TimelineTables {
         session_id TEXT NOT NULL, lane TEXT NOT NULL, turn TEXT NOT NULL, start_pos INTEGER NOT NULL, cut INTEGER, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, lane, turn));
       CREATE INDEX IF NOT EXISTS timeline_turns_pos ON timeline_turns(session_id, lane, start_pos);`);
-    if (!(this.db.prepare('PRAGMA table_info(timeline_heads)').all() as Array<{ name: string }>).some(column => column.name === 'epoch')) {
-      this.db.exec('ALTER TABLE timeline_heads ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0');
-    }
+    const hasColumn = (table: string, name: string) =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(column => column.name === name);
+    if (!hasColumn('timeline_heads', 'epoch')) this.db.exec('ALTER TABLE timeline_heads ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0');
+    if (!hasColumn('timeline_heads', 'summary')) this.db.exec('ALTER TABLE timeline_heads ADD COLUMN summary TEXT');
+    if (!hasColumn('timeline_rows', 'truncated_hash')) this.db.exec('ALTER TABLE timeline_rows ADD COLUMN truncated_hash TEXT');
+    this.db.exec('CREATE INDEX IF NOT EXISTS timeline_rows_truncated ON timeline_rows(session_id, truncated_hash) WHERE truncated_hash IS NOT NULL');
   }
 
   private sql(text: string): StatementSync {
@@ -87,14 +108,34 @@ export class TimelineTables {
     return statement;
   }
 
+  /** Runs `fn` in a transaction on the timeline database (nested calls join the open transaction). */
+  tx<T>(fn: () => T): T {
+    if (this.depth) return fn();
+    this.db.exec('BEGIN IMMEDIATE');
+    this.depth += 1;
+    try {
+      const result = fn();
+      this.db.exec('COMMIT');
+      this.depth -= 1;
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      this.depth -= 1;
+      throw error;
+    }
+  }
+
   // ---- heads -------------------------------------------------------------------------------
 
   head(sessionId: string, lane: SyncLane): TimelineHead | undefined {
     const row = this.sql('SELECT * FROM timeline_heads WHERE session_id=? AND lane=?').get(sessionId, lane) as HeadRecord | undefined;
-    return row ? {
+    if (!row) return undefined;
+    const summary = parseSummary(row.summary);
+    return {
       sessionId: row.session_id, lane: row.lane as SyncLane, generation: row.generation, journalGeneration: row.journal_generation, scratch: row.scratch === 1, epoch: row.epoch,
-      headSeq: row.head_seq, foldVersion: row.fold_version, foldedThrough: row.folded_through, journalSeq: row.journal_seq, updatedAt: row.updated_at,
-    } : undefined;
+      headSeq: row.head_seq, foldVersion: row.fold_version, foldedThrough: row.folded_through, journalSeq: row.journal_seq,
+      ...(summary ? { summary } : {}), updatedAt: row.updated_at,
+    };
   }
 
   /** Changes whenever any lane of the session folds a row: each lane's generation and head seq, joined. */
@@ -103,26 +144,59 @@ export class TimelineTables {
       .map(row => `${row.lane}:${row.generation}:${row.head_seq}`).join(',');
   }
 
-  putHead(head: TimelineHead): void {
-    this.sql(`INSERT INTO timeline_heads(session_id,lane,generation,journal_generation,scratch,epoch,head_seq,fold_version,folded_through,journal_seq,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,lane) DO UPDATE SET generation=excluded.generation, journal_generation=excluded.journal_generation,
+  putHead(head: TimelineHead, options: { clearSummary?: boolean } = {}): void {
+    const summaryJson = head.summary ? JSON.stringify(head.summary) : null;
+    if (options.clearSummary) {
+      this.sql(`INSERT INTO timeline_heads(session_id,lane,generation,journal_generation,scratch,epoch,head_seq,fold_version,folded_through,journal_seq,summary,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?) ON CONFLICT(session_id,lane) DO UPDATE SET generation=excluded.generation, journal_generation=excluded.journal_generation,
+        scratch=excluded.scratch, epoch=excluded.epoch, head_seq=excluded.head_seq, fold_version=excluded.fold_version, folded_through=excluded.folded_through,
+        journal_seq=excluded.journal_seq, summary=NULL, updated_at=excluded.updated_at`)
+        .run(head.sessionId, head.lane, head.generation, head.journalGeneration, head.scratch ? 1 : 0, head.epoch, head.headSeq, head.foldVersion, head.foldedThrough, head.journalSeq, new Date().toISOString());
+      return;
+    }
+    this.sql(`INSERT INTO timeline_heads(session_id,lane,generation,journal_generation,scratch,epoch,head_seq,fold_version,folded_through,journal_seq,summary,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,lane) DO UPDATE SET generation=excluded.generation, journal_generation=excluded.journal_generation,
       scratch=excluded.scratch, epoch=excluded.epoch, head_seq=excluded.head_seq, fold_version=excluded.fold_version, folded_through=excluded.folded_through,
-      journal_seq=excluded.journal_seq, updated_at=excluded.updated_at`)
-      .run(head.sessionId, head.lane, head.generation, head.journalGeneration, head.scratch ? 1 : 0, head.epoch, head.headSeq, head.foldVersion, head.foldedThrough, head.journalSeq, new Date().toISOString());
+      journal_seq=excluded.journal_seq, summary=COALESCE(excluded.summary, timeline_heads.summary), updated_at=excluded.updated_at`)
+      .run(head.sessionId, head.lane, head.generation, head.journalGeneration, head.scratch ? 1 : 0, head.epoch, head.headSeq, head.foldVersion, head.foldedThrough, head.journalSeq, summaryJson, new Date().toISOString());
+  }
+
+  /** Persists a subagent lane's summary on its head so its rows can be cold-dropped without losing parent tool badges. */
+  putSummary(sessionId: string, lane: SyncLane, summary: StoredSubagentSummary): void {
+    this.sql('UPDATE timeline_heads SET summary=? WHERE session_id=? AND lane=?').run(JSON.stringify(summary), sessionId, lane);
+  }
+
+  /** Every lane of `sessionId` present in `timeline_heads`. */
+  lanesOf(sessionId: string): TimelineHead[] {
+    return (this.sql('SELECT * FROM timeline_heads WHERE session_id=? ORDER BY lane').all(sessionId) as unknown as HeadRecord[]).map(row => {
+      const summary = parseSummary(row.summary);
+      return {
+        sessionId: row.session_id, lane: row.lane as SyncLane, generation: row.generation, journalGeneration: row.journal_generation, scratch: row.scratch === 1, epoch: row.epoch,
+        headSeq: row.head_seq, foldVersion: row.fold_version, foldedThrough: row.folded_through, journalSeq: row.journal_seq,
+        ...(summary ? { summary } : {}), updatedAt: row.updated_at,
+      };
+    });
   }
 
   /** The blobs holding the whole of the lane's cut rows (`truncated.blobRef`); of the session's every lane without one. */
   truncatedBlobs(sessionId: string, lane?: SyncLane): string[] {
     const rows = (lane === undefined
-      ? this.sql(`SELECT ${TRUNCATED_REF} AS ref FROM timeline_rows WHERE session_id=? AND ${CUT}`).all(sessionId)
-      : this.sql(`SELECT ${TRUNCATED_REF} AS ref FROM timeline_rows WHERE session_id=? AND lane=? AND ${CUT}`).all(sessionId, lane)) as Array<{ ref: unknown }>;
+      ? this.sql(`SELECT COALESCE(truncated_hash, ${TRUNCATED_REF}) AS ref FROM timeline_rows WHERE session_id=? AND deleted=0 AND (truncated_hash IS NOT NULL OR instr(payload,'"truncated":')>0)`).all(sessionId)
+      : this.sql(`SELECT COALESCE(truncated_hash, ${TRUNCATED_REF}) AS ref FROM timeline_rows WHERE session_id=? AND lane=? AND deleted=0 AND (truncated_hash IS NOT NULL OR instr(payload,'"truncated":')>0)`).all(sessionId, lane)) as Array<{ ref: unknown }>;
     return rows.flatMap(row => typeof row.ref === 'string' ? [row.ref] : []);
   }
 
   /** The blob holding the whole of a stored row that was cut, if it was. */
   truncatedBlobOf(sessionId: string, lane: SyncLane, key: string): string | undefined {
-    const row = this.sql(`SELECT ${TRUNCATED_REF} AS ref FROM timeline_rows WHERE session_id=? AND lane=? AND key=? AND ${CUT}`).get(sessionId, lane, key) as { ref: unknown } | undefined;
+    const row = this.sql(`SELECT COALESCE(truncated_hash, ${TRUNCATED_REF}) AS ref FROM timeline_rows WHERE session_id=? AND lane=? AND key=? AND ${CUT}`).get(sessionId, lane, key) as { ref: unknown } | undefined;
     return typeof row?.ref === 'string' ? row.ref : undefined;
+  }
+
+  /** Locates a live truncated row by its content hash for on-demand expansion from the journal. */
+  truncatedRowByHash(sessionId: string, hash: string): { lane: SyncLane; key: string; pos: number; turn: string; payload: string } | undefined {
+    const row = this.sql('SELECT lane,key,pos,turn,payload FROM timeline_rows WHERE session_id=? AND truncated_hash=? AND deleted=0 LIMIT 1')
+      .get(sessionId, hash) as { lane: string; key: string; pos: number; turn: string; payload: string } | undefined;
+    return row ? { ...row, lane: row.lane as SyncLane } : undefined;
   }
 
   /** Every row and turn of a lane goes; its head is the caller's to rewrite. */
@@ -131,9 +205,12 @@ export class TimelineTables {
     this.sql('DELETE FROM timeline_turns WHERE session_id=? AND lane=?').run(sessionId, lane);
   }
 
-  /** Sessions after `after` with a lane that holds rows (or the rest of rows a drop did not finish deleting), up to `limit`: the candidates of a cold sweep. */
+  /**
+   * Sessions after `after` with any lane (main or subagent) that holds folded rows, up to `limit`:
+   * the candidates of a cold sweep.
+   */
   foldedSessions(after: string, limit: number): string[] {
-    return (this.sql(`SELECT DISTINCT h.session_id FROM timeline_heads h WHERE h.session_id>? AND h.lane='main' AND (h.head_seq>0 OR h.folded_through>0
+    return (this.sql(`SELECT DISTINCT h.session_id FROM timeline_heads h WHERE h.session_id>? AND (h.head_seq>0 OR h.folded_through>0
       OR (h.epoch>0 AND EXISTS (SELECT 1 FROM timeline_rows r WHERE r.session_id=h.session_id AND r.lane=h.lane))) ORDER BY h.session_id LIMIT ?`).all(after, limit) as Array<{ session_id: string }>).map(row => row.session_id);
   }
 
@@ -189,7 +266,7 @@ export class TimelineTables {
   /** The errors of frozen rows synthesized from turn ends. */
   failuresBefore(sessionId: string, lane: SyncLane, pos: number): Array<{ turnId: string; error: string | null; blobRef: string | null }> {
     return this.sql(`SELECT json_extract(payload, '$.event.nativeTurnId') AS turnId, json_extract(payload, '$.event.data.error') AS error,
-      json_extract(payload, '$.truncated.blobRef') AS blobRef
+      COALESCE(truncated_hash, json_extract(payload, '$.truncated.blobRef')) AS blobRef
       FROM timeline_rows WHERE session_id=? AND lane=? AND key>='event:meta:turn:' AND key<'event:meta:turn;' AND kind='status' AND deleted=0 AND pos<?`)
       .all(sessionId, lane, pos) as Array<{ turnId: string; error: string | null; blobRef: string | null }>;
   }
@@ -211,10 +288,10 @@ export class TimelineTables {
   }
 
   putRow(sessionId: string, lane: SyncLane, state: RowState, payload: string): void {
-    this.sql(`INSERT INTO timeline_rows(session_id,lane,key,pos,turn,seq,rev,run_id,deleted,kind,digest,bytes,payload) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+    this.sql(`INSERT INTO timeline_rows(session_id,lane,key,pos,turn,seq,rev,run_id,deleted,kind,digest,bytes,truncated_hash,payload) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(session_id,lane,key) DO UPDATE SET pos=excluded.pos, turn=excluded.turn, seq=excluded.seq, rev=excluded.rev, run_id=excluded.run_id,
-      deleted=excluded.deleted, kind=excluded.kind, digest=excluded.digest, bytes=excluded.bytes, payload=excluded.payload`)
-      .run(sessionId, lane, state.key, state.pos, state.turn, state.seq, state.rev, state.runId ?? null, state.deleted ? 1 : 0, state.kind, state.digest, state.bytes, payload);
+      deleted=excluded.deleted, kind=excluded.kind, digest=excluded.digest, bytes=excluded.bytes, truncated_hash=excluded.truncated_hash, payload=excluded.payload`)
+      .run(sessionId, lane, state.key, state.pos, state.turn, state.seq, state.rev, state.runId ?? null, state.deleted ? 1 : 0, state.kind, state.digest, state.bytes, state.truncatedHash ?? null, payload);
   }
 
   countLive(sessionId: string, lane: SyncLane): number {

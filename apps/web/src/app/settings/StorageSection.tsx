@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { STORAGE_SCAN_MS, type StorageDatabasePart, type StorageFolderKind, type StorageProjectUsage, type StorageReport, type StorageScanStep } from '@contracts';
+import { STORAGE_SCAN_MS, type StorageDatabasePart, type StorageFolderKind, type StorageProjectUsage, type StorageReport, type StorageScanStep, type StorageStoreKind } from '@contracts';
 import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner } from '@/components/ui/controls';
@@ -24,6 +24,12 @@ const labelOf = (label: MessageDescriptor | string) => typeof label === 'string'
  * What the database's pages hold; `note` is how each is let go, which nothing on screen shows. They
  * share the database's colour: the colours on this page name what the overview bar is made of.
  */
+const STORE_LABELS: Record<StorageStoreKind, MessageDescriptor> = {
+  control: msg`控制数据`,
+  journal: msg`历史日志`,
+  derived: msg`可重建缓存`,
+};
+
 const PARTS: Record<StorageDatabasePart, Meta> = {
   journal: { label: msg`会话记录`, note: msg`随会话删除` },
   timeline: { label: msg`时间线`, note: msg`7 天未活动的会话清空，打开时重建` },
@@ -205,18 +211,58 @@ function DatabaseGroup({ data, onChange }: { data: StorageReport; onChange: (nex
   const { t } = useLingui();
   const { database } = data;
   const parts = data.scan?.parts ?? [];
+  const stores = database.stores ?? [];
   return (
     <Group title={t`数据库 · ${formatBytes(database.bytes)}`}>
+      {stores.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-line-soft py-3 text-xs text-fg-3">
+          {stores.map((store) => (
+            <span key={store.kind} className="inline-flex items-baseline gap-1.5">
+              <span>{STORE_LABELS[store.kind] ? i18n._(STORE_LABELS[store.kind]) : store.kind}</span>
+              <span className="tabular-nums text-fg">{formatBytes(store.bytes)}</span>
+            </span>
+          ))}
+        </div>
+      )}
       <ol className="flex flex-col gap-3 py-4">
         {parts.length === 0 && !data.scanError && <li className="flex justify-center py-4"><Spinner /></li>}
         {ranked(parts, (item) => item.part).map((item) => {
           const meta = PARTS[item.part];
           return <ShareRow key={item.part} label={labelOf(meta.label)} note={meta.note && i18n._(meta.note)} bytes={item.bytes} of={database.bytes} color={DATABASE_COLOR} />;
         })}
-        <ShareRow label={t`可释放`} bytes={database.freeBytes} of={database.bytes} color={FREE_COLOR} />
+        <ShareRow label={t`可释放`} note={database.incremental ? t`自动回收` : undefined} bytes={database.freeBytes} of={database.bytes} color={FREE_COLOR} />
       </ol>
+      <MaintenanceRow data={data} onChange={onChange} />
       <CompactionRow data={data} onChange={onChange} />
     </Group>
+  );
+}
+
+function MaintenanceRow({ data, onChange }: { data: StorageReport; onChange: (next: StorageReport) => void }) {
+  const { t } = useLingui();
+  const [busy, setBusy] = useState(false);
+  const last = data.maintenance;
+
+  const run = async () => {
+    setBusy(true);
+    try { onChange(await api.maintainStorage()); }
+    catch (reason) { toast.error(errorMessage(reason, t`无法整理存储空间`)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <Row title={<Trans>在线整理</Trans>} description={t`清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务`}>
+        <Button size="sm" variant="secondary" busy={busy} onClick={() => void run()}><Trans>立即整理</Trans></Button>
+      </Row>
+      {last && (
+        <p className="py-2.5 text-2xs tabular-nums text-fg-4">
+          {last.beforeBytes > last.afterBytes
+            ? <Trans>上次整理 {timeAgo(last.at)} · {formatBytes(last.beforeBytes)} → {formatBytes(last.afterBytes)} · 用时 {formatDuration(last.durationMs)}</Trans>
+            : <Trans>上次整理 {timeAgo(last.at)} · 无可释放空间 · 用时 {formatDuration(last.durationMs)}</Trans>}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -248,7 +294,9 @@ function CompactionRow({ data, onChange }: { data: StorageReport; onChange: (nex
       ? t`磁盘可用空间不足，需要 ${formatBytes(compaction.requiredBytes)}`
       : database.freeBytes >= RECLAIM_WORTH_NAMING
         ? t`可释放 ${formatBytes(database.freeBytes)}，在服务下次启动时进行，期间服务不可用`
-        : t`在服务下次启动时进行，期间服务不可用`;
+        : database.incremental
+          ? t`空闲页会自动回收，仅在碎片较多时需要重启重建`
+          : t`在服务下次启动时进行，期间服务不可用`;
 
   return (
     <>

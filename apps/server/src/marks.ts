@@ -4,7 +4,7 @@ import type { StatementSync } from 'node:sqlite';
 import type { Mark, MarkAnchor, MarkAsset, MarkColor, MarkFacets, MarkKind, MarkListPage, MarkListQuery, MarkLocation, MarkPrompt, MarkQuote, NativeBackendId, Session, WorkbenchEvent } from '../../../packages/contracts/src/index.js';
 import { AppError, requireString } from './errors.js';
 import { isNativeBackendId } from './backends/registry.js';
-import { likePattern, MAX_INDEXED_TEXT } from './search/messages.js';
+import { likePattern, MAX_INDEXED_TEXT, MAX_TOOL_INDEXED_TEXT } from './search/messages.js';
 import type { Store } from './store.js';
 
 /** Bytes kept of a message's text; a mark is a pointer with a readable copy, not an archive of the answer. */
@@ -254,12 +254,8 @@ export class MarkStore {
    */
   prompt(id: string): MarkPrompt {
     const mark = this.get(id);
-    // Providers write ISO times at whatever precision they have (`…:02Z` next to `…:02.000Z`), and
-    // comparing those as strings puts the second-precision one after the answer it precedes. The
-    // seconds decide instead; within one second the order is the row order.
-    const row = this.sql(`SELECT text FROM message_index WHERE session_id=? AND kind='user' AND text<>'' AND substr(at,1,19)<=substr(?,1,19) ORDER BY at DESC, rowid DESC LIMIT 1`)
-      .get(mark.sessionId, mark.snapshot.at) as { text: string } | undefined;
-    return row ? { text: capBytes(row.text, MAX_PROMPT_BYTES) } : {};
+    const text = this.store.latestIndexedPromptBefore(mark.sessionId, mark.snapshot.at);
+    return text ? { text: capBytes(text, MAX_PROMPT_BYTES) } : {};
   }
 
   list(query: { [K in keyof MarkListQuery]?: unknown }, limit: number, excludeTaskWorkspaces = false): MarkListPage {
@@ -405,8 +401,14 @@ export class MarkStore {
     const live = this.sql('SELECT 1 AS found FROM sessions WHERE id=?').get(mark.sessionId);
     if (!live) return { found: false, mark: this.settle(mark, undefined) };
     const assets = mark.kind === 'image' || mark.kind === 'file';
-    const indexed = (this.sql(`SELECT message_id AS messageId, text FROM message_index WHERE session_id=? AND (kind='assistant' OR (? AND kind='tool')) AND text<>'' ORDER BY at, rowid`).all(mark.sessionId, assets ? 1 : 0) as Array<{ messageId: string; text: string }>)
-      .map(row => ({ messageId: row.messageId, aliases: [], text: row.text, norm: skeleton(row.text), truncated: row.text.length >= MAX_INDEXED_TEXT - 100 }) satisfies Candidate);
+    const indexed = this.store.indexedCandidatesForMark(mark.sessionId, assets)
+      .map(row => ({
+        messageId: row.messageId,
+        aliases: [],
+        text: row.text,
+        norm: skeleton(row.text),
+        truncated: row.kind === 'tool' ? row.text.length >= MAX_TOOL_INDEXED_TEXT - 16 : row.text.length >= MAX_INDEXED_TEXT - 100,
+      }) satisfies Candidate);
     let found = liveRunCommand(mark.anchor.messageId) ? undefined : relocate({ ...mark, anchor: { messageId: mark.anchor.messageId } }, indexed.filter(row => row.messageId === mark.anchor.messageId && !row.truncated), new Set());
     if (!found) {
       let events: readonly WorkbenchEvent[] = [];

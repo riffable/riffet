@@ -118,11 +118,12 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
     catch(error){const message=error instanceof Error?error.message:'The title model returned no title';throw new AppError('TITLE_MODEL_FAILED',message,400,undefined,{message});}
   });
   app.post('/api/system/backup',async()=>createBackup(store,stateDir));
-  // The storage page: a breakdown that comes from a background scan, and a compaction that waits for the next start.
-  const storage=new StorageInspector({stateDir,store});
+  // The storage page: a breakdown that comes from a background scan, online maintenance, and a full rebuild at next start.
+  const storage=new StorageInspector({stateDir,store,sweepColdTimeline:deps.sweepColdTimeline});
   app.addHook('onClose',async()=>storage.close());
   app.get('/api/system/storage',async()=>storage.report());
   app.post('/api/system/storage/scan',async()=>{storage.scan();return storage.report();});
+  app.post('/api/system/storage/maintain',async()=>storage.maintain());
   app.put<{Body:{scheduled?:unknown}}>('/api/system/storage/compaction',async(request)=>{
     const scheduled=request.body?.scheduled;
     if(typeof scheduled!=='boolean')throw new AppError('INVALID_REQUEST','scheduled must be true or false');

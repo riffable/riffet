@@ -24,11 +24,12 @@
 6. 控制信息（状态、交互、Run）与历史分离投递，**任何历史补齐都不得阻塞控制信息**。
 7. 任何一帧、任何一处缓存都有字节上限；超限是显式降级（截断并提供按需加载），不是静默跳过。
 
-## 存储（SQLite，`workbench.db`）
+## 存储（SQLite 三库 + Tier-2 `blobs/`）
 
-- `journal_events(session_id, seq, kind, native_id, rev, turn_id, at, payload, blob_ref)`，主键 `(session_id, seq)`，索引 `(session_id, native_id)`、`(session_id, turn_id)`。`payload` 有上限（默认 64KB）。
-- `journal_heads(session_id, generation, last_seq, ingest_cursor, projection, projection_seq, updated_at)`：`ingest_cursor` 是后端特定的增量读取位置（文件偏移、RPC 游标等）。
-- `blobs(hash, size, bytes, created_at)`：超过 `payload` 上限的工具输出、diff、图片等按内容哈希去重存放；事件里只留预览与 `blob_ref`。引用计数或周期性清扫回收。
+- L1 日志与对象位于 `journal.db` 与 `blobs/`（与 L0 控制库 `workbench.db`、L2 派生缓存库 `derived.db` 物理分离，独立写锁，见 `docs/guide/performance.md` §3.7）：
+- `journal_events(session_id, seq, kind, native_id, rev, turn_id, at, digest, blob_ref, payload)`，主键 `(session_id, seq)`，索引 `(session_id, native_id)`、`(session_id, turn_id)`。`payload` 内联上限 `STORAGE_BUDGET.journalInlineBytes`（2 KiB，定长列前置、零溢出页）。
+- `journal_heads(session_id, generation, last_seq, ingest_cursor, projection, projection_seq, updated_at, identity, compacted_seq)`：`ingest_cursor` 是后端特定的增量读取位置，`compacted_seq` 记录已安全去壳旧修订的单调水位。
+- `blobs(hash, size, stored_size, codec, external, bytes, created_at)`：超过内联上限的事件载荷、图片等在写锁外按无字典 Zstd（level 3）透明压缩，按明文 SHA-256 去重；压缩后 `< 128 KiB` 存表内，更大的不可变对象分片落盘至 `blobs/<前2位>/<hash>.<codec>`。引用清零后由清扫回收。
 - 写入在事务内完成：一批转写行 → 若干日志事件 + 新 `ingest_cursor`，原子提交，崩溃后从 `ingest_cursor` 继续，不重复不遗漏。
 
 ## 写入（各后端适配器）

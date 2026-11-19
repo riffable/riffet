@@ -592,6 +592,106 @@
         }
       }
     },
+    "控制数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control data"
+          }
+        }
+      }
+    },
+    "历史日志": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History journal"
+          }
+        }
+      }
+    },
+    "可重建缓存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebuildable cache"
+          }
+        }
+      }
+    },
+    "自动回收": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reclaimed automatically"
+          }
+        }
+      }
+    },
+    "在线整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Online maintenance"
+          }
+        }
+      }
+    },
+    "立即整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean up now"
+          }
+        }
+      }
+    },
+    "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clears stale timeline caches, old revisions, and duplicate Checkpoints without stopping the service"
+          }
+        }
+      }
+    },
+    "空闲页会自动回收，仅在碎片较多时需要重启重建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free pages are reclaimed automatically; a restart rebuild is only needed when heavily fragmented"
+          }
+        }
+      }
+    },
+    "上次整理 %@ · %@ → %@ · 用时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last cleaned %1$@ · %2$@ → %3$@ · took %4$@"
+          }
+        }
+      }
+    },
+    "上次整理 %@ · 无可释放空间 · 用时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last cleaned %1$@ · no reclaimable space · took %2$@"
+          }
+        }
+      }
+    },
     "上次释放未完成（%@）：%@": {
       "localizations": {
         "en": {

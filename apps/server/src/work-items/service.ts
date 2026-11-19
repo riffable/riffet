@@ -389,7 +389,7 @@ export class WorkItemService {
       const stamp = now();
       const submission: WorkItemSubmission = {
         sessionId, at: stamp, summary, criteria,
-        evidence: collectEvidence(this.store.db, this.sessionsOf(item.id), item.submission?.at ?? item.createdAt, cwd),
+        evidence: collectEvidence(this.store.journal.db, this.sessionsOf(item.id), item.submission?.at ?? item.createdAt, cwd),
       };
       const next: WorkItem = { ...item, submission, updatedAt: stamp };
       this.record(item.id, { kind: 'submit', submission });

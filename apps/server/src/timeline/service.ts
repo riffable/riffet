@@ -1,14 +1,19 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { SERVER_BUDGET, type NativeActivity, type NativeJob, type Run } from '../../../../packages/contracts/src/index.js';
+import { SERVER_BUDGET, STORAGE_BUDGET, type NativeActivity, type NativeJob, type NativeWorkbenchEvent, type Run, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET, type FileChange, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import { buildTimeline } from '../../../../packages/timeline/src/buildTimeline.js';
+import { projectEvents } from '../../../../packages/timeline/src/projectEvents.js';
+import { rowContent, type RowContent } from '../../../../packages/timeline/src/rows.js';
 import { isLiveActivity } from '../journal/activity.js';
+import { blobSha256 } from '../journal/blob-store.js';
 import { eventLoopBusy } from '../loop-health.js';
-import { laneKey, type Journal, type JournalAppend } from '../journal/journal.js';
+import { META_PREFIX, TOMBSTONE_KIND, laneKey, type Journal, type JournalAppend, type SessionBlobResult } from '../journal/journal.js';
 import { hasTurnEnded, servingKey, turnMetaId } from '../journal/ingest.js';
-import type { BlobWriter } from './budget.js';
-import { generationOf, LaneFold, rowFrames, type FoldContext, type FoldInputs, type RowEntry, type TimelineChange } from './fold.js';
+import { reclaimFreePages } from '../sqlite-storage.js';
+import { materializeRowImages, type BlobWriter } from './budget.js';
+import { generationOf, LaneFold, rowFrames, timelineRuns, type FoldContext, type FoldInputs, type RowEntry, type TimelineChange } from './fold.js';
 import { LaneFinder } from './find.js';
-import { rowOf, TimelineTables } from './tables.js';
+import { rowOf, TimelineTables, type StoredSubagentSummary } from './tables.js';
 import { toolFileChanges } from '../../../../packages/timeline/src/lineDiff.js';
 
 export { FOLD_VERSION, type ResetReason, type TimelineChange } from './fold.js';
@@ -114,6 +119,9 @@ export class TimelineService {
   private readonly coldWaits = new Map<ReturnType<typeof setTimeout>, () => void>();
   /** Lanes of a cold drop whose rows are still being deleted. */
   private readonly dropping = new Set<string>();
+  /** Bounded LRU of on-demand expanded truncated rows, keyed by `${sessionId}\n${hash}`. */
+  private readonly expandedCache = new Map<string, Buffer>();
+  private expandedCacheBytes = 0;
 
   constructor(private readonly deps: TimelineDeps) {
     this.tables = new TimelineTables(deps.db);
@@ -121,6 +129,7 @@ export class TimelineService {
     const put = deps.putBlob ?? ((sessionId: string, bytes: Buffer, type: string) => deps.journal.putSessionBlob(sessionId, bytes, type));
     const release = deps.releaseBlobs ?? ((sessionId: string, hashes: string[]) => deps.journal.releaseSessionBlobs(sessionId, hashes));
     this.context = { journal: deps.journal, tables: this.tables, put, release, subagent: (sessionId, toolCallId) => this.summary(sessionId, toolCallId) };
+    deps.journal.setFallbackBlobResolver((sessionId, hash) => this.expandTruncatedBlob(sessionId, hash));
     this.offs.push(deps.journal.onAppend(change => this.noteAppend(change)));
     // A lane not folded now takes up its runs and jobs when it is next opened (`LaneFold.open`).
     if (deps.onRunChanged) this.offs.push(deps.onRunChanged(run => { if (this.wanted(run.sessionId, 'main')) this.later(run.sessionId, 'main', work => { work.runs = true; }); }));
@@ -297,24 +306,110 @@ export class TimelineService {
     return () => { group!.delete(listener); if (!group!.size) this.listeners.delete(id); };
   }
 
+  /** Runs timeline table writes atomically on `tables.db` (reusing `journal.tx` when both share one DB). */
+  private tableTx<T>(fn: () => T): T {
+    return this.tables.db === this.deps.journal.db ? this.deps.journal.tx(fn) : this.tables.tx(fn);
+  }
+
+  /**
+   * Reconstructs the full JSON of a truncated timeline row directly from the journal on demand,
+   * eliminating duplicate full-row copies in the `blobs` table. Backed by a bounded LRU cache.
+   */
+  expandTruncatedBlob(sessionId: string, hash: string): SessionBlobResult | undefined {
+    const cacheKey = `${sessionId}\n${hash}`;
+    const cached = this.expandedCache.get(cacheKey);
+    if (cached) {
+      this.expandedCache.delete(cacheKey);
+      this.expandedCache.set(cacheKey, cached);
+      return { size: cached.length, type: 'application/json', bytes: () => cached };
+    }
+    const stored = this.tables.truncatedRowByHash(sessionId, hash);
+    if (!stored) return undefined;
+    let preview: RowContent;
+    try { preview = JSON.parse(stored.payload) as RowContent; } catch { return undefined; }
+    const sourceIds = preview.event?.sourceIds;
+    if (!Array.isArray(sourceIds) || !sourceIds.length) return undefined;
+    const { key: journalKey } = servingKey(this.deps.journal, sessionId, stored.lane);
+    const seen = new Set<string>();
+    const events: WorkbenchEvent[] = [];
+    for (const nativeId of sourceIds) {
+      if (typeof nativeId !== 'string' || !nativeId || seen.has(nativeId)) continue;
+      seen.add(nativeId);
+      const entity = this.deps.journal.entity(journalKey, nativeId);
+      // Allow live draft entities (streaming long answers) while skipping tombstones and meta markers.
+      if (!entity || entity.kind === TOMBSTONE_KIND || entity.kind.startsWith(META_PREFIX)) continue;
+      const payload = entity.payload as Omit<NativeWorkbenchEvent, 'sequence' | 'sessionId'> | undefined;
+      if (!payload || typeof payload.type !== 'string' || !payload.data || typeof payload.data !== 'object') continue;
+      events.push({ ...payload, sessionId, sequence: entity.identity } as WorkbenchEvent);
+    }
+    if (!events.length) return undefined;
+    events.sort((a, b) => a.sequence - b.sequence);
+    const runs = stored.lane === 'main' && preview.kind === 'user' ? timelineRuns(this.deps.listRuns(sessionId)) : [];
+    const chatId = stored.lane === 'main' ? this.deps.nativeChatId?.(sessionId) : undefined;
+    const items = buildTimeline(projectEvents(events), runs, undefined, undefined, chatId);
+    const matched = items.find(item => item.key === stored.key) ?? (items.length === 1 && items[0]!.kind === preview.kind ? items[0] : undefined);
+    if (!matched) return undefined;
+    const rebuilt = { ...rowContent(matched, { pos: stored.pos, turn: stored.turn }), key: stored.key } as RowContent;
+    if (rebuilt.kind === 'tool' && preview.kind === 'tool') {
+      if (preview.subagent) rebuilt.subagent = preview.subagent;
+      if (preview.activity) rebuilt.activity = preview.activity;
+    }
+    const materialized = materializeRowImages(rebuilt, sessionId, (_sid, bytes) => blobSha256(bytes));
+    const buf = Buffer.from(JSON.stringify(materialized));
+    this.cacheExpanded(cacheKey, buf);
+    return { size: buf.length, type: 'application/json', bytes: () => buf };
+  }
+
+  private cacheExpanded(cacheKey: string, bytes: Buffer): void {
+    const existing = this.expandedCache.get(cacheKey);
+    if (existing) {
+      this.expandedCacheBytes -= existing.length;
+      this.expandedCache.delete(cacheKey);
+    }
+    if (bytes.length > STORAGE_BUDGET.expandedRowCacheBytes) return;
+    this.expandedCache.set(cacheKey, bytes);
+    this.expandedCacheBytes += bytes.length;
+    while (this.expandedCache.size > STORAGE_BUDGET.expandedRowCacheEntries || this.expandedCacheBytes > STORAGE_BUDGET.expandedRowCacheBytes) {
+      const oldest = this.expandedCache.keys().next().value;
+      if (oldest === undefined) break;
+      const evicted = this.expandedCache.get(oldest)!;
+      this.expandedCache.delete(oldest);
+      this.expandedCacheBytes -= evicted.length;
+    }
+  }
+
+  private clearExpandedFor(sessionId?: string): void {
+    if (!sessionId) {
+      this.expandedCache.clear();
+      this.expandedCacheBytes = 0;
+      return;
+    }
+    const prefix = `${sessionId}\n`;
+    for (const [key, bytes] of [...this.expandedCache]) {
+      if (!key.startsWith(prefix)) continue;
+      this.expandedCache.delete(key);
+      this.expandedCacheBytes -= bytes.length;
+    }
+  }
+
   /** Forgets a session's rows (a deleted conversation), and the blobs they held. */
   drop(sessionId: string): void {
     this.forget(sessionId);
-    this.deps.journal.tx(() => {
-      const cut = this.tables.truncatedBlobs(sessionId);
+    this.clearExpandedFor(sessionId);
+    const cut = this.tableTx(() => {
+      const refs = this.tables.truncatedBlobs(sessionId);
       this.tables.dropSession(sessionId);
-      if (cut.length) this.context.release(sessionId, cut);
+      return refs;
     });
+    if (cut.length) this.context.release(sessionId, cut);
   }
 
   /**
    * Drops the rows of sessions idle longer than `SERVER_BUDGET.coldTimelineDays` that nobody holds open
-   * (docs/guide/performance.md §3.7). Each lane keeps its head under a new epoch, so its generation differs
-   * and a client holding the old rows is sent a snapshot; the rows refold from the journal when next read.
-   * Only the main lane is dropped: subagent lanes keep their rows and heads, which the main lane's tool rows
-   * read their summaries from when it refolds.
-   * One session per turn of the event loop, its rows deleted in chunks with the loop yielded between them;
-   * returns how many sessions were dropped.
+   * (docs/guide/performance.md §3.7). Both main and subagent lanes are dropped: each subagent lane's
+   * summary (`rows`, `changes`) is persisted onto its `timeline_heads.summary` before its rows go, so
+   * refolding the main lane later still decorates every parent tool row accurately without refolding children.
+   * Each dropped lane keeps its head under a new epoch, and releases any legacy persisted truncated blobs.
    *
    * Limitation: a background job (`NativeJob`) is held in memory only and decorates stored tool rows, so a
    * session whose rows carry one is not dropped; a refold could not bring it back.
@@ -334,6 +429,7 @@ export class TimelineService {
           if (await this.dropIfCold(sessionId, now)) dropped++;
           await new Promise<void>(resolve => setImmediate(resolve));
         }
+        if (dropped > 0 && !this.closed) reclaimFreePages(this.deps.db, { busy: this.deps.busy });
       } catch (error) {
         console.error('[timeline] cold sweep failed:', error);
       }
@@ -360,41 +456,62 @@ export class TimelineService {
 
   private async dropIfCold(sessionId: string, now: number): Promise<boolean> {
     if (this.held(sessionId) || this.deps.deleted?.(sessionId)) return false;
-    const head = this.tables.head(sessionId, 'main');
+    const heads = this.tables.lanesOf(sessionId);
+    if (!heads.length) return false;
     // A lane still being imported is served from its scratch window; leave the session alone.
-    if (!head || head.scratch) return false;
-    // What a drop left behind (rows under a head already at a new generation) is finished whatever the session's idleness.
-    const resume = head.headSeq === 0 && head.journalSeq === 0 && head.epoch > 0 && this.tables.hasRows(sessionId, 'main');
-    if (!resume) {
+    if (heads.some(head => head.scratch)) return false;
+    const activeHeads = heads.filter(head => head.headSeq > 0 || head.foldedThrough > 0 || (head.epoch > 0 && this.tables.hasRows(sessionId, head.lane)));
+    if (!activeHeads.length) return false;
+    const resumeOnly = activeHeads.every(head => head.headSeq === 0 && head.journalSeq === 0 && head.epoch > 0);
+    if (!resumeOnly) {
       const activity = (this.deps.activity ?? ((id: string) => this.storedActivity(id)))(sessionId);
       if (!activity || activity.running) return false;
-      // The newest sign of use: the session's activity, its log, and the lane's last fold (a session a reader keeps opening is not dropped again each sweep).
-      const at = Math.max(Date.parse(activity.at ?? '') || 0, Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0, Date.parse(head.updatedAt ?? '') || 0);
+      // The newest sign of use: the session's activity, its log, and any lane's last fold.
+      const at = Math.max(
+        Date.parse(activity.at ?? '') || 0,
+        Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0,
+        ...heads.map(head => Date.parse(head.updatedAt ?? '') || 0),
+      );
       if (!at || now - at < SERVER_BUDGET.coldTimelineDays * 86_400_000) return false;
       if (this.deps.listRuns(sessionId).some(run => !TERMINAL_RUNS.has(run.state))) return false;
       if (await this.hasJob(sessionId)) return false;
       if (this.closed || this.held(sessionId)) return false;
     }
-    // The first chunk goes in the transaction that moves the head to its new generation: from then on a reader
-    // refolds from the journal. A fold of the lane (`flushLane`) takes it off `dropping` and clears what is left (`LaneFold.attach`).
-    const id = laneId(sessionId, 'main');
-    this.dropping.add(id);
-    let left = true;
-    this.deps.journal.tx(() => {
-      this.tables.clearTurns(sessionId, 'main');
-      if (!resume) {
-        const epoch = head.epoch + 1;
-        this.tables.putHead({ ...head, epoch, generation: generationOf(head.journalGeneration ?? undefined, epoch), headSeq: 0, foldedThrough: 0, journalSeq: 0 });
+    this.clearExpandedFor(sessionId);
+    // Drop subagent lanes first (caching their summaries onto `timeline_heads.summary`), then the main lane.
+    const ordered = [...activeHeads.filter(h => h.lane !== 'main'), ...activeHeads.filter(h => h.lane === 'main')];
+    for (const head of ordered) {
+      if (this.closed || this.held(sessionId)) break;
+      const id = laneId(sessionId, head.lane);
+      this.dropping.add(id);
+      const resume = head.headSeq === 0 && head.journalSeq === 0 && head.epoch > 0 && this.tables.hasRows(sessionId, head.lane);
+      // Snapshot subagent summary before removing its rows so parent tool cards refold identically later.
+      let summary = head.summary;
+      if (head.lane !== 'main' && !resume && this.tables.hasRows(sessionId, head.lane)) {
+        summary = { rows: this.tables.countLive(sessionId, head.lane), changes: this.subagentFileChanges(sessionId, head.lane) };
       }
-      left = this.deleteChunk(sessionId);
-    });
-    this.forget(sessionId, false);
-    while (left) {
-      await new Promise<void>(resolve => setImmediate(resolve));
-      if (this.closed || !this.dropping.has(id)) break;
-      this.deps.journal.tx(() => { left = this.deleteChunk(sessionId); });
+      const released = this.tables.truncatedBlobs(sessionId, head.lane);
+      let left = true;
+      this.tableTx(() => {
+        this.tables.clearTurns(sessionId, head.lane);
+        if (!resume) {
+          const epoch = head.epoch + 1;
+          this.tables.putHead({
+            ...head, epoch, generation: generationOf(head.journalGeneration ?? undefined, epoch),
+            headSeq: 0, foldedThrough: 0, journalSeq: 0, ...(summary ? { summary } : {}),
+          });
+        }
+        left = this.deleteChunk(sessionId, head.lane);
+      });
+      if (released.length) this.context.release(sessionId, released);
+      this.forget(sessionId, false);
+      while (left) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (this.closed || !this.dropping.has(id)) break;
+        this.tableTx(() => { left = this.deleteChunk(sessionId, head.lane); });
+      }
+      this.dropping.delete(id);
     }
-    this.dropping.delete(id);
     return true;
   }
 
@@ -410,12 +527,9 @@ export class TimelineService {
     }
   }
 
-  /**
-   * Deletes a chunk of the main lane's rows; whether rows may be left. The blobs their cut outputs name stay
-   * claimed: the refold from the journal cuts the same outputs and names the same content-addressed blobs again.
-   */
-  private deleteChunk(sessionId: string): boolean {
-    return this.tables.deleteRowsChunk(sessionId, 'main', COLD_CHUNK_ROWS) === COLD_CHUNK_ROWS;
+  /** Deletes a chunk of a lane's rows; whether rows may be left. */
+  private deleteChunk(sessionId: string, lane: SyncLane): boolean {
+    return this.tables.deleteRowsChunk(sessionId, lane, COLD_CHUNK_ROWS) === COLD_CHUNK_ROWS;
   }
 
   /** The default `activity`: the store's session record, which shares this database. */
@@ -444,6 +558,8 @@ export class TimelineService {
 
   close(): void {
     this.closed = true;
+    this.deps.journal.setFallbackBlobResolver(undefined);
+    this.clearExpandedFor();
     for (const timer of this.coldTimers.splice(0)) { clearTimeout(timer); clearInterval(timer); }
     for (const [timer, resolve] of [...this.coldWaits]) { clearTimeout(timer); resolve(); }
     this.coldWaits.clear();
@@ -554,6 +670,7 @@ export class TimelineService {
     this.hot.set(id, hot);
     this.evict();
     const changes = hot.fold.take();
+    if (reset || changes.length) this.clearExpandedFor(sessionId);
     const listeners = this.listeners.get(id);
     if (reset) for (const listener of listeners ?? []) listener(reset);
     else for (const change of changes) for (const listener of listeners ?? []) listener(change);
@@ -565,6 +682,8 @@ export class TimelineService {
   private subagentLaneChanged(sessionId: string, lane: SyncLane, fold: LaneFold): void {
     const toolCallId = lane.slice('sub:'.length);
     const next = this.readSubagentProgress(sessionId, lane, fold.liveRows);
+    const persisted: StoredSubagentSummary = { rows: next.rows, changes: next.changes ?? [] };
+    this.tables.putSummary(sessionId, lane, persisted);
     const previous = this.summaries.get(laneId(sessionId, lane));
     this.summaries.set(laneId(sessionId, lane), next);
     this.staleSummaries.delete(laneId(sessionId, lane));
@@ -597,8 +716,20 @@ export class TimelineService {
     const end = closed && key && turnId ? journal.entity(key, turnMetaId(turnId, 'ended')) : undefined;
     const ended = (end?.payload as { status?: unknown } | undefined)?.status;
     const status: SubagentProgress['status'] = ended === 'failed' ? 'failed' : ended === 'cancelled' || ended === 'interrupted' ? 'cancelled' : end ? 'completed' : start ? 'running' : undefined;
-    const changes = this.subagentFileChanges(sessionId, lane);
-    return { rows, running: status === 'running', ...(turnId ? { turnId } : {}), ...(status ? { status } : {}), ...(start ? { startedAt: start.at } : {}), ...(end ? { endedAt: end.at } : {}), ...(changes.length ? { changes } : {}) };
+    let liveRows = rows;
+    let changes: FileChange[];
+    if (liveRows === 0) {
+      const head = this.tables.head(sessionId, lane);
+      if (head && head.headSeq === 0 && head.epoch > 0 && head.summary) {
+        liveRows = head.summary.rows;
+        changes = head.summary.changes;
+      } else {
+        changes = [];
+      }
+    } else {
+      changes = this.subagentFileChanges(sessionId, lane);
+    }
+    return { rows: liveRows, running: status === 'running', ...(turnId ? { turnId } : {}), ...(status ? { status } : {}), ...(start ? { startedAt: start.at } : {}), ...(end ? { endedAt: end.at } : {}), ...(changes.length ? { changes } : {}) };
   }
 
   /**

@@ -93,4 +93,6 @@ export interface RouteDeps {
   externalSessions: ExternalSessions;
   /** Conversations handed to a terminal by `riffet resume`. */
   terminalHolds: TerminalHolds;
+  /** Runs a cold timeline sweep on demand during online storage maintenance. */
+  sweepColdTimeline?: () => Promise<number>;
 }

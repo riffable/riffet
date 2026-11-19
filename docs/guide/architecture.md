@@ -35,7 +35,7 @@
 | P3 命令与观测分离 | 消息以观测到回执为送达，不以写入为准 | [DELIVERY.md](../DELIVERY.md) |
 | P4 Journal 是唯一事实来源 | 时间线、状态、用量与搜索都是它的投影 | [SESSION-JOURNAL.md](../SESSION-JOURNAL.md) |
 | P5 服务端折叠，客户端渲染 | 客户端从游标续传，得到同一份行 | [SYNC-V3.md](../SYNC-V3.md) |
-| P6 单节点 | 一个进程、一个数据库文件、一个用户，不依赖外部服务 | `apps/server/src/store.ts` |
+| P6 单节点 | 一个进程、本地嵌入式 SQLite（L0 `workbench.db` / L1 `journal.db`+`blobs/` / L2 `derived.db`）、一个用户，不依赖外部服务 | `apps/server/src/store.ts` |
 | P7 依赖向内 | 表面与驱动依赖核心，反向不成立；可选能力以插件提供 | `pnpm check:layers`、[PLUGIN_ARCHITECTURE.md](../PLUGIN_ARCHITECTURE.md) |
 
 ### 2. Session core

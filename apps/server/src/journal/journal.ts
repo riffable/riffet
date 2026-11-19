@@ -1,18 +1,20 @@
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
+import { STORAGE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import type { SyncLane } from '../../../../packages/contracts/src/sync.js';
 import { AppError } from '../errors.js';
+import { prepareBlob, readStoredBlob, removeExternalBlob, sweepOrphanExternalBlobs, writeExternalBlob, type PreparedBlob, type StoredBlobRow } from './blob-store.js';
 import { foldProjection, emptyProjection, projectionCheck, type JournalFoldRow, type SessionProjection } from './projection.js';
 
-/** Largest payload kept inline in `journal_events`; anything bigger goes to `blobs`. */
-export const JOURNAL_PAYLOAD_LIMIT = 64 * 1024;
+/** Largest payload kept inline in `journal_events`; anything bigger spills to CAS `blobs` (fits one 4 KiB page). */
+export const JOURNAL_PAYLOAD_LIMIT = STORAGE_BUDGET.journalInlineBytes;
 /** Rows folded into a projection per statement batch; keeps one fold from holding the loop long. */
 const FOLD_BATCH = 2000;
-/** Draft chunks emptied per transaction, so housekeeping never holds the database (or the loop) for long. */
+/** Draft/superseded chunks emptied per transaction, so housekeeping never holds the database (or the loop) for long. */
 const COMPACT_BATCH = 500;
-const PREVIEW_TEXT = 2000;
+const PREVIEW_TEXT = STORAGE_BUDGET.journalPreviewChars;
 const SCHEMA_MARKER = 'journal-schema';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /** Kinds that exist in the log but are not part of the transcript a client sees. */
 export const DRAFT_KIND = 'draft';
@@ -21,6 +23,10 @@ export const META_PREFIX = 'meta.';
 export const isHiddenKind = (kind: string): boolean => kind === DRAFT_KIND || kind === TOMBSTONE_KIND || kind.startsWith(META_PREFIX);
 /** The kind of a `session/update` event, which is how a system activity travels (`activity.ts`). */
 const SESSION_UPDATE_KIND = 'session/update';
+
+/** Non-draft event kinds whose superseded earlier revisions can be safely stripped while preserving seq/digest. */
+const COMPACTABLE_KINDS_SQL = "'tool_call','tool_call_update','agent_message_chunk','agent_thought_chunk','session/update'";
+const ARCHIVED_TRIM_MARKER = '\n... [archived tool output trimmed] ...\n';
 
 /*
  * A session has one log per lane (docs/SYNC-V3.md): `main`, and `sub:<toolCallId>` for each subagent. A
@@ -94,6 +100,7 @@ export interface JournalHead {
   /** The native conversation the log was written from, when its writer records one (see `ingest.ts`). */
   identity?: string;
   projectionSeq: number;
+  compactedSeq: number;
   updatedAt: string;
 }
 
@@ -136,6 +143,9 @@ export interface AppendedRow {
 
 export interface AppendResult { head: JournalHead; rows: AppendedRow[]; }
 
+export type SessionBlobResult = { size: number; type: string; bytes: () => Buffer };
+export type FallbackBlobResolver = (sessionId: string, hash: string) => SessionBlobResult | undefined;
+
 export class JournalGenerationChanged extends Error {
   constructor() { super('The session journal was rebuilt'); }
 }
@@ -147,46 +157,147 @@ export class JournalSessionDeleted extends AppError {
 
 interface RawRow {
   seq: number; kind: string; native_id: string; rev: number; turn_id: string | null; at: string; payload: string; blob_ref: string | null; digest: string;
+  blob_codec?: string | null; blob_external?: number | null; blob_bytes?: Uint8Array | null;
 }
 
-interface HeadRow { session_id: string; generation: string; last_seq: number; ingest_cursor: string | null; identity: string | null; projection_seq: number; updated_at: string }
+interface HeadRow { session_id: string; generation: string; last_seq: number; ingest_cursor: string | null; identity: string | null; projection_seq: number; compacted_seq: number; updated_at: string }
 
 const sha1 = (text: string) => createHash('sha1').update(text).digest('base64');
 
-/** A bounded stand-in for an oversized payload: identity and scalar fields, text cut short. */
-function previewOf(payload: unknown): Record<string, unknown> {
-  const clip = (value: string) => value.length > PREVIEW_TEXT ? `${value.slice(0, PREVIEW_TEXT)}…` : value;
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return { truncated: true };
-  const record = payload as Record<string, unknown>;
+const SELECT_EVENT_COLS = `e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest,b.codec AS blob_codec,b.external AS blob_external,b.bytes AS blob_bytes`;
+const EVENT_JOIN = `LEFT JOIN blobs b ON b.hash=e.blob_ref`;
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * A narrow envelope kept inline in `journal_events` when the full payload spills to `blobs`.
+ * Preserves the small structured fields read by projections, activity restoration, tool lookup and
+ * work-item evidence without reading the blob, while fitting comfortably inside one 4 KiB page.
+ */
+const MESSAGE_PREVIEW_BYTES = 2001;
+const MESSAGE_INLINE_BYTES = 3072;
+
+function clipUtf8(value: string, maxBytes: number): string {
+  if (value.length * 3 <= maxBytes || Buffer.byteLength(value) <= maxBytes) return value;
+  return `${Buffer.from(value).subarray(0, maxBytes).toString('utf8').replace(/\uFFFD+$/, '')}…`;
+}
+
+export function previewOf(payload: unknown): Record<string, unknown> {
+  const clip = (value: string, max: number = PREVIEW_TEXT) => value.length > max ? `${value.slice(0, max)}…` : value;
+  if (!isPlainRecord(payload)) return { truncated: true };
   const preview: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(record)) {
+  for (const [key, value] of Object.entries(payload)) {
     if (key === 'data') continue;
-    if (typeof value === 'string') preview[key] = clip(value);
+    if (typeof value === 'string') preview[key] = clip(value, 256);
     else if (typeof value === 'number' || typeof value === 'boolean') preview[key] = value;
   }
-  const data = record.data;
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
+  const data = payload.data;
+  if (isPlainRecord(data)) {
     const shallow: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-      if (typeof value === 'string') shallow[key] = clip(value);
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof value === 'string') shallow[key] = clip(value, 256);
       else if (typeof value === 'number' || typeof value === 'boolean') shallow[key] = value;
     }
-    const content = (data as Record<string, unknown>).content;
-    const text = content && typeof content === 'object' && !Array.isArray(content) ? (content as Record<string, unknown>).text : undefined;
-    if (typeof text === 'string') shallow.content = { type: 'text', text: clip(text) };
+    // Text chunk preview: user/assistant messages keep up to 2001 UTF-8 bytes (2001 ASCII chars or ~667 CJK chars,
+    // fitting one 4 KiB page without duplicating CJK messages in both `journal_events` and `blobs`).
+    const isMessageChunk = payload.type === 'user_message_chunk' || payload.type === 'agent_message_chunk';
+    const content = data.content;
+    if (isPlainRecord(content)) {
+      const text = content.text;
+      if (typeof text === 'string') shallow.content = { type: typeof content.type === 'string' ? content.type : 'text', text: isMessageChunk ? clipUtf8(text, MESSAGE_PREVIEW_BYTES) : clip(text) };
+    } else if (Array.isArray(content)) {
+      // First short text snippet for tool exit-code evidence without storing the full output.
+      for (const block of content) {
+        const inner = isPlainRecord(block) ? block.content : undefined;
+        const text = isPlainRecord(inner) ? inner.text : undefined;
+        if (typeof text === 'string' && text) {
+          shallow.content = [{ type: 'content', content: { type: 'text', text: clip(text, 160) } }];
+          break;
+        }
+      }
+    }
+    // Preserve edited file paths for work-item evidence.
+    if (Array.isArray(data.locations)) {
+      const paths: Array<{ path: string }> = [];
+      for (const loc of data.locations) {
+        if (isPlainRecord(loc) && typeof loc.path === 'string' && loc.path) {
+          paths.push({ path: clip(loc.path, 256) });
+          if (paths.length >= 16) break;
+        }
+      }
+      if (paths.length) shallow.locations = paths;
+    }
+    // Preserve scalar input paths/commands and job exit codes for evidence extraction.
+    if (isPlainRecord(data.rawInput)) {
+      const input: Record<string, unknown> = {};
+      for (const key of ['command', 'file_path', 'path', 'filePath']) {
+        if (typeof data.rawInput[key] === 'string' && data.rawInput[key]) input[key] = clip(data.rawInput[key] as string, 256);
+      }
+      if (isPlainRecord(data.rawInput.changes)) {
+        const keys = Object.keys(data.rawInput.changes).slice(0, 16);
+        if (keys.length) input.changes = Object.fromEntries(keys.map(k => [clip(k, 256), true]));
+      }
+      if (Object.keys(input).length) shallow.rawInput = input;
+    }
+    if (isPlainRecord(data.jobResult) && typeof data.jobResult.exitCode === 'number') {
+      shallow.jobResult = { exitCode: data.jobResult.exitCode };
+    }
+    // Preserve activity metadata so `foldProjection` reads live activities without loading blobs.
+    if (isPlainRecord(data.activity)) {
+      const act: Record<string, unknown> = {};
+      for (const key of ['id', 'kind', 'status', 'title', 'toolCallId', 'startedAt', 'endedAt', 'blobRef']) {
+        if (typeof data.activity[key] === 'string') act[key] = clip(data.activity[key] as string, 256);
+      }
+      if (typeof data.activity.durationMs === 'number') act.durationMs = data.activity.durationMs;
+      if (typeof data.activity.detail === 'string') act.detail = clip(data.activity.detail, 256);
+      if (isPlainRecord(data.activity.stop)) act.stop = data.activity.stop;
+      if (isPlainRecord(data.activity.compaction)) act.compaction = data.activity.compaction;
+      if (isPlainRecord(data.activity.task)) {
+        const task: Record<string, unknown> = {};
+        if (typeof data.activity.task.kind === 'string') task.kind = data.activity.task.kind;
+        if (typeof data.activity.task.command === 'string') task.command = clip(data.activity.task.command, 256);
+        if (typeof data.activity.task.exitCode === 'number') task.exitCode = data.activity.task.exitCode;
+        act.task = task;
+      }
+      if (isPlainRecord(data.activity.command) && typeof data.activity.command.name === 'string') {
+        act.command = { name: clip(data.activity.command.name, 128) };
+      }
+      shallow.activity = act;
+    }
     preview.data = shallow;
   }
   preview.truncated = true;
   return preview;
 }
 
+export interface JournalOptions {
+  /** Directory for Tier-2 immutable compressed blobs (>= `STORAGE_BUDGET.blobExternalBytes`). */
+  blobsDir?: string;
+  /**
+   * Optional coordinator with an enclosing L0 store transaction: returns true only while a caller
+   * explicitly opened `store.transaction(...)`, letting `journalDb` defer its commit/rollback until the
+   * outer transaction settles without touching the L0 lock during normal standalone journal writes.
+   */
+  enclosingTransaction?: {
+    active(): boolean;
+    onSettle(fn: (committed: boolean) => void): void;
+  };
+}
+
 export class Journal {
   private readonly statements = new Map<string, StatementSync>();
   private depth = 0;
+  private savepointSeq = 0;
+  private joinedEnclosing = false;
   private readonly settleHooks: Array<(committed: boolean) => void> = [];
   private readonly appendListeners = new Set<(change: JournalAppend) => void>();
   /** Changes of the open transaction, reported once it commits. */
   private pending: { changes: JournalAppend[]; last: Map<string, JournalAppend> } | undefined;
+  readonly blobsDir: string | undefined;
+  private readonly enclosing: JournalOptions['enclosingTransaction'];
+  /** Legacy tables created `blobs.bytes BLOB NOT NULL`; external rows store empty buffer there instead of NULL. */
+  private readonly bytesNotNull: boolean;
+  private fallbackBlobResolver: FallbackBlobResolver | undefined;
 
   /**
    * `transaction` lets the owner of the database (the store) make journal writes join its own
@@ -194,19 +305,23 @@ export class Journal {
    * open transaction has ended, saying whether it committed, so changes are reported only when they hold.
    */
   constructor(
-    private readonly db: DatabaseSync,
+    readonly db: DatabaseSync,
     private readonly transaction?: <T>(fn: () => T) => T,
     private readonly afterTransaction?: (fn: (committed: boolean) => void) => void,
     /** A deleted conversation: none of its logs is started again (a read or fold finishing late writes nothing). */
     private readonly deleted?: (sessionId: string) => boolean,
+    options?: JournalOptions,
   ) {
+    this.blobsDir = options?.blobsDir;
+    this.enclosing = options?.enclosingTransaction;
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS journal_heads (
         session_id TEXT PRIMARY KEY, generation TEXT NOT NULL, last_seq INTEGER NOT NULL DEFAULT 0, ingest_cursor TEXT,
-        projection TEXT, projection_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, identity TEXT);
+        projection TEXT, projection_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, identity TEXT,
+        compacted_seq INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS journal_events (
         session_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, native_id TEXT NOT NULL, rev INTEGER NOT NULL,
-        turn_id TEXT, at TEXT NOT NULL, payload TEXT NOT NULL, blob_ref TEXT, digest TEXT NOT NULL,
+        turn_id TEXT, at TEXT NOT NULL, digest TEXT NOT NULL, blob_ref TEXT, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, seq));
       CREATE UNIQUE INDEX IF NOT EXISTS journal_native ON journal_events(session_id, native_id, rev);
       CREATE INDEX IF NOT EXISTS journal_turn ON journal_events(session_id, turn_id) WHERE turn_id IS NOT NULL;
@@ -215,7 +330,9 @@ export class Journal {
       CREATE INDEX IF NOT EXISTS journal_open_drafts ON journal_events(kind) WHERE kind='draft' AND payload<>'{}';
       -- Session updates (system activities among them), which a writer reads back on start (see activityEntities): under 1% of the rows.
       CREATE INDEX IF NOT EXISTS journal_session_updates ON journal_events(session_id, seq) WHERE kind='${SESSION_UPDATE_KIND}';
-      CREATE TABLE IF NOT EXISTS blobs (hash TEXT PRIMARY KEY, size INTEGER NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS blobs (
+        hash TEXT PRIMARY KEY, size INTEGER NOT NULL, stored_size INTEGER NOT NULL DEFAULT 0,
+        codec TEXT NOT NULL DEFAULT 'raw', external INTEGER NOT NULL DEFAULT 0, bytes BLOB, created_at TEXT NOT NULL);
       -- Blobs a session refers to from inside a payload (an activity's full text), which journal_events.blob_ref does not cover.
       CREATE TABLE IF NOT EXISTS session_blobs (session_id TEXT NOT NULL, hash TEXT NOT NULL, type TEXT NOT NULL, PRIMARY KEY (session_id, hash));
       -- Additive and unversioned for readers that predate it, like message_index; the marker is for later migrations.
@@ -226,17 +343,35 @@ export class Journal {
       this.migrate(version);
       this.sql('INSERT INTO settings(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(SCHEMA_MARKER, JSON.stringify(SCHEMA_VERSION));
     }
+    const blobCols = this.db.prepare('PRAGMA table_info(blobs)').all() as Array<{ name: string; notnull: number }>;
+    this.bytesNotNull = blobCols.some(col => col.name === 'bytes' && col.notnull === 1);
+  }
+
+  /**
+   * Registers an on-demand resolver consulted by {@link sessionBlob} when a hash is not persisted in `blobs`
+   * (e.g. truncated timeline rows reconstructed dynamically from the journal).
+   */
+  setFallbackBlobResolver(resolver: FallbackBlobResolver | undefined): void {
+    this.fallbackBlobResolver = resolver;
   }
 
   /**
    * Brings an older shape up to this one. Every step checks before it alters, so a step that ran without
-   * its marker being written is not run twice. v2 adds `journal_heads.identity`: a nullable column, which
-   * SQLite adds by editing the schema alone, without rewriting a row of any table.
+   * its marker being written is not run twice.
+   * - v2 adds `journal_heads.identity`.
+   * - v3 adds `journal_heads.compacted_seq` and compressed/external blob metadata columns on `blobs`.
    */
   private migrate(from: number): void {
+    const hasColumn = (table: string, name: string) =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(column => column.name === name);
     if (from < 2) {
-      const columns = this.db.prepare('PRAGMA table_info(journal_heads)').all() as Array<{ name: string }>;
-      if (!columns.some(column => column.name === 'identity')) this.db.exec('ALTER TABLE journal_heads ADD COLUMN identity TEXT');
+      if (!hasColumn('journal_heads', 'identity')) this.db.exec('ALTER TABLE journal_heads ADD COLUMN identity TEXT');
+    }
+    if (from < 3) {
+      if (!hasColumn('journal_heads', 'compacted_seq')) this.db.exec('ALTER TABLE journal_heads ADD COLUMN compacted_seq INTEGER NOT NULL DEFAULT 0');
+      if (!hasColumn('blobs', 'stored_size')) this.db.exec('ALTER TABLE blobs ADD COLUMN stored_size INTEGER NOT NULL DEFAULT 0');
+      if (!hasColumn('blobs', 'codec')) this.db.exec("ALTER TABLE blobs ADD COLUMN codec TEXT NOT NULL DEFAULT 'raw'");
+      if (!hasColumn('blobs', 'external')) this.db.exec('ALTER TABLE blobs ADD COLUMN external INTEGER NOT NULL DEFAULT 0');
     }
   }
 
@@ -249,7 +384,52 @@ export class Journal {
   /** Runs `fn` inside one transaction, joining the owner's when there is one. */
   tx<T>(fn: () => T): T {
     if (this.transaction) return this.transaction(fn);
-    if (this.depth) return fn();
+    if (this.depth) {
+      // Inside a joined enclosing transaction, isolate nested calls with a SAVEPOINT so a caught inner
+      // error rolls back its partial L1 writes instead of letting them commit with the outer L0 tx.
+      if (!this.joinedEnclosing) return fn();
+      const sp = `j_sp_${++this.savepointSeq}`;
+      this.db.exec(`SAVEPOINT ${sp}`);
+      try {
+        const result = fn();
+        this.db.exec(`RELEASE SAVEPOINT ${sp}`);
+        return result;
+      } catch (error) {
+        try { this.db.exec(`ROLLBACK TO SAVEPOINT ${sp}; RELEASE SAVEPOINT ${sp}`); } catch { /* connection closed */ }
+        throw error;
+      }
+    }
+    if (this.enclosing?.active()) {
+      this.db.exec('BEGIN IMMEDIATE');
+      this.depth += 1;
+      this.joinedEnclosing = true;
+      this.enclosing.onSettle(committed => {
+        if (!this.joinedEnclosing) return;
+        this.joinedEnclosing = false;
+        this.depth = Math.max(0, this.depth - 1);
+        let settled = committed;
+        try {
+          this.db.exec(committed ? 'COMMIT' : 'ROLLBACK');
+        } catch (error) {
+          settled = false;
+          if (!/database is not open/i.test(String(error))) {
+            console.error('[riffet] journal transaction settle failed; attempting rollback:', error);
+            try { this.db.exec('ROLLBACK'); } catch { /* ignore */ }
+          }
+        }
+        this.settle(settled);
+      });
+      const sp = `j_sp_${++this.savepointSeq}`;
+      this.db.exec(`SAVEPOINT ${sp}`);
+      try {
+        const result = fn();
+        this.db.exec(`RELEASE SAVEPOINT ${sp}`);
+        return result;
+      } catch (error) {
+        try { this.db.exec(`ROLLBACK TO SAVEPOINT ${sp}; RELEASE SAVEPOINT ${sp}`); } catch { /* connection closed */ }
+        throw error;
+      }
+    }
     this.db.exec('BEGIN IMMEDIATE'); this.depth++;
     try { const result = fn(); this.db.exec('COMMIT'); this.depth--; this.settle(true); return result; }
     catch (error) { this.db.exec('ROLLBACK'); this.depth--; this.settle(false); throw error; }
@@ -300,13 +480,14 @@ export class Journal {
   private headOf(row: HeadRow): JournalHead {
     return {
       sessionId: row.session_id, generation: row.generation, lastSeq: row.last_seq, ingestCursor: row.ingest_cursor,
-      ...(row.identity !== null ? { identity: row.identity } : {}), projectionSeq: row.projection_seq, updatedAt: row.updated_at,
+      ...(row.identity !== null ? { identity: row.identity } : {}), projectionSeq: row.projection_seq,
+      compactedSeq: row.compacted_seq ?? 0, updatedAt: row.updated_at,
     };
   }
 
   /** The log's head, or undefined when the session has never been written. */
   peek(sessionId: string): JournalHead | undefined {
-    const row = this.sql('SELECT session_id,generation,last_seq,ingest_cursor,identity,projection_seq,updated_at FROM journal_heads WHERE session_id=?').get(sessionId) as HeadRow | undefined;
+    const row = this.sql('SELECT session_id,generation,last_seq,ingest_cursor,identity,projection_seq,compacted_seq,updated_at FROM journal_heads WHERE session_id=?').get(sessionId) as HeadRow | undefined;
     return row ? this.headOf(row) : undefined;
   }
 
@@ -352,8 +533,20 @@ export class Journal {
    * Appends a batch and the cursor that says how far the source has been read, atomically.
    * `seq` continues from the head with no gaps. An input identical to its entity's latest version
    * writes nothing, which is what makes re-reading a source after a crash safe.
+   *
+   * Serialization, hashing and Zstd compression run before the write transaction opens so CPU work
+   * never holds the SQLite write lock.
    */
   append(sessionId: string, inputs: readonly JournalEventInput[], options: AppendOptions = {}): AppendResult {
+    const prepared = inputs.map(input => {
+      const json = JSON.stringify(input.payload);
+      const digest = sha1(`${input.kind}\n${input.contentKey === undefined ? json : JSON.stringify(input.contentKey)}`);
+      const limit = input.kind === 'user_message_chunk' || input.kind === 'agent_message_chunk' ? MESSAGE_INLINE_BYTES : JOURNAL_PAYLOAD_LIMIT;
+      const oversized = Buffer.byteLength(json) > limit;
+      if (!oversized) return { input, digest, payload: json, blob: undefined as PreparedBlob | undefined };
+      const blob = prepareBlob(Buffer.from(json), { mimeType: 'application/json', blobsDir: this.blobsDir });
+      return { input, digest, payload: JSON.stringify(previewOf(input.payload)), blob };
+    });
     return this.tx(() => {
       const head = this.head(sessionId);
       if (options.generation !== undefined && options.generation !== head.generation) throw new JournalGenerationChanged();
@@ -363,9 +556,8 @@ export class Journal {
       const insert = this.sql('INSERT INTO journal_events(session_id,seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest) VALUES(?,?,?,?,?,?,?,?,?,?)');
       const latestOf = this.sql('SELECT seq,rev,kind,digest FROM journal_events WHERE session_id=? AND native_id=? ORDER BY rev DESC LIMIT 1');
       const firstOf = this.sql('SELECT seq FROM journal_events WHERE session_id=? AND native_id=? AND rev=1');
-      for (const input of inputs) {
-        const json = JSON.stringify(input.payload);
-        const digest = sha1(`${input.kind}\n${input.contentKey === undefined ? json : JSON.stringify(input.contentKey)}`);
+      for (const item of prepared) {
+        const { input, digest, payload, blob } = item;
         const latest = latestOf.get(sessionId, input.nativeId) as { seq: number; rev: number; kind: string; digest: string } | undefined;
         if (latest && latest.digest === digest) {
           const identity = latest.rev === 1 ? latest.seq : (firstOf.get(sessionId, input.nativeId) as { seq: number }).seq;
@@ -375,10 +567,10 @@ export class Journal {
         seq += 1;
         const rev = latest ? latest.rev + 1 : 1;
         const identity = latest ? (latest.rev === 1 ? latest.seq : (firstOf.get(sessionId, input.nativeId) as { seq: number }).seq) : seq;
-        let payload = json, blobRef: string | null = null;
-        if (Buffer.byteLength(json) > JOURNAL_PAYLOAD_LIMIT) {
-          blobRef = this.putBlob(Buffer.from(json));
-          payload = JSON.stringify(previewOf(input.payload));
+        let blobRef: string | null = null;
+        if (blob) {
+          this.storePreparedBlob(blob, stamp);
+          blobRef = blob.hash;
         }
         insert.run(sessionId, seq, input.kind, input.nativeId, rev, input.turnId ?? null, input.at ?? stamp, payload, blobRef, digest);
         rows.push({ nativeId: input.nativeId, seq, identity, rev, written: true, created: !latest });
@@ -431,40 +623,58 @@ export class Journal {
 
   // ---- blobs -------------------------------------------------------------------------------
 
-  putBlob(bytes: Buffer): string {
-    const hash = createHash('sha256').update(bytes).digest('hex');
-    this.sql('INSERT OR IGNORE INTO blobs(hash,size,bytes,created_at) VALUES(?,?,?,?)').run(hash, bytes.length, bytes, new Date().toISOString());
-    return hash;
+  private storePreparedBlob(prepared: PreparedBlob, stamp = new Date().toISOString()): void {
+    // Never write a mismatched external file if the same plaintext hash is already stored under another codec/tier.
+    if (this.sql('SELECT 1 AS found FROM blobs WHERE hash=?').get(prepared.hash)) return;
+    if (prepared.external && this.blobsDir) writeExternalBlob(this.blobsDir, prepared);
+    const storedBytes = prepared.external ? (this.bytesNotNull ? Buffer.alloc(0) : null) : prepared.storedBytes;
+    this.sql('INSERT OR IGNORE INTO blobs(hash,size,stored_size,codec,external,bytes,created_at) VALUES(?,?,?,?,?,?,?)')
+      .run(prepared.hash, prepared.size, prepared.storedSize, prepared.codec, prepared.external ? 1 : 0, storedBytes, stamp);
+  }
+
+  putBlob(bytes: Buffer, mimeType?: string): string {
+    const prepared = prepareBlob(bytes, { mimeType, blobsDir: this.blobsDir });
+    this.storePreparedBlob(prepared);
+    return prepared.hash;
   }
 
   getBlob(hash: string): Buffer | undefined {
-    const row = this.sql('SELECT bytes FROM blobs WHERE hash=?').get(hash) as { bytes: Uint8Array } | undefined;
-    return row ? Buffer.from(row.bytes) : undefined;
+    const row = this.sql('SELECT hash,codec,external,bytes FROM blobs WHERE hash=?').get(hash) as StoredBlobRow | undefined;
+    return row ? readStoredBlob(row, this.blobsDir) : undefined;
+  }
+
+  /** Uncompressed size of a stored blob without loading or decompressing its bytes. */
+  blobSize(hash: string): number | undefined {
+    const row = this.sql('SELECT size FROM blobs WHERE hash=?').get(hash) as { size: number } | undefined;
+    return row?.size;
   }
 
   /** Stores `bytes` for a session to fetch later (`GET /api/sessions/:id/blobs/:hash`); returns the hash to put in a payload. */
   putSessionBlob(sessionId: string, bytes: Buffer, type = 'text/plain; charset=utf-8'): string {
     this.refuseDeleted(sessionId);
+    const prepared = prepareBlob(bytes, { mimeType: type, blobsDir: this.blobsDir });
     return this.tx(() => {
-      const hash = this.putBlob(bytes);
-      this.sql('INSERT OR IGNORE INTO session_blobs(session_id,hash,type) VALUES(?,?,?)').run(sessionId, hash, type);
-      return hash;
+      this.storePreparedBlob(prepared);
+      this.sql('INSERT OR IGNORE INTO session_blobs(session_id,hash,type) VALUES(?,?,?)').run(sessionId, prepared.hash, type);
+      return prepared.hash;
     });
   }
 
   /**
    * A blob as seen by one session: only if that session's log refers to it (an oversized payload, or a
-   * blob it stored itself). `size` is read first so a caller can refuse a large one without loading it.
+   * blob it stored itself), falling back to dynamic reconstruction for unpersisted truncated timeline rows.
+   * `size` is read first so a caller can refuse a large one without loading it.
    */
-  sessionBlob(sessionId: string, hash: string): { size: number; type: string; bytes: () => Buffer } | undefined {
+  sessionBlob(sessionId: string, hash: string): SessionBlobResult | undefined {
     const owned = this.sql('SELECT type FROM session_blobs WHERE session_id=? AND hash=?').get(sessionId, hash) as { type: string } | undefined;
     // Any log of the session counts: its lanes and their scratch windows (see `keysOf`).
     const payload = owned ? undefined : this.sql('SELECT 1 AS one FROM journal_events WHERE blob_ref=? AND (session_id=? OR (session_id>=? AND session_id<?)) LIMIT 1')
       .get(hash, sessionId, `${sessionId}#`, `${sessionId}$`);
-    if (!owned && !payload) return undefined;
-    const row = this.sql('SELECT size FROM blobs WHERE hash=?').get(hash) as { size: number } | undefined;
-    if (!row) return undefined;
-    return { size: row.size, type: owned?.type ?? 'application/json', bytes: () => this.getBlob(hash) ?? Buffer.alloc(0) };
+    if (owned || payload) {
+      const row = this.sql('SELECT size FROM blobs WHERE hash=?').get(hash) as { size: number } | undefined;
+      if (row) return { size: row.size, type: owned?.type ?? 'application/json', bytes: () => this.getBlob(hash) ?? Buffer.alloc(0) };
+    }
+    return this.fallbackBlobResolver?.(sessionId, hash);
   }
 
   /**
@@ -476,10 +686,39 @@ export class Journal {
     this.tx(() => { for (const hash of hashes) release.run(sessionId, hash); });
   }
 
-  /** Deletes blobs no row refers to any more; returns how many went. */
+  /** Deletes blobs no row refers to any more (and removes any Tier-2 external files after commit); returns how many went. */
   sweepBlobs(): number {
-    return Number(this.sql('DELETE FROM blobs WHERE hash NOT IN (SELECT blob_ref FROM journal_events WHERE blob_ref IS NOT NULL) AND hash NOT IN (SELECT hash FROM session_blobs)').run().changes);
+    const unreferenced = 'hash NOT IN (SELECT blob_ref FROM journal_events WHERE blob_ref IS NOT NULL) AND hash NOT IN (SELECT hash FROM session_blobs)';
+    let externalRows: Array<{ hash: string; codec: string | null }> = [];
+    const deleted = this.tx(() => {
+      if (this.blobsDir) {
+        externalRows = this.sql(`SELECT hash, codec FROM blobs WHERE external=1 AND ${unreferenced}`).all() as Array<{ hash: string; codec: string | null }>;
+      }
+      return Number(this.sql(`DELETE FROM blobs WHERE ${unreferenced}`).run().changes);
+    });
+    if (this.blobsDir && externalRows.length) {
+      const dir = this.blobsDir;
+      const toRemove = externalRows;
+      this.whenSettled(committed => {
+        if (!committed) return;
+        for (const row of toRemove) {
+          // Guard against a concurrent re-insert of the exact same hash before unlink.
+          if (this.sql('SELECT 1 AS found FROM blobs WHERE hash=? AND external=1').get(row.hash)) continue;
+          removeExternalBlob(dir, row.hash, row.codec);
+        }
+      });
+    }
+    return deleted;
   }
+
+  /** Sweeps stale `.tmp` and unreferenced Tier-2 blob files on disk (matching both hash and codec). */
+  sweepExternalFiles(): number {
+    if (!this.blobsDir) return 0;
+    const exists = this.sql('SELECT 1 AS found FROM blobs WHERE hash=? AND codec=? AND external=1');
+    return sweepOrphanExternalBlobs(this.blobsDir, (hash, codec) => Boolean(exists.get(hash, codec)));
+  }
+
+  // ---- compaction & retention ---------------------------------------------------------------
 
   /**
    * Empties the payload of streamed chunks whose entity has since been committed: only the final version is
@@ -502,18 +741,112 @@ export class Journal {
     }
   }
 
+  /**
+   * Kafka MCCO-style head/tail compaction: scans only new `rev > 1` rows above each lane's `compacted_seq`
+   * watermark and strips superseded older revisions (keeping `seq`, `native_id`, `rev`, `kind`, `digest`
+   * intact for monotonic ordering and replay deduplication).
+   *
+   * Never strips `user_message_chunk` (needed for projection previews), `meta.*`, or `tombstone`.
+   */
+  compactSuperseded(options: { minAgeMs?: number; maxUpdates?: number } = {}): number {
+    const minAgeMs = options.minAgeMs ?? STORAGE_BUDGET.supersededLagMs;
+    const maxUpdates = options.maxUpdates ?? 2_000;
+    const cutoff = minAgeMs > 0 ? new Date(Date.now() - minAgeMs).toISOString() : undefined;
+    const heads = this.sql('SELECT session_id, last_seq, compacted_seq FROM journal_heads WHERE last_seq > compacted_seq').all() as Array<{ session_id: string; last_seq: number; compacted_seq: number }>;
+    const pickNewer = this.sql(`SELECT seq, native_id, rev, at FROM journal_events
+      WHERE session_id=? AND seq>? AND rev>1 AND kind<>'${DRAFT_KIND}' ORDER BY seq LIMIT ?`);
+    const stripOlder = this.sql(`UPDATE journal_events SET payload='{}', blob_ref=NULL
+      WHERE session_id=? AND native_id=? AND rev<? AND kind IN (${COMPACTABLE_KINDS_SQL}) AND (payload<>'{}' OR blob_ref IS NOT NULL)`);
+    const advance = this.sql('UPDATE journal_heads SET compacted_seq=? WHERE session_id=? AND compacted_seq<?');
+    let stripped = 0;
+    for (const head of heads) {
+      if (stripped >= maxUpdates) break;
+      let cursor = head.compacted_seq;
+      let blockedAt: number | undefined;
+      for (;;) {
+        const batch = pickNewer.all(head.session_id, cursor, COMPACT_BATCH) as Array<{ seq: number; native_id: string; rev: number; at: string }>;
+        if (!batch.length) break;
+        const eligible: Array<{ seq: number; native_id: string; rev: number }> = [];
+        for (const row of batch) {
+          if (cutoff && row.at > cutoff) { blockedAt = row.seq - 1; break; }
+          eligible.push(row);
+          cursor = row.seq;
+        }
+        if (eligible.length) {
+          this.tx(() => {
+            for (const row of eligible) stripped += Number(stripOlder.run(head.session_id, row.native_id, row.rev).changes);
+            advance.run(cursor, head.session_id, cursor);
+          });
+        }
+        if (blockedAt !== undefined || batch.length < COMPACT_BATCH || stripped >= maxUpdates) break;
+      }
+      if (blockedAt === undefined && stripped < maxUpdates && head.last_seq > cursor) {
+        this.tx(() => { advance.run(head.last_seq, head.session_id, head.last_seq); });
+      }
+    }
+    return stripped;
+  }
+
+  /**
+   * Cold trimming for long-archived conversations (tiered retention): keeps all human/assistant text,
+   * thoughts, file paths and diffs intact, while head+tail truncating oversized raw terminal/tool outputs.
+   */
+  trimArchivedToolBlobs(sessionIds: readonly string[], options: { keepBytes?: number; limit?: number } = {}): number {
+    const keepBytes = options.keepBytes ?? STORAGE_BUDGET.archivedTrimKeepBytes;
+    const minBytes = keepBytes * 2;
+    const limit = options.limit ?? 40;
+    if (!sessionIds.length || keepBytes <= 0) return 0;
+    const find = this.sql(`SELECT e.session_id, e.seq, e.blob_ref, b.size FROM journal_events e
+      JOIN blobs b ON b.hash = e.blob_ref
+      WHERE (e.session_id=? OR (e.session_id>=? AND e.session_id<?))
+        AND e.kind IN ('tool_call','tool_call_update') AND e.blob_ref IS NOT NULL AND b.size > ?
+      LIMIT ?`);
+    const update = this.sql('UPDATE journal_events SET blob_ref=? WHERE session_id=? AND seq=? AND blob_ref=?');
+    let trimmed = 0;
+    for (const sessionId of sessionIds) {
+      if (trimmed >= limit) break;
+      const candidates = find.all(sessionId, `${sessionId}#`, `${sessionId}$`, minBytes, limit - trimmed) as Array<{ session_id: string; seq: number; blob_ref: string; size: number }>;
+      for (const candidate of candidates) {
+        const raw = this.getBlob(candidate.blob_ref);
+        if (!raw) continue;
+        let parsed: unknown;
+        try { parsed = JSON.parse(raw.toString('utf8')); } catch { continue; }
+        const shrunk = trimToolPayloadOutputs(parsed, keepBytes);
+        if (!shrunk) continue;
+        const nextBytes = Buffer.from(JSON.stringify(shrunk));
+        if (nextBytes.length >= candidate.size) continue;
+        const prepared = prepareBlob(nextBytes, { mimeType: 'application/json', blobsDir: this.blobsDir });
+        this.tx(() => {
+          this.storePreparedBlob(prepared);
+          update.run(prepared.hash, candidate.session_id, candidate.seq, candidate.blob_ref);
+        });
+        trimmed += 1;
+      }
+    }
+    return trimmed;
+  }
+
   /** Housekeeping the log needs now and then: superseded draft chunks first, so the blobs they referenced go with the sweep. */
   maintain(): { drafts: number; blobs: number } {
     const drafts = this.compactDrafts();
     return { drafts, blobs: this.sweepBlobs() };
   }
 
-  stats(sessionId?: string): { events: number; payloadBytes: number; blobs: number; blobBytes: number } {
+  /** Full background maintenance: drafts, superseded revisions, unreferenced blobs and orphan Tier-2 files. */
+  maintainAll(options: { minAgeMs?: number; maxUpdates?: number } = {}): { drafts: number; superseded: number; blobs: number; externalFiles: number } {
+    const drafts = this.compactDrafts();
+    const superseded = this.compactSuperseded(options);
+    const blobs = this.sweepBlobs();
+    const externalFiles = this.sweepExternalFiles();
+    return { drafts, superseded, blobs, externalFiles };
+  }
+
+  stats(sessionId?: string): { events: number; payloadBytes: number; blobs: number; blobBytes: number; storedBlobBytes: number } {
     const events = (sessionId
       ? this.sql('SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(payload)),0) AS bytes FROM journal_events WHERE session_id=?').get(sessionId)
       : this.sql('SELECT COUNT(*) AS n, COALESCE(SUM(LENGTH(payload)),0) AS bytes FROM journal_events').get()) as { n: number; bytes: number };
-    const blobs = this.sql('SELECT COUNT(*) AS n, COALESCE(SUM(size),0) AS bytes FROM blobs').get() as { n: number; bytes: number };
-    return { events: events.n, payloadBytes: events.bytes, blobs: blobs.n, blobBytes: blobs.bytes };
+    const blobs = this.sql('SELECT COUNT(*) AS n, COALESCE(SUM(size),0) AS bytes, COALESCE(SUM(CASE WHEN stored_size>0 THEN stored_size ELSE size END),0) AS stored FROM blobs').get() as { n: number; bytes: number; stored: number };
+    return { events: events.n, payloadBytes: events.bytes, blobs: blobs.n, blobBytes: blobs.bytes, storedBlobBytes: blobs.stored };
   }
 
   // ---- reads -------------------------------------------------------------------------------
@@ -521,7 +854,9 @@ export class Journal {
   private rowOf(raw: RawRow): JournalRow {
     let payload: unknown;
     if (raw.blob_ref) {
-      const blob = this.getBlob(raw.blob_ref);
+      const blob = raw.blob_codec !== undefined || raw.blob_bytes !== undefined || raw.blob_external !== undefined
+        ? readStoredBlob({ hash: raw.blob_ref, codec: raw.blob_codec, external: raw.blob_external, bytes: raw.blob_bytes }, this.blobsDir)
+        : this.getBlob(raw.blob_ref);
       payload = blob ? JSON.parse(blob.toString('utf8')) : JSON.parse(raw.payload);
     } else payload = JSON.parse(raw.payload);
     return {
@@ -532,13 +867,14 @@ export class Journal {
 
   /** Raw rows by seq, oldest first: what a resuming subscriber replays. */
   range(sessionId: string, afterSeq: number, limit: number): JournalRow[] {
-    return (this.sql('SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events WHERE session_id=? AND seq>? ORDER BY seq LIMIT ?')
+    return (this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN} WHERE e.session_id=? AND e.seq>? ORDER BY e.seq LIMIT ?`)
       .all(sessionId, afterSeq, limit) as unknown as RawRow[]).map(row => this.rowOf(row));
   }
 
   /** The latest version of an entity, with the seq of its first row. */
   entity(sessionId: string, nativeId: string): JournalEntity | undefined {
-    const raw = this.sql('SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events WHERE session_id=? AND native_id=? ORDER BY rev DESC LIMIT 1').get(sessionId, nativeId) as unknown as RawRow | undefined;
+    const raw = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN} WHERE e.session_id=? AND e.native_id=? ORDER BY e.rev DESC LIMIT 1`)
+      .get(sessionId, nativeId) as unknown as RawRow | undefined;
     if (!raw) return undefined;
     const identity = raw.rev === 1 ? raw.seq : (this.sql('SELECT seq FROM journal_events WHERE session_id=? AND native_id=? AND rev=1').get(sessionId, nativeId) as { seq: number }).seq;
     return { ...this.rowOf(raw), identity };
@@ -546,8 +882,8 @@ export class Journal {
 
   /** The latest explicit retraction, retained even after a corrected entity supersedes it. */
   retraction(sessionId: string, nativeId: string): JournalRow | undefined {
-    const raw = this.sql(`SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events
-      WHERE session_id=? AND native_id=? AND kind=? ORDER BY rev DESC LIMIT 1`).get(sessionId, nativeId, TOMBSTONE_KIND) as unknown as RawRow | undefined;
+    const raw = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
+      WHERE e.session_id=? AND e.native_id=? AND e.kind=? ORDER BY e.rev DESC LIMIT 1`).get(sessionId, nativeId, TOMBSTONE_KIND) as unknown as RawRow | undefined;
     return raw ? this.rowOf(raw) : undefined;
   }
 
@@ -561,7 +897,7 @@ export class Journal {
 
   /** Current entities of one kind in a turn, newest transcript position first. */
   *turnEntitiesNewestFirst(sessionId: string, turnId: string, kind: string): Generator<JournalRow> {
-    const rows = this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest FROM journal_events e
+    const rows = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
       WHERE e.session_id=? AND e.turn_id=? AND e.kind=?
         AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
       ORDER BY (SELECT seq FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id AND rev=1) DESC`)
@@ -583,7 +919,7 @@ export class Journal {
    */
   activityEntities(sessionId: string): JournalEntity[] {
     // The kind is written into the statement: only a literal lets SQLite use the partial `journal_session_updates` index.
-    const rows = this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest FROM journal_events e
+    const rows = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
       WHERE e.session_id=? AND e.kind='${SESSION_UPDATE_KIND}' AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
       ORDER BY e.seq`).all(sessionId) as unknown as RawRow[];
     const firstOf = this.sql('SELECT seq FROM journal_events WHERE session_id=? AND native_id=? AND rev=1');
@@ -592,7 +928,7 @@ export class Journal {
 
   /** Current child bindings, including children whose parent tool was already folded for good. */
   subagentEntities(sessionId: string): JournalRow[] {
-    const rows = this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest FROM journal_events e
+    const rows = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
       WHERE e.session_id=? AND e.native_id>='meta:subagent:' AND e.native_id<'meta:subagent;' AND e.kind='meta.subagent'
         AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
       ORDER BY (SELECT seq FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id AND rev=1)`)
@@ -602,7 +938,7 @@ export class Journal {
 
   /** Current rows of a tool, used when retracting a duplicate child binding without rebuilding history. */
   toolEntities(sessionId: string, toolCallId: string): JournalRow[] {
-    const rows = this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,e.digest FROM journal_events e
+    const rows = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN}
       WHERE e.session_id=? AND e.kind IN ('tool_call','tool_call_update') AND json_extract(e.payload,'$.data.toolCallId')=?
         AND e.rev=(SELECT MAX(rev) FROM journal_events WHERE session_id=e.session_id AND native_id=e.native_id)
       ORDER BY e.seq`).all(sessionId, toolCallId) as unknown as RawRow[];
@@ -631,7 +967,7 @@ export class Journal {
   entitiesBefore(sessionId: string, beforeIdentity: number, limit: number, includeDrafts = false): JournalEntity[] {
     // Paged by seq cursor, not OFFSET: a page costs the same however deep the walk goes.
     const firsts = this.sql('SELECT seq,native_id FROM journal_events WHERE session_id=? AND rev=1 AND seq<? ORDER BY seq DESC LIMIT ?');
-    const latestOf = this.sql('SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events WHERE session_id=? AND native_id=? ORDER BY rev DESC LIMIT 1');
+    const latestOf = this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN} WHERE e.session_id=? AND e.native_id=? ORDER BY e.rev DESC LIMIT 1`);
     const found: JournalEntity[] = [];
     const page = Math.max(limit, 64);
     let cursor = beforeIdentity;
@@ -737,4 +1073,46 @@ export class Journal {
       return next;
     });
   }
+}
+
+function headTailTrim(text: string, keepBytes: number): string | undefined {
+  const total = Buffer.byteLength(text);
+  if (total <= keepBytes) return undefined;
+  const half = Math.max(256, Math.floor((keepBytes - Buffer.byteLength(ARCHIVED_TRIM_MARKER)) / 2));
+  const buf = Buffer.from(text);
+  const head = buf.subarray(0, half).toString('utf8').replace(/\uFFFD+$/, '');
+  const tail = buf.subarray(Math.max(half, buf.length - half)).toString('utf8').replace(/^\uFFFD+/, '');
+  return `${head}${ARCHIVED_TRIM_MARKER}${tail}`;
+}
+
+/** Head+tail trims large raw text outputs inside an archived tool payload while preserving diffs and metadata. */
+function trimToolPayloadOutputs(payload: unknown, keepBytes: number): Record<string, unknown> | undefined {
+  if (!isPlainRecord(payload) || !isPlainRecord(payload.data)) return undefined;
+  let changed = false;
+  const data: Record<string, unknown> = { ...payload.data };
+  if (Array.isArray(data.content)) {
+    data.content = data.content.map(block => {
+      if (!isPlainRecord(block) || block.type === 'diff') return block;
+      if (block.type === 'content' && isPlainRecord(block.content) && block.content.type === 'text' && typeof block.content.text === 'string') {
+        const trimmed = headTailTrim(block.content.text, keepBytes);
+        if (trimmed !== undefined) { changed = true; return { ...block, content: { ...block.content, text: trimmed } }; }
+      }
+      return block;
+    });
+  }
+  if (typeof data.rawOutput === 'string') {
+    const trimmed = headTailTrim(data.rawOutput, keepBytes);
+    if (trimmed !== undefined) { changed = true; data.rawOutput = trimmed; }
+  } else if (isPlainRecord(data.rawOutput)) {
+    let rawChanged = false;
+    const nextRaw: Record<string, unknown> = { ...data.rawOutput };
+    for (const [key, value] of Object.entries(nextRaw)) {
+      if (typeof value === 'string') {
+        const trimmed = headTailTrim(value, keepBytes);
+        if (trimmed !== undefined) { nextRaw[key] = trimmed; rawChanged = true; }
+      }
+    }
+    if (rawChanged) { changed = true; data.rawOutput = nextRaw; }
+  }
+  return changed ? { ...payload, data } : undefined;
 }

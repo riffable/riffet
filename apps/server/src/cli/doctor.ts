@@ -42,11 +42,11 @@ export async function doctor(options: { stateDir: string; host: string; port: st
   const dir = stateDir(options.stateDir);
   if (options.compact) {
     if (await active(dir)) throw new CliError('Stop Riffet before compacting its database', ['riffet stop']);
-    const progress = spinner('Compacting workbench.db');
+    const progress = spinner('Compacting databases');
     let result: ReturnType<typeof recordCompaction>;
     try { result = recordCompaction(dir, () => compactDatabase(dir)); } finally { progress.stop(); }
     if (result.error) throw new CliError(result.error);
-    success('Compacted workbench.db');
+    success('Compacted databases');
     return;
   }
   const progress = options.json ? undefined : spinner('Checking this machine');

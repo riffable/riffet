@@ -234,7 +234,7 @@ function runtime(mode) {
   p.edge(SERVER.x + 28, SERVER.y + SERVER.h, SERVER.x + 28, FILES, c.ink, { ends: 'both' });
   p.text(SERVER.x + 40, FILES - 16, 'node:sqlite · fs', { size: 10, fill: c.fg2, mono: true });
   p.label(SERVER.x + SERVER.w, FILES - 16, 'FILES', undefined, 'end');
-  p.node(SERVER.x, FILES, 232, 44, 'workbench.db', 'SQLite · WAL');
+  p.node(SERVER.x, FILES, 232, 44, 'workbench.db · journal.db', 'derived.db · blobs/ · SQLite WAL');
   p.node(SERVER.x + 244, FILES, 232, 44, '~/.local/share/riffet/', 'devices.json · daemon.json · server.log');
   p.node(PROC.x - 190, FILES, 178, 44, 'project working trees', 'cwd of each CLI · git');
   p.node(PROC.x, FILES, PROC.w, 44, 'CLI-owned state', '~/.claude · ~/.codex · ~/.cursor');
@@ -371,7 +371,7 @@ function dataPath(mode) {
   const legend = (draw, value, width) => { draw(lx); p.text(lx + 34, 631.5, value, { size: 10.5, fill: c.fg2 }); lx += width; };
   legend(x => p.edge(x, 628, x + 26, 628, c.ink), 'call or write', 118);
   legend(x => p.edge(x, 628, x + 26, 628, c.blue), 'event or read: direction of data', 208);
-  legend(x => p.store(x, 621, 26, 14), 'table in workbench.db', 156);
+  legend(x => p.store(x, 621, 26, 14), 'table in SQLite (L0 / L1 / L2)', 196);
   legend(x => p.rect(x, 621, 26, 14, { fill: c.card, stroke: c.hair, r: 3 }), 'class, function or module', 176);
   p.text(lx, 631.5, 'S1 at most one write per message · S3 one turn at a time (docs/DELIVERY.md §2)', { size: 10.5, fill: c.fg3 });
 

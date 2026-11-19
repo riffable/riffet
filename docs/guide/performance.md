@@ -27,6 +27,7 @@
 | `LIST_POLL_MS` | 会话列表轮询间隔：推送在线、推送断开、后台 |
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
 | `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、解析后转录缓存上限、事件循环阻塞阈值 |
+| `STORAGE_BUDGET` | 日志内联与包络上限、Zstd 压缩阈值与 Tier-2 外部文件分流阈值、工具全文索引上限、在线增量页回收阈值、截断行按需展开 LRU 上限、归档冷输出裁剪策略 |
 | `AGENT_PROCESS_BUDGET` | 会话 CLI 的空闲阈值与内存预算、内存压力下的缩短倍数、最短存活时间、Droid/Pi/DSH 的空闲停止时间、临时实例的空闲退出时间、扫除的宽限时间 |
 | `PLUGIN_MARKET_BUDGET` | 可添加的插件源个数、单个索引大小上限、索引（含读取失败）缓存时长、同时读取的索引数、单次读取和整次列出的时限 |
 
@@ -78,12 +79,19 @@
 
 ### 3.7 持久化数据有保留策略
 
-- 派生数据可以丢弃、按需重建：冷会话（会话活动、日志与时间线最后一次折叠都早于 `SERVER_BUDGET.coldTimelineDays`，且无人打开、无未结束的运行）的主车道 `timeline_rows` 被丢弃，下次打开时从日志重新折叠；车道头换新的 epoch，代际随之更换，客户端收到快照。服务启动 5 分钟后第一次清理，之后每 6 小时一次，每轮只处理一个会话、分块删除。
-- 子 Agent 车道的行保留：主车道重新折叠时，工具行里的子 Agent 摘要从这些行读出。带后台任务（`NativeJob`）的会话不丢弃，任务只在内存里，重新折叠找不回。
-- 日志（`journal_events`）是历史的来源，随会话删除而删除，不按时间清理。
-- blob 按引用回收（`releaseSessionBlobs`）；冷会话丢弃时不释放，重新折叠会引用同一批内容寻址的 blob。
-- SQLite 文件不会因删除而变小；回收的页由后续写入复用。压缩文件（VACUUM）不和服务的连接同时进行：服务停着时用 `riffet doctor --compact`；在设置的「存储空间」页安排的，在服务下次启动、打开数据库之前进行（`storage/compaction.ts`），期间写 `maintenance.json`，Mac 客户端据此继续等待启动。两种都要求剩余空间不少于库大小的两倍，并把库改为 `auto_vacuum=INCREMENTAL`。
-- 「存储空间」页的分项统计要整读数据库和状态目录，只在 worker 线程里做（`storage/inspector.ts`），三步各用一个 worker 并行（6 GB 的库共约 24 秒，依次做约 40 秒），每步完成就显示。完成的统计存为 `storage-scan.json`，重启后直接显示；超过一天才在后台重新统计，期间仍显示上一次的结果。
+- **三库物理隔离 + Tier-2 对象池**（`sqlite-storage.ts`、`journal/storage-migration.ts`）：状态目录下拆分为三个独立锁的 SQLite 数据库与一个外部大对象池：
+  - `workbench.db`（L0 权威控制库）：会话、项目、Run、任务、设置与统计事实，常驻数十 MB，控制面写锁不受历史导入或索引触发器阻塞；
+  - `journal.db` + `blobs/`（L1 事实日志与 CAS 对象层）：`journal_events` 单行内联上限 `STORAGE_BUDGET.journalInlineBytes`（2 KiB，定长列前置、零溢出页）；超限载荷在锁外用无字典 Zstd（level 3）透明压缩，`hash`/`size` 保持明文语义；压缩后 `< STORAGE_BUDGET.blobExternalBytes`（128 KiB）存 `blobs` 表，更大的不可变对象分片落盘至 `blobs/<前2位>/<hash>.<codec>`；
+  - `derived.db`（L2 纯派生缓存库）：`timeline_*` 与 `message_index` / FTS5，不包含任何唯一业务状态，损坏或升级时可随时重建，在线备份自动跳过。
+- **头尾分段保序去壳**（`journal/journal.ts` 的 `compactSuperseded`）：每条车道维护单调水位 `compacted_seq`，只扫描新增 `rev > 1` 的行，将已滞后超过 `STORAGE_BUDGET.supersededLagMs` 且被新版本取代的旧 `draft`、`tool_call`、`tool_call_update`、`agent_message_chunk`、`agent_thought_chunk`、`session/update` 行清空 `payload='{}'` 并解除 `blob_ref`，保留 `seq`/`rev`/`digest` 不变；`user_message_chunk`、`meta.*` 与 `tombstone` 不去壳。
+- **派生数据全量冷回收与零写放大展开**：
+  - 截断行（`timeline/budget.ts` 的 `fitRow`）对可从日志还原的行不再往 `blobs` 写重复的 `RowContent` JSON 拷贝，客户端请求 `/api/sessions/:id/blobs/:hash` 时由 `TimelineService.expandTruncatedBlob` 按需从 `journal.db` 重建，辅以受 `STORAGE_BUDGET.expandedRowCacheEntries` / `expandedRowCacheBytes` 约束的进程内 LRU；
+  - 子 Agent 车道的汇总摘要（`rows`、`changes`）持久化在 `timeline_heads.summary`；冷会话（活动、日志与折叠都早于 `SERVER_BUDGET.coldTimelineDays`，无人打开、无未结束运行、无内存 `NativeJob`）的**主车道与全部子 Agent 车道** `timeline_rows` 都会被分块丢弃，同时释放可能残留的旧截断行 blob，下次打开按需从日志重折叠；
+  - `message_index` 的工具行按 `STORAGE_BUDGET.toolIndexChars`（256 字符）非对称精简，只保留工具名、文件路径、标题与命令前缀；
+  - 归档超过 `STORAGE_BUDGET.archivedTrimDays`（90 天）的会话，后台维护对其超大工具纯文本输出执行首尾裁剪（保留全部对话、思考、diff 与文件路径）。
+- **在线微步缩容与离线重建**：三个 SQLite 库均以 `auto_vacuum=INCREMENTAL` 运行，后台维护与冷清扫在事件循环空闲时分片执行 `PRAGMA incremental_vacuum`（`reclaimFreePages`）自动归还空闲页；需要整文件重建时仍可使用停服 `riffet doctor --compact` 或设置页「存储空间」的下次启动重建（`storage/compaction.ts`），期间写 `maintenance.json`，Mac 客户端据此继续等待。
+- **检查点硬链接去重**：同项目的 Git checkpoints 在 `checkpoints/<projectHash>/.objects/` 通过硬链接共享相同内容的脏文件快照，删旧 checkpoint 后自动清理 `nlink <= 1` 的孤儿对象。
+- 「存储空间」页的分项统计在 worker 线程里并行汇总三个数据库与 `blobs/` 目录（`storage/inspector.ts`），结果缓存为 `storage-scan.json`，超过一天才在后台重扫。
 
 ### 3.8 大文件流式读取，后台任务限量
 
@@ -183,7 +191,6 @@
 
 ### 服务端
 
-- §3.7：冷会话只丢弃主车道；子 Agent 车道的行（2026-11-16 本机约占时间线一半）要等子 Agent 摘要落进主车道的行之后才能丢弃。
 - §3.10：旧版本拉起的 tmux 服务没有所有者标记。socket 不在临时状态目录里的（`<临时目录>/riffet-<uid>-<hash>/tmux.sock`，状态目录路径过长时的位置）无法判断所有者，只在 socket 消失后扫除。这类服务只会越来越少，不另做迁移。
 
 ### Kotlin 共享客户端（Mac、iOS、Android）

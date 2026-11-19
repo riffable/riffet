@@ -121,6 +121,34 @@ export const SERVER_BUDGET = {
   loopBlockMs: 200,
 } as const;
 
+/** Database storage layout, compression, compaction and incremental reclaim budgets (docs/guide/performance.md §3.7). */
+export const STORAGE_BUDGET = {
+  /** Largest event payload kept inline in `journal_events` before spilling to CAS blobs (fits within one 4 KiB SQLite page). */
+  journalInlineBytes: 2 * KIB,
+  /** Maximum characters kept per preview field in an inline envelope of an oversized journal event. */
+  journalPreviewChars: 512,
+  /** Minimum blob payload size worth running Zstd on; smaller payloads stay raw. */
+  blobCompressMinBytes: 512,
+  /** Compressed blobs at or above this size live as immutable files under `blobs/aa/<hash>.<codec>` instead of SQLite pages. */
+  blobExternalBytes: 128 * KIB,
+  /** Maximum characters indexed for a `tool` call row in `message_index` / FTS5. */
+  toolIndexChars: 256,
+  /** Free pages threshold (per database) before background maintenance runs incremental vacuum. */
+  vacuumMinFreePages: 256,
+  /** Maximum pages reclaimed per incremental vacuum step, so maintenance never blocks the event loop. */
+  vacuumStepPages: 2_000,
+  /** Maximum on-demand expanded truncated row payloads cached in memory (LRU). */
+  expandedRowCacheEntries: 64,
+  /** Maximum total bytes of on-demand expanded truncated row payloads cached in memory. */
+  expandedRowCacheBytes: 16 * MIB,
+  /** Minimum age (ms) after supersession before non-draft journal revisions are stripped by background maintenance. */
+  supersededLagMs: 60_000,
+  /** Archived conversations older than this (days) have oversized tool text outputs eligible for head+tail cold trimming. */
+  archivedTrimDays: 90,
+  /** Bytes kept at the head and tail (combined) when trimming an oversized archived tool output blob. */
+  archivedTrimKeepBytes: 32 * KIB,
+} as const;
+
 /**
  * A warm Agent resource held for a new session's first message (`WarmPool` in the plugin kit,
  * docs/PLUGIN_ARCHITECTURE.md「预热」). One per Agent; a page asks for it, renews it and releases it.

@@ -126,6 +126,8 @@ export class JournalFeed {
         continue;
       }
       if (isHiddenKind(row.kind)) continue;
+      // Superseded revisions stripped by compaction leave an empty envelope; skip them.
+      if (!row.payload || typeof (row.payload as { type?: unknown }).type !== 'string') continue;
       const identity = row.rev === 1 ? row.seq : this.journal.locate(key, row.nativeId)?.identity ?? row.seq;
       items.push({ event: { ...(row.payload as Omit<NativeWorkbenchEvent, 'sequence' | 'sessionId'>), sessionId, sequence: identity } as NativeWorkbenchEvent });
     }

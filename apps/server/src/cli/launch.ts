@@ -8,7 +8,7 @@ import { AGENT_PROCESS_BUDGET } from '../../../../packages/contracts/src/index.j
 import { isTempStateDir } from '../terminal/orphans.js';
 import { createApp } from '../app.js';
 import { claimStateDirectory } from '../compat.js';
-import { COMPACTION_WAIT_MS, compactionRunning, runRequestedCompaction } from '../storage/compaction.js';
+import { COMPACTION_WAIT_MS, compactionRunning, runRequestedCompaction, runStorageMigrationIfNeeded } from '../storage/compaction.js';
 import { startDiscovery, type DiscoveryHandle } from '../discovery.js';
 import { SERVER_VERSION } from '../version.js';
 import { rotateServerLog, stampServerOutput } from '../server-log.js';
@@ -131,7 +131,8 @@ export async function serve(options: LaunchOptions): Promise<void> {
   const releaseState = claimStateDirectory(dir);
   process.once('exit', releaseState);
   rotateServerLog(join(dir, 'server.log'));
-  // Asked for on the settings page; runs before anything opens the database, and delays the start by its length.
+  // Migrate a legacy single-file workbench.db before opening databases, then run any requested compaction.
+  runStorageMigrationIfNeeded(dir);
   runRequestedCompaction(dir);
   const instanceId = randomUUID();
   const webRoot = options.dev ? undefined : join(dirname(entry), 'public');

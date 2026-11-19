@@ -40,6 +40,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Database and checkpoint disk usage is substantially smaller and space is reclaimed automatically while Riffet runs: history logs and large outputs are compressed, superseded tool revisions and cold subagent timelines are pruned automatically, duplicate project checkpoints share hard links, and Settings › Storage separates control data, history journal, and rebuildable cache with a one-click online cleanup action (Web and Mac).
 - Files in the conversation aside's Outputs list now show monochrome file-type icons aligned with the sections above on both Web and Mac; opening a file's diff dialog on the web includes a jump-to-preview button beside the file path.
 - Claude Code replies now appear as they are written, on every client, instead of a whole paragraph or section at a time. The streamed text may show headings and emphasis plainly until each part is complete. Conversations that were already running when Riffet started stream again from their next message.
 - Switching conversations on the web keeps the page in place: the header, side column and composer stay where they are and only the conversation fades in briefly, as on the Mac. The context meter and the running indicator show the last known state right away.

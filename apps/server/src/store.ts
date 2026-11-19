@@ -1,5 +1,5 @@
 import { DatabaseSync, backup, type StatementSync } from 'node:sqlite';
-import { mkdirSync, chmodSync } from 'node:fs';
+import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Project, Session, Run, RunMetrics, NativeBackendId, NativeDeliveryState, NativeRunConfig, NativeRunDetails, NativeRunInput, CapturedSessionReference, NativeSessionInput, NativeContext, NativeInteractionResult, NativeTurnTarget, TerminalInfo, WorkbenchEvent, AppSettings, FolderFavorite } from '../../../packages/contracts/src/index.js';
@@ -9,7 +9,9 @@ import { isNativeBackendId } from './backends/registry.js';
 import { acceptedTitlePatch, firstHumanMessage, isPlaceholderTitle } from './session-title.js';
 import type { IndexedMessage } from './search/messages.js';
 import { Journal } from './journal/journal.js';
+import { migrateStorageLayout, needsStorageLayoutMigration } from './journal/storage-migration.js';
 import { LEGACY_DEFAULT_BACKEND_ID, applyNativeSessionIdPatch, restartObservation, legacyMirrorFields, normalizeRunIdentity, normalizeSessionIdentity, requestedNativeSessionId, type IdentifiedRun, type IdentifiedSession } from './session-identity.js';
+import { openSqliteDatabase, reclaimFreePages, storageLayoutForControlDb, type StorageLayoutPaths } from './sqlite-storage.js';
 
 const now = () => new Date().toISOString();
 const SESSION_SNAPSHOTS_KEPT = 50;
@@ -19,10 +21,7 @@ const INTERACTION_RECEIPT_TTL_MS = 7 * 24 * 60 * 60_000;
 const INTERACTION_RECEIPTS_PER_SESSION = 200;
 /** A stored session's backend; rows written before `backendId` existed are Cursor's (see `session-identity.ts`). */
 const STORED_BACKEND_ID_SQL = `COALESCE(json_extract(s.json,'$.backendId'),'${LEGACY_DEFAULT_BACKEND_ID}')`;
-/** Never indexed at all, or active since the conversation was last indexed. */
-const STALE_INDEX_FILTER = `json_extract(s.json,'$.kind')='native' AND (x.indexed_at IS NULL AND NOT EXISTS (SELECT 1 FROM message_index m WHERE m.session_id=s.id)
-  OR x.indexed_at < COALESCE(json_extract(s.json,'$.lastActivityAt'),''))`;
-/** Narrows a search to a conversation and can hide backends; nothing for a global one. */
+/** Narrows a prompt search to a conversation and can hide backends; nothing for a global one. */
 function searchScope(sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): { clause: string; params: string[] } {
   const hidden = excludedBackendIds?.length ? excludedBackendIds : undefined;
   return {
@@ -161,11 +160,19 @@ function normalizedNativeSessionInput(input: NativeSessionInput) {
 export type StoredFolderFavorite = Omit<FolderFavorite, 'exists'>;
 
 export class Store {
+  /** L0 authoritative control-plane database (`workbench.db`). */
   readonly db: DatabaseSync;
-  /** Per-session append-only transcript log; see `journal/journal.ts`. Tables are additive, so older databases upgrade in place. */
+  /** L1 append-only session journal and compressed Tier-1 CAS database (`journal.db`). */
+  readonly journalDb: DatabaseSync;
+  /** L2 rebuildable derived views database (`derived.db`: timeline + FTS5 message search). */
+  readonly derivedDb: DatabaseSync;
+  /** Companion file paths for disk-backed stores; undefined for `:memory:`. */
+  readonly layout: StorageLayoutPaths | undefined;
+  /** Per-session append-only transcript log; see `journal/journal.ts`. */
   readonly journal: Journal;
   private listeners = new Map<string, Set<(event: WorkbenchEvent) => void>>();
   private depth = 0;
+  private derivedDepth = 0;
   private pending: WorkbenchEvent[] = [];
   private runListeners = new Set<(run: Run) => void>();
   private pendingRuns = new Map<string, Run>();
@@ -175,6 +182,8 @@ export class Store {
   private listsDirty = false;
   /** Told how the open transaction ended; see {@link afterTransaction}. */
   private settleHooks: Array<(committed: boolean) => void> = [];
+  /** Companion DB transaction coordinators settled before listeners/hooks observe the commit. */
+  private txCoordinators: Array<(committed: boolean) => void> = [];
   /**
    * Bumped by every change to a session (docs/LIST-SYNC.md); it is the validator behind the session
    * list ETag and the `changed` event's `revision`. Seeded from the clock so a restart never reissues
@@ -198,17 +207,19 @@ export class Store {
   private sessionSnapshotAppends = new Map<string, number>();
   /** Every statement this store runs is one of a fixed set of texts, so each is compiled once. */
   private readonly statements = new Map<string, StatementSync>();
+  private readonly derivedStatements = new Map<string, StatementSync>();
   constructor(readonly path: string) {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    this.db = new DatabaseSync(path, { timeout: 5000 });
-    if (path !== ':memory:') chmodSync(path, 0o600);
+    this.layout = storageLayoutForControlDb(path);
+    if (path !== ':memory:') {
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      if (needsStorageLayoutMigration(path)) {
+        try { migrateStorageLayout(path); } catch (error) { console.error('[riffet] storage layout migration failed:', error); throw error; }
+      }
+    }
+    this.db = openSqliteDatabase(path, { foreignKeys: true });
     const schemaVersion=(this.sql('PRAGMA user_version').get() as {user_version:number}).user_version;
     if(schemaVersion>SCHEMA_VERSION){this.db.close();throw new AppError('DATABASE_VERSION_NEWER','This workbench database requires a newer Riffet version',409);}
-    // `auto_vacuum` only takes effect on a database that has no tables yet; an existing file keeps
-    // its mode until someone runs a full VACUUM, which is never done here because it blocks.
-    // NORMAL is durable across application crashes in WAL mode; only an OS crash can drop the
-    // last commits, never corrupt the file.
-    this.db.exec(`PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS sessions_waiting_owner ON sessions(id) WHERE json_extract(json,'$.state')='waiting' AND json_extract(json,'$.archivedAt') IS NULL;
@@ -223,18 +234,6 @@ export class Store {
       CREATE TABLE IF NOT EXISTS terminals (id TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workbench_document_proofs (digest TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
-      -- Searchable message text. Additive and unversioned: a reader that does not know this table
-      -- simply ignores it, and one that does fills it when it has a transcript in hand.
-      CREATE TABLE IF NOT EXISTS message_index (
-        session_id TEXT NOT NULL REFERENCES sessions(id),
-        message_id TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        text TEXT NOT NULL,
-        at TEXT NOT NULL,
-        PRIMARY KEY (session_id, message_id));
-      CREATE INDEX IF NOT EXISTS message_index_session ON message_index(session_id);
-      -- When a conversation's messages were last indexed. Additive, like message_index itself.
-      CREATE TABLE IF NOT EXISTS message_index_sessions (session_id TEXT PRIMARY KEY, indexed_at TEXT NOT NULL);
       -- Lets snapshot pruning find one session's events of one type without parsing every row.
       CREATE INDEX IF NOT EXISTS event_session_type ON events(session_id, json_extract(json,'$.type'), sequence);
       -- Saved replies (see marks.ts). Additive, and deliberately without a foreign key: a mark outlives
@@ -250,7 +249,20 @@ export class Store {
       -- Multi-model discussions (council). Additive and unversioned.
       CREATE TABLE IF NOT EXISTS council_discussions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, json TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS council_updated ON council_discussions(updated_at DESC, id);`);
-    this.journal = new Journal(this.db, fn => this.transaction(fn), fn => this.afterTransaction(fn), id => this.isSessionDeleted(id));
+    // L1 journal database (independent write lock + optional Tier-2 external blobs directory).
+    this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:');
+    this.journal = new Journal(
+      this.journalDb,
+      undefined,
+      undefined,
+      id => this.isSessionDeleted(id),
+      {
+        ...(this.layout ? { blobsDir: this.layout.blobsDir } : {}),
+        enclosingTransaction: { active: () => this.depth > 0, onSettle: fn => { if (this.depth) this.txCoordinators.push(fn); else fn(true); } },
+      },
+    );
+    // L2 derived database (timeline + FTS5 search). Pure materialized cache: recreate on corruption.
+    this.derivedDb = this.openDerivedDatabase();
     try { this.ensureMessageSearchIndex(); } catch (error) { console.error('[riffet] message search index unavailable; search falls back to a table scan:', error); }
     // Schema v2 removed the ACP backend. `purgeAcpConversations` writes `user_version` only as part
     // of the transaction that commits the purge, so a failure leaves the database at v1 and the next
@@ -317,10 +329,57 @@ export class Store {
     // restart, so every start trims all of them once. Indexed per session, so a second start is cheap.
     try { this.pruneAllSnapshots(); } catch (error) { console.error('[riffet] startup snapshot pruning failed; retrying on next start:', error); }
   }
+  private openDerivedDatabase(): DatabaseSync {
+    const derivedPath = this.layout?.derived ?? ':memory:';
+    const init = (db: DatabaseSync) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS message_index (
+          session_id TEXT NOT NULL,
+          message_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          text TEXT NOT NULL,
+          at TEXT NOT NULL,
+          PRIMARY KEY (session_id, message_id));
+        CREATE INDEX IF NOT EXISTS message_index_session ON message_index(session_id);
+        CREATE TABLE IF NOT EXISTS message_index_sessions (session_id TEXT PRIMARY KEY, indexed_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS derived_meta (key TEXT PRIMARY KEY, json TEXT NOT NULL);`);
+      return db;
+    };
+    let opened: DatabaseSync | undefined;
+    try {
+      opened = openSqliteDatabase(derivedPath);
+      return init(opened);
+    } catch (error) {
+      if (opened) { try { opened.close(); } catch { /* ignore */ } }
+      if (derivedPath === ':memory:') throw error;
+      console.warn('[riffet] derived.db could not be opened; recreating rebuildable cache:', error);
+      for (const suffix of ['', '-wal', '-shm']) rmSync(`${derivedPath}${suffix}`, { force: true });
+      return init(openSqliteDatabase(derivedPath));
+    }
+  }
   private sql(text: string): StatementSync {
     let statement = this.statements.get(text);
     if (!statement) this.statements.set(text, statement = this.db.prepare(text));
     return statement;
+  }
+  private derivedSql(text: string): StatementSync {
+    let statement = this.derivedStatements.get(text);
+    if (!statement) this.derivedStatements.set(text, statement = this.derivedDb.prepare(text));
+    return statement;
+  }
+  private derivedTx<T>(fn: () => T): T {
+    if (this.derivedDepth) return fn();
+    this.derivedDb.exec('BEGIN IMMEDIATE');
+    this.derivedDepth += 1;
+    try { const result = fn(); this.derivedDb.exec('COMMIT'); this.derivedDepth -= 1; return result; }
+    catch (error) { this.derivedDb.exec('ROLLBACK'); this.derivedDepth -= 1; throw error; }
+  }
+  private getDerivedMeta<T>(key: string, fallback: T): T {
+    const row = this.derivedSql('SELECT json FROM derived_meta WHERE key=?').get(key) as { json: string } | undefined;
+    return row ? JSON.parse(row.json) as T : fallback;
+  }
+  private setDerivedMeta(key: string, value: unknown): void {
+    this.derivedSql('INSERT INTO derived_meta(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(key, JSON.stringify(value));
   }
   /**
    * Trigram index over `message_index.text`, so a substring search reads candidates instead of
@@ -330,8 +389,8 @@ export class Store {
    * Rows are linked by rowid, which a full VACUUM may renumber; the start-up check rebuilds then.
    */
   private ensureMessageSearchIndex(): void {
-    const exists = this.sql("SELECT 1 AS found FROM sqlite_master WHERE name='message_index_fts'").get();
-    this.db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS message_index_fts USING fts5(text, tokenize='trigram', detail=none, content='message_index', content_rowid='rowid');
+    const exists = this.derivedSql("SELECT 1 AS found FROM sqlite_master WHERE name='message_index_fts'").get();
+    this.derivedDb.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS message_index_fts USING fts5(text, tokenize='trigram', detail=none, content='message_index', content_rowid='rowid');
       CREATE TRIGGER IF NOT EXISTS message_index_fts_insert AFTER INSERT ON message_index BEGIN
         INSERT INTO message_index_fts(rowid,text) VALUES (new.rowid,new.text); END;
       CREATE TRIGGER IF NOT EXISTS message_index_fts_update AFTER UPDATE OF text ON message_index WHEN old.text IS NOT new.text BEGIN
@@ -339,16 +398,16 @@ export class Store {
         INSERT INTO message_index_fts(rowid,text) VALUES (new.rowid,new.text); END;
       CREATE TRIGGER IF NOT EXISTS message_index_fts_delete AFTER DELETE ON message_index BEGIN
         INSERT INTO message_index_fts(message_index_fts,rowid,text) VALUES ('delete',old.rowid,old.text); END;`);
-    const shape = this.sql('SELECT COUNT(*) AS total, COALESCE(MAX(rowid),0) AS top FROM message_index').get() as { total: number; top: number };
-    const marker = this.getSetting<{ total: number; top: number } | undefined>('message-index-fts-v1', undefined);
+    const shape = this.derivedSql('SELECT COUNT(*) AS total, COALESCE(MAX(rowid),0) AS top FROM message_index').get() as { total: number; top: number };
+    const marker = this.getDerivedMeta<{ total: number; top: number } | undefined>('message-index-fts-v1', undefined);
     if (exists && marker && marker.total === shape.total && marker.top === shape.top) return;
-    if (exists && marker === undefined && shape.total === 0) { this.setSetting('message-index-fts-v1', shape); return; }
-    this.db.exec("INSERT INTO message_index_fts(message_index_fts) VALUES('rebuild')");
-    this.setSetting('message-index-fts-v1', shape);
+    if (exists && marker === undefined && shape.total === 0) { this.setDerivedMeta('message-index-fts-v1', shape); return; }
+    this.derivedDb.exec("INSERT INTO message_index_fts(message_index_fts) VALUES('rebuild')");
+    this.setDerivedMeta('message-index-fts-v1', shape);
   }
   /** Records the shape the search index was last known to match, for the next start's check. */
   private noteMessageIndexShape(): void {
-    try { this.setSetting('message-index-fts-v1', this.sql('SELECT COUNT(*) AS total, COALESCE(MAX(rowid),0) AS top FROM message_index').get()); } catch { /* checked again next start */ }
+    try { this.setDerivedMeta('message-index-fts-v1', this.derivedSql('SELECT COUNT(*) AS total, COALESCE(MAX(rowid),0) AS top FROM message_index').get()); } catch { /* checked again next start */ }
   }
   private pruneAllSnapshots(): void {
     const ids = (this.sql('SELECT id FROM sessions').all() as Array<{ id: string }>).map(row => row.id);
@@ -471,16 +530,19 @@ export class Store {
     this.db.exec('BEGIN IMMEDIATE'); this.depth++;
     try {
       const result = fn(); this.db.exec('COMMIT'); this.depth--;
+      // Settle companion DB transactions (L1 journalDb) BEFORE broadcasting events or running hooks.
+      for (const coord of this.txCoordinators.splice(0)) { try { coord(true); } catch (error) { console.error('[riffet] transaction coordinator failed:', error); } }
       const events = this.pending.splice(0); for (const event of events) this.broadcast(event);
       const runs = [...this.pendingRuns.values()]; this.pendingRuns.clear(); for (const run of runs) this.emitRun(run);
       if (this.listsDirty) { this.listsDirty = false; this.emitLists(); }
-      for (const hook of this.settleHooks.splice(0)) hook(true);
+      for (const hook of this.settleHooks.splice(0)) { try { hook(true); } catch (error) { console.error('[riffet] afterTransaction hook failed:', error); } }
       return result;
     }
     catch (error) {
       this.sessionCache = undefined;
       this.db.exec('ROLLBACK'); this.depth--; this.pending.length = 0; this.pendingRuns.clear(); this.listsDirty = false;
-      for (const hook of this.settleHooks.splice(0)) hook(false);
+      for (const coord of this.txCoordinators.splice(0)) { try { coord(false); } catch (coordError) { console.error('[riffet] transaction rollback coordinator failed:', coordError); } }
+      for (const hook of this.settleHooks.splice(0)) { try { hook(false); } catch (hookError) { console.error('[riffet] afterTransaction rollback hook failed:', hookError); } }
       throw error;
     }
   }
@@ -695,21 +757,17 @@ export class Store {
     if (record?.cleanupPending) this.setSetting(`${DELETED_PREFIX}${id}`, { ...record, cleanupPending: false });
   }
   /**
-   * Removes the conversations' rows and records their ids as deleted, in one transaction (a caller may
-   * widen it with the rest of what the conversations own). Runs, events, the search index, every journal
-   * lane and the settings each owns go; marks, shares and usage facts are not theirs and stay.
+   * Removes the conversations' rows and records their ids as deleted in L0 first (so any concurrent
+   * request immediately sees 410), then drops their L1 journal lanes and L2 search index entries.
+   * Any crash between L0 commit and L1/L2 cleanup is retried idempotently by `purgeDeletedSessionArtifacts`.
    */
   deleteSessions(rootId: string, ids: readonly string[]): DeletedSession {
-    return this.transaction(() => {
+    const record = this.transaction(() => {
       const deletedAt = now();
       for (const id of ids) {
         this.getSession(id);
         this.sql('DELETE FROM events WHERE session_id=?').run(id);
         this.sql('DELETE FROM runs WHERE session_id=?').run(id);
-        this.sql('DELETE FROM message_index WHERE session_id=?').run(id);
-        this.sql('DELETE FROM message_index_sessions WHERE session_id=?').run(id);
-        for (const key of this.journal.keysOf(id)) this.journal.drop(key);
-        this.journal.drop(id);
         for (const prefix of SESSION_SETTING_PREFIXES) this.sql('DELETE FROM settings WHERE key=?').run(`${prefix}${id}`);
         this.sql('DELETE FROM sessions WHERE id=?').run(id);
         this.sessionSnapshotAppends.delete(id);
@@ -718,11 +776,45 @@ export class Store {
       this.sessionsChanged(ids);
       this.afterTransaction(committed => {
         if (!committed) return;
+        for (const id of ids) {
+          this.purgeDeletedSessionArtifacts(id);
+          this.listeners.delete(id);
+          for (const listener of this.deletionListeners.get(id) ?? []) { try { listener(); } catch { /* a closing stream's failure is its own */ } }
+        }
         this.noteMessageIndexShape();
-        for (const id of ids) { this.listeners.delete(id); for (const listener of this.deletionListeners.get(id) ?? []) { try { listener(); } catch { /* a closing stream's failure is its own */ } } }
       });
       return { rootId, deletedAt, cleanupPending: true, sessionIds: [...ids] };
     });
+    return record;
+  }
+  /** Idempotently clears L1 journal and L2 search index artifacts for a deleted conversation. */
+  purgeDeletedSessionArtifacts(id: string): void {
+    for (const key of this.journal.keysOf(id)) this.journal.drop(key);
+    this.journal.drop(id);
+    this.derivedTx(() => {
+      this.derivedSql('DELETE FROM message_index WHERE session_id=?').run(id);
+      this.derivedSql('DELETE FROM message_index_sessions WHERE session_id=?').run(id);
+    });
+  }
+  /** Activity timestamp and running flag for `TimelineService.sweepCold` without cross-DB queries. */
+  sessionActivity(id: string): { at?: string; running: boolean } | undefined {
+    const item = this.get<Session>('sessions', id);
+    if (!item) return undefined;
+    const times = [item.lastActivityAt, item.updatedAt].filter((value): value is string => typeof value === 'string').sort();
+    return { ...(times.length ? { at: times.at(-1)! } : {}), running: ACTIVE_SESSION_STATES.has(item.state) };
+  }
+  /** Ids of cold conversations archived before `cutoffIso` (skipping any with live hot timeline rows). */
+  archivedSessionsBefore(cutoffIso: string): string[] {
+    let hot = new Set<string>();
+    try {
+      const hasTimeline = this.derivedSql("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='timeline_rows'").get();
+      if (hasTimeline) {
+        hot = new Set((this.derivedSql('SELECT DISTINCT session_id FROM timeline_rows').all() as Array<{ session_id: string }>).map(row => row.session_id));
+      }
+    } catch { /* ignore */ }
+    return this.allSessions()
+      .filter(session => typeof session.archivedAt === 'string' && session.archivedAt < cutoffIso && !hot.has(session.id))
+      .map(session => session.id);
   }
   /** Called once the conversation is deleted: its open streams end, and their clients learn it on reconnecting. */
   onSessionDeleted(id: string, listener: () => void): () => void {
@@ -1048,20 +1140,22 @@ export class Store {
   }
   /** Startup reconciliation only: exact turns whose provider end may have been corrected. */
   listProviderEndedNativeRuns(): IdentifiedRun[] {
-    return (this.sql(`SELECT r.json FROM runs r JOIN sessions s ON s.id=r.session_id
+    const candidates = (this.sql(`SELECT r.json FROM runs r JOIN sessions s ON s.id=r.session_id
       WHERE json_extract(s.json,'$.kind')='native'
         AND ((json_extract(r.json,'$.state')='interrupted'
           AND json_extract(r.json,'$.native.delivery')='cancelled'
           AND json_extract(r.json,'$.native.stage')='provider_cancelled')
-        OR (((json_extract(r.json,'$.state')='failed' AND json_extract(r.json,'$.native.delivery')='failed'
+        OR (json_extract(r.json,'$.state')='failed' AND json_extract(r.json,'$.native.delivery')='failed'
           AND json_extract(r.json,'$.native.stage')='provider_failed')
         OR (json_extract(r.json,'$.state')='completed' AND json_extract(r.json,'$.native.delivery')='observed'
           AND json_extract(r.json,'$.native.stage')='completed'))
-          AND EXISTS (SELECT 1 FROM journal_events e WHERE e.session_id=r.session_id
-            AND e.native_id='meta:turn:' || json_extract(r.json,'$.native.nativeTurnId') || ':ended'
-            AND e.kind='tombstone')))
         AND json_extract(r.json,'$.native.nativeSessionId') IS NOT NULL
         AND json_extract(r.json,'$.native.nativeTurnId') IS NOT NULL`).all() as { json: string }[]).map(row => this.run(row.json));
+    return candidates.filter(run => {
+      if (run.state === 'interrupted' && run.native?.delivery === 'cancelled' && run.native.stage === 'provider_cancelled') return true;
+      const turnId = run.native?.nativeTurnId;
+      return Boolean(turnId && this.journal.retraction(run.sessionId, `meta:turn:${turnId}:ended`));
+    });
   }
   appendEvent(sessionId: string, type: string, data: Record<string,unknown>, extra: {runId?:string;raw?:unknown} = {}): WorkbenchEvent {
     this.getSession(sessionId);
@@ -1107,16 +1201,18 @@ export class Store {
   /** `indexedAt` is when the transcript was read; activity after it makes the conversation stale again. */
   indexMessages(messages: readonly IndexedMessage[], indexedAt = now()): number {
     if (!messages.length) return 0;
-    return this.transaction(() => {
+    // L2 has no cross-database foreign key to L0 `sessions`; verify live ownership first.
+    const liveIds = new Set(this.allSessions().map(session => session.id));
+    const valid = messages.filter(message => liveIds.has(message.sessionId));
+    if (!valid.length) return 0;
+    return this.derivedTx(() => {
       // An unchanged message is left alone, so re-indexing a window rewrites only what moved.
-      const statement = this.sql(`INSERT INTO message_index(session_id,message_id,kind,text,at) VALUES(?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET kind=excluded.kind,text=excluded.text,at=excluded.at
+      const statement = this.derivedSql(`INSERT INTO message_index(session_id,message_id,kind,text,at) VALUES(?,?,?,?,?) ON CONFLICT(session_id,message_id) DO UPDATE SET kind=excluded.kind,text=excluded.text,at=excluded.at
         WHERE kind IS NOT excluded.kind OR text IS NOT excluded.text OR at IS NOT excluded.at`);
-      const mark = this.sql('INSERT INTO message_index_sessions(session_id,indexed_at) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET indexed_at=MAX(indexed_at,excluded.indexed_at)');
+      const mark = this.derivedSql('INSERT INTO message_index_sessions(session_id,indexed_at) VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET indexed_at=MAX(indexed_at,excluded.indexed_at)');
       const sessions = new Set<string>();
       let written = 0;
-      for (const message of messages) {
-        // A message whose session was deleted while the window was in flight is not worth failing
-        // the whole batch over.
+      for (const message of valid) {
         try { statement.run(message.sessionId, message.messageId, message.kind, message.text, message.at); written += 1; sessions.add(message.sessionId); } catch { /* skipped */ }
       }
       for (const sessionId of sessions) mark.run(sessionId, indexedAt);
@@ -1126,37 +1222,99 @@ export class Store {
 
   /** The earliest indexed message of one kind, if a transcript has been indexed for the session. */
   firstIndexedText(sessionId: string, kind: IndexedMessage['kind']): string | undefined {
-    const row = this.sql('SELECT text FROM message_index WHERE session_id=? AND kind=? AND text<>? ORDER BY at LIMIT 1').get(sessionId, kind, '') as {text:string} | undefined;
+    const row = this.derivedSql('SELECT text FROM message_index WHERE session_id=? AND kind=? AND text<>? ORDER BY at LIMIT 1').get(sessionId, kind, '') as {text:string} | undefined;
     return row?.text;
+  }
+
+  /** The latest indexed user prompt at or before `at` (seconds precision), for mark context lookup. */
+  latestIndexedPromptBefore(sessionId: string, at: string): string | undefined {
+    const row = this.derivedSql("SELECT text FROM message_index WHERE session_id=? AND kind='user' AND text<>'' AND substr(at,1,19)<=substr(?,1,19) ORDER BY at DESC, rowid DESC LIMIT 1")
+      .get(sessionId, at) as { text: string } | undefined;
+    return row?.text;
+  }
+
+  /** Indexed assistant (and optionally tool) rows of one conversation, for mark relocation. */
+  indexedCandidatesForMark(sessionId: string, includeTools: boolean): Array<{ messageId: string; kind: IndexedMessage['kind']; text: string }> {
+    return this.derivedSql(`SELECT message_id AS messageId, kind, text FROM message_index WHERE session_id=? AND (kind='assistant' OR (? AND kind='tool')) AND text<>'' ORDER BY at, rowid`)
+      .all(sessionId, includeTools ? 1 : 0) as Array<{ messageId: string; kind: IndexedMessage['kind']; text: string }>;
   }
 
   /** Every indexed user and assistant message of a conversation, oldest first, with its tool calls when `tools` is set. */
   indexedMessages(sessionId: string, options: { tools?: boolean } = {}): Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string }> {
-    return this.sql(`SELECT kind,text,at FROM message_index WHERE session_id=? AND kind IN (${options.tools ? "'user','assistant','tool'" : "'user','assistant'"}) AND text<>'' ORDER BY at, rowid`).all(sessionId) as Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string }>;
+    return this.derivedSql(`SELECT kind,text,at FROM message_index WHERE session_id=? AND kind IN (${options.tools ? "'user','assistant','tool'" : "'user','assistant'"}) AND text<>'' ORDER BY at, rowid`).all(sessionId) as Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string }>;
   }
 
   /** A bounded tail from the search index, without loading earlier rows or tools. */
   recentIndexedMessages(sessionId: string, limit: number, characters: number): Array<{ role: 'user' | 'assistant'; text: string; at: string }> {
-    const rows = this.sql("SELECT kind AS role,substr(text,1,?) AS text,at FROM message_index WHERE session_id=? AND kind IN ('user','assistant') AND text<>'' ORDER BY at DESC,rowid DESC LIMIT ?")
+    const rows = this.derivedSql("SELECT kind AS role,substr(text,1,?) AS text,at FROM message_index WHERE session_id=? AND kind IN ('user','assistant') AND text<>'' ORDER BY at DESC,rowid DESC LIMIT ?")
       .all(characters, sessionId, limit) as Array<{ role: 'user' | 'assistant'; text: string; at: string }>;
     return rows.reverse();
   }
 
+  private scopedSessions(sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): Map<string, IdentifiedSession> {
+    const hidden = excludedBackendIds?.length ? new Set(excludedBackendIds) : undefined;
+    const projectsById = excludeTaskWorkspaces || assistantHistory ? new Map(this.listProjects().map(project => [project.id, project])) : undefined;
+    const allowed = new Map<string, IdentifiedSession>();
+    for (const session of this.allSessions()) {
+      if (sessionId !== undefined && session.id !== sessionId) continue;
+      if (hidden?.has(session.backendId)) continue;
+      if (hidePluginAgents && session.backendId.includes('.')) continue;
+      const system = projectsById?.get(session.projectId)?.system;
+      if (excludeTaskWorkspaces && system === 'task-workspace') continue;
+      if (assistantHistory && (session.origin?.kind === 'assistant' || system === 'quick-chat')) continue;
+      allowed.set(session.id, session);
+    }
+    return allowed;
+  }
+
   /** Assistant and tool text, newest first. Prompts come from `searchPrompts`, which is complete. [sessionId] narrows it to one conversation; [excludedBackendIds] hides providers before the limit. */
   searchIndexedMessages(pattern: string, limit: number, sessionId?: string, excludedBackendIds?: readonly string[], excludeTaskWorkspaces = false, hidePluginAgents = false, assistantHistory = false): MessageSearchHit[] {
-    const scope = searchScope(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents, assistantHistory);
+    if (limit <= 0) return [];
+    const allowed = this.scopedSessions(sessionId, excludedBackendIds, excludeTaskWorkspaces, hidePluginAgents, assistantHistory);
+    if (!allowed.size) return [];
     // The trigram index answers a plain substring of three characters or more; it cannot take an
     // ESCAPE clause, so a query holding a wildcard character keeps the scan. Either way the LIKE
     // on `message_index` decides, which keeps the result exactly what the scan would return.
     const indexed = /^%[^%_\\]+%$/.test(pattern) && [...pattern.slice(1, -1)].length >= 3;
-    const rows = (indexed
-      ? this.sql(`SELECT m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at, s.json AS sessionJson
-        FROM message_index_fts f JOIN message_index m ON m.rowid = f.rowid JOIN sessions s ON s.id = m.session_id
-        WHERE f.text LIKE ? AND m.text LIKE ? ESCAPE '\\'${scope.clause} ORDER BY m.at DESC LIMIT ?`).all(pattern, pattern, ...scope.params, limit)
-      : this.sql(`SELECT m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at, s.json AS sessionJson
-        FROM message_index m JOIN sessions s ON s.id = m.session_id
-        WHERE m.text LIKE ? ESCAPE '\\'${scope.clause} ORDER BY m.at DESC LIMIT ?`).all(pattern, ...scope.params, limit)) as Array<{messageId:string;kind:MessageSearchHit['kind'];text:string;at:string;sessionJson:string}>;
-    return rows.map(row => this.hit(row.sessionJson, row.messageId, row.kind, row.text, row.at));
+    const hits: MessageSearchHit[] = [];
+    const pushRows = (rows: Array<{ sessionId: string; messageId: string; kind: MessageSearchHit['kind']; text: string; at: string }>) => {
+      for (const row of rows) {
+        const session = allowed.get(row.sessionId);
+        if (!session) continue;
+        hits.push(this.hitFromSession(session, row.messageId, row.kind, row.text, row.at));
+        if (hits.length >= limit) break;
+      }
+    };
+    if (sessionId !== undefined) {
+      const rows = (indexed
+        ? this.derivedSql(`SELECT m.session_id AS sessionId, m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at
+          FROM message_index_fts f JOIN message_index m ON m.rowid = f.rowid
+          WHERE f.text LIKE ? AND m.text LIKE ? ESCAPE '\\' AND m.session_id=? ORDER BY m.at DESC LIMIT ?`).all(pattern, pattern, sessionId, limit)
+        : this.derivedSql(`SELECT m.session_id AS sessionId, m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at
+          FROM message_index m
+          WHERE m.text LIKE ? ESCAPE '\\' AND m.session_id=? ORDER BY m.at DESC LIMIT ?`).all(pattern, sessionId, limit)) as Array<{ sessionId: string; messageId: string; kind: MessageSearchHit['kind']; text: string; at: string }>;
+      pushRows(rows);
+      return hits;
+    }
+    // Stream rows in descending time order once (O(N)) rather than repeating LIMIT/OFFSET sorts.
+    const iter = (indexed
+      ? this.derivedSql(`SELECT m.session_id AS sessionId, m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at
+        FROM message_index_fts f JOIN message_index m ON m.rowid = f.rowid
+        WHERE f.text LIKE ? AND m.text LIKE ? ESCAPE '\\' ORDER BY m.at DESC`).iterate(pattern, pattern)
+      : this.derivedSql(`SELECT m.session_id AS sessionId, m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at
+        FROM message_index m
+        WHERE m.text LIKE ? ESCAPE '\\' ORDER BY m.at DESC`).iterate(pattern)) as IterableIterator<{ sessionId: string; messageId: string; kind: MessageSearchHit['kind']; text: string; at: string }>;
+    try {
+      for (const row of iter) {
+        const session = allowed.get(row.sessionId);
+        if (!session) continue;
+        hits.push(this.hitFromSession(session, row.messageId, row.kind, row.text, row.at));
+        if (hits.length >= limit) break;
+      }
+    } finally {
+      iter.return?.();
+    }
+    return hits;
   }
 
   /**
@@ -1176,12 +1334,37 @@ export class Store {
   }
 
   private hit(sessionJson: string, messageId: string, kind: MessageSearchHit['kind'], text: string, at: string): MessageSearchHit {
-    const session = this.session(sessionJson);
+    return this.hitFromSession(this.session(sessionJson), messageId, kind, text, at);
+  }
+
+  private hitFromSession(session: IdentifiedSession, messageId: string, kind: MessageSearchHit['kind'], text: string, at: string): MessageSearchHit {
     return {
       sessionId: session.id, projectId: session.projectId, sessionTitle: session.title,
       archived: Boolean(session.archivedAt), backendId: session.backendId,
       messageId, kind, text, at,
     };
+  }
+
+  private staleMessageSessions(backendIds: readonly string[], sessionId?: string, excludeTaskWorkspaces = false): IdentifiedSession[] {
+    if (!backendIds.length) return [];
+    const backends = new Set(backendIds);
+    const allowed = this.scopedSessions(sessionId, undefined, excludeTaskWorkspaces);
+    const indexedAt = new Map(
+      (this.derivedSql('SELECT session_id, indexed_at FROM message_index_sessions').all() as Array<{ session_id: string; indexed_at: string }>)
+        .map(row => [row.session_id, row.indexed_at] as const),
+    );
+    const hasMessage = new Set(
+      (this.derivedSql('SELECT DISTINCT session_id FROM message_index').all() as Array<{ session_id: string }>)
+        .map(row => row.session_id),
+    );
+    const stale: IdentifiedSession[] = [];
+    for (const session of allowed.values()) {
+      if (session.kind !== 'native' || !backends.has(session.backendId)) continue;
+      const marked = indexedAt.get(session.id);
+      const isStale = marked === undefined ? !hasMessage.has(session.id) : marked < (session.lastActivityAt ?? '');
+      if (isStale) stale.push(session);
+    }
+    return stale;
   }
 
   /**
@@ -1190,21 +1373,14 @@ export class Store {
    * they last were. A conversation indexed before that time was recorded counts as current.
    */
   sessionsMissingMessages(backendIds: readonly string[], limit: number, sessionId?: string, excludeTaskWorkspaces = false): IdentifiedSession[] {
-    if (!backendIds.length) return [];
-    const scope = searchScope(sessionId, undefined, excludeTaskWorkspaces);
-    const rows = this.sql(`SELECT s.json AS sessionJson FROM sessions s LEFT JOIN message_index_sessions x ON x.session_id=s.id
-      WHERE ${STALE_INDEX_FILTER} AND ${STORED_BACKEND_ID_SQL} IN (${backendIds.map(() => '?').join(',')})${scope.clause}
-      ORDER BY json_extract(s.json,'$.lastActivityAt') DESC LIMIT ?`).all(...backendIds, ...scope.params, limit) as {sessionJson:string}[];
-    return rows.map(row => this.session(row.sessionJson));
+    return this.staleMessageSessions(backendIds, sessionId, excludeTaskWorkspaces)
+      .sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
+      .slice(0, limit);
   }
 
   /** How many of those conversations are still missing from the index. */
   countSessionsMissingMessages(backendIds: readonly string[], sessionId?: string, excludeTaskWorkspaces = false): number {
-    if (!backendIds.length) return 0;
-    const scope = searchScope(sessionId, undefined, excludeTaskWorkspaces);
-    const row = this.sql(`SELECT COUNT(*) AS total FROM sessions s LEFT JOIN message_index_sessions x ON x.session_id=s.id
-      WHERE ${STALE_INDEX_FILTER} AND ${STORED_BACKEND_ID_SQL} IN (${backendIds.map(() => '?').join(',')})${scope.clause}`).get(...backendIds, ...scope.params) as {total:number};
-    return row.total;
+    return this.staleMessageSessions(backendIds, sessionId, excludeTaskWorkspaces).length;
   }
 
   /**
@@ -1327,6 +1503,21 @@ export class Store {
   }
   getSettings(): AppSettings { return this.getSetting('app',{}); }
   async backup(destination: string) { mkdirSync(dirname(destination),{recursive:true,mode:0o700}); await backup(this.db,destination); chmodSync(destination,0o600); }
+  async backupJournal(destination: string) { mkdirSync(dirname(destination),{recursive:true,mode:0o700}); await backup(this.journalDb,destination); chmodSync(destination,0o600); }
+  /** Bounded online incremental vacuum across L0, L1 and L2 when the event loop is idle (or forced during explicit maintenance). */
+  reclaimSpace(options: { busy?: () => boolean; checkpoint?: boolean } = {}): { control: number; journal: number; derived: number } {
+    const result = {
+      control: reclaimFreePages(this.db, options),
+      journal: reclaimFreePages(this.journalDb, options),
+      derived: reclaimFreePages(this.derivedDb, options),
+    };
+    if (options.checkpoint) {
+      for (const db of [this.db, this.journalDb, this.derivedDb]) {
+        try { db.exec('PRAGMA wal_checkpoint(PASSIVE)'); } catch { /* ignore */ }
+      }
+    }
+    return result;
+  }
   recoverInterruptedRuns() {
     this.transaction(() => {
       for (const session of this.listSessions()) {
@@ -1366,5 +1557,10 @@ export class Store {
       }
     });
   }
-  close() { this.noteMessageIndexShape(); this.listeners.clear(); this.runListeners.clear(); this.listListeners.clear(); this.deletionListeners.clear(); this.statements.clear(); this.db.close(); }
+  close() {
+    this.noteMessageIndexShape();
+    this.listeners.clear(); this.runListeners.clear(); this.listListeners.clear(); this.deletionListeners.clear();
+    this.statements.clear(); this.derivedStatements.clear();
+    this.derivedDb.close(); this.journalDb.close(); this.db.close();
+  }
 }
