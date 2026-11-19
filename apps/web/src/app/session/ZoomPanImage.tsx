@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent, type Ref } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconMinus, IconPlus } from '@/components/icons';
 import { Tip } from '@/components/ui/tooltip';
@@ -16,19 +16,25 @@ interface Anchor { u: number; v: number; x: number; y: number; scale: number }
  * dragging or scrolling pans, and a double-click toggles between the fitted and the actual size.
  * The frame scrolls natively, so a trackpad or wheel pans the way it does anywhere else.
  */
-export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, onBackgroundClick }: {
+export function ZoomPanImage({ src, alt, tone = 'surface', className, imgRef, initialSize, onImageLoad, onError, onBackgroundClick, onImageClick }: {
   src: string;
   alt: string;
   /** `overlay` sits on the dark lightbox; `surface` on a panel of the workbench. */
   tone?: 'surface' | 'overlay';
   className?: string;
+  imgRef?: Ref<HTMLImageElement>;
+  /** Known natural pixel size, so the fitted box is laid out on frame 0 before `onLoad` fires. */
+  initialSize?: Size | undefined;
+  onImageLoad?: (size: Size) => void;
   onError?: () => void;
   /** A click outside the image that did not end a drag. */
   onBackgroundClick?: () => void;
+  /** A click on the image itself that did not end a drag. */
+  onImageClick?: () => void;
 }) {
   const { t } = useLingui();
   const frame = useRef<HTMLDivElement>(null);
-  const [image, setImage] = useState<Size>();
+  const [image, setImage] = useState<Size | undefined>(() => initialSize);
   const [box, setBox] = useState<Size>();
   // `null` follows the fitted scale as the frame resizes; a number is a scale the reader chose.
   const [zoom, setZoom] = useState<number | null>(null);
@@ -42,7 +48,7 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
   const [shown, setShown] = useState(src);
   if (shown !== src) {
     setShown(src);
-    setImage(undefined);
+    setImage(initialSize);
     setZoom(null);
   }
 
@@ -157,6 +163,7 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    suppressClick.current = false;
     const element = frame.current!;
     pointers.current.set(event.pointerId, local(event.clientX, event.clientY));
     if (pointers.current.size === 2) {
@@ -209,7 +216,8 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
 
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     if (suppressClick.current) { suppressClick.current = false; return; }
-    if (!(event.target instanceof HTMLImageElement)) onBackgroundClick?.();
+    if (event.target instanceof HTMLImageElement) onImageClick?.();
+    else onBackgroundClick?.();
   };
 
   const toggle = (point?: { x: number; y: number }) => {
@@ -219,6 +227,11 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (onImageClick && event.target === frame.current && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      onImageClick();
+      return;
+    }
     const { scale: current, fit } = view.current;
     const next = { '+': current * 1.25, '=': current * 1.25, '-': current / 1.25, '0': fit, '1': 1 }[event.key];
     if (next === undefined) return;
@@ -233,29 +246,36 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
     <div className={cn('relative flex min-h-0 flex-col', className)} onKeyDown={onKeyDown}>
       <div
         ref={frame}
+        data-zoom-pan-frame
         tabIndex={0}
         aria-label={t`${alt}，可缩放`}
         className={cn(
           'min-h-0 flex-1 touch-none select-none overflow-auto overscroll-contain outline-none',
           // The lightbox pans by dragging and gestures; scrollbars would only cover the picture.
           overlay && 'scrollbar-none',
-          dragging ? 'cursor-grabbing' : overflowing ? 'cursor-grab' : image && scales.fit < 1 ? 'cursor-zoom-in' : undefined,
+          dragging ? 'cursor-grabbing' : overflowing ? 'cursor-grab' : !onImageClick && image && scales.fit < 1 ? 'cursor-zoom-in' : undefined,
         )}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
         onClick={onClick}
-        onDoubleClick={(event) => { if (event.target instanceof HTMLImageElement) toggle(local(event.clientX, event.clientY)); }}
+        onDoubleClick={(event) => { if (!onImageClick && event.target instanceof HTMLImageElement) toggle(local(event.clientX, event.clientY)); }}
       >
         <div className="grid place-items-center" style={inner ? { width: inner.w, height: inner.h } : undefined}>
           <img
+            ref={imgRef}
             src={src}
             alt={alt}
             draggable={false}
-            className={cn('max-w-none', overlay ? 'rounded-md' : 'rounded-sm', !image && 'invisible')}
+            data-zoom-pan-ready={box && image ? 'true' : undefined}
+            className={cn('max-w-none', overlay ? 'rounded-md' : 'rounded-sm', !dragging && !overflowing && onImageClick && 'cursor-zoom-in', (!image || !box) && 'invisible')}
             style={image ? { width, height } : undefined}
-            onLoad={(event) => setImage({ w: event.currentTarget.naturalWidth || 1, h: event.currentTarget.naturalHeight || 1 })}
+            onLoad={(event) => {
+              const size = { w: event.currentTarget.naturalWidth || 1, h: event.currentTarget.naturalHeight || 1 };
+              setImage(size);
+              onImageLoad?.(size);
+            }}
             onError={onError}
           />
         </div>

@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Opening or closing an image preview from message attachments, composer thumbnails, diagrams, marks, or the right-hand Files panel on the web now plays its smooth transition animation in production builds too, and clicking an image in the Files panel opens the full-screen lightbox.
 - Switching between New Task and Quick Chat on the web keeps the composer in the same vertical position instead of shifting up and down.
 - Riffet can restart after a storage upgrade when conversation timelines contain deleted rows.
 - Cursor command and file approvals appear in the conversation when the terminal shows a review shortcut or the top of a long preview has scrolled out of view.

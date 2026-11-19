@@ -18,6 +18,7 @@ import { usePreviewTheme } from '@/lib/content-preview';
 import { cn, errorMessage, formatBytes } from '@/lib/utils';
 import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { ImageViewer, loadedImageSize, rememberImageSize } from '../session/ImageViewer';
 import { ZoomPanImage } from '../session/ZoomPanImage';
 import { FavoriteMenu, FavoriteStar, favoriteName, useFolderFavorites } from '../FolderFavorites';
 import { useUi } from '../state/stores';
@@ -118,6 +119,9 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   const renderable = Boolean(preview?.render || (preview && isHtmlPath(preview.path)));
   const showingRendered = renderable && rendered && !preview?.image;
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const previewImageThumb = useRef<HTMLImageElement>(null);
+  useEffect(() => { setImageViewerOpen(false); }, [project.id, previewFilePath, panelOpen, shown]);
   // A missing or outside-blocked file says so in place; retrying missing cannot help, and a toast would say it twice.
   const [previewMissing, setPreviewMissing] = useState(false);
   const [previewBlocked, setPreviewBlocked] = useState(false);
@@ -637,14 +641,32 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
         <EmptyState title={t`无法打开文件`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
       ) : preview.image ? imageLoadError ? (
         <EmptyState icon={<IconImage />} title={t`图片无法加载`} description={t`文件可能已更改，或超过图片预览大小上限。`} />
-      ) : (
-        <ZoomPanImage
-          src={withClientFeatures(`/api/projects/${encodeURIComponent(project.id)}/file/image?path=${encodeURIComponent(preview.path)}&version=${preview.hash}`)}
-          alt={preview.path.split('/').at(-1) ?? preview.path}
-          className="min-h-0 flex-1 bg-subtle/30"
-          onError={() => setImageLoadError(true)}
-        />
-      ) : showingRendered ? (
+      ) : (() => {
+        const imageSrc = withClientFeatures(`/api/projects/${encodeURIComponent(project.id)}/file/image?path=${encodeURIComponent(preview.path)}&version=${preview.hash}`);
+        const imageName = preview.path.split('/').at(-1) ?? preview.path;
+        const known = loadedImageSize(imageSrc);
+        return (
+          <>
+            <ZoomPanImage
+              src={imageSrc}
+              alt={imageName}
+              className="min-h-0 flex-1 bg-subtle/30"
+              imgRef={previewImageThumb}
+              initialSize={known ? { w: known.width, h: known.height } : undefined}
+              onImageLoad={(size) => rememberImageSize(imageSrc, size.w, size.h)}
+              onImageClick={() => setImageViewerOpen(true)}
+              onError={() => setImageLoadError(true)}
+            />
+            <ImageViewer
+              src={imageSrc}
+              name={imageName}
+              open={imageViewerOpen}
+              onOpenChange={setImageViewerOpen}
+              thumb={() => previewImageThumb.current}
+            />
+          </>
+        );
+      })() : showingRendered ? (
         preview.render ? (
           <ContentPreview
             key={`${preview.path}:${preview.hash ?? ''}`}

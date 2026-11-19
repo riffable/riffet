@@ -51,6 +51,16 @@ export function settled(animations: readonly Animation[]): Promise<void> {
   }));
 }
 
+/** Parses a CSS time value (`300ms` or `.3s` after CSS minification) into milliseconds. */
+export function cssDurationMs(raw: string, fallback: number): number {
+  const value = raw.trim().toLowerCase();
+  const num = parseFloat(value);
+  if (!Number.isFinite(num) || num < 0) return fallback;
+  if (value.endsWith('ms')) return num;
+  if (value.endsWith('s')) return num * 1000;
+  return num;
+}
+
 /** Longer than a frame or two of slack: the timer only matters when the animation never runs. */
 const EXIT_MARGIN_MS = 100;
 

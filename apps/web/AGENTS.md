@@ -32,6 +32,7 @@
 ## 动画
 
 - 动画状态只通过 `src/lib/motion.ts` 读取和等待。`pnpm check:motion` 会拦下直接调用 `getAnimations()` 和 Animation 的 `.finished`。
+- JS 里读 CSS `--duration-*` 必须经 `src/lib/motion.ts` 的 `cssDurationMs` 解析（或直接用 `@contracts` 的 `MOTION_DURATION`）：生产构建的 CSS 压缩会把 `300ms` 写成 `.3s`，直接 `parseFloat` 会变成 `0.3` ms；`pnpm check:motion` 会拦下裸读。
 - 复查动画状态要让出一帧，不用微任务循环：已结束、但因 `fill: 'forwards'` 仍留在列表里的动画，曾让一个标签页死循环。
 - 动画结束后要移除的元素，由这段动画自己的结束来触发移除（`exit`）；定时器只作为动画没运行时的兜底。
 - 循环动画只用于进行中的指示和品牌标志，要在同一行或上方两行内写 `motion-loop: <原因>`。

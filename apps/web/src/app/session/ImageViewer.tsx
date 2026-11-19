@@ -5,9 +5,10 @@ import { IconDownload, IconImage, IconX } from '@/components/icons';
 import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { boundedCache } from '@/lib/bounded-cache';
 import { cn } from '@/lib/utils';
-import { exit } from '@/lib/motion';
+import { cssDurationMs, exit } from '@/lib/motion';
 import { isTextField } from '@/lib/tap-focus';
 import { SaveImageButton } from './marks';
+import { fitScale, IMAGE_GUTTER, type Size } from './imageFit';
 import { ASSEMBLY_MS, useLingering } from './sessionLayout';
 import { ZoomPanImage } from './ZoomPanImage';
 import { PrintImage, PrintRenderingContext } from './printRendering';
@@ -241,7 +242,7 @@ const FALLBACK_EASING = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
 function motionTokens() {
   const style = getComputedStyle(document.documentElement);
   return {
-    duration: parseFloat(style.getPropertyValue('--duration-slow')) || 300,
+    duration: cssDurationMs(style.getPropertyValue('--duration-slow'), 300),
     easing: style.getPropertyValue('--ease-out-soft').trim() || FALLBACK_EASING,
   };
 }
@@ -254,9 +255,34 @@ function visibleRect(element: Element | null | undefined): DOMRect | undefined {
   return rect.width > 0 && rect.height > 0 && inside ? rect : undefined;
 }
 
-/** `transform` that maps a box laid out at `to` onto `from` (top-left origin, uniform scale by width). */
+/**
+ * Thumbnail rect suitable for a shared-element flight: skips when the thumbnail is zoomed past its
+ * scrollable panel frame (`ZoomPanImage`), so opening never flies from an oversized off-panel box.
+ */
+function thumbRect(element: Element | null | undefined): DOMRect | undefined {
+  const rect = visibleRect(element);
+  if (!rect || !element) return undefined;
+  for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    if (style.overflow === 'visible' && style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+    const clip = parent.getBoundingClientRect();
+    if (rect.width > clip.width + 2 || rect.height > clip.height + 2) return undefined;
+    if (rect.right <= clip.left || rect.left >= clip.right || rect.bottom <= clip.top || rect.top >= clip.bottom) return undefined;
+    break;
+  }
+  return rect;
+}
+
+function sameAspectRatio(a: DOMRect, b: DOMRect): boolean {
+  return Math.abs(a.width / a.height - b.width / b.height) <= 0.02;
+}
+
+/** `transform` that maps a box laid out at `to` onto `from` (top-left origin, centered fit for cropped tiles). */
 function flipTransform(from: DOMRect, to: DOMRect): string {
-  return `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})`;
+  const scale = Math.min(from.width / to.width, from.height / to.height);
+  const dx = from.left + (from.width - to.width * scale) / 2 - to.left;
+  const dy = from.top + (from.height - to.height * scale) / 2 - to.top;
+  return `translate(${dx}px, ${dy}px) scale(${scale})`;
 }
 
 /**
@@ -264,7 +290,7 @@ function flipTransform(from: DOMRect, to: DOMRect): string {
  * backdrop and bar fade in; closing runs it backwards. The flying image is a copy laid over the
  * viewer (the viewer's frame scrolls and would clip it, and the zoom/pan layout stays untouched),
  * while the real one stays hidden until the copy lands. Without a thumbnail on screen, or with
- * reduced motion, only the fade plays.
+ * reduced motion, a centered scale-fade plays instead.
  */
 function ViewerBody({ src, name, thumb, closer, onClose }: {
   src: string;
@@ -281,13 +307,21 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
   const settle = useRef<(() => void) | null>(null);
   const thumbOf = useRef(thumb);
   thumbOf.current = thumb;
+  const known = loadedImageSize(src);
+  const initialSize: Size | undefined = known ? { w: known.width, h: known.height } : undefined;
 
-  const fades = (from: number, to: number, done?: () => void) => {
-    const { duration, easing } = motionTokens();
+  const fades = (from: number, to: number, { zoomStage = false }: { zoomStage?: boolean } = {}, done?: () => void) => {
+    const { duration } = motionTokens();
+    const fadeEasing = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
     const stops = [backdrop, bar, stage].map((target, index) => {
       const element = target.current;
       if (!element) return () => {};
-      const stop: () => void = exit(element, [{ opacity: from }, { opacity: to }], { duration, easing }, () => {
+      const keyframes = zoomStage && target === stage
+        ? (from < to
+            ? [{ opacity: from, transform: 'scale(0.96)' }, { opacity: to, transform: 'none' }]
+            : [{ opacity: from, transform: 'none' }, { opacity: to, transform: 'scale(0.96)' }])
+        : [{ opacity: from }, { opacity: to }];
+      const stop: () => void = exit(element, keyframes, { duration, easing: fadeEasing }, () => {
         if (to === 1) stop();
         if (index === 0) done?.();
       });
@@ -296,15 +330,16 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
     return () => stops.forEach((stop) => stop());
   };
 
-  /** Flies a copy of the image between two rects; `to` is where the copy is laid out. */
-  const fly = (root: HTMLElement, source: DOMRect, laid: DOMRect, forward: boolean, done: () => void) => {
+  /** Flies a copy of the image between two rects; `laid` is where the copy is laid out. */
+  const fly = (root: HTMLElement, source: DOMRect, laid: DOMRect, forward: boolean, thumbEl: Element | null | undefined, done: () => void) => {
     const { duration, easing } = motionTokens();
     const bounds = root.getBoundingClientRect();
     const copy = document.createElement('img');
-    copy.src = src;
+    copy.src = thumbEl instanceof HTMLImageElement && thumbEl.complete && thumbEl.naturalWidth > 0 ? (thumbEl.currentSrc || src) : src;
     copy.alt = '';
     copy.setAttribute('aria-hidden', 'true');
     copy.draggable = false;
+    copy.decoding = 'sync';
     copy.className = 'pointer-events-none absolute z-10 max-w-none rounded-md';
     Object.assign(copy.style, { left: `${laid.left - bounds.left}px`, top: `${laid.top - bounds.top}px`, width: `${laid.width}px`, height: `${laid.height}px`, transformOrigin: '0 0' });
     root.appendChild(copy);
@@ -319,26 +354,88 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
     const real = stage.current?.querySelector('img');
     if (!root || !real) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const source = visibleRect(thumbOf.current());
+    const thumbEl = thumbOf.current();
+    const source = thumbRect(thumbEl);
     let alive = true;
+    let stopFades: (() => void) | undefined;
     let stopFly: (() => void) | undefined;
     let waiting: (() => void) | undefined;
-    const stopFades = fades(0, 1);
-    const land = () => { stopFly?.(); stopFly = undefined; waiting?.(); waiting = undefined; real.style.visibility = ''; };
-    settle.current = () => { stopFades(); land(); };
+    let hiddenThumb: HTMLElement | undefined;
+    const restoreThumb = () => { if (hiddenThumb) { hiddenThumb.style.visibility = ''; hiddenThumb = undefined; } };
+    const land = () => { stopFly?.(); stopFly = undefined; waiting?.(); waiting = undefined; restoreThumb(); real.style.visibility = ''; };
+    settle.current = () => { stopFades?.(); stopFades = undefined; land(); };
 
-    if (source && !reduced) {
-      real.style.visibility = 'hidden';
-      // The copy needs the real image's fitted box, which exists once it has loaded and been laid out.
+    if (!source || reduced) {
+      stopFades = fades(0, 1, { zoomStage: !reduced });
+      return () => { alive = false; settle.current?.(); settle.current = null; };
+    }
+
+    const natural: Size | undefined =
+      thumbEl instanceof HTMLImageElement && thumbEl.complete && thumbEl.naturalWidth > 0
+        ? { w: thumbEl.naturalWidth, h: thumbEl.naturalHeight }
+        : initialSize;
+
+    const isRealReady = () => real.complete && real.naturalWidth > 0 && real.dataset.zoomPanReady === 'true';
+
+    const measureLaidBox = (): DOMRect | undefined => {
+      if (isRealReady()) return visibleRect(real);
+      if (!natural) return undefined;
+      const frameEl = stage.current?.querySelector<HTMLElement>('[data-zoom-pan-frame]');
+      if (!frameEl) return undefined;
+      const box = { w: Math.max(0, Math.floor(frameEl.offsetWidth - 1)), h: Math.max(0, Math.floor(frameEl.offsetHeight - 1)) };
+      if (box.w <= 0 || box.h <= 0) return undefined;
+      const scale = fitScale(natural, box);
+      const width = natural.w * scale;
+      const height = natural.h * scale;
+      const innerW = Math.max(box.w, Math.floor(width + IMAGE_GUTTER * 2));
+      const innerH = Math.max(box.h, Math.floor(height + IMAGE_GUTTER * 2));
+      const frameRect = frameEl.getBoundingClientRect();
+      return new DOMRect(frameRect.left + (innerW - width) / 2, frameRect.top + (innerH - height) / 2, width, height);
+    };
+
+    const startFlight = (laid: DOMRect) => {
+      let flightDone = false;
+      let realReady = isRealReady();
+      const tryLand = () => { if (alive && flightDone && realReady) land(); };
+      if (thumbEl instanceof HTMLElement && sameAspectRatio(source, laid)) {
+        hiddenThumb = thumbEl;
+        hiddenThumb.style.visibility = 'hidden';
+      }
+      stopFades = fades(0, 1);
+      stopFly = fly(root, source, laid, true, thumbEl, () => { flightDone = true; tryLand(); });
+      if (!realReady) {
+        let attempts = 0;
+        const waitReal = () => {
+          if (!alive) return;
+          if (isRealReady()) {
+            realReady = true;
+            tryLand();
+            return;
+          }
+          if (++attempts > 600 || (real.complete && real.naturalWidth === 0)) { land(); return; }
+          frame = requestAnimationFrame(waitReal);
+        };
+        let frame = requestAnimationFrame(waitReal);
+        waiting = () => cancelAnimationFrame(frame);
+      }
+    };
+
+    real.style.visibility = 'hidden';
+    const immediateLaid = measureLaidBox();
+    if (immediateLaid) {
+      startFlight(immediateLaid);
+    } else {
+      // Wait for laid box before fading backdrop, so the screen never turns black before the image starts flying.
       let attempts = 0;
       const measure = () => {
         if (!alive) return;
-        const laid = real.complete && real.naturalWidth > 0 && real.style.width ? visibleRect(real) : undefined;
-        if (laid) {
-          stopFly = fly(root, source, laid, true, land);
+        const laid = measureLaidBox();
+        if (laid) { startFlight(laid); return; }
+        if (++attempts > 600 || (real.complete && real.naturalWidth === 0)) {
+          stopFades = fades(0, 1, { zoomStage: true });
+          land();
           return;
         }
-        if (++attempts > 600 || real.complete && real.naturalWidth === 0) { land(); return; }
         frame = requestAnimationFrame(measure);
       };
       let frame = requestAnimationFrame(measure);
@@ -349,24 +446,31 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
   }, []);
 
   useEffect(() => {
+    let hiddenThumb: HTMLElement | undefined;
+    const restoreThumb = () => { if (hiddenThumb) { hiddenThumb.style.visibility = ''; hiddenThumb = undefined; } };
     closer.current = (done) => {
       const root = backdrop.current?.parentElement;
       const real = stage.current?.querySelector('img');
       settle.current?.();
       settle.current = null;
       const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const target = visibleRect(thumbOf.current());
-      const current = real && real.style.width ? visibleRect(real) : undefined;
+      const thumbEl = thumbOf.current();
+      const target = thumbRect(thumbEl);
+      const current = real && real.dataset.zoomPanReady === 'true' ? visibleRect(real) : undefined;
       if (!root || !target || !current || reduced) {
-        fades(1, 0, done);
+        fades(1, 0, { zoomStage: !reduced }, done);
         return;
       }
       real!.style.visibility = 'hidden';
-      fly(root, target, current, false, done);
+      if (thumbEl instanceof HTMLElement && sameAspectRatio(target, current)) {
+        hiddenThumb = thumbEl;
+        hiddenThumb.style.visibility = 'hidden';
+      }
+      fly(root, target, current, false, thumbEl, () => { restoreThumb(); done(); });
       // The backdrop and bar go with the flight; the stage's own fade would show the real image's toolbar leaving late.
       fades(1, 0);
     };
-    return () => { closer.current = null; };
+    return () => { closer.current = null; restoreThumb(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closer]);
 
@@ -391,7 +495,15 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
         </DialogClose>
       </div>
       <div ref={stage} className="flex min-h-0 flex-1 flex-col">
-        <ZoomPanImage src={src} alt={name} tone="overlay" className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom,0px)]" onBackgroundClick={onClose} />
+        <ZoomPanImage
+          src={src}
+          alt={name}
+          tone="overlay"
+          initialSize={initialSize}
+          onImageLoad={(size) => rememberImageSize(src, size.w, size.h)}
+          className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom,0px)]"
+          onBackgroundClick={onClose}
+        />
       </div>
     </>
   );
@@ -401,15 +513,31 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
  * In-app lightbox. Images must never open as a top-level tab: browsers refuse to navigate to
  * `data:` URLs, which leaves the user on a blank page.
  */
-export function ImageViewer({ src, name, children }: { src: string; name: string; children: ReactNode }) {
+export function ImageViewer({ src, name, open: controlledOpen, onOpenChange, thumb, children }: {
+  src: string;
+  name: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Element to animate from/to when opened without a `DialogTrigger` child. */
+  thumb?: () => Element | null | undefined;
+  children?: ReactNode;
+}) {
   // A pointer close must not leave a focus ring on the thumbnail; a keyboard close should. Neither
   // applies when the preview was opened while typing: the dialog hands the caret back to that field.
   const pointer = useRef(false);
   const fromField = useRef(false);
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const trigger = useRef<HTMLButtonElement>(null);
   const closer = useRef<Closer | null>(null);
   const closing = useRef(false);
+  useEffect(() => {
+    if (!open) closing.current = false;
+  }, [open]);
   // Every way out (button, Esc, backdrop, bar) asks here; the dialog closes when the exit has played.
   const requestClose = () => {
     if (!open || closing.current) return;
@@ -420,10 +548,11 @@ export function ImageViewer({ src, name, children }: { src: string; name: string
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (next) setOpen(true); else requestClose(); }}>
-      <DialogTrigger asChild ref={trigger}>{children}</DialogTrigger>
+      {children !== undefined && <DialogTrigger asChild ref={trigger}>{children}</DialogTrigger>}
       <DialogContent
         hideClose
         aria-describedby={undefined}
+        overlayClassName="hidden"
         className="left-0 top-[var(--app-top,0px)] h-[var(--app-height,100dvh)] max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none bg-transparent p-0 text-white shadow-none"
         // The viewer plays its own enter and exit; the dialog's default zoom and fade would stack on it.
         style={{ animation: 'none' }}
@@ -435,7 +564,7 @@ export function ImageViewer({ src, name, children }: { src: string; name: string
         <ViewerBody
           src={src}
           name={name}
-          thumb={() => trigger.current?.matches('img') ? trigger.current : trigger.current?.querySelector('img[data-image-thumb]')}
+          thumb={() => thumb?.() ?? (trigger.current?.matches('img') ? trigger.current : (trigger.current?.querySelector('img[data-image-thumb]') ?? trigger.current?.querySelector('img')))}
           closer={closer}
           onClose={requestClose}
         />

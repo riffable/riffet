@@ -4,7 +4,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { markdownHeadings, type MarkdownHeading } from './Markdown';
 import { useViewPrefs } from './viewPrefs';
-import { animationsOf } from '@/lib/motion';
+import { animationsOf, cssDurationMs } from '@/lib/motion';
 
 interface ReadingChapters {
   scope: string;
@@ -81,7 +81,7 @@ export function ChapterNavigation({ scrollRef, columnRef, onNavigate, scope }: {
         if (!leaving) {
           leaving = true;
           setExiting(true);
-          const duration = parseFloat(getComputedStyle(container).getPropertyValue('--duration-exit-fast')) || 100;
+          const duration = cssDurationMs(getComputedStyle(container).getPropertyValue('--duration-exit-fast'), 100);
           exit = setTimeout(() => {
             leaving = false;
             exit = undefined;

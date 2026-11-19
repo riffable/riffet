@@ -15,6 +15,11 @@ const exempt = new Set(['lib/motion.ts', 'lib/view-transition.ts'].map(path => j
 const rules = [
   { name: 'getAnimations()', test: line => /\bgetAnimations\s*\(/.test(line), hint: 'use animationsOf / findAnimation / cancelAnimations from lib/motion' },
   { name: 'Animation .finished', test: line => /\.finished\b/.test(line), hint: 'use settled(...) or exit(...) from lib/motion' },
+  {
+    name: 'raw CSS --duration parsing',
+    test: line => (/--duration/.test(line) && /\b(?:parseFloat|Number)\s*\(/.test(line)) || (/getPropertyValue\s*\(\s*['"]--duration/.test(line) && !/\bcssDurationMs\s*\(/.test(line)),
+    hint: 'use cssDurationMs(...) from lib/motion or MOTION_DURATION from @contracts (LightningCSS minifies ms to s in production builds)',
+  },
 ];
 
 function* sourceFiles(directory) {
