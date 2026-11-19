@@ -18,7 +18,7 @@ import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
-import { useSwitchedIn } from './sessionFrame';
+import { SWITCH_HOLD_MS, useSwitchedIn } from './sessionFrame';
 import { Collapse } from '@/components/ui/collapse';
 import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
 import { rowKeyForMessage, type MessageFocus } from './focus-message';
@@ -839,6 +839,12 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   // Replacing another conversation, the transcript fades in once, briefly, as the Mac's does; the frame
   // around it stays. Opening the page, or a copy that had to be waited for, arrives as before.
   const loadedInPlace = useSwitchedIn(loaded);
+  // A copy painted from memory or disk is only the tail the last visit saved: catching up still
+  // brings the rows after it, unfolds the newest turn's run, and moves the bottom the view is pinned
+  // to. Replacing another conversation, it stays unseen until it has caught up, so the one fade shows
+  // it settled; a server slower than `SWITCH_HOLD_MS` gets the copy shown rather than a blank column.
+  const heldLong = useLingering(loadedInPlace, SWITCH_HOLD_MS);
+  const holding = loadedInPlace && catchingUp && !heldLong;
   if (loaded) {
     if (seen.current?.session !== sessionId) seen.current = { session: sessionId, keys: new Set(timeline.map((item) => item.key)), fresh: new Map(), length: timeline.length };
     else if (timelineVersion > 0) {
@@ -1549,7 +1555,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           role="region"
           aria-label={t`会话记录`}
           aria-busy={running || loadingEarlier || !loaded || undefined}
-          className={cn('mx-auto flex w-full flex-col pb-4', embedded ? 'px-4 pt-4' : 'max-w-(--content-width) px-3 pt-6 sm:px-4 sm:pt-8 md:px-12', loaded && 'animate-in fade-in-0', loaded && (loadedInPlace ? 'duration-[var(--duration-base)] ease-[var(--ease-decelerate)]' : 'duration-[var(--duration-slow)]'))}>
+          className={cn('mx-auto flex w-full flex-col pb-4', embedded ? 'px-4 pt-4' : 'max-w-(--content-width) px-3 pt-6 sm:px-4 sm:pt-8 md:px-12', holding ? 'opacity-0' : loaded && 'animate-in fade-in-0', loaded && (loadedInPlace ? 'duration-[var(--duration-base)] ease-[var(--ease-decelerate)]' : 'duration-[var(--duration-slow)]'))}>
           {showLoading && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
           <FeedbackNotice scope={sessionId} tone="warning" className="mb-5" message={historyLoad.state === 'error' && (historyLoad.message || t`无法同步最新会话记录。`)}
             action={() => <Button size="xs" variant="secondary" onClick={() => onRetryHistory?.()}><IconRefreshCw /><Trans>重试同步</Trans></Button>}

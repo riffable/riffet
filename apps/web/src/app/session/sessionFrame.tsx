@@ -17,8 +17,9 @@ import { WAIT_GRACE_MS } from './sessionLayout';
  * data. Today that is whether the page has already assembled. A conversation that replaces another one
  * paints in place: what it shows within `SWITCH_WINDOW_MS` (a copy held in memory or read from disk,
  * its status, the side column) plays no entrance and no transition of its own. The one motion a switch
- * has is the transcript fading in once, briefly, as on the Mac. Content that arrives after a longer
- * wait still fades in, and opening the page from elsewhere assembles it as before.
+ * has is the transcript fading in once, briefly, as on the Mac, after its copy has caught up. Content
+ * that arrives after a longer wait still fades in, and opening the page from elsewhere assembles it as
+ * before.
  * See docs/design/system/surfaces.md §1.1.
  */
 interface Frame { shown: boolean }
@@ -26,6 +27,12 @@ interface Arrival { replacing: boolean; at: number }
 
 /** How long after a switch what appears still counts as the switch: anything that arrives before a spinner would have shown. */
 export const SWITCH_WINDOW_MS = WAIT_GRACE_MS;
+/**
+ * How long a switched-in transcript may stay unseen while its copy catches up with the server. A
+ * local server answers well within it; past it, the copy shows and what catching up changes lands
+ * where the reader can see it.
+ */
+export const SWITCH_HOLD_MS = 200;
 
 const FrameContext = createContext<Frame | null>(null);
 const ArrivalContext = createContext<Arrival | null>(null);
