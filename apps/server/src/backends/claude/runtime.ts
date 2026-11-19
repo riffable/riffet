@@ -1690,12 +1690,9 @@ export class ClaudeSessionRuntime {
     const terminal = await this.host.terminal.get(terminalId).catch(() => undefined);
     const current = this.host.getSession(this.session.id);
     const turn = activeTurnOf(this.state.mainTurn);
-    // The client can only name the turn the status published (`activeTurn`), which a cold-attached or
-    // hook-without-prompt turn leaves unnamed; checking the internal prompt id here refused every stop of it.
-    // A stop under way has already taken the published turn down (`stopMainTurn`) and names it as `stopping`,
-    // which counts only while that prompt is still the one running.
-    const published = this.nativeTurn ?? (stopping && turn?.promptId === stopping.turnId ? stopping : undefined);
-    const turnId = turn ? published?.turnId : undefined;
+    // The client names the turn the status published (`activeTurn`, none for a cold-attached or hook-without-prompt turn), not
+    // the internal prompt id. A stop under way took it down already and passes it as `stopping`, valid while that prompt runs.
+    const turnId = turn ? (this.nativeTurn ?? (stopping && turn.promptId === stopping.turnId ? stopping : undefined))?.turnId : undefined;
     if (!terminal || terminal.state !== 'running' || terminal.kind !== 'native' || terminal.sessionId !== current.id
       || terminal.projectId !== current.projectId || current.terminalId !== terminalId || this.terminalId !== terminalId
       || current.nativeSessionId !== stop.nativeSessionId || this.nativeSessionId !== stop.nativeSessionId
