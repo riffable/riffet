@@ -19,8 +19,8 @@ verify:
 ## 不变量
 
 - 一条消息写入 CLI 至多一次，超时、重启、收敛都不重写；不确定的投递记为 `uncertain` 并占住队列（`lane.ts#holdsUnconfirmed`），由用户确认后才继续。契约见 docs/DELIVERY.md §2。
-- CLI 不在提示符、也没有在跑回合时，消息只允许反复被拒 `dispatch.ts#CLI_BUSY_LIMIT_MS`；排在活跃回合后面不计时。只有待处理的设置重启可以暂停这个计时，后台任务不行。
-- 空闲收敛有两档：`dispatch.ts#IDLE_RECONCILE_MS` 关闭丢了完成事件的回合，`dispatch.ts#IDLE_OUTCOME_GRACE_MS` 给 Stop hook 链留时间。缩短后者会先显示「结果未确认」再自我更正。
+- CLI 不在提示符、也没有在跑回合时，消息只允许反复被拒 `session-actor.ts#CLI_BUSY_LIMIT_MS`；排在活跃回合后面不计时。只有待处理的设置重启可以暂停这个计时，后台任务不行。
+- 空闲收敛有两档：`session-actor.ts#IDLE_RECONCILE_MS` 关闭丢了完成事件的回合，`session-actor.ts#IDLE_OUTCOME_GRACE_MS` 给 Stop hook 链留时间。缩短后者会先显示「结果未确认」再自我更正。
 - 回合的 checkpoint 与消息同时发出，不等待它；checkpoint 只保留能证明早于回合认领时间的内容，宁可拒绝恢复也不还原回合自己的改动（`dispatch.ts#NativeDispatcher` 内的 `beforeTurn`）。
 - 同一会话的启动、配置、发送、中断都在 `apps/server/src/agent-host/session-lock.ts#SessionLock` 下串行；修改配置要先同步 `dispatch.ts#reserveSessionStart` 再等锁（`configure.ts#configureNative`）。
 - 回收判断依赖持久化的 `reclaim.ts#UsageRecord`（agent-usage.json）：没有上次抓屏的 pane 记为 `unobserved` 并保留，在会话锁下读不到的 pane 也保留。比较前要先过 `reclaim.ts#settledScreen`，否则 spinner 与时钟让空闲规则永不触发。
