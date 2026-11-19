@@ -438,7 +438,7 @@ struct AppIconSettings: View {
                                 color: tier == .full ? palette.warning : palette.fg2
                             )
                             Text(tier.title)
-                                .riffetFont(.caption)
+                                .font(RiffetFont.caption)
                                 .foregroundStyle(tier == .full ? palette.warning : palette.fg2)
                         }
                     }

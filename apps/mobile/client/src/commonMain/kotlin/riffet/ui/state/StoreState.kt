@@ -18,6 +18,7 @@ import riffet.contracts.Session
 import riffet.contracts.SessionState
 import riffet.core.StoredSubagent
 import riffet.core.TimelineItem
+import riffet.core.timelineTurnKeys
 import riffet.ui.composer.OutboxEntry
 
 /**
@@ -134,8 +135,9 @@ internal data class StoreState(
         val latestOutput = timeline.getOrNull(latestOutputIndex)
         val latestUserRun = latestUser?.run
         val delivery = latestUserRun?.native?.delivery
+        // Turn keys as the timeline groups them (`timelineTurnKeys`), the same comparison `Model.kt` makes.
         val sameTurn = latestUser != null && latestOutput != null
-            && (latestUser.turn == null || latestOutput.turn == null || latestUser.turn == latestOutput.turn)
+            && timelineTurnKeys(timeline).let { keys -> keys[latestOutputIndex] == keys[latestUserIndex] }
         val turnOutputActive = latestOutputIndex > latestUserIndex && sameTurn && latestUserRun != null
             && (latestUserRun.state == RunState.RUNNING || latestUserRun.state == RunState.QUEUED)
             && delivery != NativeDeliveryState.QUEUED && delivery != NativeDeliveryState.CANCELLED && delivery != NativeDeliveryState.FAILED && delivery != NativeDeliveryState.UNCERTAIN
