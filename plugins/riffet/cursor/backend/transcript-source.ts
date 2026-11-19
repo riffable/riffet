@@ -143,6 +143,8 @@ interface LaneState {
   children: Array<[string, string]>;
   /** What the `Task` calls of the subagents not done yet asked for (`AgentSubagentInfo`), by tool call id: the store of a subagent does not say. */
   tasks?: Array<[string, AgentSubagentInfo]>;
+  /** Tool call ids of foreground `Task` calls that failed (interrupted, errored): their subagents stop where their stores end. */
+  stopped?: string[];
   /** Compactions the CLI reported that no archive has completed, so a restarted ledger knows them. */
   compacting?: NativeActivity[];
   /** Ids a rewound history held past the point it changed and no read has written again yet; retired at the end. */
@@ -199,6 +201,8 @@ interface ReadOptions {
   behind: boolean;
   depth: number;
   slice: Slice;
+  /** A subagent's lane whose foreground `Task` call failed: the CLI stopped it and writes nothing more to its store. */
+  stopped?: boolean;
 }
 
 export interface CursorTurnResult { status: AgentTurnStatus; at?: string; error?: string }
@@ -384,15 +388,15 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
    * G4: a long store read for the first time opens with its tail in a scratch window, which serves
    * while the lane imports from the start a step per pull. `serving` is false for a subagent's lane.
    */
-  private async readWithTail(w: AgentLaneWriter, view: ChatView, depth: number, serving: boolean, slice: Slice): Promise<boolean> {
-    const tail = (target: AgentLaneWriter) => this.read(target, view, { bounded: false, origin: 'tail', serving, behind: false, depth, slice });
+  private async readWithTail(w: AgentLaneWriter, view: ChatView, depth: number, serving: boolean, slice: Slice, stopped = false): Promise<boolean> {
+    const tail = (target: AgentLaneWriter) => this.read(target, view, { bounded: false, origin: 'tail', serving, behind: false, depth, slice, stopped });
     if (w.cursor === null && !w.scratch) {
       const ids = view.snapshot()?.messageIds;
       if (ids && ids.length > this.limits.stepMessages) await tail(w.openScratch());
     } else if (w.scratch) await tail(w.scratch);
     if (slice.stopped) return false;
     const behind = Boolean(w.scratch);
-    return this.read(w, view, { bounded: true, origin: 'start', serving: serving && !behind, behind, depth, slice });
+    return this.read(w, view, { bounded: true, origin: 'start', serving: serving && !behind, behind, depth, slice, stopped });
   }
 
   /** Reads `view` into `w` from its cursor on, then the subagents it follows; true once nothing readable is left. */
@@ -409,7 +413,7 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
   }
 
   /** Reads each subagent of a lane into a lane of its own (G9), dropping the ones that are done; true once all are caught up. */
-  async readChildren(w: AgentLaneWriter, children: Map<string, string>, tasks: ReadonlyMap<string, AgentSubagentInfo>, options: ReadOptions): Promise<boolean> {
+  async readChildren(w: AgentLaneWriter, children: Map<string, string>, tasks: ReadonlyMap<string, AgentSubagentInfo>, stopped: Set<string>, options: ReadOptions): Promise<boolean> {
     let done = true;
     if (options.depth >= CHILD_DEPTH) return done;
     for (const [toolCallId, agentId] of [...children]) {
@@ -418,15 +422,15 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
       // A store the CLI has not created yet: nothing to read, kept for when it appears.
       if (!existsSync(path)) continue;
       const view = new ChatView(path, agentId);
-      const depth = options.depth + 1;
+      const depth = options.depth + 1, halted = stopped.has(toolCallId);
       let child: AgentLaneWriter;
       try {
         child = w.child(toolCallId, agentId, subagentInfo(tasks.get(toolCallId), view.meta()));
         done = (options.bounded
-          ? await this.readWithTail(child, view, depth, false, options.slice)
-          : await this.read(child.scratch ?? child, view, { bounded: false, origin: child.scratch ? 'tail' : 'start', serving: false, behind: false, depth, slice: options.slice })) && done;
+          ? await this.readWithTail(child, view, depth, false, options.slice, halted)
+          : await this.read(child.scratch ?? child, view, { bounded: false, origin: child.scratch ? 'tail' : 'start', serving: false, behind: false, depth, slice: options.slice, stopped: halted })) && done;
       } finally { view.close(); }
-      if (finished(child)) children.delete(toolCallId);
+      if (finished(child)) { children.delete(toolCallId); stopped.delete(toolCallId); }
     }
     return done;
   }
@@ -479,6 +483,8 @@ class LaneRead {
   private stale: Set<string>;
   /** See `LaneState.tasks`. */
   private readonly tasks: Map<string, AgentSubagentInfo>;
+  /** See `LaneState.stopped`. */
+  private readonly stopped: Set<string>;
   private seenAt: string | undefined;
   /** This read reached a stored assistant checkpoint with no pending step. */
   private historyAnswered = false;
@@ -492,6 +498,7 @@ class LaneRead {
     this.children = new Map(this.state.children);
     this.stale = new Set(this.state.stale);
     this.tasks = new Map(this.state.tasks);
+    this.stopped = new Set(this.state.stopped);
   }
 
   async run(end?: TurnEnd): Promise<boolean> {
@@ -509,7 +516,7 @@ class LaneRead {
       for (const [toolCallId, agentId] of this.source.takeHints()) this.follow(toolCallId, agentId);
     }
     this.flush();
-    const childrenDone = await this.source.readChildren(this.w, this.children, this.tasks, this.options);
+    const childrenDone = await this.source.readChildren(this.w, this.children, this.tasks, this.stopped, this.options);
     this.flush();
     // A child still importing history does not hold the parent's Stop hook open.
     return end ? done && this.end(end) : done && childrenDone;
@@ -530,6 +537,8 @@ class LaneRead {
       if (state === 'exited' && turn.attached) outcome = { status: 'interrupted' };
       else if (state && state !== 'exited') outcome = state;
       else if (this.historyAnswered && !this.state.draft && !turn.attached) outcome = { status: 'completed' };
+      // The CLI writes no end to the store of a subagent it stopped: the parent's failed `Task` result is that end.
+      else if (this.options.stopped && !this.state.draft?.prompt) outcome = { status: 'interrupted' };
     }
     if (!outcome) return;
     if (this.state.draft && !this.state.draft.prompt) this.dropDraft();
@@ -838,6 +847,8 @@ class LaneRead {
       const result = event.type === 'tool_call_update' && isRecord(event.data.subagentResult) ? event.data.subagentResult : undefined;
       const toolCallId = typeof event.data.toolCallId === 'string' ? event.data.toolCallId : undefined;
       if (toolCallId && typeof result?.agentId === 'string' && AGENT_ID.test(result.agentId)) steps.push({ op: 'child', toolCallId, agentId: result.agentId });
+      // A background `Task` returns once its subagent starts, so only a foreground one failing means the subagent stopped.
+      if (toolCallId && result && event.data.status === 'failed' && result.background !== true) this.noteStopped(toolCallId);
     });
     const turn = this.state.turn;
     if (turn) {
@@ -998,6 +1009,12 @@ class LaneRead {
     while (tasks.size > CHILD_LIMIT) tasks.delete(tasks.keys().next().value!);
   }
 
+  private noteStopped(toolCallId: string): void {
+    this.stopped.delete(toolCallId);
+    this.stopped.add(toolCallId);
+    while (this.stopped.size > CHILD_LIMIT) this.stopped.delete(this.stopped.values().next().value!);
+  }
+
   /** A subagent the lane follows from now on; its lane is named once its store exists. */
   private follow(toolCallId: string, agentId: string): void {
     if (this.children.get(toolCallId) === agentId) return;
@@ -1017,6 +1034,7 @@ class LaneRead {
       v, ...(mapping ? { mapping } : {}), ...(reproject ? { reproject } : {}), from, ...(root ? { root } : {}), n, len, digest: this.hash ? this.hash.copy().digest('hex') : this.state.digest, ...(live ? { live } : {}),
       mapper: before?.mapper ?? this.mapper.state(), ...(turn ? { turn } : {}), recent: before?.recent ?? this.state.recent, placed,
       ...(draft ? { draft } : {}), ...(liveEnded?.length ? { liveEnded } : {}), children: [...this.children], ...(this.tasks.size ? { tasks: [...this.tasks] } : {}),
+      ...(this.stopped.size ? { stopped: [...this.stopped] } : {}),
       ...(compacting.length ? { compacting } : {}), ...(this.stale.size ? { stale: [...this.stale] } : {}),
     };
     return JSON.stringify(state);

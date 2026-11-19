@@ -309,6 +309,42 @@ describe('Cursor transcript source', () => {
     expect(whole.subagents).toContainEqual(expect.objectContaining({ toolCallId: 't4-task', title: 'Look around', subagentType: 'explore' }));
   });
 
+  it('ends a stopped foreground subagent at its failed Task result, and leaves a background one running', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-stopped-child-'));
+    dirs.push(dir);
+    const stopped = agentId(5), background = agentId(6);
+    const listeners = new Set<CursorTranscriptSignals>();
+    const source = () => new CursorTranscriptSource({
+      chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's',
+      signals: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    });
+    // Both subagents are cut off after a tool result: the CLI writes no end to a subagent's store.
+    const cutOff = (name: string) => [...SYSTEM, ask(`task ${name}`, `req-${name}`), call(`${name}-read`, 'Read', { path: '/p/a.ts' }), result(`${name}-read`, 'Read', 'file')];
+    writeChat(dir, stopped, { messages: cutOff('stopped') });
+    writeChat(dir, background, { messages: cutOff('background') });
+    const messages = [...SYSTEM, ask('split the work', 'req-1'),
+      call('bg-task', 'Task', { description: 'Watch', subagent_type: 'explore', prompt: 'watch', run_in_background: true }),
+      result('bg-task', 'Task', 'Started', { success: { agentId: background, isBackground: true } }),
+      call('fg-task', 'Task', { description: 'Refactor', subagent_type: 'generalPurpose', prompt: 'refactor' })];
+    writeChat(dir, 'chat-1', { messages });
+    const { lanes, writer } = openLanes();
+    const first = source();
+    const unwatch = first.watch(writer, () => undefined);
+    // The CLI holds the running subagent's store open; that names it before any result does.
+    for (const listener of listeners) listener.subagent('fg-task', stopped);
+    await catchUp(first, writer);
+    unwatch();
+    expect(turnEnds(lanes)).toEqual([]);
+
+    messages.push(result('fg-task', 'Task', 'Error: CallDynamicTool was interrupted by the user before it completed.', { error: { message: 'interrupted' } }), say('Stopped.'));
+    writeChat(dir, 'chat-1', { messages });
+    await catchUp(source(), writer);
+    const childEnds = (toolCallId: string) => rowsOf(lanes, `sub:${toolCallId}`).filter(row => row.kind === 'meta.turn_ended').map(row => (row.payload as { status: string }).status);
+    expect(childEnds('fg-task')).toEqual(['interrupted']);
+    expect(childEnds('bg-task')).toEqual([]);
+    expect(JSON.parse(writer.cursor!).children.map(([toolCallId]: [string]) => toolCallId)).toEqual(['bg-task']);
+  });
+
   it('ends a turn whose last step never returns after reading what is on disk, once, and later rows open a turn of their own', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
     dirs.push(dir);
