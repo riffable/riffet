@@ -4,7 +4,7 @@ import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconCompress, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
-import { isNativeBackendId, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
+import { isNativeBackendId, REMOTE_SPEECH_RECOGNIZER, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ToolsPickerInMenu } from './ToolsPicker';
@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
+import { usePlugins } from '@/lib/plugins';
 import { api, HttpError, isSessionReference, sameContextReference, restoreContext, mergeRestoredReferences, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
 import { cn, errorMessage } from '@/lib/utils';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -637,8 +638,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<number | undefined>(undefined);
-  /** 语音输入 (docs/VOICE.md §7): offered once a recognizer is chosen in settings. */
-  const voiceInput = useSettings((settings) => Boolean(settings.voiceInput?.recognizer));
+  /** 语音输入 (docs/VOICE.md §7): offered once a recognizer is chosen in settings, while it is still there to use. */
+  const recognizer = useSettings((settings) => settings.voiceInput?.recognizer);
+  const plugins = usePlugins();
+  const voiceInput = Boolean(recognizer) && (recognizer === REMOTE_SPEECH_RECOGNIZER || !plugins || plugins.some((plugin) => plugin.id === recognizer && plugin.enabled));
   const dictation = useDictation({
     text: () => textRef.current,
     selection: () => {

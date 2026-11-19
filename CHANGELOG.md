@@ -7,6 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Fixes
 
 - After a gateway plugin such as AsterGate is turned off or uninstalled, providers that use it keep working with their own address and key instead of failing to load models; only its quota stops showing.
+- On the web, the composer no longer shows the microphone when the selected voice recognizer's plugin is turned off or uninstalled; Settings › Voice input marks that recognizer as unavailable.
 
 ## 0.9.0 - 2026-11-19
 

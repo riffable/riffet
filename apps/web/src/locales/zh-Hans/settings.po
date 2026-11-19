@@ -178,6 +178,10 @@ msgstr "{label}：{message}"
 msgid "{minutes} 分钟"
 msgstr "{minutes} 分钟"
 
+#: src/app/settings/VoiceInputSection.tsx
+msgid "{recognizer} · 不可用"
+msgstr "{recognizer} · 不可用"
+
 #: src/app/settings/ProviderUsage.tsx
 msgid "{reset} 重置"
 msgstr "{reset} 重置"

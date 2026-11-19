@@ -31,7 +31,7 @@ export function VoiceInputSection({ settings, onSaved, onError, onOpenPlugin }: 
 }) {
   const { t, i18n } = useLingui();
   const [busy, setBusy] = useState(false);
-  const [plugins, setPlugins] = useState<PluginDescriptor[]>([]);
+  const [plugins, setPlugins] = useState<PluginDescriptor[]>();
   useEffect(() => {
     const controller = new AbortController();
     void api.plugins(controller.signal).then((answer) => setPlugins(answer.integrations.filter((plugin) => plugin.declared?.speechRecognizer)), () => {});
@@ -39,7 +39,7 @@ export function VoiceInputSection({ settings, onSaved, onError, onOpenPlugin }: 
   }, []);
   const voice = settings.voiceInput ?? {};
   const recognizer = voice.recognizer ?? OFF;
-  const plugin = plugins.find((item) => item.id === recognizer);
+  const plugin = plugins?.find((item) => item.id === recognizer);
   const persist = async (voiceInput: VoiceInputSettingsUpdate) => {
     if (busy) return;
     setBusy(true);
@@ -50,17 +50,19 @@ export function VoiceInputSection({ settings, onSaved, onError, onOpenPlugin }: 
   const choose = async (next: string) => {
     if (next === recognizer) return;
     await persist({ recognizer: next === OFF ? null : next });
-    const chosen = plugins.find((item) => item.id === next);
+    const chosen = plugins?.find((item) => item.id === next);
     // Choosing a plugin's recognizer is turning it on; its models are installed on its page.
     if (chosen && !chosen.enabled) {
-      try { const updated = await api.updatePlugin(chosen.id, { enablement: 'on' }); setPlugins((current) => current.map((item) => item.id === updated.id ? updated : item)); }
+      try { const updated = await api.updatePlugin(chosen.id, { enablement: 'on' }); setPlugins((current) => current?.map((item) => item.id === updated.id ? updated : item)); }
       catch (error) { onError(errorMessage(error, t`无法开启插件`)); }
     }
   };
   const options = [
     { value: OFF, label: t({ message: '关闭', context: 'option-off' }) },
     { value: REMOTE_SPEECH_RECOGNIZER, label: t`语音识别服务` },
-    ...plugins.map((item) => ({ value: item.id, label: localizedText(item.declared?.speechRecognizer?.title, [i18n.locale]) ?? item.name })),
+    ...(plugins ?? []).map((item) => ({ value: item.id, label: localizedText(item.declared?.speechRecognizer?.title, [i18n.locale]) ?? item.name })),
+    // A saved recognizer whose plugin was uninstalled stays visible until another is chosen.
+    ...(plugins && recognizer !== OFF && recognizer !== REMOTE_SPEECH_RECOGNIZER && !plugin ? [{ value: recognizer, label: t`${recognizer} · 不可用` }] : []),
   ];
   return <Group title={t`语音输入`}>
     <Row title={t`识别方式`}>
