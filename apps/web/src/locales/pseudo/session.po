@@ -362,10 +362,6 @@ msgstr ""
 msgid "会话已经切换，已忽略旧会话的交互结果。"
 msgstr ""
 
-#: src/app/session/Activities.tsx
-msgid "会话报告 {count} 个后台任务，部分任务详情尚未加载。"
-msgstr ""
-
 #: src/app/session/SessionReferences.tsx
 msgid "会话暂时无法读取，请重试"
 msgstr ""

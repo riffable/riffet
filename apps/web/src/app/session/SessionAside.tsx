@@ -6,7 +6,7 @@ import { Spinner, StatusDot } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import { FileDiffDialog } from '../panels/FileDiffDialog';
 import { FileIcon } from '../panels/fileVisuals';
-import { BackgroundTaskItem, BackgroundTasksNotLoaded } from './Activities';
+import { BackgroundTaskItem } from './Activities';
 import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './ComposerDock';
 import type { TimelineItem } from './model';
 import { formatDuration, subagentTitle, transcriptDuration, backgroundTaskSummary, type SubagentBrief } from './SessionWorkActions';
@@ -133,7 +133,6 @@ const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackgr
               </li>
             ))}
           </ul>
-          {summary.unloaded > 0 && <BackgroundTasksNotLoaded count={reportedBackground} />}
         </Section>
       )}
     </>

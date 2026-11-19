@@ -370,9 +370,3 @@ export function BackgroundTaskItem({ activity, root }: { activity: NativeActivit
     </li>
   );
 }
-
-/** The session still reports work whose activity rows are outside the loaded history. */
-export function BackgroundTasksNotLoaded({ count }: { count: number }) {
-  if (count <= 0) return null;
-  return <p role="status" className="px-3 py-1.5 text-xs text-fg-3"><Trans>会话报告 {count} 个后台任务，部分任务详情尚未加载。</Trans></p>;
-}

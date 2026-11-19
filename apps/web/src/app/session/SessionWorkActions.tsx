@@ -6,7 +6,7 @@ import { IconCheck } from '@/components/icons';
 import { formatDuration as formatElapsed } from '@/lib/format-duration';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { InfoMore, InfoSection, infoRow } from '../SessionInfo';
-import { BackgroundTaskItem, BackgroundTasksNotLoaded } from './Activities';
+import { BackgroundTaskItem } from './Activities';
 import { JobRow } from './Timeline';
 import { NativeJobStore, SubagentContext, SubagentStore, subagentTitle, type StoredSubagent, type SubagentBrief, type SubagentTarget } from './subagents';
 
@@ -41,7 +41,6 @@ export function backgroundTaskSummary(reported: number, tasks: readonly NativeAc
     // Jobs can be foreground calls too. Without identities for the unloaded activities, the two
     // counts may overlap, so their maximum is the number we can safely report, not their sum.
     count: Math.max(jobs.length + others.length, reported - listedChildren),
-    unloaded: Math.max(0, reported - tasks.length),
   };
 }
 
@@ -110,7 +109,7 @@ function SubagentsSection({ entries, briefs }: { entries: readonly StoredSubagen
   );
 }
 
-function JobsSection({ jobs, tasks, active, reportedBackground, unloaded, onOpenPath }: { jobs: readonly NativeJob[]; tasks: readonly NativeActivity[]; active: number; reportedBackground: number; unloaded: boolean; onOpenPath?: (path: string, line?: number) => void }) {
+function JobsSection({ jobs, tasks, active, onOpenPath }: { jobs: readonly NativeJob[]; tasks: readonly NativeActivity[]; active: number; onOpenPath?: (path: string, line?: number) => void }) {
   const [expanded, setExpanded] = useState(false);
   // Running work first: the tasks have no other state, and the jobs are ordered running-first.
   const rows = useMemo(() => [
@@ -122,7 +121,6 @@ function JobsSection({ jobs, tasks, active, reportedBackground, unloaded, onOpen
     <InfoSection title={kindLabel('jobs')} summary={active ? i18n._(msg`${active} 运行`) : undefined}>
       <ul>{rows.slice(0, shown)}</ul>
       {rows.length > shown && <InfoMore hidden={rows.length - shown} onClick={() => setExpanded(true)} />}
-      {unloaded && <BackgroundTasksNotLoaded count={reportedBackground} />}
     </InfoSection>
   );
 }
@@ -146,7 +144,7 @@ export function SessionWorkActions({ subagentStore, jobStore, tasks, reportedBac
   return (
     <>
       {subagents.length > 0 && <SubagentsSection entries={subagents} briefs={subagentBriefs} />}
-      {summary.count > 0 && <JobsSection jobs={jobs} tasks={summary.tasks} active={activeBackground} reportedBackground={reportedBackground} unloaded={summary.unloaded > 0} onOpenPath={onOpenPath} />}
+      {summary.count > 0 && <JobsSection jobs={jobs} tasks={summary.tasks} active={activeBackground} onOpenPath={onOpenPath} />}
     </>
   );
 }
