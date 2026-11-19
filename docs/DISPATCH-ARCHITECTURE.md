@@ -276,7 +276,7 @@ export interface ExecutionAdapter {
 
 ### 5.2 `TurnProcess` 纯派生折叠状态机
 
-对照 DeepSeek Harness（`turn-process.ts` + `contract/turn-process.ts#turnProcessAlwaysOpen`）：
+对照 DeepSeek Harness（`turn-process.ts` + <!-- doc-paths:off -->`contract/turn-process.ts#turnProcessAlwaysOpen`<!-- doc-paths:on -->）：
 
 ```ts
 // 每一轮是否满足「正常完成可自动折叠」的纯派生判定

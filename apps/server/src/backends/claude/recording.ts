@@ -22,7 +22,7 @@ import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRe
 import { rowsOf } from '../../journal/ingest-contract.js';
 import { Journal, laneKey, type JournalRow } from '../../journal/journal.js';
 import { TranscriptIngest } from '../../sync/ingest.js';
-import { stable, stableRows } from '../codex/recording.js';
+import { stable, stableRows } from '../shared/recording.js';
 import { ClaudeBackendAdapter } from './index.js';
 
 export { stable, stableRows };

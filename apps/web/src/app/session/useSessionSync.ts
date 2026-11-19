@@ -57,6 +57,7 @@ const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasAfter: false,
 
 /** Where an outline turn the rows do not hold stands in the turn list, until its rows are loaded. */
 const OUTLINE_TURN = 'outline-turn:';
+// perf-rules: allow empty shared ReadonlyMap sentinel, never mutated
 const EMPTY_TURN_STATUS: ReadonlyMap<string, TurnOutlineV3['status']> = new Map();
 
 /**

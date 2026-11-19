@@ -729,7 +729,7 @@ const phoneValues = () => ({ server: 'MacBook Pro', agent: 'Claude Code', projec
 function phoneBody() {
   const p = S.phone;
   if (p.server === 'open') return `<div class="step-body"><button class="p-btn primary" data-pact="scan">${I('scan')}扫码配对</button>
-    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.8</small></span><button class="btn secondary" data-pact="lan">连接</button></div></div>`;
+    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.10</small></span><button class="btn secondary" data-pact="lan">连接</button></div></div>`;
   if (p.server === 'busy') return `<div class="step-body"><div class="what fg-3">在 MacBook Pro 上允许这台手机</div></div>`;
   if (p.project === 'open') return `<div class="step-body"><div class="what">Agent 会在所选目录里读写文件</div><div style="display:flex;gap:8px"><button class="p-btn secondary" data-pact="pskip" style="flex:1">跳过</button><button class="p-btn primary" data-pact="ppick" style="flex:2">选择项目</button></div></div>`;
   return '';
@@ -740,7 +740,7 @@ function phoneOnbStrip() {
   const welcome = shell('欢迎：标志描画一次', `<div class="p-onb">${top(0)}<div class="pc center">${mark(true)}<div class="brand">Riffet</div><p class="sub">在任何设备上查看和接手<br>电脑上的编程 Agent</p></div>
     <div class="bottom"><button class="p-btn primary">开始</button></div></div>`);
   const connect = shell('连接：扫码，或局域网里找到的那一台', `<div class="p-onb">${top(1)}<div class="pc"><h1>连接你的电脑</h1><p class="sub">二维码在电脑上 Riffet 设置的「设备管理」里</p>
-    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.8</small></span><button class="btn secondary">连接</button></div></div>
+    <div class="found">${I('wifi')}<span class="b">MacBook Pro<small>192.168.1.10</small></span><button class="btn secondary">连接</button></div></div>
     <div class="bottom"><button class="p-btn primary">${I('scan')}扫码配对</button><button class="p-btn ghost">输入地址</button></div></div>`);
   const notify = shell('通知：审批要靠它', `<div class="p-onb">${top(2)}<div class="pc"><h1>需要你时通知你</h1><p class="sub">Agent 等待审批、提问或完成时</p>
     <div class="notif"><span class="ic">${mark(false).replace('<svg', '<svg style="width:22px;height:22px;color:#fff"')}</span><span class="b"><b>kiln · 运行命令</b><br><span>pnpm install 等待确认</span></span></div></div>
