@@ -2,7 +2,7 @@ import type { NativeActivity, WorkbenchEvent } from '@contracts';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
 import { isRecord, records, str } from '@/lib/utils';
-import { isCommandTitle, stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
+import { commandLabel, isCommandTitle, stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
 import { toolFoldedDetail } from '../../../../../packages/timeline/src/findText';
 import { lineDiff } from './lineDiff';
 import { contentDiffStats } from '../../../../../packages/timeline/src/lineDiff';
@@ -35,6 +35,17 @@ export interface ToolView {
 export const toolDiffStats = (view: ToolView) => contentDiffStats(view.contents, (before, after) => lineDiff(before, after, 0));
 
 export { isCommandTitle, stripRoot };
+
+/**
+ * A background task's one-line name: what its launch said it does, else its command as a label
+ * (`mono`). A title that only restates the command is the command, not a description.
+ */
+export function taskLabel(title: string | undefined, command: string | undefined, root?: string): { text: string; mono: boolean } | undefined {
+  // Either side may be raw or already project-relative (a tool view's command is); compare both relative.
+  if (title?.trim() && !isCommandTitle(stripRoot(title, root), command && stripRoot(command, root))) return { text: title.trim(), mono: false };
+  if (command?.trim()) return { text: commandLabel(command, root), mono: true };
+  return undefined;
+}
 
 /** A display category, including the child metadata retained by older Task rows. */
 export function toolKind(event: WorkbenchEvent): string {

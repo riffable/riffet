@@ -476,11 +476,12 @@ export class ClaudeActivities {
     return true;
   }
   /** What a report is about: the task it names, else what its summary says. */
-  noticeInfo(notice: ClaudeTaskNotice): { kind?: ClaudeTaskKind; command?: string } {
+  noticeInfo(notice: ClaudeTaskNotice): { kind?: ClaudeTaskKind; command?: string; title?: string } {
     const id = notice.taskId ? activityId('claude', notice.taskId) : notice.toolUseId ? this.byToolCall.get(notice.toolUseId) : undefined;
     const known = id ? this.states.get(id) : undefined;
     const kind = (known?.task?.kind as ClaudeTaskKind | undefined) ?? kindFromSummary(notice);
-    return { ...(kind ? { kind } : {}), ...(known?.task?.command ? { command: known.task.command } : {}) };
+    // The launch's title is the call's own description; the report's summary only quotes the command.
+    return { ...(kind ? { kind } : {}), ...(known?.task?.command ? { command: known.task.command } : {}), ...(known?.title ? { title: known.title } : {}) };
   }
 
   /** The agent a task id names, as its launch titled it. */
@@ -569,6 +570,10 @@ export class ClaudeActivities {
     if (!taskId) return [];
     const id = activityId('claude', taskId);
     const previous = this.states.get(id);
+    // A report naming a call this conversation neither launched nor has open belongs to a subagent: the CLI
+    // queues a subagent's task reports on the session too (a Bash that timed out into the background, say),
+    // and the subagent takes them. Its own transcript shows that call; the conversation gets no row of it.
+    if (!previous && notice.toolUseId && !knownByCall && !calls?.has(notice.toolUseId)) return [];
     // A reused agent id still receives reports for its old launch. Never restate one of those with
     // the current launch's identity, which would let its terminal state end the new execution.
     if (previous?.task?.kind === 'agent') {

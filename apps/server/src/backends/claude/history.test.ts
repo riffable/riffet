@@ -970,6 +970,23 @@ describe('Claude subagent notifications', () => {
     expect(transcript.measurements().find(step => step.stepId === 'msg_2')).toMatchObject({ nativeMessageId: prompt.nativeId });
   });
 
+  // Claude Code 2.1.322: a subagent's Bash that timed out into the background is reported on the session's
+  // queue too (enqueue, then remove once the subagent takes it), naming the subagent's call.
+  it('leaves a subagent background task out of the conversation and names its own by the call description', async () => {
+    const at = '2026-10-04T05:00:01.000Z';
+    const report = (taskId: string, toolUseId: string) => `<task-notification>\n<task-id>${taskId}</task-id>\n<tool-use-id>${toolUseId}</tool-use-id>\n<status>completed</status>\n<summary>Background command "cd /repo; npx vitest run" completed (exit code 0)</summary>\n</task-notification>`;
+    const transcript = await open([
+      { type: 'assistant', uuid: 'a-bash', timestamp: at, message: { id: 'm-bash', role: 'assistant', content: [{ type: 'tool_use', id: 'main-bash', name: 'Bash', input: { command: 'cd /repo; npx vitest run', description: 'Run the tests', run_in_background: true } }] } },
+      { type: 'user', uuid: 'r-bash', timestamp: at, toolUseResult: { backgroundTaskId: 'mine' }, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'main-bash', content: 'started' }] } },
+      { type: 'queue-operation', operation: 'enqueue', timestamp: at, content: report('theirs', 'child-bash') },
+      { type: 'queue-operation', operation: 'remove', timestamp: at, content: report('theirs', 'child-bash') },
+      noticeRow(report('mine', 'main-bash')),
+    ]);
+    const events = transcript.allEvents();
+    expect(transcript.activities().map(activity => [activity.id, activity.status])).toEqual([['claude:mine', 'completed']]);
+    expect(events.filter(event => event.type === 'task_notification').map(event => event.data.title)).toEqual(['Run the tests']);
+  });
+
   it('keeps a notification the CLI changed shape for, as a readable notice', async () => {
     const transcript = await open([noticeRow('<task-notification>The CLI changed format\nwithout any fields')]);
     const [row] = transcript.allEvents();

@@ -31,10 +31,24 @@ export function commandHeadline(command: string): string {
   return lines.find(line => !line.startsWith('#')) ?? lines[0] ?? cleanLabel(command);
 }
 
+/** A leading `cd` into the project root (`cd .` once `stripRoot` ran): every command starts there anyway. */
+const ROOT_CD = /^cd \.?\s*(?:&&|;)\s*/;
+
+/**
+ * Whether a title only restates its command: the command itself, its headline, or either cut short
+ * with `…` (an activity's title is its command's first line, clipped).
+ */
 export function isCommandTitle(title: string, command: string | undefined): boolean {
   if (!command) return false;
-  const normalized = cleanLabel(title.replace(/^cd \.? ?&& /, ''));
-  return normalized === cleanLabel(command) || normalized === commandHeadline(command);
+  const normalized = cleanLabel(title.replace(ROOT_CD, ''));
+  if (normalized === cleanLabel(command) || normalized === commandHeadline(command)) return true;
+  const clipped = normalized.endsWith('…') ? normalized.slice(0, -1).trimEnd() : '';
+  return clipped.length > 0 && (cleanLabel(command).startsWith(clipped) || cleanLabel(command.replace(ROOT_CD, '')).startsWith(clipped));
+}
+
+/** A command as a one-line label: project-relative, without the `cd` into the root, cut to its first logical line. */
+export function commandLabel(command: string, root?: string): string {
+  return commandHeadline(stripRoot(command, root).replace(ROOT_CD, ''));
 }
 
 function uniqueStrings(items: readonly string[]): string[] {
@@ -191,7 +205,7 @@ export function toolTitleOf(data: Record<string, unknown>, fallback: string, roo
   const rawInput = data.rawInput ?? data.input;
   const input = isRecord(rawInput) ? rawInput : undefined;
   const rawCommand = str(input?.command) ?? (Array.isArray(input?.command) ? (input.command as unknown[]).join(' ') : undefined);
-  const command = rawCommand ? stripRoot(rawCommand, root).replace(/^cd \.? ?&& /, '') : undefined;
+  const command = rawCommand ? stripRoot(rawCommand, root).replace(ROOT_CD, '') : undefined;
   const actions = records(input?.commandActions);
   const described = actions.length ? describeCommandActions(actions, root) : undefined;
   const rawTitle = described?.title ?? str(data.title) ?? str(data.toolName) ?? str(data.name) ?? fallback;

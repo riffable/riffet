@@ -77,7 +77,7 @@ function jobElapsed(job: NativeJob): string | undefined {
 const WORK_LIMIT = 5;
 
 /** Subagents and background tasks, the work running beside the conversation rather than in it, each in its own section. */
-const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackground, briefs }: { subagentStore: SubagentStore; jobStore: NativeJobStore; tasks: readonly NativeActivity[]; reportedBackground: number; briefs?: ReadonlyMap<string, SubagentBrief> }) {
+const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackground, briefs, root }: { subagentStore: SubagentStore; jobStore: NativeJobStore; tasks: readonly NativeActivity[]; reportedBackground: number; briefs?: ReadonlyMap<string, SubagentBrief>; root?: string }) {
   const { t } = useLingui();
   const subagents = useSyncExternalStore(subagentStore.subscribeAll, subagentStore.getSnapshot, subagentStore.getSnapshot);
   const jobs = useSyncExternalStore(jobStore.subscribeAll, jobStore.getSnapshot, jobStore.getSnapshot);
@@ -124,7 +124,7 @@ const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackgr
       {background > 0 && (
         <Section title={t`后台任务`} meta={t`${background} 进行中`}>
           <ul className="flex flex-col">
-            {summary.tasks.map((task) => <BackgroundTaskItem key={task.id} activity={task} />)}
+            {summary.tasks.map((task) => <BackgroundTaskItem key={task.id} activity={task} root={root} />)}
             {runningJobs.map((job) => (
               <li key={job.toolCallId} className="flex h-7 min-w-0 items-center gap-2.5 px-2 text-sm" title={job.command}>
                 <span className="grid size-3.5 shrink-0 place-items-center"><Spinner className="size-3.5" /></span>
@@ -209,7 +209,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
     <aside aria-label={t`会话概览`} className={cn('flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto pt-3.5 pr-4 pb-6 pl-1 scrollbar-none', !switchedIn && 'animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]')}>
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
-      <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} />
+      <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} root={root} />
       {outputs && <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
     </aside>
   );

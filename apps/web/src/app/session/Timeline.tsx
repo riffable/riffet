@@ -25,7 +25,7 @@ import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
 import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
-import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
+import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, taskLabel, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
 import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
 import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, tokensPerSecond } from './speed';
@@ -752,9 +752,11 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   const controls = useContext(ActivityContext);
   const activity = currentToolActivity(item);
   const backgroundTask = activity?.kind === 'background_task';
-  const taskTitle = backgroundTask ? activity.title || title : title;
   const taskView = backgroundTask && !view.command && activity.task?.command ? { ...view, command: activity.task.command } : view;
-  const taskIsCommand = backgroundTask ? isCommandTitle(taskTitle, taskView.command) : isCommand;
+  // The call's own description, else its command; the activity's title is only a clipped copy of either.
+  const taskName = backgroundTask ? taskLabel(isCommand ? activity.title : title, taskView.command, root) : undefined;
+  const taskTitle = taskName?.text ?? title;
+  const taskIsCommand = backgroundTask ? taskName?.mono ?? isCommandTitle(taskTitle, taskView.command) : isCommand;
   const activityStopping = activity?.status === 'stopping' || Boolean(activity && controls?.stopping.has(activity.id));
   const stats = useMemo(() => toolDiffStats(view), [view]);
   const images = failed ? [] : view.contents.flatMap(entry => isRecord(entry.content) && entry.content.type === 'image' ? [entry.content] : []);
@@ -855,13 +857,13 @@ export const StatusRow = memo(function StatusRow({ tone, text, detail, reveal, f
 });
 
 /** Each trigger keeps its own task row; an aggregate heading would repeat its state and time. */
-export const TurnTriggerBlock = memo(function TurnTriggerBlock({ notices, moreOf }: { notices: Extract<TimelineItem, { kind: 'task_notification' }>[]; moreOf?: (notice: TimelineItem) => ReactNode }) {
-  return <section className="flex flex-col gap-1.5">{notices.map((notice) => <NoticeItem key={notice.key} notice={notice} more={moreOf?.(notice)} />)}</section>;
+export const TurnTriggerBlock = memo(function TurnTriggerBlock({ notices, moreOf, root }: { notices: Extract<TimelineItem, { kind: 'task_notification' }>[]; moreOf?: (notice: TimelineItem) => ReactNode; root?: string }) {
+  return <section className="flex flex-col gap-1.5">{notices.map((notice) => <NoticeItem key={notice.key} notice={notice} more={moreOf?.(notice)} root={root} />)}</section>;
 });
 
 /** One notice of several in a row: findable by its own key, and remembering its own state. */
-function NoticeItem({ notice, more }: { notice: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode }) {
-  return <div data-item-key={notice.key} className="min-w-0"><RememberedScope.Provider value={notice.key}><TaskNotificationRow item={notice} more={more} /></RememberedScope.Provider></div>;
+function NoticeItem({ notice, more, root }: { notice: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode; root?: string }) {
+  return <div data-item-key={notice.key} className="min-w-0"><RememberedScope.Provider value={notice.key}><TaskNotificationRow item={notice} more={more} root={root} /></RememberedScope.Provider></div>;
 }
 
 /** A notice's own numbers, in the same compact shape the subagent list uses. */
@@ -871,7 +873,7 @@ const compactTokens = (value: number) => value >= 1_000_000 ? `${(value / 1_000_
 /** Under ten seconds a tenth still says something; past that it is the transcript's one duration shape. */
 export const compactDuration = (ms: number) => ms > 0 && ms < 10_000 ? `${(ms / 1_000).toFixed(1)}s` : formatDuration(ms);
 
-export const TaskNotificationRow = memo(function TaskNotificationRow({ item, more }: { item: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode }) {
+export const TaskNotificationRow = memo(function TaskNotificationRow({ item, more, root }: { item: Extract<TimelineItem, { kind: 'task_notification' }>; more?: ReactNode; root?: string }) {
   const { t } = useLingui();
   const [open, setOpen] = useRemembered('notice', false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useRemembered('notice-diagnostics', false);
@@ -884,13 +886,13 @@ export const TaskNotificationRow = memo(function TaskNotificationRow({ item, mor
   const openSubagent = subagent && item.subagentToolCallId && subagents
     ? () => subagents.open({ toolCallId: item.subagentToolCallId! })
     : undefined;
-  const titleIsCommand = Boolean(item.command && item.title.trim() === item.command.trim());
-  const title = item.title || item.command || (subagent ? t`子 Agent` : t`后台任务`);
+  const label = subagent ? (item.title ? { text: item.title, mono: false } : undefined) : taskLabel(item.title, item.command, root);
+  const title = label?.text ?? (subagent ? t`子 Agent` : t`后台任务`);
   const Icon = subagent ? IconBot : IconSquareTerminal;
   return (
     <Disclosure
       icon={running ? <Spinner className="size-3.5" /> : <Icon />}
-      title={<span className={cn('min-w-0 text-fg-2', open ? 'whitespace-normal break-words' : 'truncate', titleIsCommand && 'font-mono text-xs')}>{title}</span>}
+      title={<span className={cn('min-w-0 text-fg-2', open ? 'whitespace-normal break-words' : 'truncate', label?.mono && 'font-mono text-xs')}>{title}</span>}
       inline={item.status === 'failed' ? <RowOutcome failed /> : item.status === 'unknown' ? <RowOutcome /> : undefined}
       open={open}
       onToggle={() => setOpen(!open)}

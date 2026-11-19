@@ -775,7 +775,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         if (!notice.handedBack) events.push({ ...base(0), runId: state.turnId, type: 'task_notification', data: {
           sessionUpdate: 'task_notification', kind: noticeRowKind(info?.kind), status: monitorEvent ? 'running' : notice.status,
           ...(notice.sourceStatus ? { sourceStatus: notice.sourceStatus } : {}),
-          title: notice.title,
+          title: info?.title || notice.title,
           ...(notice.taskId ? { taskId: notice.taskId } : {}),
           ...(notice.toolUseId ? { subagentToolCallId: notice.toolUseId } : {}),
           ...(info?.command ? { command: info.command } : {}),

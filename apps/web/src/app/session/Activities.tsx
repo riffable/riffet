@@ -16,6 +16,7 @@ import { cn, formatDateTime } from '@/lib/utils';
 import { CodeBlock, compactDuration, Disclosure } from './Timeline';
 import { useRemembered } from './rememberedState';
 import type { TimelineItem } from './model';
+import { taskLabel } from './toolView';
 
 type ActivityItem = Extract<TimelineItem, { kind: 'activity' }>;
 
@@ -252,7 +253,7 @@ function CompactionRow({ item, status }: { item: ActivityItem; status: NativeAct
   );
 }
 
-function BackgroundTaskRow({ item, status }: { item: ActivityItem; status: NativeActivity['status'] }) {
+function BackgroundTaskRow({ item, status, root }: { item: ActivityItem; status: NativeActivity['status']; root?: string }) {
   const { activity } = item;
   const [open, setOpen] = useRemembered('activity', false);
   const running = status === 'running';
@@ -260,20 +261,20 @@ function BackgroundTaskRow({ item, status }: { item: ActivityItem; status: Nativ
   const live = running || stopping;
   const kind = taskKinds[activity.task?.kind ?? 'shell'];
   const command = activity.task?.command;
-  const titleIsCommand = Boolean(command && activity.title.trim() === command.trim());
-  const title = activity.title || command || i18n._(kind.label);
+  const label = taskLabel(activity.title, command, root);
+  const title = label?.text ?? i18n._(kind.label);
   return (
     <div className="flex min-w-0 items-start gap-1">
       <div className="min-w-0 flex-1">
         <Disclosure
           icon={live ? <Spinner className="size-3.5" /> : <kind.Icon />}
-          title={<span className={cn('min-w-0 truncate text-fg-2', titleIsCommand && 'font-mono text-xs')}>{title}</span>}
+          title={<span className={cn('min-w-0 truncate text-fg-2', label?.mono && 'font-mono text-xs')}>{title}</span>}
           inline={<BackgroundTaskOutcome activity={activity} status={status} />}
           status={<BackgroundTaskStatus activity={activity} status={status} />}
           open={open}
           onToggle={() => setOpen(!open)}
         >
-          {!titleIsCommand && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{title}</p>}
+          {label && !label.mono && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{title}</p>}
           <BackgroundTaskMetadata activity={activity} status={status} fallbackStart={item.event.createdAt} />
           {command && <CodeBlock className="text-fg" copy={command} remember="command"><span className="select-none text-fg-4">$ </span>{command}</CodeBlock>}
           <Details activity={activity} />
@@ -322,13 +323,13 @@ function LocalCommandRow({ activity }: { activity: NativeActivity }) {
 }
 
 /** One system activity in the transcript. It is not a message: no bubble, no author, no turn header. */
-export const ActivityRow = memo(function ActivityRow({ item }: { item: ActivityItem }) {
+export const ActivityRow = memo(function ActivityRow({ item, root }: { item: ActivityItem; root?: string }) {
   const controls = useContext(ActivityContext);
   const resources = useTranscriptResources();
   const live = effectiveStatus(item.activity, controls?.stopping ?? noneStopping);
   const status = resources && (live === 'running' || live === 'stopping') ? 'unknown' : live;
   if (item.activity.kind === 'compaction') return <CompactionRow item={item} status={status} />;
-  if (item.activity.kind === 'background_task') return <BackgroundTaskRow item={item} status={status} />;
+  if (item.activity.kind === 'background_task') return <BackgroundTaskRow item={item} status={status} root={root} />;
   if (item.activity.kind === 'local_command' && item.activity.task?.command) return <ShellCommandRow activity={item.activity} status={status} />;
   return <LocalCommandRow activity={item.activity} />;
 });
@@ -352,17 +353,18 @@ export function liveBackgroundActivities(timeline: readonly TimelineItem[]): Nat
 }
 
 /** A running background task among the session's subagents and jobs, with its stop button. */
-export function BackgroundTaskItem({ activity }: { activity: NativeActivity }) {
+export function BackgroundTaskItem({ activity, root }: { activity: NativeActivity; root?: string }) {
   const { t } = useLingui();
   const controls = useContext(ActivityContext);
   const status = effectiveStatus(activity, controls?.stopping ?? noneStopping);
   const kind = taskKinds[activity.task?.kind ?? 'shell'];
   const since = startOf(activity, '');
-  const name = activity.title || activity.task?.command || i18n._(kind.label);
+  const label = taskLabel(activity.title, activity.task?.command, root);
+  const name = label?.text ?? i18n._(kind.label);
   return (
     <li className="flex min-h-7 min-w-0 items-center gap-2.5 px-2 text-sm no-hover:min-h-11" title={activity.task?.command || name}>
       <span className="grid size-3.5 shrink-0 place-items-center"><Spinner className="size-3.5" /></span>
-      <span className="min-w-0 flex-1 truncate text-fg-2">{name}</span>
+      <span className={cn('min-w-0 flex-1 truncate text-fg-2', label?.mono && 'font-mono text-xs')}>{name}</span>
       {status === 'stopping' ? <span className="shrink-0 text-2xs text-fg-4">{t`停止中`}</span> : Number.isFinite(since) && <span className="shrink-0 text-2xs text-fg-4"><Elapsed since={since} /></span>}
       {status === 'running' && <StopButton activity={activity} className="-mr-1.5 h-6 text-xs" />}
     </li>

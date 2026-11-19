@@ -531,8 +531,8 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
               case 'assistant': inner = <AssistantMessage text={item.text} showActions={false} streaming={running && itemIndex === lastOutputIndex} mark={markTargetOf(item, row.runId)} />; break;
               case 'plan': inner = <PlanBlock entries={item.entries} />; break;
               case 'image': inner = <ImageBlock src={item.src} />; break;
-              case 'activity': inner = <ActivityRow item={item} />; break;
-              case 'task_notification': inner = <TaskNotificationRow item={item} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />; break;
+              case 'activity': inner = <ActivityRow item={item} root={root} />; break;
+              case 'task_notification': inner = <TaskNotificationRow item={item} root={root} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />; break;
               default: inner = null;
             }
             return (
@@ -549,7 +549,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   if (row.type === 'trigger') {
     return (
       <div ref={attach} data-row-key={row.key} className={cn('-ml-1.5 min-w-0 pl-1.5', contained, row.gap)}>
-        <TurnTriggerBlock notices={row.notices} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
+        <TurnTriggerBlock notices={row.notices} root={context.root} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
       </div>
     );
   }
@@ -566,8 +566,8 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     const modelLabel = showModels ? [...new Map(models.map((info) => [shareModelKey(info), shareModelLabel(info)])).values()].join(' / ') : undefined;
     content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
   }
-  else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />;
-  else if (item.kind === 'activity') content = <ActivityRow item={item} />;
+  else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} root={context.root} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />;
+  else if (item.kind === 'activity') content = <ActivityRow item={item} root={context.root} />;
   else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}
     footer={<MessageFooter text={row.answerText} showActions={settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />} />;
   return (

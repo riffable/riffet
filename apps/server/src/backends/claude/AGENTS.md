@@ -39,6 +39,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - hook（UserPromptSubmit、Stop、StopFailure、PermissionRequest、PreToolUse、PreCompact 等）：入口 `hook-bridge.ts#ClaudeHookBridge`，改变回合状态的 hook 在会话未就绪时要等其运行时拉起。录制与转写同在 `fixtures/transcript-hooks/<版本>`，重录方式同上。
 - 权限对话框先在屏幕上读出（`claude-screen:` 卡），PermissionRequest hook 随后到达并取代它；此时回答屏幕卡返回 `NATIVE_INTERACTION_STALE`，客户端等协议卡到达后再答，自动化脚本要等 `transport === 'protocol'`。
 - 状态描述文件由 `hook-cli.mjs` 每次 hook 时重读，所以比服务活得更久的 CLI 能找到重启后的服务。
+- 子 agent 的后台任务（例如 Bash 超时后被转入后台）完成时，CLI 也会在主转写里写一条 `queue-operation` enqueue/remove，`<tool-use-id>` 指向子 agent 的调用，随后由子 agent 取走。主会话既没发起也没挂着这个调用的报告不建活动（`activity.ts#notified`），否则它会作为孤立的一行出现在主时间线末尾。
 
 ## 排障
 
