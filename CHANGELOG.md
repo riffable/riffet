@@ -4,6 +4,11 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Fixes
+
+- Reading an in-progress reply on the web (including Cursor conversations and long virtualized transcripts) no longer jumps when the turn finishes and its process block folds, even when the prompt or process header is still visible at the top of the screen or right after scrolling.
+- In Cursor conversations, a subagent that was interrupted no longer shows as running after it stopped.
+
 ## 0.9.0 - 2026-11-19
 
 ### Upgrade notes

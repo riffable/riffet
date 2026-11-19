@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { captureReadingAnchor, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
+import { captureReadingAnchor, findRow, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
 import { animationsOf } from '@/lib/motion';
 
 export interface TranscriptScrollHandle {
@@ -307,14 +307,25 @@ export function useTranscriptScroll(options: Options) {
           // and reader gesture into `element.scrollTop`; otherwise apply the JS delta directly.
           if ((state.current.pointerHeld || performance.now() < state.current.readerUntil) && anchored <= bottom(element)) {
             const baseline = Math.max(0, Math.min(bottom(element), anchor.current.scrollTop));
-            const soleFoldingProcess = anchor.current.rows.length === 1
-              && anchor.current.rows[0]!.top < 0
-              && Boolean(anchor.current.rows[0]!.processOpen);
+            // Any captured process row that is now folding needs JS anchoring rather than trusting
+            // the browser's native scroll-top adjustment, which may have anchored elsewhere or clamped.
+            // Also guard against a cleared/invalidated native anchor (e.g. off-screen process fold
+            // right after a programmatic `scrollTo` or Markdown settle) leaving `scrollTop` stuck at
+            // `baseline` or clamped at the new bottom instead of shifting toward `anchored`.
+            const hasFoldingProcess = anchor.current.rows.some((saved) =>
+              Boolean(saved.processOpen) && Boolean(findRow(element, saved.key)?.querySelector('[data-process-open="false"]')));
+            const layoutDelta = anchored - anchor.current.scrollTop;
+            const clampedAtBottom = anchor.current.scrollTop > bottom(element) + 1 && bottom(element) - element.scrollTop <= 1;
+            const nativeMoved = Math.abs(layoutDelta) <= 1
+              || (!clampedAtBottom
+                && Math.abs(element.scrollTop - baseline) > 1
+                && (Math.abs(layoutDelta) < 120 || Math.abs(element.scrollTop - anchored) <= Math.abs(element.scrollTop - baseline)));
             const nativeAnchored = supportsOverflowAnchor
               && !state.current.suppressNativeAnchor
               && baseline > 0
-              && !soleFoldingProcess
-              && getComputedStyle(element).overflowAnchor !== 'none';
+              && !hasFoldingProcess
+              && getComputedStyle(element).overflowAnchor !== 'none'
+              && nativeMoved;
             top = nativeAnchored ? element.scrollTop : anchored + element.scrollTop - baseline;
           }
           write(element, top, 'auto', true);

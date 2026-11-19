@@ -372,7 +372,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
         case 'session': latest.current.onSessionChanged(frame.session); break;
       }
       // The engine has already dropped a control frame whose revision went backwards. Read that, not the frame.
-      if (frame.type === 'hello' || frame.type === 'control') view.set({ control: sync.store.get().control });
+      // Publish `outline` on the same tick as `status`/`runs`/`control` so turn completion lands in one commit.
+      if (frame.type === 'hello') view.set({ control: sync.store.get().control, outline: sync.store.get().outline });
+      else if (frame.type === 'control') view.set({ control: sync.store.get().control });
+      else if (frame.type === 'outline') view.set({ outline: sync.store.get().outline });
     };
     const sync = new SessionSync({
       sessionId: session.id, transport: source?.transport ?? browserTransport, cache, visibility: documentVisibility, onControl: control, onClosed: () => { void confirmSessionGone(session.id); },

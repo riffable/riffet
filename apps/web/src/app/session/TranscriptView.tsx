@@ -381,6 +381,18 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
       for (const [key, element] of observed) if (!heights.has(key)) heights.set(key, extent(element, element.getBoundingClientRect().height));
       markDirty();
     },
+    /**
+     * Synchronously refreshes heights of currently mounted rows so windowed layout checks inside a
+     * commit (such as an instant process fold) see the new heights before the async ResizeObserver.
+     */
+    syncMounted() {
+      let changed = false;
+      for (const [key, element] of observed) {
+        if (!element.isConnected) continue;
+        changed = record(key, extent(element, element.getBoundingClientRect().height)) || changed;
+      }
+      return changed;
+    },
     standIn,
     disconnect() { observer?.disconnect(); observed.clear(); returning = []; },
   };
@@ -442,7 +454,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
  * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
  * whose answer actually changed, instead of invalidating the shared context for all of them.
  */
-const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
+const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, nearTail = false, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; nearTail?: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
   const resources = useTranscriptResources();
   const remembered = useContext(RememberedValues);
@@ -450,9 +462,11 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   // Both explicit choices survive virtual unmounting; undefined means automatic folding.
   const [processChoice, rememberProcessChoice] = useRemembered<boolean | undefined>('process', undefined);
   const markTarget = useMemo(() => row.type === 'item' ? markTargetOf(row.item, row.runId) : undefined, [row]);
-  // Off-screen rows are skipped by the browser in a whole list. A windowed one unmounts them
-  // instead, and measuring needs every mounted row at its real size.
-  const contained = context.virtual ? '' : '[content-visibility:auto] [contain-intrinsic-size:auto_88px]';
+  // Off-screen rows are skipped by the browser in a whole list. Keep the tail (the current turn and
+  // the rows directly above it) out of `content-visibility: auto`: otherwise folding a tall process
+  // block pulls unrendered rows into view and their 88px intrinsic estimate snaps to real height a
+  // frame later. A windowed list unmounts off-screen rows instead and measures every mounted row.
+  const contained = context.virtual || nearTail ? '' : '[content-visibility:auto] [contain-intrinsic-size:auto_88px]';
   const hasTurnFooter = row.type !== 'trigger' && row.footer !== 'none' && (row.footer !== 'held' || !suppressHeldFooter);
   const footerProgress = row.type !== 'trigger' && row.footer === 'held' && !suppressHeldFooter ? { progress: progress ?? null } : {};
   if (row.type === 'process') {
@@ -472,7 +486,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
         // column; `TurnProcess` cancels it for the expanded contents. Process rows never use
         // `content-visibility: auto`: when folded their body already carries `hidden="until-found"`,
         // and skipping an open process off-screen would freeze its pre-fold height until scrolled near.
-        '-mx-2 min-w-0',
+        '-mx-2 min-w-0 [overflow-anchor:none]',
         hasTurnFooter && 'turn-footer-row can-hover:-mx-6 can-hover:px-4',
         row.spaced ? 'timeline-gap-block' : '',
         highlighted && 'timeline-focus-hit',
@@ -789,6 +803,9 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
    */
   const ensureWindow = (sync: boolean) => {
     const scroller = scrollRef.current;
+    if (windowed.current && !scroll.following.current && rowObserver.syncMounted() && layoutCache.current) {
+      layoutCache.current.dirty = true;
+    }
     const layout = windowed.current && !scroll.following.current ? layoutFor() : undefined;
     if (!scroller || !layout) return;
     const viewport = scroller.clientHeight || 800;
@@ -1374,7 +1391,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   // A pending interaction or a visible compaction row already explains the pause.
   const suppressHeldFooter = !progress && (pendingConfirmationCount > 0 || (running && showsRunningCompaction(timeline)));
   const latestRows = rowTurns.at(-1)?.rows;
-  const renderRow = (row: TranscriptRow) => (
+  const tailCutoff = Math.max(0, rowsAll.length - 12);
+  const renderRow = (row: TranscriptRow, index: number) => (
     <RememberedScope.Provider key={row.key} value={row.key}>
       <TranscriptRowView
         row={row}
@@ -1383,6 +1401,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         actionPending={row.type === 'item' && row.item.kind === 'user' && row.item.run ? runActionPending?.(row.item.run) ?? false : false}
         suppressHeldFooter={suppressHeldFooter || row.key !== heldFooter}
         latestTurn={latestRows?.includes(row) ?? false}
+        nearTail={index >= tailCutoff}
         footerPinned={row === rowsAll.at(-1)}
         progressShown={Boolean(progress) && row === rowsAll.at(-1)}
         {...(row.key === heldFooter && progress ? { progress } : {})}
@@ -1575,12 +1594,12 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
             let cursor = 0;
             segments.forEach(([from, to], segment) => {
               mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
-              for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!));
+              for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!, index));
               cursor = to;
             });
             mounted.push(<div key="space:end" aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
             return mounted;
-          })() : rowsAll.map(renderRow)}
+          })() : rowsAll.map((row, index) => renderRow(row, index))}
           </RememberedValues.Provider></TranscriptCatchUp.Provider>
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}

@@ -80,7 +80,10 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
     if (children[middle]!.getBoundingClientRect().bottom <= bounds.top) low = middle + 1;
     else high = middle;
   }
-  for (let index = low; index < children.length && rows.length < 3; index += 1) {
+  // Capture every row visible in the viewport (binary-searched from the top edge, stopped at the
+  // bottom edge) so a folding process block and the prose row below it are never missed behind
+  // several short rows at the top of the screen.
+  for (let index = low; index < children.length; index += 1) {
     const row = children[index] as HTMLElement;
     const rect = row.getBoundingClientRect();
     if (rect.top >= bounds.bottom) break;
@@ -110,6 +113,30 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
  * anchor still names where the reader was, and the list's index knows where that row would be.
  */
 export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, locate?: (key: string) => number | undefined): number {
+  const bounds = scroller.getBoundingClientRect();
+  const targetOf = (saved: ReadingAnchor['rows'][number], row: HTMLElement) => {
+    // The block, while the row still holds it; a re-rendered message falls back to the row.
+    const block = saved.block && saved.block.element.isConnected && row.contains(saved.block.element) && !saved.block.element.closest('[data-process-open="false"]') ? saved.block : undefined;
+    const top = block ? block.element.getBoundingClientRect().top - block.top : row.getBoundingClientRect().top - saved.top;
+    return scroller.scrollTop + top - bounds.top;
+  };
+  // When an automatically folding process block sits above visible prose (even if the prompt or
+  // process header is still visible near the top of the viewport), prefer anchoring on the prose
+  // row below it whenever there is room above to absorb the collapse.
+  for (let index = 0; index + 1 < anchor.rows.length; index += 1) {
+    const saved = anchor.rows[index]!;
+    if (!saved.processOpen) continue;
+    const row = findRow(scroller, saved.key);
+    if (!row?.querySelector('[data-process-open="false"]')) continue;
+    for (let next = index + 1; next < anchor.rows.length; next += 1) {
+      const below = anchor.rows[next]!;
+      const belowRow = findRow(scroller, below.key);
+      if (!belowRow) continue;
+      const target = targetOf(below, belowRow);
+      if (target >= -0.5) return Math.max(0, target);
+      break;
+    }
+  }
   let foldedTop: number | undefined;
   for (let index = 0; index < anchor.rows.length; index += 1) {
     const saved = anchor.rows[index]!;
@@ -119,14 +146,11 @@ export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, l
     // and that has now folded away, collapses into that off-screen header; the row below it is what
     // remains stable on screen for the reader.
     if (saved.top < 0 && saved.processOpen && row.querySelector('[data-process-open="false"]')) {
-      foldedTop ??= scroller.scrollTop + row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      foldedTop ??= scroller.scrollTop + row.getBoundingClientRect().top - bounds.top;
       if (index + 1 < anchor.rows.length) continue;
       return foldedTop;
     }
-    // The block, while the row still holds it; a re-rendered message falls back to the row.
-    const block = saved.block && saved.block.element.isConnected && row.contains(saved.block.element) && !saved.block.element.closest('[data-process-open="false"]') ? saved.block : undefined;
-    const top = block ? block.element.getBoundingClientRect().top - block.top : row.getBoundingClientRect().top - saved.top;
-    return scroller.scrollTop + top - scroller.getBoundingClientRect().top;
+    return targetOf(saved, row);
   }
   if (foldedTop !== undefined) return foldedTop;
   const first = anchor.rows[0];

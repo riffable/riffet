@@ -132,7 +132,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const hasFooter = Boolean(footerTime || progress !== undefined);
 
   return (
-    <section ref={section} data-process-open={open} className={cn('group/process flex min-w-0 flex-col', open && 'is-open')}>
+    <section ref={section} data-process-open={open} className={cn('group/process flex min-w-0 flex-col [overflow-anchor:none]', open && 'is-open')}>
       <button
         type="button"
         aria-expanded={open}
@@ -194,11 +194,13 @@ function beingRead(element: HTMLElement | null): boolean {
 }
 
 /**
- * Whether folding [element] can land in a single synchronous commit without moving anything visible:
+ * Whether folding [element] can land in a single synchronous commit without moving visible prose:
  * - below the viewport: invisible to the reader;
- * - header visible in the viewport: animate so the reader sees the fold;
- * - header above the viewport: instant only when `scrollTop` can absorb the lost height without
- *   hitting 0 and snapping content below it upward.
+ * - header inside the viewport with nothing visible below it (`box.bottom >= view.bottom`):
+ *   animate smoothly so the reader sees the fold instead of a snap;
+ * - header above the viewport, or visible prose below it (`box.bottom < view.bottom`):
+ *   land synchronously whenever `scrollTop` can absorb the lost height without hitting 0,
+ *   so `useTranscriptScroll` shifts `scrollTop` before paint and the prose below never moves.
  */
 function canInstantFold(element: HTMLElement | null): boolean {
   if (!element) return false;
@@ -208,7 +210,7 @@ function canInstantFold(element: HTMLElement | null): boolean {
   const row = element.closest<HTMLElement>('[data-row-key]') ?? element;
   const box = row.getBoundingClientRect();
   if (box.top >= view.bottom) return true;
-  if (box.top >= view.top) return false;
+  if (box.top >= view.top && box.bottom >= view.bottom) return false;
   const body = element.querySelector<HTMLElement>('[data-process-body]');
   const header = element.firstElementChild?.getBoundingClientRect().height ?? 0;
   const collapsible = body ? body.getBoundingClientRect().height : Math.max(0, box.height - header);
