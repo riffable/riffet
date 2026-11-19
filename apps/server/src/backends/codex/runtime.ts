@@ -1,29 +1,26 @@
 import { isDeepStrictEqual } from 'node:util';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute } from 'node:path';
 import type {
   ModelInfo, NativeActivity, NativeBackendId, NativeContext, NativeInteraction, NativeInteractionResponse,
   NativeInteractionResult, NativeRunConfig, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget, Project, Run, Session, SessionGoal,
 } from '../../../../../packages/contracts/src/index.js';
-import type { CodexAppServerClient, CodexAppServerFactory, CodexAppServerOptions, JsonRpcServerRequest } from '../shared/codex-app-server.js';
+import type { CodexAppServerClient, CodexAppServerFactory, JsonRpcServerRequest } from '../shared/codex-app-server.js';
 import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
-import { listWorkbenchAppServers, stopWorkbenchAppServerAt } from '../shared/app-server-daemons.js';
 import { CodexDraftStream, messagePhase, type CodexDraftOptions } from './drafts.js';
 import { codexFlavor, type CodexFlavor } from './flavors.js';
-import { NotificationGate, type CodexObservation } from './observation.js';
+import type { CodexObservation } from './observation.js';
 import { findCodexRollout } from './rollout-usage.js';
 import { normalizePlanEntries, parseRolloutPlan, type RolloutPlanSnapshot } from './rollout-plan.js';
 import { notificationSpan, rolloutItemSpans, type ItemSpans } from './item-spans.js';
-import { codexTrustArgs } from '../shared/cli-trust.js';
 import { nativeModelEffort, nativeModelFast, parseNativeModelSelection, type NativeModelSelection } from '../shared/model-selection.js';
 import { modelSourceOf, resolveSource } from '../shared/model-source.js';
 import { TurnTracker, turnPhaseOf } from '../shared/turn-tracker.js';
 import { DORMANT_POLL_MS, DormancyClock } from '../shared/dormancy.js';
 import { turnMarkers } from './event-diff.js';
 import { AppError } from '../../errors.js';
-import { sameTerminalAppearance } from '../../terminal/appearance.js';
 import { firstHumanMessage, firstMessageTitlePatch, isPromptTitle, nativeTitlePatch } from '../../session-title.js';
-import type { NativeBackendHost, NativeBackendProfileConfig, NativePtyLaunchSpec, NativeControlMessage, NativeDispatchBinding, NativeInteractionReceipt } from '../types.js';
+import type { NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding, NativeInteractionReceipt } from '../types.js';
 import { turnMetaId } from '../../journal/ingest.js';
 import { activityEvent, isLiveActivity, withActivity } from '../../journal/activity.js';
 import { CodexActivities } from './activities.js';
@@ -31,8 +28,9 @@ import type { CodexNativeCommand } from './commands.js';
 import { projectCodexItem, rowTextKey, userMessageText } from './project-item.js';
 import { CodexTurnMetering, CodexContextMeter, noteItemMeter, noteRequestWaitStart, noteRequestWaitEnd } from './metering.js';
 import { CodexTurns } from './turns.js';
+import { CodexConnection, type NativeRuntimeHooks } from './connection.js';
+import { CodexTerminal } from './terminal.js';
 import { CodexSubagents, type CodexSubagentFrame } from './subagents.js';
-import { codexInvocation, codexInvocationFingerprint, codexTerminalEndpoint } from './endpoint.js';
 import { CodexJournalSpace, journalOf, type CodexIngestState } from './journal-space.js';
 import type { CodexLiveFeed, CodexThreadReader, CodexTurnPage, CodexTurnsRequest } from './transcript-source.js';
 import type {
@@ -50,16 +48,14 @@ import { threadStatusUpdate } from './thread-status.js';
 import { codexGoal, sameGoal } from './goal.js';
 import { requestIdString, toIso, str, finiteToken, asRecord, asArray, canonicalJson } from './util.js';
 import {
-  MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, executableOf, runtimeFingerprintFor, runtimeScopeFingerprintFor, matchesRuntimeFingerprint, providerEnv, credentialDirFor, collaborationModeOf,
-  probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion, TUI_TOKEN_ENV, permissionParamsOf, hasNativePermissions, riffetMcpOverride,
+  MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, matchesRuntimeFingerprint, providerEnv, collaborationModeOf,
+  STEER_MIN_VERSIONS, supportsSteerVersion, permissionParamsOf, hasNativePermissions, riffetMcpOverride,
 } from './config.js';
 import { fastServiceTier, listModels, modelBackendVariant, resolveModelSelection } from './catalog.js';
 import { extensionsOffNames } from '../../extensions/toggles.js';
 import { codexStanding, standingProtects, standingThreadConfig, useStandingSkillRoots, type CodexStanding } from './standing.js';
 import { readConfiguredMcpNames } from './extensions.js';
-import { conversationServerOptions, newThreadRequest, spawnConversationServer, type CodexWarm, type ThreadStart } from './launch.js';
-import type { RuntimeAttachment, RuntimeContext } from '@riffet/plugin-api';
-import type { PluginRegistry } from '../../plugins/registry.js';
+import { newThreadRequest, type CodexWarm, type ThreadStart } from './launch.js';
 import {
   makePendingInteraction, commandApprovalDecision, questionInteraction, answerValues, elicitationContent, interactionFingerprint, asyncQuestionsOf, asyncQuestionInteraction,
   asyncAnswerText, modeChangeInteraction, asyncQuestionReply, isAsyncQuestionInteraction, parseAsyncQuestionReplies, type CodexAsyncQuestion,
@@ -71,20 +67,36 @@ import {
   isProvisionalItemId, buildEvent, rolloutPlanNativeId, nativeTurnIdOf, type ItemSpan,
 } from './transcript.js';
 import {
-  isMissingTerminalError, isUnmaterializedThreadError, isUnavailableSocket, isActiveWriterError, isTurnsListUnsupportedError,
+  isUnmaterializedThreadError, isActiveWriterError, isTurnsListUnsupportedError,
   isEmptyThreadRolloutError, safeTurnError, safeProviderError,
 } from './errors.js';
 import { MESSAGE_ID_PREFIX, STEER_ELEMENT_PREFIX, commandIdOfMessageId, commandIdOfSteerPlaceholder, isTaggedMessageId } from './message-tag.js';
 
 
-/** The plugins' runtime hooks, as `PluginRegistry` serves them. */
-export type NativeRuntimeHooks = Pick<PluginRegistry, 'runtimeHooks'>;
-type SavedAttachment = NonNullable<NonNullable<Session['nativeRuntime']>['attachment']>;
+export type { NativeRuntimeHooks } from './connection.js';
+
+/** What the adapter supplies to `switchProfile`: the parts of the move that belong to its runtime table and listeners. */
+export interface ProfileSwitchSteps {
+  feed(): CodexLiveFeed;
+  /** Makes `runtime` the one that serves the session. */
+  publish(runtime: CodexSessionRuntime): void;
+  /** Subscribes the session's listeners to `runtime`. */
+  bind(runtime: CodexSessionRuntime): Promise<void>;
+  /** A new, unstarted runtime for the profile being left, already attached to the feed and published. */
+  restore(): CodexSessionRuntime;
+  previousModel: string;
+  /** The failure as the user may see it, with provider credentials removed. */
+  describe(error: unknown): string;
+  succeeded(): void;
+  failed(): void;
+}
 
 export class CodexSessionRuntime implements CodexThreadReader {
-  transport?: CodexAppServerClient;
   nativeSessionId: string | undefined;
-  terminalId: string | undefined;
+  /** The link to the app-server: transport, endpoint and binding conflicts, profile identity (`connection.ts`). */
+  readonly connection: CodexConnection;
+  /** The terminal client sharing the app-server (`terminal.ts`). */
+  readonly terminal: CodexTerminal;
   /** Turn bookkeeping: the current turn, and which command and run each turn belongs to. */
   private readonly turns: CodexTurns;
   /** A written operation without a receipted turn may still start, even after its local wait ends. */
@@ -149,24 +161,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** The name a `thread/name/set` in flight is giving the thread. */
   private pushingTitle: string | undefined;
   private opening?: Promise<string | undefined>;
-  private attached = false;
-  private transportBorrowed = false;
-  private endpointSource: 'terminal' | 'binding' | 'spawn' = 'spawn';
-  /** The saved endpoint this runtime found gone before spawning its own; it stays saved until a resume confirms the replacement. */
-  private unreachableBinding: string | undefined;
-  private loadedCheck: boolean | undefined;
-  private loadedCheckAt = 0;
-  private loadedCheckThreadId: string | undefined;
   private attachAttemptAt = 0;
-  private terminalEndpointCheckedAt = 0;
-  private terminalEndpointStateValue: TerminalEndpointState = 'absent';
-  private terminalEndpointCheck?: Promise<TerminalEndpointState>;
-  private endpointWriteConflict = false;
-  private bindingScopeMismatch = false;
-  /** Set when the app-server could not be shared privately, so no TUI may attach to it. */
-  private terminalUnavailable = false;
-  /** A colour change waiting for the turn to end before the TUI is relaunched to probe it. */
-  private appearancePending = false;
   private readonly metering: CodexTurnMetering;
   private readonly drafts = new CodexDraftStream({
     ...(process.env.RIFFET_CODEX_STREAM_TIMING === '1' ? {
@@ -236,25 +231,17 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private threadError = false;
   /** Only a root turn observed in the current activity can explain its thread's generic error. */
   private threadErrorTurnId: string | undefined;
-  private connectionConflictSource?: 'profile' | 'endpoint';
   private readonly profileConfig: Record<string, unknown>;
-  private profileFingerprint: string;
-  private profilePending = false;
-  private readonly scopeFingerprint: string;
-  /** A plugin's sidecar on the native process, such as a routing proxy, with the plugin's id. */
-  private attachment?: { owner: string; value: RuntimeAttachment };
   private detachObservation?: () => void;
-  /** The thread a warm app-server was started with, until this conversation opens its first thread. */
-  private warmThread?: CodexWarm;
 
   constructor(
     private readonly host: NativeBackendHost,
     private session: Session,
     private readonly project: Project,
     private readonly profile: NativeBackendProfileConfig,
-    private readonly startAppServer: CodexAppServerFactory,
+    startAppServer: CodexAppServerFactory,
     private readonly flavor: CodexFlavor = codexFlavor,
-    private readonly runtimeHooks?: NativeRuntimeHooks,
+    runtimeHooks?: NativeRuntimeHooks,
     /** Reports what shell commands change in the working tree (`observation.ts`); only Codex itself has the hooks it needs. */
     private readonly observation?: CodexObservation,
   ) {
@@ -275,10 +262,44 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.events.push(...this.space.tail(RESIDENT_EVENTS));
       for (const event of this.events) this.seenEvents.add(event.nativeId);
     }
-    this.terminalId = session.terminalId;
     this.profileConfig = this.profile.config;
-    this.profileFingerprint = runtimeFingerprintFor(this.project, this.profile, this.flavor);
-    this.scopeFingerprint = runtimeScopeFingerprintFor(this.project, this.profile, this.flavor);
+    this.connection = new CodexConnection({
+      host,
+      project: this.project,
+      profile: this.profile,
+      flavor: this.flavor,
+      startAppServer,
+      runtimeHooks,
+      observation,
+      session: () => this.session,
+      threadId: () => this.nativeSessionId,
+      status: () => this.status,
+      terminal: () => this.terminal,
+      refreshStatus: change => this.refreshStatus(change),
+      resumed: () => this.resumed(),
+      canSwitchProfile: () => this.canSwitchProfile,
+      readThread: threadId => this.history.readThread(threadId, false),
+      interrupt: () => this.interrupt(),
+      dispose: () => this.dispose(host),
+      beginMaterialization: () => this.history.beginMaterialization(),
+      terminalEndpointUnreachable: () => {
+        this.facts = { link: 'offline', connection: { state: 'failed', message: `The ${this.label} terminal endpoint could not be reached.` }, history: { state: 'error', message: `${this.label} history could not be loaded from the running terminal.` } };
+        this.status = { phase: this.turnPhase('offline'), connection: this.facts.connection, history: this.facts.history };
+      },
+      onNotification: (method, params) => this.onNotification(method, params),
+      onServerRequest: request => this.onServerRequest(request),
+      onExit: error => this.onExit(error),
+    });
+    this.terminal = new CodexTerminal({
+      host,
+      project: this.project,
+      profile: this.profile,
+      flavor: this.flavor,
+      observation,
+      session: () => this.session,
+      threadId: () => this.nativeSessionId,
+      turnInFlight: () => Boolean(this.activeTurnId || this.dispatchCommandId || this.interaction || this.status.phase === 'busy' || this.status.phase === 'attention'),
+    }, this.connection, session.terminalId);
     this.turns = new CodexTurns({
       threadId: () => this.nativeSessionId,
       runsOfTurn: (threadId, turnId) => this.host.findRunsByNativeTurn?.(this.session.id, threadId, turnId) ?? [],
@@ -287,7 +308,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       scopedRequestId: (threadId, id) => this.scopedRequestId(threadId, id),
     });
     this.history = new CodexHistoryReader({
-      requireTransport: () => this.requireTransport(),
+      requireTransport: () => this.connection.requireTransport(),
       label: () => this.label,
       subagents: () => this.subagents,
       dispatchCommandId: () => this.turns.dispatchCommandId,
@@ -306,7 +327,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       emit: message => { for (const listener of this.listeners) listener(message); },
       threadId: () => this.nativeSessionId,
       transport: () => this.transport,
-      bindingScopeMismatch: () => this.bindingScopeMismatch,
+      bindingScopeMismatch: () => this.connection.bindingScopeMismatch,
       rolloutFile: threadId => this.rolloutFile(threadId),
       contextUsed: used => this.activities.noteContext(used),
     });
@@ -334,6 +355,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   get label(): string { return this.flavor.label; }
+
+  get transport(): CodexAppServerClient | undefined { return this.connection.transport; }
+  get terminalId(): string | undefined { return this.terminal.id; }
+  set terminalId(id: string | undefined) { this.terminal.bind(id); }
 
   /** The provider turn in the foreground, if any. */
   get activeTurnId(): string | undefined { return this.turns.activeTurnId; }
@@ -452,91 +477,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return this.rolloutPath ?? await findCodexRollout(this.flavor.stateHome(this.profileConfig), threadId);
   }
 
-  matches(project: Project, profile: NativeBackendProfileConfig): boolean {
-    return !this.profilePending && runtimeFingerprintFor(project, profile, this.flavor) === this.profileFingerprint;
-  }
-
-  belongsTo(project: Project, profile: NativeBackendProfileConfig): boolean {
-    return runtimeScopeFingerprintFor(project, profile, this.flavor) === this.scopeFingerprint && !this.bindingScopeMismatch;
-  }
-
-  canRunWith(project: Project, profile: NativeBackendProfileConfig): boolean {
-    return this.belongsTo(project, profile) && !this.endpointWriteConflict;
-  }
-
-  syncSessionBinding(session: Session, project: Project, profile: NativeBackendProfileConfig): void {
-    if (session.terminalId && session.terminalId !== this.terminalId) {
-      this.terminalId = session.terminalId;
-      this.terminalEndpointCheckedAt = 0;
-    }
-    // The fingerprint belongs to the process, not the latest profile. A restored profile clears
-    // the pending state without rewriting that process's identity or replacing its connection.
-    this.profilePending = !matchesRuntimeFingerprint(this.profileFingerprint, project, profile, this.flavor);
-    if (!this.profilePending && !session.nativeRuntime?.scopeFingerprint) this.bindingScopeMismatch = false;
-    if (this.belongsTo(project, profile) && !this.endpointWriteConflict
-      && this.connectionConflictSource === 'profile' && this.status.connection?.state === 'conflict') {
-      this.setConnection({ state: this.attached ? 'connected' : 'disconnected' });
-      return;
-    }
-    this.refreshStatus();
-  }
-
-  /** The session's saved endpoint names another app-server than this one, and not the one it already found gone. */
-  bindingMoved(address: string | undefined): boolean {
-    return Boolean(address && address !== this.transport?.remoteAddress && address !== this.unreachableBinding);
-  }
-
-  deferForProfileChange(): void {
-    const message = `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.`;
-    this.setConnection({ state: 'conflict', message }, 'profile');
-  }
-
-  deferWriteBlocked(project: Project, profile: NativeBackendProfileConfig): { code: string; message: string } {
-    if (!this.belongsTo(project, profile)) {
-      this.deferForProfileChange();
-      return {
-        code: 'NATIVE_PROFILE_CHANGED',
-        message: `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.`,
-      };
-    }
-    this.deferForEndpointConflict();
-    return {
-      code: 'NATIVE_ENDPOINT_CONFLICT',
-      message: this.endpointConflictMessage(),
-    };
-  }
-
-  private assertWritable(): void {
-    if (this.bindingScopeMismatch) throw new AppError('NATIVE_PROFILE_CHANGED', `The previous ${this.label} profile must be restored or its backend explicitly ended before this thread can be resumed.`, 409);
-    if (this.endpointWriteConflict) throw new AppError('NATIVE_ENDPOINT_CONFLICT', this.endpointConflictMessage(), 409);
-  }
-
-  private endpointConflictMessage(): string {
-    return this.terminalEndpointStateValue === 'changed'
-      ? `This ${this.label} terminal is connected to a different backend.`
-      : `This ${this.label} terminal's backend connection could not be verified.`;
-  }
-
-  /**
-   * Writes stay blocked either way, but only a terminal proven to use another app-server is a
-   * conflict. One that could not be verified yet is retried and reads as reconnecting.
-   */
-  private endpointConnection(): NonNullable<NativeStatus['connection']> {
-    return { state: this.terminalEndpointStateValue === 'changed' ? 'conflict' : 'reconnecting', message: this.endpointConflictMessage() };
-  }
-
-  /** Writes wait for the terminal's endpoint to be verified again. */
-  get endpointBlocked(): boolean { return this.endpointWriteConflict; }
-
-  private deferForEndpointConflict(): void {
-    const message = this.endpointConflictMessage();
-    if (!this.endpointWriteConflict || this.status.connection?.message !== message) {
-      this.logRecovery('terminal', this.transport?.remoteAddress ?? 'unknown', 'verify', this.terminalEndpointStateValue === 'changed' ? 'changed' : 'unverified', false);
-    }
-    this.endpointWriteConflict = true;
-    this.setConnection(this.endpointConnection(), 'endpoint');
-  }
-
   get projectCwd(): string { return this.project.cwd; }
 
   /** The actual writer's launch profile, independent of the next provider the user selected. */
@@ -557,6 +497,93 @@ export class CodexSessionRuntime implements CodexThreadReader {
       && this.host.getSession(this.session.id).goal?.status !== 'active';
   }
 
+  /**
+   * Whether the endpoint a reused runtime stands on is still the one the session's terminal uses.
+   * Undefined when this runtime has no live connection to that thread, where there is nothing to
+   * check; `reuseVerdict` then judges the runtime on its own. `force` rechecks the terminal even
+   * if a recent check is cached.
+   */
+  async probeEndpoint(session: Session, project: Project, profile: NativeBackendProfileConfig, force: boolean): Promise<{ state: TerminalEndpointState; changed: boolean } | undefined> {
+    this.connection.syncSessionBinding(session, project, profile);
+    if (!this.transport?.isOnline || this.project.cwd !== project.cwd || this.nativeSessionId !== session.nativeSessionId) return undefined;
+    const state = await this.terminal.endpointState(force || this.connection.endpointBlocked || this.status.connection?.state === 'conflict');
+    // A cold reader's replacement leaves the dead binding saved; that binding is not a new owner.
+    return { state, changed: state === 'changed' || this.connection.bindingMoved(session.nativeRuntime?.address) };
+  }
+
+  /**
+   * Whether this runtime keeps serving the session or a new one replaces it. A runtime that has to
+   * stay because a profile change waits for its turn is marked as deferred here; the caller only
+   * acts on the verdict.
+   */
+  reuseVerdict(session: Session, project: Project, profile: NativeBackendProfileConfig, probe: { state: TerminalEndpointState; changed: boolean } | undefined): 'keep' | 'replace' {
+    const online = () => Boolean(this.transport?.isOnline);
+    if (probe) {
+      if (probe.state === 'unknown' && online()) {
+        if (!this.connection.belongsTo(project, profile)) this.connection.deferForProfileChange();
+        return 'keep';
+      }
+      if (!probe.changed && this.connection.belongsTo(project, profile) && online()
+        && (this.connection.matches(project, profile) || session.nativeRuntime?.address === this.transport!.remoteAddress)) {
+        return 'keep';
+      }
+    }
+    const confirmedProfileRestored = Boolean(session.nativeRuntime?.fingerprint && matchesRuntimeFingerprint(session.nativeRuntime.fingerprint, project, profile, this.flavor));
+    // If the terminal still proves this is the active endpoint, preserve its owner while a
+    // profile change waits. A changed endpoint is reselected by the caller, with this runtime only
+    // detached so it cannot stop the terminal's new owner.
+    if (!probe?.changed && online() && this.project.cwd === project.cwd && this.nativeSessionId === session.nativeSessionId
+      && (this.status.phase === 'busy' || this.activeTurnId) && !confirmedProfileRestored) {
+      this.connection.deferForProfileChange();
+      return 'keep';
+    }
+    return 'replace';
+  }
+
+  /**
+   * Moves the conversation from this runtime onto `replacement`, which the caller built for the
+   * selected profile. The replacement starts first, so a profile that cannot launch never costs the
+   * old writer; the old one is released only once it is idle and verified. A failure after the
+   * release restores the old profile on a new runtime and keeps the desired profile pending, so an
+   * explicit retry attempts it again. Resolves to the runtime that serves the session afterwards.
+   */
+  async switchProfile(replacement: CodexSessionRuntime, steps: ProfileSwitchSteps): Promise<CodexSessionRuntime> {
+    const sessionId = this.session.id;
+    let released = false;
+    try {
+      await replacement.start();
+      if (!await this.connection.releaseForProfileSwitch()) { await replacement.dispose(this.host); return this; }
+      released = true;
+      this.host.updateSession(sessionId, { terminalId: undefined });
+      replacement.attachFeed(steps.feed());
+      await replacement.openOrResume();
+      steps.publish(replacement);
+      const updated = this.host.updateSession(sessionId, { configPending: false, terminalId: undefined });
+      this.host.emit(sessionId, { type: 'session', session: updated });
+      await steps.bind(replacement).catch(error => replacement.profileSwitchFailed(steps.describe(error)));
+      await replacement.terminal.ensureTui().catch(error => replacement.profileSwitchFailed(steps.describe(error)));
+      steps.succeeded();
+      return replacement;
+    } catch (error) {
+      await replacement.dispose(this.host).catch(() => undefined);
+      let restored: CodexSessionRuntime = this;
+      if (released) {
+        // The failed target never receives user input. Restore the old writer, retain the
+        // desired provider and pending flag, and let an explicit retry attempt it again.
+        restored = steps.restore();
+        try {
+          await restored.start();
+          await restored.openOrResume({ model: steps.previousModel });
+          await steps.bind(restored);
+          await restored.terminal.ensureTui();
+        } catch { /* The persisted source binding and original thread remain recoverable. */ }
+      }
+      restored.profileSwitchFailed(steps.describe(error));
+      steps.failed();
+      throw new AppError('NATIVE_PROFILE_SWITCH_FAILED', steps.describe(error), 502);
+    }
+  }
+
   profileSwitchFailed(message: string): void {
     this.refreshStatus({ notice: { text: message, level: 'error', source: 'other' } });
   }
@@ -569,10 +596,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
   async leaveThread(): Promise<string> {
     const busy = () => new AppError('CLI_BUSY', 'The current task is still running; start a new topic when it finishes.', 409);
     const threadId = this.nativeSessionId;
-    if (!threadId || !this.attached) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
+    if (!threadId || !this.connection.attached) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
     if (!this.canSwitchProfile) throw busy();
-    this.assertWritable();
-    const transport = this.requireTransport();
+    this.connection.assertWritable();
+    const transport = this.connection.requireTransport();
     await this.host.transcript?.drain(this.session.id);
     if (!this.canSwitchProfile) throw busy();
     if (this.terminalId) {
@@ -585,209 +612,19 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return threadId;
   }
 
-  /** Release only an idle, verified owner; a provider change never interrupts its current work. */
-  async releaseForProfileSwitch(): Promise<boolean> {
-    if (!this.canSwitchProfile) return false;
-    await this.terminalEndpointState(true);
-    this.assertWritable();
-    const transport = this.requireTransport();
-    const threadId = this.nativeSessionId;
-    const binding = this.host.getSession(this.session.id).nativeRuntime;
-    const loaded = threadId ? await this.loadedThread(threadId, true) : undefined;
-    if (loaded === false && !this.transportBorrowed) {
-      // A saved owner was already gone and this reader spawned an unloaded replacement.
-      await this.dispose(this.host);
-      return true;
-    }
-    if (!threadId || binding?.address !== transport.remoteAddress || loaded !== true) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend could not be verified; it was left running.', 409);
-    }
-    const idle = async () => {
-      const thread = await this.history.readThread(threadId, false);
-      return thread?.id === threadId && thread.status?.type !== 'active' && this.canSwitchProfile;
-    };
-    if (!await idle()) return false;
-    await this.host.transcript?.drain(this.session.id);
-    if (!await idle()) return false;
-    this.assertWritable();
-    const current = this.host.getSession(this.session.id);
-    if (current.nativeSessionId !== threadId || current.nativeRuntime?.address !== binding.address
-      || current.nativeRuntime.fingerprint !== binding.fingerprint || this.transport !== transport) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The backend binding changed during restart; no backend was stopped.', 409);
-    }
-    // Reattached Unix clients have no process handle. Stop only the verified Riffet-owned daemon.
-    if (this.transportBorrowed && !transport.processId
-      && !await stopWorkbenchAppServerAt(binding.address, [credentialDirFor(this.flavor)])) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend process could not be verified; it was left running.', 409);
-    }
-    await this.dispose(this.host);
-    return true;
-  }
-
-  /** Explicit user action, never called by a reader or by ordinary reconnect/send. */
-  async restartBackend(expected: string, address: string): Promise<boolean> {
-    const binding = this.host.getSession(this.session.id).nativeRuntime;
-    if (!binding || binding.fingerprint !== expected || binding.address !== address || !this.profilePending) return false;
-    await this.terminalEndpointState(true);
-    this.assertWritable();
-    const transport = this.requireTransport();
-    const assertTarget = () => {
-      const current = this.host.getSession(this.session.id);
-      if (current.nativeRuntime?.fingerprint !== expected || current.nativeRuntime.address !== address
-        || current.nativeSessionId !== this.nativeSessionId || this.transport !== transport || !transport.isOnline || !this.profilePending) {
-        throw new AppError('NATIVE_LAUNCH_ABORTED', 'The backend binding changed during restart; no backend was stopped.', 409);
-      }
-      this.assertWritable();
-    };
-    if (binding.address !== transport.remoteAddress || !this.nativeSessionId
-      || await this.loadedThread(this.nativeSessionId, true) !== true) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend could not be verified; it was left running.', 409);
-    }
-    const stopBorrowed = this.transportBorrowed && !transport.processId;
-    if (stopBorrowed && !(await listWorkbenchAppServers([credentialDirFor(this.flavor)])).some(server => server.address === binding.address)) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend process could not be verified; it was left running.', 409);
-    }
-    assertTarget();
-    await this.interrupt();
-    await this.host.transcript?.drain(this.session.id);
-    assertTarget();
-    // A borrowed Unix connection has no process handle. Only a verified Riffet process group
-    // may be stopped; closing the socket alone must never be mistaken for stopping its owner.
-    if (stopBorrowed
-      && !await stopWorkbenchAppServerAt(binding.address, [credentialDirFor(this.flavor)])) {
-      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend process could not be verified; it was left running.', 409);
-    }
-    await this.dispose(this.host);
-    // The durable binding stays until a replacement resumes the same native thread. start()
-    // still probes it, so a surviving listener cannot produce a second writer.
-    return true;
-  }
-
   /**
    * `warm` hands over an app-server with a new thread started ahead of this conversation (`launch.ts`);
    * it is asked only by a conversation that has no thread and no process of its own yet.
    */
-  async start(optionsOnly: { reconnectOnly?: boolean; warm?: () => Promise<CodexWarm | undefined> } = {}): Promise<void> {
-    let runtime: CodexSessionRuntime | undefined;
-    const binding = this.session.nativeRuntime;
-    const launchChanged = Boolean(binding?.fingerprint && !matchesRuntimeFingerprint(binding.fingerprint, this.project, this.profile, this.flavor));
-    this.bindingScopeMismatch = Boolean(binding?.scopeFingerprint && binding.scopeFingerprint !== this.scopeFingerprint);
-    const gate = new NotificationGate();
-    const handlers: Pick<CodexAppServerOptions, 'onNotification' | 'onServerRequest' | 'onExit'> = {
-      // A command's completion waits for its PostToolUse record, and everything after it waits behind it.
-      onNotification: (method, params) => gate.push(this.observation?.hold(method, params), () => runtime?.onNotification(method, params)),
-      onServerRequest: request => runtime?.onServerRequest(request) ?? Promise.reject(new Error(`${this.label} runtime is not ready`)),
-      // An exit is taken after a completion held before it, or the completion would land on a runtime that has let go.
-      onExit: error => gate.push(undefined, () => runtime?.onExit(error)),
-    };
-    const options = await conversationServerOptions(this.project, this.profile, this.flavor, this.observation, handlers);
-    runtime = this;
-    const threadId = this.nativeSessionId;
-    const terminalAddress = threadId && this.terminalId
-      ? await this.terminalEndpoint(this.terminalId, threadId).catch(() => undefined)
-      : undefined;
-    const candidates: Array<{ address: string; source: 'terminal' | 'binding' }> = [];
-    if (terminalAddress) candidates.push({ address: terminalAddress, source: 'terminal' });
-    if (binding?.address && !candidates.some(candidate => candidate.address === binding.address)) {
-      candidates.push({ address: binding.address, source: 'binding' });
-    }
-
-    let lastAttachError: unknown;
-    for (const candidate of candidates) {
-      try {
-        this.transport = await this.startAppServer({ ...options, remoteAddress: candidate.address });
-        this.transportBorrowed = true;
-        this.endpointSource = candidate.source;
-        if (binding?.address === candidate.address && launchChanged) {
-          this.profileFingerprint = binding.fingerprint;
-          this.profilePending = true;
-          // Old rows have only a launch hash. A verified terminal proves their cwd/thread; a
-          // headless owner must prove both through the protocol before relaxing the old gate.
-          if (!binding.scopeFingerprint && !terminalAddress) {
-            const thread = threadId ? await this.history.readThread(threadId, false).catch(() => undefined) : undefined;
-            const [storedCwd, projectCwd] = await Promise.all([
-              thread?.cwd ? realpath(thread.cwd).catch(() => undefined) : undefined,
-              realpath(this.project.cwd).catch(() => undefined),
-            ]);
-            this.bindingScopeMismatch = !threadId || await this.loadedThread(threadId, true) !== true
-              || thread?.id !== threadId || !storedCwd || storedCwd !== projectCwd;
-          }
-        } else if (launchChanged) {
-          this.bindingScopeMismatch = true;
-        }
-        this.logRecovery(candidate.source, candidate.address, 'connect', 'connected', false);
-        break;
-      } catch (error) {
-        lastAttachError = error;
-        this.logRecovery(candidate.source, candidate.address, 'connect', isUnavailableSocket(error) ? 'unreachable' : 'failed', false);
-        // A terminal's verified endpoint can still be the active owner even when this socket
-        // failed. Try only another durable endpoint; never create a second writer in that case.
-        if (!isUnavailableSocket(error)) throw error;
-      }
-    }
-
-    if (!this.transport) {
-      if (optionsOnly.reconnectOnly) throw new AppError('STEER_TARGET_CHANGED', `The existing ${this.label} endpoint is unavailable; the instruction was not sent.`, 409);
-      if (terminalAddress) {
-        const error = lastAttachError ?? new Error(`The verified ${this.label} terminal endpoint is unavailable`);
-        this.facts = { link: 'offline', connection: { state: 'failed', message: `The ${this.label} terminal endpoint could not be reached.` }, history: { state: 'error', message: `${this.label} history could not be loaded from the running terminal.` } };
-        this.status = { phase: this.turnPhase('offline'), connection: this.facts.connection, history: this.facts.history };
-        throw error;
-      }
-      // Only a definitively gone endpoint permits a replacement. Its binding is retained until
-      // the replacement confirms the original thread id.
-      this.bindingScopeMismatch = false;
-      this.profilePending = false;
-      this.profileFingerprint = runtimeFingerprintFor(this.project, this.profile, this.flavor);
-      if (binding?.address && lastAttachError && !isUnavailableSocket(lastAttachError)) throw lastAttachError;
-      if (binding?.address && lastAttachError) {
-        this.logRecovery('binding', binding.address, 'connect', 'unreachable', false);
-        this.unreachableBinding = binding.address;
-      }
-      const warm = !binding && !threadId && !this.terminalId ? await optionsOnly.warm?.() : undefined;
-      let spawnedTransport: CodexAppServerClient | undefined;
-      try {
-        if (warm) {
-          warm.attach(handlers);
-          spawnedTransport = warm.transport;
-          this.terminalUnavailable ||= warm.terminalUnavailable;
-          this.warmThread = warm;
-        } else {
-          await this.prepareAttachment();
-          if (this.attachment) options.env = { ...options.env, ...this.attachment.value.launchEnv };
-          const spawned = await spawnConversationServer(this.startAppServer, this.flavor, options);
-          spawnedTransport = spawned.transport;
-          this.terminalUnavailable ||= spawned.terminalUnavailable;
-        }
-        this.transport = spawnedTransport;
-        await this.attachment?.value.bindNative({ address: spawnedTransport.remoteAddress, pid: spawnedTransport.processId });
-      } catch (error) {
-        await spawnedTransport?.dispose();
-        this.transport = undefined;
-        await this.releaseAttachment(false);
-        throw error;
-      }
-      this.transportBorrowed = false;
-      this.endpointSource = 'spawn';
-      this.logRecovery('spawn', this.transport.remoteAddress, 'connect', 'connected', false);
-    }
-    // A sidecar a previous server left on this very process comes back only through the plugin that made it.
-    const saved = this.transportBorrowed && binding?.address === this.transport.remoteAddress ? binding?.attachment : undefined;
-    const owned = saved && this.runtimeHooks?.runtimeHooks(this.flavor.id).find(item => item.owner === saved.hook);
-    if (binding && saved && owned) {
-      const value = await owned.hook.recover({ ...this.runtimeContext(binding.fingerprint), id: saved.id, address: this.transport.remoteAddress }).catch(() => undefined);
-      if (value) this.attachment = { owner: owned.owner, value };
-    }
-    // Riffet's observation hooks run only once confirmed; a conversation without a TUI is confirmed here.
-    await this.observation?.trust(this.transport, this.project.cwd).catch(() => undefined);
-    await this.terminalEndpointState(true);
+  async start(options: { reconnectOnly?: boolean; warm?: () => Promise<CodexWarm | undefined> } = {}): Promise<void> {
+    await this.connection.start(options);
     // Opening the app-server socket is not proof that this client owns the native thread. A
     // cold history reader remains offline until it explicitly resumes a confirmed loaded owner.
     this.facts = {
       link: 'offline',
-      connection: this.endpointWriteConflict
-        ? this.endpointConnection()
-        : this.bindingScopeMismatch
+      connection: this.connection.endpointBlocked
+        ? this.connection.endpointConnection()
+        : this.connection.bindingScopeMismatch
         ? { state: 'conflict', message: `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.` }
         : { state: 'disconnected' },
       history: { state: 'loading' },
@@ -796,41 +633,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
       phase: this.turnPhase('offline'),
       connection: this.facts.connection,
       history: this.facts.history,
-      ...(this.profilePending ? { profilePending: true } : {}),
+      ...(this.connection.profilePending ? { profilePending: true } : {}),
     };
     const control = this.runtimeControl();
     if (control) this.status.runtimeControl = control;
-  }
-
-  private runtimeContext(fingerprint: string): RuntimeContext {
-    return {
-      sessionId: this.session.id, fingerprint, profileConfig: this.profileConfig,
-      // `<backend>/routes` predates hooks; routes already running are found there.
-      directory: join(credentialDirFor(this.flavor), '..', 'routes'),
-      onChange: () => this.refreshStatus(),
-    };
-  }
-
-  /** The first hook that attaches to the process about to spawn. One that fails leaves the process as launched. */
-  private async prepareAttachment(): Promise<void> {
-    for (const { owner, hook } of this.runtimeHooks?.runtimeHooks(this.flavor.id) ?? []) {
-      try {
-        const value = await hook.prepare(this.runtimeContext(this.runtimeFingerprint));
-        if (value) { this.attachment = { owner, value }; return; }
-      } catch (error) {
-        console.warn(`[riffet] plugin ${owner} did not attach to ${this.label}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-  }
-
-  /** `keep` leaves the sidecar serving a native process that outlives this runtime. */
-  private async releaseAttachment(keep: boolean): Promise<void> {
-    const attachment = this.attachment?.value;
-    this.attachment = undefined;
-    try {
-      if (keep) attachment?.detach();
-      else await attachment?.stop();
-    } catch { /* Plugin code is not ours: its failure cannot fail a teardown. */ }
   }
 
   /** The model the sidecar's control is shown for. */
@@ -840,7 +646,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** The sidecar's control on this conversation. Plugin code: one that throws shows nothing. */
   private runtimeControl(status?: NativeStatus): NativeRuntimeControl | undefined {
-    const attachment = this.attachment;
+    const attachment = this.connection.attachment;
     if (!attachment?.value.control) return undefined;
     try {
       const control = attachment.value.control({ model: this.controlModel(status) });
@@ -849,8 +655,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   async runtimeAction(request: NativeRuntimeActionRequest): Promise<void> {
-    this.assertWritable();
-    const attachment = this.attachment?.value;
+    this.connection.assertWritable();
+    const attachment = this.connection.attachment?.value;
     if (!attachment?.act || !this.transport?.isOnline) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'The native process is not connected to its sidecar', 409);
     try {
       await attachment.act({ ...request, model: this.controlModel() });
@@ -860,10 +666,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
     } finally {
       this.refreshStatus();
     }
-  }
-
-  private get runtimeFingerprint(): string {
-    return this.profileFingerprint;
   }
 
   /**
@@ -876,16 +678,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
   async openOrResume(override?: { model?: string; approval?: string }): Promise<string> {
     const source = modelSourceOf(this.profileConfig);
     const reason = source && resolveSource(source, this.profileConfig).reason;
-    if (reason && !this.transportBorrowed) throw new AppError('NATIVE_MODEL_SOURCE_UNAVAILABLE', reason, 409);
-    this.assertWritable();
+    if (reason && !this.connection.transportBorrowed) throw new AppError('NATIVE_MODEL_SOURCE_UNAVAILABLE', reason, 409);
+    this.connection.assertWritable();
     while (this.opening) {
       const opened = await this.opening;
       if (opened) return opened;
     }
-    this.assertWritable();
-    if (this.nativeSessionId && this.transport?.isOnline && this.attached) return this.nativeSessionId;
+    this.connection.assertWritable();
+    if (this.nativeSessionId && this.transport?.isOnline && this.connection.attached) return this.nativeSessionId;
     const task = (async () => {
-      const transport = this.requireTransport();
+      const transport = this.connection.requireTransport();
       const existingId = this.nativeSessionId;
       const current = this.host.getSession(this.session.id);
       const requestedModel = override?.model ?? current.model ?? str(this.profileConfig.defaultModel);
@@ -911,41 +713,40 @@ export class CodexSessionRuntime implements CodexThreadReader {
           thread = response.thread;
           settings = response;
         } catch (error) {
-          this.noteConnectionFailure(error);
-          this.logRecovery(this.endpointSource, transport.remoteAddress, 'resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
-          await this.discardFailedTransport();
+          this.connection.noteConnectionFailure(error);
+          this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
+          await this.connection.discardFailedTransport();
           throw error;
         }
       } else {
         // A warm thread started for the same model and permission is this conversation's first thread.
-        const warm = this.warmThread;
-        this.warmThread = undefined;
+        const warm = this.connection.takeWarm();
         try {
           const response = warm && warm.model === requestedModel && warm.approval === permission.id ? warm.thread : await this.startThread(selection, permission);
           thread = response.thread;
           settings = response;
         } catch (error) {
-          this.noteConnectionFailure(error);
-          this.logRecovery(this.endpointSource, transport.remoteAddress, 'start', isActiveWriterError(error) ? 'conflict' : 'failed', false);
-          await this.discardFailedTransport();
+          this.connection.noteConnectionFailure(error);
+          this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'start', isActiveWriterError(error) ? 'conflict' : 'failed', false);
+          await this.connection.discardFailedTransport();
           throw error;
         }
       }
       if (!thread?.id) {
         const error = new Error(`${this.label} app-server did not return a thread id`);
-        this.noteConnectionFailure(error);
-        this.logRecovery(this.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'missing-thread-id', false);
-        await this.discardFailedTransport();
+        this.connection.noteConnectionFailure(error);
+        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'missing-thread-id', false);
+        await this.connection.discardFailedTransport();
         throw error;
       }
       if (existingId && thread.id !== existingId) {
         const error = new Error(`${this.label} app-server resumed a different thread`);
-        this.noteConnectionFailure(error);
-        this.logRecovery(this.endpointSource, transport.remoteAddress, 'resume', 'wrong-thread', false);
-        await this.discardFailedTransport();
+        this.connection.noteConnectionFailure(error);
+        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'resume', 'wrong-thread', false);
+        await this.connection.discardFailedTransport();
         throw error;
       }
-      this.attached = true;
+      this.connection.markAttached();
       this.nativeSessionId = thread.id;
       // A newly created thread has no older transcript to seed before accepting live events.
       if (!existingId) {
@@ -967,34 +768,15 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
       // Commit the durable endpoint only after Codex confirms the requested thread id. History is
       // a separate read path: a transcript error must not undo an established writer binding.
-      await this.commitRuntimeBinding(transport, thread.id);
-      this.setConnection({ state: 'connected' });
-      this.logRecovery(this.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'confirmed', true);
+      await this.connection.commitBinding(transport, thread.id);
+      this.connection.setConnection({ state: 'connected' });
+      this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, existingId ? 'resume' : 'start', 'confirmed', true);
       await this.refreshEvents().catch(error => this.noteHistoryFailure(error));
       return thread.id;
     })();
     this.opening = task;
     try { return await task; }
     finally { if (this.opening === task) this.opening = undefined; }
-  }
-
-  /** Explicit opens and observer resumes must preserve the same durable native/attachment association. */
-  private async commitRuntimeBinding(transport: CodexAppServerClient, threadId: string): Promise<void> {
-    const current = this.host.getSession(this.session.id);
-    const previous = current.nativeRuntime;
-    const attachment = this.attachment ? { hook: this.attachment.owner, id: this.attachment.value.id }
-      : this.transportBorrowed && previous?.address === transport.remoteAddress ? previous?.attachment : undefined;
-    // A sidecar that cannot bind says so in its own control; the native writer stays verified.
-    try { await this.attachment?.value.bindNative({ address: transport.remoteAddress, nativeSessionId: threadId }); }
-    catch { /* reported by the plugin */ }
-    // A control outage must not erase a verified native writer or lose the attachment needed on reconnect.
-    this.host.updateSession(this.session.id, {
-      ...(this.flavor.id === 'codex' && current.configPending && current.backendProfileId === this.profile.id ? { configPending: false } : {}),
-      nativeRuntime: {
-        address: transport.remoteAddress, fingerprint: this.runtimeFingerprint, scopeFingerprint: this.scopeFingerprint,
-        profileId: this.profile.id, ...(attachment ? { attachment } : {}),
-      },
-    });
   }
 
   private async resumeWithConfiguration(threadId: string, selection: NativeModelSelection, permission: ReturnType<typeof permissionOf> | undefined): Promise<{ thread: RpcThread } & Record<string, unknown>> {
@@ -1009,7 +791,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...await this.extensionsOffConfig(),
       ...standing?.config,
     };
-    return await this.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
+    return await this.connection.requireTransport().request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
       ...standing?.instructions,
       threadId,
       cwd: this.project.cwd,
@@ -1028,7 +810,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private async standingThread(): Promise<{ instructions: { baseInstructions: string; developerInstructions: string }; config: Record<string, unknown> } | undefined> {
     const standing = this.standing();
     if (!standing) return undefined;
-    const transport = this.requireTransport();
+    const transport = this.connection.requireTransport();
     await useStandingSkillRoots(transport, standing);
     const riffet = Object.keys(this.riffetMcpConfig()).map(key => key.slice('mcp_servers.'.length));
     return {
@@ -1086,7 +868,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // handed-over name, or a plugin's server), so only defined names reach it. If the config cannot be read, nothing
     // is switched off rather than risking the launch.
     let known: Set<string>;
-    try { known = await readConfiguredMcpNames(this.requireTransport(), this.project.cwd); }
+    try { known = await readConfiguredMcpNames(this.connection.requireTransport(), this.project.cwd); }
     catch { return {}; }
     return Object.fromEntries(names.filter(name => known.has(name)).map(name => [`mcp_servers.${name}.enabled`, false]));
   }
@@ -1094,249 +876,20 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private async startThread(selection: NativeModelSelection, permission: ReturnType<typeof permissionOf>): Promise<{ thread: RpcThread } & Record<string, unknown>> {
     const standing = await this.standingThread();
     const config = { ...this.riffetMcpConfig(), ...await this.extensionsOffConfig(), ...standing?.config };
-    return await this.requireTransport().request<ThreadStart>('thread/start',
+    return await this.connection.requireTransport().request<ThreadStart>('thread/start',
       newThreadRequest(this.flavor, this.project.cwd, selection, this.permissionParams(permission, 'sandbox', true), config, standing?.instructions));
-  }
-
-  /**
-   * The launch of a terminal client joining this runtime's app-server, or undefined where the build
-   * or the endpoint offers no shared transport. `ensureTui` starts it as Riffet's own terminal;
-   * `terminalLaunch` hands it to the reader's terminal.
-   */
-  async tuiLaunchSpec(): Promise<NativePtyLaunchSpec | undefined> {
-    if (!this.transport) return undefined;
-    // A recovered old process has no recoverable launch config beyond its hash. Do not launch a
-    // new remote TUI with the edited provider flags; the protocol conversation remains usable.
-    if (this.transportBorrowed && this.profilePending) return undefined;
-    const probe = await probeAppServer(executableOf(this.profile, this.flavor));
-    const shared = this.flavor.terminalTransport(probe);
-    if (shared === 'none' || this.terminalUnavailable) return undefined;
-    const address = this.transport.remoteAddress;
-    if (shared === 'ws' ? !address.startsWith('ws:') || !this.transport.authToken : !address.startsWith('unix:')) return undefined;
-    const token = shared === 'ws' ? this.transport.authToken : undefined;
-    const command = executableOf(this.profile, this.flavor);
-    // Riffet's own observation hooks are confirmed on the server first, so the TUI does not ask
-    // about them each time it starts; a failure leaves the CLI's prompt as the fallback.
-    await this.observation?.trust(this.transport, this.project.cwd).catch(() => undefined);
-    // Directory trust is a global override, so it stays ahead of `resume`. Review of other hooks
-    // remains the CLI's own prompt, lifted into Riffet by TerminalDialogObserver; the CLI persists
-    // each trusted hook hash. Disable the separate startup update prompt, which otherwise returns
-    // after every Codex release until the reader dismisses it in the terminal.
-    const args = [
-      ...this.flavor.args(this.profileConfig), ...codexTrustArgs(this.project.cwd), '-c', 'check_for_update_on_startup=false',
-      '--remote', address, ...(token ? ['--remote-auth-token-env', TUI_TOKEN_ENV] : []),
-      // Riffet scrolls tmux history. A full-screen TUI leaves that history empty, so use the
-      // CLI's inline mode when this installed build advertises it.
-      ...(probe.noAltScreen ? ['--no-alt-screen'] : []),
-      '--cd', this.project.cwd, 'resume', this.nativeSessionId!,
-    ];
-    const invocation = codexInvocation([command, ...args], this.project.cwd, this.nativeSessionId!);
-    return {
-      command,
-      args,
-      env: this.flavor.env(this.profileConfig),
-      ...(token ? { secretEnv: { [TUI_TOKEN_ENV]: token } } : {}),
-      cwd: this.project.cwd,
-      title: this.label,
-      // Recovery still matches the live pane's argv and cwd; this only rules out a look-alike launch.
-      ...(invocation ? { launchMarker: codexInvocationFingerprint(invocation) } : {}),
-    };
-  }
-
-  async ensureTui(): Promise<string | undefined> {
-    // While a terminal holds the conversation it is the only client; Riffet's own TUI must not come back.
-    if (this.host.getSession(this.session.id).terminalHold) return undefined;
-    this.assertWritable();
-    if (!this.transport) return undefined;
-    let existing: Awaited<ReturnType<NativeBackendHost['terminal']['get']>> | undefined;
-    if (this.terminalId) {
-      try { existing = await this.host.terminal.get(this.terminalId); }
-      catch (error) {
-        if (!isMissingTerminalError(error)) {
-          this.deferForEndpointConflict();
-          throw new AppError('NATIVE_ENDPOINT_CONFLICT', `The ${this.label} terminal state could not be verified, so no new terminal was started.`, 409);
-        }
-      }
-    }
-    if (existing?.state === 'running') {
-      // The write gate just verified this terminal. Reuse that short-lived proof instead of
-      // scanning the same process tree again and turning a transient timeout into a conflict.
-      const state = await this.terminalEndpointState(true);
-      if (state === 'verified') return existing.id;
-      // A running TUI may be the only remaining owner of this thread. Never replace it based on
-      // an in-memory transport identity or a profile change; the terminal worker verifies the
-      // actual endpoint when it can.
-      this.deferForEndpointConflict();
-      throw new AppError('NATIVE_ENDPOINT_CONFLICT', this.endpointConflictMessage(), 409);
-    }
-    if (existing && existing.state !== 'exited') {
-      this.deferForEndpointConflict();
-      throw new AppError('NATIVE_ENDPOINT_CONFLICT', `A ${this.label} terminal is still changing state and its endpoint is not verified.`, 409);
-    }
-    const spec = await this.tuiLaunchSpec();
-    if (!spec) return undefined;
-    const terminal = await this.host.launchPty(this.session, this.project, spec);
-    this.terminalId = terminal.id;
-    this.terminalEndpointCheckedAt = 0;
-    return terminal.id;
-  }
-
-  /**
-   * Relaunches the remote TUI so it probes the session's current terminal colours: Codex reads them
-   * once at startup and keeps its diff and composer palette for the life of the process. The thread
-   * lives in the app-server, so the new TUI resumes it unchanged. A turn in flight is never cut off;
-   * the relaunch waits for it to settle. Callers hold the session lock.
-   */
-  async relaunchTuiForAppearance(): Promise<void> {
-    if (this.activeTurnId || this.dispatchCommandId || this.interaction || this.status.phase === 'busy' || this.status.phase === 'attention') {
-      this.appearancePending = true;
-      return;
-    }
-    this.appearancePending = false;
-    const terminalId = this.terminalId;
-    if (!terminalId || !this.transport?.isOnline || this.terminalUnavailable || this.profilePending) return;
-    const current = await this.host.terminal.get(terminalId).catch(() => undefined);
-    const wanted = this.host.getSession(this.session.id).terminalAppearance;
-    if (!current || current.state !== 'running' || !wanted || sameTerminalAppearance(current.appearance, wanted)) return;
-    // Stop the old TUI only where `ensureTui` will launch its successor: a writable runtime whose
-    // terminal is verified on this endpoint, and a build that still offers a remote TUI on it.
-    if (this.host.getSession(this.session.id).terminalHold) return;
-    try { this.assertWritable(); } catch { return; }
-    if (await this.terminalEndpointState(true) !== 'verified') return;
-    const shared = this.flavor.terminalTransport(await probeAppServer(executableOf(this.profile, this.flavor)));
-    const address = this.transport?.remoteAddress;
-    if (!address || shared === 'none' || (shared === 'ws' ? !address.startsWith('ws:') || !this.transport?.authToken : !address.startsWith('unix:'))) return;
-    await this.host.terminal.stop(terminalId);
-    await this.ensureTui();
-  }
-
-  async terminalEndpointState(force = false): Promise<TerminalEndpointState> {
-    if (!this.terminalId || !this.nativeSessionId || !this.transport?.remoteAddress) return this.confirmTerminalEndpoint('absent');
-    if (this.terminalEndpointCheck) {
-      const checking = this.terminalEndpointCheck;
-      const state = await checking;
-      if (!force || state !== 'unknown') return state;
-      if (this.terminalEndpointCheck === checking) this.terminalEndpointCheck = undefined;
-      // Another caller may already have started the fresh check while this one was waiting.
-      if (this.terminalEndpointCheck) return await this.terminalEndpointCheck;
-    }
-    const elapsed = Date.now() - this.terminalEndpointCheckedAt;
-    if (this.terminalEndpointCheckedAt && elapsed < 2_500 && (!force || elapsed < 750)
-      && (!force || this.terminalEndpointStateValue !== 'unknown')) return this.terminalEndpointStateValue;
-    const task = (async () => {
-      // A read-only scan can time out while tmux or the event loop is busy. A user action gets
-      // one fresh retry, but a changed endpoint or two unverified scans still block every write.
-      for (let attempt = 0; attempt < (force ? 2 : 1); attempt += 1) {
-        const terminalId = this.terminalId;
-        const threadId = this.nativeSessionId;
-        const address = this.transport?.remoteAddress;
-        let state: TerminalEndpointState = 'unknown';
-        try {
-          if (!terminalId || !threadId || !address) state = 'absent';
-          else {
-            let terminal: Awaited<ReturnType<NativeBackendHost['terminal']['get']>> | undefined;
-            try { terminal = await this.host.terminal.get(terminalId); }
-            catch (error) { if (!isMissingTerminalError(error)) throw error; }
-            if (!terminal || terminal.state === 'exited') state = 'absent';
-            else if (terminal.state === 'running') {
-              const endpoint = await this.terminalEndpoint(terminalId, threadId);
-              state = endpoint ? endpoint === address ? 'verified' : 'changed' : 'unknown';
-            }
-          }
-        } catch { /* Retry an unverified scan without sending or replacing anything. */ }
-        // A scan of a previous binding cannot verify the terminal selected while it was in flight.
-        if (terminalId !== this.terminalId || threadId !== this.nativeSessionId || address !== this.transport?.remoteAddress) continue;
-        if (state === 'unknown') continue;
-        if (state === 'changed') {
-          this.terminalEndpointStateValue = state;
-          this.terminalEndpointCheckedAt = Date.now();
-          this.deferForEndpointConflict();
-        } else {
-          this.confirmTerminalEndpoint(state);
-        }
-        return state;
-      }
-      this.terminalEndpointStateValue = 'unknown';
-      this.terminalEndpointCheckedAt = Date.now();
-      this.deferForEndpointConflict();
-      return 'unknown' as const;
-    })();
-    this.terminalEndpointCheck = task;
-    try { return await task; }
-    finally { if (this.terminalEndpointCheck === task) this.terminalEndpointCheck = undefined; }
-  }
-
-  private confirmTerminalEndpoint(state: 'absent' | 'verified'): 'absent' | 'verified' {
-    const wasBlocked = this.endpointWriteConflict;
-    this.endpointWriteConflict = false;
-    this.terminalEndpointStateValue = state;
-    this.terminalEndpointCheckedAt = Date.now();
-    if (this.bindingScopeMismatch || (this.status.connection?.state === 'conflict' && this.connectionConflictSource !== 'endpoint')) return state;
-    this.connectionConflictSource = undefined;
-    if (this.attached) {
-      this.refreshStatus({ link: this.resumed(), connection: { state: 'connected' } });
-    } else if (this.status.connection?.state === 'conflict' || wasBlocked) {
-      this.refreshStatus({ link: 'offline', connection: { state: 'disconnected' } });
-    }
-    return state;
-  }
-
-  private async terminalEndpoint(terminalId: string, threadId: string): Promise<string | undefined> {
-    return await codexTerminalEndpoint(this.host, this.session.id, terminalId, threadId, this.project.cwd, this.transport?.remoteAddress);
-  }
-
-  private async loadedThread(threadId: string, fresh = false): Promise<boolean | undefined> {
-    if (!fresh && this.loadedCheckThreadId === threadId && Date.now() - this.loadedCheckAt < 5_000) return this.loadedCheck;
-    const clearCheck = () => {
-      this.loadedCheck = undefined;
-      this.loadedCheckAt = 0;
-      this.loadedCheckThreadId = undefined;
-    };
-    let cursor: string | undefined;
-    for (let page = 0; page < 100; page += 1) {
-      let result: { data?: unknown; nextCursor?: string | null };
-      try {
-        result = await this.requireTransport().request<{ data?: unknown; nextCursor?: string | null }>('thread/loaded/list', {
-          ...(cursor ? { cursor } : {}), limit: 100,
-        });
-      } catch {
-        // Older app-server versions may not expose this endpoint. Unknown is different from the
-        // authoritative empty list and must never trigger a writer-creating resume.
-        clearCheck();
-        return undefined;
-      }
-      if (!Array.isArray(result.data)) {
-        clearCheck();
-        return undefined;
-      }
-      if (result.data.includes(threadId)) {
-        this.loadedCheck = true;
-        this.loadedCheckAt = Date.now();
-        this.loadedCheckThreadId = threadId;
-        return true;
-      }
-      if (!result.nextCursor) {
-        this.loadedCheck = false;
-        this.loadedCheckAt = Date.now();
-        this.loadedCheckThreadId = threadId;
-        return false;
-      }
-      cursor = result.nextCursor;
-    }
-    clearCheck();
-    return undefined;
   }
 
   /** Attach only when the selected endpoint already proves it owns this loaded thread. */
   async attachLoadedOwner(): Promise<void> {
     const threadId = this.nativeSessionId;
-    if (!threadId || this.attached || !this.transport?.isOnline) return;
-    if (this.bindingScopeMismatch) {
-      this.deferForProfileChange();
+    if (!threadId || this.connection.attached || !this.transport?.isOnline) return;
+    if (this.connection.bindingScopeMismatch) {
+      this.connection.deferForProfileChange();
       return;
     }
-    if (this.endpointWriteConflict) {
-      this.deferForEndpointConflict();
+    if (this.connection.endpointBlocked) {
+      this.connection.deferForEndpointConflict();
       return;
     }
     if (this.opening) {
@@ -1346,20 +899,20 @@ export class CodexSessionRuntime implements CodexThreadReader {
       return;
     }
     const task = (async (): Promise<string | undefined> => {
-      const loaded = await this.loadedThread(threadId, true);
-      if (loaded !== true || this.attached || !this.transport?.isOnline) return undefined;
-      if (this.bindingScopeMismatch) {
-        this.deferForProfileChange();
+      const loaded = await this.connection.loadedThread(threadId, true);
+      if (loaded !== true || this.connection.attached || !this.transport?.isOnline) return undefined;
+      if (this.connection.bindingScopeMismatch) {
+        this.connection.deferForProfileChange();
         return undefined;
       }
-      if (this.endpointWriteConflict) {
-        this.deferForEndpointConflict();
+      if (this.connection.endpointBlocked) {
+        this.connection.deferForEndpointConflict();
         return undefined;
       }
       if (Date.now() - this.attachAttemptAt < 15_000) return undefined;
       this.attachAttemptAt = Date.now();
       try {
-        const transport = this.requireTransport();
+        const transport = this.connection.requireTransport();
         const permissionObservation = this.permissionObservation;
         const modeObservation = this.modeObservation;
         const response = await transport.request<{ thread: RpcThread } & Record<string, unknown>>('thread/resume', {
@@ -1369,16 +922,16 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.noteThread(response.thread, this.modeObservation === modeObservation ? response : undefined);
         if (this.permissionObservation === permissionObservation) this.adoptApproval(response);
         if (this.modeObservation === modeObservation) this.adoptSettingsMode(response);
-        this.attached = true;
+        this.connection.markAttached();
         this.applyThreadStatus(response.thread.status);
         if (this.facts.link === 'offline' || this.facts.link === 'starting') this.refreshStatus({ link: 'quiet' });
-        await this.commitRuntimeBinding(transport, threadId);
-        this.setConnection({ state: 'connected' });
-        this.logRecovery(this.endpointSource, transport.remoteAddress, 'observer-resume', 'confirmed', true);
+        await this.connection.commitBinding(transport, threadId);
+        this.connection.setConnection({ state: 'connected' });
+        this.connection.logRecovery(this.connection.endpointSource, transport.remoteAddress, 'observer-resume', 'confirmed', true);
         return threadId;
       } catch (error) {
-        this.noteConnectionFailure(error);
-        this.logRecovery(this.endpointSource, this.transport?.remoteAddress ?? 'unknown', 'observer-resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
+        this.connection.noteConnectionFailure(error);
+        this.connection.logRecovery(this.connection.endpointSource, this.transport?.remoteAddress ?? 'unknown', 'observer-resume', isActiveWriterError(error) ? 'conflict' : 'failed', false);
         return undefined;
       }
     })();
@@ -1391,7 +944,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** Local evidence of a live turn on the attached owner connection. */
   private foregroundTarget(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
     const turnId = this.turns.unsettledActiveTurnId;
-    if (!this.attached || !this.transport?.isOnline || this.bindingScopeMismatch || this.endpointWriteConflict ||
+    if (!this.connection.attached || !this.transport?.isOnline || this.connection.bindingScopeMismatch || this.connection.endpointBlocked ||
       !this.nativeSessionId || !turnId ||
       this.status.connection?.state !== 'connected' || this.status.phase !== 'busy' || this.currentInteraction) return undefined;
     const ownerRunId = this.turns.turnRun(turnId)?.runId;
@@ -1410,7 +963,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private assertSteerTarget(target: NativeTurnTarget): void {
-    this.assertWritable();
+    this.connection.assertWritable();
     const live = this.steerTarget;
     if (!live || live.nativeSessionId !== target.nativeSessionId || live.turnId !== target.turnId ||
       this.host.getSession(this.session.id).nativeSessionId !== target.nativeSessionId) {
@@ -1438,7 +991,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.turns.ensureTurnRun(target.turnId);
     const ownerRunId = this.turns.turnRun(target.turnId)?.runId;
     const resolvedConfig = this.turns.turnConfig(target.turnId);
-    const transport = this.requireTransport();
+    const transport = this.connection.requireTransport();
     const taggedInput = this.flavor.id === 'traex' ? input.input.map(part => {
       const value = asRecord(part);
       if (value?.type !== 'text' || value.text !== input.renderedText) return part;
@@ -1487,13 +1040,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
     command?: CodexNativeCommand;
     commitDispatchFence(binding?: NativeDispatchBinding): unknown;
   }): Promise<{ turnId: string }> {
-    this.assertWritable();
+    this.connection.assertWritable();
     if (input.command) return await this.sendCommand(input, input.command);
     const requestedModel = input.config.model ?? str(this.profileConfig.defaultModel);
     const requestedSelection = parseNativeModelSelection(requestedModel);
     const submittedAt = new Date().toISOString();
     this.turns.submitCommand(input.commandId, input.runId, submittedAt);
-    const transport = this.requireTransport();
+    const transport = this.connection.requireTransport();
     const modeObservation = this.modeObservation;
     const modelSelection = await resolveModelSelection(transport, this.flavor, requestedSelection);
     const effort = nativeModelEffort(modelSelection);
@@ -1505,7 +1058,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     while (this.modeReconciliation) await this.modeReconciliation;
     // Ordinary send follows the current foreground, unlike an explicit user-targeted steer.
     // Select after the final terminal await; a completed/replaced turn must never be steered.
-    this.assertWritable();
+    this.connection.assertWritable();
     const activeTurnId = this.turns.unsettledActiveTurnId;
     // The TUI may tighten permissions or resolve a mode decision during preparation. Fence and
     // submit the same effective config, not the adapter's earlier snapshot.
@@ -1614,12 +1167,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
       }
     };
     assertIdle();
-    const transport = this.requireTransport();
+    const transport = this.connection.requireTransport();
     const terminal = this.terminalId ? await this.host.terminal.get(this.terminalId).catch(() => undefined) : undefined;
     // The setter ACK is not application evidence. Verify the final native snapshot after all
     // other preparation awaits, including on fresh threads, before the irreversible command.
     const verified = await this.verifyCommandConfig(input.config, input.nativeSessionId);
-    this.assertWritable();
+    this.connection.assertWritable();
     assertIdle();
     if (transport !== this.transport || input.nativeSessionId !== this.nativeSessionId || verified.observation !== this.permissionObservation) {
       throw new AppError('NATIVE_COMMAND_CONFIG_UNVERIFIED', 'Native settings changed before the command could be submitted.', 409);
@@ -1676,7 +1229,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private async verifyCommandConfig(config: NativeRunConfig, threadId: string): Promise<{ config: NativeRunConfig; observation: number }> {
-    const transport = this.requireTransport();
+    const transport = this.connection.requireTransport();
     const fail = (field: string) => new AppError('NATIVE_COMMAND_CONFIG_UNVERIFIED', `Native command settings were not confirmed (${field}).`, 409);
     if (this.commandConfigObserver) throw fail('concurrent configuration');
     const notifications: Record<string, unknown>[] = [];
@@ -1717,7 +1270,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       };
       try {
         assertNoConflict();
-        this.assertWritable();
+        this.connection.assertWritable();
         if (transport !== this.transport || !transport.isOnline || threadId !== this.nativeSessionId) throw fail('connection');
         if (this.activeTurnId || this.interaction || this.status.phase === 'busy') throw new AppError('CLI_BUSY', 'Finish or stop the current turn before running this command.', 409);
         // Unlike resume overrides, this applies to an already loaded thread. Null effort preserves
@@ -1793,7 +1346,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   async interrupt(targetTurnId?: string, targetThreadId = this.nativeSessionId): Promise<void> {
-    this.assertWritable();
+    this.connection.assertWritable();
     const runs = this.host.listRuns?.(this.session.id);
     const unresolved = (run: Run) => run.native && !run.native.nativeTurnId
       && (!run.native.nativeSessionId || run.native.nativeSessionId === this.nativeSessionId)
@@ -1812,12 +1365,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
       throw new AppError('NATIVE_SESSION_NOT_CONNECTED', `The requested ${this.label} child is not associated with this session.`, 409);
     }
     if (!this.transport?.isOnline) throw new Error(`${this.label} app-server is offline; the turn has not been confirmed stopped.`);
-    if (!this.attached) {
+    if (!this.connection.attached) {
       // A reconnect has not observed the running turn yet. Rejoin only a verified loaded owner,
       // then read its current turn; lack of local state is not proof that the task already stopped.
       await this.attachLoadedOwner();
-      this.assertWritable();
-      if (!this.attached) throw new AppError('NATIVE_SESSION_NOT_CONNECTED', `The ${this.label} thread is not attached; its turn has not been confirmed stopped.`, 409);
+      this.connection.assertWritable();
+      if (!this.connection.attached) throw new AppError('NATIVE_SESSION_NOT_CONNECTED', `The ${this.label} thread is not attached; its turn has not been confirmed stopped.`, 409);
       await this.refreshEvents();
       if (!this.historySnapshotReady) throw new AppError('NATIVE_HISTORY_UNAVAILABLE', `The current ${this.label} turn could not be read; interruption was not confirmed.`, 503);
     }
@@ -1834,7 +1387,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     timeout.unref();
     try {
       await Promise.race([
-        this.requireTransport().request('turn/interrupt', { threadId: targetThreadId, turnId }).then(() => completed),
+        this.connection.requireTransport().request('turn/interrupt', { threadId: targetThreadId, turnId }).then(() => completed),
         timeoutReached,
       ]);
     } finally {
@@ -1856,7 +1409,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   async applyThreadConfig(config: { model?: string; approval?: string; mode?: string }, updateApproval = true): Promise<{ approval?: string; mode?: string }> {
-    this.assertWritable();
+    this.connection.assertWritable();
     const observedBeforeConfig = this.permissionObservation;
     let effectiveApproval: string | undefined;
     let effectiveMode: string | undefined;
@@ -1873,7 +1426,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         }
       }
       const threadId = await this.openOrResume({ model: config.model, ...(updateApproval ? { approval: config.approval } : {}) });
-      const transport = this.requireTransport();
+      const transport = this.connection.requireTransport();
       const selection = await resolveModelSelection(transport, this.flavor, parseNativeModelSelection(config.model));
       const effort = nativeModelEffort(selection);
       const serviceTier = fastServiceTier(this.flavor, selection.model, nativeModelFast(selection));
@@ -1945,7 +1498,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    return await listModels(this.requireTransport(), this.flavor);
+    return await listModels(this.connection.requireTransport(), this.flavor);
   }
 
   subscribe(listener: (message: NativeControlMessage) => void): () => void {
@@ -1971,7 +1524,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
    * a failing connection or history) still has nothing but the read, so it keeps the quick cadence.
    */
   private pushHealthy(): boolean {
-    return this.attached && this.transport?.isOnline === true && !this.bindingScopeMismatch && !this.endpointWriteConflict
+    return this.connection.attached && this.transport?.isOnline === true && !this.connection.bindingScopeMismatch && !this.connection.endpointBlocked
       && this.status.connection?.state === 'connected' && this.status.history?.state === 'ready';
   }
 
@@ -1988,7 +1541,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (!this.refreshTask) void this.refreshEvents().catch(error => this.noteHistoryFailure(error));
       // An unverified endpoint is usually a scan that timed out, not a different owner. Re-check it
       // (at most every couple of seconds, by the state's own cache) so the conflict clears on its own.
-      if (this.endpointWriteConflict) void this.terminalEndpointState().then(() => this.attachLoadedOwner());
+      if (this.connection.endpointBlocked) void this.terminal.endpointState().then(() => this.attachLoadedOwner());
       else void this.attachLoadedOwner();
       this.activities.sync();
       this.scheduleHistoryPoll();
@@ -2017,9 +1570,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.noteHistoryFailure(error);
       this.historySnapshotReady = false;
     }
-    if (!this.attached && this.nativeSessionId && this.transcriptLoaded) {
-      await this.loadedThread(this.nativeSessionId).catch(() => undefined);
-      this.refreshStatus({ link: 'offline', connection: this.status.connection?.state === 'conflict' || this.endpointWriteConflict ? this.status.connection : { state: 'disconnected' } });
+    if (!this.connection.attached && this.nativeSessionId && this.transcriptLoaded) {
+      await this.connection.loadedThread(this.nativeSessionId).catch(() => undefined);
+      this.refreshStatus({ link: 'offline', connection: this.status.connection?.state === 'conflict' || this.connection.endpointBlocked ? this.status.connection : { state: 'disconnected' } });
     }
     void this.subagents.refresh();
     // A resumed thread reports nothing until its next turn, so the rollout is consulted once when
@@ -2140,7 +1693,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       pending.candidateResponse = { requestId: response.requestId, fingerprint };
       pending.candidateSent = true;
       try {
-        await this.requireTransport().request('mode/change/respond', {
+        await this.connection.requireTransport().request('mode/change/respond', {
           threadId: str(pending.request.params.threadId) ?? this.nativeSessionId,
           requestId: str(pending.request.params.requestId),
           decision,
@@ -2270,7 +1823,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (this.sendingAsyncAnswers.has(question.questionItemId)) return { status: 'uncertain', message: `${this.label} is still receiving this answer.` };
     this.sendingAsyncAnswers.add(question.questionItemId);
     try {
-      await this.requireTransport().request('turn/steer', {
+      await this.connection.requireTransport().request('turn/steer', {
         threadId: this.nativeSessionId,
         input: [{ type: 'text', text: asyncQuestionReply(question, answer), text_elements: [] }],
         expectedTurnId: question.turnId,
@@ -2318,15 +1871,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.pending.clear();
     this.interaction = undefined;
     this.asyncQuestions = [];
-    const transport = this.transport;
-    this.transport = undefined;
-    const preserveOwner = options.keepRunning && (this.transportBorrowed || this.attached);
-    if (preserveOwner && transport?.detach) await transport.detach();
-    else await transport?.dispose();
-    await this.releaseAttachment(Boolean(preserveOwner));
+    await this.connection.releaseTransport(options.keepRunning);
     if (!options.keepRunning && this.terminalId) await host.terminal.stop(this.terminalId).catch(() => undefined);
-    this.transportBorrowed = false;
-    this.attached = false;
+    this.connection.markClosed();
     this.listeners.clear();
     this.subagents.clear();
     this.drafts.clear();
@@ -2346,22 +1893,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** The highest number handed out so far: a steer's baseline for "events after the input". */
   private get headSequence(): number { return this.space.peekNext() - 1; }
-
-  private requireTransport(): CodexAppServerClient {
-    if (!this.transport?.isOnline) throw new Error(`${this.label} app-server is offline`);
-    return this.transport;
-  }
-
-  private async discardFailedTransport(): Promise<void> {
-    this.history.beginMaterialization();
-    const transport = this.transport;
-    this.transport = undefined;
-    this.attached = false;
-    if (!transport) return;
-    if (this.transportBorrowed && transport.detach) await transport.detach();
-    else await transport.dispose();
-    await this.releaseAttachment(this.transportBorrowed);
-  }
 
   hasEmptyHistoryBaseline(threadId: string): boolean {
     return this.history.materialization?.threadId === threadId;
@@ -2585,7 +2116,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // `notLoaded` is an observation about this reader connection. It cannot prove that another
       // Codex endpoint stopped the thread, so only an explicitly attached owner drives phase.
       if (phaseStillCurrent && this.status === statusBeforeThread && this.turns.unchangedSince(turnsBeforeThread) &&
-        (this.attached || (this.loadedCheck === true && this.loadedCheckThreadId === threadId && Date.now() - this.loadedCheckAt < 5_000))) {
+        (this.connection.attached || this.connection.loadedOwnerFresh(threadId))) {
         const target = this.activeTurnId ? turns.find(turn => turn.id === this.activeTurnId) : undefined;
         // Unlike a provisional interrupted copy on an active thread, the same target plus the
         // verified owner's idle/error state confirms a lost interruption completion.
@@ -2701,7 +2232,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const params = { threadId, ...(cursor ? { cursor } : {}), limit, sortDirection, itemsView: itemsView ?? 'full' };
     let flushError: unknown;
     try {
-      const page = await this.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
+      const page = await this.connection.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
       if (Array.isArray(page.data)) this.history.noteMaterialized(threadId, page.data);
       this.history.clearChildPending(threadId);
       return page;
@@ -2714,7 +2245,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         // persisted legacy history is a fallback only at the head (opaque cursors cannot be
         // translated safely). Never replace it with an empty successful snapshot.
         try {
-          const page = await this.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
+          const page = await this.connection.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
           if (Array.isArray(page.data)) this.history.noteMaterialized(threadId, page.data);
           this.history.clearChildPending(threadId);
           return page;
@@ -2828,7 +2359,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     for (;;) {
       if (this.importStopped) return;
-      const page = await this.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', {
+      const page = await this.connection.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', {
         threadId, ...(cursor ? { cursor } : {}), limit: IMPORT_PAGE_TURNS, sortDirection: 'asc', itemsView: 'full',
       });
       if (!Array.isArray(page.data)) throw new Error(`${this.label} app-server thread/turns/list returned invalid history data.`);
@@ -2860,7 +2391,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     let cursor: string | undefined;
     for (let pages = 0; pages < 1000; pages += 1) {
       let response: { data?: RpcTurn[]; nextCursor?: string | null };
-      const request = (itemsView: string) => this.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', {
+      const request = (itemsView: string) => this.connection.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', {
         threadId, ...(cursor ? { cursor } : {}), limit: 100, sortDirection: 'asc', itemsView,
       });
       try { response = await request('notLoaded'); } catch { response = await request('summary'); }
@@ -3042,9 +2573,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // An interrupted item may never be committed; the reset below drops whatever it streamed.
       if (turnId) this.drafts.dropTurn(turnId);
       this.refreshStatus({ link: this.dispatchCommandId ? 'working' : 'quiet', notice: undefined });
-      if (this.appearancePending && this.status.phase === 'idle') {
+      if (this.terminal.appearancePending && this.status.phase === 'idle') {
         // This handler can inherit the async scope of a locked operation; queue behind it instead.
-        const relaunch = () => this.relaunchTuiForAppearance();
+        const relaunch = () => this.terminal.relaunchTuiForAppearance();
         void (this.host.withDetachedSessionLock ? this.host.withDetachedSessionLock(this.session.id, relaunch) : this.host.withSessionLock(this.session.id, relaunch)).catch(() => undefined);
       }
       void this.refreshEvents()
@@ -3478,7 +3009,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** Reads the thread's goal once it is attached; a CLI without goals answers with an error and leaves the stored one. */
   private async readGoal(threadId: string): Promise<void> {
     try {
-      const response = await this.requireTransport().request<{ goal?: unknown }>('thread/goal/get', { threadId });
+      const response = await this.connection.requireTransport().request<{ goal?: unknown }>('thread/goal/get', { threadId });
       if (this.nativeSessionId !== threadId) return;
       const goal = codexGoal(response.goal);
       // The thread keeps a finished goal until the next one; here it already stepped aside unless it was still on show.
@@ -3654,10 +3185,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const turnId = requested.phase === 'busy' || requested.phase === 'attention' ? this.activeTurnId : undefined;
     const next: NativeStatus = withActivity({
       ...requested,
-      profilePending: this.profilePending || undefined,
+      profilePending: this.connection.profilePending || undefined,
       phase: this.turnPhase(requested.phase),
       ...(turnId ? { activeTurnId: this.turns.turnRun(turnId)?.runId ?? turnId } : {}),
-      ...(turnId && this.attached && this.transport?.isOnline && !this.bindingScopeMismatch && !this.endpointWriteConflict &&
+      ...(turnId && this.connection.attached && this.transport?.isOnline && !this.connection.bindingScopeMismatch && !this.connection.endpointBlocked &&
         facts.connection?.state === 'connected' && requested.phase === 'busy' && !this.currentInteraction && this.nativeSessionId
         && supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)
         ? { activeTurn: { nativeSessionId: this.nativeSessionId, turnId, ...(this.turns.turnRun(turnId)?.runId ? { ownerRunId: this.turns.turnRun(turnId)!.runId } : {}) } } : {}),
@@ -3676,11 +3207,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private turnPhase(phase: NativeStatus['phase']): NativeStatus['phase'] {
     this.turn.observe({ source: 'protocol', phase: turnPhaseOf(phase), ...(phase === 'busy' && this.activeTurnId ? { turnId: this.activeTurnId } : {}) });
     return this.turn.nativePhase;
-  }
-
-  private setConnection(connection: NonNullable<NativeStatus['connection']>, source?: 'profile' | 'endpoint'): void {
-    this.connectionConflictSource = connection.state === 'conflict' ? source : undefined;
-    this.refreshStatus({ connection });
   }
 
   private setHistory(history: NonNullable<NativeStatus['history']>): void {
@@ -3709,27 +3235,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private noteHistoryReady(): void {
     this.setHistory({ state: 'ready' });
-  }
-
-  private noteConnectionFailure(error: unknown): void {
-    if (isActiveWriterError(error)) {
-      this.setConnection({ state: 'conflict', message: `Another ${this.label} client currently owns this thread. The saved history remains available.` });
-      return;
-    }
-    const message = safeProviderError(error, this.profileConfig);
-    this.refreshStatus({ ...(this.transport?.isOnline ? {} : { link: 'offline' as const }), connection: { state: 'failed', message } });
-  }
-
-  private logRecovery(source: string, endpoint: string, attempt: string, result: string, commit: boolean): void {
-    console.info('[codex-recovery]', JSON.stringify({
-      sessionId: this.session.id,
-      nativeThreadId: this.nativeSessionId ?? null,
-      source,
-      endpoint,
-      attempt,
-      result,
-      commit,
-    }));
   }
 
   private applyThreadStatus(status: RpcThread['status']): void {

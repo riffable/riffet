@@ -36,7 +36,7 @@ import { sessionWarmKey, startCodexWarm, warmKey, type CodexWarm } from './launc
 import { MAX_PREVIOUS_NATIVE_SESSIONS } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
-  normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, matchesRuntimeFingerprint, assertSupportedProfile, providerEnv,
+  normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, assertSupportedProfile, providerEnv,
   collaborationModeOf, probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion, readCodexOwnerGateway, hasCodexChatgptAuth,
 } from './config.js';
 import { listModels, readUsage } from './catalog.js';
@@ -436,44 +436,22 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     // A fresh, unloaded process validates the target launch before the old writer is released.
     // Its snapshot deliberately has no old socket/TUI binding to accidentally reattach.
     const replacement = new CodexSessionRuntime(host, { ...session, nativeRuntime: undefined, terminalId: undefined }, project, target, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
-    let released = false;
     this.restarting.add(sessionId);
-    const task = Promise.resolve().then(async () => {
-      try {
-        await replacement.start();
-        if (!await previous.releaseForProfileSwitch()) { await replacement.dispose(host); return previous; }
-        released = true;
-        host.updateSession(sessionId, { terminalId: undefined });
-        replacement.attachFeed(this.feedOf(sessionId));
-        await replacement.openOrResume();
-        this.runtimes.set(sessionId, replacement);
-        const updated = host.updateSession(sessionId, { configPending: false, terminalId: undefined });
-        host.emit(sessionId, { type: 'session', session: updated });
-        await this.bindListeners(sessionId, replacement).catch(error => replacement.profileSwitchFailed(safeProviderError(error, target.config)));
-        await replacement.ensureTui().catch(error => replacement.profileSwitchFailed(safeProviderError(error, target.config)));
-        this.profileSwitchFailures.delete(sessionId);
-        return replacement;
-      } catch (error) {
-        await replacement.dispose(host).catch(() => undefined);
-        let restored = previous;
-        if (released) {
-          // The failed target never receives user input. Restore the old writer, retain the
-          // desired provider and pending flag, and let an explicit retry attempt it again.
-          restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
-          restored.attachFeed(this.feedOf(sessionId));
-          this.runtimes.set(sessionId, restored);
-          try {
-            await restored.start();
-            await restored.openOrResume({ model: previousModel });
-            await this.bindListeners(sessionId, restored);
-            await restored.ensureTui();
-          } catch { /* The persisted source binding and original thread remain recoverable. */ }
-        }
-        restored.profileSwitchFailed(safeProviderError(error, target.config));
-        this.profileSwitchFailures.add(sessionId);
-        throw new AppError('NATIVE_PROFILE_SWITCH_FAILED', safeProviderError(error, target.config), 502);
-      }
-    });
+    const task = Promise.resolve().then(() => previous.switchProfile(replacement, {
+      feed: () => this.feedOf(sessionId),
+      publish: runtime => { this.runtimes.set(sessionId, runtime); },
+      bind: runtime => this.bindListeners(sessionId, runtime),
+      restore: () => {
+        const restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
+        restored.attachFeed(this.feedOf(sessionId));
+        this.runtimes.set(sessionId, restored);
+        return restored;
+      },
+      previousModel,
+      describe: error => safeProviderError(error, target.config),
+      succeeded: () => { this.profileSwitchFailures.delete(sessionId); },
+      failed: () => { this.profileSwitchFailures.add(sessionId); },
+    }));
     const entry = { projectId: project.id, fingerprint: runtimeFingerprintFor(project, source, this.flavor), promise: task };
     this.creating.set(sessionId, entry);
     try { await task; return !this.profileSwitchPending(host.getSession(sessionId)); }
@@ -545,8 +523,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       session = host.getSession(session.id);
       profile = this.activeProfile(host, session, profile);
       let runtime = await this.ensureRuntime(host, session, project, profile, true);
-      if (!runtime.canRunWith(project, profile)) {
-        runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        runtime.connection.deferWriteBlocked(project, profile);
         return { ...(runtime.nativeSessionId ? { nativeSessionId: runtime.nativeSessionId } : {}), ...(runtime.terminalId ? { terminalId: runtime.terminalId } : {}), status: runtime.status };
       }
       if (options.restartFingerprint && runtime.status.profilePending
@@ -555,7 +533,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         const previous = runtime;
         this.restarting.add(session.id);
         const promise = Promise.resolve().then(async () => {
-          if (!await previous.restartBackend(options.restartFingerprint!, options.restartAddress!)) return previous;
+          if (!await previous.connection.restartBackend(options.restartFingerprint!, options.restartAddress!)) return previous;
           this.runtimes.delete(session.id);
           const replacement = new CodexSessionRuntime(host, host.getSession(session.id), project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
           replacement.attachFeed(this.feedOf(session.id));
@@ -569,14 +547,14 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         try { runtime = await promise; }
         finally { this.restarting.delete(session.id); if (this.creating.get(session.id) === entry) this.creating.delete(session.id); }
       }
-      if (!runtime.canRunWith(project, profile)) {
-        runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        runtime.connection.deferWriteBlocked(project, profile);
         return { ...(runtime.nativeSessionId ? { nativeSessionId: runtime.nativeSessionId } : {}), ...(runtime.terminalId ? { terminalId: runtime.terminalId } : {}), status: runtime.status };
       }
       const nativeSessionId = await runtime.openOrResume();
-      await runtime.ensureTui();
+      await runtime.terminal.ensureTui();
       // A colour change recorded while no runtime was loaded (or a TUI from before it) applies now.
-      await runtime.relaunchTuiForAppearance();
+      await runtime.terminal.relaunchTuiForAppearance();
       const terminalId = runtime.terminalId;
       return { nativeSessionId, ...(terminalId ? { terminalId } : {}), status: runtime.status };
     });
@@ -594,12 +572,12 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         throw new AppError('CLI_BUSY', 'The current task is still running; the provider change will apply when it finishes.', 409);
       }
       const runtime = await this.ensureRuntime(host, request.session, request.project, request.profile, true);
-      if (!runtime.canRunWith(request.project, request.profile)) {
-        const blocked = runtime.deferWriteBlocked(request.project, request.profile);
+      if (!runtime.connection.canRunWith(request.project, request.profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(request.project, request.profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       const nativeSessionId = await runtime.openOrResume();
-      await runtime.ensureTui();
+      await runtime.terminal.ensureTui();
       const { input, images, renderedText } = await renderInput(host, request.input);
       const standing = this.standingOf(host, request.project);
       const skills = command ? [] : await this.skillInputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
@@ -649,8 +627,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // A conversation that never started has no context to clear.
       if (!previous) return settle();
       const runtime = await this.ensureRuntime(host, session, request.project, request.profile, true);
-      if (!runtime.canRunWith(request.project, request.profile)) {
-        const blocked = runtime.deferWriteBlocked(request.project, request.profile);
+      if (!runtime.connection.canRunWith(request.project, request.profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(request.project, request.profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       await runtime.openOrResume();
@@ -673,7 +651,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         await next.openOrResume();
         // A new topic starts from nothing: the new thread is not told the last turns.
         next.takeStandingMoments();
-        await next.ensureTui();
+        await next.terminal.ensureTui();
       } finally {
         this.restarting.delete(sessionId);
       }
@@ -689,8 +667,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // Reconnect only to a verified existing endpoint: this path must never spawn a new server.
       const profile = this.activeProfile(host, session, request.profile);
       const runtime = await this.ensureRuntime(host, session, request.project, profile, true, true);
-      if (!runtime.canRunWith(request.project, profile)) {
-        const blocked = runtime.deferWriteBlocked(request.project, profile);
+      if (!runtime.connection.canRunWith(request.project, profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(request.project, profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       if (!runtime.steerTarget) await runtime.prime();
@@ -715,8 +693,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       profile = this.activeProfile(host, host.getSession(session.id), profile);
       const project = host.getProject(session.projectId);
       const runtime = await this.ensureRuntime(host, session, project, profile, true, Boolean(options?.expectedStop));
-      if (!runtime.canRunWith(project, profile)) {
-        const blocked = runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(project, profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       const expected = options?.expectedStop;
@@ -734,8 +712,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const project = host.getProject(session.projectId);
       // A runtime action may reconnect to an existing owner, but must never create a new native turn.
       const runtime = await this.ensureRuntime(host, session, project, profile, true, true);
-      if (!runtime.canRunWith(project, profile)) {
-        const blocked = runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(project, profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       await runtime.runtimeAction(request);
@@ -750,8 +728,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     await host.withSessionLock(session.id, async () => {
       profile = this.activeProfile(host, host.getSession(session.id), profile);
       const project = host.getProject(session.projectId);
-      if (!runtime.canRunWith(project, profile)) {
-        const blocked = runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(project, profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
     });
@@ -769,8 +747,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (live?.holdsInteraction(response.interactionId)) return await live.respond(response);
       const project = host.getProject(session.projectId);
       const runtime = await this.ensureRuntime(host, session, project, profile, true);
-      if (!runtime.canRunWith(project, profile)) {
-        const blocked = runtime.deferWriteBlocked(project, profile);
+      if (!runtime.connection.canRunWith(project, profile)) {
+        const blocked = runtime.connection.deferWriteBlocked(project, profile);
         return { status: 'uncertain', message: blocked.message };
       }
       return await runtime.respond(response);
@@ -807,7 +785,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
           this.profileSwitchFailures.delete(session.id);
         }
       }
-      if (runtime?.transport?.isOnline && !runtime.canRunWith(host.getProject(session.projectId), profile)) runtime.deferWriteBlocked(host.getProject(session.projectId), profile);
+      if (runtime?.transport?.isOnline && !runtime.connection.canRunWith(host.getProject(session.projectId), profile)) runtime.connection.deferWriteBlocked(host.getProject(session.projectId), profile);
       // A map entry is not a working runtime: `onExit` deliberately keeps the handle of a dead
       // transport around so a later reopen can dispose it. Pushing the patch into such a zombie
       // would resume on a dead socket, throw, and take the caller's record write down with it —
@@ -816,7 +794,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // caller records it, and the next open/send rebuilds the runtime from that record.
       // Codex defers changes during a turn because it configures through resume. TRAE's dedicated
       // settings setter safely updates subsequent turns and the attached TUI while a turn runs.
-      if (runtime?.canRunWith(host.getProject(session.projectId), profile) && runtime.transport?.isOnline && (this.flavor.id === 'traex' || runtime.status.phase !== 'busy')) {
+      if (runtime?.connection.canRunWith(host.getProject(session.projectId), profile) && runtime.transport?.isOnline && (this.flavor.id === 'traex' || runtime.status.phase !== 'busy')) {
         const current = host.getSession(session.id);
         const effective = await runtime.applyThreadConfig({
           model: patch.model ?? current.model,
@@ -840,7 +818,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
 
   /** Without a loaded runtime the session's recorded colours are applied when it next opens. */
   async relaunchForAppearance(host: NativeBackendHost, session: Session): Promise<void> {
-    await host.withSessionLock(session.id, async () => { await this.runtimes.get(session.id)?.relaunchTuiForAppearance(); });
+    await host.withSessionLock(session.id, async () => { await this.runtimes.get(session.id)?.terminal.relaunchTuiForAppearance(); });
   }
 
   async listModels(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<ModelInfo[]> {
@@ -909,7 +887,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private async extensionRuntime(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport> {
     const report: import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport = { entries: [], diagnostics: [], checkedAt: new Date().toISOString() };
     if (!project) { report.diagnostics.push('选择项目以查看已运行会话的 MCP 状态。'); return report; }
-    const matching = [...this.runtimes].filter(([, runtime]) => runtime.transport?.isOnline && runtime.matches(project, profile));
+    const matching = [...this.runtimes].filter(([, runtime]) => runtime.transport?.isOnline && runtime.connection.matches(project, profile));
     await Promise.all(matching.slice(0, 16).map(async ([sessionId, runtime]) => {
       const transport = runtime.transport!;
       const results = await Promise.allSettled([
@@ -990,9 +968,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // Riffet keeps the app-server and the loaded thread; only its own TUI is left out, so the terminal is the one client.
       const spec = await host.withSessionLock(session.id, async () => {
         const runtime = await this.ensureRuntime(host, session, project, profile, true);
-        if (!runtime.canRunWith(project, profile)) return undefined;
+        if (!runtime.connection.canRunWith(project, profile)) return undefined;
         await runtime.openOrResume();
-        return await runtime.tuiLaunchSpec();
+        return await runtime.terminal.tuiLaunchSpec();
       });
       if (spec) return { spec, keepsRuntime: true };
     }
@@ -1043,7 +1021,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const visited = new Set<string>();
     for (const runtime of this.runtimes.values()) {
       const transport = runtime.transport;
-      if (!transport?.isOnline || !runtime.matches(project, profile) || visited.has(transport.remoteAddress)) continue;
+      if (!transport?.isOnline || !runtime.connection.matches(project, profile) || visited.has(transport.remoteAddress)) continue;
       await transport.request('config/mcpServer/reload', {}, 15_000);
       visited.add(transport.remoteAddress);
     }
@@ -1052,7 +1030,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
 
   private async authorizeMcp(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string> {
     if (project) for (const [sessionId, runtime] of this.runtimes) {
-      if (!runtime.transport?.isOnline || !runtime.matches(project, profile)) continue;
+      if (!runtime.transport?.isOnline || !runtime.connection.matches(project, profile)) continue;
       const servers = await readMcpRuntime(runtime.transport, sessionId, runtime.nativeSessionId);
       if (!servers.some(server => server.name === name)) continue;
       const response = await runtime.transport.request<{ authorizationUrl: string }>('mcpServer/oauth/login', { name, threadId: runtime.nativeSessionId, timeoutSecs: 300 }, 15_000);
@@ -1251,7 +1229,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const runtime = this.runtimes.get(session.id);
     const observed = this.profileSwitchPending(session) ? { ...session, backendProfileId: session.nativeRuntime!.profileId } : session;
     const desired = host.getProfile?.(observed) ?? profile;
-    if (runtime && desired) runtime.syncSessionBinding(session, host.getProject(session.projectId), this.activeProfile(host, session, desired));
+    if (runtime && desired) runtime.connection.syncSessionBinding(session, host.getProject(session.projectId), this.activeProfile(host, session, desired));
     return runtime?.status ?? { phase: 'offline' };
   }
 
@@ -1274,8 +1252,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const project = host.getProject(session.projectId);
     profile = this.activeProfile(host, host.getSession(session.id), profile);
     const current = this.runtimes.get(session.id);
-    if (current?.belongsTo(project, profile) && current.transport?.isOnline) {
-      current.syncSessionBinding(session, project, profile);
+    if (current?.connection.belongsTo(project, profile) && current.transport?.isOnline) {
+      current.connection.syncSessionBinding(session, project, profile);
       void this.bindListeners(session.id, current).catch(error => {
         if (subscriptions.listeners.has(listener)) listener({ type: 'status', status: { phase: 'offline', connection: { state: 'failed', message: safeProviderError(error, profile.config) } } });
       });
@@ -1366,7 +1344,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (matches) {
         const runtime = await pending.promise;
         // A send may join a read-only reconnect, whose cached scan is not a fresh write check.
-        if (forceEndpointCheck) await runtime.terminalEndpointState(true);
+        if (forceEndpointCheck) await runtime.terminal.endpointState(true);
         return runtime;
       }
       await pending.promise.catch(() => undefined);
@@ -1375,34 +1353,11 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     }
     const task = Promise.resolve().then(async () => {
       let current = this.runtimes.get(session.id);
-      let endpointChanged = false;
-      current?.syncSessionBinding(session, project, profile);
-      if (current?.transport?.isOnline && current.projectCwd === project.cwd && current.nativeSessionId === session.nativeSessionId) {
-        const endpointState = await current.terminalEndpointState(forceEndpointCheck || current.endpointBlocked || current.status.connection?.state === 'conflict');
-        // A cold reader's replacement leaves the dead binding saved; that binding is not a new owner.
-        endpointChanged = endpointState === 'changed' || current.bindingMoved(session.nativeRuntime?.address);
-        const latest = this.runtimes.get(session.id);
-        if (latest !== current) current = latest;
-        if (endpointState === 'unknown' && current?.transport?.isOnline) {
-          if (!current.belongsTo(project, profile)) current.deferForProfileChange();
-          return current;
-        }
-        if (!endpointChanged && current?.belongsTo(project, profile) && current.transport?.isOnline
-          && (current.matches(project, profile) || session.nativeRuntime?.address === current.transport.remoteAddress)) {
-          return current;
-        }
-      }
+      const probe = await current?.probeEndpoint(session, project, profile, forceEndpointCheck);
+      // A runtime that replaced this one while its terminal was being checked is the one judged.
+      if (probe) current = this.runtimes.get(session.id);
       if (current) {
-        const threadId = session.nativeSessionId;
-        const confirmedProfileRestored = Boolean(session.nativeRuntime?.fingerprint && matchesRuntimeFingerprint(session.nativeRuntime.fingerprint, project, profile, this.flavor));
-        // If the terminal still proves this is the active endpoint, preserve its owner while a
-        // profile change waits. A changed endpoint is reselected below, with the old runtime only
-        // detached so it cannot stop the terminal's new owner.
-        if (!endpointChanged && current.transport?.isOnline && current.projectCwd === project.cwd && current.nativeSessionId === threadId
-          && (current.status.phase === 'busy' || current.activeTurnId) && !confirmedProfileRestored) {
-          current.deferForProfileChange();
-          return current;
-        }
+        if (current.reuseVerdict(session, project, profile, probe) === 'keep') return current;
         this.runtimes.delete(session.id);
         // A profile switch must never stop a live terminal or its app-server. Detach this client's
         // socket and let the verified terminal endpoint select the existing owner below.

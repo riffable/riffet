@@ -12,7 +12,10 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 ## 入口
 
 - `index.ts#CodexBackendAdapter`：驱动接口的实现，发送、打断、状态、预热。
-- `runtime.ts#CodexSessionRuntime`：每个会话一个，持有 App Server 连接、回合簿记、审批与子 agent。
+- `runtime.ts#CodexSessionRuntime`：每个会话一个，协调下面几个对象，分发通知，推导状态（`refreshStatus`，phase 只在 `livePhase` 计算）。
+- `connection.ts#CodexConnection`：传输、端点归属、启动与重启、配置切换。
+- `terminal.ts#CodexTerminal`：TUI 启动与端点确认。
+- `turns.ts#CodexTurns`：当前回合与回合、命令、Run 的对应，只能经它的方法改。
 - `transcript-source.ts#CodexTranscriptSource`：线程进入 journal 的唯一路径，合并实时通知与 `thread/turns/list`。
 - `apps/server/src/backends/shared/codex-app-server.ts#CodexAppServer`：进程、socket 与 JSON-RPC。
 - `recording.ts#replayFactory`：录制数据的回放，测试在 `recordings.test.ts`。
