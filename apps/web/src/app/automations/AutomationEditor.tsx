@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { Automation, AutomationTrigger, LaunchTarget, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
-import { IconCalendarClock } from '@/components/icons';
+import type { Automation, AutomationTrigger, LaunchTarget, NativeBackendCatalogEntry } from '@contracts';
+import { IconChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Segmented, Select, Switch, Textarea } from '@/components/ui/controls';
+import { Field, fieldClass, Input, Segmented, Select, Switch, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, HttpError, type ProjectRecord } from '@/lib/api';
 import { useDiscardGuard } from '@/lib/dialogs';
 import { cn, errorMessage } from '@/lib/utils';
+import { type AgentModelValue, useAgentModelChoice } from '../session/agentModelChoice';
+import { ModelPicker } from '../session/ModelPicker';
 import { CRON_PRESETS, cronTrigger, describeCron, formatWhen, localTimeZone, nameFromPrompt, onceTrigger, toLocalInput, triggerNextRun } from './automation';
 
 /** What the editor opens with: an automation being changed, or the fields a new one starts from. */
@@ -20,7 +22,7 @@ export interface AutomationEditorState {
 
 type When = 'manual' | 'once' | 'repeat';
 
-interface Fields { name: string; prompt: string; backendId: NativeBackendId | ''; projectId: string; isolate: boolean; when: When; onceAt: string; preset: string; custom: string; delivery: Automation['delivery']; catchUp: boolean }
+interface Fields { name: string; prompt: string; agent?: AgentModelValue; projectId: string; isolate: boolean; when: When; onceAt: string; preset: string; custom: string; delivery: Automation['delivery']; catchUp: boolean }
 
 function fieldsOf(state: AutomationEditorState, defaultProjectId: string): Fields {
   const source = state.automation;
@@ -31,7 +33,7 @@ function fieldsOf(state: AutomationEditorState, defaultProjectId: string): Field
   return {
     name: source?.name ?? seed?.name ?? '',
     prompt: source?.prompt ?? seed?.prompt ?? '',
-    backendId: (source?.backendId ?? seed?.target?.backendId ?? '') as NativeBackendId | '',
+    agent: agentOf(source ?? seed?.target),
     projectId: source ? source.projectId ?? '' : seed?.projectId ?? defaultProjectId,
     isolate: Boolean(source?.isolate ?? seed?.isolate),
     when: !first ? 'manual' : first.kind === 'once' ? 'once' : 'repeat',
@@ -43,7 +45,15 @@ function fieldsOf(state: AutomationEditorState, defaultProjectId: string): Field
   };
 }
 
-const groupTitle = 'text-xs font-medium text-fg-3';
+/** The agent, provider and model a target names; none means the default agent at run time. */
+function agentOf(target: LaunchTarget | undefined): AgentModelValue | undefined {
+  if (!target?.backendId) return undefined;
+  return { backendId: target.backendId, ...(target.backendProfileId ? { profileId: target.backendProfileId } : {}), ...(target.model ? { model: target.model } : {}) };
+}
+
+const CUSTOM = 'custom';
+/** Segments share the column's width, as the fields above and below them do. */
+const fill = 'w-full [&>[role=radio]]:flex-1';
 
 export function AutomationEditor({ state, projects, backends, defaultProjectId, onClose, onSaved, onError }: {
   state?: AutomationEditorState;
@@ -62,6 +72,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
   const [cronError, setCronError] = useState('');
   const [editingExisting, setEditingExisting] = useState(false);
   const whenRef = useRef<HTMLDivElement>(null);
+  const promptId = useId();
   useEffect(() => {
     if (!state) return;
     const live = projects.some((item) => item.id === defaultProjectId) ? defaultProjectId! : '';
@@ -93,19 +104,21 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
   const complete = Boolean(fields.prompt.trim()) && (!scheduled || (Boolean(first) && Boolean(fields.projectId)));
   const unchangedWhen = Boolean(existing?.nextRunAt) && JSON.stringify(first) === JSON.stringify(existing?.triggers[0]);
   const next = unchangedWhen ? new Date(existing!.nextRunAt!) : triggerNextRun(first);
+  const { picker, pick, params, withParam } = useAgentModelChoice({ projectId: fields.projectId, backends, choice: fields.agent, agents: true });
 
   const submit = async () => {
     if (busy || !complete) return;
     setBusy(true);
     setCronError('');
     try {
-      // Model, mode and permission belong to one backend; switching it falls back to that backend's
-      // saved defaults rather than carrying values it may not understand.
+      // Mode and permission belong to one backend; switching it falls back to that backend's saved
+      // defaults rather than carrying values it may not understand.
       const base: LaunchTarget = existing ?? state?.seed?.target ?? {};
-      const kept = base.backendId === (fields.backendId || undefined)
-        ? { ...(base.backendProfileId ? { backendProfileId: base.backendProfileId } : {}), ...(base.model ? { model: base.model } : {}), ...(base.mode ? { mode: base.mode } : {}), ...(base.approval ? { approval: base.approval } : {}) }
+      const agent = fields.agent;
+      const kept = agent && base.backendId === agent.backendId ? { ...(base.mode ? { mode: base.mode } : {}), ...(base.approval ? { approval: base.approval } : {}) } : {};
+      const target: LaunchTarget = agent
+        ? { backendId: agent.backendId, ...(agent.profileId ? { backendProfileId: agent.profileId } : {}), ...(agent.model ? { model: agent.model } : {}), ...kept }
         : {};
-      const target: LaunchTarget = { ...(fields.backendId ? { backendId: fields.backendId } : {}), ...kept };
       // Only the first trigger is edited here; the others the agent or a later version set stay,
       // unless the task is made manual, which it then really is.
       const triggers = first ? [first, ...(existing?.triggers.slice(1) ?? [])] : [];
@@ -123,27 +136,43 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
     } finally { setBusy(false); }
   };
 
-  const chip = (active: boolean) => cn('h-7 rounded-lg border px-2.5 text-sm transition-colors no-hover:min-h-11', active ? 'border-accent bg-accent-soft text-fg' : 'border-line text-fg-2 hover:bg-hover');
   const orphan = fields.projectId && !projects.some((item) => item.id === fields.projectId);
   // Literal braces must be values, not message text: ICU would read `{{date}}` as an argument.
   const dateToken = '{{date}}';
   const projectToken = '{{project}}';
+  const customCron = fields.preset === CUSTOM;
+  const described = customCron && fields.custom.trim() && describeCron(fields.custom) !== fields.custom.trim() ? describeCron(fields.custom) : '';
+  const nextText = scheduled && next ? t`下次 ${formatWhen(next.toISOString())}` : '';
+  const whenHint = cronError || [described, nextText].filter(Boolean).join(' · ') || (customCron ? t`分 时 日 月 周，本地时间；也可以用 @daily、@hourly` : '');
   return (
     <Dialog open={Boolean(state)} onOpenChange={(open) => { if (!open && !busy) close(); }}>
-      <DialogContent aria-describedby={undefined}>
+      <DialogContent size="content" mobileFullscreen aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{editingExisting ? t`编辑自动化` : t`新建自动化`}</DialogTitle>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-5">
-          <section className="flex flex-col gap-3">
+        <DialogBody className="grid gap-x-6 gap-y-5 md:grid-cols-[minmax(0,1fr)_16.5rem]">
+          <div className="flex min-w-0 flex-col gap-4">
             <Field label={t`名称`}><Input value={fields.name} onChange={(event) => set({ name: event.target.value })} placeholder={nameFromPrompt(fields.prompt) || undefined} /></Field>
-            <Field label={t`任务`} hint={<Trans>运行时 <code className="font-mono">{dateToken}</code> 会替换为当天日期，<code className="font-mono">{projectToken}</code> 替换为项目名。</Trans>}>
-              <Textarea autoFocus={!existing && !fields.prompt} value={fields.prompt} onChange={(event) => set({ prompt: event.target.value })} className="min-h-28" placeholder={t`让 Agent 做什么`} />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* A Field whose box grows to the settings column beside it, so the two end on one line. */}
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+              <label htmlFor={promptId} className="text-sm font-medium text-fg"><Trans>任务</Trans></label>
+              <Textarea id={promptId} autoFocus={!existing && !fields.prompt} value={fields.prompt} onChange={(event) => set({ prompt: event.target.value })} className="min-h-56 flex-1 resize-none md:min-h-72" placeholder={t`让 Agent 做什么`} />
+              <p className="text-xs text-fg-3"><Trans>运行时 <code className="font-mono">{dateToken}</code> 替换为当天日期，<code className="font-mono">{projectToken}</code> 替换为项目名</Trans></p>
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-5 max-md:edge-t max-md:pt-5 md:edge-l md:pl-6">
+            <div className="flex flex-col gap-4">
               <Field label="Agent">
-                <Select<string> label="Agent" value={fields.backendId} onChange={(next) => set({ backendId: next as NativeBackendId | '' })}
-                  options={[{ value: '', label: t`默认 Agent` }, ...backends.map((entry) => ({ value: entry.backendId, label: `${entry.label}${entry.available ? '' : t`（不可用）`}` }))]} />
+                {/* The composer's Agent → provider → model menu, on a trigger drawn as the Select below it. */}
+                <span className="relative flex min-w-0">
+                  <ModelPicker side="bottom" align="start" placeholder={fields.agent ? t`默认模型` : t`默认 Agent`} {...picker}
+                    className={cn(fieldClass, 'h-8 w-full justify-start pr-8 text-fg hover:bg-elevated hover:text-fg data-[state=open]:border-accent data-[state=open]:bg-elevated data-[state=open]:text-fg data-[state=open]:ring-3 data-[state=open]:ring-accent/15 max-md:h-11 max-md:rounded-xl max-md:px-3 max-md:pr-8 max-md:text-base')}
+                    labelClassName="min-w-0 flex-1 max-w-none truncate text-left sm:max-w-none"
+                    params={params} onParamChange={(id, value) => { const agent = withParam(id, value); if (agent) set({ agent }); }}
+                    onChange={(id) => { const agent = pick(id); if (agent) set({ agent }); }} />
+                  <IconChevronDown aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-3" />
+                </span>
               </Field>
               <Field label={t`项目`}>
                 <Select label={t`项目`} value={fields.projectId} onChange={(projectId) => set({ projectId })}
@@ -153,51 +182,41 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
                     ...projects.map((item) => ({ value: item.id, label: item.name })),
                   ]} />
               </Field>
-            </div>
-            <label className="flex items-center justify-between gap-3 text-sm text-fg">
-              <Trans>每次在新的 Worktree 中运行</Trans>
-              <Switch checked={fields.isolate} onCheckedChange={(isolate) => set({ isolate })} aria-label={t`每次在新的 Worktree 中运行`} />
-            </label>
-          </section>
-
-          <section ref={whenRef} className="flex scroll-mt-2 flex-col gap-3 border-t border-line pt-5">
-            <h3 className={groupTitle}><Trans>何时运行</Trans></h3>
-            <Segmented<When> value={fields.when} onChange={(when) => set({ when })} ariaLabel={t`何时运行`} options={[{ value: 'manual', label: t`手动` }, { value: 'once', label: t`一次` }, { value: 'repeat', label: t`重复` }]} />
-            {fields.when === 'once' && <Input type="datetime-local" autoFocus={state?.focus === 'when'} value={fields.onceAt} onChange={(event) => set({ onceAt: event.target.value })} aria-label={t`日期时间`} />}
-            {fields.when === 'repeat' && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-wrap gap-1.5">
-                  {[...CRON_PRESETS.map((item) => ({ cron: item as string, label: describeCron(item) })), { cron: 'custom', label: t`自定义` }].map((item) => (
-                    <button key={item.cron} type="button" aria-pressed={fields.preset === item.cron} onClick={() => set({ preset: item.cron })} className={chip(fields.preset === item.cron)}>{item.label}</button>
-                  ))}
-                </div>
-                {fields.preset === 'custom' && (
-                  <>
-                    <Input autoFocus className="font-mono" value={fields.custom} onChange={(event) => set({ custom: event.target.value })} placeholder="30 8 * * 1-5" aria-label={t`Cron 表达式`} />
-                    <span className={cn('text-xs', cronError ? 'text-danger' : 'text-fg-3')}>
-                      {cronError || (fields.custom.trim() && describeCron(fields.custom) !== fields.custom.trim() ? describeCron(fields.custom) : t`分 时 日 月 周，本地时间；也可以用 @daily、@hourly`)}
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
-            {scheduled && next && <span className="text-xs text-fg-3"><Trans>下次 {formatWhen(next.toISOString())}</Trans></span>}
-          </section>
-
-          <section className="flex flex-col gap-3 border-t border-line pt-5">
-            <h3 className={groupTitle}><Trans>运行方式</Trans></h3>
-            <Segmented<Automation['delivery']> value={fields.delivery} onChange={(delivery) => set({ delivery })} ariaLabel={t`运行方式`} options={[{ value: 'new', label: t`每次开新会话` }, { value: 'same', label: t`在同一会话继续` }]} />
-            {scheduled && (
-              <label className="flex items-center justify-between gap-3 text-sm text-fg">
-                <Trans>错过后补跑</Trans>
-                <Switch checked={fields.catchUp} onCheckedChange={(catchUp) => set({ catchUp })} aria-label={t`错过后补跑`} />
+              <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-fg">
+                <Trans>每次新建 Worktree</Trans>
+                <Switch checked={fields.isolate} onCheckedChange={(isolate) => set({ isolate })} aria-label={t`每次新建 Worktree`} />
               </label>
-            )}
-          </section>
+            </div>
+
+            <div ref={whenRef} className="flex scroll-mt-2 flex-col gap-2 edge-t pt-5">
+              <span className="text-sm font-medium text-fg"><Trans>何时运行</Trans></span>
+              <Segmented<When> className={fill} value={fields.when} onChange={(when) => set({ when })} ariaLabel={t`何时运行`} options={[{ value: 'manual', label: t`手动` }, { value: 'once', label: t`一次` }, { value: 'repeat', label: t`重复` }]} />
+              {fields.when === 'once' && <Input type="datetime-local" autoFocus={state?.focus === 'when'} value={fields.onceAt} onChange={(event) => set({ onceAt: event.target.value })} aria-label={t`日期时间`} />}
+              {fields.when === 'repeat' && (
+                <Select<string> label={t`重复`} value={fields.preset} onChange={(preset) => set({ preset })}
+                  options={[...CRON_PRESETS.map((item) => ({ value: item as string, label: describeCron(item) })), { value: CUSTOM, label: t`自定义` }]} />
+              )}
+              {fields.when === 'repeat' && customCron && (
+                <Input autoFocus className="font-mono" value={fields.custom} onChange={(event) => set({ custom: event.target.value })} placeholder="30 8 * * 1-5" aria-label={t`Cron 表达式`} aria-invalid={Boolean(cronError) || undefined} />
+              )}
+              {whenHint && <span role={cronError ? 'alert' : undefined} className={cn('text-xs', cronError ? 'text-danger' : 'text-fg-3')}>{whenHint}</span>}
+            </div>
+
+            <div className="flex flex-col gap-2 edge-t pt-5">
+              <span className="text-sm font-medium text-fg"><Trans>运行方式</Trans></span>
+              <Segmented<Automation['delivery']> className={fill} value={fields.delivery} onChange={(delivery) => set({ delivery })} ariaLabel={t`运行方式`} options={[{ value: 'new', label: t`每次开新会话` }, { value: 'same', label: t`在同一会话继续` }]} />
+              {scheduled && (
+                <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-fg">
+                  <Trans>错过后补跑</Trans>
+                  <Switch checked={fields.catchUp} onCheckedChange={(catchUp) => set({ catchUp })} aria-label={t`错过后补跑`} />
+                </label>
+              )}
+            </div>
+          </div>
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={close}><Trans context="tasks-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={!complete} onClick={() => void submit()} busy={busy}><IconCalendarClock /><Trans>保存</Trans></Button>
+          <Button variant="primary" disabled={!complete} onClick={() => void submit()} busy={busy}><Trans>保存</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

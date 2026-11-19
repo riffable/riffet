@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { catalogEntry, catalogSelection, parseSelection, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
+import { catalogEntry, catalogParams, catalogSelection, parseSelection, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { IconMessageSquareText } from '@/components/icons';
 import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
@@ -101,8 +101,17 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
     return { backendId: picked.backendId, ...(picked.profileId ? { profileId: picked.profileId } : {}), ...(model ? { model } : {}) };
   };
 
+  /** The saved model's parameters (effort, Fast…), for a form that keeps them; see `withParam`. */
+  const catalog = backendId ? agentModels.read(backendId, activeProfileId) ?? [] : [];
+  const params = savedModel ? catalogParams(catalog, savedModel, saved.params) : [];
+  /** The choice with one parameter changed, as the composer's model menu changes it. */
+  const withParam = (id: string, next: string): AgentModelValue | undefined => !backendId || !savedModel ? undefined
+    : { backendId, ...(choice?.profileId ? { profileId: choice.profileId } : {}), model: catalogSelection(catalog, savedModel, { ...saved.params, [id]: next }, id) };
+
   return {
     pick,
+    params,
+    withParam,
     /** Spread onto `ModelPicker`. */
     picker: {
       models,

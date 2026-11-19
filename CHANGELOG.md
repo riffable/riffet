@@ -7,6 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Fixes
 
 - The Background tasks list in the side panel and on narrow screens no longer ends with "The session reports N background tasks; some task details haven't loaded yet". Web.
+- Automations page (Web): the editor is wider, with the name and task on the left and the agent, project, schedule and delivery on the right. The agent field, and the quick bar, use the composer's agent, provider and model menu, including the model's effort, Fast and other parameters. Clicking a row opens it for editing (an agent wake-up or a send-later opens its conversation). "Recent runs" no longer lists "Deleted task": wake-ups and send-laters that have run show only in their conversation.
 - A subagent's own background commands no longer show up on their own at the end of the main conversation. Background tasks are titled by the agent's description; without one, by the command's first line in monospace, minus the leading `cd` into the project. Web.
 - Stopping a running Claude Code turn works again instead of failing with "Could not stop; try again".
 - PDF file previews in the Files panel, message attachments, and shared links now render pages instead of stalling on the file name.

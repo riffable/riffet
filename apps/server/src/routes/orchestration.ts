@@ -137,7 +137,9 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
       requireSessionVisibleToClient(request.headers, store.getSession(requireString(followUp.sessionId, 'sessionId', 100)), id => store.getProject(id));
     }
   };
-  app.get('/api/automations', async request => orchestration.automations().filter(item => !item.followUp || (item.enabled && item.nextRunAt)).filter(item => automationVisible(request, item)).map(item => withoutHiddenSession(request, item)));
+  /** A follow-up is listed while it is pending; once it has gone off it, and its runs, belong to its conversation. */
+  const listedAutomations = (request: Headers) => orchestration.automations().filter(item => !item.followUp || (item.enabled && item.nextRunAt)).filter(item => automationVisible(request, item));
+  app.get('/api/automations', async request => listedAutomations(request).map(item => withoutHiddenSession(request, item)));
   // The REST caller is the user: a follow-up made here is `by: 'user'` whatever the body says.
   app.post<{ Body: Body }>('/api/automations', async request => {
     const body = request.body ?? {};
@@ -186,7 +188,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     return orchestration.runs(request.params.id).map(run => withoutHiddenSession(request, run));
   });
   app.get<{ Querystring: { limit?: string } }>('/api/automation-runs', async request => {
-    const visible = orchestration.automations().filter(item => automationVisible(request, item)).map(item => item.id);
+    const visible = listedAutomations(request).map(item => item.id);
     return orchestration.runs(undefined, Number(request.query.limit) || 100, visible).map(run => withoutHiddenSession(request, run));
   });
 }

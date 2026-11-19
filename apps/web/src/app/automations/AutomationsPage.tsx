@@ -37,18 +37,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 const listClass = 'flex flex-col overflow-hidden [&>*+*]:edge-t rounded-xl border border-line bg-elevated';
 
-function Row({ lead, title, mark, sub, dim, children }: { lead?: React.ReactNode; title: string; mark?: React.ReactNode; sub?: React.ReactNode; dim?: boolean; children?: React.ReactNode }) {
-  return (
-    <div className="flex min-h-14 items-center gap-3 px-4 py-2.5 max-md:px-3">
+/** A whole row opens what it stands for; the switch and menu at its end stay their own targets. */
+function Row({ lead, title, mark, sub, dim, onOpen, children }: { lead?: React.ReactNode; title: string; mark?: React.ReactNode; sub?: React.ReactNode; dim?: boolean; onOpen?: () => void; children?: React.ReactNode }) {
+  const text = (
+    <>
       {lead}
-      <div className={cn('flex min-w-0 flex-1 flex-col gap-0.5', dim && 'opacity-55')}>
+      <span className={cn('flex min-w-0 flex-1 flex-col gap-0.5', dim && 'opacity-55')}>
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-sm font-medium text-fg">{title}</span>
           {mark}
         </span>
         {sub && <span className="truncate text-xs text-fg-3">{sub}</span>}
-      </div>
-      {children}
+      </span>
+    </>
+  );
+  return (
+    <div className={cn('relative flex min-h-14 items-center gap-3 px-4 py-2.5 max-md:px-3', onOpen && 'transition-colors hover:bg-hover has-[[data-row-open]:focus-visible]:bg-hover')}>
+      {onOpen
+        ? <button type="button" data-row-open onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left outline-none after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-focus">{text}</button>
+        : text}
+      {children && <div className="relative flex shrink-0 items-center gap-3">{children}</div>}
     </div>
   );
 }
@@ -105,6 +113,8 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
   const projectName = (id: string | undefined) => id ? projects.find((item) => item.id === id)?.name ?? t`已移除的项目` : undefined;
   const sessionById = useMemo(() => new Map(sessions.map((item) => [item.id, item])), [sessions]);
   const nameById = useMemo(() => new Map((automations ?? []).map((item) => [item.id, item.name])), [automations]);
+  // Runs of a follow-up that has gone off belong to its conversation, which is where they show.
+  const knownRuns = useMemo(() => runs.filter((item) => nameById.has(item.automationId)), [runs, nameById]);
 
   const { upcoming, manual, paused } = useMemo(() => {
     const all = automations ?? [];
@@ -184,6 +194,10 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
       </>}
     </RowMenu>
   );
+  /** A follow-up belongs to its conversation; anything else opens in the editor. */
+  const openOf = (item: Automation) => item.followUp
+    ? (hasSession(item.followUp.sessionId) ? () => onOpenSession(item.followUp!.sessionId) : undefined)
+    : () => setEditing({ automation: item });
   const switchOf = (item: Automation) => (
     <Switch checked={item.enabled} disabled={toggling.has(item.id)} onCheckedChange={(enabled) => void toggle(item, enabled)} aria-label={item.enabled ? t`暂停` : t`启用`} />
   );
@@ -223,7 +237,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
             <Section title={t`即将运行`}>
               <div className={listClass}>
                 {upcoming.map((item) => (
-                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} onOpen={openOf(item)}
                     lead={<span className={timeColumn}>{formatWhen(item.nextRunAt!)}</span>}>
                     {!item.followUp && switchOf(item)}
                     {menu(item)}
@@ -237,7 +251,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
             <Section title={t`手动`}>
               <div className={listClass}>
                 {manual.map((item) => (
-                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}>
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} onOpen={openOf(item)}>
                     <Tip label={t`运行`}>
                       <Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`运行`} disabled={Boolean(running)} busy={running === item.id} onClick={() => item.projectId ? void run(item) : setChoosing(item)}>
                         <IconPlay />
@@ -254,7 +268,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
             <Section title={t`已暂停`}>
               <div className={listClass}>
                 {paused.map((item) => (
-                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} dim={!item.enabled}>
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} dim={!item.enabled} onOpen={openOf(item)}>
                     {item.enabled ? <span className="shrink-0 text-xs text-fg-3"><Trans context="tasks-schedule-ended">已结束</Trans></span> : switchOf(item)}
                     {menu(item)}
                   </Row>
@@ -263,10 +277,11 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
             </Section>
           )}
 
-          {runs.length > 0 && (
+          {knownRuns.length > 0 && (
             <Section title={t`最近运行`}>
               <div className={listClass}>
-                {runs.map((item) => {
+                {knownRuns.map((item) => {
+                  const name = nameById.get(item.automationId)!;
                   const reason = reasonText(item);
                   const openable = hasSession(item.sessionId);
                   const tone = item.result === 'started' ? 'text-success' : item.result === 'failed' ? 'text-danger' : item.result === 'missed' ? 'text-warning' : 'text-fg-4';
@@ -274,7 +289,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
                     <>
                       {item.result === 'started' ? <IconCircleCheck className={cn('size-4 shrink-0', tone)} /> : item.result === 'failed' ? <IconCircleAlert className={cn('size-4 shrink-0', tone)} /> : <IconTriangleAlert className={cn('size-4 shrink-0', tone)} />}
                       <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-                        <span className="truncate text-sm text-fg">{nameById.get(item.automationId) ?? t`已删除的任务`}</span>
+                        <span className="truncate text-sm text-fg">{name}</span>
                         {reason && <Tip label={reason.length > 60 ? reason : undefined}><span className="truncate text-xs text-fg-3">{reason}</span></Tip>}
                       </span>
                       <span className="shrink-0 text-xs tabular-nums text-fg-3">{formatDateTime(item.at)}</span>

@@ -39,5 +39,6 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 - 旧客户端整页报错或看不到会话：确认请求头 `CLIENT_FEATURES_HEADER`，再看 `apps/server/src/native/client-features.ts#sessionVisibleToClient`；多半是新 Agent 没进过滤。
 - 令牌模式下被拒、反向代理后无法登录：`apps/server/src/auth.ts#proxiedRequest` 与 `apps/server/src/routes/auth.ts` 里的 Host 校验，错误码在响应体的 `code` 上。
 - 手机换地址后找不到服务：`POST /api/devices/prove`（`apps/server/src/routes/devices.ts`），以及配对二维码里的 `hosts`（`apps/server/src/routes/auth.ts`）。
+- 自动化页「最近运行」出现找不到名字的记录：`/api/automation-runs` 与 `/api/automations` 共用 `orchestration.ts` 里的 `listedAutomations` 过滤；已执行的唤醒和稍后发送不在列表里，它们的运行记录也不能返回。
 - 浏览器崩溃报告：服务日志 `[riffet] browser crash report received`（`browser-diagnostics.ts`）。
 - 列表更新滞后：`sessions.ts` 里 SSE 与 WebSocket 两条通道发同一组 revision，先确认客户端协商了哪条。

@@ -7,10 +7,6 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
-#: src/app/automations/AutomationEditor.tsx
-msgid "（不可用）"
-msgstr " (Unavailable)"
-
 #. placeholder {0}: item.name
 #: src/app/automations/AutomationsPage.tsx
 msgid "{0} 的操作"
@@ -118,10 +114,6 @@ msgstr "Weekends at {time}"
 #: src/app/automations/AutomationEditor.tsx
 msgid "在同一会话继续"
 msgstr "Continue in the same conversation"
-
-#: src/app/automations/AutomationsPage.tsx
-msgid "已删除的任务"
-msgstr "Deleted task"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "已暂停"
@@ -288,12 +280,12 @@ msgid "每月 1 日 0:00"
 msgstr "The 1st of each month at 0:00"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "每次在新的 Worktree 中运行"
-msgstr "Run in a new Worktree each time"
-
-#: src/app/automations/AutomationEditor.tsx
 msgid "每次开新会话"
 msgstr "New conversation each time"
+
+#: src/app/automations/AutomationEditor.tsx
+msgid "每次新建 Worktree"
+msgstr "New worktree each run"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "添加计划"
@@ -360,8 +352,8 @@ msgid "运行方式"
 msgstr "How it runs"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
-msgstr "At run time, <0>{dateToken}</0> is replaced with today's date and <1>{projectToken}</1> with the project name."
+msgid "运行时 <0>{dateToken}</0> 替换为当天日期，<1>{projectToken}</1> 替换为项目名"
+msgstr "<0>{dateToken}</0> becomes the date and <1>{projectToken}</1> the project name when it runs"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "运行时选择"
@@ -401,3 +393,8 @@ msgstr "Project unavailable"
 #: src/app/automations/AutomationEditor.tsx
 msgid "默认 Agent"
 msgstr "Default Agent"
+
+#: src/app/automations/AutomationEditor.tsx
+#: src/app/automations/QuickCreate.tsx
+msgid "默认模型"
+msgstr "Default model"

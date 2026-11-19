@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AutomationTrigger, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
+import type { AutomationTrigger, NativeBackendCatalogEntry } from '@contracts';
 import { IconArrowUp, IconCalendarClock, IconChevronDown } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
 import { cn, errorMessage } from '@/lib/utils';
-import { BackendPicker } from '../session/BackendPicker';
+import { type AgentModelValue, useAgentModelChoice } from '../session/agentModelChoice';
+import { ModelPicker } from '../session/ModelPicker';
+import { useSettings } from '../state/stores';
+import { startingAgent } from '../council/SeatPicker';
 import { classifyEnterGesture, primaryEnterHint, readEnterKeyBehavior, resolveEnter } from '../session/composerKeyboard';
 import { CRON_PRESETS, cronTrigger, describeCron, nameFromPrompt, ONCE_PRESETS, onceDate, onceLabel, onceTrigger, type OncePreset } from './automation';
 import type { AutomationEditorState } from './AutomationEditor';
@@ -45,10 +48,16 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
   const [text, setText] = useState('');
   const [when, setWhen] = useState<When>({ kind: 'once', preset: '1h' });
   const [projectId, setProjectId] = useState(defaultProjectId ?? '');
-  const [backendId, setBackendId] = useState<NativeBackendId>();
+  const [picked, setPicked] = useState<AgentModelValue>();
+  const defaultBackendId = useSettings((settings) => settings.defaultBackendId);
+  const nativeBackendDefaults = useSettings((settings) => settings.nativeBackendDefaults);
   const [busy, setBusy] = useState(false);
   const project = projects.find((item) => item.id === projectId) ?? projects.find((item) => item.id === defaultProjectId) ?? projects[0];
-  const agent = backendId ?? backends.find((item) => item.available)?.backendId ?? backends[0]?.backendId;
+  // Until one is picked the menu shows what a new conversation would start on; nothing is saved for it.
+  const fallback = backends.find((item) => item.backendId === defaultBackendId && item.available) ?? backends.find((item) => item.available && item.backendId !== 'chat');
+  const choice = picked ?? (fallback ? startingAgent(fallback, { nativeBackendDefaults }) : undefined);
+  const { picker, pick, params, withParam } = useAgentModelChoice({ projectId: project?.id ?? '', backends, choice, agents: true });
+  const target = picked ? { backendId: picked.backendId, ...(picked.profileId ? { backendProfileId: picked.profileId } : {}), ...(picked.model ? { model: picked.model } : {}) } : undefined;
   const ready = Boolean(text.trim() && project) && !busy;
 
   const submit = async () => {
@@ -57,7 +66,7 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
     try {
       await api.createAutomation({
         name: nameFromPrompt(text), prompt: text.trim(), projectId: project.id,
-        ...(backendId ? { target: { backendId } } : {}),
+        ...(target ? { target } : {}),
         triggers: [triggerOf(when)], delivery: 'new', catchUp: 'latest', enabled: true,
       });
       setText('');
@@ -66,7 +75,7 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
     finally { setBusy(false); }
   };
   const openEditor = () => onCustom({
-    seed: { prompt: text.trim(), projectId: project?.id, ...(backendId ? { target: { backendId } } : {}), trigger: triggerOf(when) },
+    seed: { prompt: text.trim(), projectId: project?.id, ...(target ? { target } : {}), trigger: triggerOf(when) },
     focus: 'when',
   });
 
@@ -118,7 +127,9 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            {agent && backends.length > 0 && <BackendPicker backends={backends} backendId={agent} onChange={setBackendId} />}
+            {choice && <ModelPicker side="bottom" align="start" placeholder={t`默认模型`} {...picker}
+              params={params} onParamChange={(id, value) => { const next = withParam(id, value); if (next) setPicked(next); }}
+              onChange={(id) => { const next = pick(id); if (next) setPicked(next); }} />}
           </div>
           <Tip label={t`创建`} kbd={primaryEnterHint(behavior)}>
             <button
