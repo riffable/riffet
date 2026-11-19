@@ -301,6 +301,11 @@ const VOLATILE_KEY = /^(at|ts|time|timestamp|duration|elapsed)$|(At|Ms|Time|Dura
 
 /** Rows without what changes from run to run: sequence, digests, clocks and generated ids. */
 export function stableRows(rows: JournalRow[]): unknown[] {
+  return stable(rows.map(row => ({ kind: row.kind, nativeId: row.nativeId, rev: row.rev, ...(row.turnId ? { turnId: row.turnId } : {}), payload: row.payload }))) as unknown[];
+}
+
+/** Any value without clocks and generated ids: uuids become `<id-n>` in order of appearance. */
+export function stable(value: unknown): unknown {
   const ids = new Map<string, string>();
   const id = (value: string) => value.replace(UUID, match => {
     if (!ids.has(match)) ids.set(match, `<id-${ids.size + 1}>`);
@@ -313,5 +318,5 @@ export function stableRows(rows: JournalRow[]): unknown[] {
     if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, clean(item, name)]));
     return value;
   };
-  return rows.map(row => clean({ kind: row.kind, nativeId: row.nativeId, rev: row.rev, ...(row.turnId ? { turnId: row.turnId } : {}), payload: row.payload }));
+  return clean(value);
 }

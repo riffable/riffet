@@ -6,17 +6,21 @@
  * Codex: drives `CodexBackendAdapter` over the App Server with an in-memory host and keeps every
  * message that crossed the `CodexAppServerClient` seam, in a scratch project with two small files.
  * Uses the CLI's own configuration (model, provider, sign-in), like scripts/probe-codex-e2e.ts.
- * Output: apps/server/src/backends/codex/fixtures/app-server/<cli version>/<scenario>.jsonl, then run
- * `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u` to write the expected rows.
+ * Output, under apps/server/src/backends/codex/fixtures/ (or `--out <dir>`):
+ * - app-server/<cli version>/<scenario>.jsonl: what crossed the seam;
+ * - rollout/<cli version>/<scenario>.jsonl: the thread's rollout file, reduced to the records the
+ *   rollout parsers read (`ROLLOUT_KEEP`).
+ * Then run `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u` to write the expected
+ * rows and parser outputs.
  *
  * Recordings are committed to a public repository, so machine paths, the user name, URLs and model
  * ids are replaced with synthetic text, and accounts, rate limits and provider configuration are
  * dropped (`redact`). Read the diff before committing; `pnpm check:privacy` scans it too.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, tmpdir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { CodexAppServer } from '../apps/server/src/backends/shared/codex-app-server.js';
 import { resolveCliExecutable } from '../apps/server/src/backends/shared/cli-resolve.js';
 import { probeAppServer } from '../apps/server/src/backends/codex/config.js';
@@ -39,10 +43,10 @@ const executable = resolveCliExecutable({ command: process.env.CODEX_CLI?.trim()
 const version = execFileSync(executable, ['--version'], { encoding: 'utf8' }).trim();
 const versionDir = /(\d+\.\d+\.\d+)/.exec(version)?.[1] ?? 'unknown';
 const probe = await probeAppServer(executable);
-const outDir = outFlag >= 0 ? rest[outFlag + 1]! : join(root, 'apps/server/src/backends/codex/fixtures/app-server', versionDir);
+const outBase = outFlag >= 0 ? rest[outFlag + 1]! : join(root, 'apps/server/src/backends/codex/fixtures');
 
 /** Keys whose values describe the account, the provider or the machine rather than the protocol. */
-const DROPPED_KEYS = /^(account|accounts|email|planType|rateLimits|rateLimitsByLimitId|credits|authMode|apiKey|baseUrl|base_url|model_providers|modelProviders|env|http_headers|headers|token|accessToken|userAgent|serviceTier|service_tier|instructionSources)$/;
+const DROPPED_KEYS = /^(account|accounts|email|planType|rateLimits|rateLimitsByLimitId|rate_limits|credits|authMode|apiKey|baseUrl|base_url|model_providers|modelProviders|env|http_headers|headers|token|accessToken|userAgent|serviceTier|service_tier|instructionSources|creator_account_id|creator_user_id|internal_chat_message_metadata_passthrough|encrypted_content|comp_hash)$|instructions/i;
 /** Requests about the account or the provider configuration: kept, so the replay takes the same path, with an empty answer. */
 const EMPTIED_METHODS = /^(account\/|config\/read$)/;
 /**
@@ -83,8 +87,7 @@ function redactor(project: string, projectReal: string) {
   return { walk, text };
 }
 
-function redact(recording: Recording, project: string, projectReal: string): Recording {
-  const { walk, text } = redactor(project, projectReal);
+function redact(recording: Recording, { walk }: ReturnType<typeof redactor>): Recording {
   const emptied = new Set<number>();
   const messages: RecordedMessage[] = [];
   for (const message of recording.messages) {
@@ -100,7 +103,45 @@ function redact(recording: Recording, project: string, projectReal: string): Rec
   };
 }
 
-mkdirSync(outDir, { recursive: true });
+/**
+ * Rollout records the parsers read (`rollout-records.ts`, `rollout-usage.ts`, `rollout-plan.ts`,
+ * `share-read.ts`); everything else — the base and developer instructions, injected context, world
+ * state, extra tools — describes this machine's setup and stays out of the repository.
+ */
+const ROLLOUT_KEEP = new Set(['session_meta', 'turn_context', 'event_msg', 'response_item', 'token_usage_record', 'compacted']);
+const ROLLOUT_EVENTS = /^(task_started|task_complete|turn_aborted|item_completed|token_count|entered_review_mode|exited_review_mode|thread_settings_applied|context_compacted)$/;
+/** Parts of a user message the CLI injected (environment, instructions) rather than the user typed. */
+const INJECTED = /^\s*(<[a-z_ ]+>|<[a-z_]+ |# AGENTS\.md)/i;
+
+function redactRollout(content: string, { walk }: ReturnType<typeof redactor>): string {
+  const out: string[] = [];
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    const record = JSON.parse(line) as { type?: string; payload?: Record<string, unknown> };
+    if (!ROLLOUT_KEEP.has(record.type ?? '')) continue;
+    const payload = record.payload ?? {};
+    if (record.type === 'event_msg' && !ROLLOUT_EVENTS.test(String(payload.type))) continue;
+    if (record.type === 'response_item') {
+      if (payload.role === 'developer' || payload.role === 'system' || payload.type === 'additional_tools') continue;
+      if (payload.type === 'message' && payload.role === 'user' && Array.isArray(payload.content)) {
+        const typed = (payload.content as Array<{ text?: unknown }>).filter(part => !(typeof part.text === 'string' && INJECTED.test(part.text)));
+        if (!typed.length) continue;
+        record.payload = { ...payload, content: typed };
+      }
+    }
+    out.push(JSON.stringify(walk(record)));
+  }
+  return out.join('\n') + '\n';
+}
+
+const threadPathOf = (sink: RecordedMessage[]) => {
+  for (const message of sink) {
+    const thread = message.kind === 'response' ? (message.result as { thread?: { path?: unknown } } | undefined)?.thread : undefined;
+    if (typeof thread?.path === 'string') return thread.path;
+  }
+  return undefined;
+};
+
 for (const name of names) {
   const scenario = CODEX_SCENARIOS[name]!;
   const project = mkdtempSync(join(tmpdir(), 'riffet-record-'));
@@ -123,9 +164,18 @@ for (const name of names) {
     await harness.dispose();
     rmSync(project, { recursive: true, force: true });
   }
-  const recording = redact({ meta: { cli: 'codex', version, serverUserAgent, probe, scenario: name, prompts: scenario.prompts, approval: scenario.approval }, messages: sink }, project, projectReal);
-  const file = join(outDir, `${name}.jsonl`);
-  writeFileSync(file, formatRecording(recording));
-  console.log(`[${name}] wrote ${file}`);
+  // One redactor per scenario, so a model id maps to the same synthetic name in both channels.
+  const redaction = redactor(project, projectReal);
+  const recording = redact({ meta: { cli: 'codex', version, serverUserAgent, probe, scenario: name, prompts: scenario.prompts, approval: scenario.approval }, messages: sink }, redaction);
+  const write = (channel: string, content: string) => {
+    const file = join(outBase, channel, versionDir, `${name}.jsonl`);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, content);
+    console.log(`[${name}] wrote ${file}`);
+  };
+  write('app-server', formatRecording(recording));
+  const rollout = threadPathOf(sink);
+  if (rollout && existsSync(rollout)) write('rollout', redactRollout(readFileSync(rollout, 'utf8'), redaction));
+  else console.log(`[${name}] no rollout file found; the rollout channel is not recorded`);
 }
 process.exit(0);

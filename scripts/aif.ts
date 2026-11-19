@@ -31,6 +31,8 @@ const SECTIONS = ['职责', '入口', '不变量', '外部行为', '排障'];
 const MISSED = ['context', 'co-change', 'external', 'invariant', 'cross-platform', 'logic'];
 const SOURCE = /\.(ts|tsx|mts|mjs|swift|kt)$/;
 const TEST = /(\.test\.|\.spec\.|\/test\/|Test\.kt$|Tests?\.swift$|\/fixtures\/)/;
+/** Trees where every source file must belong to a module (docs/guide/aif.md §5.1); more join as they are declared. */
+const COVERED = ['apps/server/src/'];
 
 /**
  * Global checks by changed path; what AGENTS.md's "改了什么跑什么" table said, in executable form. The
@@ -286,12 +288,14 @@ function context(paths: string[]) {
   for (const file of files) {
     const module = moduleOf(modules, file);
     if (module) touched.set(module, [...(touched.get(module) ?? []), file]);
-    for (const guide of guidesFor(file, docs)) if (!modules.some((m) => m.doc === guide)) guides.add(guide);
+    // Directory guides and enclosing modules' docs are named, not printed: the module itself is printed in full.
+    for (const guide of guidesFor(file, docs)) if (guide !== module?.doc) guides.add(guide);
   }
   const hits = coChangeHits(modules, files);
   const out: string[] = [];
   if (note) out.push(`> ${note}`, '');
-  if (guides.size) out.push(`目录规则（开工前读）：${[...guides].join('、')}`, '');
+  for (const [module] of touched) guides.delete(module.doc);
+  if (guides.size) out.push(`目录规则与上级模块（开工前读）：${[...guides].join('、')}`, '');
   const full = [...touched].map(([module, own]) => [`# ${module.id}（${module.doc}，范围内 ${own.length} 个文件）`, module.body.trim(), recordingSummary(module), module.verify.length ? `验证：${module.verify.join('；')}` : null].filter(Boolean).join('\n\n'));
   const brief = [...touched].map(([module, own]) => [
     `# ${module.id}（${module.doc}，范围内 ${own.length} 个文件）`,
@@ -369,6 +373,9 @@ function check(args: string[]) {
       if (script && !scripts[script]) problems.push(`${module.doc}: verify runs pnpm ${script}, which package.json does not define`);
       for (const token of command.split(/\s+/).filter((token) => /^(apps|packages|scripts)\//.test(token))) if (!existsSync(join(root, token))) problems.push(`${module.doc}: verify names ${token}, which does not exist`);
     }
+  }
+  for (const file of files) {
+    if (COVERED.some((prefix) => file.startsWith(prefix)) && SOURCE.test(file) && !TEST.test(file) && !moduleOf(modules, file)) problems.push(`${file}: belongs to no module; declare one in an enclosing directory's AGENTS.md`);
   }
   const baseline = existsSync(baselinePath) ? (JSON.parse(readFileSync(baselinePath, 'utf8')) as { lines: Record<string, number> }) : { lines: {} };
   const sizes = new Map<string, number>();

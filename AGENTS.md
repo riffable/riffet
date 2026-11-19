@@ -6,7 +6,7 @@
 
 | 目录 | 内容 | 补充规则 |
 |---|---|---|
-| `apps/server/` | 服务端（Node） | 本文「服务端」 |
+| `apps/server/` | 服务端（Node） | [apps/server/src/AGENTS.md](apps/server/src/AGENTS.md)，各模块目录另有自己的 |
 | `apps/web/` | Web 客户端（React、Tailwind、Lingui） | [apps/web/AGENTS.md](apps/web/AGENTS.md) |
 | `apps/macos/` | Mac 客户端（SwiftUI、AppKit） | [apps/macos/AGENTS.md](apps/macos/AGENTS.md) |
 | `apps/mobile/` | Android 与 iOS（Kotlin Multiplatform、Compose、SwiftUI） | [apps/mobile/AGENTS.md](apps/mobile/AGENTS.md) |
@@ -74,11 +74,6 @@ pnpm verify [路径...]        # 按改动路径选出检查、模块验证和�
 
 - 缓存、流缓冲、轮询、长列表、持久化数据、服务拉起的长期子进程按 [性能与资源规范](docs/guide/performance.md) 做：上限取自 `packages/contracts/src/budgets.ts`，不在业务代码里另写数字；每份常驻数据要有释放时机，每个子进程要有所有者和回收条件。
 - 规范 §6「现状」列着不符合规则的现有代码。迁移了哪条就删哪条；新留下的不一致也记进去。
-
-## 服务端
-
-- 按层组织，导入只能指向下层（[架构](docs/guide/architecture.md)「服务端分层」）。`pnpm check:layers` 会拦下新增的越层导入；需要上层的东西时由 `app.ts` 传进来，或者把公共部分下沉。
-- 预热的进程只交给启动配置与预热键完全一致的新会话，不一致时静默冷启动，没有报错（[插件架构](docs/PLUGIN_ARCHITECTURE.md)「预热」）。页面的请求一律经 `resolveNativeSessionInput` 解析，会话一侧读存储的会话；给会话加了影响启动或工具列表的字段，加进 `apps/server/src/backends/shared/launch-input.ts` 的 `SessionLaunchInput`，各后端的预热键会在类型检查时要求处理它；Cursor 插件的 `resourceKey` 在仓库外，要自己跟上；影响 Riffet MCP 工具的还要让 `RiffetMcpService.draftOf` 跟上。服务日志里持续出现 `prewarm: a new session did not match` 就是键算偏了。
 
 ## 测试与验证
 

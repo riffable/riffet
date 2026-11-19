@@ -1,0 +1,166 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 23438,
+      "cacheReadTokens": 23296,
+      "cacheWriteTokens": 0,
+      "outputTokens": 43,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 23422,
+    "size": 486400,
+    "breakdown": [
+      {
+        "id": "cached_input",
+        "label": "缓存输入",
+        "tokens": 23296
+      },
+      {
+        "id": "input",
+        "label": "未缓存输入",
+        "tokens": 121
+      },
+      {
+        "id": "output",
+        "label": "输出",
+        "tokens": 5
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:web:command-1:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Run `ls` in the current directory, then reply with the number of entries only."
+          },
+          "commandId": "command-1"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 2,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_042ed56d2edc98fd016afe8393d3c087d085c9cf6cf5c1437f:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Running `ls`."
+          },
+          "phase": "commentary"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 3,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "exec-<id-3>",
+          "toolName": "List files",
+          "kind": "search",
+          "title": "List files",
+          "status": "in_progress",
+          "rawInput": {
+            "command": "ls",
+            "originalCommand": "/bin/zsh -lc ls",
+            "cwd": "/workspace/project",
+            "commandActions": [
+              {
+                "type": "listFiles",
+                "cmd": "ls",
+                "path": null,
+                "command": "ls",
+                "input": {
+                  "type": "shell",
+                  "command": [
+                    "/bin/zsh",
+                    "-lc",
+                    "ls"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 4,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "exec-<id-3>",
+          "status": "completed",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "README.md\nnotes.txt\n"
+              }
+            }
+          ],
+          "exitCode": 0
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 5,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_042ed56d2edc98fd016afe83addb5887d0a8999301ef843285:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "2"
+          },
+          "phase": "final_answer"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 6,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}

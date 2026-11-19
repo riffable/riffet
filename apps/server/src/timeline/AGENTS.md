@@ -1,0 +1,40 @@
+---
+module: server.timeline
+verify:
+  - npx vitest run apps/server/src/timeline
+  - npx vitest run packages/timeline
+---
+
+## 职责
+
+把每条车道的 journal 日志、Run 与后台任务折叠成 `timeline_rows`，给同步协议按 seq、位置、回合读取。折叠规则本身在 `packages/timeline`，这里只负责增量、持久化和预算。
+
+## 入口
+
+- `service.ts#TimelineService`：折叠调度、读取（`changes`、`page`、`snapshot`、`outline`）和冷会话清理。
+- `fold.ts#LaneFold`：一条车道的折叠窗口，只持有未结束回合的尾部。
+- `tables.ts#TimelineTables`：`timeline_rows`、`timeline_heads`、`timeline_turns` 三张表的读写。
+- `budget.ts#fitRow`：单行预算的截断，截断行带 `truncated.blobRef`。
+- `find.ts#LaneFinder`：车道内查找，按 head 计数。
+
+## 不变量
+
+- 折叠规则变了必须同时加大 `fold.ts#FOLD_VERSION`：它进入 `fold.ts#generationOf`，所有车道因此换 generation，客户端收到快照而不是错位的增量。
+- 折叠不在调用方的栈上执行，journal 提交只排下一轮事件循环（`service.ts#TimelineService`）；读取方等 `service.ts#ready`，不要在提交回调里同步读行表。
+- 车道 seq 只在行摘要变化或行被删除时加一，摘要取自截断之前的行（`tables.ts#RowState`）；改了截断规则不会让 seq 空转，但会让已发出的行与表里不一致，需要升 `FOLD_VERSION`。
+- 只折叠窗口尾部。已结束回合里的实体出新版本、工具更新、迟到输出或 Run 变化，要经 `fold.ts#LaneFold` 的 `unfreeze` 退回到那个回合的开头重折叠；新增会改写旧回合的输入时，要确认它走了这条路。
+- 冷会话清理（`service.ts#sweepCold`）删行但保留 head 并换 `epoch`，子 Agent 车道先把行数和文件改动存进 `timeline_heads.summary`，否则父工具行重折叠后摘要会变。内存里的后台任务不在日志里，行上带任务的会话不会被清理。
+- 迟到的旧回合记录不能覆盖子 Agent 当前轮次的状态；回合结束标记被撤销（tombstone）后，错误状态行要同步移除（`fold.ts#LaneFold`）。
+
+## 外部行为
+
+- 读 `journal.db` 的日志与 blob，写 `derived.db` 的 `timeline_*` 表（测试里与 journal 同库）。空闲超过 `SERVER_BUDGET.coldTimelineDays` 且无人打开的会话，行被丢弃，下次打开从 journal 重折叠；预算见 `packages/contracts/src/budgets.ts#SERVER_BUDGET`。
+- 折叠结果的契约是 `packages/contracts/src/sync.ts#SYNC_BUDGET` 与 `TimelineRow`；Kotlin 解码器的共享数据由 `pnpm gen:timeline-fixtures`（`scripts/gen-timeline-fixtures.ts`）生成，Web 转写的回放用 `scripts/replay-transcript.ts`。
+- 折叠规则的场景测试在 `packages/timeline/src/projectEvents.test.ts`；性能基线 `scripts/bench-timeline.ts`。
+
+## 排障
+
+- 行显示不更新或某条车道停住：`riffet logs --scope timeline`，`[timeline] fold of <session> <lane> failed` 是折叠抛错（`service.ts#TimelineService`）。
+- 客户端反复收到快照、不走增量：比较 `timeline_heads` 的 `generation`、`epoch` 与 `fold_version`，常见原因是 `FOLD_VERSION` 变化、日志重建或冷清理。
+- 冷清理失败或磁盘不回收：`riffet logs --scope timeline`（`cold sweep failed`），`riffet doctor --compact` 在服务停止后整理数据库。
+- 打开旧会话慢：首次折叠要读完整日志，看 `timeline_heads.folded_through` 与 `journal_seq` 的差距。

@@ -1,0 +1,87 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 8919,
+      "cacheReadTokens": 15232,
+      "cacheWriteTokens": 0,
+      "outputTokens": 5,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 24156,
+    "size": 486400,
+    "breakdown": [
+      {
+        "id": "cached_input",
+        "label": "缓存输入",
+        "tokens": 15232
+      },
+      {
+        "id": "input",
+        "label": "未缓存输入",
+        "tokens": 8919
+      },
+      {
+        "id": "output",
+        "label": "输出",
+        "tokens": 5
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:web:command-1:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Reply with exactly the word: ready"
+          },
+          "commandId": "command-1"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 2,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_01e6489c6b0ec369016afe8365c25487d0bac1b4bf026d45f6:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "ready"
+          },
+          "phase": "final_answer"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 3,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}
