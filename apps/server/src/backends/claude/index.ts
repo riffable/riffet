@@ -326,26 +326,21 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
 
   async openOrResume(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<NativeBackendOpenResult> {
     return await host.withSessionLock(session.id, async () => {
-      let current = session;
+      let current = host.getSession(session.id);
       let launchNotice: string | undefined;
-      const stored = host.getSession(session.id);
-      if (stored.nativeSessionId && (stored.quickExitCount ?? 0) >= QUICK_EXIT_LIMIT) {
+      if (current.nativeSessionId && (current.quickExitCount ?? 0) >= QUICK_EXIT_LIMIT) {
         // `--resume` keeps failing at once, so the saved conversation is what the CLI chokes on. Start
         // under a new id instead, and keep the old ones on the session: their transcripts still lead
         // the conversation the reader sees (see `ClaudeTranscript`).
+        // A watch can still be attaching to the exited CLI. Retire it before publishing the replacement.
+        await this.creating.get(session.id)?.catch(() => undefined);
         await this.dispose(host, session.id);
-        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), stored.nativeSessionId].slice(-MAX_PREVIOUS_NATIVE_SESSIONS), quickExitCount: 0 });
-        current = host.setNativeSessionId(session.id, randomUUID());
+        current = host.updateSession(session.id, { previousNativeSessionIds: [...(current.previousNativeSessionIds ?? []), current.nativeSessionId].slice(-MAX_PREVIOUS_NATIVE_SESSIONS), quickExitCount: 0, nativeSessionId: undefined });
         launchNotice = `Claude Code 已连续 ${QUICK_EXIT_LIMIT} 次在启动后 ${QUICK_EXIT_MS / 1000} 秒内退出，这次放弃 --resume，以全新的 Claude 会话启动；之前的对话记录仍会显示在本会话中。`;
       }
       if (current.nativeSessionId) this.validateNativeSessionId(current.nativeSessionId);
-      const resumeRequested = Boolean(current.nativeSessionId) && launchNotice === undefined;
-      if (!current.nativeSessionId) { await this.launchWarm(host, current, project, profile); current = host.getSession(current.id); }
-      const nativeSessionId = current.nativeSessionId ?? randomUUID();
-      if (!current.nativeSessionId) host.setNativeSessionId(current.id, nativeSessionId);
-      const runtime = await this.ensureRuntime(host, { ...current, nativeSessionId }, project, profile, true, resumeRequested, launchNotice);
-      const opened = await runtime.start();
-      return { nativeSessionId, ...(opened.terminalId ? { terminalId: opened.terminalId } : {}), status: runtime.status };
+      const runtime = await this.ensureRuntime(host, current, project, profile, true, launchNotice);
+      return { nativeSessionId: runtime.nativeSessionId, ...(runtime.terminalId ? { terminalId: runtime.terminalId } : {}), status: runtime.status };
     });
   }
 
@@ -683,7 +678,8 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     await this.bridge.close().catch(() => undefined);
   }
 
-  private async ensureRuntime(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, start: boolean, resumeRequested = Boolean(session.nativeSessionId), launchNotice?: string): Promise<ClaudeSessionRuntime> {
+  private async ensureRuntime(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, start: boolean, launchNotice?: string): Promise<ClaudeSessionRuntime> {
+    let resumeRequested = Boolean(session.nativeSessionId);
     const cleared = this.runtimes.get(session.id);
     if (cleared?.clearedTo) {
       // After `/clear` the conversation goes on under the CLI's new id: the old one leads its history.
@@ -697,12 +693,13 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       session = host.getSession(session.id);
       resumeRequested = true;
     }
-    if (start && !host.getSession(session.id).nativeSessionId && await this.launchWarm(host, host.getSession(session.id), project, profile)) {
+    if (start && !session.nativeSessionId && !launchNotice && await this.launchWarm(host, session, project, profile)) {
       session = host.getSession(session.id);
       resumeRequested = false;
     }
     const current = this.runtimes.get(session.id);
     if (current) {
+      if (start && !session.nativeSessionId) host.setNativeSessionId(session.id, current.nativeSessionId);
       if (start) await current.setStartRequested();
       return current;
     }
@@ -716,12 +713,19 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       const nativeSessionId = session.nativeSessionId ?? randomUUID();
       const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes, this.observer);
       this.runtimes.set(session.id, runtime);
-      if (!session.nativeSessionId && start) host.setNativeSessionId(session.id, nativeSessionId);
       try {
+        // Publishing the id synchronously rebinds the watch. It must find this launch's runtime.
+        if (!session.nativeSessionId && start) host.setNativeSessionId(session.id, nativeSessionId);
         await runtime.monitor();
         if (start) await runtime.setStartRequested();
         return runtime;
       } catch (error) {
+        const stored = host.getSession(session.id);
+        // A replacement may still point at the previous, exited terminal until its own CLI launches.
+        if (start && !session.nativeSessionId && stored.nativeSessionId === nativeSessionId
+          && stored.terminalId === session.terminalId && runtime.terminalId === session.terminalId) {
+          host.setNativeSessionId(session.id, undefined);
+        }
         if (this.runtimes.get(session.id) === runtime) this.runtimes.delete(session.id);
         await runtime.dispose();
         throw error;

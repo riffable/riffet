@@ -413,6 +413,74 @@ function flagValue(args: string[], flag: string): string | undefined {
   return index === -1 ? undefined : args[index + 1];
 }
 
+function watchNativeId(h: FakeHarness): NativeControlMessage[] {
+  const messages: NativeControlMessage[] = [];
+  const subscribe = (session: Session) => h.adapter.subscribe(h.host, session, h.profile, message => messages.push(message));
+  let stop = subscribe(h.getSession());
+  const setNativeSessionId = h.host.setNativeSessionId;
+  h.host.setNativeSessionId = (sessionId, nativeSessionId) => {
+    const previousId = h.getSession().nativeSessionId;
+    const session = setNativeSessionId(sessionId, nativeSessionId);
+    // Publishing a new id synchronously rebinds the service's existing watcher.
+    if (nativeSessionId && nativeSessionId !== previousId) {
+      stop();
+      stop = subscribe(session);
+    }
+    return session;
+  };
+  cleaning.push(async () => { stop(); });
+  return messages;
+}
+
+describe('Claude launch with an existing watcher', () => {
+  it('starts once with a new id and reports startup to the rebound watcher', async () => {
+    const h = await makeHarness({ savedTerminal: 'exited' });
+    h.store.update({ nativeSessionId: undefined });
+    const messages = watchNativeId(h);
+
+    const opened = await h.open();
+
+    expect(h.launches).toHaveLength(1);
+    expect(opened.terminalId).toBeDefined();
+    expect(h.getSession().nativeSessionId).toBe(opened.nativeSessionId);
+    expect(flagValue(h.launches[0]!.args, '--session-id')).toBe(opened.nativeSessionId);
+    expect(h.launches[0]!.args).not.toContain('--resume');
+    expect(messages).toContainEqual(expect.objectContaining({ type: 'status', status: expect.objectContaining({ phase: 'starting' }) }));
+  });
+
+  it.each(['first launch', 'crash recovery'])('can retry %s after failing to create a terminal', async attempt => {
+    const h = await makeHarness({ savedTerminal: 'exited' });
+    const previousTerminalId = attempt === 'crash recovery' ? h.savedTerminalId : undefined;
+    if (previousTerminalId) h.store.update({ terminalId: previousTerminalId, quickExitCount: 2 });
+    else h.store.update({ nativeSessionId: undefined });
+    watchNativeId(h);
+    const launch = vi.spyOn(h.host, 'launchPty').mockRejectedValueOnce(new Error('Terminal unavailable'));
+
+    await expect(h.open()).rejects.toThrow('Terminal unavailable');
+    expect(h.getSession().nativeSessionId).toBeUndefined();
+    expect(h.getSession().terminalId).toBe(previousTerminalId);
+
+    const opened = await h.open();
+    expect(launch).toHaveBeenCalledTimes(2);
+    expect(h.launches).toHaveLength(1);
+    expect(opened.terminalId).toBeDefined();
+    expect(opened.terminalId).not.toBe(previousTerminalId);
+    expect(flagValue(h.launches[0]!.args, '--session-id')).toBe(opened.nativeSessionId);
+    expect(h.getSession().nativeSessionId).toBe(opened.nativeSessionId);
+  });
+
+  it('keeps a saved session id when its history is missing', async () => {
+    const h = await makeHarness({ savedTerminal: 'exited' });
+    const nativeSessionId = h.getSession().nativeSessionId;
+    await rm(h.transcriptPath);
+    watchNativeId(h);
+
+    await expect(h.open()).rejects.toMatchObject({ code: 'CLAUDE_SESSION_NOT_FOUND' });
+    expect(h.getSession().nativeSessionId).toBe(nativeSessionId);
+    expect(h.launches).toHaveLength(0);
+  });
+});
+
 describe('Claude transcript titles', () => {
   it('checks a provider title against the complete first prompt after the title stand-in is clipped', async () => {
     const h = await makeHarness();
@@ -2954,9 +3022,11 @@ describe('Claude crash protection', () => {
       else expect(notice).toBeUndefined();
     }
 
+    watchNativeId(h);
     await h.open();
     const args = h.launches.at(-1)!.args;
     const fresh = h.getSession();
+    expect(h.launches).toHaveLength(3);
     expect(args).not.toContain('--resume');
     expect(flagValue(args, '--session-id')).toBe(fresh.nativeSessionId);
     expect(fresh.nativeSessionId).not.toBe(oldId);

@@ -27,6 +27,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
 - 停止当前回合时，`runtime.ts#stopMainTurn` 先撤下发布的回合，此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并检查结果。
 - 30 秒内连续退出两次，下一次启动去掉 `--resume` 新开会话（`launch-guard.ts#QUICK_EXIT_LIMIT`）；计数存在会话上，重启服务不清零。
+- 发布新的会话 id（`setNativeSessionId`）会同步重绑服务端已有的监听，所以 `index.ts#ClaudeBackendAdapter` 先登记本次启动的运行时再发布 id，否则监听会另起一个 CLI；启动失败且终端没换时撤回这个 id，重试才不会去 `--resume` 一个从未写下的对话。
 - 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`runtime.ts#ClaudeSessionRuntime`，修复 1a06647）。
 - 预热键由 `warm.ts#sessionClaudeWarmKey` 从 `apps/server/src/backends/shared/launch-input.ts#SessionLaunchInput` 派生；键与启动不一致时静默冷启动。
 - 屏幕读取的版面约定属于 CLI，随时可能变；读不出时一律退化为不画草稿，不能影响转写读取。
