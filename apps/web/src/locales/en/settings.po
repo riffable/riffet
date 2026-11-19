@@ -2489,6 +2489,10 @@ msgstr "Runs when creating a handoff draft"
 msgid "发送"
 msgstr "Send"
 
+#: src/app/settings/ViewsSection.tsx
+msgid "发送下一条时"
+msgstr "On next message"
+
 #: src/app/settings/SupportSections.tsx
 msgid "发送到当前服务器。发送后记录仍会保留。"
 msgstr "Sent to the current server. The record is kept after sending."
@@ -2899,6 +2903,10 @@ msgstr "Turn state"
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
 msgstr "After the turn ends the execution process collapses into one row"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "回合结束时"
+msgstr "At turn end"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "回合进行中"
@@ -8734,6 +8742,10 @@ msgstr "Migrate call sites and delete the old code"
 #: src/app/design/overview/Opening.tsx
 msgid "过渡保留位置关系"
 msgstr "Transitions keep spatial relationships"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "过程自动收起"
+msgstr "Process auto-fold"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "运行 --check 与 check:design"

@@ -3,7 +3,7 @@ import { Segmented, Switch } from '@/components/ui/controls';
 import { SortableList, SortHandle } from '@/components/ui/sortable-list';
 import { cn } from '@/lib/utils';
 import type { ViewEntry } from '@/plugins/catalog';
-import { setChapterNavigation, setRailMark, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type RailMark, type SessionSide, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
+import { setChapterNavigation, setProcessFoldTiming, setRailMark, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type ProcessFoldTiming, type RailMark, type SessionSide, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
 import { SettingsGroup as Group, SettingsRow as Row, SettingsThumbChoice, ThumbSidebar, thumbFrame } from './SettingsLayout';
 
 /** Settings list the views of a conversation, whichever one is open. */
@@ -69,6 +69,7 @@ export function ViewsSection() {
   const mark = useViewPrefs((state) => state.mark);
   const placement = useViewPrefs((state) => state.placement);
   const chapterNavigation = useViewPrefs((state) => state.chapterNavigation);
+  const processFoldTiming = useViewPrefs((state) => state.processFoldTiming);
   const hidden = useViewPrefs((state) => state.hidden);
   const sidebarHidden = useViewPrefs((state) => state.sidebarHidden);
   const offered = useSessionViews(SETTINGS_FACTS);
@@ -91,6 +92,12 @@ export function ViewsSection() {
       </Row>
     </Group>
     <Group>
+      <Row title={t`过程自动收起`}>
+        <Segmented<ProcessFoldTiming> size="xs" value={processFoldTiming} onChange={setProcessFoldTiming} ariaLabel={t`过程自动收起`} options={[
+          { value: 'turn-end', label: t`回合结束时` },
+          { value: 'next-input', label: t`发送下一条时` },
+        ]} />
+      </Row>
       <Row title={t`章节导航`}>
         <Switch aria-label={t`章节导航`} checked={chapterNavigation} onCheckedChange={setChapterNavigation} />
       </Row>

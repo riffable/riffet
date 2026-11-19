@@ -2489,6 +2489,10 @@ msgstr "发起会话交接时生成"
 msgid "发送"
 msgstr "发送"
 
+#: src/app/settings/ViewsSection.tsx
+msgid "发送下一条时"
+msgstr "发送下一条时"
+
 #: src/app/settings/SupportSections.tsx
 msgid "发送到当前服务器。发送后记录仍会保留。"
 msgstr "发送到当前服务器。发送后记录仍会保留。"
@@ -2899,6 +2903,10 @@ msgstr "回合状态"
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
 msgstr "回合结束后执行过程收成一行"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "回合结束时"
+msgstr "回合结束时"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "回合进行中"
@@ -8734,6 +8742,10 @@ msgstr "迁移调用点，删除旧写法"
 #: src/app/design/overview/Opening.tsx
 msgid "过渡保留位置关系"
 msgstr "过渡保留位置关系"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "过程自动收起"
+msgstr "过程自动收起"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "运行 --check 与 check:design"

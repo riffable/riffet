@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readViewPrefs, setChapterNavigation, setViewOrder, viewPrefs } from './viewPrefs';
+import { readViewPrefs, setChapterNavigation, setProcessFoldTiming, setViewOrder, viewPrefs } from './viewPrefs';
 
 describe('session view preferences', () => {
-  beforeEach(() => viewPrefs.set({ order: [], hidden: [], chapterNavigation: true }));
+  beforeEach(() => viewPrefs.set({ order: [], hidden: [], chapterNavigation: true, processFoldTiming: 'turn-end' }));
 
   it('migrates the old canvas id and keeps ids it does not know, never hiding the conversation', () => {
     const prefs = readViewPrefs(JSON.stringify({ order: ['canvas', 'chat', 'acme.board/board', 'canvas'], hidden: ['chat', 'canvas', 'acme.board/board'] }));
@@ -20,5 +20,11 @@ describe('session view preferences', () => {
     expect(readViewPrefs('{}').chapterNavigation).toBe(true);
     setChapterNavigation(false);
     expect(readViewPrefs(JSON.stringify(viewPrefs.get())).chapterNavigation).toBe(false);
+  });
+
+  it('defaults process auto-fold to turn-end and persists next-input', () => {
+    expect(readViewPrefs('{}').processFoldTiming).toBe('turn-end');
+    setProcessFoldTiming('next-input');
+    expect(readViewPrefs(JSON.stringify(viewPrefs.get())).processFoldTiming).toBe('next-input');
   });
 });

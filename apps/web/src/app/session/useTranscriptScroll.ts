@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { captureReadingAnchor, findRow, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
+import { captureReadingAnchor, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
 import { animationsOf } from '@/lib/motion';
 
 export interface TranscriptScrollHandle {
@@ -64,7 +64,6 @@ const geometry = (element: HTMLElement): Geometry => ({ height: element.clientHe
 const sameGeometry = (a: Geometry | undefined, b: Geometry) => a?.height === b.height && a.width === b.width && a.content === b.content;
 const visible = (element: HTMLElement) => element.clientHeight > 0 && element.clientWidth > 0;
 const bottom = (element: HTMLElement) => Math.max(0, element.scrollHeight - element.clientHeight);
-const supportsOverflowAnchor = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('overflow-anchor', 'auto');
 const editable = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
 const selecting = (element: HTMLElement) => {
   const selection = element.ownerDocument.getSelection();
@@ -110,7 +109,6 @@ export function useTranscriptScroll(options: Options) {
     navigation: undefined as Navigation | undefined,
     held: undefined as Held | undefined,
     request: undefined as AbortController | undefined,
-    suppressNativeAnchor: false,
     readerUntil: 0,
     pointerHeld: false,
     touchY: undefined as number | undefined,
@@ -138,21 +136,6 @@ export function useTranscriptScroll(options: Options) {
     const naturalBottom = (element: HTMLElement) => Math.max(0, naturalContent(element) - element.clientHeight);
     const spacerNeeded = (element: HTMLElement, top: number) =>
       top > 0.5 ? Math.max(0, top + element.clientHeight - naturalContent(element)) : 0;
-    /**
-     * Native CSS scroll anchoring (`overflow-anchor: auto`) stays active while reading so Chromium
-     * and Firefox compensate layout changes above the viewport inside the layout pass before paint.
-     * It is disabled whenever JS owns scroll placement (following, navigation, disclosure hold, or
-     * a virtual window / prepend swap).
-     */
-    const syncOverflowAnchor = (element: HTMLElement | null) => {
-      if (!element) return;
-      const disable = following.current
-        || Boolean(state.current.navigation)
-        || Boolean(state.current.held)
-        || state.current.suppressNativeAnchor;
-      const next = disable ? 'none' : '';
-      if (element.style.overflowAnchor !== next) element.style.overflowAnchor = next;
-    };
     const reclaimSpacer = (element: HTMLElement) => {
       if (state.current.held || state.current.navigation) return;
       if (following.current) { setSpacer(0); return; }
@@ -204,7 +187,6 @@ export function useTranscriptScroll(options: Options) {
       cancelAnimationFrame(operation.frame);
       state.current.navigation = undefined;
       const element = current();
-      syncOverflowAnchor(element);
       // An instant scroll to the current position stops the browser's smooth animation.
       if (element) {
         element.scrollTo({ top: element.scrollTop, behavior: 'instant' });
@@ -226,7 +208,6 @@ export function useTranscriptScroll(options: Options) {
       if (!held) return;
       cancelAnimationFrame(held.frame);
       state.current.held = undefined;
-      syncOverflowAnchor(current());
     };
     const cancelPending = () => {
       navigationVersion.current += 1;
@@ -261,12 +242,10 @@ export function useTranscriptScroll(options: Options) {
         following.current = true;
         anchor.current = null;
         setSpacer(0);
-        syncOverflowAnchor(element);
         if (element) reconcile();
         return;
       }
       following.current = false;
-      syncOverflowAnchor(element);
       capture();
       state.current.readerUntil = performance.now() + 240;
       deferReaderEnd();
@@ -275,7 +254,6 @@ export function useTranscriptScroll(options: Options) {
       cancelPending();
       clearReader();
       following.current = false;
-      syncOverflowAnchor(current());
       capture();
       reportBottom();
     };
@@ -302,31 +280,11 @@ export function useTranscriptScroll(options: Options) {
           const anchored = Math.max(0, readingAnchorTop(element, anchor.current, latest.current.locate));
           let top = anchored;
           // Preserve native gesture movement since the last capture while compensating layout.
-          // When CSS Scroll Anchoring is active on this scroller (and scrollTop > 0 per spec, with
-          // an anchorable row outside a folding process), the browser already combined layout shift
-          // and reader gesture into `element.scrollTop`; otherwise apply the JS delta directly.
+          // The scroller always disables native `overflow-anchor`, so `element.scrollTop - baseline`
+          // is strictly reader gesture movement across every browser.
           if ((state.current.pointerHeld || performance.now() < state.current.readerUntil) && anchored <= bottom(element)) {
             const baseline = Math.max(0, Math.min(bottom(element), anchor.current.scrollTop));
-            // Any captured process row that is now folding needs JS anchoring rather than trusting
-            // the browser's native scroll-top adjustment, which may have anchored elsewhere or clamped.
-            // Also guard against a cleared/invalidated native anchor (e.g. off-screen process fold
-            // right after a programmatic `scrollTo` or Markdown settle) leaving `scrollTop` stuck at
-            // `baseline` or clamped at the new bottom instead of shifting toward `anchored`.
-            const hasFoldingProcess = anchor.current.rows.some((saved) =>
-              Boolean(saved.processOpen) && Boolean(findRow(element, saved.key)?.querySelector('[data-process-open="false"]')));
-            const layoutDelta = anchored - anchor.current.scrollTop;
-            const clampedAtBottom = anchor.current.scrollTop > bottom(element) + 1 && bottom(element) - element.scrollTop <= 1;
-            const nativeMoved = Math.abs(layoutDelta) <= 1
-              || (!clampedAtBottom
-                && Math.abs(element.scrollTop - baseline) > 1
-                && (Math.abs(layoutDelta) < 120 || Math.abs(element.scrollTop - anchored) <= Math.abs(element.scrollTop - baseline)));
-            const nativeAnchored = supportsOverflowAnchor
-              && !state.current.suppressNativeAnchor
-              && baseline > 0
-              && !hasFoldingProcess
-              && getComputedStyle(element).overflowAnchor !== 'none'
-              && nativeMoved;
-            top = nativeAnchored ? element.scrollTop : anchored + element.scrollTop - baseline;
+            top = anchored + element.scrollTop - baseline;
           }
           write(element, top, 'auto', true);
           capture();
@@ -336,8 +294,6 @@ export function useTranscriptScroll(options: Options) {
           capture();
         }
       }
-      state.current.suppressNativeAnchor = false;
-      syncOverflowAnchor(element);
       reportBottom();
       latest.current.onPositionChange(false);
     };
@@ -348,7 +304,6 @@ export function useTranscriptScroll(options: Options) {
       dropHold();
       if (!held || !element || !visible(element)) return;
       if (following.current && (!held.following || latest.current.hasMoreLater || selecting(element) || naturalBottom(element) - element.scrollTop > 2)) following.current = false;
-      syncOverflowAnchor(element);
       if (following.current) {
         setSpacer(0);
         anchor.current = null;
@@ -378,7 +333,6 @@ export function useTranscriptScroll(options: Options) {
         frame: 0, deadline: performance.now() + HOLD_MAX_MS, quiet: 0, size: size(element), following: following.current,
       };
       state.current.held = held;
-      syncOverflowAnchor(element);
       const tick = () => {
         if (state.current.held !== held) return;
         const scroller = current();
@@ -399,7 +353,6 @@ export function useTranscriptScroll(options: Options) {
       following.current = !latest.current.hasMoreLater;
       anchor.current = null;
       if (following.current) setSpacer(0);
-      syncOverflowAnchor(current());
       if (following.current) reconcile(); else capture();
     };
     const navigate = (resolve: () => number | undefined, navigationOptions?: { behavior?: ScrollBehavior }) => {
@@ -408,7 +361,6 @@ export function useTranscriptScroll(options: Options) {
       anchor.current = null;
       const operation: Navigation = { frame: 0, resolve, behavior: navigationOptions?.behavior ?? 'auto', deadline: performance.now() + 1500, still: 0 };
       state.current.navigation = operation;
-      syncOverflowAnchor(current());
       const finish = () => {
         if (state.current.navigation !== operation) return;
         cancelNavigation();
@@ -443,11 +395,7 @@ export function useTranscriptScroll(options: Options) {
       navigationVersion,
       intentVersion,
       get atBottom() { return bottomVisible.current; },
-      preserveBeforeChange() {
-        state.current.suppressNativeAnchor = true;
-        syncOverflowAnchor(current());
-        capture();
-      },
+      preserveBeforeChange() { capture(); },
       reconcile,
       release,
       navigate,
@@ -480,14 +428,12 @@ export function useTranscriptScroll(options: Options) {
         if (!latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2) {
           following.current = true;
           anchor.current = null;
-          syncOverflowAnchor(element);
         }
         capture();
         latest.current.onPositionChange(false);
         return true;
       },
       attach(element: HTMLElement, content: HTMLElement | null) {
-        syncOverflowAnchor(element);
         const onScroll = () => {
           if (!visible(element)) { state.current.hidden = true; return; }
           if (state.current.hidden) {
@@ -512,7 +458,6 @@ export function useTranscriptScroll(options: Options) {
             reclaimSpacer(element);
             following.current = !latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2;
             state.current.owned = undefined;
-            syncOverflowAnchor(element);
             if (following.current) anchor.current = null; else capture();
             state.current.readerUntil = performance.now() + 240;
             deferReaderEnd();
@@ -596,7 +541,6 @@ export function useTranscriptScroll(options: Options) {
         element.ownerDocument.addEventListener('selectionchange', onSelectionChange);
         return () => {
           observer.disconnect();
-          element.style.overflowAnchor = '';
           setSpacer(0);
           element.removeEventListener('scroll', onScroll);
           element.removeEventListener('scrollend', finishReader);
@@ -632,12 +576,10 @@ export function useTranscriptScroll(options: Options) {
         state.current.geometry = undefined;
         state.current.naturalContent = undefined;
         state.current.owned = undefined;
-        state.current.suppressNativeAnchor = false;
         state.current.pointerHeld = false;
         state.current.touchY = undefined;
         following.current = !latest.current.resources && !latest.current.hasMoreLater;
         anchor.current = null;
-        syncOverflowAnchor(current());
       },
     };
   }, []);

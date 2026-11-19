@@ -132,7 +132,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const hasFooter = Boolean(footerTime || progress !== undefined);
 
   return (
-    <section ref={section} data-process-open={open} className={cn('group/process flex min-w-0 flex-col [overflow-anchor:none]', open && 'is-open')}>
+    <section ref={section} data-process-open={open} className={cn('group/process flex min-w-0 flex-col', open && 'is-open')}>
       <button
         type="button"
         aria-expanded={open}
@@ -150,10 +150,9 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
         <span className={cn('min-w-0 truncate', running && 'text-shimmer')}>{label}</span>
         <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 opacity-70 transition-transform duration-[var(--duration-base)] ease-out-soft', open && 'rotate-90')} />
       </button>
-      {/* Opening and on-screen folding animate height; off-screen folds with enough scroll room
-          above land in a single synchronous commit so visible content below never moves.
-          `overflow-anchor: none` keeps native scroll anchoring from pinning inside a collapsing body. */}
-      <Collapse open={open} keep still={!onScreen || quiet || instantFold} id={contentsId} onReveal={() => chooseOpen(true)} className="[overflow-anchor:none]">
+      {/* Opening and on-screen folding animate height; folds whose lost height `scrollTop` can
+          absorb land in a single synchronous commit so visible prose below never moves. */}
+      <Collapse open={open} keep still={!onScreen || quiet || instantFold} id={contentsId} onReveal={() => chooseOpen(true)}>
         {/* No left rail or indent: a turn's contents line up with its own header. Indentation
             is reserved for genuinely nested detail (a tool row expanding its own payload).
             `mx-2` cancels the row's own widening, so the contents stay on the text column. The

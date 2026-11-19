@@ -13,11 +13,15 @@ export type SessionSide = 'overview' | 'rail';
 /** How the message rail marks each prompt. */
 export type RailMark = 'line' | 'dot';
 
+/** When a finished turn's process block folds automatically: right as the turn finishes, or once a later turn begins. */
+export type ProcessFoldTiming = 'turn-end' | 'next-input';
+
 export interface ViewPrefs {
   placement: ViewSwitchPlacement;
   side: SessionSide;
   mark: RailMark;
   chapterNavigation: boolean;
+  processFoldTiming: ProcessFoldTiming;
   /**
    * The reader's order, by view id. It keeps ids this client does not offer now (a plugin that is
    * off, or one this build does not know), so the view returns to its place when it comes back.
@@ -31,7 +35,7 @@ export interface ViewPrefs {
 }
 
 const KEY = 'riffet.sessionViews.v1';
-const DEFAULTS: ViewPrefs = { placement: 'dots', side: 'overview', mark: 'line', chapterNavigation: true, order: [], hidden: [], sidebarOrder: [], sidebarHidden: [] };
+const DEFAULTS: ViewPrefs = { placement: 'dots', side: 'overview', mark: 'line', chapterNavigation: true, processFoldTiming: 'turn-end', order: [], hidden: [], sidebarOrder: [], sidebarHidden: [] };
 
 /** A stored list of view ids: strings only, legacy ids migrated (`canvas` is `riffet.canvas/canvas`), duplicates dropped, unknown ids kept. */
 const ids = (list: unknown): string[] => Array.isArray(list)
@@ -48,6 +52,7 @@ export function readViewPrefs(raw: string): ViewPrefs {
       side: value.side === 'rail' ? 'rail' : 'overview',
       mark: value.mark === 'dot' ? 'dot' : 'line',
       chapterNavigation: value.chapterNavigation !== false,
+      processFoldTiming: value.processFoldTiming === 'next-input' ? 'next-input' : 'turn-end',
       order: ids(value.order),
       hidden: ids(value.hidden).filter((view) => view !== 'chat'),
       sidebarOrder: ids(value.sidebarOrder),
@@ -69,6 +74,8 @@ export function setSessionSide(side: SessionSide) { viewPrefs.set({ side }); }
 export function setRailMark(mark: RailMark) { viewPrefs.set({ mark }); }
 
 export function setChapterNavigation(chapterNavigation: boolean) { viewPrefs.set({ chapterNavigation }); }
+
+export function setProcessFoldTiming(processFoldTiming: ProcessFoldTiming) { viewPrefs.set({ processFoldTiming }); }
 
 /**
  * `order` with the views on offer in `shown`'s order. Ids that are not on offer keep their places and

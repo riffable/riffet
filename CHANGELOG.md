@@ -4,9 +4,13 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Features
+
+- Settings › Views (Web): added "Process auto-fold" (`At turn end` / `On next message`, device-local, defaults to `At turn end`) so readers who prefer zero layout change above a finishing reply can defer folding a turn's process block until the next message is sent.
+
 ### Fixes
 
-- Reading an in-progress reply on the web (including Cursor conversations and long virtualized transcripts) no longer jumps when the turn finishes and its process block folds, even when the prompt or process header is still visible at the top of the screen or right after scrolling.
+- Reading an in-progress reply on the web (including Cursor conversations and long virtualized transcripts) no longer jumps when the turn finishes and its process block folds, even when the prompt or process header is still visible at the top of the screen or right after scrolling; non-virtualized conversations also no longer snap unrendered earlier rows from an 88px estimate, and transcript scrolling now uses one deterministic anchor owner across browsers.
 - In Cursor conversations, a subagent that was interrupted no longer shows as running after it stopped.
 
 ## 0.9.0 - 2026-11-19

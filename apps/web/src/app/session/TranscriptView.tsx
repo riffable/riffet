@@ -40,6 +40,7 @@ import { POS_STEP } from '../../../../../packages/timeline/src/rows';
 import { truncationOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
+import { useViewPrefs, type ProcessFoldTiming } from './viewPrefs';
 import { animationsOf } from '@/lib/motion';
 
 const time = (value: string) => { const at = new Date(value).getTime(); return Number.isFinite(at) ? at : undefined; };
@@ -316,31 +317,6 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
   let observer: ResizeObserver | undefined;
   const extent = (element: HTMLElement, box: number, style = getComputedStyle(element)) =>
     box + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
-  /** Rows mounting again at a remembered height, waiting for `standIn`. */
-  let returning: { key: string; element: HTMLElement; known: number }[] = [];
-  /**
-   * A row the browser may skip (`content-visibility: auto`) mounting again stands in at the height
-   * it last had, rather than the flat estimate, until it renders. Once rendered, `auto` remembers
-   * its real size on its own. Every style is read before any size is written: interleaved, each
-   * row's read would lay the list out again, once per row when a whole list remounts.
-   */
-  const standIn = () => {
-    if (!returning.length) return;
-    const rows = returning;
-    returning = [];
-    const sizes = rows.map(({ key, element, known }) => {
-      if (observed.get(key) !== element) return undefined;
-      const style = getComputedStyle(element);
-      // The remembered extent includes the border box; contain-intrinsic-size takes its content box.
-      const edges = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
-        + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
-      return style.contentVisibility === 'auto' ? Math.max(0, known - extent(element, 0, style) - edges) : undefined;
-    });
-    rows.forEach(({ element }, index) => {
-      const size = sizes[index];
-      if (size !== undefined) element.style.containIntrinsicSize = `auto ${size}px`;
-    });
-  };
   const record = (key: string, height: number) => {
     if (Math.abs((heights.get(key) ?? -1) - height) <= 0.5) return false;
     heights.set(key, height);
@@ -352,10 +328,6 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
       if (held && held !== element) { observer?.unobserve(held); observed.delete(key); }
       if (!element || held === element) return;
       observed.set(key, element);
-      // Stood in once the commit has attached every row (`standIn`); a microtask covers a row that
-      // remounts on its own, without the list committing.
-      const known = heights.get(key);
-      if (known !== undefined && returning.push({ key, element, known }) === 1) queueMicrotask(standIn);
       observer ??= new ResizeObserver((entries) => {
         let changed = false;
         for (const entry of entries) {
@@ -393,8 +365,7 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
       }
       return changed;
     },
-    standIn,
-    disconnect() { observer?.disconnect(); observed.clear(); returning = []; },
+    disconnect() { observer?.disconnect(); observed.clear(); },
   };
 }
 
@@ -422,6 +393,7 @@ interface RowContext {
   /** Fetches the whole of a row sent cut to a preview (sync v3). */
   onExpandRow?: (key: string) => Promise<boolean>;
   completedProcessesOpen?: boolean;
+  foldTiming: ProcessFoldTiming;
 }
 
 /** Under a row the server sent cut to a preview: fetches the rest when asked. */
@@ -454,7 +426,7 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
  * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
  * whose answer actually changed, instead of invalidating the shared context for all of them.
  */
-const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, nearTail = false, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; nearTail?: boolean; footerPinned: boolean; context: RowContext }) {
+const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
   const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
   const resources = useTranscriptResources();
   const remembered = useContext(RememberedValues);
@@ -462,11 +434,6 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   // Both explicit choices survive virtual unmounting; undefined means automatic folding.
   const [processChoice, rememberProcessChoice] = useRemembered<boolean | undefined>('process', undefined);
   const markTarget = useMemo(() => row.type === 'item' ? markTargetOf(row.item, row.runId) : undefined, [row]);
-  // Off-screen rows are skipped by the browser in a whole list. Keep the tail (the current turn and
-  // the rows directly above it) out of `content-visibility: auto`: otherwise folding a tall process
-  // block pulls unrendered rows into view and their 88px intrinsic estimate snaps to real height a
-  // frame later. A windowed list unmounts off-screen rows instead and measures every mounted row.
-  const contained = context.virtual || nearTail ? '' : '[content-visibility:auto] [contain-intrinsic-size:auto_88px]';
   const hasTurnFooter = row.type !== 'trigger' && row.footer !== 'none' && (row.footer !== 'held' || !suppressHeldFooter);
   const footerProgress = row.type !== 'trigger' && row.footer === 'held' && !suppressHeldFooter ? { progress: progress ?? null } : {};
   if (row.type === 'process') {
@@ -483,10 +450,8 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
     return (
       <div ref={attach} data-row-key={row.key} className={cn(
         // `-mx-2` widens the row by the turn header's own padding so the icon stays on the text
-        // column; `TurnProcess` cancels it for the expanded contents. Process rows never use
-        // `content-visibility: auto`: when folded their body already carries `hidden="until-found"`,
-        // and skipping an open process off-screen would freeze its pre-fold height until scrolled near.
-        '-mx-2 min-w-0 [overflow-anchor:none]',
+        // column; `TurnProcess` cancels it for the expanded contents.
+        '-mx-2 min-w-0',
         hasTurnFooter && 'turn-footer-row can-hover:-mx-6 can-hover:px-4',
         row.spaced ? 'timeline-gap-block' : '',
         highlighted && 'timeline-focus-hit',
@@ -502,7 +467,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
           footerPinned={footerPinned}
           footerActions={<AnswerActions text={row.answerText} runId={row.runId} onTurnAction={context.onTurnAction} at={lastTime} />}
           defaultOpen={context.completedProcessesOpen}
-          canAutoFold={row.canAutoFold}
+          canAutoFold={row.canAutoFold && (context.foldTiming === 'turn-end' || !latestTurn)}
           detailOpen={detailOpen}
           choice={processChoice}
           onOpenChange={rememberProcessChoice}
@@ -557,7 +522,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   if (row.type === 'trigger') {
     return (
-      <div ref={attach} data-row-key={row.key} className={cn('-ml-1.5 min-w-0 pl-1.5', contained, row.gap)}>
+      <div ref={attach} data-row-key={row.key} className={cn('-ml-1.5 min-w-0 pl-1.5', row.gap)}>
         <TurnTriggerBlock notices={row.notices} root={context.root} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
       </div>
     );
@@ -584,10 +549,9 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
       ref={attach}
       data-row-key={item.key}
       data-turn={item.kind === 'user' ? item.key : undefined}
-      // `-ml-1.5 pl-1.5` widens the contained row by 6px on the left without moving its content,
-      // so an action row that hangs 6px outward (the answer's copy button) keeps its rounded
-      // hover pill: paint containment from `content-visibility` clips anything that overhangs.
-      className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', contained, row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
+      // `-ml-1.5 pl-1.5` widens the row by 6px on the left without moving its content, matching
+      // the footer's outward action pill.
+      className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
     >
       {content}
       {item.kind !== 'task_notification' && <TruncatedMore item={item} expand={context.onExpandRow} />}
@@ -733,9 +697,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     rowLayoutChange.current();
   }), []);
   useEffect(() => () => rowObserver.disconnect(), [rowObserver]);
-  // Ahead of this view's other layout effects, which measure rows: the rows mounted in this commit
-  // stand in at their remembered heights first, as when each wrote its own as it attached.
-  useLayoutEffect(() => rowObserver.standIn());
   const layoutFor = useCallback((rows?: readonly TranscriptRow[]): RowLayout | undefined => {
     const cached = layoutCache.current;
     const target = rows ?? cached?.rows;
@@ -1366,8 +1327,9 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     expand: (key: string) => handlers.current.onExpandRow?.(key) ?? Promise.resolve(false),
   }), []);
   const fresh = seen.current?.fresh;
+  const foldTiming = useViewPrefs((state) => state.processFoldTiming);
   const rowContext = useMemo<RowContext>(() => ({
-    sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual,
+    sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming,
     measure: rowObserver.measure,
     ...(onOpenPath ? { onOpenPath: stable.openPath } : {}),
     ...(onOpenInEditor ? { onOpenInEditor: stable.openInEditor } : {}),
@@ -1380,7 +1342,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     ...(onRestoreNativeRun ? { onRestoreNativeRun: stable.restore } : {}),
     ...(onTurnAction ? { onTurnAction: stable.turnAction } : {}),
     ...(onExpandRow ? { onExpandRow: stable.expand } : {}),
-  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
+  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);
@@ -1391,8 +1353,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   // A pending interaction or a visible compaction row already explains the pause.
   const suppressHeldFooter = !progress && (pendingConfirmationCount > 0 || (running && showsRunningCompaction(timeline)));
   const latestRows = rowTurns.at(-1)?.rows;
-  const tailCutoff = Math.max(0, rowsAll.length - 12);
-  const renderRow = (row: TranscriptRow, index: number) => (
+  const renderRow = (row: TranscriptRow) => (
     <RememberedScope.Provider key={row.key} value={row.key}>
       <TranscriptRowView
         row={row}
@@ -1401,7 +1362,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         actionPending={row.type === 'item' && row.item.kind === 'user' && row.item.run ? runActionPending?.(row.item.run) ?? false : false}
         suppressHeldFooter={suppressHeldFooter || row.key !== heldFooter}
         latestTurn={latestRows?.includes(row) ?? false}
-        nearTail={index >= tailCutoff}
         footerPinned={row === rowsAll.at(-1)}
         progressShown={Boolean(progress) && row === rowsAll.at(-1)}
         {...(row.key === heldFooter && progress ? { progress } : {})}
@@ -1565,9 +1525,9 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         data-transcript-scroll
         // Never scrolls sideways: a column sliding after a session step (`useSessionLayout`) would
         // otherwise overflow it for the slide's length and flash a horizontal scrollbar.
-        // `overflow-anchor` is managed dynamically by `useTranscriptScroll` (enabled while reading,
-        // disabled while following, navigating, holding a disclosure, or swapping virtual segments).
-        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]"
+        // `overflow-anchor: none` gives `useTranscriptScroll` sole, deterministic ownership across
+        // all browsers without racing Chromium's black-box ScrollAnchor.
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [overflow-anchor:none]"
       >
         <div
           ref={contentRef}
@@ -1593,19 +1553,19 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
             const mounted: ReactNode[] = [];
             let cursor = 0;
             segments.forEach(([from, to], segment) => {
-              mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
-              for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!, index));
+              mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
+              for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!));
               cursor = to;
             });
-            mounted.push(<div key="space:end" aria-hidden data-virtual-spacer className="[overflow-anchor:none]" style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
+            mounted.push(<div key="space:end" aria-hidden data-virtual-spacer style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
             return mounted;
-          })() : rowsAll.map((row, index) => renderRow(row, index))}
+          })() : rowsAll.map(renderRow)}
           </RememberedValues.Provider></TranscriptCatchUp.Provider>
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}
           {progress && !heldFooter && <div className={standaloneProgressGap}>{progress}</div>}
           {/* Temporary room below closing rows so collapsing near the end never clamps the reader; reclaimed as the reader scrolls or content grows. */}
-          <div ref={spacerRef} aria-hidden data-transcript-spacer className="shrink-0 [overflow-anchor:none]" />
+          <div ref={spacerRef} aria-hidden data-transcript-spacer className="shrink-0" />
         </div>
       </div>
 

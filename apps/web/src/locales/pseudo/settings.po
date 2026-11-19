@@ -2489,6 +2489,10 @@ msgstr ""
 msgid "发送"
 msgstr ""
 
+#: src/app/settings/ViewsSection.tsx
+msgid "发送下一条时"
+msgstr ""
+
 #: src/app/settings/SupportSections.tsx
 msgid "发送到当前服务器。发送后记录仍会保留。"
 msgstr ""
@@ -2898,6 +2902,10 @@ msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "回合结束时"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
@@ -8733,6 +8741,10 @@ msgstr ""
 
 #: src/app/design/overview/Opening.tsx
 msgid "过渡保留位置关系"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "过程自动收起"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
