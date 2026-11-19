@@ -44,8 +44,10 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.HazeColorEffect
 import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.glass.GlassOptics
 import dev.chrisbanes.haze.glass.GlassStyle
 import dev.chrisbanes.haze.glass.GlassTransformTarget
+import dev.chrisbanes.haze.glass.OpticalSizeValue
 import dev.chrisbanes.haze.glass.RefractionProfile
 import dev.chrisbanes.haze.glass.hazeGlass
 import dev.chrisbanes.haze.hazeSource
@@ -447,11 +449,19 @@ internal fun Modifier.riffetMaterial(
             shape(rounded)
             backgroundColor(tintBase)
             tint(tintBase.copy(alpha = spec.tintAlpha))
-            optics(refractionStrength = spec.refraction, refractionHeightFraction = 0.15f,
-                // Haze's depth is the sharp/blurred input mix; zero would disable its blur pass.
-                refractionDisplacement = spec.displacement.dp, depth = spec.depth, blurRadius = spec.blurRadius.dp,
-                progressive = progressive, refractionDetailIntensity = spec.refractionDetail,
-                refractionProfile = RefractionProfile.Edge(spec.edgeWidth.dp))
+            optics(
+                GlassOptics(
+                    refractionStrength = spec.refraction,
+                    refractionHeightFraction = 0.15f,
+                    // Haze's depth is the sharp/blurred input mix; zero would disable its blur pass.
+                    refractionDisplacement = spec.displacement.dp,
+                    depth = OpticalSizeValue.Fixed(spec.depth),
+                    blurRadius = OpticalSizeValue.Fixed(spec.blurRadius.dp),
+                    progressive = progressive,
+                    refractionDetailIntensity = spec.refractionDetail,
+                    refractionProfile = RefractionProfile.Edge(spec.edgeWidth.dp),
+                ),
+            )
             specularIntensity(spec.specular)
             ambientResponse(if (surfaces.dark) 0.08f else 0.15f)
             edgeShadow(Color.Black.copy(alpha = if (surfaces.dark) 0.24f else 0.10f))

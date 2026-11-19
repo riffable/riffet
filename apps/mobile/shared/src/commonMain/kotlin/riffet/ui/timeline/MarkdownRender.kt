@@ -449,6 +449,8 @@ private fun markdownColors(colors: RiffetColors, text: Color): MarkdownColors = 
     inlineCodeBackground = colors.bgSubtle,
     dividerColor = colors.line,
     tableBackground = colors.bgSubtle,
+    highlightText = text,
+    highlightBackground = colors.warningSoft,
 )
 
 /** One heading step, in Medium: size carries the rank, and CJK at 600 is too heavy. */
