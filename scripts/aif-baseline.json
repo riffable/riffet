@@ -1,0 +1,7 @@
+{
+  "lines": {
+    "apps/server/src/backends/codex/index.ts": 1515,
+    "apps/server/src/backends/codex/runtime.ts": 3934,
+    "apps/server/src/backends/codex/transcript-source.ts": 1068
+  }
+}

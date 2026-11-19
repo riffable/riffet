@@ -1,0 +1,124 @@
+[
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-1>:started",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-1>:web:command-1:user",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Run `ls` in the current directory, then reply with the number of entries only."
+        },
+        "commandId": "command-1"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:web:command-1:user",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call",
+    "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call",
+      "data": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "exec-<id-3>",
+        "toolName": "List files",
+        "kind": "search",
+        "title": "List files",
+        "status": "in_progress",
+        "rawInput": {
+          "command": "ls",
+          "originalCommand": "/bin/zsh -lc ls",
+          "cwd": "/workspace/project",
+          "commandActions": [
+            {
+              "type": "listFiles",
+              "command": "ls",
+              "path": null
+            }
+          ]
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:exec-<id-3>:call",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call_update",
+    "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call_update",
+      "data": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "exec-<id-3>",
+        "status": "completed",
+        "content": [
+          {
+            "type": "content",
+            "content": {
+              "type": "text",
+              "text": "README.md\nnotes.txt\n"
+            }
+          }
+        ],
+        "exitCode": 0
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:exec-<id-3>:result",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_076f6cdc9e91ac9b016afe81a08dd887d08f42bcd5fe9549c8:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "phase": "final_answer",
+        "content": {
+          "type": "text",
+          "text": "2"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_076f6cdc9e91ac9b016afe81a08dd887d08f42bcd5fe9549c8:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-1>:ended",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>",
+      "status": "completed"
+    }
+  }
+]

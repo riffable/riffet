@@ -34,18 +34,16 @@ pnpm typecheck          # 全仓类型检查
 pnpm test               # vitest；单个目录：npx vitest run apps/web
 ```
 
-按改动的范围跑对应检查，CI 全部都会跑（`.github/workflows/verify.yml`）：
+开工前和提交前各跑一条命令（[AI 友好工程机制](docs/guide/aif.md)）：
 
-| 改了什么 | 跑什么 |
-|---|---|
-| 服务端的导入关系 | `pnpm check:layers` |
-| 界面的取值、动效 | `pnpm check:design`、`pnpm check:motion` |
-| Web 文案 | `pnpm i18n:extract`，补齐英文后 `pnpm i18n:check` |
-| 移动端文案、Compose | `pnpm check:mobile-strings`、`pnpm check:compose` |
-| 插件边界、插件 API | `pnpm check:plugins`、`pnpm gen:plugin-api:check` |
-| 文档里的路径 | `pnpm check:docs` |
-| 缓存、流、轮询、长列表、持久化数据 | `pnpm check:perf`；改了预算跑 `pnpm gen:budgets` |
-| 生成物的源头（设计取值、契约、图标……） | 对应的 `pnpm gen:<名字>`，再跑它的 `:check` |
+```bash
+pnpm aif context [路径...]   # 范围内模块的规则、同改项、录制数据和验证命令
+pnpm verify [路径...]        # 按改动路径选出检查、模块验证和受影响的测试
+```
+
+不传路径时取工作区的全部改动，可能混入其他会话的修改。改动路径到检查的对应关系在 `scripts/aif.ts` 的 `GLOBAL_CHECKS`，生成物检查从各生成脚本推导，CI 跑全量（`.github/workflows/verify.yml`）。`verify` 只做检查，生成要自己跑：Web 文案先 `pnpm i18n:extract` 并补齐英文；生成物过期时（`verify` 里某个 `gen:*:check` 失败）跑对应的 `pnpm gen:<名字>`。
+
+`AGENTS.md` 头部声明了 `module:` 的目录是一个模块，规则见 [AI 友好工程机制](docs/guide/aif.md) §5。修复模块里非显然的问题时，在同一个提交里给模块文档的「外部行为」或「排障」补一条；修改 Agent CLI 输出解析的修复，用 `pnpm record` 补录制数据。
 
 ## 改界面
 
@@ -97,6 +95,7 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 - 提交信息用 `type(scope): 小写开头的英文摘要`，例如 `feat(web): …`、`fix(tabs): …`、`docs(design): …`。
 - 有 AI 参与编写的提交，带上实际模型的 `Co-authored-by` 署名。
 - 使用者能感知的 `feat`、`fix`、`perf`，在同一个提交里给 `CHANGELOG.md` 和 `CHANGELOG.zh-CN.md` 的未发布节各加一条，两份一一对应，写使用者看到的变化而不是实现。CI 对漏写的提交只给警告。
+- `fix` 提交在尾注写 `Missed: <类型>`，说明缺了什么：`context`、`co-change`、`external`、`invariant`、`cross-platform`、`logic`（[§5.6](docs/guide/aif.md)）。CI 对漏写的提交只给警告。
 - 仓库会公开。代码、文档、提交信息里不写凭据、个人信息、内部系统的地址和内部数据。
 - PR 按 [模板](.github/pull_request_template.md) 填写；涉及界面的，勾选设计规范的自查项。
 

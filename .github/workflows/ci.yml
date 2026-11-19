@@ -56,6 +56,24 @@ jobs:
         env:
           RANGE: ${{ steps.range.outputs.range }}
         run: node scripts/release.mjs changelog "$RANGE"
+      # Only warns, like the changelog: fix commits say what was missing (`Missed:`), and fixes to how
+      # an agent CLI is read carry a recording (docs/guide/aif.md §5.4, §5.6).
+      - uses: pnpm/action-setup@v4
+        if: steps.range.outputs.range != ''
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        if: steps.range.outputs.range != ''
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Fix attribution and recordings
+        if: steps.range.outputs.range != ''
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm aif commits "$RANGE"
 
   mobile:
     # The Gradle build is independent of pnpm. Only the JVM test targets run here: the iOS targets
