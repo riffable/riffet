@@ -219,8 +219,9 @@ function Messages() {
         { label: t`用户消息`, cells: [<Value key="a">rounded-3xl · px 16 · py 10 · bg-bubble</Value>, <Value key="b">max-w min(82%, 560px)</Value>] },
         { label: t`用户元信息`, cells: [<Value key="a">text-2xs · text-fg-3 · {t`右对齐`}</Value>] },
         { label: t`回答`, cells: [<Value key="a">{t`无气泡，占满阅读列`}</Value>] },
-        { label: t`回答脚注`, cells: [<Value key="a">min-h 36 · text-2xs · {t`时间 · tok/s`}</Value>, <Value key="b">{t`估算值前缀 ~，字色 fg-4`}</Value>] },
-        { label: t`显示时机`, cells: [<Value key="a">{t`指针停留 500 ms，触屏常显`}</Value>] },
+        { label: t`回答脚注`, cells: [<Value key="a">h 28 · text-2xs · {t`时间 · tok/s`}</Value>, <Value key="b">{t`估算值前缀 ~，字色 fg-4`}</Value>] },
+        { label: t`到下一回合`, cells: [<Value key="a">28 + timeline-gap-block</Value>] },
+        { label: t`显示时机`, cells: [<Value key="a">{t`指针停留 150 ms，触屏常显`}</Value>, <Value key="b">{t`悬停区宽 ≥ 352，接到下一回合`}</Value>] },
         { label: t`插件结果`, cells: [<Value key="a">rounded-xl · bg-subtle · px 16 · py 12</Value>, <Value key="b">{t`回答页脚下方；运行中图标换为转圈`}</Value>] },
       ]} />
     </div>

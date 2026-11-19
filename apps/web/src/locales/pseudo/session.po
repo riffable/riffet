@@ -1190,10 +1190,6 @@ msgstr ""
 msgid "按住 说话"
 msgstr ""
 
-#: src/app/session/Timeline.tsx
-msgid "排队中"
-msgstr ""
-
 #: src/app/session/Composer.tsx
 msgid "排队发送"
 msgstr ""

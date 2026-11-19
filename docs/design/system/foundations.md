@@ -21,7 +21,7 @@
 | `primary` | 主按钮的实心底（每个区域最多一个）、开关打开时的轨道 | 其他按钮 |
 | `danger` / `warning` / `success` | 出错 / 等待处理 / diff 新增，只表达状态 | 装饰、强调 |
 
-- 彩色只来自内容：agent 标志、代码高亮、diff、头像。
+- 彩色只来自内容：agent 标志、代码高亮、diff、头像。标志投下的光晕（模型协作的席位，[界面](surfaces.md) §4）用标志自己的颜色，算作标志的一部分。
 - 移动端另有 19 个设计颜色角色（`page`、`card`、`floating`、`press`、`selected`……，见 `packages/contracts/src/theme-design.ts`），由上表的角色派生，组件优先用它们。
 - 文字与底色的对比度至少 4.5:1，非文字（图标、边框、焦点环）至少 3:1，由 `scripts/check-theme-contrast.ts` 检查所有内置主题。
 

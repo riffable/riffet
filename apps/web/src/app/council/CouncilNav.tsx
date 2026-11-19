@@ -1,15 +1,16 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { CouncilDiscussion } from '@contracts';
-import { IconChevronDown, IconFileText, IconLayers, IconMessagesSquare, IconPlus, IconTrash2 } from '@/components/icons';
+import type { CouncilFormat, CouncilSummary } from '@contracts';
+import { IconArrowRightLeft, IconChevronDown, IconFilePenLine, IconLayers, IconMessagesSquare, IconPlus, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/controls';
 import { ListRow, RowActions } from '@/components/ui/list-row';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
-function modeIcon(mode: CouncilDiscussion['mode']) {
-  if (mode === 'debate') return <IconMessagesSquare />;
-  if (mode === 'prism') return <IconLayers />;
-  return <IconFileText />;
+function formatIcon(format: CouncilFormat) {
+  if (format === 'ld') return <IconArrowRightLeft />;
+  if (format === 'roundtable') return <IconMessagesSquare />;
+  if (format === 'prism') return <IconLayers />;
+  return <IconFilePenLine />;
 }
 
 /**
@@ -22,7 +23,7 @@ export function CouncilAsideNav({
   onSelect,
   onDelete,
 }: {
-  items: CouncilDiscussion[];
+  items: CouncilSummary[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
   onDelete: (id: string) => void;
@@ -51,7 +52,7 @@ export function CouncilAsideNav({
           {items.map((item) => (
             <ListRow
               key={item.id}
-              leading={item.status === 'running' ? <Spinner /> : modeIcon(item.mode)}
+              leading={item.status === 'running' ? <Spinner /> : formatIcon(item.format)}
               selected={activeId === item.id}
               aria-current={activeId === item.id ? 'page' : undefined}
               onClick={() => onSelect(item.id)}
@@ -86,7 +87,7 @@ export function CouncilHistoryMenu({
   activeId,
   onSelect,
 }: {
-  items: CouncilDiscussion[];
+  items: CouncilSummary[];
   activeId: string | null;
   onSelect: (id: string | null) => void;
 }) {

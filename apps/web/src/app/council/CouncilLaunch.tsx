@@ -1,364 +1,285 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type {
-  CouncilCreateRequest,
-  CouncilMode,
-  CouncilModelRef,
-  CouncilRhythm,
-  NativeBackendCatalogEntry,
+import {
+  COUNCIL_BUDGET,
+  type CouncilAgent,
+  type CouncilCreateRequest,
+  type CouncilFormat,
+  type CouncilReviewTask,
+  type CouncilRhythm,
+  type CouncilRole,
+  type CouncilSummary,
+  type NativeBackendCatalogEntry,
 } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Segmented } from '@/components/ui/controls';
+import { Segmented, Select } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
-import { Tip } from '@/components/ui/tooltip';
-import { IconArrowRightLeft, IconArrowUp, IconFileText, IconPlus, IconX } from '@/components/icons';
-import { AgentModelSlot, workerBackendsOf } from './AgentModelSlot';
+import { IconPlus, IconX } from '@/components/icons';
+import { Composer } from '../session/Composer';
+import { LEAD_ROLES, useCouncilLabels } from './model';
+import { Halo, MarkTile } from './Speech';
+import { cn } from '@/lib/utils';
+import { useSettings } from '../state/stores';
+import { SeatPicker, seatAgents, startingAgent } from './SeatPicker';
 
-interface DraftSide {
-  id: string;
-  label: string;
-  models: CouncilModelRef[];
-}
+interface DraftSeat { key: string; role: CouncilRole; model?: CouncilAgent; task?: CouncilReviewTask }
 
-function sameRef(a: CouncilModelRef | undefined, b: CouncilModelRef | undefined): boolean {
-  return Boolean(a && b && a.backendId === b.backendId && a.profileId === b.profileId && a.model === b.model);
-}
+/** Seat roles per format, in the order they are listed, with how many of each. */
+const ROLES: Record<CouncilFormat, Array<{ role: CouncilRole; min: number; max: number; initial: number }>> = {
+  ld: [{ role: 'pro', min: 1, max: 1, initial: 1 }, { role: 'con', min: 1, max: 1, initial: 1 }, { role: 'judge', min: 1, max: 1, initial: 1 }],
+  roundtable: [{ role: 'debater', min: 2, max: 6, initial: 3 }, { role: 'moderator', min: 1, max: 1, initial: 1 }],
+  prism: [{ role: 'participant', min: 2, max: 4, initial: 3 }, { role: 'observer', min: 1, max: 1, initial: 1 }],
+  review: [{ role: 'reviewer', min: 1, max: 4, initial: 3 }, { role: 'editor', min: 1, max: 1, initial: 1 }],
+};
+const TASKS: CouncilReviewTask[] = ['correct', 'augment', 'diagnose', 'restructure'];
+const FORMATS: CouncilFormat[] = ['ld', 'roundtable', 'prism', 'review'];
+const ROUND_CHOICES = Array.from({ length: COUNCIL_BUDGET.maxRounds - COUNCIL_BUDGET.minRounds + 1 }, (_, i) => String(COUNCIL_BUDGET.minRounds + i));
 
-/** Picks initial models across distinct available agents so defaults are diverse out of the box. */
-function seedRefs(workerBackends: readonly NativeBackendCatalogEntry[], count: number): CouncilModelRef[] {
-  const picked: CouncilModelRef[] = [];
-  for (const backend of workerBackends) {
-    if (picked.length >= count) break;
-    const defaultProfile = backend.profiles.find((p) => p.isDefault) ?? backend.profiles[0];
-    const model = backend.defaultModel ?? backend.models[0]?.value ?? '';
-    picked.push({
-      backendId: backend.backendId,
-      ...(defaultProfile ? { profileId: defaultProfile.id } : {}),
-      model,
+let seatKey = 0;
+const nextKey = () => `seat-${seatKey += 1}`;
+
+/**
+ * The seats a format starts with: those of its last discussion, where their Agents are still there, else the
+ * available Agents in turn.
+ */
+function initialSeats(format: CouncilFormat, models: CouncilAgent[], previous?: CouncilSummary, still?: (agent: CouncilAgent) => CouncilAgent | undefined): DraftSeat[] {
+  if (previous?.seats.length) {
+    return previous.seats.map((seat, at) => {
+      const model = still?.(seat.model) ?? (models.length ? models[at % models.length] : undefined);
+      return { key: nextKey(), role: seat.role, ...(model ? { model } : {}), ...(seat.task ? { task: seat.task } : {}) };
     });
   }
-  return picked;
+  const seats: DraftSeat[] = [];
+  let at = 0;
+  for (const rule of ROLES[format]) {
+    for (let i = 0; i < rule.initial; i += 1) {
+      const model = models.length ? models[at % models.length] : undefined;
+      at += 1;
+      seats.push({ key: nextKey(), role: rule.role, ...(model ? { model } : {}), ...(rule.role === 'reviewer' ? { task: TASKS[i % TASKS.length] } : {}) });
+    }
+  }
+  return seats;
 }
 
-export function CouncilLaunch({
-  backends,
-  submitting,
-  onCreate,
-  onOpenProviderSettings,
-}: {
+export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettings, onError }: {
   backends: readonly NativeBackendCatalogEntry[];
-  submitting: boolean;
-  onCreate: (req: CouncilCreateRequest) => void;
+  /** The discussions held so far, newest first; undefined until read. Each format starts from its last one. */
+  recent: readonly CouncilSummary[] | undefined;
+  onCreate: (request: CouncilCreateRequest) => Promise<boolean>;
   onOpenProviderSettings: () => void;
+  onError: (message: string) => void;
 }) {
   const { t } = useLingui();
-  const workerBackends = useMemo(() => workerBackendsOf(backends), [backends]);
-  const [mode, setMode] = useState<CouncilMode>('debate');
-  const [topic, setTopic] = useState('');
-  const [sourceTitle, setSourceTitle] = useState('');
-  const [rhythm, setRhythm] = useState<CouncilRhythm>('pause');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const labels = useCouncilLabels();
+  // Seats start on the available Agents in turn, so a discussion seats different ones unless the reader picks
+  // otherwise; quick chat only when no Agent is there.
+  const agents = seatAgents(backends);
+  const workers = agents.some((entry) => entry.backendId !== 'chat') ? agents.filter((entry) => entry.backendId !== 'chat') : agents;
+  const nativeBackendDefaults = useSettings((settings) => settings.nativeBackendDefaults);
+  const auxiliaryModels = useSettings((settings) => settings.auxiliaryModels);
+  const models: CouncilAgent[] = workers.map((entry) => startingAgent(entry, { nativeBackendDefaults, auxiliaryModels }));
+  const [format, setFormat] = useState<CouncilFormat>('ld');
+  const [seats, setSeats] = useState<Partial<Record<CouncilFormat, DraftSeat[]>>>({});
+  const [rounds, setRounds] = useState<Partial<Record<CouncilFormat, number>>>({});
+  const [rhythms, setRhythms] = useState<Partial<Record<CouncilFormat, CouncilRhythm>>>({});
+  const [busy, setBusy] = useState(false);
 
-  const [sides, setSides] = useState<DraftSide[]>([]);
-  const [judgeRef, setJudgeRef] = useState<CouncilModelRef | undefined>();
-  const [prismRefs, setPrismRefs] = useState<CouncilModelRef[]>([]);
-  const [observerRef, setObserverRef] = useState<CouncilModelRef | undefined>();
-
+  const agentKey = models.map((model) => `${model.backendId}:${model.profileId}:${model.model ?? ''}`).join(',');
+  const listed = recent !== undefined;
+  // The page opens on the format last used, once the discussions are read.
+  const opened = useRef(false);
   useEffect(() => {
-    const seeds = seedRefs(workerBackends, 4);
-    if (!seeds.length) return;
-    setSides((cur) => cur.length >= 2 ? cur : [
-      { id: 'pro', label: t`正方`, models: [seeds[0]!] },
-      { id: 'con', label: t`反方`, models: [seeds[1] ?? seeds[0]!] },
-    ]);
-    setJudgeRef((cur) => cur ?? seeds[2] ?? seeds[0]);
-    setPrismRefs((cur) => cur.length >= 2 ? cur : (seeds.length >= 2 ? seeds.slice(0, Math.min(3, seeds.length)) : [seeds[0]!, seeds[0]!]));
-    setObserverRef((cur) => cur ?? seeds[2] ?? seeds[0]);
-  }, [workerBackends, t]);
+    if (!listed || opened.current) return;
+    opened.current = true;
+    const last = recent[0];
+    if (!last) return;
+    setFormat(last.format);
+  }, [listed]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    // The last discussions are read first, so a format does not open on Agents in turn and then jump to its last seats.
+    if (!listed) return;
+    const previous = recent.find((item) => item.format === format);
+    if (previous && rounds[format] === undefined) setRounds((current) => ({ ...current, [format]: previous.maxRounds }));
+    if (previous && rhythms[format] === undefined) setRhythms((current) => ({ ...current, [format]: previous.rhythm }));
+    setSeats((current) => {
+      const drafted = current[format];
+      // A seat that named no model (a discussion from before seats named one) takes what its Agent would start on now.
+      const still = (agent: CouncilAgent) => {
+        const entry = agents.find((item) => item.backendId === agent.backendId);
+        if (!entry) return undefined;
+        return agent.model && entry.profiles.some((profile) => profile.id === agent.profileId) ? agent : startingAgent(entry, { nativeBackendDefaults, auxiliaryModels }, agent.profileId);
+      };
+      if (!drafted) return { ...current, [format]: initialSeats(format, models, previous, still) };
+      // Seats drafted before the Agents were known take them now, in turn, as they would have at first.
+      if (!models.length || drafted.every((seat) => seat.model)) return current;
+      return { ...current, [format]: drafted.map((seat, at) => seat.model ? seat : { ...seat, model: models[at % models.length]! }) };
+    });
+  }, [format, agentKey, listed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const noAgents = workerBackends.length === 0;
-  const dupExactModel = useMemo(() => {
-    const list = mode === 'debate' ? sides.flatMap((s) => s.models) : prismRefs;
-    const keys = list.map((r) => `${r.backendId}:${r.profileId ?? ''}:${r.model}`);
-    return keys.length >= 2 && new Set(keys).size < keys.length;
-  }, [mode, sides, prismRefs]);
+  const list = seats[format] ?? [];
+  const setList = (next: DraftSeat[]) => setSeats((current) => ({ ...current, [format]: next }));
+  const roundCount = rounds[format] ?? (format === 'ld' ? 4 : 3);
+  const rhythm = rhythms[format] ?? 'pause';
+  const noModels = backends.length > 0 && agents.length === 0;
+  const ready = list.length > 0 && list.every((seat) => seat.model);
 
-  const nextCandidate = (exclude: CouncilModelRef[]): CouncilModelRef | undefined => {
-    const allSeeds = seedRefs(workerBackends, 8);
-    const fresh = allSeeds.find((r) => !exclude.some((e) => sameRef(e, r)));
-    return fresh ?? allSeeds[0];
-  };
-
-  const addModelToSide = (sideIdx: number) => {
-    const target = sides[sideIdx];
-    if (!target || target.models.length >= 3) return;
-    const cand = nextCandidate(sides.flatMap((s) => s.models));
-    if (!cand) return;
-    setSides((prev) => prev.map((s, i) => i === sideIdx ? { ...s, models: [...s.models, cand] } : s));
-  };
-
-  const addSide = () => {
-    if (sides.length >= 4) return;
-    const cand = nextCandidate(sides.flatMap((s) => s.models));
-    if (!cand) return;
-    const n = sides.length + 1;
-    setSides((prev) => [...prev, { id: `side-${n}`, label: t`立场 ${n}`, models: [cand] }]);
-  };
-
-  const swapTwoSides = () => {
-    if (sides.length !== 2) return;
-    setSides(([a, b]) => [
-      { ...a!, models: b!.models },
-      { ...b!, models: a!.models },
-    ]);
-  };
-
-  const addPrismSlot = () => {
-    if (prismRefs.length >= 4) return;
-    const cand = nextCandidate(prismRefs);
-    if (cand) setPrismRefs([...prismRefs, cand]);
-  };
-
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
-    const text = await file.text();
-    setTopic(text.slice(0, 60_000));
-    setSourceTitle(file.name);
-  };
-
-  const canSubmit = Boolean(topic.trim()) && workerBackends.length > 0 && !submitting;
-
-  const submit = () => {
-    if (!canSubmit) return;
-    if (mode === 'debate') {
-      onCreate({
-        mode,
-        topic: topic.trim(),
+  const submit = async (text: string): Promise<boolean> => {
+    if (!ready || busy) return false;
+    setBusy(true);
+    try {
+      return await onCreate({
+        format,
+        topic: format === 'review' ? '' : text.trim(),
+        ...(format === 'review' ? { document: text.trim() } : {}),
+        seats: list.map((seat) => ({ role: seat.role, model: seat.model!, ...(seat.task ? { task: seat.task } : {}) })),
+        ...(format === 'ld' || format === 'roundtable' ? { maxRounds: roundCount } : {}),
         rhythm,
-        sides: sides.map((s) => ({ id: s.id, label: s.label, models: s.models })),
-        ...(judgeRef ? { judgeModel: judgeRef } : {}),
       });
-    } else if (mode === 'prism') {
-      onCreate({
-        mode,
-        topic: topic.trim(),
-        rhythm,
-        participants: prismRefs,
-        ...(observerRef ? { observerModel: observerRef } : {}),
-      });
-    } else {
-      onCreate({
-        mode,
-        topic: sourceTitle.trim() || topic.trim().slice(0, 48),
-        documentText: topic.trim(),
-        sourceTitle: sourceTitle.trim() || undefined,
-        rhythm,
-        participants: prismRefs,
-        ...(observerRef ? { observerModel: observerRef } : {}),
-      });
+    } finally {
+      setBusy(false);
     }
   };
 
-  const roleLabels = [t`修改`, t`补充`, t`问题`, t`结构`];
+  const pickerProps = (seat: DraftSeat) => ({
+    backends: agents,
+    value: seat.model,
+    disabled: busy,
+    onChange: (model: CouncilAgent) => setList(list.map((item) => (item.key === seat.key ? { ...item, model } : item))),
+  });
+  const remove = (seat: DraftSeat) => (
+    <Button size="icon-sm" variant="quiet" className="absolute top-2 right-2" aria-label={t`移除`} onClick={() => setList(list.filter((item) => item.key !== seat.key))}><IconX /></Button>
+  );
 
-  return (
-    <div className="mx-auto mt-8 flex w-full max-w-2xl flex-col gap-4 max-md:mt-2">
-      <div className="flex items-center justify-start">
+  /**
+   * A seat on the stage: its Agent's mark on a tile, lit in the mark's colour, its role, and the model it runs on as
+   * its name. A reviewer also picks how it reads.
+   */
+  const podium = (seat: DraftSeat | undefined, size: 'lg' | 'md', removable = false) => seat && (
+    <div key={seat.key} className={cn('relative isolate flex min-w-0 flex-col items-center overflow-hidden rounded-3xl bg-subtle text-center', size === 'lg' ? 'gap-2.5 px-3 pt-5 pb-4 @lg:px-6 @lg:pt-7 @lg:pb-5' : 'gap-2 px-4 pt-5 pb-4')}>
+      {seat.model && <Halo backend={seat.model.backendId} />}
+      {seat.model ? <MarkTile backend={seat.model.backendId} size={size} /> : <span className={cn('rounded-2xl bg-bg', size === 'lg' ? 'size-16' : 'size-11')} />}
+      <span className="text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
+      <SeatPicker {...pickerProps(seat)} stage={size} />
+      {seat.role === 'reviewer' && (
         <Segmented
           size="xs"
-          ariaLabel={t`协作方式`}
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'debate', label: t`辩论` },
-            { value: 'prism', label: 'Prism' },
-            { value: 'insight', label: t`审阅` },
-          ]}
+          ariaLabel={t`审阅角度`}
+          className="mt-1"
+          value={seat.task ?? 'correct'}
+          onChange={(task) => setList(list.map((item) => (item.key === seat.key ? { ...item, task } : item)))}
+          options={TASKS.map((task) => ({ value: task, label: labels.task(task) }))}
         />
-      </div>
-
-      {noAgents && (
-        <Notice
-          tone="warning"
-          action={<Button size="xs" variant="secondary" onClick={onOpenProviderSettings}><Trans>前往配置</Trans></Button>}
-        >
-          <Trans>当前没有可用的 Agent 或模型，请先在设置中配置。</Trans>
-        </Notice>
       )}
+      {removable && remove(seat)}
+    </div>
+  );
 
-      {/* Hero composer */}
-      <div className="overflow-hidden rounded-2xl bg-elevated shadow-composer">
-        <textarea
-          rows={mode === 'insight' ? 6 : 3}
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder={
-            mode === 'debate'
-              ? t`输入辩论命题，例如：首版应当独立建表，不复用 NativeSession`
-              : mode === 'prism'
-              ? t`输入要多角度探讨的问题…`
-              : t`粘贴待审阅的文档、方案或 Diff…`
-          }
-          className="block w-full resize-none border-0 bg-transparent px-4 pt-4 pb-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-4"
-        />
-        <div className="flex flex-wrap items-center gap-1.5 px-3 pt-1 pb-2.5">
-          {mode === 'insight' && (
-            <>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".md,.txt,.ts,.tsx,.js,.jsx,.json,.py,.go,.rs,.swift,.kt"
-                className="hidden"
-                onChange={(e) => void handleFile(e.target.files?.[0])}
-              />
-              <Button size="xs" variant="ghost" onClick={() => fileRef.current?.click()}>
-                <IconFileText />
-                <span><Trans>打开文件</Trans></span>
+  /** The seat that leads the format (the judge, the moderator): a bench below the stage, not a podium on it. */
+  const bench = (seat: DraftSeat | undefined) => seat && (
+    <div key={seat.key} className="mx-auto flex w-full max-w-md min-w-0 items-center justify-center gap-2 rounded-2xl bg-subtle px-4 py-2.5">
+      <span className="shrink-0 text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
+      <SeatPicker {...pickerProps(seat)} />
+    </div>
+  );
+
+  const leadRule = ROLES[format].find((rule) => LEAD_ROLES.has(rule.role));
+  const stage = format === 'ld' ? (
+    // LD: the two sides face each other, the judge on the bench below.
+    <div className="@container flex flex-col gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 @lg:gap-3">
+        {podium(list.find((seat) => seat.role === 'pro'), 'lg')}
+        <span className="text-center text-base font-extrabold tracking-tight text-fg-4 italic @lg:text-xl" aria-hidden>VS</span>
+        {podium(list.find((seat) => seat.role === 'con'), 'lg')}
+      </div>
+      {bench(list.find((seat) => seat.role === 'judge'))}
+    </div>
+  ) : (
+    <div className="@container flex flex-col gap-3">
+      <div className="grid gap-3 @md:grid-cols-2 @xl:grid-cols-3">
+        {ROLES[format].filter((rule) => rule !== leadRule).flatMap((rule) => {
+          const ofRole = list.filter((seat) => seat.role === rule.role);
+          return [
+            ...ofRole.map((seat) => podium(seat, 'md', ofRole.length > rule.min)),
+            ...(rule.max > 1 && ofRole.length < rule.max ? [(
+              <Button
+                key={`add-${rule.role}`}
+                variant="quiet"
+                disabled={busy}
+                className="h-auto min-h-40 rounded-3xl border border-dashed border-line"
+                onClick={() => {
+                  const model = models[list.length % Math.max(1, models.length)];
+                  const seat: DraftSeat = { key: nextKey(), role: rule.role, ...(model ? { model } : {}), ...(rule.role === 'reviewer' ? { task: TASKS[ofRole.length % TASKS.length] } : {}) };
+                  const last = list.findLastIndex((item) => item.role === rule.role);
+                  setList([...list.slice(0, last + 1), seat, ...list.slice(last + 1)]);
+                }}
+              >
+                <IconPlus /><span>{labels.roleOf(rule.role)}</span>
               </Button>
-              <input
-                value={sourceTitle}
-                onChange={(e) => setSourceTitle(e.target.value)}
-                placeholder={t`标题（可选）`}
-                className="h-6 min-w-28 max-w-44 rounded-md border border-line bg-subtle px-2 text-xs text-fg outline-none placeholder:text-fg-4 focus:border-accent"
-              />
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => setRhythm((r) => r === 'pause' ? 'auto' : 'pause')}
-            className="inline-flex h-7 items-center rounded-full px-2.5 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg"
-          >
-            {rhythm === 'pause' ? <Trans>每轮停顿</Trans> : <Trans>自动完成</Trans>}
-          </button>
-          <Button
-            size="icon"
-            variant="primary"
-            className="ml-auto rounded-full"
-            aria-label={t`开始协作`}
-            busy={submitting}
-            disabled={!canSubmit}
-            onClick={submit}
-          >
-            <IconArrowUp />
-          </Button>
-        </div>
+            )] : []),
+          ];
+        })}
       </div>
+      {leadRule && bench(list.find((seat) => seat.role === leadRule.role))}
+    </div>
+  );
 
-      {/* Unified Agent & Model roster */}
-      <section className="divide-y divide-line rounded-xl border border-line bg-bg">
-        {mode === 'debate' ? (
-          <>
-            {sides.map((side, sideIdx) => (
-              <div key={side.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
-                <input
-                  value={side.label}
-                  onChange={(e) => setSides((prev) => prev.map((s, i) => i === sideIdx ? { ...s, label: e.target.value } : s))}
-                  aria-label={t`立场名称`}
-                  className="w-16 shrink-0 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-xs font-medium text-fg-2 outline-none hover:border-line focus:border-accent"
-                />
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  {side.models.map((ref, mIdx) => (
-                    <AgentModelSlot
-                      key={`${side.id}-${mIdx}`}
-                      backends={workerBackends}
-                      value={ref}
-                      onChange={(next) => setSides((prev) => prev.map((s, i) => i === sideIdx ? { ...s, models: s.models.map((item, j) => j === mIdx ? next : item) } : s))}
-                      onRemove={side.models.length > 1 ? () => setSides((prev) => prev.map((s, i) => i === sideIdx ? { ...s, models: s.models.filter((_, j) => j !== mIdx) } : s)) : undefined}
-                    />
-                  ))}
-                  {side.models.length < 3 && (
-                    <Button size="xs" variant="ghost" onClick={() => addModelToSide(sideIdx)}>
-                      <IconPlus />
-                      <span><Trans>添加</Trans></span>
-                    </Button>
-                  )}
-                </div>
-                {sides.length === 2 && sideIdx === 1 && (
-                  <Tip label={t`互换正反方`}>
-                    <Button size="icon-xs" variant="quiet" aria-label={t`互换正反方`} onClick={swapTwoSides}>
-                      <IconArrowRightLeft />
-                    </Button>
-                  </Tip>
-                )}
-                {sides.length > 2 && (
-                  <Button
-                    size="icon-xs"
-                    variant="quiet"
-                    aria-label={t`移除立场`}
-                    onClick={() => setSides((prev) => prev.filter((_, i) => i !== sideIdx))}
-                  >
-                    <IconX />
-                  </Button>
-                )}
-              </div>
-            ))}
+  return (
+    <div className="mx-auto mt-8 flex w-full max-w-2xl flex-col gap-4 px-4 pb-16 max-md:mt-2">
+      <Segmented
+        size="xs"
+        ariaLabel={t`协作方式`}
+        className="self-start"
+        value={format}
+        onChange={setFormat}
+        options={FORMATS.map((value) => ({ value, label: labels.format(value) }))}
+      />
 
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-              <div className="flex items-center gap-2">
-                <span className="w-16 shrink-0 px-1 text-xs font-medium text-fg-2"><Trans>裁判</Trans></span>
-                <AgentModelSlot
-                  backends={workerBackends}
-                  value={judgeRef}
-                  onChange={setJudgeRef}
-                />
-              </div>
-              {sides.length < 4 && (
-                <Button size="xs" variant="ghost" onClick={addSide}>
-                  <IconPlus />
-                  <span><Trans>添加立场</Trans></span>
-                </Button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-start gap-2 px-4 py-3">
-              <span className="mt-1.5 w-16 shrink-0 text-xs font-medium text-fg-2">
-                {mode === 'prism' ? <Trans>参与模型</Trans> : <Trans>审阅分工</Trans>}
-              </span>
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                {prismRefs.map((ref, idx) => (
-                  <AgentModelSlot
-                    key={`slot-${idx}`}
-                    backends={workerBackends}
-                    value={ref}
-                    badge={mode === 'insight' ? roleLabels[idx % roleLabels.length] : undefined}
-                    onChange={(next) => setPrismRefs((list) => list.map((item, i) => i === idx ? next : item))}
-                    onRemove={prismRefs.length > 2 ? () => setPrismRefs((list) => list.filter((_, i) => i !== idx)) : undefined}
-                  />
-                ))}
-                {prismRefs.length < 4 && (
-                  <Button size="xs" variant="ghost" onClick={addPrismSlot}>
-                    <IconPlus />
-                    <span><Trans>添加</Trans></span>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-              <span className="w-16 shrink-0 text-xs font-medium text-fg-2"><Trans>汇总</Trans></span>
-              <AgentModelSlot
-                backends={workerBackends}
-                value={observerRef}
-                onChange={setObserverRef}
-              />
-            </div>
-          </>
-        )}
-      </section>
-
-      {dupExactModel && (
-        <Notice tone="neutral">
-          <Trans>当前存在重复的相同模型，选择不同 Agent 或模型能获得更有差异的视角。</Trans>
+      {noModels && (
+        <Notice tone="warning" action={<Button size="xs" variant="secondary" onClick={onOpenProviderSettings}><Trans>前往配置</Trans></Button>}>
+          <Trans>没有可用的 Agent</Trans>
         </Notice>
       )}
+
+      {stage}
+
+      <Composer
+        key={format}
+        variant="hero"
+        autoFocus
+        projectId=""
+        draftKey={`council:${format}`}
+        windowDrop={false}
+        attachmentsAllowed={false}
+        fileMentions={false}
+        referencesEnabled={false}
+        persistReferences={false}
+        references={[]}
+        onReferencesChange={() => {}}
+        placeholder={{ ld: t`辩题，例如：首版应当先做 Web 端`, roundtable: t`要讨论的问题`, prism: t`要多角度回答的问题`, review: t`粘贴要审阅的文档或方案` }[format]}
+        disabled={busy}
+        submitDisabled={!ready || busy}
+        onSubmit={(text) => submit(text)}
+        onError={onError}
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        {(format === 'ld' || format === 'roundtable') && (
+          <Select
+            label={t`轮数`}
+            className="w-28"
+            value={String(roundCount)}
+            onChange={(value) => setRounds((current) => ({ ...current, [format]: Number(value) }))}
+            options={ROUND_CHOICES.map((value) => ({ value, label: t`最多 ${value} 轮` }))}
+          />
+        )}
+        <Segmented
+          size="xs"
+          ariaLabel={t`节奏`}
+          value={rhythm}
+          onChange={(value) => setRhythms((current) => ({ ...current, [format]: value }))}
+          options={[{ value: 'pause', label: t`每轮暂停` }, { value: 'auto', label: t`自动进行` }]}
+        />
+      </div>
     </div>
   );
 }

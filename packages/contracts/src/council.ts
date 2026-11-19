@@ -1,205 +1,199 @@
 import type { NativeBackendId } from './agent-ids.js';
+import type { RunMetrics } from './run.js';
+import type { TimelineRow } from './sync.js';
 
-export type CouncilMode = 'debate' | 'prism' | 'insight';
-export type CouncilStatus = 'setup' | 'running' | 'paused' | 'done' | 'failed';
+/**
+ * Multi-model discussions. Each seat is an Agent conversation of its own, kept for the discussion's life
+ * and hidden from the conversation list; a speech is one turn of it, drawn with the session's row
+ * components. Formats only decide who speaks next and what they are told.
+ *
+ * - `ld`: one-on-one Lincoln-Douglas debate. Pro and con speak in turn within a round, a judge keeps
+ *   a ledger after each round, the closing round reverses the order so pro speaks last.
+ * - `roundtable`: free debate among several models. All speak at once each round, a moderator sums
+ *   up and names who challenged whom; it ends on convergence, the round limit or the reader's call.
+ * - `prism`: independent answers, an observer probes the contradictions, each answers the probe,
+ *   the observer concludes.
+ * - `review`: reviewers each propose edits to a document from their own angle, the reader accepts
+ *   some, an editor merges the accepted ones into a revised document.
+ */
+export type CouncilFormat = 'ld' | 'roundtable' | 'prism' | 'review';
+
+/** `paused` waits for the reader at a round boundary or after a stop; `failed` stopped on an error. */
+export type CouncilStatus = 'running' | 'paused' | 'done' | 'failed';
 export type CouncilRhythm = 'pause' | 'auto';
 
-/** Reference submitted by clients when picking a model through Riffet's ModelPicker. */
-export interface CouncilModelRef {
-  backendId: NativeBackendId;
-  profileId?: string;
-  model: string;
-}
+export type CouncilRole = 'pro' | 'con' | 'judge' | 'debater' | 'moderator' | 'participant' | 'observer' | 'reviewer' | 'editor';
+export type CouncilReviewTask = 'correct' | 'augment' | 'diagnose' | 'restructure';
 
-/** A model participating in a discussion, resolved to a configured backend profile. */
-export interface CouncilModelParticipant {
-  /** Stable key `${backendId}:${profileId}:${model}`. */
-  id: string;
+export type CouncilPhase =
+  | 'opening' | 'rebuttal' | 'closing' | 'ledger'
+  | 'statement' | 'summary'
+  | 'explore' | 'probe' | 'deepen'
+  | 'review'
+  | 'conclusion';
+
+/** The Agent a seat runs on, as the composer picks one. `model` absent: the profile's default. */
+export interface CouncilAgent {
   backendId: NativeBackendId;
   profileId: string;
+  model?: string;
+}
+
+/**
+ * The model a seat names when it speaks: its choice without parameters, and a quick chat's without the provider it
+ * goes through (`<backend>:<profile>:<model>`). Undefined when the seat runs on its Agent's default.
+ */
+export function councilModelName(agent: CouncilAgent): string | undefined {
+  const model = agent.model?.replace(/\[[^\]]*\]$/, '');
+  if (!model) return undefined;
+  return agent.backendId === 'chat' ? /^[a-z]+:[^:]+:(.+)$/.exec(model)?.[1] ?? model : model;
+}
+
+export interface CouncilSeat {
+  /** Short and stable within the discussion (`pro`, `s2`, `mod` …); models refer to seats by it. */
+  id: string;
+  role: CouncilRole;
+  model: CouncilAgent;
   profileName: string;
-  model: string;
-  label: string;
+  /** Reviewers only. */
+  task?: CouncilReviewTask;
+  /** The seat's conversation, once it first spoke. */
+  sessionId?: string;
+  /** Speeches of others and reader notes the conversation has been given, so the next turn tells only what is new. */
+  heard?: string[];
 }
 
-export interface CouncilDebateSide {
-  id: string;
-  label: string;
-  models: CouncilModelParticipant[];
+/** The judge's account of one LD round. */
+export interface CouncilLedger {
+  kind: 'ledger';
+  sides: Partial<Record<'pro' | 'con', { claim: string; reinforced?: string; broken?: string }>>;
+  crossExam: Array<{ asker: 'pro' | 'con'; question: string; answered: 'direct' | 'dodged' | 'pending' }>;
+  intensity: 'clashing' | 'stalling';
+  action: 'continue' | 'closing';
 }
 
-export interface CouncilDebateQuestion {
-  id: string;
-  targetSideId?: string;
-  targetLabel?: string;
-  summary: string;
-  text: string;
-  status: 'direct' | 'dodged' | 'pending';
+/** The moderator's account of one roundtable round. */
+export interface CouncilModeration {
+  kind: 'moderation';
+  positions: Array<{ seatId: string; stance: string }>;
+  challenges: Array<{ from: string; to: string; point: string }>;
+  unanswered?: string;
+  convergence: 'divergent' | 'partial' | 'converging' | 'consensus';
+  action: 'continue' | 'conclude';
 }
 
-export interface CouncilDebateReply {
-  turnId: string;
-  label: string;
-  quote: string;
-  status: 'direct' | 'dodged' | 'partial';
-}
-
-export interface CouncilDebateTurn {
-  id: string;
-  sideId: string;
-  sideLabel: string;
-  speaker: CouncilModelParticipant;
-  text: string;
-  replyTo?: CouncilDebateReply;
-  question?: CouncilDebateQuestion;
-}
-
-export interface CouncilDebateRound {
-  num: number;
-  stage: string;
-  turns: CouncilDebateTurn[];
-  summary?: Record<string, { claim: string; weakness?: string }>;
-}
-
-export interface CouncilDebateHostReply {
-  sideId: string;
-  sideLabel: string;
-  speaker: CouncilModelParticipant;
-  text: string;
-}
-
-export interface CouncilDebateHostTurn {
-  id: string;
-  prompt: string;
-  replies: CouncilDebateHostReply[];
-  createdAt: string;
-}
-
-export interface CouncilDebateState {
-  proposition: string;
-  sides: CouncilDebateSide[];
-  judgeModel: CouncilModelParticipant;
-  rounds: CouncilDebateRound[];
-  hostTurns: CouncilDebateHostTurn[];
-  verdict?: {
-    winner: string;
-    takeaway: string;
-  };
-}
-
-export interface CouncilPrismExploreEntry {
-  stance: string;
-  thought?: string;
-  text: string;
-  quoteId?: string;
-  quoteSnippet?: string;
-}
-
-export interface CouncilPrismContradiction {
-  id: string;
-  title: string;
-  leftModelId: string;
-  leftQuote: string;
-  rightModelId: string;
-  rightQuote: string;
-  question: string;
-  selected: boolean;
-}
-
-export interface CouncilPrismDeepenEntry {
-  shifted: boolean;
-  oldStance: string;
-  newStance: string;
-  challenge: string;
-  text: string;
-}
-
-export interface CouncilPrismState {
-  participants: CouncilModelParticipant[];
-  observer: CouncilModelParticipant;
-  explore: Record<string, CouncilPrismExploreEntry>;
-  contradictions: CouncilPrismContradiction[];
+/** The observer's probe of the first Prism answers. */
+export interface CouncilProbe {
+  kind: 'probe';
+  contradictions: Array<{ title: string; seats: string[]; question: string }>;
   gaps: string[];
-  deepen: Record<string, CouncilPrismDeepenEntry>;
-  verdict?: {
-    headline: string;
-    analysis: string;
-  };
-  supplements: string[];
 }
 
-export type CouncilInsightTask = 'correct' | 'augment' | 'diagnose' | 'restructure';
+/** Edits one reviewer proposes; `id` is unique within the discussion. */
+export interface CouncilEdits {
+  kind: 'edits';
+  edits: Array<{ id: string; para: string; title: string; before: string; after: string }>;
+}
 
-export interface CouncilInsightAnnotation {
+export type CouncilDirective = CouncilLedger | CouncilModeration | CouncilProbe | CouncilEdits;
+
+export type CouncilSpeechStatus = 'waiting' | 'streaming' | 'done' | 'failed' | 'stopped';
+
+export interface CouncilSpeech {
   id: string;
-  task: CouncilInsightTask;
-  taskLabel: string;
-  modelId: string;
-  modelLabel: string;
-  para: string;
-  title: string;
-  before: string;
-  after: string;
-  checked: boolean;
+  seatId: string;
+  round: number;
+  phase: CouncilPhase;
+  /** The turn's answer, once it ended: what later speeches quote. */
+  text: string;
+  status: CouncilSpeechStatus;
+  error?: string;
+  startedAt?: string;
+  endedAt?: string;
+  /** The seat conversation's run this speech is. */
+  runId?: string;
+  metrics?: RunMetrics;
+  /** Notes the seat recorded for the next prompts in a turn of its own after the speech; not part of the speech. */
+  directive?: CouncilDirective;
 }
 
-export interface CouncilInsightState {
-  sourceTitle?: string;
-  goal?: string;
+export interface CouncilSupplement {
+  id: string;
+  text: string;
+  at: string;
+  /** How many speeches existed when it was added: it is drawn after them and read by every later one. */
+  after: number;
+}
+
+export interface CouncilDocument {
+  title?: string;
   paragraphs: Array<{ id: string; text: string }>;
-  participants: CouncilModelParticipant[];
-  synthesizer: CouncilModelParticipant;
-  reviews: Record<string, { role: string; summary: string; text: string }>;
-  annotations: CouncilInsightAnnotation[];
-  synthesis?: string;
 }
 
 export interface CouncilDiscussion {
   id: string;
-  mode: CouncilMode;
+  format: CouncilFormat;
   title: string;
-  status: CouncilStatus;
-  phaseIndex: number;
-  phases: string[];
+  topic: string;
+  document?: CouncilDocument;
+  seats: CouncilSeat[];
+  maxRounds: number;
   rhythm: CouncilRhythm;
+  status: CouncilStatus;
+  error?: string;
+  /** The round the reader has let run; the format stops at its end unless the rhythm is `auto`. */
+  round: number;
+  /** LD: the round that closes (defaults to `maxRounds`). */
+  closingRound?: number;
+  /** The reader or the moderator asked to wrap up. */
+  concluding?: boolean;
+  speeches: CouncilSpeech[];
+  supplements: CouncilSupplement[];
+  /** Review: accepted edit ids. */
+  accepted?: string[];
+  /** Grows with every run, so a superseded run's late writes are dropped. */
+  version: number;
   createdAt: string;
   updatedAt: string;
-  durationMs: number;
-  inputTokens: number;
-  outputTokens: number;
-  error?: string;
-  debate?: CouncilDebateState;
-  prism?: CouncilPrismState;
-  insight?: CouncilInsightState;
+}
+
+/** A discussion as the history list shows it. */
+/** A seat as a new discussion of the same format would take it again. */
+export type CouncilSeatChoice = Pick<CouncilSeat, 'role' | 'model' | 'task'>;
+export type CouncilSummary = Pick<CouncilDiscussion, 'id' | 'format' | 'title' | 'status' | 'createdAt' | 'updatedAt' | 'maxRounds' | 'rhythm'> & {
+  /** Who sat where: what the launch page starts the next discussion of this format from. */
+  seats: CouncilSeatChoice[];
+};
+
+export interface CouncilSeatRequest {
+  role: CouncilRole;
+  model: CouncilAgent;
+  task?: CouncilReviewTask;
 }
 
 export interface CouncilCreateRequest {
-  mode: CouncilMode;
+  format: CouncilFormat;
   topic: string;
+  seats: CouncilSeatRequest[];
+  maxRounds?: number;
   rhythm?: CouncilRhythm;
-  participants?: CouncilModelRef[];
-  observerModel?: CouncilModelRef;
-  sides?: Array<{ id?: string; label: string; models: CouncilModelRef[] }>;
-  proModels?: CouncilModelRef[];
-  conModels?: CouncilModelRef[];
-  judgeModel?: CouncilModelRef;
-  /** Document text for Insight mode. */
-  documentText?: string;
-  sourceTitle?: string;
+  /** Review: the document text. */
+  document?: string;
+  documentTitle?: string;
 }
 
-export interface CouncilAdvanceRequest {
-  action?: 'next-round' | 'conclude';
+export interface CouncilContinueRequest {
+  /** `next` runs the next round; `conclude` wraps up (LD: the next round is the closing one). */
+  action?: 'next' | 'conclude';
+}
+
+export interface CouncilSupplementRequest {
+  text: string;
 }
 
 export interface CouncilPatchRequest {
-  swapDebateSides?: boolean;
-  toggleContradictionId?: string;
-  toggleAnnotationId?: string;
-}
-
-export interface CouncilSteerRequest {
-  text: string;
+  /** Review: accept or drop one proposed edit. */
+  edit?: { id: string; accepted: boolean };
 }
 
 export interface CouncilExportRequest {
@@ -215,10 +209,11 @@ export interface CouncilExportResult {
   id: string;
 }
 
-export interface CouncilModelsResponse {
-  models: CouncilModelParticipant[];
-}
-
 export type CouncilStreamEvent =
   | { type: 'snapshot'; discussion: CouncilDiscussion }
-  | { type: 'delta'; discussionId: string; phaseIndex: number; targetId: string; kind: 'text' | 'thought'; text: string };
+  | { type: 'speech'; discussionId: string; version: number; speech: CouncilSpeech }
+  /** The rows of a speech's turn in its seat conversation as they change: thinking, tool calls, the answer. */
+  | { type: 'rows'; discussionId: string; speechId: string; upserts: TimelineRow[]; deletes: string[] };
+
+/** `GET /api/council/:id/speeches/:speechId/rows`: a finished speech's turn, read when the reader opens it. */
+export interface CouncilSpeechRows { rows: TimelineRow[] }

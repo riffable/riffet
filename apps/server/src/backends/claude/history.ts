@@ -32,7 +32,7 @@ const FINAL_STOP_REASONS = new Set(['end_turn', 'stop_sequence', 'max_tokens', '
 const SUBAGENT_SNAPSHOT_BYTES = 96 * 1024;
 /** How often the subagents directory is listed; child files themselves are read only when they grow. */
 const SUBAGENT_SCAN_MS = 1_000;
-const clip = (value: string, limit = 24 * 1024) => value.length > limit ? `${value.slice(0, limit)}\n…` : value;
+export const clip = (value: string, limit = 24 * 1024) => value.length > limit ? `${value.slice(0, limit)}\n…` : value;
 /** Edits are whole-file sized: `Write` sends the file's full text. Matches the other backends' limit. */
 const EDIT_LIMIT = 256 * 1024;
 const record = (value: unknown): Record<string, unknown> | undefined => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;

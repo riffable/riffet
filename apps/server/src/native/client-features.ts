@@ -84,8 +84,9 @@ export function requireProjectVisibleToClient(headers: IncomingHttpHeaders | und
   if (!projectVisibleToClient(headers, project)) throw new AppError('PROJECT_NOT_FOUND', 'Project does not exist', 404);
 }
 
+/** The projects a list shows. The council's holds only seat conversations, which no list shows either. */
 export function visibleProjectsForClient(headers: IncomingHttpHeaders | undefined, items: readonly Project[]): Project[] {
-  return items.filter(project => projectVisibleToClient(headers, project));
+  return items.filter(project => project.system !== 'council' && projectVisibleToClient(headers, project));
 }
 
 export function visibleProjectItemsForClient<T extends { projectId?: string }>(headers: IncomingHttpHeaders | undefined, items: readonly T[], getProject: ProjectLookup): T[] {

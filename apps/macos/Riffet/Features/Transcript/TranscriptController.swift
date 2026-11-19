@@ -1821,8 +1821,9 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// already materialised cells, keeping the current target when padded regions overlap.
     private func footerKey(at windowPoint: NSPoint) -> String? {
         let point = table.convert(windowPoint, from: nil)
-        let padding = style.rhythm.footerHoverPadding
-        let rows = table.rows(in: CGRect(x: table.bounds.minX, y: point.y - padding, width: table.bounds.width, height: padding * 2))
+        let above = style.rhythm.footerHoverPadding
+        let below = style.rhythm.block
+        let rows = table.rows(in: CGRect(x: table.bounds.minX, y: point.y - below, width: table.bounds.width, height: above + below))
         guard rows.location != NSNotFound, rows.length > 0, rows.location < entries.count else { return nil }
         let end = rows.location + min(rows.length, entries.count - rows.location)
         var first: String?
@@ -1861,7 +1862,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     private var restingRow: String?
     private var restTimer: Timer?
     /// How long the pointer stays still on a footer's line before its time and actions appear.
-    private static let footerRest: TimeInterval = 0.5
+    private static let footerRest: TimeInterval = 0.15
 
     /// A footer shows once the pointer has rested on its line for `footerRest`, and hides as soon
     /// as the pointer leaves it. Moving along the line starts the wait again; scrolling does not.

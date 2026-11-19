@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
 import Fastify from 'fastify';
@@ -137,6 +137,7 @@ import type { ChannelProvider } from './channels/types.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
+import { AgentSeats, councilProject } from './council/seats.js';
 import { registerCouncilRoutes } from './routes/council.js';
 
 export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; token?:string; auth?:boolean; allowedHosts?:string[]; webRoot?:string; logger?:boolean; instanceId?:string;
@@ -403,114 +404,33 @@ export async function createApp(options: AppOptions = {}) {
       agentDefaultsRead(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
     [instanceSettingCommand(settings), sharedThemeCommand(themes), agentDefaultsCommand(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
   ));
+  // Seats are Agent conversations; deleting one goes through the same path as a reader's delete, set up below.
   let deletionRef:SessionDeletion|undefined;
   const council=new CouncilService({
     db:store.db,
-    listBackendProfiles:backendId=>nativeBackends.catalog.profileSettings(backendId).profiles.map(p=>({id:p.id,name:p.name,...(p.isDefault?{isDefault:true}:{}),...(p.defaultModel?{defaultModel:p.defaultModel}:{})})),
-    runAgentTurn:async({backendId,profileId,model,prompt,signal,onDelta})=>{
-      signal.throwIfAborted();
-      const councilDir=join(stateDir,'council-work');
-      await mkdir(councilDir,{recursive:true,mode:0o700});
-      const targetProject=store.listProjects().find(p=>!p.archivedAt&&!p.system)
-        ??store.listProjects().find(p=>p.cwd===councilDir&&!p.archivedAt)
-        ??store.createProject(councilDir,'Council');
-      const resolvedProfileId=profileId??nativeBackends.catalog.profileSettings(backendId).defaultProfileId;
-      const caps=await nativeBackends.catalog.capabilitiesFor(backendId,resolvedProfileId).catch(()=>undefined);
-      const preferredMode=caps?.supportsModeSelection?(caps.modes.find(m=>m.id==='ask'||m.id==='plan')?.id):undefined;
-      const preferredApproval=caps?.supportsPermissionSelection?(caps.permissions.find(p=>p.id==='dontAsk')?.id):undefined;
-      const session=await orchestration.start({
-        projectId:targetProject.id,
-        backendId,
-        ...(profileId?{backendProfileId:profileId}:{}),
-        ...(model?{model}:{}),
-        ...(preferredMode?{mode:preferredMode}:{}),
-        ...(preferredApproval?{approval:preferredApproval}:{}),
-        title:'[模型协作]',
-      },prompt,{kind:'council'},{sessionId:randomUUID(),commandId:randomUUID()});
-      const offFollow=ingest.follow(session.id);
-      void ingest.read(session.id);
-      const rows=new Map<string,import('../../../packages/contracts/src/index.js').TimelineRow>();
-      let lastLiveText='';
-      let lastLiveThought='';
-      const offTimeline=timeline.subscribe(session.id,'main',change=>{
-        if(change.type!=='rows')return;
-        for(const key of change.deletes)rows.delete(key);
-        for(const row of change.upserts)rows.set(row.key,row);
-        const sorted=[...rows.values()].sort((a,b)=>a.pos-b.pos);
-        const liveText=sorted.filter(r=>r.kind==='assistant').map(r=>r.text).join('\n\n');
-        const liveThought=sorted.filter(r=>r.kind==='thought').map(r=>r.text).join('\n\n');
-        if(liveText!==lastLiveText||liveThought!==lastLiveThought){
-          lastLiveText=liveText;
-          lastLiveThought=liveThought;
-          onDelta?.({text:liveText,...(liveThought?{thought:liveThought}:{})});
-        }
-      });
-      try{
-        const finishedRun=await new Promise<import('../../../packages/contracts/src/index.js').Run>((resolvePromise,rejectPromise)=>{
-          let settled=false;
-          let offRuns=():void=>{};
-          let offState=():void=>{};
-          const cleanup=()=>{settled=true;offRuns();offState();signal.removeEventListener('abort',onAbort);clearTimeout(timer);};
-          const check=()=>{
-            if(settled)return;
-            const run=store.listRuns(session.id).at(-1);
-            if(run&&['completed','failed','cancelled','interrupted'].includes(run.state)){
-              cleanup();
-              resolvePromise(run);
-              return;
-            }
-            const cur=store.getSession(session.id);
-            if(cur.state==='waiting'||cur.state==='failed'){
-              cleanup();
-              rejectPromise(new Error(cur.error??'Agent stopped waiting for input'));
-            }
-          };
-          const onAbort=()=>{
-            cleanup();
-            const run=store.listRuns(session.id).at(-1);
-            if(run)try{dispatch.cancel(session.id,run.id);}catch{/* already settled */}
-            rejectPromise(signal.reason instanceof Error?signal.reason:new Error('Cancelled by user'));
-          };
-          const timer=setTimeout(()=>{
-            cleanup();
-            const run=store.listRuns(session.id).at(-1);
-            if(run)try{dispatch.cancel(session.id,run.id);}catch{/* already settled */}
-            rejectPromise(new Error('Agent turn timed out'));
-          },180_000);
-          timer.unref?.();
-          offRuns=store.onRunChanged(run=>{if(run.sessionId===session.id)check();});
-          offState=store.onSessionState(cur=>{if(cur.id===session.id)check();});
-          signal.addEventListener('abort',onAbort,{once:true});
-          check();
-        });
-        if(finishedRun.state!=='completed'){
-          throw new Error(finishedRun.error??`Agent run ended with state: ${finishedRun.state}`);
-        }
-        await timeline.ready(session.id,'main');
-        const turn=timeline.outline(session.id,'main',1).turns.at(-1);
-        let text=turn?timeline.turnText(session.id,turn.turn)?.answer:undefined;
-        if(!text?.trim()){
-          const events=await nativeBackends.indexableTranscript(session.id).catch(()=>[]);
-          for(let i=events.length-1;i>=0;i--){
-            const ev=events[i] as {type?:string;role?:string;text?:string;content?:string};
-            if((ev.type==='message'||ev.role==='assistant')&&typeof (ev.text??ev.content)==='string'&&(ev.text??ev.content)!.trim()){
-              text=(ev.text??ev.content)!.trim();
-              break;
-            }
-          }
-        }
-        if(!text?.trim()&&lastLiveText.trim())text=lastLiveText.trim();
-        if(!text?.trim())throw new Error('Agent returned an empty response');
-        return {
-          text:text.trim(),
-          ...(finishedRun.native?.metrics?.outputTokens!==undefined?{outputTokens:finishedRun.native.metrics.outputTokens}:{}),
-        };
-      }finally{
-        offTimeline();
-        offFollow();
-        void (deletionRef?.delete(session.id,[session.id])??patchSession(deps,session.id,{archived:true})).catch(()=>undefined);
-      }
+    seats:new AgentSeats({
+      store,orchestration,timeline,
+      // A quick chat runs only in its own project; every other seat in the empty council one.
+      project:backendId=>backendId==='chat'?quickChatProject(store,stateDir):councilProject(store,stateDir),
+      // A seat speaks with nobody to answer it: what would need asking is refused, and it starts in the backend's
+      // plain mode, never the owner's saved one (a plan mode stops for approval, a quick-chat preset rewrites the brief).
+      launch:async(backendId,profileId)=>{
+        const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,profileId).catch(()=>undefined);
+        if(!capabilities)return {};
+        const approval=capabilities.supportsPermissionSelection&&capabilities.permissions.some(item=>item.id==='dontAsk')?'dontAsk':undefined;
+        const mode=capabilities.supportsModeSelection?capabilities.modes.find(item=>item.id==='agent')?.id??capabilities.modes[0]?.id:undefined;
+        return {...(approval?{approval}:{}),...(mode?{mode}:{})};
+      },
+      cancel:(sessionId,runId)=>{dispatch.cancel(sessionId,runId);},
+      delete:async sessionId=>{
+        if(!deletionRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
+        return await deletionRef.delete(sessionId,[sessionId]);
+      },
+    }),
+    profileName:(backendId,profileId)=>{
+      try{return nativeBackends.catalog.validateProfile(backendId,profileId).name;}catch{return undefined;}
     },
+    log:(message,fields)=>app.log.warn(fields,message),
     exports:{
       createWorkItem:input=>{
         const item=workItems.create({title:input.title,description:input.body,...(input.projectId?{projectId:input.projectId}:{})});
@@ -547,7 +467,8 @@ export async function createApp(options: AppOptions = {}) {
   const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,riffetMcp,planFiles,
     onCleanupError:(sessionId,error)=>app.log.warn({err:error,sessionId},'deleted conversation file cleanup failed; retrying on next start')});
   deletionRef=deletion;
-  for(const orphan of store.listSessions().filter(item=>item.origin?.kind==='council'))void deletion.delete(orphan.id,[orphan.id]).catch(()=>undefined);
+  // Seat conversations outlive a restart with their discussion; one whose discussion is gone is removed.
+  for(const orphan of store.listSessions().filter(item=>item.origin?.kind==='council'&&!(item.origin.groupId&&council.has(item.origin.groupId))))void deletion.delete(orphan.id,[orphan.id]).catch(()=>undefined);
   registerSessionDeletionRoutes(app,deletion);
   void deletion.resumeCleanup();
   const clientLogs=new ClientLogs(join(stateDir,'client-logs'));

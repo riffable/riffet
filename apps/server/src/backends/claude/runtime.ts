@@ -496,11 +496,12 @@ export class ClaudeSessionRuntime {
     if (this.terminalPollTimer) clearInterval(this.terminalPollTimer);
     this.pollTimer = setInterval(() => { void this.refreshTranscript(false).catch(() => undefined); }, dormant ? DORMANT_POLL_MS : TRANSCRIPT_POLL_MS);
     this.pollTimer.unref?.();
+    // A tick that fails (the conversation deleted while its runtime is being closed) is the next tick's to retry.
     this.terminalPollTimer = setInterval(() => {
-      void this.refreshTerminalStatus();
+      void this.refreshTerminalStatus().catch(() => undefined);
       // An idle conversation nobody watches shows nothing new on its screen; a turn, a hook or a client wakes it.
-      if (!this.pollDormant) void this.refreshScreenState();
-      void this.applyPendingConfig();
+      if (!this.pollDormant) void this.refreshScreenState().catch(() => undefined);
+      void this.applyPendingConfig().catch(() => undefined);
       this.checkSilence();
       this.schedulePolling();
     }, dormant ? DORMANT_POLL_MS : SCREEN_POLL_MS);

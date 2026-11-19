@@ -33,9 +33,10 @@ export interface Project {
   worktree?: { originProjectId: string; branch: string };
   /**
    * Internal directories stay out of the project picker. Each task workspace holds one independent task and its continuations;
-   * `assistant` holds the 助理's conversations (docs/ASSISTANT.md).
+   * `assistant` holds the 助理's conversations (docs/ASSISTANT.md); `council` the seats of model discussions that use no
+   * project of the owner's, and is never listed.
    */
-  system?: 'quick-chat' | 'task-workspace' | 'assistant';
+  system?: 'quick-chat' | 'task-workspace' | 'assistant' | 'council';
   /**
    * The 助理's one standing conversation, on its project only (docs/ASSISTANT.md §3). The server sets it when a
    * client opens a conversation there and none is in place; clients open it instead of starting another. It may

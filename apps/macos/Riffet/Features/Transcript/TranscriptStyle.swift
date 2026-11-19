@@ -110,6 +110,9 @@ enum RowGap: Equatable, Sendable {
     case first
     /// A new turn starts: a user message, or the notices that woke the agent.
     case turn
+    /// A new turn starts after a turn that ends in a footer: the footer's line and a block gap
+    /// stand between them, not a turn gap on top of the footer.
+    case turnAfterFooter
     /// What answers a user message, under it.
     case answer
     /// Prose next to a one-line row (a tool, a process block's header), either way round.
@@ -122,11 +125,17 @@ enum RowGap: Equatable, Sendable {
     /// The gap between [previous] and [row]; [compact] is the shared rule for two one-line rows.
     static func between(_ previous: (any TimelineRow)?, _ row: any TimelineRow, compact: Bool) -> RowGap {
         guard let previous else { return .first }
-        if row is TimelineRowTrigger || (row as? TimelineRowSingle)?.item is TimelineItemUser { return .turn }
+        if row is TimelineRowTrigger || (row as? TimelineRowSingle)?.item is TimelineItemUser { return endsInFooter(previous) ? .turnAfterFooter : .turn }
         if (previous as? TimelineRowSingle)?.item is TimelineItemUser { return .answer }
         if compact { return .tight }
         if isProse(previous) != isProse(row), isLine(previous) || isLine(row) { return .proseRow }
         return .block
+    }
+
+    private static func endsInFooter(_ row: any TimelineRow) -> Bool {
+        if let single = row as? TimelineRowSingle { return single.footer != .none }
+        if let process = row as? TimelineRowProcess { return process.footer != .none }
+        return false
     }
 
     private static func isProse(_ row: any TimelineRow) -> Bool {
@@ -178,11 +187,18 @@ struct TranscriptRhythm {
     /// From the last line of an answer to its footer (time, copy, actions).
     var footer: CGFloat { 14 }
 
-    /// The web's 36-point content slot, held for both the working line and the settled footer.
-    var footerHeight: CGFloat { 36 }
+    /// The web's 28-point content slot, held for both the working line and the settled footer.
+    var footerHeight: CGFloat { 28 }
 
-    /// Invisible slack around a turn footer, without changing its content slot or the row's height.
+    /// Invisible slack above a turn footer; below it the hover area runs to the next turn.
     var footerHoverPadding: CGFloat { 16 }
+
+    /// A turn footer's hover area is at least this wide, capped at the reading column.
+    var footerHoverWidth: CGFloat { 352 }
+
+    /// A user message's meta line: hover area up to the bubble, at least this wide, growing leftwards.
+    var userFooterHoverTop: CGFloat { 6 }
+    var userFooterHoverWidth: CGFloat { 192 }
 
     /// What a user message keeps under its bubble for its hover footer. It counts towards the space
     /// to the answer, which is measured from the bubble.
@@ -192,6 +208,7 @@ struct TranscriptRhythm {
         switch kind {
         case .first: first
         case .turn: turn
+        case .turnAfterFooter: block
         case .answer: max(0, answer - userFooter)
         case .proseRow: proseRow
         case .tight: tight

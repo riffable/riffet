@@ -1,0 +1,89 @@
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /tmp/…
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Worked for 2s · done 11:40 PM
+
+❯ First run the shell command ls -la with the Bash tool. Then write about 250 words in Markdown
+  explaining what a resilient job queue needs, with a bulleted list of 4 items and a short
+  TypeScript code block. Then run echo second-step with Bash. Then write a closing paragraph of
+  about 120 words that includes a markdown link to https://example.com/docs and some inline code.
+
+  Thought for 1s, listed 1 directory (ctrl+o to expand)
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /tmp/…
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Worked for 2s · done 11:40 PM
+
+❯ First run the shell command ls -la with the Bash tool. Then write about 250 words in Markdown
+  explaining what a resilient job queue needs, with a bulleted list of 4 items and a short
+  TypeScript code block. Then run echo second-step with Bash. Then write a closing paragraph of
+  about 120 words that includes a markdown link to https://example.com/docs and some inline code.
+
+  Thought for 6s, listed 1 directory (ctrl+o to expand)
+
+⏺ The directory contains only a .git folder — an empty repo.
+
+  What a Resilient Job Queue Needs
+
+  A job queue is easy to write and hard to make trustworthy. The naive version — push a job ID into
+  Redis, pop it in a worker — works until the first worker crashes mid-job, at which point the job
+  is silently gone or silently duplicated. Resilience comes from making the queue's state explicit
+  and recoverable at every step.
+
+  Four properties carry most of the weight:
+
+  - At-least-once delivery with idempotent handlers. The queue should re-deliver on failure, and
+    every handler must tolerate receiving the same job twice. Exactly-once is a promise distributed
+    systems rarely keep; idempotency is the promise you can actually enforce.
+  - Visibility timeouts and heartbeats. A popped job is reserved, not deleted. If the worker dies,
+    the reservation expires and the job returns to the queue. Long-running jobs renew a heartbeat so
+    they aren't reclaimed while still working.
+  - Bounded retries with backoff and a dead-letter path. Retries should be capped, spaced with
+    exponential backoff plus jitter, and terminal failures routed to a dead-letter queue where they
+    can be inspected rather than lost.
+  - Observability from the start. Queue depth, age of oldest job, retry counts, and failure rates
+    need to be visible. Without them, a stalled consumer looks identical to a healthy one.
+
+  type Job<T> = { id: string; payload: T; attempts: number };
+
+  async function process<T>(job: Job<T>, run: (p: T) => Promise<void>) {
+    if (job.attempts >= 5) return deadLetter(job);
+    await run(job.payload); // handler must be idempotent
+  }
+
+  Build these in from day one. Retrofitting reliability onto a queue that already drops jobs is far
+  harder than designing for it.
+
+⏺ Bash(echo second-step)
+  ⎿  second-step
+
+⏺ Now the closing paragraph:
+
+  Reliability is ultimately a property of the whole pipeline, not just the queue software. The
+  broker can guarantee re-delivery, but if a handler performs a side effect — sending an email,
+  charging a card — before it records its own progress, a retry will repeat that side effect. The
+  practical pattern is to make the side effect and the progress marker part of one atomic step,
+  using an idempotency key that the downstream service honors, as described in the delivery
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  ⏵⏵ auto mode on (shift+tab to cycle)
+  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tra…

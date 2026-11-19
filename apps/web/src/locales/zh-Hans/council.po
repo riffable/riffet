@@ -7,93 +7,67 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
-#. placeholder {0}: rev.role
-#. placeholder {1}: rev.summary
-#: src/app/council/InsightStage.tsx
-msgid "· {0}：{1}"
-msgstr "· {0}：{1}"
+#: src/app/council/CouncilStage.tsx
+msgid "{owed} 问待回应"
+msgstr "{owed} 问待回应"
 
-#. placeholder {0}: prism.observer.model
-#: src/app/council/PrismStage.tsx
-msgid "{0} 整理 · 悬停定位原文"
-msgstr "{0} 整理 · 悬停定位原文"
+#: src/app/council/CouncilStage.tsx
+msgid "{side}占上风"
+msgstr "{side}占上风"
 
-#. placeholder {0}: anns.length
-#: src/app/council/InsightStage.tsx
-msgid "{0} 条建议"
-msgstr "{0} 条建议"
+#: src/app/council/CouncilStage.tsx
+msgid "{side}略占上风"
+msgstr "{side}略占上风"
 
-#. placeholder {0}: reply.sideLabel
-#: src/app/council/DebateStage.tsx
-msgid "{0}补充"
-msgstr "{0}补充"
+#: src/app/council/model.ts
+msgid "1v1 辩论"
+msgstr "1v1 辩论"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "Agent"
 msgstr "Agent"
 
-#: src/app/council/PrismStage.tsx
-msgid "一致结论"
-msgstr "一致结论"
+#: src/app/council/model.ts
+msgid "主持人"
+msgstr "主持人"
 
-#. placeholder {0}: ht.prompt
-#: src/app/council/DebateStage.tsx
-msgid "主持人追问：{0}"
-msgstr "主持人追问：{0}"
+#: src/app/council/model.ts
+msgid "主持小结"
+msgstr "主持小结"
 
-#: src/app/council/DebateStage.tsx
-msgid "互换"
-msgstr "互换"
+#: src/app/council/CouncilStage.tsx
+msgid "交锋激烈"
+msgstr "交锋激烈"
 
-#: src/app/council/CouncilLaunch.tsx
-msgid "互换正反方"
-msgstr "互换正反方"
+#: src/app/council/CouncilStage.tsx
+msgid "修改建议"
+msgstr "修改建议"
 
-#: src/app/council/CouncilAside.tsx
-msgid "交锋记录"
-msgstr "交锋记录"
+#: src/app/council/model.ts
+msgid "修订"
+msgstr "修订"
 
-#: src/app/council/CouncilPage.tsx
-msgid "作为主持人向双方追问或补充约束…"
-msgstr "作为主持人向双方追问或补充约束…"
-
-#: src/app/council/PrismStage.tsx
-msgid "保留追问"
-msgstr "保留追问"
-
-#: src/app/council/CouncilAside.tsx
-#: src/app/council/CouncilLaunch.tsx
-msgid "修改"
-msgstr "修改"
-
-#. placeholder {0}: annotations.length
-#: src/app/council/CouncilAside.tsx
-msgid "修改建议 · {0}"
-msgstr "修改建议 · {0}"
-
-#: src/app/council/InsightStage.tsx
-msgid "修订预览 ({checkedCount})"
-msgstr "修订预览 ({checkedCount})"
-
-#: src/app/council/CouncilPage.tsx
-msgid "停止"
-msgstr "停止"
-
-#: src/app/council/CouncilAside.tsx
-msgid "全部"
-msgstr "全部"
+#: src/app/council/model.ts
+msgid "修订稿"
+msgstr "修订稿"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "内容"
 msgstr "内容"
 
-#: src/app/council/PrismStage.tsx
-msgid "分歧焦点"
-msgstr "分歧焦点"
+#: src/app/council/CouncilLaunch.tsx
+#: src/app/council/CouncilStage.tsx
+msgid "最多 {value} 轮"
+msgstr "最多 {value} 轮"
 
 #: src/app/council/CouncilAside.tsx
-msgid "分歧索引"
-msgstr "分歧索引"
+#: src/app/council/model.ts
+msgid "分歧"
+msgstr "分歧"
+
+#: src/app/council/CouncilStage.tsx
+msgid "分歧明显"
+msgstr "分歧明显"
 
 #: src/app/council/CouncilPage.tsx
 msgid "切换右侧栏"
@@ -115,6 +89,18 @@ msgstr "删除失败"
 msgid "前往配置"
 msgstr "前往配置"
 
+#: src/app/council/CouncilStage.tsx
+msgid "加强"
+msgstr "加强"
+
+#: src/app/council/CouncilStage.tsx
+msgid "势均力敌"
+msgstr "势均力敌"
+
+#: src/app/council/CouncilStage.tsx
+msgid "势头"
+msgstr "势头"
+
 #: src/app/council/CouncilNav.tsx
 msgid "协作历史"
 msgstr "协作历史"
@@ -123,29 +109,41 @@ msgstr "协作历史"
 msgid "协作方式"
 msgstr "协作方式"
 
+#: src/app/council/CouncilAside.tsx
+msgid "协作概览"
+msgstr "协作概览"
+
 #: src/app/council/CouncilNav.tsx
 msgid "历史记录"
 msgstr "历史记录"
 
-#: src/app/council/InsightStage.tsx
-msgid "原文批注"
-msgstr "原文批注"
+#: src/app/council/CouncilStage.tsx
+msgid "原地打转"
+msgstr "原地打转"
 
-#: src/app/council/CouncilLaunch.tsx
-msgid "参与模型"
-msgstr "参与模型"
+#: src/app/council/model.ts
+msgid "参与者"
+msgstr "参与者"
 
-#: src/app/council/CouncilLaunch.tsx
+#: src/app/council/CouncilAside.tsx
+msgid "双方立场"
+msgstr "双方立场"
+
+#: src/app/council/model.ts
 msgid "反方"
 msgstr "反方"
 
-#: src/app/council/CouncilAside.tsx
-msgid "发言完成后将显示质询记录"
-msgstr "发言完成后将显示质询记录"
+#: src/app/council/model.ts
+msgid "发言"
+msgstr "发言"
 
-#: src/app/council/CouncilPage.tsx
-msgid "发送"
-msgstr "发送"
+#: src/app/council/CouncilAside.tsx
+msgid "发言中"
+msgstr "发言中"
+
+#: src/app/council/Speech.tsx
+msgid "发言失败，已跳过"
+msgstr "发言失败，已跳过"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "取消"
@@ -155,120 +153,106 @@ msgstr "取消"
 msgid "各方立场"
 msgstr "各方立场"
 
-#: src/app/council/DebateStage.tsx
-msgid "命题"
-msgstr "命题"
+#: src/app/council/model.ts
+msgid "回应"
+msgstr "回应"
 
-#: src/app/council/PrismStage.tsx
-msgid "回应追问"
-msgstr "回应追问"
-
-#: src/app/council/CouncilLaunch.tsx
 #: src/app/council/CouncilPage.tsx
+msgid "回应分歧"
+msgstr "回应分歧"
+
+#: src/app/council/Speech.tsx
+msgid "回避"
+msgstr "回避"
+
+#: src/app/council/model.ts
+msgid "圆桌讨论"
+msgstr "圆桌讨论"
+
+#: src/app/council/model.ts
+msgid "多视角"
+msgstr "多视角"
+
+#: src/app/council/CouncilAside.tsx
+msgid "失败"
+msgstr "失败"
+
+#: src/app/council/model.ts
 msgid "审阅"
 msgstr "审阅"
 
+#: src/app/council/model.ts
+msgid "审阅意见"
+msgstr "审阅意见"
+
 #: src/app/council/CouncilLaunch.tsx
-msgid "审阅分工"
-msgstr "审阅分工"
+msgid "审阅角度"
+msgstr "审阅角度"
 
 #: src/app/council/CouncilPage.tsx
 msgid "导出失败"
 msgstr "导出失败"
 
+#: src/app/council/Speech.tsx
+msgid "展开"
+msgstr "展开"
+
 #: src/app/council/CouncilPage.tsx
 msgid "展开右侧栏"
 msgstr "展开右侧栏"
+
+#: src/app/council/CouncilAside.tsx
+msgid "已一致"
+msgstr "已一致"
+
+#: src/app/council/Speech.tsx
+msgid "已停止"
+msgstr "已停止"
 
 #: src/app/council/CouncilPage.tsx
 msgid "已创建任务"
 msgstr "已创建任务"
 
-#: src/app/council/DebateStage.tsx
-msgid "已回应"
-msgstr "已回应"
+#: src/app/council/Speech.tsx
+msgid "已正面回答"
+msgstr "已正面回答"
 
-#: src/app/council/CouncilAside.tsx
-#: src/app/council/DebateStage.tsx
-msgid "已正面回应"
-msgstr "已正面回应"
-
-#. placeholder {0}: annotations.length
-#: src/app/council/InsightStage.tsx
-msgid "已采纳 {checkedCount} / {0}"
-msgstr "已采纳 {checkedCount} / {0}"
+#: src/app/council/CouncilStage.tsx
+msgid "已达成共识"
+msgstr "已达成共识"
 
 #: src/app/council/CouncilExportDialog.tsx
 #: src/app/council/CouncilPage.tsx
-#: src/app/council/DebateStage.tsx
 msgid "带入会话"
 msgstr "带入会话"
+
+#: src/app/council/CouncilAside.tsx
+msgid "席位"
+msgstr "席位"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "开始会话"
 msgstr "开始会话"
 
-#: src/app/council/CouncilLaunch.tsx
-msgid "开始协作"
-msgstr "开始协作"
-
-#: src/app/council/PrismStage.tsx
-msgid "开始回应追问"
-msgstr "开始回应追问"
-
-#: src/app/council/InsightStage.tsx
-msgid "开始审阅"
-msgstr "开始审阅"
-
-#: src/app/council/DebateStage.tsx
-msgid "开始辩论"
-msgstr "开始辩论"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "当前存在重复的相同模型，选择不同 Agent 或模型能获得更有差异的视角。"
-msgstr "当前存在重复的相同模型，选择不同 Agent 或模型能获得更有差异的视角。"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "当前没有可用的 Agent 或模型，请先在设置中配置。"
-msgstr "当前没有可用的 Agent 或模型，请先在设置中配置。"
-
-#: src/app/council/CouncilAside.tsx
+#: src/app/council/Speech.tsx
 msgid "待回应"
 msgstr "待回应"
 
-#. placeholder {0}: entry.weakness
-#: src/app/council/CouncilAside.tsx
-msgid "待补：{0}"
-msgstr "待补：{0}"
+#: src/app/council/CouncilPage.tsx
+msgid "总结"
+msgstr "总结"
 
-#. placeholder {0}: gaps.join(' · ')
-#: src/app/council/PrismStage.tsx
-msgid "待补充：{0}"
-msgstr "待补充：{0}"
+#: src/app/council/CouncilStage.tsx
+msgid "按裁判各轮的记录：论点加强、被击破，对方回避质询"
+msgstr "按裁判各轮的记录：论点加强、被击破，对方回避质询"
 
-#: src/app/council/PrismStage.tsx
-msgid "思考"
-msgstr "思考"
-
-#: src/app/council/DebateStage.tsx
-msgid "总结结论"
-msgstr "总结结论"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "打开文件"
-msgstr "打开文件"
+#: src/app/council/Speech.tsx
+msgid "收起"
+msgstr "收起"
 
 #: src/app/council/CouncilPage.tsx
 msgid "收起右侧栏"
 msgstr "收起右侧栏"
-
-#: src/app/council/InsightStage.tsx
-msgid "文档视图"
-msgstr "文档视图"
-
-#: src/app/council/InsightStage.tsx
-msgid "文档草稿"
-msgstr "文档草稿"
 
 #: src/app/council/CouncilNav.tsx
 msgid "新建协作"
@@ -279,12 +263,16 @@ msgid "无法停止"
 msgstr "无法停止"
 
 #: src/app/council/CouncilPage.tsx
+msgid "无法发送"
+msgstr "无法发送"
+
+#: src/app/council/CouncilPage.tsx
 msgid "无法开始协作"
 msgstr "无法开始协作"
 
-#: src/app/council/CouncilAside.tsx
-msgid "暂无符合条件的建议"
-msgstr "暂无符合条件的建议"
+#: src/app/council/CouncilPage.tsx
+msgid "无法继续"
+msgstr "无法继续"
 
 #: src/app/council/CouncilNav.tsx
 msgid "暂无记录"
@@ -294,199 +282,189 @@ msgstr "暂无记录"
 msgid "更新失败"
 msgstr "更新失败"
 
-#: src/app/council/DebateStage.tsx
-msgid "未完成"
-msgstr "未完成"
-
-#: src/app/council/CouncilAside.tsx
-#: src/app/council/DebateStage.tsx
-msgid "未正面回应"
-msgstr "未正面回应"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "标题（可选）"
-msgstr "标题（可选）"
+#: src/app/council/model.ts
+msgid "本轮记录"
+msgstr "本轮记录"
 
 #: src/app/council/CouncilPage.tsx
 msgid "模型协作"
 msgstr "模型协作"
 
-#: src/app/council/PrismStage.tsx
-msgid "正在作答…"
-msgstr "正在作答…"
-
-#: src/app/council/DebateStage.tsx
-msgid "正在整理发言…"
-msgstr "正在整理发言…"
-
-#: src/app/council/PrismStage.tsx
-msgid "正在独立作答…"
-msgstr "正在独立作答…"
-
-#: src/app/council/CouncilPage.tsx
-msgid "正在生成…"
-msgstr "正在生成…"
-
-#: src/app/council/CouncilLaunch.tsx
+#: src/app/council/model.ts
 msgid "正方"
 msgstr "正方"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "每轮停顿"
-msgstr "每轮停顿"
+msgid "每轮暂停"
+msgstr "每轮暂停"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "汇总"
-msgstr "汇总"
+msgid "没有可用的 Agent"
+msgstr "没有可用的 Agent"
 
-#. placeholder {0}: insight.synthesis
-#: src/app/council/InsightStage.tsx
-msgid "汇总建议：{0}"
-msgstr "汇总建议：{0}"
+#: src/app/council/model.ts
+msgid "独立作答"
+msgstr "独立作答"
+
+#: src/app/council/CouncilPage.tsx
+msgid "生成修订稿"
+msgstr "生成修订稿"
+
+#: src/app/council/CouncilPage.tsx
+msgid "直接总结"
+msgstr "直接总结"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "添加"
-msgstr "添加"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "添加立场"
-msgstr "添加立场"
-
-#. placeholder {0}: insight.goal
-#: src/app/council/InsightStage.tsx
-msgid "目标：{0}"
-msgstr "目标：{0}"
-
-#: src/app/council/AgentModelSlot.tsx
 msgid "移除"
 msgstr "移除"
 
-#: src/app/council/CouncilLaunch.tsx
-msgid "移除立场"
-msgstr "移除立场"
+#: src/app/council/model.ts
+msgid "立论"
+msgstr "立论"
+
+#: src/app/council/model.ts
+msgid "第 {round} 轮"
+msgstr "第 {round} 轮"
+
+#: src/app/council/CouncilStage.tsx
+msgid "等候发言"
+msgstr "等候发言"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "立场 {n}"
-msgstr "立场 {n}"
+msgid "粘贴要审阅的文档或方案"
+msgstr "粘贴要审阅的文档或方案"
 
-#: src/app/council/PrismStage.tsx
-msgid "立场变化"
-msgstr "立场变化"
+#: src/app/council/model.ts
+msgid "纠错"
+msgstr "纠错"
 
-#: src/app/council/CouncilLaunch.tsx
-msgid "立场名称"
-msgstr "立场名称"
-
-#. placeholder {0}: r.num
-#. placeholder {1}: r.stage
-#: src/app/council/DebateStage.tsx
-msgid "第 {0} 轮 · {1}"
-msgstr "第 {0} 轮 · {1}"
-
-#: src/app/council/CouncilAside.tsx
-msgid "等待作答"
-msgstr "等待作答"
-
-#: src/app/council/CouncilAside.tsx
-msgid "筛选"
-msgstr "筛选"
-
-#: src/app/council/CouncilLaunch.tsx
-msgid "粘贴待审阅的文档、方案或 Diff…"
-msgstr "粘贴待审阅的文档、方案或 Diff…"
-
-#: src/app/council/CouncilAside.tsx
-#: src/app/council/CouncilLaunch.tsx
+#: src/app/council/model.ts
 msgid "结构"
 msgstr "结构"
 
-#: src/app/council/DebateStage.tsx
-msgid "继续下一轮"
-msgstr "继续下一轮"
+#: src/app/council/model.ts
+msgid "结论"
+msgstr "结论"
 
-#: src/app/council/DebateStage.tsx
-msgid "继续交锋"
-msgstr "继续交锋"
+#: src/app/council/model.ts
+msgid "结辩"
+msgstr "结辩"
 
 #: src/app/council/CouncilPage.tsx
-msgid "继续失败"
-msgstr "继续失败"
+msgid "继续"
+msgstr "继续"
+
+#. placeholder {0}: labels.round(next)
+#: src/app/council/CouncilPage.tsx
+msgid "继续{0}"
+msgstr "继续{0}"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "自动完成"
-msgstr "自动完成"
+msgid "自动进行"
+msgstr "自动进行"
 
-#: src/app/council/CouncilAside.tsx
 #: src/app/council/CouncilLaunch.tsx
+msgid "节奏"
+msgstr "节奏"
+
+#: src/app/council/model.ts
 msgid "补充"
 msgstr "补充"
 
 #: src/app/council/CouncilPage.tsx
-msgid "补充条件或追问…"
-msgstr "补充条件或追问…"
+msgid "补充看法或约束"
+msgstr "补充看法或约束"
 
-#: src/app/council/CouncilLaunch.tsx
+#: src/app/council/CouncilStage.tsx
+msgid "被击破"
+msgstr "被击破"
+
+#: src/app/council/model.ts
+msgid "裁决"
+msgstr "裁决"
+
+#: src/app/council/model.ts
 msgid "裁判"
 msgstr "裁判"
 
+#: src/app/council/CouncilLaunch.tsx
+msgid "要多角度回答的问题"
+msgstr "要多角度回答的问题"
+
+#: src/app/council/CouncilLaunch.tsx
+msgid "要讨论的问题"
+msgstr "要讨论的问题"
+
+#: src/app/council/model.ts
+msgid "观察者"
+msgstr "观察者"
+
+#: src/app/council/Speech.tsx
+msgid "质询"
+msgstr "质询"
+
 #: src/app/council/CouncilAside.tsx
-msgid "质询定位"
-msgstr "质询定位"
+#: src/app/council/CouncilStage.tsx
+msgid "趋于一致"
+msgstr "趋于一致"
+
+#: src/app/council/CouncilAside.tsx
+msgid "跳转"
+msgstr "跳转"
 
 #: src/app/council/CouncilExportDialog.tsx
 #: src/app/council/CouncilPage.tsx
-#: src/app/council/DebateStage.tsx
 msgid "转为任务"
 msgstr "转为任务"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "输入要多角度探讨的问题…"
-msgstr "输入要多角度探讨的问题…"
+msgid "轮数"
+msgstr "轮数"
+
+#: src/app/council/model.ts
+msgid "辩手"
+msgstr "辩手"
 
 #: src/app/council/CouncilLaunch.tsx
-msgid "输入辩论命题，例如：首版应当独立建表，不复用 NativeSession"
-msgstr "输入辩论命题，例如：首版应当独立建表，不复用 NativeSession"
-
-#: src/app/council/CouncilLaunch.tsx
-#: src/app/council/CouncilPage.tsx
-msgid "辩论"
-msgstr "辩论"
-
-#: src/app/council/DebateStage.tsx
-#: src/app/council/PrismStage.tsx
-msgid "追问"
-msgstr "追问"
-
-#. placeholder {0}: turn.question.targetLabel
-#: src/app/council/DebateStage.tsx
-msgid "追问 {0}"
-msgstr "追问 {0}"
+msgid "辩题，例如：首版应当先做 Web 端"
+msgstr "辩题，例如：首版应当先做 Web 端"
 
 #: src/app/council/CouncilPage.tsx
-msgid "追问失败"
-msgstr "追问失败"
+msgid "进入{closing}"
+msgstr "进入{closing}"
 
-#: src/app/council/CouncilAside.tsx
-msgid "选中"
-msgstr "选中"
+#: src/app/council/CouncilStage.tsx
+msgid "进度"
+msgstr "进度"
 
-#: src/app/council/AgentModelSlot.tsx
+#: src/app/council/SeatPicker.tsx
 msgid "选择模型"
 msgstr "选择模型"
 
-#: src/app/council/DebateStage.tsx
-msgid "部分回应"
-msgstr "部分回应"
-
-#: src/app/council/InsightStage.tsx
-msgid "采纳修改"
-msgstr "采纳修改"
-
 #: src/app/council/CouncilAside.tsx
-#: src/app/council/CouncilLaunch.tsx
-msgid "问题"
-msgstr "问题"
+msgid "部分一致"
+msgstr "部分一致"
+
+#: src/app/council/CouncilStage.tsx
+msgid "部分共识"
+msgstr "部分共识"
+
+#: src/app/council/CouncilPage.tsx
+msgid "重试"
+msgstr "重试"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "项目"
 msgstr "项目"
+
+#: src/app/council/model.ts
+msgid "风险"
+msgstr "风险"
+
+#: src/app/council/model.ts
+msgid "驳论"
+msgstr "驳论"
+
+#: src/app/council/SeatPicker.tsx
+msgid "默认模型"
+msgstr "默认模型"

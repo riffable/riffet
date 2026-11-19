@@ -1,0 +1,120 @@
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /tmp/…
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Worked for 3s · done 11:25 PM
+
+❯ Do not use any tools. Write a detailed answer of about 900 words in Markdown on: how to design a
+  resilient job queue. Include: a level-2 heading, two paragraphs, a bulleted list of 6 items, a
+  TypeScript code block of about 25 lines, a table with 4 rows, and a closing paragraph.
+
+⏺ Designing a Resilient Job Queue
+
+  A job queue looks trivial until it meets production. You enqueue a payload, a worker pulls it, the
+  work happens, the job is acknowledged — and on a quiet afternoon with a healthy database, that
+  loop really is the whole story. The design problem only appears once you ask what happens when the
+  worker dies mid-task, when the downstream API returns 500 for six hours, when the same message
+  arrives twice, or when ten thousand jobs land in a queue that drains at forty per second.
+  Resilience is not a feature you add to a queue; it is a set of explicit answers to those failure
+  questions, decided before the first job is ever enqueued. Every queue you have ever trusted — SQS,
+  Sidekiq, Celery, Kafka-based consumers — is a different set of answers to the same handful of
+  questions.
+
+  The most important decision is the delivery contract, because it determines everything downstream.
+  True exactly-once delivery is impossible across a network boundary: the moment a worker finishes
+  its side effect but dies before acknowledging, the broker cannot distinguish "done" from "never
+  started," so it must either redeliver (risking duplicate work) or drop the job (risking lost
+  work). Practical systems therefore choose at-least-once delivery and push the duplication problem
+  into the handler via idempotency. Accepting that trade explicitly — rather than hoping the broker
+  handles it — is what separates a queue that survives an incident from one that corrupts data
+  during it. The second decision is where state lives: the queue should hold only a reference and a
+  small envelope, with the authoritative job record in a durable store you can query, so operators
+  can answer "what happened to job 8f2c?" without grepping logs.
+
+  Six properties carry most of the resilience:
+
+  - Lease-based delivery with a visibility timeout. A pulled job becomes invisible for a bounded
+    window rather than being deleted. If the worker crashes, the lease expires and the job returns
+    to the queue automatically — no reaper cron needed, no orphaned work.
+  - Idempotency keys on every handler. Each job carries a stable key; the handler records it in a
+    deduplication store inside the same transaction as its side effects. Redelivery becomes a no-op
+    instead of a double charge.
+  - Bounded retries with jittered exponential backoff. Retry a handful of times, doubling the delay,
+    and randomize it so a thousand failed jobs do not stampede the recovering dependency in
+    lockstep the instant it returns.
+  - A dead-letter queue that is actually inspected. Jobs that exhaust retries are parked with their
+    error and payload intact, alertable and replayable. A dead-letter queue nobody reads is just a
+    slower way to lose data.
+  - Backpressure and fair scheduling. Cap in-flight work per worker and per tenant so one customer's
+    bulk import cannot starve everyone else's interactive jobs; pause intake when queue age crosses
+    a threshold.
+  - Observability on age, not just depth. Depth tells you volume; the age of the oldest unclaimed
+    job tells you whether the system is actually keeping up. Track attempt-count distributions too —
+    a rising retry rate is the earliest signal of a degrading dependency.
+
+  type Job<T> = { id: string; payload: T; attempts: number; idempotencyKey: string };
+
+  async function runWorker<T>(queue: Queue<T>, handler: (p: T) => Promise<void>) {
+    for (;;) {
+      // Lease one job for 30s; the lease is renewed while work is in flight.
+      const job = await queue.lease({ visibilityTimeoutMs: 30_000 });
+      if (!job) { await sleep(250); continue; }
+
+      const heartbeat = setInterval(() => queue.renew(job.id, 30_000), 10_000);
+      try {
+        await handler(job.payload);          // handler must be idempotent
+        await queue.ack(job.id);             // ack only after durable side effects
+      } catch (err) {
+        const attempts = job.attempts + 1;
+      } catch (err) {
+        const attempts = job.attempts + 1;
+        if (attempts >= MAX_ATTEMPTS) {
+          await queue.deadLetter(job, err);  // park for inspection, never drop silently
+        } else {
+          const base = Math.min(60_000, 2 ** attempts * 1_000);
+          await queue.nack(job.id, { delayMs: base / 2 + Math.random() * base / 2 });
+        }
+      } finally {
+        clearInterval(heartbeat);
+      }
+    }
+  }
+
+  ┌──────────────────┬─────────────────────────┬───────────────────────┬───────────────────────┐
+  │    Guarantee     │   Behavior on failure   │      Typical use      │         Cost          │
+  ├──────────────────┼─────────────────────────┼───────────────────────┼───────────────────────┤
+  │ At-most-once     │ Job may be lost, never  │ Metrics, non-critical │ Cheapest, silently    │
+  │                  │ duplicated              │  telemetry            │ lossy                 │
+  ├──────────────────┼─────────────────────────┼───────────────────────┼───────────────────────┤
+  │ At-least-once    │ Job is redelivered      │ Most business         │ Requires idempotent   │
+  │                  │ until acked             │ workflows             │ handlers              │
+  ├──────────────────┼─────────────────────────┼───────────────────────┼───────────────────────┤
+  │ Effectively-once │ At-least-once plus      │ Payments,             │ Extra write per job,  │
+  │                  │ dedup store             │ provisioning          │ TTL tuning            │
+  ├──────────────────┼─────────────────────────┼───────────────────────┼───────────────────────┤
+  │ Dead-lettered    │ Parked after retry      │ Poison messages, bad  │ Needs alerting and a  │
+  │                  │ exhaustion              │ payloads              │ replay path           │
+  └──────────────────┴─────────────────────────┴───────────────────────┴───────────────────────┘
+
+  None of this is exotic, and none of it is free. Leases require a heartbeat, idempotency requires a
+  store with sensible expiry, dead letters require an owner who will look at them, and backpressure
+  requires you to decide what "too slow" means for your product before an incident decides it for
+  you. The value of making these choices up front is that each one converts a class of silent,
+  hard-to-reproduce production bug into a known, testable behavior — one you can simulate by killing
+  workers, throttling the downstream, and replaying the dead-letter queue on a Tuesday afternoon
+  instead of discovering it during a launch.
+
+✻ Worked for 17s · done 11:25 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  ⏵⏵ auto mode on (shift+tab to cycle)

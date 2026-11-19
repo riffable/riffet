@@ -24,6 +24,7 @@ import type { UsageTranscript } from '../../stats/types.js';
 import { claudeHistoryMetrics, claudeUsageRecord, runForClaudeStep } from './metering.js';
 import { claudePromptKey, readClaudeMeasurements, findClaudeTranscript, parseRow, mapRow, type MapperState, type ClaudeRow } from './history.js';
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
+import { ClaudeScreenFeed } from './live/feed.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability , STANDING_ISOLATION } from './launch.js';
@@ -502,15 +503,21 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   /**
    * The conversation's transcripts as the session journal reads them (`transcript-source.ts`). Read-only
    * on the CLI's files; a running conversation wakes it from its hooks and its transcript poll, and lends
-   * it what it knows about its rows (the run a prompt belongs to, a prompt it rewrote).
+   * it what it knows about its rows (the run a prompt belongs to, a prompt it rewrote). Its terminal is looked at for
+   * the text the CLI draws before writing it (`live/`).
    */
   transcript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): TranscriptSource {
     const configDir = configDirOf(profile);
     const current = () => { try { return host.getSession(session.id); } catch { return session; } };
     const runtime = () => this.runtimes.get(session.id);
     const steering = new DeferredSteerInputs(host, { backendId, sessionId: session.id, currentTarget: () => undefined });
+    const tail = host.terminal.tail?.bind(host.terminal);
     return new ClaudeTranscriptSource({
       sessionId: session.id,
+      ...(tail ? {
+        screen: new ClaudeScreenFeed({ terminalId: () => current().terminalId, tail, observe: (id, callback) => host.terminal.observe(id, callback) }),
+        drift: drift => console.warn('[claude] live draft differs from its transcript text', drift),
+      } : {}),
       nativeSessionId: () => current().nativeSessionId,
       previousNativeSessionIds: () => current().previousNativeSessionIds ?? [],
       locate: nativeSessionId => findClaudeTranscript(configDir, nativeSessionId),

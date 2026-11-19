@@ -52,6 +52,17 @@ export function agentMarkStyle(backend: NativeBackendId): CSSProperties | undefi
   return { color: `var(--agent-${backend})` };
 }
 
+/**
+ * The colour light cast from an Agent's mark takes (a council seat's halo): the mark's own colour. The Codex mark is a
+ * gradient; its middle stop stands for it. A mark without a colour of its own casts the neutral ink.
+ */
+export function agentTint(backend: NativeBackendId): string {
+  // design-rules: allow the Codex mark's middle gradient stop, from agent-marks.tsx
+  if (backend === 'codex') return '#7a9dff';
+  if (backend === 'chat') return 'var(--fg-3)';
+  return agentMarkStyle(backend)?.color ?? 'var(--fg-3)';
+}
+
 /** A catalog whose models group their exact CLI ids under `nativeVariants` is restored and launched by those ids. */
 const groupsVariants = (catalog: ModelInfo[]): boolean => catalog.some((item) => item.nativeVariants?.length);
 

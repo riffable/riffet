@@ -126,7 +126,8 @@ export class TitleService {
     const { store } = this.options;
     let session: Session;
     try { session = store.getSession(run.sessionId); } catch { return; }
-    if (session.kind !== 'native' || session.archivedAt) return;
+    // A discussion's seats are named by it.
+    if (session.kind !== 'native' || session.archivedAt || session.origin?.kind === 'council') return;
     const runs = store.listRuns(session.id);
     if (!runs.some(item => item.state === 'completed')) return;
     const firstPrompt = store.firstUserMessage(session.id);

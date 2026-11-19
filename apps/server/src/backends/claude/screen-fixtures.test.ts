@@ -7,6 +7,8 @@ import {
 } from '../../adapters/cli/claude-code.js';
 import { parseDialog } from '../../agent-host/interaction-screen.js';
 import { localRedactions } from '../../../../../scripts/terminal-fixture-guards.js';
+import { screenMarkdown } from './live/markdown.js';
+import { readScreenTurn } from './live/screen.js';
 import { claudeScreenInteraction, parseClaudeScreenQuestion } from './screen-dialog.js';
 
 /**
@@ -17,6 +19,14 @@ import { claudeScreenInteraction, parseClaudeScreenQuestion } from './screen-dia
 const root = fileURLToPath(new URL('./fixtures/screens/', import.meta.url));
 const versions = readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
 const terminal = { id: 'term-1', epoch: 1 };
+
+/** `live-*`: the pane's tail, scrollback included, while an answer streams (`live/screen.ts`); captured at 100 columns. */
+const live = (screen: string) => {
+  const turn = readScreenTurn(screen);
+  expect(turn).toBeDefined();
+  const last = turn!.blocks.at(-1);
+  return { ...turn!, kinds: turn!.blocks.map(block => block.kind), draft: last?.kind === 'text' ? screenMarkdown(last.lines, 98) : undefined };
+};
 
 /** A screen with the input box up and nothing else asking for the keyboard. */
 const atComposer = (screen: string) => {
@@ -93,6 +103,46 @@ const expectations: Record<string, (screen: string) => void> = {
     expect(claudeComposerText(screen)).toBeUndefined();
     expect(claudeBackgroundScreen(screen)).toEqual({ kind: 'task', closable: true });
   },
+  // A tool running under the spinner: nothing to draft.
+  'live-tool-running': screen => {
+    const turn = live(screen);
+    expect(turn.prompt).toMatch(/^First run the shell command ls -la with the Bash tool\. .* some inline code\.$/);
+    expect(turn.kinds).toEqual(['tool', 'other']);
+    expect(turn.draft).toBeUndefined();
+  },
+  // Prose, a heading and a list item cut mid-stream, under a folded tool group.
+  'live-text': screen => {
+    const turn = live(screen);
+    expect(turn.kinds).toEqual(['other', 'text']);
+    expect(turn.draft).toMatch(/^The directory contains only a \.git folder — an empty repo\.\n\nWhat a Resilient Job Queue Needs\n\nA job queue is easy to write and hard to make trustworthy\. The naive version — push a job ID into Redis, pop it/);
+    expect(turn.draft).toMatch(/\n\n- At-least-once delivery with idempotent handlers\. The queue should re-deliver on failure, and every handler must/);
+    expect(turn.draft).toMatch(/actually enforce\.$/);
+  },
+  // A repaint left a copy of the conversation above; the second text block streams after a tool. Code keeps its lines.
+  'live-after-tool': screen => {
+    const turn = live(screen);
+    expect(turn.kinds).toEqual(['other', 'text', 'tool', 'text']);
+    expect(screenMarkdown(turn.blocks[1]!.lines, 98)).toContain('\n\n```\ntype Job<T> = { id: string; payload: T; attempts: number };\n\nasync function process<T>(job: Job<T>, run: (p: T) => Promise<void>) {\n  if (job.attempts >= 5)');
+    expect(turn.draft).toMatch(/^Now the closing paragraph:\n\nReliability is ultimately a property of the whole pipeline, not just the queue software\. The broker/);
+  },
+  // Wide characters wrap between characters, and at a space before a Latin word.
+  'live-cjk': screen => {
+    const turn = live(screen);
+    expect(turn.kinds).toEqual(['text']);
+    expect(turn.draft).toContain('所以设计的起点不是"怎么派发"');
+    expect(turn.draft).toContain('列表、由 worker 弹出执行');
+    expect(turn.draft).toMatch(/\n1\. 至少一次投递，消费端按业务键去重，保证重复执行不产生重复副作用。\n2\. /);
+    expect(turn.draft).toMatch(/\n4\. 超过上限的任务进入死信队列，保留原始载荷和最后一次错误，供人工排查。$/);
+  },
+  // A finished answer: the repaint's copy of two code lines is dropped, the table kept as drawn.
+  'live-seam': screen => {
+    const turn = live(screen);
+    expect(turn.kinds).toEqual(['text', 'other']);
+    const text = screenMarkdown(turn.blocks[0]!.lines, 98);
+    expect(text.match(/\} catch \(err\) \{/g)).toHaveLength(1);
+    expect(text).toContain('```\n┌──────────────────┬');
+    expect(turn.draft).toBeUndefined();
+  },
   // A monitor's page whose output box pushed the hints below a short pane.
   'background-task-cut': screen => {
     expect(claudeComposerText(screen)).toBeUndefined();
@@ -112,4 +162,22 @@ describe.each(versions)('Claude Code %s screens', version => {
     for (const [from] of localRedactions) expect(screen.toLowerCase()).not.toContain(from.toLowerCase());
     expectations[name]!(screen);
   });
+});
+
+// What the TUI draws of an answer it could not fully parse: a line the answer broke, a soft wrap at a space before a
+// Latin word, and a bold pair touching CJK punctuation left as asterisks. It reads as prose, not as a code block.
+it('keeps a CJK answer\'s own line breaks and its unparsed bold as prose', () => {
+  const text = screenMarkdown([
+    '我的立场:**最重要的是 A。**但我先质疑一下“重要”的框架。',
+    '',
+    '读法二:技术史层面。',
+    'Transformer 的论文标题是 Attention Is All You',
+    'Need。过去近十年的大模型几乎都建立在注意力机制上,所以"A"是现代 AI 的技术核心。其他候选各有短板:',
+    '- X:XLA、XGBoost 之类,不是范式级。',
+    '- W:权重 weights 很重要,但每个参数化模型都有,区分度低。',
+  ], 98);
+  expect(text).not.toContain('```');
+  expect(text).toContain('我的立场:**最重要的是 A。**但');
+  expect(text).toContain('读法二:技术史层面。\\\nTransformer 的论文标题是 Attention Is All You Need。过去近十年');
+  expect(text).toMatch(/短板:\n- X:XLA、XGBoost 之类,不是范式级。\n- W:/);
 });

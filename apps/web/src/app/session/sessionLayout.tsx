@@ -190,14 +190,15 @@ export function useLingering(value: boolean, ms: number): boolean {
 
 /**
  * A message's or turn's time and actions show once the pointer has rested on their own line for
- * 300 ms (moving along it starts the wait again), not anywhere over the message, and hide as
- * soon as it leaves. A turn footer includes transparent padding around its content; the faded time
+ * 150 ms (moving along it starts the wait again), not anywhere over the message, and hide as
+ * soon as it leaves. A turn footer includes transparent padding around its content, down to the next
+ * turn and wider than what it holds; the faded time
  * and buttons inside it neither change the cursor nor take a click.
  * Focus inside it, or one of its menus open, shows it at once. Spread `useRestReveal()` on the line.
  */
 export const revealOnOwnHover = 'w-fit can-hover:opacity-0 can-hover:data-revealed:opacity-100 can-hover:focus-within:opacity-100 can-hover:has-[[data-state=open]]:opacity-100 can-hover:not-data-revealed:not-focus-within:not-has-[[data-state=open]]:**:pointer-events-none';
 
-const REST_MS = 300;
+const REST_MS = 150;
 
 /** The pointer handlers and `data-revealed` flag behind `revealOnOwnHover`; a mouse only, a finger has no hover. */
 export function useRestReveal() {

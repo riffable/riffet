@@ -14,7 +14,7 @@ import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent
 export type NativeTerminalControls = Pick<TerminalService,
   'get' | 'screen' | 'paste' | 'sendKeys' | 'stop' | 'observe' | 'subscribe' | 'withInteraction' | 'panePid'
   | 'createWarmup' | 'claimWarmup' | 'extendWarmup' | 'listWarmups' | 'stopWarmup'>
-  & Partial<Pick<TerminalService, 'inspectPane' | 'paneLaunchMarker' | 'adoptPaneLaunch'>>;
+  & Partial<Pick<TerminalService, 'inspectPane' | 'paneLaunchMarker' | 'adoptPaneLaunch' | 'tail'>>;
 
 /** Server-only profile settings. Keep secrets and provider command details out of HTTP responses. */
 export interface NativeBackendProfileConfig extends NativeBackendProfile {

@@ -56,11 +56,20 @@ final class TranscriptCell: NSView, FragmentHost {
             guard let footer = view as? FooterView else { continue }
             let drawn = footer.contentRect
             guard !drawn.isNull else { continue }
-            // A turn's surrounding whitespace reveals it too; compact footers keep their existing padding.
-            let turnFooter = footer.bounds.height >= style.rhythm.footerHeight
-            let horizontalPadding = turnFooter ? style.rhythm.footerHoverPadding : Space.sm
-            let verticalPadding = turnFooter ? style.rhythm.footerHoverPadding : Space.xs
-            if drawn.offsetBy(dx: footer.frame.minX, dy: footer.frame.minY).insetBy(dx: -horizontalPadding, dy: -verticalPadding).contains(point) { return true }
+            let origin = CGPoint(x: footer.frame.minX, y: footer.frame.minY)
+            let rhythm = style.rhythm
+            if footer.bounds.height >= rhythm.footerHeight {
+                // A turn footer: from just above its line down to the next turn, wider than its content.
+                let width = min(footer.bounds.width, max(drawn.maxX, rhythm.footerHoverWidth))
+                let band = CGRect(x: origin.x, y: origin.y - rhythm.footerHoverPadding, width: width, height: rhythm.footerHoverPadding + footer.bounds.height + rhythm.block)
+                if band.contains(point) { return true }
+            } else if footer.isTrailing {
+                // A message's own line: up to the bubble, and leftwards to a minimum width.
+                let right = origin.x + footer.bounds.width
+                let left = min(origin.x + drawn.minX, right - rhythm.userFooterHoverWidth)
+                let band = CGRect(x: left, y: origin.y - rhythm.userFooterHoverTop, width: right - left, height: rhythm.userFooterHoverTop + footer.bounds.height)
+                if band.contains(point) { return true }
+            } else if drawn.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -Space.sm, dy: -Space.xs).contains(point) { return true }
         }
         return false
     }

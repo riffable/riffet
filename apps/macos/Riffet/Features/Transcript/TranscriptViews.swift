@@ -701,6 +701,7 @@ extension DisclosureSpec {
 
 final class FooterView: FragmentView {
     private var spec: FooterSpec?
+    var isTrailing: Bool { spec?.trailing == true }
     /// Time, speed and actions recede until the row is hovered; delivery status and live clocks stay.
     var revealed = true { didSet { if revealed != oldValue { updateVisibility() } } }
 

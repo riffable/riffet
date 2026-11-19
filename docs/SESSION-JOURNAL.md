@@ -35,7 +35,7 @@
 
 适配器只做一件事：**从 `ingest_cursor` 增量读取原生数据，归一化后追加到日志**。
 
-- Claude：转写 JSONL 按字节偏移增量读；hook 事件作为低延迟信号写入同一日志；回合结束前先读尽已落盘的转写尾部。不再全量重映射，去掉 128MB 上限。
+- Claude：转写 JSONL 按字节偏移增量读；hook 事件作为低延迟信号写入同一日志；回合结束前先读尽已落盘的转写尾部。不再全量重映射，去掉 128MB 上限。CLI 每个内容块写完才落一行转写，正在写的文本块从终端读出（`apps/server/src/backends/claude/live/`）：pane 输出时最多每 250ms 读一次尾部（含回滚），取最后一个提示回显之后、输入框之上的最后一个文本块，还原成 Markdown 作为草稿；转写写入该块的同一提交里收回草稿，回合结束时收回剩余草稿。只为本进程看到开始的回合起草。屏幕布局是 CLI 的约定，不受我们控制：识别依据集中在 `live/screen.ts` 的 `CLAUDE_SCREEN_LAYOUT`，每个版本的真实屏幕存为 `fixtures/screens/<版本>/live-*.txt`；读不懂的屏幕不起草，草稿与转写差得多时服务日志记 `live draft differs from its transcript text`，这是布局变了、要补抓新版本屏幕的信号。
 - Codex / TraeX：以 app-server 通知为主，条目按 id 增量拉取；`thread/turns/list` 只用于修复，且分页、限量。
 - Cursor：chat store 按行号增量扫描。store 每步只在 checkpoint 落一次，进行中的步骤（含新回合尚未落盘的 prompt）由注入 CLI 的 live tap（`plugins/riffet/cursor/assets/live-tap.cjs`）从 agent 流读出，作为草稿写在 store 将来给它的 id 下，store 记录后原位替换；store 一直没记录的回合以 interrupted 结束。
 - Droid、DSH：通知 + 分页读取，补齐无进程时的文件追踪。

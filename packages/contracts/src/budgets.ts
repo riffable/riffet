@@ -158,6 +158,22 @@ export const CURSOR_API_CACHE_BUDGET = {
 /** Extra tmux rows read only when a visible Cursor approval needs its preview or batch header. */
 export const CURSOR_APPROVAL_SCROLLBACK_ROWS = 128;
 
+/**
+ * Claude's answer read off its terminal while the CLI draws it (`apps/server/src/backends/claude/live/`). Only while a turn
+ * this service watched open runs; nothing is kept past the last few turns.
+ */
+export const CLAUDE_LIVE_SCREEN_BUDGET = {
+  /** Rows read back per look, scrollback included: an answer taller than this is not drafted. */
+  tailRows: 2_000,
+  /** A pane is looked at most this often, however much it prints. */
+  readMs: 250,
+  /** Turns whose committed text is remembered, to tell an answer already written from one in flight. */
+  turns: 4,
+  /** A draft less than this percent of which is in its transcript text is reported, at most once per `reportMs` per session. */
+  driftPercent: 90,
+  reportMs: 10 * 60_000,
+} as const;
+
 /** Checking for a newer Riffet release (docs/UPDATE.md「提示」). */
 export const UPDATE_CHECK_BUDGET = {
   /** A check result is reused this long by the CLI, the server and every client; a check runs out of band once it is older. */
@@ -252,18 +268,31 @@ export const MODEL_PICKER_BUDGET = {
   storedMaxAgeMs: 24 * 60 * 60_000,
 } as const;
 
-/** Multi-model discussions: stored list cap, input text cap, and model call limits. */
+/** Multi-model discussions: stored list cap, input text caps, and per-speech turn limits. */
 export const COUNCIL_BUDGET = {
   /** Discussions kept in the store; older ones are pruned on create. */
   keptDiscussions: 100,
   /** Longest topic / proposition text accepted on create. */
   topicChars: 4_000,
-  /** Longest document text accepted for Insight review. */
+  /** Longest document text accepted for review. */
   documentChars: 64_000,
-  /** Longest follow-up message in steer. */
-  steerChars: 4_000,
-  /** Output token ceiling per model turn. */
-  maxOutputTokens: 4_096,
-  /** Stream idle timeout before failing a silent model request. */
-  idleTimeoutMs: 60_000,
+  /** Paragraphs a review document is split into at most. */
+  documentParagraphs: 40,
+  /** Longest reader supplement. */
+  supplementChars: 4_000,
+  /** Supplements one discussion keeps. */
+  supplements: 20,
+  /** Seats per discussion, judge or moderator included. */
+  seats: 7,
+  /** Rounds a debate may run. */
+  minRounds: 2,
+  maxRounds: 6,
+  /** A speech is a turn of its seat's Agent, tools included; it is stopped after this long. */
+  speechTimeoutMs: 15 * 60_000,
+  /** The follow-up turn in which a seat records its notes as JSON. */
+  recordTimeoutMs: 3 * 60_000,
+  /** Rows of one speech's turn sent to a reader who opens it. */
+  speechRows: 400,
+  /** Deleting a discussion waits this long for a seat's turn to stop before giving up on its conversation. */
+  removeWaitMs: 30_000,
 } as const;

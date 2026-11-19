@@ -82,7 +82,7 @@ export class QuickChatSweeper {
   async sweep(now = Date.now()): Promise<string[]> {
     const { store } = this.deps;
     const marked = store.sessionsWithMarks();
-    const chats = store.listSessions().filter(session => session.backendId === 'chat' && session.origin?.kind !== 'discussion' && !session.archivedAt);
+    const chats = store.listSessions().filter(session => session.backendId === 'chat' && session.origin?.kind !== 'discussion' && session.origin?.kind !== 'council' && !session.archivedAt);
     const previous = store.getSetting<Record<string, number | 'kept'>>(KEPT_KEY, {});
     const kept: Record<string, number | 'kept'> = {};
     for (const session of chats) {

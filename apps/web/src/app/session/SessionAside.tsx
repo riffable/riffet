@@ -13,7 +13,8 @@ import { sessionOutputs, type EditRecord } from './sessionAsideModel';
 import { useSwitchedIn } from './sessionFrame';
 import { SubagentContext, type NativeJobStore, type SubagentStore } from './subagents';
 
-function Section({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
+/** A titled group of the right aside; the model-collaboration page shares it. */
+export function Section({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
   return (
     <section aria-label={title}>
       <h2 className="mb-1.5 flex items-center px-2 text-2xs font-medium text-fg-4">{title}{meta !== undefined && <span className="ml-auto tabular-nums">{meta}</span>}</h2>

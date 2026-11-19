@@ -3136,28 +3136,43 @@ html[data-density='relaxed'] {
   margin-top: var(--timeline-gap-tight);
 }
 
-/* The footer's surrounding whitespace reveals it too. Negative margins keep its 36px layout
- * slot and text position; the row's compensated padding contains the full hit area even with
- * content-visibility paint containment. Hover changes opacity only, never this geometry. */
+/* A turn that ends in a footer is set off by the footer's own line and a block gap, not a turn
+ * gap on top of it: the footer stands in the space between turns rather than adding to it. */
+.turn-footer-row {
+  margin-bottom: calc(var(--timeline-gap-block) - var(--timeline-gap-turn));
+}
+
+/* The footer's surrounding whitespace reveals it too: the band from the answer's last line down
+ * to the next turn, wider than what it holds. Negative margins keep its 28px layout line and text
+ * position; the row's compensated padding contains the full hit area even with content-visibility
+ * paint containment. Hover changes opacity only, never this geometry. */
 @media (hover: hover) {
   .turn-footer {
-    min-height: 68px;
+    min-height: calc(28px + 16px + var(--timeline-gap-block));
     width: fit-content;
+    min-width: min(calc(100% + 32px), 22rem);
     max-width: calc(100% + 32px);
-    padding: 16px;
+    padding: 16px 16px var(--timeline-gap-block);
     margin-top: -16px;
     margin-right: -16px;
-    margin-bottom: -16px;
+    margin-bottom: calc(-1 * var(--timeline-gap-block));
   }
   .turn-footer.timeline-gap-block {
     --footer-hover-top: min(16px, var(--timeline-gap-block));
-    min-height: calc(52px + var(--footer-hover-top));
+    min-height: calc(28px + var(--footer-hover-top) + var(--timeline-gap-block));
     padding-top: var(--footer-hover-top);
     margin-top: calc(var(--timeline-gap-block) - var(--footer-hover-top));
   }
   .turn-footer-row {
-    padding-bottom: 16px;
-    margin-bottom: -16px;
+    padding-bottom: var(--timeline-gap-block);
+    margin-bottom: calc(-1 * var(--timeline-gap-turn));
+  }
+  /* A message's own line (time, delivery) under its bubble: reached from the gap above and from the
+   * left of it as well, inside the row so containment does not clip it. */
+  .message-meta-band {
+    min-width: min(100%, 12rem);
+    padding-top: 6px;
+    margin-top: -6px;
   }
 }
 

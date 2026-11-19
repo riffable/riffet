@@ -1,103 +1,13 @@
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
-import {
-  COUNCIL_BUDGET,
-  type CouncilDebateRound,
-  type CouncilDebateSide,
-  type CouncilDebateTurn,
-  type CouncilDiscussion,
-  type CouncilModelParticipant,
-} from '../../../../packages/contracts/src/index.js';
-
-interface LegacyDebateTurn {
-  id: string;
-  speaker: CouncilModelParticipant;
-  text: string;
-  replyTo?: CouncilDebateTurn['replyTo'];
-  question?: CouncilDebateTurn['question'] | string;
-}
-
-interface LegacyDebateRound {
-  num: number;
-  stage: string;
-  order?: Array<'pro' | 'con'>;
-  proTurns?: LegacyDebateTurn[];
-  conTurns?: LegacyDebateTurn[];
-  turns?: CouncilDebateTurn[];
-  ledger?: Record<string, { claim: string; weakness?: string }>;
-  summary?: Record<string, { claim: string; weakness?: string }>;
-}
-
-/** Upgrades persisted discussions written before multi-stance debate normalization. */
-function normalizeDiscussion(raw: CouncilDiscussion): CouncilDiscussion {
-  if (!Array.isArray(raw.phases)) raw.phases = [];
-  if (raw.mode === 'debate' && raw.debate) {
-    const debate = raw.debate as CouncilDiscussion['debate'] & {
-      proModel?: CouncilModelParticipant;
-      conModel?: CouncilModelParticipant;
-      proModels?: CouncilModelParticipant[];
-      conModels?: CouncilModelParticipant[];
-    };
-    if (!Array.isArray(debate.sides)) {
-      const proModels = Array.isArray(debate.proModels)
-        ? debate.proModels
-        : debate.proModel
-        ? [debate.proModel]
-        : [];
-      const conModels = Array.isArray(debate.conModels)
-        ? debate.conModels
-        : debate.conModel
-        ? [debate.conModel]
-        : [];
-      const sides: CouncilDebateSide[] = [
-        { id: 'pro', label: '正方', models: proModels },
-        { id: 'con', label: '反方', models: conModels },
-      ];
-      debate.sides = sides;
-    }
-    if (!Array.isArray(debate.hostTurns)) debate.hostTurns = [];
-    if (!Array.isArray(debate.rounds)) {
-      debate.rounds = [];
-    } else {
-      debate.rounds = (debate.rounds as unknown as LegacyDebateRound[]).map((r): CouncilDebateRound => {
-        if (Array.isArray(r.turns)) return r as CouncilDebateRound;
-        const order = Array.isArray(r.order) && r.order.length ? r.order : (['pro', 'con'] as const);
-        const proList = Array.isArray(r.proTurns) ? r.proTurns : [];
-        const conList = Array.isArray(r.conTurns) ? r.conTurns : [];
-        const maxLen = Math.max(proList.length, conList.length);
-        const turns: CouncilDebateTurn[] = [];
-        for (let i = 0; i < maxLen; i += 1) {
-          for (const sideId of order) {
-            const src = sideId === 'pro' ? proList[i] : conList[i];
-            if (!src) continue;
-            const q = typeof src.question === 'string'
-              ? { id: `${src.id}-q`, summary: '追问', text: src.question, status: 'pending' as const }
-              : src.question;
-            turns.push({
-              id: src.id,
-              sideId,
-              sideLabel: sideId === 'pro' ? '正方' : '反方',
-              speaker: src.speaker,
-              text: src.text ?? '',
-              ...(src.replyTo ? { replyTo: src.replyTo } : {}),
-              ...(q ? { question: q } : {}),
-            });
-          }
-        }
-        return {
-          num: r.num,
-          stage: r.stage,
-          turns,
-          ...(r.summary ? { summary: r.summary } : r.ledger ? { summary: r.ledger } : {}),
-        };
-      });
-    }
-  }
-  return raw;
-}
+import { COUNCIL_BUDGET, type CouncilDiscussion, type CouncilSeat, type CouncilSummary } from '../../../../packages/contracts/src/index.js';
 
 export class CouncilStore {
   private readonly statements = new Map<string, StatementSync>();
-  constructor(private readonly db: DatabaseSync) {}
+
+  constructor(private readonly db: DatabaseSync) {
+    // Rows of the unreleased first version (no `format`) cannot be read as discussions.
+    this.sql(`DELETE FROM council_discussions WHERE json_extract(json, '$.format') IS NULL`).run();
+  }
 
   private sql(text: string): StatementSync {
     let stmt = this.statements.get(text);
@@ -105,15 +15,26 @@ export class CouncilStore {
     return stmt;
   }
 
-  list(): CouncilDiscussion[] {
-    const rows = this.sql('SELECT json FROM council_discussions ORDER BY updated_at DESC, id DESC LIMIT ?')
-      .all(COUNCIL_BUDGET.keptDiscussions) as Array<{ json: string }>;
-    return rows.map(row => normalizeDiscussion(JSON.parse(row.json) as CouncilDiscussion));
+  list(): CouncilSummary[] {
+    const rows = this.sql(`SELECT id, json_extract(json, '$.format') AS format, json_extract(json, '$.title') AS title,
+      json_extract(json, '$.status') AS status, json_extract(json, '$.maxRounds') AS maxRounds, json_extract(json, '$.rhythm') AS rhythm,
+      json_extract(json, '$.seats') AS seats, created_at AS createdAt, updated_at AS updatedAt
+      FROM council_discussions ORDER BY updated_at DESC, id DESC LIMIT ?`).all(COUNCIL_BUDGET.keptDiscussions) as Array<Omit<CouncilSummary, 'seats'> & { seats: string }>;
+    return rows.map(({ seats, ...row }) => ({
+      ...row,
+      seats: (JSON.parse(seats) as CouncilSeat[]).map(seat => ({ role: seat.role, model: seat.model, ...(seat.task ? { task: seat.task } : {}) })),
+    }));
+  }
+
+  /** Discussions a server stop left running. */
+  running(): CouncilDiscussion[] {
+    const rows = this.sql(`SELECT json FROM council_discussions WHERE json_extract(json, '$.status') = 'running'`).all() as Array<{ json: string }>;
+    return rows.map(row => JSON.parse(row.json) as CouncilDiscussion);
   }
 
   get(id: string): CouncilDiscussion | undefined {
     const row = this.sql('SELECT json FROM council_discussions WHERE id=?').get(id) as { json: string } | undefined;
-    return row ? normalizeDiscussion(JSON.parse(row.json) as CouncilDiscussion) : undefined;
+    return row ? JSON.parse(row.json) as CouncilDiscussion : undefined;
   }
 
   save(discussion: CouncilDiscussion): void {
@@ -129,7 +50,6 @@ export class CouncilStore {
   }
 
   delete(id: string): boolean {
-    const result = this.sql('DELETE FROM council_discussions WHERE id=?').run(id);
-    return Number(result.changes) > 0;
+    return Number(this.sql('DELETE FROM council_discussions WHERE id=?').run(id).changes) > 0;
   }
 }

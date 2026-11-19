@@ -141,7 +141,6 @@ msgid "{0} 风格的窗口缩样"
 msgstr "Window thumbnail in the {0} style"
 
 #. placeholder {0}: current.model
-#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "{0}（提供商里已不可用）"
 msgstr "{0} (unavailable in the provider)"
@@ -187,6 +186,10 @@ msgstr "Resets at {reset}"
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}, last 30 minutes. Use the arrow keys to step through 10-second intervals."
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "**Web 优先能用最少的人覆盖最多的用户。** 一套代码同时服务桌面与手机浏览器，迭代不用等商店审核。"
+msgstr "**Web first reaches the most users with the fewest people.** One codebase serves desktop and mobile browsers, and releases never wait on store review."
+
 #. placeholder {0}: formatCount(terminals.total)
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "/ {0} 存活"
@@ -213,6 +216,10 @@ msgstr "12 passed"
 msgid "16 像素，触屏命中区 44；半选用于全选。"
 msgstr "16 px, 44 touch target; indeterminate is for select-all."
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "1v1 辩论"
+msgstr "1v1 debate"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "2 个文件 · 用时 1 分钟"
 msgstr "2 files · 1 min"
@@ -236,6 +243,10 @@ msgstr "Per 24 hours, at most"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "248，会话宽度 ≥ {SESSION_ASIDE_MIN_WIDTH} 时出现"
 msgstr "248, appears when conversation width ≥ {SESSION_ASIDE_MIN_WIDTH}"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "26 个字母里对 AI 最重要的是哪一个"
+msgstr "Which of the 26 letters matters most to AI"
 
 #: src/app/settings/ServiceCharts.tsx
 msgid "2xx 成功"
@@ -328,6 +339,11 @@ msgstr "Android does not hand-write these values: change the source, run the gen
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
 msgstr "bg-active, text fg; the caller passes the matching ARIA."
 
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "CLI · 较慢"
+msgstr "CLI · slower"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
 msgstr "CLI executable"
@@ -364,6 +380,10 @@ msgstr "confirm · form · content · workspace."
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "CPU 与内存"
 msgstr "CPU and memory"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "CRDT。离线编辑是本地优先的前提，合并必须在没有服务端时也成立；代价是文档体积和撤销语义更复杂。"
+msgstr "CRDTs. Offline editing is the premise of local-first, so merging has to work without a server; the cost is larger documents and trickier undo."
 
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "DropdownMenuContent 默认变成底部面板；贴着光标的菜单传 mobileSheet={false}。"
@@ -557,6 +577,10 @@ msgstr "One fact in one place"
 msgid "一处定义，四端生成"
 msgstr "Defined once, generated for four platforms"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "一套代码覆盖最多用户"
+msgstr "One codebase reaches the most users"
+
 #: src/app/design/mac/notes.ts
 msgid "一张满铺的纸，边缘全部用细线，面板从页头的图标打开。"
 msgstr "A single full-bleed sheet of paper with hairline edges everywhere; panels open from the header icons."
@@ -660,6 +684,20 @@ msgstr "Reported"
 #: src/app/design/android/StylesChapter.tsx
 msgid "上方的线"
 msgstr "Line above"
+
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: formatBytes(last.beforeBytes)
+#. placeholder {2}: formatBytes(last.afterBytes)
+#. placeholder {3}: formatDuration(last.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理 {0} · {1} → {2} · 用时 {3}"
+msgstr "Last cleaned {0} · {1} → {2} · took {3}"
+
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: formatDuration(last.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理 {0} · 无可释放空间 · 用时 {1}"
+msgstr "Last cleaned {0} · no reclaimable space · took {1}"
 
 #. placeholder {0}: timeAgo(last.at)
 #. placeholder {1}: formatBytes(last.beforeBytes)
@@ -825,10 +863,22 @@ msgstr "Discard a file with no backup"
 msgid "丢弃无法备份的文件、删除会话"
 msgstr "Discard files that cannot be backed up, delete a conversation"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "两周三端只有 Web 做得到"
+msgstr "Only the web can cover three platforms in two weeks"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "两周内要给三个平台的用户试用，原生方案怎么做到？"
+msgstr "How would a native first version reach users on three platforms within two weeks?"
+
 #. placeholder {0}: Object.keys(DESKTOP_TEXT).length
 #: src/app/design/foundations/TypeChapter.tsx
 msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 msgstr "Two typefaces, {0} font sizes, two weights. Line height is a multiple of 2px."
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "两种读法：A 是「做出来的东西」，E 是「判断它好不好」。下一轮请各自回应对方的框架。"
+msgstr "Two readings: A is \"what gets built\", E is \"judging whether it is good\". Next round, answer each other's framing."
 
 #: src/app/settings/settingsSections.ts
 msgid "个人助理"
@@ -1022,6 +1072,10 @@ msgstr "Values, recipes and miniatures of the five styles"
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "交接摘要"
 msgstr "Handoff summary"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "交锋在「覆盖」与「留存」哪个是首版的目标。反方正面回答了时间问题，正方还没回应离线。"
+msgstr "The clash is whether reach or retention is the goal of a first version. CON answered the timing question directly; PRO has not addressed offline use yet."
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "产品功能"
@@ -1555,9 +1609,17 @@ msgstr "Meta · text-xs"
 msgid "先停止 App 托管的服务器并退出 App，再在终端执行。"
 msgstr "Stop the app-managed server, quit the app, then run this in a terminal."
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "先回答：两周内三端都做到，确实只有 Web。但首版要验证的是留存，不是覆盖面；通知、离线和系统集成决定用户会不会回来。"
+msgstr "First, the answer: only the web covers three platforms in two weeks. But a first version has to prove retention, not reach; notifications, offline use and system integration decide whether users come back."
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "先看关闭弹窗时焦点去了哪里。"
 msgstr "First check where focus goes when the dialog closes."
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "先确定论证负担：要证明 Web 优先在首版的成本与覆盖上都更优。"
+msgstr "Burden of proof first: show that web-first wins on both cost and reach for the first version."
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "先确认焦点是在关闭时丢失，还是在打开时没有记录触发元素。"
@@ -1869,6 +1931,10 @@ msgstr "Reduce motion"
 msgid "减速"
 msgstr "Decelerate"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。"
+msgstr "Several Agents speak to one question, each seat its own conversation. A scoreboard or seat panel sits on top with the question centred as the heading; in a 1v1 pro and con face each other, speeches given at once sit in a row of cards, and the judge's and moderator's notes run across the page."
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "几个组件的组合与约定"
 msgstr "Combinations and conventions for several components"
@@ -1904,6 +1970,10 @@ msgstr "Layers, platforms and styles"
 #: src/app/design/catalog.tsx
 msgid "分层、生成与检查"
 msgstr "Layers, generation and checks"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "分歧在于离线是常态还是例外。"
+msgstr "They differ on whether offline is the norm or the exception."
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "分段控件"
@@ -2109,6 +2179,10 @@ msgstr "Delete this session?"
 msgid "利用率 {0} · p99 {1}"
 msgstr "Utilization {0} · p99 {1}"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "到下一回合"
+msgstr "To the next turn"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "刷新"
 msgstr "Refresh"
@@ -2263,6 +2337,10 @@ msgstr "Stopping soon"
 msgid "历史头像"
 msgstr "Recent avatars"
 
+#: src/app/settings/StorageSection.tsx
+msgid "历史日志"
+msgstr "History journal"
+
 #: src/app/design/android/OverlayChapter.tsx
 msgid "压栈的页面"
 msgstr "A pushed page"
@@ -2356,6 +2434,14 @@ msgstr "Release notes"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "发生了什么，下一步做什么。"
 msgstr "What happened, and what to do next."
+
+#: src/app/design/catalog.tsx
+msgid "发言、轮次、裁判记录"
+msgstr "Speeches, rounds, the judge's record"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "发言中"
+msgstr "Speaking"
 
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
@@ -2550,6 +2636,10 @@ msgstr "Reclaimable"
 #: src/app/settings/StorageSection.tsx
 msgid "可释放 {0}，在服务下次启动时进行，期间服务不可用"
 msgstr "{0} can be freed at the next service start; the service is unavailable meanwhile"
+
+#: src/app/settings/StorageSection.tsx
+msgid "可重建缓存"
+msgstr "Rebuildable cache"
 
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
@@ -2803,6 +2893,10 @@ msgstr "Fence in an answer"
 msgid "回答页脚下方；运行中图标换为转圈"
 msgstr "Under the answer footer; a spinner replaces the icon while it runs"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "团队只有两名前端"
+msgstr "The team has only two front-end engineers"
+
 #: src/app/settings/SidebarSection.tsx
 msgid "固定到侧栏"
 msgstr "Pin to sidebar"
@@ -2867,6 +2961,10 @@ msgstr "Images and long output"
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "图片放大、面板出现"
 msgstr "Images zooming in, panels appearing"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "圆桌讨论"
+msgstr "Roundtable"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "圆点"
@@ -2938,10 +3036,10 @@ msgstr "Where to find it"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "在手机上扫码配对后出现在这里。"
 msgstr "Appears here after you pair by scanning the QR code on your phone."
+
 #: src/app/settings/ChannelsSection.tsx
 msgid "在插件中启用飞书后可添加"
 msgstr "Turn on the Feishu plugin to add one"
-
 
 #: src/app/settings/StorageSection.tsx
 msgid "在服务下次启动时进行，期间服务不可用"
@@ -2978,6 +3076,10 @@ msgstr "Move between views and items. Tabs switch top-level views; a row opens a
 #: src/app/settings/DevicesSection.tsx
 msgid "在线"
 msgstr "Online"
+
+#: src/app/settings/StorageSection.tsx
+msgid "在线整理"
+msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "在终端中运行"
@@ -3105,6 +3207,10 @@ msgstr "Repeating the interface"
 msgid "外观"
 msgstr "Appearance"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "多视角"
+msgstr "Perspectives"
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "多行中文段落不低于 1.5 倍；单行控件的文字在容器里垂直居中。"
 msgstr "Multi-line Chinese paragraphs use at least 1.5; text in a single-line control is vertically centered in its container."
@@ -3134,6 +3240,10 @@ msgstr "Awesome, your settings were saved successfully!"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "失败"
 msgstr "Failed"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "失败的发言写明原因后跳过。"
+msgstr "A failed speech says why and is skipped."
 
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "失败详情：连接在 8 秒后超时。"
@@ -3350,6 +3460,10 @@ msgstr "The key stays on this server"
 #: src/app/design/android/OverlayChapter.tsx
 msgid "对一项内容执行操作"
 msgstr "Act on an item"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "对方的质询要先正面回答。"
+msgstr "The other side's cross-examination needs a direct answer first."
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "对比度"
@@ -4296,6 +4410,10 @@ msgstr "Hover, pressed, focus, selected, disabled"
 msgid "悬停、按下、颜色变化"
 msgstr "Hover, press, colour changes"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "悬停区宽 ≥ 352，接到下一回合"
+msgstr "Hover band ≥ 352 wide, down to the next turn"
+
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "悬停提示"
 msgstr "Hover tooltip"
@@ -4341,6 +4459,14 @@ msgstr "Floating panels, full-screen previews"
 #: src/app/settings/ThemeEditor.tsx
 msgid "我的主题"
 msgstr "My theme"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "我选 A。**Attention** 是这十年模型的共同底座，Agent、Alignment 也都从 A 开始。E 说的评估很重要，但它衡量的对象是先由注意力机制做出来的。"
+msgstr "I pick A. **Attention** underlies this decade of models, and Agent and Alignment start with A too. Evaluation matters, but what it measures was built on attention first."
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "我选 E，Evaluation。「智能」给出了目标，评估决定我们把哪些变化当作进步。同一个模型，只看补丁能否通过测试，和同时看它是否保留了调用方依赖的行为，会得到截然不同的结论；评价标准就在塑造用户实际接触到的 AI。"
+msgstr "I pick E, for Evaluation. Intelligence sets the goal; evaluation decides which changes count as progress. Judge the same model only on whether its patch passes the tests, or also on whether it keeps the behaviour callers rely on, and you reach very different conclusions; the yardstick shapes the AI people actually meet."
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "截断"
@@ -4426,6 +4552,10 @@ msgstr "Extensions and engineering"
 #: src/app/settings/PreferencesSections.tsx
 msgid "扫码"
 msgstr "Scan"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "承认了时间上做不到"
+msgstr "Conceded it cannot be done in time"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SearchChapter.tsx
@@ -4532,8 +4662,8 @@ msgid "指针"
 msgstr "Pointer"
 
 #: src/app/design/surfaces/SessionChapter.tsx
-msgid "指针停留 500 ms，触屏常显"
-msgstr "Pointer rests 500 ms, always shown on touch"
+msgid "指针停留 150 ms，触屏常显"
+msgstr "After a 150 ms rest; always shown on touch"
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "指针停留、键盘进入或菜单打开时出现，触屏常驻；隐藏时仍占位。"
@@ -4571,6 +4701,10 @@ msgstr "Press lowers opacity, no ripple"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "按住 说话"
 msgstr "Hold to talk"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "按文档类型分：长文本与列表用 CRDT，结构化记录由服务端裁决。两边都同意权限必须在服务端检查。"
+msgstr "Split by document type: CRDTs for long text and lists, server arbitration for structured records. Both agree permissions must be checked on the server."
 
 #: src/app/design/mac/notes.ts
 msgid "按时间分组"
@@ -4701,6 +4835,10 @@ msgstr "Control"
 #: src/app/design/android/notes.ts
 msgid "控件圆角 4，分组 8"
 msgstr "Control radius 4, groups 8"
+
+#: src/app/settings/StorageSection.tsx
+msgid "控制数据"
+msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "推翻一条规则"
@@ -5345,6 +5483,10 @@ msgstr "Couldn't turn on the plugin"
 msgid "无法开始统计"
 msgstr "Could not start the scan"
 
+#: src/app/settings/StorageSection.tsx
+msgid "无法整理存储空间"
+msgstr ""
+
 #: src/app/settings/UpdateSection.tsx
 msgid "无法检查更新"
 msgstr "Couldn't check for updates"
@@ -5701,6 +5843,10 @@ msgstr "Server processes"
 msgid "服务地址"
 msgstr "Service address"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "服务端裁决。多数冲突是同一字段的覆盖，最后写入胜出加冲突提示就够用，换来简单的数据模型和权限检查。"
+msgstr "Server arbitration. Most conflicts overwrite the same field, so last write wins plus a conflict notice is enough, in exchange for a simple data model and permission checks."
+
 #: src/app/settings/settingsSections.ts
 msgid "服务管理"
 msgstr "Service"
@@ -5764,6 +5910,10 @@ msgstr "Allow this kind of command in this conversation"
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "本周"
 msgstr "This week"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "本地优先的同步该用 CRDT 还是服务端裁决"
+msgstr "Should local-first sync use CRDTs or server arbitration"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "本地源码"
@@ -6073,6 +6223,11 @@ msgstr "Model"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "模型与工具名"
 msgstr "Model and tool names"
+
+#: src/app/design/catalog.tsx
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "模型协作"
+msgstr "Collaboration"
 
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
@@ -6498,7 +6653,12 @@ msgstr "Add project"
 msgid "添加飞书机器人"
 msgstr "Add Feishu bot"
 
+#: src/app/settings/StorageSection.tsx
+msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
@@ -6672,6 +6832,10 @@ msgstr "User message"
 #: src/app/design/android/TypeChapter.tsx
 msgid "用户的文字大小与系统字体倍率相乘，终端固定为 1"
 msgstr "The user's text size multiplies the system font scale; the terminal stays at 1"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "用户离线编辑多久之后再同步？"
+msgstr "How long do users edit offline before syncing?"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "用时"
@@ -6937,6 +7101,14 @@ msgstr "On leave"
 msgid "离开页面"
 msgstr "Leaving a page"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "离线时 Web 端还能用吗？"
+msgstr "Does the web version work offline?"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "离线的地位"
+msgstr "The role of offline"
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "移动端的底部面板"
 msgstr "Bottom sheets on phones"
@@ -7012,6 +7184,10 @@ msgstr "Empty state"
 msgid "空闲后停止 CLI"
 msgstr "Stop CLI when idle"
 
+#: src/app/settings/StorageSection.tsx
+msgid "空闲页会自动回收，仅在碎片较多时需要重启重建"
+msgstr ""
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "空间弹簧 · 刚度"
 msgstr "Spatial spring · stiffness"
@@ -7071,6 +7247,10 @@ msgstr "Controls in a window are only icon buttons and capsules"
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "立即执行，通知里带撤销"
 msgstr "Runs immediately, with undo in the toast"
+
+#: src/app/settings/StorageSection.tsx
+msgid "立即整理"
+msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "竖线分别是非文字 3:1 和文字 4.5:1。读自当前主题；占位和快捷键用的 fg-4 不承载需要读清的信息。"
@@ -7550,6 +7730,10 @@ msgstr "Auto"
 msgid "自动化"
 msgstr "Automations"
 
+#: src/app/settings/StorageSection.tsx
+msgid "自动回收"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "自动增高上限"
 msgstr "Auto-grow limit"
@@ -7943,6 +8127,10 @@ msgstr "Groups, docs and code directories of the design system page correspond o
 msgid "访问"
 msgstr "Access"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "评估衡量的对象由注意力机制做出来，E 排在 A 之后"
+msgstr "What evaluation measures is built by attention, so E comes after A"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "识别方式"
 msgstr "Recognition"
@@ -8106,6 +8294,10 @@ msgstr "Call sites name a role, never .sp"
 msgid "调用处只写角色，不写字号。角色的取值随风格变：界面、次要、侧栏三档来自配方，正文、注脚、标题与代码各端相同。"
 msgstr "Call sites name a role, not a font size. Role values vary by style: the interface, secondary and sidebar tiers come from the recipe, while body, footnote, title and code are the same on every platform."
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "质询从发言里分出来，按裁判的记录标出回答情况。"
+msgstr "Cross-examination is set apart from the speech and marked by the judge's notes."
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "贯穿各层"
 msgstr "Across all layers"
@@ -8117,6 +8309,11 @@ msgstr "Rail attached to the column edge"
 #: src/app/settings/PreferencesSections.tsx
 msgid "资源回收"
 msgstr "Resource reclaim"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "走 CLI 进程启动，较慢"
+msgstr "Launches via CLI process, slower"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
@@ -8213,6 +8410,10 @@ msgstr "System"
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "跟随系统的深浅色"
 msgstr "Follow the system appearance"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随默认"
+msgstr "Follow default"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -8433,10 +8634,6 @@ msgstr "No one yet"
 #: src/app/settings/ServiceCharts.tsx
 msgid "还没有完成的请求"
 msgstr "No completed requests yet"
-
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
-msgstr "No provider with a gateway yet. Add a custom provider under Claude Code, DSH, or Codex first."
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "还没有提供商"
@@ -9358,6 +9555,14 @@ msgstr "Feishu"
 msgid "飞书里的应用不会被删除"
 msgstr "The app in Feishu is not deleted"
 
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "首版应当先做 Web 端"
+msgstr "The first version should ship on the web first"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "首版验证留存"
+msgstr "A first version proves retention"
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "首页的模式切换"
 msgstr "Home mode switch"
@@ -9454,6 +9659,7 @@ msgstr "Default provider"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/AssistantSettingsSection.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx

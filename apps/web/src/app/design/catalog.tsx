@@ -46,6 +46,7 @@ import { SearchChapter } from './patterns/SearchChapter';
 import { SelectionChapter } from './patterns/SelectionChapter';
 import { NewSessionChapter } from './surfaces/NewSessionChapter';
 import { PanelsChapter } from './surfaces/PanelsChapter';
+import { CouncilChapter } from './surfaces/CouncilChapter';
 import { SessionChapter } from './surfaces/SessionChapter';
 
 /**
@@ -128,6 +129,7 @@ export function useDesignCatalog(platform: DesignPlatform): CatalogGroup[] {
       ['session', t`会话`, t`消息、工具调用、代码、审批、输入框`, SessionChapter],
       ['new-session', t`新会话`, t`项目主页与起始输入`, NewSessionChapter],
       ['panels', t`侧边面板`, t`变更、文件、浏览器、终端`, PanelsChapter],
+      ['council', t`模型协作`, t`发言、轮次、裁判记录`, CouncilChapter],
     ],
     engineering: [
       ['plugins', t`插件界面`, t`插件视图能用什么、怎么画`, PluginsChapter],

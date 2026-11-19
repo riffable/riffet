@@ -8,7 +8,7 @@ import type {
   ApiError,
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
-  CouncilAdvanceRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSteerRequest,
+  CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
   ExtensionContext, ExtensionInventory, ExtensionDetail, ExtensionDocument, ExtensionManagementCapabilities, ExtensionActionRequest, ExtensionActionResult, ExtensionRuntimeReport,
@@ -981,14 +981,15 @@ export const api = {
     return request<StatsRunsPage>(`${API.stats}/runs?${params}`, { signal });
   },
 
-  councilList: (signal?: AbortSignal) => request<{ items: CouncilDiscussion[] }>('/api/council', { signal }),
-  councilGet: (id: string, signal?: AbortSignal) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { signal }),
+  councilList: (signal?: AbortSignal) => request<{ items: CouncilSummary[] }>('/api/council', { signal }),
   councilCreate: (body: CouncilCreateRequest) => request<CouncilDiscussion>('/api/council', { method: 'POST', body: JSON.stringify(body) }),
   councilPatch: (id: string, body: CouncilPatchRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  councilAdvance: (id: string, body?: CouncilAdvanceRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/advance`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
-  councilSteer: (id: string, body: CouncilSteerRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/steer`, { method: 'POST', body: JSON.stringify(body) }),
-  councilCancel: (id: string) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: '{}' }),
+  councilContinue: (id: string, body?: CouncilContinueRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  councilSupplement: (id: string, body: CouncilSupplementRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/supplement`, { method: 'POST', body: JSON.stringify(body) }),
+  councilStop: (id: string) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/stop`, { method: 'POST', body: '{}' }),
   councilDelete: (id: string) => request<void>(`/api/council/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  councilAgents: (signal?: AbortSignal) => request<NativeBackendCatalogEntry[]>('/api/council/agents', { signal }),
+  councilSpeechRows: (id: string, speechId: string, signal?: AbortSignal) => request<CouncilSpeechRows>(`/api/council/${encodeURIComponent(id)}/speeches/${encodeURIComponent(speechId)}/rows`, { signal }),
   councilExport: (id: string, body: CouncilExportRequest) => request<CouncilExportResult>(`/api/council/${encodeURIComponent(id)}/export`, { method: 'POST', body: JSON.stringify(body) }),
 };
 

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { catalogEntry, catalogSelection, parseSelection, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
+import { IconMessageSquareText } from '@/components/icons';
 import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
 import { cleanLabel } from '@/lib/utils';
 import { useAgentModels } from './agentModels';
@@ -10,6 +11,11 @@ import type { Choice } from './model';
 
 /** An agent, its provider and a model: what a model menu picks. `model` carries the composer's parameters (`model[effort=high]`). */
 export interface AgentModelValue { backendId: NativeBackendId; profileId?: string; model?: string }
+
+/** An agent's mark in the menu; quick chat has none of its own and is drawn as the tab bar draws it. */
+const agentIcon = (backendId: NativeBackendId, className?: string) => backendId === 'chat'
+  ? <IconMessageSquareText className={['size-3.5 text-fg-3', className].filter(Boolean).join(' ')} aria-hidden />
+  : <AgentLogo backend={backendId} size={14} {...(className ? { className } : {})} style={agentMarkStyle(backendId)} />;
 
 /** A choice names its provider too, as in the composer: two providers may offer the same model id. */
 const SEPARATOR = '\u0000';
@@ -32,13 +38,14 @@ function splitAgent(id: string): { backendId: NativeBackendId; profileId?: strin
  * What a settings page or dialog needs to run the composer's model menu on a saved choice: the
  * `ModelPicker` props (spread them) and `pick`, which turns a picked id back into agent, provider and
  * model. With `agents` the menu also picks the agent (a new conversation's menu, Agent → provider →
- * model); without, it lists the providers of the choice's own agent.
+ * model); without, it lists the providers of the choice's own agent. `quickChat` lists quick chat among the agents.
  */
-export function useAgentModelChoice({ projectId, backends, choice, agents = false }: {
+export function useAgentModelChoice({ projectId, backends, choice, agents = false, quickChat = false }: {
   projectId: string;
   backends: readonly NativeBackendCatalogEntry[];
   choice: AgentModelValue | undefined;
   agents?: boolean;
+  quickChat?: boolean;
 }) {
   const { t } = useLingui();
   const label = useBackendLabel();
@@ -54,7 +61,7 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
   const choiceId = (id: NativeBackendId, profileId: string | undefined, model: string) => agents ? choiceOf(id, profileId, model) : compose(profileId, model);
   const listed = (id: NativeBackendId, profileId?: string): Choice[] => (agentModels.read(id, profileId) ?? []).map((item) => ({ id: choiceId(id, profileId, item.value), label: cleanLabel(item.name) }));
   const providersOf = (entry: NativeBackendCatalogEntry): ModelProviderChoices[] => {
-    const agent = { id: entry.backendId, label: label(entry.backendId), icon: <AgentLogo backend={entry.backendId} size={14} style={agentMarkStyle(entry.backendId)} /> };
+    const agent = { id: entry.backendId, label: label(entry.backendId), icon: agentIcon(entry.backendId) };
     const saved = entry.profiles.find((profile) => profile.isDefault)?.id;
     return (entry.profiles.length ? entry.profiles : [undefined]).map((profile): ModelProviderChoices => {
       const list = listed(entry.backendId, profile?.id);
@@ -72,7 +79,7 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
       };
     });
   };
-  const workers = backends.filter((entry) => entry.backendId !== 'chat' && entry.available !== false);
+  const workers = backends.filter((entry) => (quickChat || entry.backendId !== 'chat') && entry.available !== false);
   const providers: ModelProviderChoices[] | undefined = agents ? workers.flatMap(providersOf) : backend && profiles.length ? providersOf(backend) : undefined;
   // The saved model names the model alone; its parameters ride along when another model is picked.
   const saved = parseSelection(choice?.model);
@@ -116,7 +123,7 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
           if (other && !provider.models.length && !(other.backendId === backendId && other.profileId === activeProfileId)) agentModels.load(other.backendId, other.profileId);
         }
       },
-      ...(agents && backendId ? { leading: <><AgentLogo backend={backendId} size={14} className="shrink-0" style={agentMarkStyle(backendId)} /><span className="sr-only">{label(backendId)}</span></> } : {}),
+      ...(agents && backendId ? { leading: <>{agentIcon(backendId, 'shrink-0')}<span className="sr-only">{label(backendId)}</span></> } : {}),
     },
   };
 }

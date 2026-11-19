@@ -305,7 +305,7 @@ function PickerScrollSync({ listRef, agentsRef, providersRef, activeOptionId, re
   return null;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, loading = false, refreshing = false, error, onRetry }: {
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, labelClassName, loading = false, refreshing = false, error, onRetry }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -362,6 +362,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   onSelectProvider?: (id: string) => void;
   /** Before the model's name in the trigger: the agent's mark when the menu also picks the agent. */
   leading?: ReactNode;
+  /** The model's name in the trigger, where the trigger is set larger than the composer's (a council seat). */
+  labelClassName?: string;
 }) {
   const { t } = useLingui();
   const shownPlaceholder = placeholder ?? 'Default model';
@@ -762,7 +764,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         className={cn('group/model inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg', inlineParams && mobilePickerTriggerClass, !models.length && failure && 'text-danger hover:text-danger', retryHeld && 'opacity-60 hover:bg-transparent', className)}
       >
         {leading}
-        <span className={cn('max-w-32 truncate sm:max-w-44', inlineParams && 'min-w-0 flex-1 max-w-none text-left sm:max-w-none')}>{label}</span>
+        <span className={cn('max-w-32 truncate sm:max-w-44', inlineParams && 'min-w-0 flex-1 max-w-none text-left sm:max-w-none', labelClassName)}>{label}</span>
         {tags.effort && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">{tags.effort}</span>}
         {/* Parameters read as words in the effort's own style: a glyph or chip apiece was noise. */}
         {tags.fast && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">Fast</span>}

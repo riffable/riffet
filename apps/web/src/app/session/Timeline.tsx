@@ -195,7 +195,7 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {(text || time || delivery) && (
-        <div data-slot="message-meta" {...rest} className={cn('flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !resources && revealOnOwnHover)}>
+        <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !resources && revealOnOwnHover)}>
           {from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}
           {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}
@@ -267,7 +267,7 @@ export function MessageFooter({ text, showActions, time, modelLabel, footerPinne
   const rate = tokensPerSecond(metrics);
   const rest = useRestReveal();
   if (!showActions && !time && progress === undefined) return null;
-  return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-9 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
+  return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-7 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
     {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
     {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} pluginItems={pluginItems} {...(time ? { at: time } : {})} />}
     <MarkedIndicator target={mark} />

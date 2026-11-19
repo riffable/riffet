@@ -1,0 +1,42 @@
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /tmp/…
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Worked for 2s · done 11:40 PM
+
+❯ First run the shell command ls -la with the Bash tool. Then write about 250 words in Markdown
+  explaining what a resilient job queue needs, with a bulleted list of 4 items and a short
+  TypeScript code block. Then run echo second-step with Bash. Then write a closing paragraph of
+  about 120 words that includes a markdown link to https://example.com/docs and some inline code.
+
+  Thought for 1s, listed 1 directory (ctrl+o to expand)
+
+⏺ The directory contains only a .git folder — an empty repo.
+
+  What a Resilient Job Queue Needs
+
+  A job queue is easy to write and hard to make trustworthy. The naive version — push a job ID into
+  Redis, pop it in a worker — works until the first worker crashes mid-job, at which point the job
+  is silently gone or silently duplicated. Resilience comes from making the queue's state explicit
+  and recoverable at every step.
+
+  Four properties carry most of the weight:
+
+  - At-least-once delivery with idempotent handlers. The queue should re-deliver on failure, and
+    every handler must tolerate receiving the same job twice. Exactly-once is a promise distributed
+    systems rarely keep; idempotency is the promise you can actually enforce.
+  -
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  ⏵⏵ auto mode on (shift+tab to cycle)
+  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tra…

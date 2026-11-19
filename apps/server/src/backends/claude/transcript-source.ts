@@ -8,9 +8,11 @@ import { ClaudeActivities, readTaskOutputTail, type ClaudeActivitiesState } from
 import { activeTurnOf, initialState, reduce } from './session-state.js';
 import { ClaudeSubagentDiscovery, type ClaudeSubagentMeta as SubagentMeta } from './subagents.js';
 import {
-  claudeApiFailure, claudeFailureText, claudePromptKey, claudeRowOwesStep, claudeRowSignals, mapRow, parseRow, subagentSettles, subagentWake,
+  claudeApiFailure, claudeFailureText, claudePromptKey, claudeRowOwesStep, claudeRowSignals, clip, mapRow, parseRow, subagentSettles, subagentWake,
   type ClaudeRow, type ClaudeTask, type ClaudeTranscriptHooks, type MapperState, type ToolCall,
 } from './history.js';
+import { ClaudeLiveDrafts, type LiveDrift } from './live/drafts.js';
+import type { ClaudeScreenFeed } from './live/feed.js';
 
 /*
  * Claude Code's transcript as the session journal reads it (docs/SYNC-V3.md, 写入契约). The CLI only
@@ -68,6 +70,13 @@ export interface ClaudeTranscriptSourceOptions {
    * own. Undefined while it may be running, or nothing knows.
    */
   exited?(): string | undefined;
+  /**
+   * The CLI's terminal, looked at for the text block it is drawing before it writes it (`live/`). Without it the
+   * conversation's text arrives a block at a time.
+   */
+  screen?: Pick<ClaudeScreenFeed, 'watch' | 'arm' | 'read'>;
+  /** A draft its transcript text contradicted: the screen's layout has likely changed (`live/screen.ts`). */
+  drift?(drift: LiveDrift): void;
   /** What a running conversation knows about its rows; nothing that acts on the CLI. */
   hooks?: Pick<ClaudeTranscriptHooks, 'additionalContext' | 'commandForUserMessage' | 'promptText' | 'putBlob' | 'observedChanges'> & {
     /** Persisted input fences survive the runtime and the journal's read cursor. */
@@ -284,7 +293,12 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   private inputScan?: string;
   private readonly repairedInputs = new Set<string>();
 
-  constructor(private readonly options: ClaudeTranscriptSourceOptions) {}
+  /** Drafts of the text the CLI draws, for the turns this process saw open. */
+  readonly live?: ClaudeLiveDrafts;
+
+  constructor(private readonly options: ClaudeTranscriptSourceOptions) {
+    if (options.screen) this.live = new ClaudeLiveDrafts({ sessionId: options.sessionId, clip: text => clip(text), ...(options.drift ? { report: options.drift } : {}) });
+  }
 
   get sessionId(): string { return this.options.sessionId; }
   get hooks(): NonNullable<ClaudeTranscriptSourceOptions['hooks']> {
@@ -324,11 +338,31 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     const { done } = await this.read(w, files, decode(w.cursor) ?? fresh(0, 0), PULL_BYTES, metas, signal);
     this.publishInputs(w, receipts);
     const children = await this.children(w, metas, PULL_BYTES, signal);
+    // Drafts are a preview: one that cannot be drawn never holds up the transcript.
+    if (done && !signal.aborted) await this.drawLive(w).catch(error => console.warn('[claude] live draft skipped', { sessionId: this.sessionId, error: error instanceof Error ? error.message : String(error) }));
     return { caughtUp: done && children && !signal.aborted };
   }
 
   watch(_w: LaneWriter, wake: () => void): () => void {
-    return this.options.watch?.(wake) ?? (() => undefined);
+    const transcript = this.options.watch?.(wake);
+    const screen = this.options.screen?.watch(wake);
+    return () => { transcript?.(); screen?.(); };
+  }
+
+  /**
+   * Drafts what the screen shows of the open turn past what the transcript has, once the transcript is read to its end;
+   * takes back the drafts of turns that are over. Never on a lane being rebuilt: its open turn is not settled yet.
+   */
+  private async drawLive(w: LaneWriter): Promise<void> {
+    const { live } = this, { screen } = this.options;
+    if (!live || !screen || w.scratch) return;
+    const turnId = this.activeTurn(w)?.turnId;
+    const watching = live.watching(turnId);
+    screen.arm(watching);
+    const tail = watching ? await screen.read() : undefined;
+    // The read may have let a commit in: the plan is for the turn open now.
+    const plan = live.plan(this.activeTurn(w)?.turnId === turnId ? turnId : undefined, tail, new Date().toISOString());
+    if (plan.drafts.length || plan.retire.length) w.commit({ events: [], drafts: plan.drafts, retire: plan.retire, cursor: w.cursor });
   }
 
   async drain(w: LaneWriter): Promise<void> {
@@ -1151,6 +1185,7 @@ class LaneRead {
     if (this.turn?.open) this.end('completed', at);
     this.turn = { k: unique, open: true, ...flags };
     this.recent = [...this.recent, unique].slice(-RECENT_TURNS);
+    if (this.main) this.source.live?.opened(unique);
   }
 
   private end(status: TurnEndStatus, at: string, error?: string): void {
@@ -1162,7 +1197,9 @@ class LaneRead {
   /** Commits the rows read so far with the cursor after them, and the writes still to make. */
   private flush(): void {
     const cursor = this.encode();
-    if (this.events.length || cursor !== this.w.cursor) this.w.commit({ events: this.events, cursor });
+    // A text block the screen drafted is taken back in the commit that writes it, so the two never show together.
+    const retire = this.main && this.events.length ? this.source.live?.committed(this.events) : undefined;
+    if (this.events.length || cursor !== this.w.cursor) this.w.commit({ events: this.events, cursor, ...(retire?.length ? { retire } : {}) });
     this.events = [];
   }
 

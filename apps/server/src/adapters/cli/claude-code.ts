@@ -55,7 +55,7 @@ const COMPOSER_RULE_PATTERN = /^[^\S\n]*[─━]{3,}[^\S\n]*$/;
 const COMPOSER_TOP_PATTERN = /^[^\S\n]*(?:[─━]{3,}(?:[^\S\n]+\S[^\n]*?[^\S\n]+[─━]+)?|[─━]+[^\S\n]+↯[^\S\n]+[─━]+)[^\S\n]*$/;
 
 /** Terminal columns a line occupies: East Asian wide and fullwidth characters take two. */
-function cellWidth(line: string): number {
+export function cellWidth(line: string): number {
   let width = 0;
   for (const char of line) {
     const code = char.codePointAt(0)!;

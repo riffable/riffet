@@ -5,20 +5,12 @@ import type { ProjectRecord } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field, Select, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { conclusionOf } from './model';
 
+/** The conclusion under the discussion's title; for a review, the revised document. */
 export function defaultExportBody(discussion: CouncilDiscussion): string {
-  if (discussion.mode === 'debate' && discussion.debate?.verdict) {
-    return `${discussion.debate.verdict.winner}\n\n${discussion.debate.verdict.takeaway}`;
-  }
-  if (discussion.mode === 'prism' && discussion.prism?.verdict) {
-    return `${discussion.prism.verdict.headline}\n\n${discussion.prism.verdict.analysis}`;
-  }
-  if (discussion.mode === 'insight' && discussion.insight) {
-    const picked = discussion.insight.annotations.filter((a) => a.checked);
-    if (picked.length) return picked.map((a, i) => `${i + 1}. [${a.para}] ${a.after}`).join('\n');
-    return discussion.insight.synthesis ?? '';
-  }
-  return discussion.title;
+  const conclusion = conclusionOf(discussion);
+  return conclusion ? `# ${discussion.title}\n\n${conclusion.text}` : discussion.title;
 }
 
 export function CouncilExportDialog({
@@ -53,7 +45,7 @@ export function CouncilExportDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <Field label={t`内容`}>
-            <Textarea rows={6} value={body} onChange={(e) => setBody(e.target.value)} />
+            <Textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} />
           </Field>
           {projects.length > 0 && (
             <Field label={t`项目`}>

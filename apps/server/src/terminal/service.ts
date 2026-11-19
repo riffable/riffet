@@ -1149,6 +1149,31 @@ export class TerminalService {
     return activity;
   }
 
+  /**
+   * The pane's last `rows` rows, scrollback included, as plain text, and the width they were drawn at. Read-only, for a
+   * reader that follows what a TUI draws (Claude's answer in flight); a pane that is gone reads as undefined.
+   */
+  async tail(id: string, rows: number): Promise<{ text: string; cols: number } | undefined> {
+    const read = async (): Promise<[string, string]> => {
+      // An attached pane is asked through its control client, without forking tmux for every look.
+      const runtime = this.runtime.get(id);
+      if (runtime) {
+        const blocks = await runtime.control.request(`display-message -p -t ${runtime.pane} '#{pane_width}' ; capture-pane -p -S -${rows} -t ${runtime.pane}`, 2);
+        const [width = '', screen = ''] = blocks.map(block => block.map(line => line.toString('utf8')).join('\n'));
+        return [width, screen];
+      }
+      const name = terminalName(id);
+      const output = await this.runTmux(['display-message', '-p', '-t', name, '#{pane_width}', ';', 'capture-pane', '-p', '-S', `-${rows}`, '-t', name], 5000, undefined, HISTORY_CAPTURE_BYTES);
+      const newline = output.indexOf('\n');
+      return [output.slice(0, newline), output.slice(newline + 1)];
+    };
+    try {
+      const [width, screen] = await read();
+      const cols = Number(width);
+      return Number.isInteger(cols) && cols > 0 ? { text: trimTrailingBlankLines(screen), cols } : undefined;
+    } catch { return undefined; }
+  }
+
   /** The pane's visible text, read-only: unlike `screen` it never attaches a terminal that is not. */
   async paneText(id: string, timeoutMs = 2000): Promise<string | undefined> {
     try { return trimTrailingBlankLines(await this.runTmux(['capture-pane', '-p', '-t', terminalName(id)], timeoutMs)); }
