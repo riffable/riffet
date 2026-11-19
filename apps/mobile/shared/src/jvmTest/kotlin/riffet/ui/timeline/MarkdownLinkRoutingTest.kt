@@ -42,6 +42,7 @@ class MarkdownLinkRoutingTest {
         val settings = object : AnnotatorSettings {
             override val linkTextSpanStyle = TextLinkStyles()
             override val codeSpanStyle = SpanStyle()
+            override val highlightSpanStyle = SpanStyle()
             override val annotator = markdownAnnotator { content, child ->
                 if (child.type == MarkdownTokenTypes.HTML_TAG) {
                     val breaks = safeBreakNewlines(child.getTextInNode(content).toString())
@@ -88,6 +89,7 @@ class MarkdownLinkRoutingTest {
         val settings = object : AnnotatorSettings {
             override val linkTextSpanStyle = TextLinkStyles()
             override val codeSpanStyle = SpanStyle()
+            override val highlightSpanStyle = SpanStyle()
             override val annotator = markdownAnnotator { _, _ -> false }
             override val referenceLinkHandler = ReferenceLinkHandlerImpl()
             override val linkInteractionListener = LinkInteractionListener { }
