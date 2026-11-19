@@ -170,7 +170,7 @@
     "@types/three": "0.185.0",
     "@types/utif": "3.0.5",
     "@types/ws": "^8.5.0",
-    "@vitejs/plugin-react": "4.5.2",
+    "@vitejs/plugin-react": "5.2.0",
     "@xterm/headless": "6.0.0",
     "tailwindcss": "4.2.2",
     "tsx": "4.20.3",
