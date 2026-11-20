@@ -274,7 +274,7 @@ bridge 先完成内容 admission 等异步操作，再在同一同步处理分�
 | 交互 TUI 工具边界验证 | 早期请求受网关 502 阻塞；随后一次独立重试成功，工具完成、单 prompt、原生 attachment 与最终引导标记均取得 |
 | Riffet 生产 HTTP 全链路 | 原始 Run 与引导 Run 同一 prompt、稳定 owner、工具启动与完成各一次、唯一原生回执；两次 snapshot 身份稳定，最终答 `CLAUDE_HTTP_STEER`；任务结束后旧 target 的新提交返回 409 |
 
-生产实现复用 Riffet 现有 TUI 和 loopback hook bridge，以 `nativeSessionId + prompt_id` 为原目标，并核验主线程及真实工具 ID。`claude/history.ts` 从原生 `hook_additional_context` attachment 生成 `native_input_receipt`，不伪造普通 user echo。失联或冷恢复后，存活的旧 TUI 可能仍指向旧 hook URL/token，不能仅凭终端存在就开放引导，也不能在引导路径重启它。官方 [交互说明](https://code.claude.com/docs/en/interactive-mode#queue-messages-while-claude-works) 和 [hook 上下文说明](https://code.claude.com/docs/en/hooks#add-context-for-claude) 分别支持输入边界与持久化机制。
+生产实现复用 Riffet 现有 TUI 和 loopback hook bridge，以 `nativeSessionId + prompt_id` 为原目标，并核验主线程及真实工具 ID。`claude/row-mapper.ts` 从原生 `hook_additional_context` attachment 生成 `native_input_receipt`，不伪造普通 user echo。失联或冷恢复后，存活的旧 TUI 可能仍指向旧 hook URL/token，不能仅凭终端存在就开放引导，也不能在引导路径重启它。官方 [交互说明](https://code.claude.com/docs/en/interactive-mode#queue-messages-while-claude-works) 和 [hook 上下文说明](https://code.claude.com/docs/en/hooks#add-context-for-claude) 分别支持输入边界与持久化机制。
 
 报告及全部实验保存在本机临时目录。`report.json` 区分确认项与未确认项；<!-- doc-paths:off -->`hook-923babeb/native-receipts.json` 保存原生注入记录，`control-4e1984c6/summary.json`<!-- doc-paths:on --> 保存无注入对照，`tail-af7ebe32/` 保存原任务单轮结束及 pending 拒绝。`run_probe.py` 与 `run_tui_probe.py` 为复验入口，各实验 `command.json` 保存实际 CLI 参数。自己的 CLI 进程均已退出，没有升级全局 CLI。
 

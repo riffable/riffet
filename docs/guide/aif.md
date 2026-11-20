@@ -276,7 +276,7 @@ Missed: context | co-change | external | invariant | cross-platform | logic
 |---|---|---|---|
 | 已完成 | Codex 后端 | `runtime.ts` 已按职责拆到 776 行，app-server 与 rollout 有录制 | 首个完整落地：先补录制场景、用回放测试锁定行为，再按职责拆分 |
 | P0 | Web 会话链 | `NativeSession.tsx`、`TranscriptView.tsx`、`Timeline.tsx`、`Composer.tsx` 合计约 5900 行，90 天 159 次 fix | 用 `replay-transcript` 的录制流锁定行为；数据流理顺为「同步流 → 存储 → 派生行 → 视图」，滚动与折叠作为派生状态，视图不反向写入 |
-| P1 | Claude 后端 | `runtime.ts` 已按 [Claude 驱动拆分方案](claude-runtime-split.md) 拆到 665 行；`history.ts` 1916 行、`transcript-source.ts` 1252 行仍超限；屏幕、会话记录文件和 hook 都有录制（hook 只有一个 CLI 版本） | `history.ts` 与 `transcript-source.ts` 单独评估 |
+| P1 | Claude 后端 | `runtime.ts` 已按 [Claude 驱动拆分方案](claude-runtime-split.md) 拆到 665 行；`history.ts` 按依赖方向拆成四个文件，自身还有 886 行（`ClaudeTranscript` 一个类）；`transcript-source.ts` 拆出 `lane-read.ts` 后 771 行；屏幕、会话记录文件和 hook 都有录制（hook 只有一个 CLI 版本） | 剩 `ClaudeTranscript` 里子 agent 车道的读取（拆分方案 §8） |
 | P1 | 后端公共层 | `backends/service.ts` 1449 行；`native/dispatch.ts` 已拆为协调器（375 行）与 `session-actor.ts`（1514 行） | 在 P0 之后处理，P0 会暴露这里的接口边界 |
 | P2 | Mac 转录与工作台、移动端首页 | `TranscriptController.swift` 2034 行、`WorkbenchView.swift` 1871 行、`ProjectHome.kt` 1761 行 | 随 Kotlin 与 Swift 接入模块检查时处理 |
 

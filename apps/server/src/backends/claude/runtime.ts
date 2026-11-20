@@ -7,7 +7,8 @@ import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRe
 import { ClaudeHookBridge } from './hook-bridge.js';
 import { waitFor } from '../shared/wait-for.js';
 import { ClaudeStepMetering } from './metering.js';
-import { CLAUDE_TURN_FAILED, ClaudeTranscript, findClaudeTranscript, type ClaudeTranscriptLifecycle } from './history.js';
+import { ClaudeTranscript, findClaudeTranscript, type ClaudeTranscriptLifecycle } from './history.js';
+import { CLAUDE_TURN_FAILED } from './rows.js';
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 import { activeTurnOf, initialState, phaseOf, reduce, replay, type ClaudeProcess, type ClaudeSessionState, type ClaudeSignal, type Transition } from './session-state.js';
 import { executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, configDirOf } from './launch.js';

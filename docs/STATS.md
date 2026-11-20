@@ -59,7 +59,7 @@ Claude 按精确消息身份补录历史指标，补录保留原 run 时间；�
    - DSH：`usage` 带 `inputTokens`、`cacheReadTokens`、`cacheWriteTokens`，目前只用于上下文环
      （`apps/server/src/backends/dsh/context.ts:63-75`）。
    - Claude：JSONL 的 `message.usage` 带 `input_tokens`、`cache_creation_input_tokens`、
-     `cache_read_input_tokens`（**待用真实 JSONL 核对**），`usageOf` 只取输出（`apps/server/src/backends/claude/history.ts:356-362`）。
+     `cache_read_input_tokens`（**待用真实 JSONL 核对**），`usageOf` 只取输出（`apps/server/src/backends/claude/step-meter.ts`）。
 3. **没人看的轮次测不到**。测速挂在会话 watch 上，没有客户端打开时不产生 metrics。
 4. **每次请求的模型没记**。只有 run 级的请求/归一模型；Claude 每条回复有 `message.model`，子 agent 可能用别的模型。
 5. **工具调用没有结构化记录**。transcript 来自 CLI 本地存储，`message_index` 只有工具名拼成的检索文本。
@@ -158,7 +158,7 @@ Claude 按精确消息身份补录历史指标，补录保留原 run 时间；�
 估算后续重读仍受覆盖，完整事实发生冲突时恢复原估算。没有 run 的事实不按时间猜归属，之后可按原生回合或
 精确请求 receipt 绑定；总量仍保留，绑定前不覆盖已有 run 的估算。整轮投影不改变原有请求级计量行为。
 
-**子 agent**：Claude 的 `<usage>` 带 `subagent_tokens` 与 `duration_ms`（`claude/history.ts:150-152`），Codex/DSH 读子 agent
+**子 agent**：Claude 的 `<usage>` 带 `subagent_tokens` 与 `duration_ms`（`claude/activity.ts` 的 `taskNotification`），Codex/DSH 读子 agent
 transcript。一律记 `agent_kind = subagent` 挂父 run；若某 provider 的父级 usage 已包含子 agent 用量，只记子 agent 明细、
 父级扣除，**实现时逐后端核对，并各配一条防重复计的测试**。
 

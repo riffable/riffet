@@ -2,7 +2,7 @@ import type { NativeStreamMessage, Session } from '../../../../../packages/contr
 import { RunMetricsTracker, runTracker } from '../../metrics/turn-metrics.js';
 import type { UsageRecord } from '../../stats/types.js';
 import type { NativeBackendHost } from '../types.js';
-import type { ClaudeStepMeasurement } from './history.js';
+import type { ClaudeStepMeasurement } from './step-meter.js';
 
 /**
  * One settled Claude request for the ledger. `stepId` for a parent response is `message.id` from

@@ -7,7 +7,7 @@
 | 文件 | 行数 | 说明 |
 |---|---|---|
 | `apps/server/src/backends/claude/runtime.ts` | 2756 | `ClaudeSessionRuntime`，每个会话一个；75 个字段、104 个方法 |
-| `apps/server/src/backends/claude/history.ts` | 1916 | 转录行到事件，不在本方案范围 |
+| `apps/server/src/backends/claude/history.ts` | 1916 | 转录行到事件，§8 单独处理 |
 
 已经拆出的协作对象：`ComposerDriver`、`ClaudeHookOverlay`、`LaunchCrashGuard`、`ReadyGate`、`TranscriptAdoption`、`DeferredSteerInputs`、`ClaudeStepMetering`。它们的接线方式是本方案沿用的约定：构造参数是一个依赖对象，成员全是取值函数和回调，不传 `this`。
 
@@ -84,7 +84,7 @@ ClaudeSessionRuntime（状态枢纽：状态、发布、转移的副作用、发
 
 - 不改对 Claude Code 的读取与写入行为。录制数据的行在整个过程中保持不变。
 - 不改驱动接口（`backends/types.ts`），不和其他后端的运行时合并实现。
-- 不拆 `index.test.ts`（3087 行）、`history.ts`、`transcript-source.ts`。
+- 不拆 `index.test.ts`（3087 行）。`history.ts`、`transcript-source.ts` 不在这六步里，见 §8。
 
 ## 7. 进展
 
@@ -106,3 +106,38 @@ ClaudeSessionRuntime（状态枢纽：状态、发布、转移的副作用、发
 - `untestedVersion`、`screenConvergenceSupported`、`quiet`、`idleForRelaunch` 留在主类。前两个只读配置，本该随 L，但测试替换的是运行时实例上的 `screenConvergenceSupported`；后两个只读状态。
 - 测试与录制器访问的成员（`refreshTranscript`、`refreshScreenState`、`screenDialogTask`、`convergeBackground`、`refreshTerminalStatus`、`pendingSend`、`started`）在主类上是同名转发，测试没有改动。
 - 各组的依赖对象里有整组引用（如 P 拿到 S 和 I），不全是取值函数。写入已经收到方法上，读取没有再收窄。
+
+## 8. history.ts 与 transcript-source.ts
+
+运行时拆完后，Claude 模块还有两个文件超过 800 行。是否拆按 `pnpm aif sizes` 的热点排，不按行数（[AI 友好工程机制](aif.md) §5.1）：
+
+| 文件 | 行数 | 近 90 天改动 | 其中 fix | 结论 |
+|---|---|---|---|---|
+| `history.ts` | 1916 | 58 | 29 | 全仓库热点第 7，拆 |
+| `transcript-source.ts` | 1252 | 14 | 9 | 不在热点前列，但文件里是两个类，边界现成，一并拆 |
+
+两个文件都只搬顶层声明，不改任何函数体和类：搬之前与搬之后的非导入行逐行比对，除补上的 `export` 外没有增减。Claude 与 `backends/shared` 的 28 个测试文件、420 个用例不改断言通过。
+
+`history.ts` 原来把四件事放在一个文件里，按依赖方向拆成四层，下层不导入上层：
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `rows.ts` | 318 | 一行转录是什么、它自己说明了什么：`ClaudeRow`、`parseRow`、`claudeRowSignals`、提示文本的归一 |
+| `row-mapper.ts` | 463 | 一行转录映射成事件：`mapRow` 与 `MapperState`、工具调用的描述、任务列表 |
+| `step-meter.ts` | 271 | 每步用量：`ClaudeStepMeter`、`readClaudeMeasurements` |
+| `history.ts` | 886 | `ClaudeTranscript`（660 行）与它的读取进度、分页游标、文件定位 |
+
+`transcript-source.ts` 拆成两个类各一个文件：
+
+| 文件 | 行数 | 内容 |
+|---|---|---|
+| `lane-read.ts` | 507 | `LaneRead`（一条车道从游标起的一次读取）、游标的类型与编解码、文件读取的小函数 |
+| `transcript-source.ts` | 771 | `ClaudeTranscriptSource`，移出基线 |
+
+`LaneRead` 仍拿到整个 `ClaudeTranscriptSource`（只作类型导入，没有运行时环）。
+
+留下的：
+
+- `history.ts` 还有 886 行，基线从 1916 下调到 886。剩下的主体是 `ClaudeTranscript` 一个类；它里面子 agent 车道的读取（`refreshSubagents`、`scanSubagents`、`readSubagent`、`subagentSnapshot`、`subagentFrames`、`subagentHistory`，约 190 行，加上 `ClaudeSubagentState`）是下一条真实的边界。那一步要先理清这些方法与主车道共用的字段（行缓存、活动账本、大块数据的引用），和运行时的拆分是同一类工作，不是搬顶层声明，所以没有在这次一起做。
+- `MAX_TRANSCRIPT_BYTES` 是手写的字节数，随 `parseRow` 到了 `rows.ts`，`scripts/perf-rules-baseline.json` 里的那一条跟着从 `history.ts` 移到 `rows.ts`；改成取自 `budgets.ts` 是另一项。
+

@@ -21,7 +21,8 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - `screen-watch.ts#ClaudeScreenWatch`：轮询节奏、CLI 自己画的对话框、拿空闲屏幕核对记录。
 - `hook-routes.ts#ClaudeHookRoutes`：hook 按事件名分发，每个事件一个方法。
 - `session-state.ts#reduce`：会话状态的事件归约，输入是转写行与 hook，不含屏幕。
-- `transcript-source.ts#ClaudeTranscriptSource`：转写 JSONL 进入 journal 的唯一路径，子 agent 各占一条车道。
+- `transcript-source.ts#ClaudeTranscriptSource`：转写 JSONL 进入 journal 的唯一路径，子 agent 各占一条车道；一条车道的一次读取在 `lane-read.ts#LaneRead`。
+- `rows.ts#claudeRowSignals`、`row-mapper.ts#mapRow`：一行转录分别给状态机的信号和给时间线的事件。两处读同一行，改一处的行类型判断时看另一处；`rows.ts` 不导入 `row-mapper.ts`、`step-meter.ts`、`history.ts`。
 - `hook-bridge.ts#ClaudeHookBridge`：本服务所有 CLI 共用的一个回环端点，按 `session_id` 路由。
 - `live/screen.ts#CLAUDE_SCREEN_LAYOUT`：屏幕读取所依赖的版面约定。
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claudeRowSignals } from './history.js';
+import { claudeRowSignals } from './rows.js';
 import { activeTurnOf, initialState, phaseOf, reduce, replay, type ClaudeSessionState, type ClaudeSignal } from './session-state.js';
 
 /**

@@ -1,5 +1,5 @@
 import type { SessionGoal } from '../../../../../packages/contracts/src/index.js';
-import type { ClaudeRow } from './history.js';
+import type { ClaudeRow } from './rows.js';
 
 /** `undefined` leaves the goal as it is; `null` clears it. */
 export type ClaudeGoalChange = SessionGoal | null | undefined;

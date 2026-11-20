@@ -2,8 +2,7 @@
   "lines": {
     "apps/server/src/auxiliary/gateway.ts": 803,
     "apps/server/src/backends/claude/activity.ts": 833,
-    "apps/server/src/backends/claude/history.ts": 1916,
-    "apps/server/src/backends/claude/transcript-source.ts": 1252,
+    "apps/server/src/backends/claude/history.ts": 886,
     "apps/server/src/backends/codex/index.ts": 832,
     "apps/server/src/backends/droid/runtime.ts": 1805,
     "apps/server/src/backends/dsh/bridge-runtime/index.mjs": 981,
