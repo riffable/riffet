@@ -28,6 +28,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- When Cursor refuses the model a new conversation started with and its first message runs only after you pick another model and resume, that message is now confirmed as delivered, instead of showing “Waiting for the previous message to be confirmed” and holding every later message.
 - After switching a Claude Code model or provider while a background task (such as a dev server) is still running, the conversation now says the new settings apply once background tasks finish and offers End background tasks and apply, instead of leaving later messages queued with no explanation.
 - A Claude Code message sent just as the CLI reports a background task left over from before a restart is now confirmed as delivered, instead of showing “Waiting for the previous message to be confirmed” and holding every later message in the queue.
 - When a Claude Code answer is cut off mid-stream (`API Error: Connection lost mid-response`), the text it had already written stays in the conversation instead of disappearing, and when the part of a conversation you were reading is removed, the view moves to what remains instead of showing a blank screen.

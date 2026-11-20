@@ -391,6 +391,7 @@ export class CursorBackend implements AgentBackend {
     }
     // The store echoes a first prompt only when the CLI has written its step; the live tap sees it go out.
     if (prompt && fencedAt !== undefined) await this.expectFirstReceipt(host, receipts, port, session.id, prompt, fencedAt);
+    else await this.expectExitedReceipts(host, receipts, port, session.id);
     const current = port.getSession(session.id);
     if (session.resumePicker && !session.nativeSessionId) titles.watch({ sessionId: session.id, terminalId: terminal.id, projectId: session.projectId });
     return { terminalId: terminal.id, ...(current.nativeSessionId ? { nativeSessionId: current.nativeSessionId } : {}), status: native.status(session.id) };
@@ -402,6 +403,23 @@ export class CursorBackend implements AgentBackend {
     const runs = await host.runs.find(sessionId, { unfinished: true }).catch(() => []);
     const run = runs.find(item => item.delivery === 'dispatching' && item.intent !== 'steer');
     if (run) receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text, sentAt });
+  }
+
+  /**
+   * A first prompt whose CLI exited at launch (a model it refused) was left unconfirmed, and nothing can
+   * release it: its terminal is gone. The relaunched CLI runs that prompt when it resumes the chat, long
+   * after the first wait ran out, so each launch, and each start of observing the conversation, looks for it
+   * again; the live tap's last step is kept on disk, so a prompt run before this look is still seen.
+   */
+  private async expectExitedReceipts(host: AgentHost, receipts: CursorLiveReceipts, port: CursorPort, sessionId: string): Promise<void> {
+    const chatId = port.getSession(sessionId).nativeSessionId;
+    if (!chatId) return;
+    const runs = await host.runs.find(sessionId, { unfinished: true }).catch(() => []);
+    for (const run of runs) {
+      if (run.delivery !== 'uncertain' || run.stage !== 'runtime_exit' || run.nativeMessageId || run.intent === 'steer'
+        || run.nativeSessionId !== chatId || !run.renderedText || run.inputSentAt === undefined) continue;
+      receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text: run.renderedText, sentAt: run.inputSentAt, waitFrom: Date.now() });
+    }
   }
 
   async send(host: AgentHost, request: AgentSendRequest): Promise<void> {
@@ -520,10 +538,12 @@ export class CursorBackend implements AgentBackend {
   }
 
   observe(host: AgentHost, context: AgentContext, report: AgentReport) {
-    const { native, steering } = this.parts(host, context.profile);
+    const { native, steering, port, receipts } = this.parts(host, context.profile);
     const sessionId = context.session.id;
     steering.bind(sessionId);
     void steering.hydrate(context.session).catch(() => undefined);
+    // A CLI taken over after a restart may have run such a prompt while nothing here was looking.
+    void this.expectExitedReceipts(host, receipts, port, sessionId).catch(() => undefined);
     void steering.launchArgs().catch(() => undefined);
     const { tracker, listeners } = this.activityEntry(sessionId, native);
     listeners.add(report);

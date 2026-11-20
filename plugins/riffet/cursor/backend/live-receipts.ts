@@ -8,7 +8,8 @@ const WAIT_MS = 10 * 60_000;
 const SKEW_MS = 2000;
 const LIMIT = 64;
 
-interface Expected { host: AgentHost; sessionId: string; chatId: string; runId: string; commandId: string; text: string; sentAt: number }
+/** `waitFrom`: when the wait began, if later than the send (a run looked for again at a relaunch or a takeover). */
+interface Expected { host: AgentHost; sessionId: string; chatId: string; runId: string; commandId: string; text: string; sentAt: number; waitFrom?: number }
 
 /**
  * A Cursor run is received once its CLI sends the prompt to the agent server, which the live tap sees
@@ -35,7 +36,7 @@ export class CursorLiveReceipts {
     const now = Date.now();
     let step: CursorLiveStep | null | undefined;
     for (const [runId, entry] of [...this.expected]) {
-      if (now - entry.sentAt > WAIT_MS) { this.expected.delete(runId); continue; }
+      if (now - (entry.waitFrom ?? entry.sentAt) > WAIT_MS) { this.expected.delete(runId); continue; }
       if (entry.chatId !== chatId) continue;
       step ??= this.live.read(chatId) ?? null;
       if (!step?.prompt || this.taken.has(step.turn) || Date.parse(step.at) < entry.sentAt - SKEW_MS || !samePromptText(entry.text, step.prompt)) continue;
