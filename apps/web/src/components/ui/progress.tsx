@@ -5,7 +5,7 @@ export type ProgressTone = 'accent' | 'neutral' | 'success' | 'warning' | 'dange
 const FILL: Record<ProgressTone, string> = { accent: 'bg-accent', neutral: 'bg-fg-3', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
 
 /**
- * A determinate bar (docs/design/system/components/feedback.md「Progress」): how much of something is done or used. `value`
+ * A determinate bar (docs/design/system/components/feedback.md「Progress」): how much of something is done, or how much of a bound is left. `value`
  * is 0–1. `role` is `progressbar` for work under way (a download) and `meter` for a bounded amount (memory, a quota).
  */
 export function Progress({ value, label, tone = 'accent', role = 'progressbar', className }: { value: number; label: string; tone?: ProgressTone; role?: 'progressbar' | 'meter'; className?: string }) {

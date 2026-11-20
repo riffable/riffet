@@ -133,7 +133,7 @@ function MeterItem({ item, locked, press }: { item: Extract<PluginPageItem, { ki
         {item.buttons?.map((button, index) => <PageButton key={index} button={button} locked={locked} press={press} />)}
       </div>
     </div>
-    <Progress value={item.percent / 100} tone={tone} role={item.sense === 'progress' ? 'progressbar' : 'meter'} label={item.label} />
+    <Progress value={(item.sense === 'quota' ? left : item.percent) / 100} tone={tone} role={item.sense === 'progress' ? 'progressbar' : 'meter'} label={item.label} />
   </div>;
 }
 

@@ -472,7 +472,7 @@ struct ModelAccountUsage: View {
     }
 
     private func usageWindowView(_ window: UsageWindow) -> some View {
-        let ratio = min(1, max(0, Double(window.usedPercent) / 100))
+        let ratio = min(1, max(0, Double(100 - window.usedPercent) / 100))
         let reached = account?.limitReached == true || window.usedPercent >= 100
         let tone = reached ? palette.danger : window.usedPercent >= 80 ? palette.warning : palette.fg3
         let title = ModelUsageCopy.window(window.windowMinutes?.intValue)

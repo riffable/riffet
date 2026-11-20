@@ -184,7 +184,7 @@ function ProviderQuotaRow({ item, plugin, expanded, disabled, onToggle, onOpenMo
       </button>
 
       {expanded && (
-        <div className="mb-3.5 mt-0.5 flex flex-col overflow-hidden rounded-lg bg-subtle px-3.5 py-1">
+        <div className="mb-3.5 mt-0.5 flex flex-col overflow-hidden rounded-lg border border-line px-3.5 py-1">
           {canReadUsage && (
             <>
               {loading && !usage ? (

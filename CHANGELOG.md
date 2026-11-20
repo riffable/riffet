@@ -23,6 +23,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - `riffet doctor` has a Storage section: the integrity of the three databases, blobs the log refers to that are missing, and records that belong to no conversation. A minute after start the server also checks the two databases that cannot be rebuilt in the background; damage is reported in the log with the restore command, and no file is touched.
 - `riffet logs --scope dispatch` shows each message's delivery steps and the phase its conversation is in, for finding out why a message was not sent or keeps running.
 - On the web, a model-source plugin's Settings tab now lists every Agent provider that uses it, with expandable account and per-model quota bars, a Models subpage, direct links to edit or add providers, and its own gateway fields grouped as Default connection; providers sharing the same gateway address and key also share one quota read.
+- Quota bars now fill with what is left, matching the “n% left” beside them, so a bar shrinks as the quota runs out (web providers and plugin pages, the Mac model menu).
 
 ### Fixes
 

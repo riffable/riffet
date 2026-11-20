@@ -162,7 +162,7 @@ export function QuotaMeterBar({ label, usedPercent, leftPercent, figure, resetsA
           <span className={cn('font-medium', quotaTextClass(left))}>{text}</span>
         </div>
       </div>
-      <Progress value={Math.max(0, Math.min(100, usedPercent)) / 100} tone={quotaTone(left)} role="meter" label={label} />
+      <Progress value={left / 100} tone={quotaTone(left)} role="meter" label={label} />
     </div>
   );
 }
