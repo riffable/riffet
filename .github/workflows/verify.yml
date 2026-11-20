@@ -89,6 +89,8 @@ jobs:
         run: pnpm check:motion
       - name: Loops, web literals, Mac spacing and motion follow the design rules
         run: pnpm check:design
+      - name: Web accessibility rules (icon-only buttons, img alt, tabIndex)
+        run: pnpm check:a11y
       - name: Resource rules
         run: pnpm check:perf
       - name: Tests

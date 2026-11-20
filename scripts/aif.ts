@@ -50,6 +50,7 @@ const GLOBAL_CHECKS: { when: RegExp; run: string }[] = [
   { when: /^apps\/(web|macos|mobile)\//, run: 'pnpm check:design' },
   { when: /^apps\/(web|macos|mobile|server)\//, run: 'pnpm check:perf' },
   { when: /^apps\/web\//, run: 'pnpm check:motion' },
+  { when: /^apps\/web\/src\/.*\.tsx$/, run: 'pnpm check:a11y' },
   { when: /^apps\/web\/src\/.*\.tsx?$/, run: 'pnpm i18n:check' },
   { when: /^apps\/mobile\//, run: 'pnpm check:mobile-strings' },
   { when: /^apps\/mobile\/.*\.kt$/, run: 'pnpm check:compose' },

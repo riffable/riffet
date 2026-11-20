@@ -282,7 +282,7 @@
 
 ### 10.1 名称与键盘
 
-- 每个可交互元素都有名称；只有图标的按钮必须有无障碍名称（Web `aria-label`，Mac/iOS `accessibilityLabel`，Android `contentDescription`）。Web 同时用 `Tip` 把名称显示给指针和键盘用户。
+- 每个可交互元素都有名称；只有图标的按钮必须有无障碍名称（Web `aria-label`，Mac/iOS `accessibilityLabel`，Android `contentDescription`）。Web 同时用 `Tip` 把名称显示给指针和键盘用户；`Tip` 本身不提供名称。`pnpm check:a11y` 拦截 Web 上只含图标又没有 `aria-label` / `aria-labelledby` / `title` 的按钮、缺 `alt` 的 `<img>` 和正的 `tabIndex`；已有违规记在 `scripts/a11y-baseline.json`，只许变少，确需例外在该行或上一行写 `design-rules: allow <原因>`。
 - 键盘能到达所有操作，指针能做的键盘都能做：悬停才出现的操作在 `focus-within` 时同样出现（`group-focus-within:opacity-100`）；右键菜单有对应的「更多操作」按钮；`Tip` 在键盘焦点时显示。
 - Tab 顺序与视觉顺序一致；Esc 关闭最上层的浮层，焦点回到打开它的控件。
 - 焦点环在所有主题下与底色的对比度至少 3:1（`scripts/check-theme-contrast.ts`）。

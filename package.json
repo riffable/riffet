@@ -34,6 +34,7 @@
     "check:privacy": "node scripts/check-privacy.mjs",
     "check:docs": "node scripts/check-doc-paths.mjs",
     "check:design": "node scripts/check-design-rules.mjs",
+    "check:a11y": "node scripts/check-a11y.mjs",
     "check:perf": "node scripts/check-perf-rules.mjs",
     "trace:android": "node scripts/android-frame-trace.mjs",
     "i18n:extract": "lingui extract --clean --config apps/web/lingui.config.ts",
