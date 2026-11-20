@@ -55,11 +55,11 @@ const OPAQUE_CONTEXT_FAMILIES = new Set(['auto', 'default', 'premium', 'cheetah'
 function familySupportsContext(id: string, variants: readonly NativeModelEntry[] = []): boolean {
   const normalized = id.toLowerCase();
   if (!normalized || normalized.startsWith('auto-') || OPAQUE_CONTEXT_FAMILIES.has(normalized)) return false;
-  if (/^(?:claude|opus|sonnet|haiku|gpt-5)/.test(normalized)) return true;
+  if (/^(?:claude|opus|sonnet|haiku|gpt-5)(?:$|[-.])/.test(normalized)) return true;
   // Fall back to explicit context-window tokens (`300K` / `1M`) in `--list-models` display names
   // so future long-context families that advertise their window in the CLI list still surface it,
   // without breaking non-parameterized models like `gemini-4-neon`.
-  return variants.some((entry) => /(?:\s+|·)(?:300k|1m)\b/i.test(entry.name));
+  return variants.some((entry) => /(?:^|[\s·(])(?:300k|1m)\b/i.test(entry.name));
 }
 function contextOption(): ModelConfigOption {
   return {
@@ -167,6 +167,26 @@ export function nativeModelCatalogFromVariants(nativeEntries: NativeModelEntry[]
   });
 }
 
+interface BracketParam {
+  key: string;
+  value: string;
+  normalized: string;
+}
+
+function parseBracketParams(raw: string | undefined): BracketParam[] {
+  return (raw ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const eq = part.indexOf('=');
+      if (eq < 0) return { key: part, value: '', normalized: part };
+      const key = part.slice(0, eq).trim();
+      const value = part.slice(eq + 1).trim();
+      return { key, value, normalized: `${key}=${value}` };
+    });
+}
+
 /** Refuses unavailable families while leaving parameterized variants to the native CLI. */
 export function assertNativeModelSelection(model: string, nativeEntries: NativeModelEntry[]): void {
   if (!nativeEntries.length) throw new AppError('MODEL_CATALOG_UNAVAILABLE', 'Could not confirm the models this native CLI supports; check the CLI model list and try again', 503);
@@ -180,26 +200,43 @@ export function assertNativeModelSelection(model: string, nativeEntries: NativeM
   }
   if (family.hasFast) return;
 
-  const fastParam = (match[2] ?? '').split(',').map((part) => part.trim()).find((part) => part.startsWith('fast='));
-  const fast = fastParam ? fastParam.slice('fast='.length) === 'true' : fastSuffix;
+  const fastParam = parseBracketParams(match[2]).find((param) => param.key === 'fast');
+  const fast = fastParam ? fastParam.value === 'true' : fastSuffix;
   if (fast) throw new AppError('INVALID_NATIVE_MODEL', 'The native CLI does not support Fast for this model; turn Fast off and try again', 400, undefined, { reason: 'fast' });
 }
 
-function findMatchingFlatVariant(rawBase: string, variants: readonly NativeModelEntry[], params: readonly string[]): string | undefined {
+function findMatchingFlatVariant(rawBase: string, variants: readonly NativeModelEntry[], params: readonly BracketParam[]): string | undefined {
+  if (!variants.length) return undefined;
+  const members = variants.map((entry) => ({ entry, slots: familyOf(entry.value).slots }));
+  const bare = members.find((item) => !item.slots.effort && !item.slots.thinking && !item.slots.fast);
+  const label = familyLabel(variants.map(familyDisplayName));
+  const named = members.find((item) => familyDisplayName(item.entry) === label);
+  const defaultSlots = (bare ?? named ?? members[0]!).slots;
+
   const baseSlots = familyOf(rawBase).slots;
-  const paramMap = new Map<string, string>();
-  for (const part of params) {
-    const eq = part.indexOf('=');
-    if (eq > 0) paramMap.set(part.slice(0, eq).trim(), part.slice(eq + 1).trim());
-  }
+  const hasBaseSuffix = Boolean(baseSlots.effort || baseSlots.thinking || baseSlots.fast);
+  const paramMap = new Map(params.map((param) => [param.key, param.value]));
   const rawEffort = paramMap.get('effort') ?? paramMap.get('reasoning_effort') ?? paramMap.get('reasoning');
   const effort = rawEffort === 'default' ? '' : rawEffort ?? baseSlots.effort;
-  const thinking = paramMap.has('thinking') ? paramMap.get('thinking') === 'true' : baseSlots.thinking;
-  const fast = paramMap.has('fast') ? paramMap.get('fast') === 'true' : baseSlots.fast;
-  return variants.find((entry) => {
-    const slots = familyOf(entry.value).slots;
-    return slots.effort === effort && slots.thinking === thinking && slots.fast === fast;
-  })?.value;
+  const thinking = paramMap.has('thinking') ? paramMap.get('thinking') === 'true' : (hasBaseSuffix ? baseSlots.thinking : defaultSlots.thinking);
+  const fast = paramMap.has('fast') ? paramMap.get('fast') === 'true' : (hasBaseSuffix ? baseSlots.fast : defaultSlots.fast);
+
+  const exact = members.find(({ slots }) => slots.effort === effort && slots.thinking === thinking && slots.fast === fast);
+  if (exact) return exact.entry.value;
+
+  // Families without a bare variant (only e.g. `-medium` / `-high`) still emit `effort=default`
+  // or omit `effort` when `context` was copied across models; fall back to the family's default
+  // variant (`named ?? first`) matching `nativeModelCatalogFromVariants`.
+  if (!effort) {
+    const candidates = members.filter(({ slots }) => slots.thinking === thinking && slots.fast === fast);
+    if (candidates.length) {
+      return (candidates.find(({ entry }) => familyDisplayName(entry) === label) ?? candidates[0])!.entry.value;
+    }
+    if (!paramMap.has('thinking') && !paramMap.has('fast')) {
+      return (bare ?? named ?? members[0])!.entry.value;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -217,18 +254,17 @@ export function normalizeNativeModelSelection(model: string, nativeEntries: Nati
   const familyId = familyOf(match[1]!).id;
   const family = nativeFamilies(nativeEntries).get(familyId);
   const familyVariants = nativeEntries.filter((entry) => familyOf(entry.value).id === familyId);
-  const rawParams = (match[2] ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  const rawParams = parseBracketParams(match[2]);
   if (!familySupportsContext(familyId, familyVariants)) {
-    const params = rawParams.filter((part) => !/^context\s*=/.test(part));
-    if (params.length !== rawParams.length) {
-      const flat = findMatchingFlatVariant(match[1]!, familyVariants, params);
-      if (flat) return flat;
-      if (!params.length) return match[1]!;
-      if (family && !family.hasFast && !params.some((part) => /^fast\s*=/.test(part))) params.push('fast=false');
-      return `${match[1]}[${params.sort().join(',')}]`;
-    }
+    const params = rawParams.filter((param) => param.key !== 'context');
+    const flat = findMatchingFlatVariant(match[1]!, familyVariants, params);
+    if (flat) return flat;
+    if (!params.length) return match[1]!;
+    const serialized = params.map((param) => param.normalized);
+    if (family && !family.hasFast && !params.some((param) => param.key === 'fast')) serialized.push('fast=false');
+    return `${match[1]}[${serialized.sort().join(',')}]`;
   }
-  const params = rawParams;
-  if (family && !family.hasFast && !params.some((part) => /^fast\s*=/.test(part))) params.push('fast=false');
-  return params.length ? `${match[1]}[${params.sort().join(',')}]` : model;
+  const serialized = rawParams.map((param) => param.normalized);
+  if (family && !family.hasFast && !rawParams.some((param) => param.key === 'fast')) serialized.push('fast=false');
+  return serialized.length ? `${match[1]}[${serialized.sort().join(',')}]` : match[1]!;
 }

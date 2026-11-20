@@ -38,15 +38,20 @@ describe('normalizeNativeModelSelection', () => {
       .toBe('gpt-5.6-luna[context=1m,effort=high,fast=false]');
     expect(() => normalizeNativeModelSelection('gpt-5.6-luna[context=1m,effort=high,fast=true]', noFast))
       .toThrow('The native CLI does not support Fast for this model');
+    expect(() => normalizeNativeModelSelection('gpt-5.6-luna[fast = true]', noFast))
+      .toThrow('The native CLI does not support Fast for this model');
   });
 
   it('restricts the context selector to supported families and heals saved selections with unsupported context', () => {
     const entries = [
-      { value: 'claude-opus-5-5', name: 'Claude Opus 5.5 1M' },
-      { value: 'gpt-6-sol', name: 'GPT-6 Sol 1M' },
+      { value: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+      { value: 'gpt-6-sol', name: 'GPT-6 Sol 300K' },
+      { value: 'gpt-50', name: 'GPT-50' },
       { value: 'gemini-4-neon', name: 'Gemini 4 Neon' },
       { value: 'gemini-4-neon-high', name: 'Gemini 4 Neon High' },
-      { value: 'composer-2.5', name: 'Composer 2.5' },
+      { value: 'gemini-5-medium', name: 'Gemini 5 Medium' },
+      { value: 'gemini-5-high', name: 'Gemini 5 High' },
+      { value: 'composer-2.5', name: 'Composer 2.5 Max' },
       { value: 'grok-4', name: 'Grok 4' },
       { value: 'auto', name: 'Auto' },
       { value: 'auto-smart', name: 'Auto Smart' },
@@ -60,10 +65,30 @@ describe('normalizeNativeModelSelection', () => {
         options: [{ value: '300k', name: '300K' }, { value: '1m', name: '1M' }, { value: 'max', name: 'MAX' }],
       });
     }
-    for (const id of ['gemini-4-neon', 'composer-2.5', 'grok-4', 'auto', 'auto-smart', 'default', 'cheetah']) {
+    for (const id of ['gpt-50', 'gemini-4-neon', 'gemini-5', 'composer-2.5', 'grok-4', 'auto', 'auto-smart', 'default', 'cheetah']) {
       expect(catalog.find((item) => item.value === id)?.configOptions.find((option) => option.id === 'context')).toBeUndefined();
     }
     expect(normalizeNativeModelSelection('gemini-4-neon[context=300k,effort=high,fast=false]', entries))
       .toBe('gemini-4-neon-high');
+    expect(normalizeNativeModelSelection('gemini-4-neon[context=300k,fast=false]', entries))
+      .toBe('gemini-4-neon');
+    expect(normalizeNativeModelSelection('gemini-4-neon-high[context=300k]', entries))
+      .toBe('gemini-4-neon-high');
+    expect(normalizeNativeModelSelection('gemini-4-neon[effort=high]', entries))
+      .toBe('gemini-4-neon-high');
+    expect(normalizeNativeModelSelection('gemini-4-neon[context=300k, effort = custom]', entries))
+      .toBe('gemini-4-neon[effort=custom,fast=false]');
+    expect(normalizeNativeModelSelection('gemini-5[context=300k,effort=default,fast=false]', entries))
+      .toBe('gemini-5-medium');
+    expect(normalizeNativeModelSelection('gemini-5[context=300k]', entries))
+      .toBe('gemini-5-medium');
+    expect(normalizeNativeModelSelection('gemini-5-high[context=300k,effort=default]', entries))
+      .toBe('gemini-5-medium');
+    const fastOnly = [
+      { value: 'gemini-6-medium-fast', name: 'Gemini 6 Medium Fast' },
+      { value: 'gemini-6-high-fast', name: 'Gemini 6 High Fast' },
+    ];
+    expect(normalizeNativeModelSelection('gemini-6[context=300k]', fastOnly))
+      .toBe('gemini-6-medium-fast');
   });
 });
