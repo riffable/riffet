@@ -40,10 +40,12 @@ describe('normalizeNativeModelSelection', () => {
       .toThrow('The native CLI does not support Fast for this model');
   });
 
-  it('exposes the context selector for named families and hides it for opaque routers', () => {
+  it('restricts the context selector to supported families and heals saved selections with unsupported context', () => {
     const entries = [
-      { value: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
-      { value: 'gemini-4-hydrogen-high', name: 'Gemini 4 Hydrogen High' },
+      { value: 'claude-opus-5-5', name: 'Claude Opus 5.5 1M' },
+      { value: 'gpt-6-sol', name: 'GPT-6 Sol 1M' },
+      { value: 'gemini-4-neon', name: 'Gemini 4 Neon' },
+      { value: 'gemini-4-neon-high', name: 'Gemini 4 Neon High' },
       { value: 'composer-2.5', name: 'Composer 2.5' },
       { value: 'grok-4', name: 'Grok 4' },
       { value: 'auto', name: 'Auto' },
@@ -52,16 +54,16 @@ describe('normalizeNativeModelSelection', () => {
       { value: 'cheetah', name: 'Cheetah' },
     ];
     const catalog = nativeModelCatalogFromVariants(entries);
-    for (const id of ['gemini-4-hydrogen', 'composer-2.5', 'grok-4']) {
+    for (const id of ['claude-opus-5-5', 'gpt-6-sol']) {
       expect(catalog.find((item) => item.value === id)?.configOptions.find((option) => option.id === 'context')).toMatchObject({
         currentValue: '300k',
         options: [{ value: '300k', name: '300K' }, { value: '1m', name: '1M' }, { value: 'max', name: 'MAX' }],
       });
     }
-    for (const id of ['auto', 'auto-smart', 'default', 'cheetah']) {
+    for (const id of ['gemini-4-neon', 'composer-2.5', 'grok-4', 'auto', 'auto-smart', 'default', 'cheetah']) {
       expect(catalog.find((item) => item.value === id)?.configOptions.find((option) => option.id === 'context')).toBeUndefined();
     }
-    expect(normalizeNativeModelSelection('gemini-4-hydrogen[effort=high,context=1m]', entries))
-      .toBe('gemini-4-hydrogen[context=1m,effort=high,fast=false]');
+    expect(normalizeNativeModelSelection('gemini-4-neon[context=300k,effort=high,fast=false]', entries))
+      .toBe('gemini-4-neon-high');
   });
 });

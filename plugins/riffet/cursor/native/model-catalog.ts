@@ -44,20 +44,22 @@ const EFFORT_LABELS: Record<string, string> = {
 // The CLI's `--list-models` emits a flat list of ids whose suffix encodes effort / thinking /
 // fast only. The `context` dimension is a parameterized bracket argument (see `cursor-agent
 // --help`: `claude-opus-4-8[context=1m,effort=high,fast=false]`) and the TUI footer shows one of
-// `300K` / `1M` / `MAX`. Expose the three documented settings as a dedicated select so users can
-// still pick a context window after the ACP catalog was removed; `--list-models` omits
-// `parameterDefinitions`, so we cannot filter by server metadata ahead of time. The CLI rejects
-// an unsupported combination at launch, which our normal error path surfaces.
+// `300K` / `1M` / `MAX`. Expose the three documented settings only for families whose backend
+// variants actually accept `[context=…]`; offering it to unsupported families (like `gemini-4-neon`)
+// causes `cursor-agent` to reject `model[context=300k,...]` at launch when parameters are copied
+// across model switches or edited.
 const CONTEXT_VALUES = ['300k', '1m', 'max'] as const;
 const CONTEXT_LABELS: Record<(typeof CONTEXT_VALUES)[number], string> = { '300k': '300K', '1m': '1M', max: 'MAX' };
 const OPAQUE_CONTEXT_FAMILIES = new Set(['auto', 'default', 'premium', 'cheetah']);
 
-function familySupportsContext(id: string): boolean {
+function familySupportsContext(id: string, variants: readonly NativeModelEntry[] = []): boolean {
   const normalized = id.toLowerCase();
-  // Err toward offering `[context=…]` for named model families (Claude, GPT, Gemini, Composer,
-  // Grok, future or custom models) and hiding it only for opaque routers/aliases that the CLI
-  // treats as fixed (`default`, `auto`, `auto-*`, `premium`, `cheetah`).
-  return Boolean(normalized) && !normalized.startsWith('auto-') && !OPAQUE_CONTEXT_FAMILIES.has(normalized);
+  if (!normalized || normalized.startsWith('auto-') || OPAQUE_CONTEXT_FAMILIES.has(normalized)) return false;
+  if (/^(?:claude|opus|sonnet|haiku|gpt-5)/.test(normalized)) return true;
+  // Fall back to explicit context-window tokens (`300K` / `1M`) in `--list-models` display names
+  // so future long-context families that advertise their window in the CLI list still surface it,
+  // without breaking non-parameterized models like `gemini-4-neon`.
+  return variants.some((entry) => /(?:\s+|·)(?:300k|1m)\b/i.test(entry.name));
 }
 function contextOption(): ModelConfigOption {
   return {
@@ -154,7 +156,7 @@ export function nativeModelCatalogFromVariants(nativeEntries: NativeModelEntry[]
     const fastValues = [...new Set(members.map(({ slots }) => String(slots.fast)))].sort();
     if (fastValues.length > 1) configOptions.push(option('fast', 'Fast', 'model_config', String(selected.slots.fast), fastValues));
 
-    if (familySupportsContext(id)) configOptions.push(contextOption());
+    if (familySupportsContext(id, variants)) configOptions.push(contextOption());
 
     return {
       value: id,
@@ -183,6 +185,23 @@ export function assertNativeModelSelection(model: string, nativeEntries: NativeM
   if (fast) throw new AppError('INVALID_NATIVE_MODEL', 'The native CLI does not support Fast for this model; turn Fast off and try again', 400, undefined, { reason: 'fast' });
 }
 
+function findMatchingFlatVariant(rawBase: string, variants: readonly NativeModelEntry[], params: readonly string[]): string | undefined {
+  const baseSlots = familyOf(rawBase).slots;
+  const paramMap = new Map<string, string>();
+  for (const part of params) {
+    const eq = part.indexOf('=');
+    if (eq > 0) paramMap.set(part.slice(0, eq).trim(), part.slice(eq + 1).trim());
+  }
+  const rawEffort = paramMap.get('effort') ?? paramMap.get('reasoning_effort') ?? paramMap.get('reasoning');
+  const effort = rawEffort === 'default' ? '' : rawEffort ?? baseSlots.effort;
+  const thinking = paramMap.has('thinking') ? paramMap.get('thinking') === 'true' : baseSlots.thinking;
+  const fast = paramMap.has('fast') ? paramMap.get('fast') === 'true' : baseSlots.fast;
+  return variants.find((entry) => {
+    const slots = familyOf(entry.value).slots;
+    return slots.effort === effort && slots.thinking === thinking && slots.fast === fast;
+  })?.value;
+}
+
 /**
  * Cursor matches parameterized ids against its canonical variant strings, including parameter
  * order. Sort parameters before launch so selections saved by older clients can resume. Families
@@ -195,8 +214,21 @@ export function normalizeNativeModelSelection(model: string, nativeEntries: Nati
   if (nativeEntries.some((entry) => entry.value === value)) return model;
   if (!match) return model;
 
-  const family = nativeFamilies(nativeEntries).get(familyOf(match[1]!).id);
-  const params = (match[2] ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  const familyId = familyOf(match[1]!).id;
+  const family = nativeFamilies(nativeEntries).get(familyId);
+  const familyVariants = nativeEntries.filter((entry) => familyOf(entry.value).id === familyId);
+  const rawParams = (match[2] ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+  if (!familySupportsContext(familyId, familyVariants)) {
+    const params = rawParams.filter((part) => !/^context\s*=/.test(part));
+    if (params.length !== rawParams.length) {
+      const flat = findMatchingFlatVariant(match[1]!, familyVariants, params);
+      if (flat) return flat;
+      if (!params.length) return match[1]!;
+      if (family && !family.hasFast && !params.some((part) => /^fast\s*=/.test(part))) params.push('fast=false');
+      return `${match[1]}[${params.sort().join(',')}]`;
+    }
+  }
+  const params = rawParams;
   if (family && !family.hasFast && !params.some((part) => /^fast\s*=/.test(part))) params.push('fast=false');
   return params.length ? `${match[1]}[${params.sort().join(',')}]` : model;
 }
