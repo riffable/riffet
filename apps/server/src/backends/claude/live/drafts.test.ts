@@ -26,7 +26,7 @@ describe('ClaudeLiveDrafts', () => {
 
     expect(drafts.committed([event('b', 'agent_message_chunk', 'Now the closing paragraph:\n\nReliability is ultimately a property of the whole pipeline, as described in the [docs](https://example.com/docs).')])).toEqual(['claude-live:t1:1']);
     // Still drawn, but written: no second copy.
-    expect(drafts.plan('t1', screen('live-after-tool'), at)).toEqual({ drafts: [], retire: [] });
+    expect(drafts.plan('t1', screen('live-after-tool'), at)).toEqual({ drafts: [], retire: [], kept: [] });
   });
 
   it('takes a draft back when its turn is over, and drafts nothing for a turn it did not see open', () => {
@@ -37,7 +37,41 @@ describe('ClaudeLiveDrafts', () => {
     expect(drafts.plan(undefined, undefined, at).retire).toEqual(['claude-live:t1:0']);
 
     expect(drafts.watching('t0')).toBe(false);
-    expect(drafts.plan('t0', screen('live-text'), at)).toEqual({ drafts: [], retire: [] });
+    expect(drafts.plan('t0', screen('live-text'), at)).toEqual({ drafts: [], retire: [], kept: [] });
+  });
+
+  it('keeps the draft of a turn a cut stream failed, unless what it drew is the error', () => {
+    const failedTurn = (error: string) => {
+      const drafts = new ClaudeLiveDrafts({ sessionId: 's', clip: text => text });
+      drafts.opened('t1');
+      drafts.committed([event('p', 'user_message_chunk', PROMPT)]);
+      const [draft] = drafts.plan('t1', screen('live-text'), at).drafts;
+      return { draft: draft!, plan: drafts.plan(undefined, undefined, at, id => id === 't1' ? { error } : undefined), drafts };
+    };
+    const cut = failedTurn('API Error: Connection lost mid-response. The response above may be incomplete.');
+    expect(cut.plan.retire).toEqual([]);
+    expect(cut.plan.kept).toEqual([cut.draft.event]);
+    // Kept once: the turn has no draft left to keep or take back.
+    expect(cut.drafts.plan(undefined, undefined, at, () => ({}))).toEqual({ drafts: [], retire: [], kept: [] });
+
+    const text = (cut.draft.event.data.content as { text: string }).text;
+    // The transcript writing the block after all takes the kept copy back, also as Markdown that starts otherwise: never two.
+    expect(cut.drafts.committed([event('a', 'agent_message_chunk', `**Note.** ${text}`)])).toEqual(['claude-live:t1:0']);
+    const drawn = failedTurn(text);
+    expect(drawn.plan).toEqual({ drafts: [], retire: ['claude-live:t1:0'], kept: [] });
+  });
+
+  it('keeps the answer a failed request drew its error below', () => {
+    const error = 'API Error: Connection lost mid-response. The response above may be incomplete.';
+    const answer = screen('live-text');
+    const cut = { ...answer, text: answer.text.replace(/\n(─+\n❯\n)/, `\n\n⏺ ${error}\n\n$1`) };
+    const drafts = new ClaudeLiveDrafts({ sessionId: 's', clip: text => text });
+    drafts.opened('t1');
+    drafts.committed([event('p', 'user_message_chunk', PROMPT)]);
+    const [drawn] = drafts.plan('t1', answer, at).drafts;
+    // The error takes the draft's place while the turn is still open.
+    expect(drafts.plan('t1', cut, at).drafts[0]!.event.data.content).toMatchObject({ text: error });
+    expect(drafts.plan(undefined, undefined, at, () => ({ error }))).toEqual({ drafts: [], retire: [], kept: [drawn!.event] });
   });
 
   it('reports a draft its transcript text contradicts', () => {

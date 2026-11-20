@@ -30,7 +30,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 
 - 回合的开始和结束以先到的一路为准，第二次报告同一事实是空操作；已见过的 prompt 记在 `seen` 里，晚读到的转写行不能重开或重关回合。`session-state.ts#reduce` 不读屏幕。
 - 转写只追加：游标是字节偏移加文件身份，`transcript-source.ts#ClaudeTranscriptSource` 按行自带的 `uuid` 与内容分段命名实体，重读不写新行（G2、G7、G8）。
-- 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。
+- 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。唯一的例外是以 failed 结束的回合：草稿按原 id 转正为这一回合的正文（`live/drafts.ts#plan`），之后转写里又写出同一段时收回转正的那份。转正的正文只在 journal 里，车道按转写重建后就没有了。
 - 自动压缩的 PreCompact hook 可能先于该 prompt 的转写行到达，要按 hook 的 `prompt_id` 压住，等 prompt 行读到后并入同一回合，否则会写成上一回合的尾巴并开出第二个压缩。
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
 - 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并检查结果。
@@ -52,6 +52,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - hook（UserPromptSubmit、Stop、StopFailure、PermissionRequest、PreToolUse、PreCompact 等）：入口 `hook-bridge.ts#ClaudeHookBridge`，改变回合状态的 hook 在会话未就绪时要等其运行时拉起。录制与转写同在 `fixtures/transcript-hooks/<版本>`，重录方式同上。
 - 权限对话框先在屏幕上读出（`claude-screen:` 卡），PermissionRequest hook 随后到达并取代它；此时回答屏幕卡返回 `NATIVE_INTERACTION_STALE`，客户端等协议卡到达后再答，自动化脚本要等 `transport === 'protocol'`。
 - 状态描述文件由 `hook-cli.mjs` 每次 hook 时重读，所以比服务活得更久的 CLI 能找到重启后的服务。
+- 流在输出中途断开时（`isApiErrorMessage`、`truncatedAfterOutput: true`，2.1.322 的 `API Error: Connection lost mid-response`），CLI 只写这条错误行，已经画到屏幕上的正文不进转写。错误在屏幕上是回答下面单独的一个 `⏺` 块（`fixtures/transcript-hooks/2.1.322/stop-failure.jsonl`），会接替草稿的 id，所以要记住它接替的那一块；StopFailure hook 先于错误行到达。草稿若按普通的回合结束收回，这段回答会从时间线上消失，阅读中的视图也会落在空白处。
 - 子 agent 的后台任务（例如 Bash 超时后被转入后台）完成时，CLI 也会在主转写里写一条 `queue-operation` enqueue/remove，`<tool-use-id>` 指向子 agent 的调用，随后由子 agent 取走。主会话既没发起也没挂着这个调用的报告不建活动（`activity.ts#notified`），否则它会作为孤立的一行出现在主时间线末尾。
 
 ## 排障

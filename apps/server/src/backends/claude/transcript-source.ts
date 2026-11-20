@@ -242,7 +242,12 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     screen.arm(watching);
     const tail = watching ? await screen.read() : undefined;
     // The read may have let a commit in: the plan is for the turn open now.
-    const plan = live.plan(this.activeTurn(w)?.turnId === turnId ? turnId : undefined, tail, new Date().toISOString());
+    const plan = live.plan(this.activeTurn(w)?.turnId === turnId ? turnId : undefined, tail, new Date().toISOString(), id => {
+      const end = w.turnEnd(id);
+      return end?.status === 'failed' ? end : undefined;
+    });
+    // Kept text belongs to a turn that is over, perhaps behind a newer one: it goes in on its own, not moving the lane's turn.
+    if (plan.kept.length) w.commit({ events: plan.kept, cursor: w.cursor, ended: true });
     if (plan.drafts.length || plan.retire.length) w.commit({ events: [], drafts: plan.drafts, retire: plan.retire, cursor: w.cursor });
   }
 

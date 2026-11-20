@@ -31,6 +31,8 @@ export interface LaneBatch {
   cursor: string | null;
   /** Reproject existing committed entities after an adapter upgrade, preserving their identity, timing and turn ownership. */
   reproject?: true;
+  /** The events belong to turns already over (a failed turn's kept draft): the lane's current turn stays where it is. */
+  ended?: true;
 }
 
 /**
@@ -249,7 +251,7 @@ export class JournalLaneWriter implements LaneWriter {
       this.journal.append(this.key, inputs, { cursor: batch.cursor });
     });
     const last = [...batch.events, ...(batch.drafts ?? []).map(draft => draft.event)].findLast(event => event.nativeTurnId)?.nativeTurnId;
-    if (last && !batch.reproject) this.turn = last;
+    if (last && !batch.reproject && !batch.ended) this.turn = last;
   }
 
   canReproject(event: NativeWorkbenchEvent): boolean {

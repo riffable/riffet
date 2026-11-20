@@ -23,6 +23,7 @@
 
 ### 修复
 
+- Claude Code 的回答在输出中途断开（`API Error: Connection lost mid-response`）时，已经输出的正文留在会话里，不再消失；往回翻阅时正在看的内容被移除，视图会回到剩下的内容上，不再停在一片空白。
 - 插件 Agent 图标（如 Doubao）在服务端缓存校验结果并在 Web 端预加载，打开模型菜单时不再每次重新读取与阻塞重验。
 - Cursor 的所有具名模型族（如 Gemini、Composer、Grok 等）现在都在模型选择面板中展示 300K / 1M / MAX 上下文窗口选项，不再因前缀白名单遗漏而隐藏。
 - 在旧版 Node.js 上运行 `riffet` 时，不再在支持 TrueColor 的终端里因 `styleText` 报出一长串颜色名错误而中止；CLI 现会在入口前置校验 Node.js 版本并按当前安装方式给出升级命令，同时在不支持十六进制颜色的环境下自动回退到 16 色输出。

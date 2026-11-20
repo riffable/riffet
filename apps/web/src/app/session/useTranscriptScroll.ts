@@ -289,7 +289,8 @@ export function useTranscriptScroll(options: Options) {
           setSpacer(0);
           write(element, bottom(element));
         } else if (anchor.current) {
-          const anchored = Math.max(0, readingAnchorTop(element, anchor.current, latest.current.locate));
+          const found = readingAnchorTop(element, anchor.current, latest.current.locate);
+          const anchored = Math.max(0, found ?? anchor.current.scrollTop);
           let top = anchored;
           // Preserve native gesture movement since the last capture while compensating layout.
           // The scroller always disables native `overflow-anchor`, so `element.scrollTop - baseline`
@@ -298,6 +299,9 @@ export function useTranscriptScroll(options: Options) {
             const baseline = Math.max(0, Math.min(bottom(element), anchor.current.scrollTop));
             top = anchored + element.scrollTop - baseline;
           }
+          // The rows the reader was on left the transcript: no place is left to hold with a blank
+          // tail, so the view stays within the content that remains.
+          if (found === undefined) top = Math.min(top, naturalBottom(element));
           write(element, top, 'auto', true);
           capture();
         } else {

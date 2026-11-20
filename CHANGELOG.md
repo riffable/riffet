@@ -23,6 +23,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- When a Claude Code answer is cut off mid-stream (`API Error: Connection lost mid-response`), the text it had already written stays in the conversation instead of disappearing, and when the part of a conversation you were reading is removed, the view moves to what remains instead of showing a blank screen.
 - Plugin Agent icons (such as Doubao) load from cache and preload on the web instead of re-reading and revalidating on every model-picker open.
 - Named Cursor model families (such as Gemini, Composer, and Grok) now show the 300K / 1M / MAX context window selector in the model picker instead of hiding it behind a partial prefix allowlist.
 - Running `riffet` on an older Node.js version no longer fails with a long list of `styleText` color names in truecolor terminals; the CLI now checks `engines.node` up front with a version-manager-specific upgrade command, and falls back to 16-color output when hex styles are unsupported.

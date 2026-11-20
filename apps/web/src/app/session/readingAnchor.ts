@@ -219,8 +219,9 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
 /**
  * [locate] gives the content-space top of a row that is not mounted, for a windowed list: the
  * anchor still names where the reader was, and the list's index knows where that row would be.
+ * Undefined when none of the anchor's rows is left anywhere: what the reader was reading is gone.
  */
-export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, locate?: (key: string) => number | undefined): number {
+export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, locate?: (key: string) => number | undefined): number | undefined {
   const bounds = scroller.getBoundingClientRect();
   const targetOf = (saved: ReadingAnchor['rows'][number], row: HTMLElement) => {
     // Hot path: keep the exact DOM block while still connected; cold path re-locates by text quote
@@ -267,5 +268,5 @@ export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, l
   if (foldedTop !== undefined) return foldedTop;
   const first = anchor.rows[0];
   const at = first && locate ? locate(first.key) : undefined;
-  return at !== undefined ? at - first!.top : anchor.scrollTop;
+  return at !== undefined ? at - first!.top : undefined;
 }

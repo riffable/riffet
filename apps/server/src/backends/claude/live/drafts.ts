@@ -19,7 +19,12 @@ import { CLAUDE_SCREEN_LAYOUT, readScreenTurn } from './screen.js';
 
 export interface ScreenTail { text: string; cols: number }
 
-export interface LiveDraftPlan { drafts: Array<{ finalId: string; event: NativeWorkbenchEvent }>; retire: string[] }
+export interface LiveDraftPlan {
+  drafts: Array<{ finalId: string; event: NativeWorkbenchEvent }>;
+  retire: string[];
+  /** Drafts of failed turns, committed as the turn's text (`plan`). */
+  kept: NativeWorkbenchEvent[];
+}
 
 /** A draft whose transcript text says something else: the layout contract has likely moved (`screen.ts`). */
 export interface LiveDrift { sessionId: string; turnId: string; ratio: number; draftChars: number; textChars: number }
@@ -29,6 +34,10 @@ const KEY = 48;
 /** Draft characters checked against the transcript text for drift, in pieces of this length. */
 const DRIFT_CHARS = 4_096;
 const DRIFT_PIECE = 16;
+/** Share of a kept draft found in a block the transcript writes later for its turn that makes the two one block. */
+const KEPT_OVERLAP = 0.5;
+/** How the CLI's API errors start, drawn as a block of their own: the error when the end records other words for it. */
+const API_ERROR = normalizeText('API Error');
 
 interface TurnState {
   /** The prompt, normalized; the echo is matched against it. */
@@ -37,10 +46,19 @@ interface TurnState {
   /** Committed text blocks: ids and normalized starts. */
   ids: Set<string>;
   texts: string[];
-  draft?: { id: string; text: string; key: string };
+  draft?: Draft;
+  /**
+   * The block the draft stood for before a different one took its id, none of them written: the CLI draws a failed
+   * request's error as a block of its own below the answer it cut.
+   */
+  prior?: Draft;
   /** Starts of drafts their text replaced, as drawn. */
   replaced: string[];
+  /** Drafts kept as the text of the failed turn (`plan`), taken back if the transcript writes the block after all. */
+  kept: Array<{ id: string; key: string; sample: string }>;
 }
+
+interface Draft { id: string; text: string; key: string; at: string }
 
 /** Letters and digits only: what Markdown and the TUI's rendering of it agree on. Link targets are not drawn. */
 export function normalizeText(text: string): string {
@@ -80,7 +98,7 @@ export class ClaudeLiveDrafts {
   /** A turn opened while this process read the transcript: what it commits from here on is all of it. */
   opened(turnId: string): void {
     if (this.turns.has(turnId)) return;
-    this.turns.set(turnId, { ids: new Set(), texts: [], replaced: [] });
+    this.turns.set(turnId, { ids: new Set(), texts: [], replaced: [], kept: [] });
     for (const [id, turn] of this.turns) {
       if (this.turns.size <= CLAUDE_LIVE_SCREEN_BUDGET.turns) break;
       if (turn.draft) this.orphans.push(turn.draft.id);
@@ -106,6 +124,14 @@ export class ClaudeLiveDrafts {
       turn.ids.add(event.nativeId);
       const normalized = normalizeText(text);
       turn.texts.push(normalized.slice(0, KEY));
+      turn.prior = undefined;
+      // Written after all (its rows came in a batch behind the failure): the transcript's copy stands, and is counted once.
+      const copy = turn.kept.findIndex(kept => sameBlock(normalized.slice(0, KEY), kept.key) || overlap(kept.sample, normalized) >= KEPT_OVERLAP);
+      if (copy >= 0) {
+        const [kept] = turn.kept.splice(copy, 1);
+        retire.push(kept!.id);
+        turn.texts.splice(turn.texts.indexOf(kept!.key), 1);
+      }
       const draft = turn.draft;
       if (!draft) continue;
       retire.push(draft.id);
@@ -118,15 +144,27 @@ export class ClaudeLiveDrafts {
 
   /**
    * What the screen of turn `turnId` (the lane's open one, if any) changes in the lane. Drafts of any other turn are
-   * taken back: it ended, and what it said is in the transcript or nowhere.
+   * taken back: it ended, and what it said is in the transcript or nowhere. Except in a turn that ended failed (`failed`
+   * gives its end): a stream cut mid-answer ends it with only the error written (`truncatedAfterOutput`), so the text
+   * drawn before the cut is all that is left of the answer and the draft is kept as the turn's text under its own id.
    */
-  plan(turnId: string | undefined, tail: ScreenTail | undefined, at: string): LiveDraftPlan {
-    const plan: LiveDraftPlan = { drafts: [], retire: this.orphans };
+  plan(turnId: string | undefined, tail: ScreenTail | undefined, at: string, failed?: (turnId: string) => { error?: string } | undefined): LiveDraftPlan {
+    const plan: LiveDraftPlan = { drafts: [], retire: this.orphans, kept: [] };
     this.orphans = [];
     for (const [id, turn] of this.turns) {
       if (id === turnId || !turn.draft) continue;
-      plan.retire.push(turn.draft.id);
-      turn.draft = undefined;
+      const { draft, prior } = turn;
+      turn.draft = turn.prior = undefined;
+      const failure = failed?.(id);
+      const error = failure?.error ? normalizeText(failure.error).slice(0, KEY) : '';
+      // A block that is the error itself is no answer; the one it took the place of may be.
+      const drawnError = (block: Draft) => (error !== '' && block.key.startsWith(error)) || block.key.startsWith(API_ERROR);
+      const answer = !failure ? undefined : !drawnError(draft) ? draft : prior && !drawnError(prior) ? prior : undefined;
+      if (answer) {
+        plan.kept.push(this.event(id, turn, answer));
+        turn.texts.push(answer.key);
+        turn.kept.push({ id: answer.id, key: answer.key, sample: normalizeText(answer.text).slice(0, DRIFT_CHARS) });
+      } else plan.retire.push(draft.id);
     }
     const turn = turnId !== undefined ? this.turns.get(turnId) : undefined;
     // A screen that does not read as the contract says leaves the draft as it was: it is drawn again shortly.
@@ -144,16 +182,21 @@ export class ClaudeLiveDrafts {
     if (written) return plan;
     const id = `claude-live:${turnId}:${turn.texts.length}`;
     if (turn.draft?.id === id && turn.draft.text === text) return plan;
-    turn.draft = { id, text, key };
-    plan.drafts.push({
-      finalId: id,
-      event: {
-        sessionId: this.options.sessionId, nativeId: id, nativeTurnId: turnId!, ...(turn.runId ? { runId: turn.runId } : {}),
-        sequence: 0, createdAt: at, type: 'agent_message_chunk',
-        data: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } },
-      },
-    });
+    // A different block under the same id, not one that grew: the one it replaces is remembered (`prior`).
+    if (turn.draft?.id === id && !key.startsWith(turn.draft.key) && !turn.draft.key.startsWith(key)) turn.prior = turn.draft;
+    else if (turn.draft?.id !== id) turn.prior = undefined;
+    turn.draft = { id, text, key, at };
+    plan.drafts.push({ finalId: id, event: this.event(turnId!, turn, turn.draft) });
     return plan;
+  }
+
+  /** The text block a draft stands for, under the id the transcript's own copy of it would replace. */
+  private event(turnId: string, turn: TurnState, draft: Draft): NativeWorkbenchEvent {
+    return {
+      sessionId: this.options.sessionId, nativeId: draft.id, nativeTurnId: turnId, ...(turn.runId ? { runId: turn.runId } : {}),
+      sequence: 0, createdAt: draft.at, type: 'agent_message_chunk',
+      data: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: draft.text } },
+    };
   }
 
   private checkDrift(turnId: string, draft: string, text: string): void {
