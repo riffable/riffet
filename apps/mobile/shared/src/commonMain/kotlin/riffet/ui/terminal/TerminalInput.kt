@@ -60,6 +60,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import org.jetbrains.compose.resources.stringResource
@@ -254,11 +256,15 @@ internal fun TerminalKeyboardField(controller: TerminalInputController, focusReq
     )
 }
 
-private class BarKey(val label: String, val repeat: Boolean = false, val active: (() -> Boolean)? = null, val onPress: () -> Unit)
+/** [primary]: the key that submits, filled like the composer's send button. */
+private class BarKey(val label: String, val repeat: Boolean = false, val active: (() -> Boolean)? = null, val primary: Boolean = false, val onPress: () -> Unit)
 
 /**
  * Two rows of keys a phone keyboard lacks, chosen for the CLIs Riffet drives: ⇧Tab cycles Claude
- * Code's permission mode, Esc interrupts, ^O expands the transcript, / opens slash commands.
+ * Code's permission mode, Esc interrupts, ^O expands the transcript, / opens slash commands, and
+ * 换行 sends LF (Ctrl+J), which Claude Code and Codex take as a newline rather than a submit.
+ * Both rows share eight columns so ↑ sits above ↓. The columns always split the width evenly and
+ * never scroll, so ⏎ at the end of the first row stays in reach on the narrowest phone.
  * Keys commit on a valid tap, or repeat after a hold, and never take focus. Scrolling the key rows
  * cancels the pending tap, and a tap neither opens nor closes the keyboard.
  */
@@ -271,8 +277,6 @@ internal fun TerminalKeyBar(
     moreActions: List<Pair<String, () -> Unit>>,
     modifier: Modifier = Modifier,
 ) {
-    val designMetrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
     val c = controller
     val link by controller.link.collectAsState()
     val enabled = link !is TerminalLink.Exited && link != TerminalLink.Unauthenticated
@@ -281,20 +285,20 @@ internal fun TerminalKeyBar(
             BarKey("Esc") { c.key(KeyHandler.KEYCODE_ESCAPE) },
             BarKey("Tab") { c.key(KeyHandler.KEYCODE_TAB) },
             BarKey("⇧Tab") { c.key(KeyHandler.KEYCODE_TAB, KeyHandler.KEYMOD_SHIFT) },
-            BarKey("Ctrl", active = { c.ctrl }) { c.ctrl = !c.ctrl },
-            BarKey("↑", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_UP) },
             BarKey("^C") { c.raw("\u0003") },
-            BarKey("⏎") { c.raw("\r") },
-            BarKey("⌨") { onToggleKeyboard() },
+            BarKey("↑", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_UP) },
+            BarKey("/") { c.typed("/") },
+            BarKey(stringResource(Res.string.timeline_terminal_newline)) { c.raw("\n") },
+            BarKey("⏎", primary = true) { c.raw("\r") },
         ),
         listOf(
-            BarKey("/") { c.typed("/") },
-            BarKey("^R") { c.raw("\u0012") },
-            BarKey("^O") { c.raw("\u000f") },
+            BarKey("Ctrl", active = { c.ctrl }) { c.ctrl = !c.ctrl },
             BarKey("Alt", active = { c.alt }) { c.alt = !c.alt },
+            BarKey("^O") { c.raw("\u000f") },
             BarKey("←", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_LEFT) },
             BarKey("↓", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_DOWN) },
             BarKey("→", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_RIGHT) },
+            BarKey("⌨") { onToggleKeyboard() },
             BarKey(
                 if (moreOpen) stringResource(Res.string.timeline_collapse) else stringResource(Res.string.timeline_more),
                 active = { moreOpen },
@@ -303,28 +307,34 @@ internal fun TerminalKeyBar(
     )
     Column(modifier.fillMaxWidth().background(materialContentBackground(LocalRiffetSurfaces.current.floating)).padding(horizontal = 4.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (moreOpen) {
-            val extra = listOf(
+            // The text actions lead: they are what a reader opens 更多 for most often.
+            val extra = moreActions.map { (label, action) -> BarKey(label) { action() } } + listOf(
+                BarKey("^R") { c.raw("\u0012") },
                 BarKey("^D") { c.raw("\u0004") }, BarKey("^L") { c.raw("\u000c") }, BarKey("^Z") { c.raw("\u001a") },
                 BarKey("Home") { c.key(KeyHandler.KEYCODE_MOVE_HOME) }, BarKey("End") { c.key(KeyHandler.KEYCODE_MOVE_END) },
                 BarKey("PgUp") { c.key(KeyHandler.KEYCODE_PAGE_UP) }, BarKey("PgDn") { c.key(KeyHandler.KEYCODE_PAGE_DOWN) },
                 BarKey("Del") { c.key(KeyHandler.KEYCODE_FORWARD_DEL) },
                 BarKey("|") { c.typed("|") }, BarKey("~") { c.typed("~") }, BarKey("-") { c.typed("-") },
-            ) + (1..12).map { n -> BarKey("F$n") { c.key(KeyHandler.KEYCODE_F1 + n - 1) } } +
-                moreActions.map { (label, action) -> BarKey(label) { action() } }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                extra.forEach { KeyButton(it, Modifier.widthIn(min = designMetrics.controlHeight), enabled) }
+            ) + (1..12).map { n -> BarKey("F$n") { c.key(KeyHandler.KEYCODE_F1 + n - 1) } }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
+                extra.forEach { KeyButton(it, Modifier.widthIn(min = MinKeyWidth), enabled) }
             }
         }
         rows.forEach { row ->
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                row.forEach { KeyButton(it, Modifier.widthIn(min = designMetrics.controlHeight), enabled) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
+                row.forEach { KeyButton(it, Modifier.weight(1f), enabled, inset = 2.dp) }
             }
         }
     }
 }
 
+private val KeyGap = 4.dp
+
+/** The 更多 row scrolls; its keys keep at least a touch target's width. */
+private val MinKeyWidth = 40.dp
+
 @Composable
-private fun KeyButton(key: BarKey, modifier: Modifier, enabled: Boolean) {
+private fun KeyButton(key: BarKey, modifier: Modifier, enabled: Boolean, inset: Dp = 6.dp) {
     val designMetrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
@@ -335,13 +345,13 @@ private fun KeyButton(key: BarKey, modifier: Modifier, enabled: Boolean) {
     val selected = surfaces.selected
     val selectedContent = surfaces.selectedContent
     val pressColor = surfaces.press
-    val keyColor = if (!enabled) surfaces.card else if (active) selected else colors.bg
+    val keyColor = if (!enabled) surfaces.card else if (key.primary) surfaces.primaryAction else if (active) selected else colors.bg
     Box(
         modifier
             .heightIn(min = designMetrics.controlHeight)
             .clip(shape)
             .background(if (pressed) pressColor.compositeOver(keyColor) else keyColor)
-            .border(designMetrics.hairlineWidth, if (active) selected else colors.line, shape)
+            .border(designMetrics.hairlineWidth, if (key.primary && enabled) surfaces.primaryAction else if (active) selected else colors.line, shape)
             // Accessibility activation sends one command without requesting IME focus.
             .semantics {
                 role = Role.Button
@@ -388,9 +398,15 @@ private fun KeyButton(key: BarKey, modifier: Modifier, enabled: Boolean) {
                     }
                 }
             }
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = inset),
         contentAlignment = Alignment.Center,
     ) {
-        Text(key.label, style = typography.label, color = if (!enabled) surfaces.disabledContent else if (active) selectedContent else colors.fg2, maxLines = 1)
+        val content = when {
+            !enabled -> surfaces.disabledContent
+            key.primary -> surfaces.primaryActionContent
+            active -> selectedContent
+            else -> colors.fg2
+        }
+        Text(key.label, style = typography.label, color = content, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
     }
 }

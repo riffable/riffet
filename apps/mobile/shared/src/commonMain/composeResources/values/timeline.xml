@@ -134,6 +134,7 @@
     <string name="timeline_terminal_interrupt_process">中断进程</string>
     <string name="timeline_terminal_back_to_live">回到实时</string>
     <string name="timeline_terminal_connecting_message">正在连接终端…</string>
+    <string name="timeline_terminal_newline">换行</string>
     <string name="timeline_terminal_paste">粘贴</string>
     <string name="timeline_terminal_line_input_off">关闭整行输入</string>
     <string name="timeline_terminal_line_input_on">整行输入</string>

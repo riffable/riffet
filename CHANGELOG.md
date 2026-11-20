@@ -25,6 +25,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On the web, a model-source plugin's Settings tab now lists every Agent provider that uses it, with expandable account and per-model quota bars, a Models subpage, direct links to edit or add providers, and its own gateway fields grouped as Default connection; providers sharing the same gateway address and key also share one quota read.
 - On the web, a plugin's Settings tab now shows what it runs on this server: an Agent plugin lists its configurations with CLI and sign-in state, a task plugin its recent tasks, a share plugin the shares still live (which can be unpublished), and Feishu Bot its bots with their connection state. Android Build lists missing tools and connected devices, and TRAE Queue Acceleration says whether acceleration is on and, if not, why. Antigravity and Feishu Bot have an introduction, and plugin introductions follow the interface language.
 - Quota bars now fill with what is left, matching the “n% left” beside them, so a bar shrinks as the quota runs out (web providers and plugin pages, the Mac model menu).
+- The Android terminal key bar always fits the screen width, so ⏎ is never cut off, and ⏎ is filled like the send button; ↑ sits directly above ↓. Newline is now on the first row and inserts a line break in Claude Code and Codex without sending; ⏎ still sends. Under More, paste, attachment, line input, and release control come first.
 
 ### Fixes
 
