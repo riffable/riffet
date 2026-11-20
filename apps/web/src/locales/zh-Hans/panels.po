@@ -962,8 +962,13 @@ msgid "最近查看"
 msgstr "最近查看"
 
 #: src/app/panels/FilesPanel.tsx
+#: src/app/panels/useFileOperations.ts
 msgid "删除"
 msgstr "删除"
+
+#: src/app/panels/useFileOperations.ts
+msgid "删除「{name}」？"
+msgstr "删除「{name}」？"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "刷新"
@@ -1254,6 +1259,10 @@ msgstr "更多操作"
 #: src/app/panels/ContextPanel.tsx
 msgid "更多视图"
 msgstr "更多视图"
+
+#: src/app/panels/useFileOperations.ts
+msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
+msgstr "未保存的修改会丢失，撤销删除也不会恢复它们。"
 
 #. placeholder {0}: formatBytes(Math.min(size, FILE_BUDGET.tailBytes))
 #. placeholder {1}: formatBytes(size)

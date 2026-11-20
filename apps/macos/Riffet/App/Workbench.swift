@@ -336,8 +336,8 @@ final class Workbench {
             if list.settings != self.settings { self.settings = list.settings }
             if list.projects != self.projectList { self.projectList = list.projects }
             guard self.role == .main else { return }
-            // A server that was late or offline at launch has not told the Agents yet: ask once it answers.
-            if self.connected, list.loaded, list.error == nil, !self.backendsLoaded, !self.backendsReading {
+            // A server that was late or offline at launch has not told the Agents or its features yet: ask once it answers.
+            if self.connected, list.loaded, list.error == nil, !self.backendsLoaded || !self.serverFeaturesLoaded, !self.backendsReading {
                 Task { await self.loadBackends() }
             }
             if list.error != nil || list.cachedAt != nil {

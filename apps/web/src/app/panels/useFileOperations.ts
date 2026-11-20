@@ -52,6 +52,11 @@ export function useFileOperations({ projectId, onChanged, onCreated, onMoved, on
   }, [projectId, t, failed, onChanged, onMoved]);
 
   const remove = useCallback(async (path: string) => {
+    // The undo brings back the file as it is on disk, not edits that were never saved.
+    if (fileDrafts.heldUnder(projectId, path)) {
+      const name = nameOf(path);
+      if (!await confirmDialog({ title: t`删除「${name}」？`, description: t`未保存的修改会丢失，撤销删除也不会恢复它们。`, confirmLabel: t`删除`, destructive: true })) return;
+    }
     let restoreId: string | undefined;
     try { restoreId = (await api.deleteFile(projectId, path)).restoreId; }
     catch (error) {

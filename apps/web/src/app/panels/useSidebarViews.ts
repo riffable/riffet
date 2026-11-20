@@ -37,11 +37,14 @@ export function shownView(views: readonly ViewEntry[], tab: string): ViewEntry |
   return views.find((view) => view.id === tab) ?? views[0];
 }
 
-/** Plugin views of the project file at [path] (views located at `file`), judged like the side panel's. */
-export function useFileViews(project: ProjectRecord, sessionId: string | undefined, path: string | undefined): ViewEntry[] {
+/**
+ * Plugin views of the project file at [path] (views located at `file`), judged like the side panel's but with no
+ * conversation: a file view is mounted without one. A file outside the project has none: a view's path is relative.
+ */
+export function useFileViews(project: ProjectRecord, path: string | undefined): ViewEntry[] {
   const catalog = useViewCatalog();
   const hasGit = useHasGit(project);
   const projectTypes = useProjectTypes(project.id);
-  const hasSession = Boolean(sessionId);
-  return useMemo(() => (path === undefined ? [] : fileViewsFor(catalog, path, { hasProject: true, hasSession, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES, projectTypes })), [catalog, path, hasSession, hasGit, projectTypes]);
+  const inside = path !== undefined && !path.startsWith('/') && !path.startsWith('~');
+  return useMemo(() => (inside ? fileViewsFor(catalog, path, { hasProject: true, hasSession: false, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES, projectTypes }) : []), [catalog, path, inside, hasGit, projectTypes]);
 }

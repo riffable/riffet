@@ -18,8 +18,10 @@ export async function readFileRange(url: string, from: number, to: number, signa
   try { response = await requestResponse(url, { headers: { Range: `bytes=${from}-${to}` }, ...(signal ? { signal } : {}) }); }
   catch (error) { if (error instanceof HttpError && error.status === 416) return 'past-end'; throw error; }
   const total = /\/(\d+)$/.exec(response.headers.get('content-range') ?? '')?.[1];
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return { bytes, size: total ? Number(total) : bytes.length };
+  const body = new Uint8Array(await response.arrayBuffer());
+  // Something on the way dropped the range and sent the whole file: keep the bytes asked for.
+  if (response.status !== 206) return { bytes: body.subarray(from, to + 1), size: body.length };
+  return { bytes: body, size: total ? Number(total) : body.length };
 }
 
 export function projectArchiveUrl(projectId: string, path: string): string {

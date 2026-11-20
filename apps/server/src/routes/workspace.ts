@@ -204,10 +204,14 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
 function sendFile(request: FastifyRequest, reply: FastifyReply, file: { path: string; size: number; mtime: Date }) {
   reply.header('Accept-Ranges','bytes');
   const range=byteRange(request.headers.range,file.size);
-  // `If-Range` names the version the client holds; a file changed since gets the whole new file.
-  const current=request.headers['if-range']===undefined||request.headers['if-range']===file.mtime.toUTCString()||request.headers['if-range']===reply.getHeader('etag');
+  // `If-Range` names the version the client holds; a file changed since gets the whole new file. Only a
+  // strong validator matches (§13.1.5): a weak ETag never does.
+  const ifRange=request.headers['if-range'];
+  const etag=reply.getHeader('etag');
+  const current=ifRange===undefined||ifRange===file.mtime.toUTCString()||(typeof etag==='string'&&!etag.startsWith('W/')&&ifRange===etag);
   if(range==='unsatisfiable'&&current)return reply.code(416).header('Content-Range',`bytes */${file.size}`).send();
-  if(!range||range==='unsatisfiable'||!current)return reply.header('Content-Length',String(file.size)).send(createReadStream(file.path));
+  // Bounded at the size sent in `Content-Length`: a file still being written must not run past it.
+  if(!range||range==='unsatisfiable'||!current)return reply.header('Content-Length',String(file.size)).send(file.size?createReadStream(file.path,{start:0,end:file.size-1}):'');
   return reply.code(206).header('Content-Range',`bytes ${range.start}-${range.end}/${file.size}`).header('Content-Length',String(range.end-range.start+1))
     .send(createReadStream(file.path,{start:range.start,end:range.end}));
 }

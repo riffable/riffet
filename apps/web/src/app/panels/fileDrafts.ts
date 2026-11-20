@@ -15,6 +15,8 @@ const key = (projectId: string, path: string) => `${projectId}\0${path}`;
 
 export const fileDrafts = {
   get: (projectId: string, path: string): FileDraft | undefined => store.get().drafts[key(projectId, path)],
+  /** `FILE_BUDGET.draftsKept` files hold unsaved edits: no other file can start one. */
+  full: (): boolean => Object.keys(store.get().drafts).length >= FILE_BUDGET.draftsKept,
   /** False when `FILE_BUDGET.draftsKept` other files already hold unsaved edits; the edit is then not kept. */
   set(projectId: string, path: string, draft: FileDraft): boolean {
     const drafts = store.get().drafts;
@@ -34,6 +36,11 @@ export const fileDrafts = {
     store.set(({ drafts }) => ({ drafts: Object.fromEntries(Object.entries(drafts).map(([id, draft]) => [
       id === old ? key(projectId, to) : id.startsWith(`${old}/`) ? key(projectId, to) + id.slice(old.length) : id, draft,
     ])) }));
+  },
+  /** Whether [path], or anything inside it, holds unsaved edits. */
+  heldUnder(projectId: string, path: string): boolean {
+    const at = key(projectId, path);
+    return Object.keys(store.get().drafts).some((id) => id === at || id.startsWith(`${at}/`));
   },
   /** An entry deleted: its draft, and those of anything inside it, go. */
   dropUnder(projectId: string, path: string): void {

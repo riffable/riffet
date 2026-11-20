@@ -18,11 +18,32 @@ export async function resolveWritablePath(root: string, input: string, deniedRoo
   const target = await resolveScopedPath(root, input);
   const relative = toProjectRelative(root, target);
   if (!relative) throw new AppError('INVALID_PATH', 'The project folder itself cannot be changed');
-  if (relative.split('/').includes('.git')) throw new AppError('PATH_DENIED', 'Git\'s own files are not changed through the workbench', 403);
-  // A name not created yet is judged by the real folder it would go into.
-  const real = await realpath(target).catch(async () => path.join(await realpath(path.dirname(target)).catch(() => path.dirname(target)), path.basename(target)));
+  // Judged as named and where it really is: a link into `.git` is `.git`.
+  const real = await realTarget(target);
+  const realRoot = await realpath(root).catch(() => root);
+  if (gitPart(relative) || gitPart(path.relative(realRoot, real).split(path.sep).join('/'))) throw new AppError('PATH_DENIED', 'Git\'s own files are not changed through the workbench', 403);
   if (await isSecretPath(real, deniedRoots, false)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be changed through the workbench', 403);
   return { target, relative };
+}
+
+/**
+ * Whether a path goes through Git's folder: any part named `.git` as the disk would match it, so `.GIT` on a disk that ignores
+ * case, and `.git.` or `.git ` that Windows trims to it.
+ */
+const gitPart = (relative: string) => relative.split('/').some((part) => /^\.git[. ]*$/i.test(part));
+
+/** Where [target] really is: through every link of the deepest folder that exists, then the names still to be created. */
+async function realTarget(target: string): Promise<string> {
+  const missing: string[] = [];
+  let at = target;
+  for (;;) {
+    const real = await realpath(at).catch(() => undefined);
+    if (real !== undefined) return path.join(real, ...missing.reverse());
+    const parent = path.dirname(at);
+    if (parent === at) return target;
+    missing.push(path.basename(at));
+    at = parent;
+  }
 }
 
 /** UTF-8 text a save can write back unchanged in form; undefined for anything else. */
@@ -54,12 +75,12 @@ export class FileWrites {
     if (typeof input.expectedHash !== 'string' || !input.expectedHash) throw new AppError('INVALID_HASH', 'expectedHash is required');
     if (Buffer.byteLength(input.content) > FILE_BUDGET.saveBytes) throw new AppError('FILE_TOO_LARGE', 'The text is too large to save here', 413);
     const root = await projectRoot(project);
-    const { target, relative } = await this.writable(root, input.path);
-    const real = await realpath(target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
-    return this.locked(real, async () => {
+    return this.locked(root, async () => {
+      const { target, relative } = await this.writable(root, input.path);
+      const real = await realpath(target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
       const info = await stat(real);
       if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');
-      if (info.size > FILE_BUDGET.previewReadBytes) throw new AppError('FILE_CHANGED', 'The file changed since it was opened', 409);
+      if (info.size > FILE_BUDGET.previewReadBytes) throw new AppError('FILE_TOO_LARGE', 'The file is too large to edit here', 413);
       const current = await readFile(real);
       if (hash(current) !== input.expectedHash) throw new AppError('FILE_CHANGED', 'The file changed since it was opened', 409);
       const text = editableText(current);
@@ -69,7 +90,8 @@ export class FileWrites {
       const body = crlf ? input.content.replace(/\r?\n/g, '\r\n') : input.content;
       const data = Buffer.concat([current.subarray(0, 3).equals(UTF8_BOM) ? UTF8_BOM : Buffer.alloc(0), Buffer.from(body)]);
       if (!data.equals(current)) await atomicWrite(real, data, info.mode & 0o7777);
-      this.options.noteWrite?.(path.join(root, relative));
+      // The file written, which for a link is where it points.
+      this.options.noteWrite?.(real);
       return { path: relative, hash: hash(data), size: data.byteLength };
     });
   }
@@ -77,71 +99,82 @@ export class FileWrites {
   async create(project: ProjectRef, input: { path: string; kind: 'file' | 'directory' }): Promise<FileVersion> {
     if (input?.kind !== 'file' && input?.kind !== 'directory') throw new AppError('INVALID_KIND', 'kind must be file or directory');
     const root = await projectRoot(project);
-    const { target, relative } = await this.writable(root, input.path);
-    await mkdir(path.dirname(target), { recursive: true });
-    try {
-      if (input.kind === 'directory') await mkdir(target);
-      else await writeFile(target, '', { flag: 'wx' });
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
-      throw error;
-    }
-    this.options.noteWrite?.(path.join(root, relative));
-    return { path: relative, hash: hash(Buffer.alloc(0)), size: 0 };
+    return this.locked(root, async () => {
+      const { target, relative } = await this.writable(root, input.path);
+      await mkdir(path.dirname(target), { recursive: true });
+      try {
+        if (input.kind === 'directory') await mkdir(target);
+        else await writeFile(target, '', { flag: 'wx' });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
+        throw error;
+      }
+      this.options.noteWrite?.(path.join(root, relative));
+      return { path: relative, hash: hash(Buffer.alloc(0)), size: 0 };
+    });
   }
 
   async move(project: ProjectRef, input: { from: string; to: string }): Promise<{ path: string }> {
     const root = await projectRoot(project);
-    const from = await this.writable(root, input?.from);
-    const to = await this.writable(root, input?.to);
-    if (from.target === to.target) return { path: to.relative };
-    const source = await lstat(from.target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
-    if (to.relative.startsWith(`${from.relative}/`)) throw new AppError('INVALID_PATH', 'A folder cannot be moved into itself');
-    // `rename` replaces a file silently. The one existing target allowed is the source itself, as a
-    // change of case finds it on a case-insensitive disk.
-    const existing = await lstat(to.target).catch(() => undefined);
-    if (existing && !(existing.dev === source.dev && existing.ino === source.ino)) throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
-    await mkdir(path.dirname(to.target), { recursive: true });
-    await rename(from.target, to.target);
-    this.options.noteWrite?.(path.join(root, from.relative));
-    this.options.noteWrite?.(path.join(root, to.relative));
-    return { path: to.relative };
+    return this.locked(root, async () => {
+      const from = await this.writable(root, input?.from);
+      const to = await this.writable(root, input?.to);
+      if (from.target === to.target) return { path: to.relative };
+      const source = await lstat(from.target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
+      if (to.relative.startsWith(`${from.relative}/`)) throw new AppError('INVALID_PATH', 'A folder cannot be moved into itself');
+      // `rename` replaces a file silently. The one existing target allowed is the source itself, as a
+      // change of case finds it on a case-insensitive disk.
+      const existing = await lstat(to.target).catch(() => undefined);
+      if (existing && !(existing.dev === source.dev && existing.ino === source.ino)) throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
+      await mkdir(path.dirname(to.target), { recursive: true });
+      await rename(from.target, to.target);
+      this.options.noteWrite?.(path.join(root, from.relative));
+      this.options.noteWrite?.(path.join(root, to.relative));
+      return { path: to.relative };
+    });
   }
 
   async remove(project: ProjectRef, input: { path: string; permanent?: boolean }): Promise<FileDeletion> {
     const root = await projectRoot(project);
-    const { target, relative } = await this.writable(root, input?.path);
-    const info = await lstat(target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
-    this.options.noteWrite?.(path.join(root, relative));
-    if (input.permanent) {
-      await rm(target, { recursive: true, force: true });
-      return { path: relative };
-    }
-    const bytes = info.isDirectory() ? await treeBytes(target, FILE_BUDGET.trashItemBytes) : info.size;
-    if (bytes > FILE_BUDGET.trashItemBytes) throw new AppError('DELETE_UNRECOVERABLE', 'This is too large to keep for undo', 409);
-    const id = randomUUID();
-    const slot = path.join(this.trashDir, id);
-    await mkdir(slot, { recursive: true, mode: 0o700 });
-    await moveAcross(target, path.join(slot, 'item'));
-    const record: TrashRecord = { root, path: relative, at: Date.now(), bytes };
-    await writeFile(path.join(slot, 'record.json'), JSON.stringify(record), { mode: 0o600 });
-    void this.prune().catch(() => undefined);
-    return { path: relative, restoreId: id };
+    return this.locked(root, async () => {
+      const { target, relative } = await this.writable(root, input?.path);
+      const info = await lstat(target).catch(() => { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); });
+      this.options.noteWrite?.(path.join(root, relative));
+      if (input.permanent) {
+        await rm(target, { recursive: true, force: true });
+        return { path: relative };
+      }
+      const bytes = info.isDirectory() ? await treeBytes(target, FILE_BUDGET.trashItemBytes) : info.size;
+      if (bytes > FILE_BUDGET.trashItemBytes) throw new AppError('DELETE_UNRECOVERABLE', 'This is too large to keep for undo', 409);
+      const id = randomUUID();
+      const slot = path.join(this.trashDir, id);
+      await mkdir(slot, { recursive: true, mode: 0o700 });
+      // The record first: a slot holding an item always says whose it is, so pruning never takes one being filled.
+      const record: TrashRecord = { root, path: relative, at: Date.now(), bytes };
+      await writeFile(path.join(slot, 'record.json'), JSON.stringify(record), { mode: 0o600 });
+      try { await moveAcross(target, path.join(slot, 'item')); }
+      catch (error) { await rm(slot, { recursive: true, force: true }).catch(() => undefined); throw error; }
+      void this.prune().catch(() => undefined);
+      return { path: relative, restoreId: id };
+    });
   }
 
   async restore(project: ProjectRef, restoreId: string): Promise<{ path: string }> {
     if (!/^[0-9a-f-]{36}$/.test(String(restoreId))) throw new AppError('INVALID_ID', 'Unknown deletion');
     const root = await projectRoot(project);
     const slot = path.join(this.trashDir, restoreId);
-    const record = await readFile(path.join(slot, 'record.json'), 'utf8').then(text => JSON.parse(text) as TrashRecord, () => undefined);
-    if (!record || record.root !== root) throw new AppError('RESTORE_EXPIRED', 'This deletion can no longer be undone', 410);
-    const { target, relative } = await this.writable(root, record.path);
-    if (await lstat(target).then(() => true, () => false)) throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
-    await mkdir(path.dirname(target), { recursive: true });
-    await moveAcross(path.join(slot, 'item'), target);
-    await rm(slot, { recursive: true, force: true });
-    this.options.noteWrite?.(path.join(root, relative));
-    return { path: relative };
+    return this.locked(root, async () => {
+      const record = await readFile(path.join(slot, 'record.json'), 'utf8').then(text => JSON.parse(text) as TrashRecord, () => undefined);
+      const kept = await lstat(path.join(slot, 'item')).then(() => true, () => false);
+      if (!record || record.root !== root || !kept) throw new AppError('RESTORE_EXPIRED', 'This deletion can no longer be undone', 410);
+      const { target, relative } = await this.writable(root, record.path);
+      if (await lstat(target).then(() => true, () => false)) throw new AppError('FILE_EXISTS', 'Something with this name already exists', 409);
+      await mkdir(path.dirname(target), { recursive: true });
+      await moveAcross(path.join(slot, 'item'), target);
+      await rm(slot, { recursive: true, force: true });
+      this.options.noteWrite?.(path.join(root, relative));
+      return { path: relative };
+    });
   }
 
   /** Drops deletions past their retention, then the oldest until the rest fit `FILE_BUDGET.trashBytes`. */
@@ -157,8 +190,9 @@ export class FileWrites {
     let total = 0;
     for (const { slot, record } of kept) {
       total += record?.bytes ?? 0;
-      // A slot without a record is a deletion that failed half way; nothing can restore it.
-      if (!record || now - record.at > FILE_BUDGET.trashRetentionMs || total > FILE_BUDGET.trashBytes) await rm(slot, { recursive: true, force: true });
+      // A slot without a record was left by a crash before anything moved into it; one just made may still be getting it.
+      const stale = !record && await stat(slot).then(info => now - info.mtimeMs > FILE_BUDGET.trashRetentionMs, () => false);
+      if (stale || (record && (now - record.at > FILE_BUDGET.trashRetentionMs || total > FILE_BUDGET.trashBytes))) await rm(slot, { recursive: true, force: true });
     }
   }
 
@@ -167,7 +201,7 @@ export class FileWrites {
     return resolveWritablePath(root, input, [this.options.stateDir]);
   }
 
-  /** One write at a time per file: the version check and the write must not interleave with another save. */
+  /** One write at a time per project: a save's version check and write, and a move, deletion or restore checking that a name is free, never interleave. */
   private locked<T>(key: string, run: () => Promise<T>): Promise<T> {
     const previous = this.locks.get(key) ?? Promise.resolve();
     const next = previous.then(run, run);

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
@@ -57,7 +57,8 @@ internal fun FileEditPage(api: RiffetApi, projectId: String, preview: FilePrevie
     val typography = LocalRiffetTypography.current
     val metrics = LocalInterfaceStyle.current.metrics
     val scope = rememberCoroutineScope()
-    val text = rememberTextFieldState(preview.content)
+    // Not saveable: a large file would not fit the saved-state Bundle.
+    val text = remember { TextFieldState(preview.content) }
     // The version the text was read from, and the one the next save names.
     var base by remember { mutableStateOf(preview) }
     var busy by remember { mutableStateOf(false) }

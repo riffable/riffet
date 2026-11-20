@@ -135,6 +135,8 @@ describe('bridge host', () => {
     const reader = setup({ capabilities: ['projects.read'] }, { context: () => own, readFile });
     expect(await reader.ask('files.read', { path: './models/a.mtl' })).toMatchObject({ result: { path: 'models/a.mtl' } });
     expect(code(await reader.ask('files.read', { path: '../secret' }))).toBe('invalid_params');
+    // The server expands `~` to the home folder, which is not the project.
+    expect(code(await reader.ask('files.read', { path: '~/.zsh_history' }))).toBe('invalid_params');
     // A view opened for no file names one; one with no project reads none.
     expect(code(await setup({}, { readFile }).ask('files.read'))).toBe('invalid_params');
     expect(code(await setup({ capabilities: ['projects.read'] }, { context: () => ({ ...own, projectId: undefined }), readFile }).ask('files.read'))).toBe('forbidden');

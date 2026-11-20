@@ -51,6 +51,8 @@ export const FILE_BUDGET = {
   followMs: 2_000,
   /** A LibreOffice conversion of an office document to PDF is killed past this (`previews/office-convert.ts`). */
   officeConvertMs: 60_000,
+  /** Conversions that may wait behind the one running; a preview asked for past this shows the extracted text. */
+  officeConvertsWaiting: 4,
   /** Converted PDFs kept in memory, all together. */
   officePdfCacheBytes: 64 * MIB,
   /** Most pixels one PDF page a client draws natively may hold (about 12 MB as ARGB); a larger page is drawn smaller. */

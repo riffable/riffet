@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 /**
  * The files last viewed in a project, in the order their tabs were opened, each with when it was
  * last shown. Kept in this browser's storage per project, so the tabs and "recent" survive a
- * reload; the least recently shown one gives way past the limit, as an IDE's tab limit does.
+ * reload; the least recently shown one gives way past the limit, as an IDE's tab limit does, except
+ * one in [keep] (a file with unsaved edits, whose tab is where they show).
  */
 
 export interface RecentFile { path: string; at: number }
@@ -17,7 +18,9 @@ function read(projectId: string): RecentFile[] {
   } catch { return []; }
 }
 
-export function useRecentFiles(projectId: string) {
+export function useRecentFiles(projectId: string, keep: readonly string[] = []) {
+  const kept = useRef(keep);
+  kept.current = keep;
   // Kept with the project they belong to, so another project's tabs never show for a render.
   const [state, setState] = useState(() => ({ projectId, files: read(projectId) }));
   const files = state.projectId === projectId ? state.files : read(projectId);
@@ -34,15 +37,20 @@ export function useRecentFiles(projectId: string) {
     const at = Date.now();
     if (current.some((file) => file.path === path)) return save(current.map((file) => (file.path === path ? { path, at } : file)));
     const next = [...current, { path, at }];
-    if (next.length > LIMIT) {
-      const oldest = next.reduce((least, file) => (file.at < least.at ? file : least));
+    const evictable = next.filter((file) => file.path !== path && !kept.current.includes(file.path));
+    if (next.length > LIMIT && evictable.length) {
+      const oldest = evictable.reduce((least, file) => (file.at < least.at ? file : least));
       next.splice(next.indexOf(oldest), 1);
     }
     return save(next);
   }), [save, setFiles]);
   const remove = useCallback((path: string) => setFiles((current) => save(current.filter((file) => file.path !== path))), [save, setFiles]);
+  /** An entry moved: the tabs of it, and of anything inside it, follow. */
+  const move = useCallback((from: string, to: string) => setFiles((current) => save(current.map((file) => (
+    file.path === from ? { ...file, path: to } : file.path.startsWith(`${from}/`) ? { ...file, path: to + file.path.slice(from.length) } : file
+  )))), [save, setFiles]);
 
   /** Newest first, for "recent" lists. */
   const byRecency = [...files].sort((a, b) => b.at - a.at);
-  return { files, byRecency, touch, remove };
+  return { files, byRecency, touch, remove, move };
 }

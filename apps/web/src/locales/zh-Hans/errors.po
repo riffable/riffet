@@ -230,7 +230,7 @@ msgstr "文件不存在"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.FILE_TOO_LARGE"
-msgstr "文件太大"
+msgstr "文件超过了大小上限"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/git.json
@@ -500,7 +500,7 @@ msgstr "暂时无法确认任务是否已停止，请检查状态"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.PATH_DENIED"
-msgstr "这个位置不能通过工作台修改"
+msgstr "工作台不能读取或修改这个位置"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json

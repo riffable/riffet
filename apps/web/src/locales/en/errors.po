@@ -230,7 +230,7 @@ msgstr "The file does not exist"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.FILE_TOO_LARGE"
-msgstr "The file is too large"
+msgstr "The file is over the size limit"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/git.json
@@ -500,7 +500,7 @@ msgstr "The stop has not been confirmed; check the task status"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.PATH_DENIED"
-msgstr "This location cannot be changed through the workbench"
+msgstr "The workbench can’t read or change this location"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json

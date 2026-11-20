@@ -14,9 +14,11 @@ import { FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
  * and never installed by Riffet (docs/guide/workspace.md).
  *
  * One conversion runs at a time, as a child process owned by its request: each gets a profile
- * directory of its own (two `soffice` sharing one block each other), is killed past
- * `FILE_BUDGET.officeConvertMs`, and its temporary directory is removed when it ends. Results are
- * kept in memory by content, within `officePdfCacheBytes`.
+ * directory of its own (two `soffice` sharing one block each other), runs in a process group of its
+ * own that is killed whole past `FILE_BUDGET.officeConvertMs` (`soffice` hands the work to a child),
+ * and its temporary directory is removed when it ends. At most `officeConvertsWaiting` wait; past
+ * that a preview shows the extracted text. Results are kept in memory by content, within
+ * `officePdfCacheBytes`, and the same document asked for twice at once is converted once.
  */
 
 /** What LibreOffice converts better than the extracted text shows; spreadsheets keep the grid. */
@@ -41,6 +43,10 @@ export const convertsToPdf = (extension: string) => CONVERTED.has(extension) && 
 const cache = new Map<string, Buffer>();
 let cachedBytes = 0;
 let queue: Promise<unknown> = Promise.resolve();
+let waiting = 0;
+/** Conversions under way or waiting, by content: a second ask shares the first. */
+// perf-rules: allow at most one running plus FILE_BUDGET.officeConvertsWaiting, each removed when it settles
+const running = new Map<string, Promise<Buffer | undefined>>();
 
 /** The document as PDF, or undefined when LibreOffice is missing, failed or took too long. */
 export function officePdf(data: Uint8Array, name: string): Promise<Buffer | undefined> {
@@ -49,18 +55,27 @@ export function officePdf(data: Uint8Array, name: string): Promise<Buffer | unde
   const key = createHash('sha256').update(data).update(name).digest('base64url');
   const hit = cache.get(key);
   if (hit) { cache.delete(key); cache.set(key, hit); return Promise.resolve(hit); }
-  const run = queue.then(() => convert(executable, data, name), () => convert(executable, data, name));
+  const shared = running.get(key);
+  if (shared) return shared;
+  if (waiting >= FILE_BUDGET.officeConvertsWaiting) return Promise.resolve(undefined);
+  waiting += 1;
+  const start = () => { waiting -= 1; return convert(executable, data, name); };
+  const run = queue.then(start, start);
   queue = run.catch(() => undefined);
-  return run.then(pdf => {
-    if (pdf && pdf.byteLength <= FILE_BUDGET.officePdfCacheBytes) {
-      cache.set(key, pdf); cachedBytes += pdf.byteLength;
-      while (cachedBytes > FILE_BUDGET.officePdfCacheBytes) {
-        const oldest = cache.keys().next().value!;
-        cachedBytes -= cache.get(oldest)!.byteLength; cache.delete(oldest);
-      }
-    }
-    return pdf;
-  }, () => undefined);
+  const result = run.then(pdf => { if (pdf) remember(key, pdf); return pdf; }, () => undefined).finally(() => running.delete(key));
+  running.set(key, result);
+  return result;
+}
+
+function remember(key: string, pdf: Buffer): void {
+  if (pdf.byteLength > FILE_BUDGET.officePdfCacheBytes) return;
+  const previous = cache.get(key);
+  if (previous) { cachedBytes -= previous.byteLength; cache.delete(key); }
+  cache.set(key, pdf); cachedBytes += pdf.byteLength;
+  for (const [oldest, kept] of cache) {
+    if (cachedBytes <= FILE_BUDGET.officePdfCacheBytes) break;
+    cachedBytes -= kept.byteLength; cache.delete(oldest);
+  }
 }
 
 async function convert(executable: string, data: Uint8Array, name: string): Promise<Buffer | undefined> {
@@ -75,10 +90,12 @@ async function convert(executable: string, data: Uint8Array, name: string): Prom
         '--headless', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
         `-env:UserInstallation=${pathToFileURL(join(work, 'profile')).href}`,
         '--convert-to', 'pdf', '--outdir', work, input,
-      ], { stdio: 'ignore', env: { ...process.env, HOME: work } });
-      const timer = setTimeout(() => child.kill('SIGKILL'), FILE_BUDGET.officeConvertMs);
+      ], { stdio: 'ignore', env: { ...process.env, HOME: work }, detached: true });
+      // The whole group: on Linux `soffice` is a script whose `soffice.bin` would outlive it.
+      const killGroup = () => { try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ } };
+      const timer = setTimeout(killGroup, FILE_BUDGET.officeConvertMs);
       child.on('error', () => { clearTimeout(timer); resolve(null); });
-      child.on('exit', (exit) => { clearTimeout(timer); resolve(exit); });
+      child.on('exit', (exit) => { clearTimeout(timer); killGroup(); resolve(exit); });
     });
     if (code !== 0) return undefined;
     return await readFile(join(work, 'document.pdf')).catch(() => undefined);

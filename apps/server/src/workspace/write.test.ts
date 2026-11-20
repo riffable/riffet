@@ -29,6 +29,13 @@ describe('project file writes', () => {
     expect(await code(writes.create(project, { path: path.join(outside, 'abs.txt'), kind: 'file' }))).toBe('INVALID_PATH');
     expect(await code(writes.save(project, { path: 'linked/target.txt', content: 'x', expectedHash: hash('outside') }))).toBe('PATH_OUTSIDE_PROJECT');
     expect(await code(writes.create(project, { path: '.git/hooks/pre-commit', kind: 'file' }))).toBe('PATH_DENIED');
+    // Git's folder as a case-insensitive disk or Windows would match it, and through a link inside the project.
+    expect(await code(writes.create(project, { path: '.GIT/hooks/pre-commit', kind: 'file' }))).toBe('PATH_DENIED');
+    expect(await code(writes.remove(project, { path: '.Git', permanent: true }))).toBe('PATH_DENIED');
+    expect(await code(writes.create(project, { path: '.git./config', kind: 'file' }))).toBe('PATH_DENIED');
+    await symlink(path.join(project, '.git'), path.join(project, 'repo'));
+    expect(await code(writes.create(project, { path: 'repo/hooks/pre-commit', kind: 'file' }))).toBe('PATH_DENIED');
+    expect(await code(writes.create(project, { path: 'repo/new/deeper/x', kind: 'file' }))).toBe('PATH_DENIED');
     expect(await code(writes.remove(project, { path: '.' }))).toBe('INVALID_PATH');
     const nested = new FileWrites({ stateDir: path.join(project, 'state') });
     await mkdir(path.join(project, 'state'));

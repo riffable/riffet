@@ -16,12 +16,12 @@
     "en": "The file does not exist"
   },
   "FILE_TOO_LARGE": {
-    "zh": "文件太大",
-    "en": "The file is too large"
+    "zh": "文件超过了大小上限",
+    "en": "The file is over the size limit"
   },
   "PATH_DENIED": {
-    "zh": "这个位置不能通过工作台修改",
-    "en": "This location cannot be changed through the workbench"
+    "zh": "工作台不能读取或修改这个位置",
+    "en": "The workbench can’t read or change this location"
   },
   "DELETE_UNRECOVERABLE": {
     "zh": "它太大，删除后无法撤销",

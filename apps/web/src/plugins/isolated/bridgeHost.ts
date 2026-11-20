@@ -98,10 +98,10 @@ function only(params: unknown, keys: readonly string[]): Record<string, unknown>
   return params;
 }
 
-/** A path inside the project: relative, no `..`, no drive letter. Returns it without a leading `./`. */
+/** A path inside the project: relative, no `..`, no drive letter, no home folder (the server expands `~`). Returns it without a leading `./`. */
 function projectPath(params: Record<string, unknown>): string {
   const value = text(params, 'path', BRIDGE_LIMITS.text);
-  if (value.startsWith('/') || value.startsWith('\\') || /^[a-zA-Z]:/.test(value) || value.includes('\\') || value.split('/').some((part) => part === '..')) throw invalid('path must be relative to the project root');
+  if (value.startsWith('/') || value.startsWith('\\') || value.startsWith('~') || /^[a-zA-Z]:/.test(value) || value.includes('\\') || value.split('/').some((part) => part === '..')) throw invalid('path must be relative to the project root');
   return value.replace(/^(?:\.\/)+/, '') || '.';
 }
 

@@ -154,7 +154,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     onCreated: (created, kind) => { if (kind === 'file') { edit.startOnOpen(created); void openPreviewRef.current(created); } },
     onMoved: (from, to) => {
       const moved = (file: string) => file === from || file.startsWith(`${from}/`);
-      for (const file of recent.files.map((item) => item.path).filter(moved)) recent.remove(file);
+      recent.move(from, to);
       if (previewFilePath !== undefined && moved(previewFilePath)) void openPreviewRef.current(to + previewFilePath.slice(from.length));
     },
     onRemoved: (removed) => {
@@ -174,7 +174,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   /** Another way to look at the open file: its bytes, or the end of a long text. */
   /** Another way to view the open file: hex, its end, or a plugin's view of it (its view id). */
   const [viewAs, setViewAs] = useState<'hex' | 'tail' | (string & {})>();
-  const fileViews = useFileViews(project, sessionId, previewFilePath);
+  const fileViews = useFileViews(project, previewFilePath);
   const pluginFileView = fileViews.find((view) => view.id === viewAs);
   const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
@@ -197,7 +197,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   const [navigating, setNavigating] = useState(false);
   const definitionRequest = useRef(0);
   const [reveal, setReveal] = useState<{ path: string; token: number; expand?: boolean }>();
-  const recent = useRecentFiles(project.id);
+  const recent = useRecentFiles(project.id, drafts);
   /** Where each file was scrolled to when it was left, so coming back to it lands there. */
   const topLines = useRef(new Map<string, number>());
   const [quickOpen, setQuickOpen] = useState<QuickOpenMode>();
@@ -714,8 +714,8 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
         <div className="flex shrink-0 items-center">
           {navigating && <Spinner className="mx-1.5" />}
           {edit.editing && edit.dirty && (
-            <Tip label={edit.conflict ? t`覆盖保存` : t`保存`} kbd={shortcutLabel('S')}>
-              <Button size="xs" variant="primary" className="mx-1 max-md:h-10" busy={edit.saving} onClick={() => void edit.save()}>{edit.conflict ? <Trans>覆盖保存</Trans> : <Trans>保存</Trans>}</Button>
+            <Tip label={edit.conflict ? t`覆盖保存` : t`保存`} {...(edit.conflict ? {} : { kbd: shortcutLabel('S') })}>
+              <Button size="xs" variant="primary" className="mx-1 max-md:h-10" busy={edit.saving} onClick={() => void edit.save(edit.conflict)}>{edit.conflict ? <Trans>覆盖保存</Trans> : <Trans>保存</Trans>}</Button>
             </Tip>
           )}
           {edit.editable && viewAs === undefined && (

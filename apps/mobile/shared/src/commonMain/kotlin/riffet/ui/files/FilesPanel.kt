@@ -418,8 +418,8 @@ private fun FilePreviewPage(
 }
 
 /**
- * Whether the server saves files (`file-write-v1`), asked of the bootstrap the first time a file
- * that could be edited is opened; a failed read counts as no.
+ * Whether the server saves files (`file-write-v1`), asked of the bootstrap when a file
+ * that could be edited is opened; it is asked again until a read succeeds.
  */
 internal class FileWriteSupport(private val api: RiffetApi) {
     var supported by mutableStateOf(false)
@@ -430,8 +430,9 @@ internal class FileWriteSupport(private val api: RiffetApi) {
         if (asked) return
         asked = true
         try { supported = api.bootstrap().protocol?.features?.contains("file-write-v1") == true }
+        // A failed read is not an answer: the next editable file asks again.
         catch (cancellation: CancellationException) { asked = false; throw cancellation }
-        catch (_: Throwable) { supported = false }
+        catch (_: Throwable) { asked = false; supported = false }
     }
 }
 

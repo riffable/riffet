@@ -32,6 +32,8 @@ struct FilesPanel: View {
     /// The open file has edits the server does not have; leaving it asks first.
     @State private var unsaved = false
     @State private var pendingLeave: (() -> Void)?
+    /// Counts given-up edits, so the open page ends its editing even when it stays on screen.
+    @State private var discards = 0
 
     enum SearchMode: String { case name, content }
 
@@ -47,7 +49,7 @@ struct FilesPanel: View {
                 listPage.keptAlive(hidden: preview != nil)
                 if let preview {
                     FilePreviewPage(
-                        workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, unsaved: $unsaved,
+                        workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, unsaved: $unsaved, discards: discards,
                         openFolder: { folder in leaving { browse(folder) } },
                         onShown: shown, onJump: { file, line in leaving { open(file, line: line) } }, onUsages: findUsages, onChoices: showChoices
                     ) { leaving { self.preview = nil } }
@@ -55,18 +57,22 @@ struct FilesPanel: View {
                         .keptAlive(hidden: usages != nil)
                 }
                 if let usages {
-                    CodeUsagesPage(usages: usages, open: { location in closeUsages(); open(location.path, line: location.line) }, back: closeUsages)
+                    CodeUsagesPage(usages: usages, open: { location in leaving { closeUsages(); open(location.path, line: location.line) } }, back: closeUsages)
                 }
             }
         }
         // Pages switch without a slide: every frame of one re-laid out the whole window.
         .task(id: project.id) {
-            path = ""
-            preview = nil
-            closeUsages()
-            recent = RecentFiles(projectId: project.id)
-            found = nil
-            hits = nil
+            // Edits of the file left open in the other project are asked about before they are dropped.
+            let reset = {
+                path = ""
+                preview = nil
+                closeUsages()
+                recent = RecentFiles(projectId: project.id)
+                found = nil
+                hits = nil
+            }
+            if unsaved { pendingLeave = reset } else { reset() }
             // A request made together with switching conversations arrives before this reset.
             if let target = workbench.previewTarget, Date.now.timeIntervalSince(target.at) < 3 { consume(target) }
             if favorites.projectId != project.id { favorites = FolderFavoritesModel(projectId: project.id) }
@@ -80,6 +86,7 @@ struct FilesPanel: View {
             let action = pendingLeave
             pendingLeave = nil
             unsaved = false
+            discards += 1
             action?()
         }
         .onAppear { consume(workbench.previewTarget) }
@@ -591,6 +598,8 @@ struct FilePreviewPage: View {
     var target: (Int, Int)?
     /// The page has edits the server does not have.
     @Binding var unsaved: Bool
+    /// Changes when the owner gave the edits up: editing ends even if this page stays.
+    var discards = 0
     var openFolder: ((String) -> Void)?
     /// A text or image file was read: it joins the recent files.
     var onShown: ((String) -> Void)?
@@ -699,7 +708,7 @@ struct FilePreviewPage: View {
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
             if conflict {
                 HStack(spacing: Space.sm) {
-                    Text("文件已在磁盘上改动").font(RiffetFont.caption).foregroundStyle(palette.warning)
+                    Text("文件已在别处改动").font(RiffetFont.caption).foregroundStyle(palette.warning)
                     Spacer(minLength: Space.sm)
                     Button("用磁盘上的版本") { useDisk() }.buttonStyle(ChipButtonStyle()).disabled(saving)
                     Button("覆盖保存") { Task { await save() } }.buttonStyle(ChipButtonStyle()).disabled(saving)
@@ -723,6 +732,7 @@ struct FilePreviewPage: View {
         .onChange(of: target?.1) { _, _ in if target != nil { htmlRendered = false } }
         .onChange(of: path) { _, _ in sitePage = nil }
         .onChange(of: isDirty) { _, value in unsaved = value }
+        .onChange(of: discards) { _, _ in if editing { endEditing() } }
         .discardConfirmation(isPresented: $confirmEndEditing) { endEditing() }
         .onDisappear { navigation?.cancel(); unsaved = false }
         .task(id: "\(path)|\(reload)") {
@@ -768,9 +778,10 @@ struct FilePreviewPage: View {
                       let raw = ProjectDownloads.rawURL(projectId: project.id, path: preview.path),
                       let url = FilePreviewTheme(palette: palette, dark: colorScheme == .dark).url(raw) {
                 RenderedFilePreview(url: url, rawURL: raw, name: (preview.path as NSString).lastPathComponent)
-                    .id("\(preview.path)|\(preview.hash)")
+                    .id("\(preview.path)|\(preview.hash_)")
             } else if systemPreviewed || preview.binary, let url = ProjectDownloads.rawURL(projectId: project.id, path: preview.path) {
                 SystemFilePreview(url: url, name: (preview.path as NSString).lastPathComponent)
+                    .id("\(preview.path)|\(preview.hash_)")
             } else {
                 CodeTextView(
                     text: editing ? draft : preview.content, language: CodeHighlighter.language(forPath: preview.path), palette: palette,
@@ -824,7 +835,8 @@ struct FilePreviewPage: View {
             let saved = try await api.preview(projectId: project.id, path: current.path)
             Self.recent.setObject(saved, forKey: key)
             preview = saved
-            if saved.content != draft { draft = saved.content }
+            // Text typed while the save ran stays: it is now an edit over the saved version.
+            if draft == text { draft = saved.content }
             conflict = false
         } catch {
             if error.riffetCode == "FILE_CHANGED" {

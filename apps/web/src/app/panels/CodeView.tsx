@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import { Compartment, EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
-import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
+import { highlightSelectionMatches, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
 import { unifiedMergeView } from '@codemirror/merge';
 import type { FilePreview } from '@contracts';
 import type { PromptContextReference } from '@/lib/api';
@@ -130,7 +130,8 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
     history(),
     keymap.of([
       { key: 'Mod-s', preventDefault: true, run: () => { callbacks.current.onSave?.(); return true; } },
-      { key: 'Escape', run: () => { callbacks.current.onEscape?.(); return Boolean(callbacks.current.onEscape); } },
+      // An open search panel takes Escape first.
+      { key: 'Escape', run: (view) => { if (searchPanelOpen(view.state) || !callbacks.current.onEscape) return false; callbacks.current.onEscape(); return true; } },
       indentWithTab, ...historyKeymap, ...defaultKeymap,
     ]),
     EditorView.updateListener.of((update) => { if (update.docChanged) callbacks.current.onChange?.(update.state.doc.toString()); }),
@@ -142,7 +143,9 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
       button.type = 'button';
       button.className = `cm-chunk-action cm-chunk-${type}`;
       button.textContent = mergeLabels.current[type];
+      // On mouse down, so the editor keeps the selection; a key press arrives as a click.
       button.onmousedown = action;
+      button.onclick = (event) => { if (event.detail === 0) action(event); };
       return button;
     },
   });

@@ -11,6 +11,8 @@ import { fileDrafts, useDraft } from './fileDrafts';
 
 /** Read again this long after the working tree last changed, so a burst of writes reads once. */
 const SETTLE_MS = 300;
+/** The editor keeps `\n` whatever the file uses; the server writes the file's own line endings back. */
+const lines = (text: string) => text.replace(/\r\n?/g, '\n');
 
 /**
  * Editing the open file of the files view (docs/guide/workspace.md「编辑与文件操作」). The edit is
@@ -33,29 +35,42 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
   const path = preview?.path;
   const draft = useDraft(projectId, path);
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  /** The file being written, if any; another file can be edited and refreshed meanwhile. */
+  const [savingPath, setSavingPath] = useState<string>();
   const [comparing, setComparing] = useState(false);
   const conflict = Boolean(draft && preview && draft.base !== preview.hash);
 
+  /** Whether [file] may be edited now: it holds an edit already, or another can still be kept. */
+  const roomFor = useCallback((file: string) => {
+    if (fileDrafts.get(projectId, file) || !fileDrafts.full()) return true;
+    toast.error(t`最多同时保留 ${FILE_BUDGET.draftsKept} 个未保存的文件，先保存或放弃其中一些`);
+    return false;
+  }, [projectId, t]);
   /** A file just created opens for editing. */
   const startOnOpen = useRef<string | undefined>(undefined);
   // Another file, or the same one again: back to editing only where an edit is kept.
   useEffect(() => {
-    setEditing(path !== undefined && (Boolean(fileDrafts.get(projectId, path)) || startOnOpen.current === path));
-    if (path !== undefined && startOnOpen.current === path) startOnOpen.current = undefined;
+    const opened = path !== undefined && startOnOpen.current === path;
+    setEditing(path !== undefined && (Boolean(fileDrafts.get(projectId, path)) || (opened && roomFor(path))));
+    if (opened) startOnOpen.current = undefined;
     setComparing(false);
-  }, [projectId, path]);
+  }, [projectId, path, roomFor]);
   useEffect(() => { if (!conflict) setComparing(false); }, [conflict]);
 
-  const latest = useRef({ preview, saving, onPreview });
-  latest.current = { preview, saving, onPreview };
+  const latest = useRef({ preview, onPreview });
+  latest.current = { preview, onPreview };
+  /** The file a save is writing now: refreshes of it wait, and it is not saved twice at once. */
+  const writing = useRef<string | undefined>(undefined);
+  /** Bumped by every save, so a read that started before one never lands after it. */
+  const generation = useRef(0);
   const refresh = useCallback(async () => {
     const shown = latest.current.preview;
-    if (!shown || latest.current.saving || shown.binary) return;
+    if (!shown || writing.current === shown.path || shown.binary) return;
+    const started = generation.current;
     try {
       const fresh = await api.preview(projectId, shown.path);
       const now = latest.current.preview;
-      if (now?.path === fresh.path && now.hash !== fresh.hash && !latest.current.saving) latest.current.onPreview(fresh);
+      if (generation.current === started && writing.current !== fresh.path && now?.path === fresh.path && now.hash !== fresh.hash) latest.current.onPreview(fresh);
     } catch { /* gone or unreadable: the next open says so */ }
   }, [projectId]);
 
@@ -79,12 +94,10 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
     if (!shown) return;
     const kept = fileDrafts.get(projectId, shown.path);
     // Typed back to what is on disk: nothing left to save.
-    if ((kept?.base ?? shown.hash) === shown.hash && text === shown.content) fileDrafts.drop(projectId, shown.path);
-    else if (!fileDrafts.set(projectId, shown.path, { base: kept?.base ?? shown.hash, text })) {
-      toast.error(t`最多同时保留 ${FILE_BUDGET.draftsKept} 个未保存的文件，先保存或放弃其中一些`);
-      return;
-    }
-  }, [projectId, t]);
+    if ((kept?.base ?? shown.hash) === shown.hash && text === lines(shown.content)) fileDrafts.drop(projectId, shown.path);
+    // Editing starts only where a draft can be kept (`roomFor`), so this holds.
+    else fileDrafts.set(projectId, shown.path, { base: kept?.base ?? shown.hash, text });
+  }, [projectId]);
 
   /** Resolves true when [file] has nothing unsaved, or the reader chose to lose it. */
   const discard = useCallback(async (file: string) => {
@@ -94,13 +107,18 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
     return confirmed;
   }, [projectId, t]);
 
-  /** Writes the draft. In conflict it is written over the version now on disk, which the reader has been shown. */
-  const save = useCallback(async () => {
+  /**
+   * Writes the draft. In conflict only [over] writes it, over the version now on disk the reader has been shown
+   * (the 覆盖保存 button); ⌘S then does nothing, so a change that arrived a moment ago is not overwritten unseen.
+   */
+  const save = useCallback(async (over = false) => {
     const shown = latest.current.preview;
     const kept = shown && fileDrafts.get(projectId, shown.path);
-    if (!shown || !kept || latest.current.saving) return;
-    setSaving(true);
-    latest.current.saving = true;
+    if (!shown || !kept || writing.current === shown.path) return;
+    if (kept.base !== shown.hash && !over) return;
+    writing.current = shown.path;
+    generation.current += 1;
+    setSavingPath(shown.path);
     try {
       const version = await api.saveFile(projectId, shown.path, kept.text, shown.hash);
       // Typed on while it was saving: what was saved is the new base, the rest stays a draft.
@@ -118,8 +136,9 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
         toast.error(translated ?? errorMessage(error, t`无法保存文件`));
       }
     } finally {
-      latest.current.saving = false;
-      setSaving(false);
+      generation.current += 1;
+      writing.current = undefined;
+      setSavingPath(undefined);
     }
   }, [projectId, t]);
 
@@ -129,13 +148,13 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
     editable: writable && Boolean(preview?.editable),
     editing: editing && writable && Boolean(preview?.editable),
     dirty: Boolean(draft),
-    saving,
+    saving: savingPath !== undefined && savingPath === path,
     conflict,
     /** The disk's text to show the draft against, while comparing. */
     original: conflict && comparing ? preview?.content : undefined,
     comparing,
     setComparing,
-    start: () => setEditing(true),
+    start: () => { if (path !== undefined && roomFor(path)) setEditing(true); },
     /** Opens [file] for editing once it is the file shown. */
     startOnOpen: (file: string) => { startOnOpen.current = file; },
     /** Leaves editing; an unsaved edit is discarded, after asking. */

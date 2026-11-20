@@ -20,8 +20,9 @@ verify:
 ## 不变量
 
 - 所有读取先过 `scope.ts#resolveReadablePath`，它做符号链接解析、项目范围检查和凭证路径拒绝。不要在 `index.ts` 里直接 `readFile` 用户给的路径。
-- 所有写入先过 `write.ts#resolveWritablePath`：只在项目内，拒绝项目目录本身、任何 `.git` 路径段、状态目录与凭证目录；不要在别处对用户给的路径 `writeFile` / `rename` / `rm`。
-- 保存必须比对 `expectedHash` 与磁盘当前内容的 sha256，并在同一把按文件的锁里写入（`write.ts#FileWrites.save`）；`FilePreview.editable` 的条件要和 `save` 接受的一致，否则界面给了编辑入口却存不进去。
+- 所有写入先过 `write.ts#resolveWritablePath`：只在项目内，拒绝项目目录本身、任何 `.git` 路径段、状态目录与凭证目录；不要在别处对用户给的路径 `writeFile` / `rename` / `rm`。`.git` 按磁盘的匹配方式判断（不分大小写，忽略 Windows 会去掉的结尾点和空格），并且对写名和真实位置各判一次：不区分大小写的 macOS 卷上 `.GIT/config` 就是 `.git/config`，指向 `.git` 的链接也是；还不存在的路径按最深一层已存在的目录解析真实位置。
+- 保存必须比对 `expectedHash` 与磁盘当前内容的 sha256，并在锁里写入；保存、新建、移动、删除、撤销共用按项目的一把锁（`write.ts#FileWrites.locked`），否则移动和保存交错会把文件写回旧路径，「目标是否已存在」的检查也会被另一次写入抢先；`FilePreview.editable` 的条件要和 `save` 接受的一致，否则界面给了编辑入口却存不进去。
+- 删除先写回收区槽位里的记录再移入文件：清理（`write.ts#FileWrites.prune`）只删过期、超量或很久以前留下的无记录槽位，先移文件再写记录时，并发的清理会把刚删的文件连同撤销一起删掉。
 - 写入后调用 `noteWrite`（接到 `apps/server/src/backends/shared/workspace-observer.ts#noteEdit`），否则同时在跑的 shell 命令会把用户的修改算进自己的产出。
 - 项目外的绝对路径只在 `allowOutsideRead` 打开时放行，且只能是已存在的常规文件，没有列目录和搜索（`scope.ts#resolveExternalFile`）；凭证目录与文件无论开关都拒绝，包括经符号链接指向它们（`scope.ts#isSecretPath`）。
 - `~/` 要在解析前展开成服务进程用户的家目录，预览图片与普通预览走同一个入口，否则同一个路径在两条路径上结果不同（`scope.ts#expandHomePath`）。
@@ -39,6 +40,7 @@ verify:
 
 ## 排障
 
+- LibreOffice 转换后残留 `soffice.bin`：转换在自己的进程组里跑，超时和结束时整组杀掉（`apps/server/src/previews/office-convert.ts`）；Linux 上 `soffice` 是脚本，只杀它不会结束干活的子进程。
 - 保存总是 409 `FILE_CHANGED`：客户端带的 `hash` 要来自整份文件的预览；有进程在持续改写这个文件（格式化工具、监听编译）时也会这样。
 
 - 文件预览报 `PATH_DENIED` 或 `FILE_NOT_FOUND`：先看路径是否在项目外且 `allowOutsideRead` 关闭，再看是否命中凭证规则（`scope.ts#isSecretPath`）。

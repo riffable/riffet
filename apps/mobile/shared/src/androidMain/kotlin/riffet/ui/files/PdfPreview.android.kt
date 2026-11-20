@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -41,6 +42,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import riffet.contracts.FILE_BUDGET_PDF_PAGE_MAX_PIXELS
 import riffet.shared.DownloadWriter
@@ -50,6 +54,9 @@ import riffet.ui.timeline.Spinner
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal actual val nativePdfSupported: Boolean = true
 
@@ -59,24 +66,45 @@ private const val RENDER_SCALE = 1.5f
 private const val MAX_ZOOM = 3f
 private const val STALE_AFTER_MS = 60L * 60 * 1000
 
-/** The PDF as [PdfRenderer] reads it; its one open page at a time makes every call take [lock]. */
+/**
+ * The PDF as [PdfRenderer] reads it; its one open page at a time makes every call take [lock], and all
+ * of them run on the document's own thread, which [close] ends after the renderer is closed.
+ */
 private class PdfPages(private val file: File, private val renderer: PdfRenderer, val sizes: List<Pair<Int, Int>>) {
     private val lock = Any()
+    private val executor = Executors.newSingleThreadExecutor { Thread(it, "pdf-render").apply { isDaemon = true } }
+    private val dispatcher = executor.asCoroutineDispatcher()
+    private val closing = AtomicBoolean(false)
     private var closed = false
 
-    /** Draws [index] into [bitmap]; false when the document has been closed meanwhile. */
-    fun render(index: Int, bitmap: Bitmap): Boolean = synchronized(lock) {
-        if (closed) return false
-        bitmap.eraseColor(AndroidColor.WHITE)
-        renderer.openPage(index).use { it.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY) }
-        true
+    /** Draws [index] into a new bitmap of [width] x [height]; null when the document has been closed meanwhile. */
+    suspend fun render(index: Int, width: Int, height: Int): Bitmap? = withContext(dispatcher) {
+        synchronized(lock) {
+            if (closing.get() || closed) return@synchronized null
+            // A page scrolled away while it waited for the lock is not drawn.
+            coroutineContext.ensureActive()
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            try {
+                bitmap.eraseColor(AndroidColor.WHITE)
+                renderer.openPage(index).use { it.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY) }
+                bitmap
+            } catch (failure: Throwable) { bitmap.recycle(); throw failure }
+        }
     }
 
-    fun close() = synchronized(lock) {
-        if (closed) return@synchronized
-        closed = true
-        runCatching { renderer.close() }
-        file.delete()
+    /** Never blocks the caller: the renderer is closed and the file deleted on the document's thread, behind the renders already running. */
+    fun close() {
+        if (!closing.compareAndSet(false, true)) return
+        try {
+            executor.execute {
+                synchronized(lock) {
+                    closed = true
+                    runCatching { renderer.close() }
+                    file.delete()
+                }
+                executor.shutdown()
+            }
+        } catch (_: RejectedExecutionException) {}
     }
 
     companion object {
@@ -89,14 +117,25 @@ private class PdfPages(private val file: File, private val renderer: PdfRenderer
     }
 }
 
+/** Ends the document it was given when the composition forgets it, even if that happens before any effect ran. */
+private class PdfHolder : RememberObserver {
+    var document by mutableStateOf<PdfPages?>(null)
+        private set
+    private var forgotten = false
+
+    fun offer(opened: PdfPages) { if (forgotten) opened.close() else document = opened }
+
+    override fun onRemembered() {}
+    override fun onForgotten() { forgotten = true; document?.close() }
+    override fun onAbandoned() = onForgotten()
+}
+
 @Composable
 internal actual fun PlatformPdfPreview(api: RiffetApi, projectId: String, path: String, version: String, modifier: Modifier, onUnavailable: () -> Unit) {
     val directory = File(LocalContext.current.cacheDir, "pdf-preview")
-    var pages by remember(api, projectId, path, version) { mutableStateOf<PdfPages?>(null) }
+    val holder = remember(api, projectId, path, version) { PdfHolder() }
     val unavailable by rememberUpdatedState(onUnavailable)
     // The private copy goes with the page: closing the document deletes its file.
-    val current = pages
-    DisposableEffect(current) { onDispose { current?.close() } }
     LaunchedEffect(api, projectId, path, version) {
         val file = withContext(Dispatchers.IO) {
             directory.mkdirs()
@@ -114,17 +153,19 @@ internal actual fun PlatformPdfPreview(api: RiffetApi, projectId: String, path: 
                     DownloadWriter { bytes, offset, length -> withContext(Dispatchers.IO) { stream.write(bytes, offset, length) } }
                 }
             } finally { withContext(NonCancellable) { out?.close() } }
-            opened = withContext(Dispatchers.IO) { PdfPages.open(file) }
-            pages = opened
+            // Opening is short and not interrupted, so a document that was opened is always either offered or closed below.
+            opened = withContext(Dispatchers.IO + NonCancellable) { PdfPages.open(file) }
+            currentCoroutineContext().ensureActive()
+            holder.offer(opened)
         } catch (cancellation: CancellationException) {
-            if (opened == null) file.delete()
+            if (opened == null) file.delete() else opened.close()
             throw cancellation
         } catch (_: Throwable) {
-            file.delete()
+            if (opened == null) file.delete() else opened.close()
             unavailable()
         }
     }
-    val document = current
+    val document = holder.document
     if (document == null) {
         Box(modifier, contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
         return
@@ -184,20 +225,20 @@ private fun PdfPage(document: PdfPages, index: Int, renderWidth: Int, pageWidth:
     val held = remember(document, index, renderWidth) { PageBitmap() }
     var image by remember(held) { mutableStateOf<ImageBitmap?>(null) }
     DisposableEffect(held) { onDispose { image = null; held.release() } }
+    // A page without a size has nothing to draw; its box takes a portrait ratio.
+    val drawable = pageWidth > 0 && pageHeight > 0
     LaunchedEffect(held) {
+        if (!drawable) return@LaunchedEffect
         // A very large page is drawn smaller rather than at the full width.
         val scale = minOf(1.0, Math.sqrt(FILE_BUDGET_PDF_PAGE_MAX_PIXELS.toDouble() / (renderWidth.toDouble() * renderWidth * pageHeight / pageWidth)))
         val width = (renderWidth * scale).toInt().coerceAtLeast(1)
         val height = (width.toLong() * pageHeight / pageWidth).toInt().coerceAtLeast(1)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        var drawn = false
-        try { drawn = withContext(Dispatchers.Default) { document.render(index, bitmap) } }
-        finally {
-            if (drawn && !held.released) { held.bitmap = bitmap; image = bitmap.asImageBitmap() }
-            else bitmap.recycle()
-        }
+        val bitmap = document.render(index, width, height) ?: return@LaunchedEffect
+        if (held.released) { bitmap.recycle(); return@LaunchedEffect }
+        held.bitmap = bitmap
+        image = bitmap.asImageBitmap()
     }
-    Box(Modifier.fillMaxWidth().aspectRatio(pageWidth.toFloat() / pageHeight)) {
+    Box(Modifier.fillMaxWidth().aspectRatio(if (drawable) pageWidth.toFloat() / pageHeight else 0.7071f)) {
         image?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxSize()) }
     }
 }

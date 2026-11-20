@@ -13390,12 +13390,12 @@
         }
       }
     },
-    "文件已在磁盘上改动": {
+    "文件已在别处改动": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The file changed on disk"
+            "value": "The file changed elsewhere"
           }
         }
       }

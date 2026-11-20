@@ -527,8 +527,9 @@ export class WorkspaceService {
   async siteFile(project: ProjectRef, root: string, relative: string, options: { allowOutside?: boolean; only?: string } = {}): Promise<{ path: string; name: string; size: number; mtime: Date } & RawFileType> {
     const missing = () => new AppError('FILE_NOT_FOUND', 'File does not exist', 404);
     const wanted = !relative || relative.endsWith('/') ? `${relative}index.html` : relative;
-    if (wanted.includes('\0') || wanted.split('/').some(part => !part || part.startsWith('.'))) throw missing();
     if (options.only !== undefined && wanted !== options.only) throw missing();
+    // An address for one file (a media preview) reaches nothing else, so that file may be a dot file.
+    if (wanted.includes('\0') || wanted.split('/').some(part => !part || (part.startsWith('.') && options.only === undefined) || part === '.' || part === '..')) throw missing();
     const target = path.resolve(root, wanted);
     if (!isWithin(root, target)) throw missing();
     const file = await this.rawFile(project, target, options);

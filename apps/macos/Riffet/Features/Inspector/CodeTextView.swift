@@ -75,7 +75,8 @@ struct CodeTextView: NSViewRepresentable {
         guard let textView = coordinator.textView, let ruler = coordinator.ruler else { return }
         ruler.palette = palette
         ruler.onLine = onLine
-        textView.isEditable = editable
+        coordinator.wantsEditable = editable
+        textView.isEditable = editable && !coordinator.rebuilding
         coordinator.onChange = onChange
         if let symbolView = textView as? SymbolTextView {
             symbolView.onSymbol = onSymbol
@@ -104,7 +105,10 @@ struct CodeTextView: NSViewRepresentable {
             coordinator.applied = key
             coordinator.appliedText = text
             coordinator.debounce?.cancel()
-            textView.undoManager?.removeAllActions()
+            coordinator.undo.removeAllActions()
+            // The storage is empty until the rebuilt text lands: a keystroke now would replace the draft with one character.
+            coordinator.rebuilding = true
+            textView.isEditable = false
             // Colours, paragraph style and line starts are built off the main thread; a file of
             // thousands of lines took the main thread for a noticeable moment.
             textView.textStorage?.setAttributedString(NSAttributedString())
@@ -115,6 +119,8 @@ struct CodeTextView: NSViewRepresentable {
                 let first = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: cached, palette: palette, codeTheme: codeTheme, codeRevision: codeRevision, commentItalic: commentItalic, fontSize: fontSize, styleFonts: styleFonts) }.value
                 guard !Task.isCancelled, coordinator.applied == key, coordinator.appliedText == text else { return }
                 textView.textStorage?.setAttributedString(first.text)
+                coordinator.rebuilding = false
+                textView.isEditable = coordinator.wantsEditable
                 ruler.reset(text: text, starts: first.starts)
                 if let target = coordinator.pendingTarget { coordinator.pendingTarget = nil; coordinator.jump(to: target, palette: palette) }
                 guard let language, cached == nil, text.utf16.count <= CodeHighlighter.maxLength,
@@ -210,12 +216,20 @@ struct CodeTextView: NSViewRepresentable {
         var restyle: ((String) async -> Void)?
         var typing: [NSAttributedString.Key: Any] = [:]
         var debounce: Task<Void, Never>?
+        /// The text view's own history: the window's shared manager also holds other fields' edits.
+        let undo = UndoManager()
+        var wantsEditable = false
+        /// The storage is being rebuilt and holds nothing, or only part, of the text.
+        var rebuilding = false
+
+        func undoManager(for view: NSTextView) -> UndoManager? { undo }
 
         @MainActor
         func textDidChange(_ notification: Notification) {
             guard let textView, textView.isEditable else { return }
             let text = textView.string
             appliedText = text
+            rebuilding = false
             build?.cancel()
             ruler?.reset(text: text, starts: CodeTextView.lineStarts(text))
             textView.typingAttributes = typing
@@ -223,6 +237,10 @@ struct CodeTextView: NSViewRepresentable {
             debounce?.cancel()
             debounce = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(400))
+                // Restyling replaces attributes under an input method's marked text: wait until the composition ends.
+                while !Task.isCancelled, self?.textView?.hasMarkedText() == true {
+                    try? await Task.sleep(for: .milliseconds(400))
+                }
                 guard !Task.isCancelled, let self else { return }
                 await self.restyle?(text)
             }
