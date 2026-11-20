@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import type { TaskActionsResponse, TasksResponse } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { requireProjectVisibleToClient } from '../native/client-features.js';
+import { projectVisibleToClient, requireProjectVisibleToClient } from '../native/client-features.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { contentDisposition } from '../workspace/download.js';
 import { MAX_LOG_BYTES } from './service.js';
@@ -31,7 +31,12 @@ export function registerTaskRoutes(app: FastifyInstance, deps: Pick<RouteDeps, '
     if (typeof projectId === 'string') requireProjectVisibleToClient(request.headers, store.getProject(projectId));
     return tasks.start(request.body);
   });
-  app.get<{ Querystring: { projectId?: string; limit?: string } }>('/api/tasks', async (request): Promise<TasksResponse> => {
+  app.get<{ Querystring: { projectId?: string; pluginId?: string; limit?: string } }>('/api/tasks', async (request): Promise<TasksResponse> => {
+    // One plugin's recent tasks across projects, for its details page. A linked server answers with its own tasks only, as every task is one server's.
+    if (typeof request.query.pluginId === 'string' && request.query.pluginId && request.query.projectId === undefined) {
+      const visibleProject = (projectId: string): boolean => { try { return projectVisibleToClient(request.headers, store.getProject(projectId)); } catch { return false; } };
+      return { tasks: await tasks.listByPlugin(request.query.pluginId, integer(request.query.limit, 'limit', 20, 100), visibleProject) };
+    }
     if (typeof request.query.projectId !== 'string' || !request.query.projectId) throw new AppError('INVALID_INPUT', 'projectId is required');
     return { tasks: await tasks.list(request.query.projectId, integer(request.query.limit, 'limit', 20, 100)) };
   });

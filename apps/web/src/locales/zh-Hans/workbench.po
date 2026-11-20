@@ -41,6 +41,11 @@ msgstr "{0} 未登录"
 msgid "{0} 读取失败"
 msgstr "{0} 读取失败"
 
+#. placeholder {0}: formatDate(share.expiresAt, { month: 'long', day: 'numeric' })
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "{0}到期"
+msgstr "{0}到期"
+
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
@@ -61,6 +66,10 @@ msgstr "Agent 与模型"
 #: src/app/onboarding/Onboarding.tsx
 msgid "Agent 会在所选目录里读写文件"
 msgstr "Agent 会在所选目录里读写文件"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "Agent 配置"
+msgstr "Agent 配置"
 
 #: src/app/ProjectHome.tsx
 msgid "CLI 与终端工具"
@@ -125,6 +134,7 @@ msgstr "下载 {0}"
 msgid "不兼容"
 msgstr "不兼容"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "不可用"
 msgstr "不可用"
@@ -132,6 +142,10 @@ msgstr "不可用"
 #: src/app/DirectoryPicker.tsx
 msgid "不存在"
 msgstr "不存在"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "不过期"
+msgstr "不过期"
 
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
@@ -305,8 +319,13 @@ msgstr "先为这个任务选一个项目"
 msgid "全部"
 msgstr "全部"
 
+#. placeholder {0}: formatNumber(accounts.length)
+#. placeholder {0}: formatNumber(items.length)
 #. placeholder {0}: formatNumber(providers.length)
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
 msgid "全部 {0} 个"
 msgstr "全部 {0} 个"
 
@@ -388,6 +407,11 @@ msgstr "内置插件不可卸载"
 msgid "最后一个标签"
 msgstr "最后一个标签"
 
+#: src/app/plugins/PluginTasksBlock.tsx
+msgctxt "plugin-tasks-section"
+msgid "最近任务"
+msgstr "最近任务"
+
 #: src/app/ProjectHome.tsx
 #: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
@@ -412,6 +436,11 @@ msgstr "出错"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-feature"
+msgid "分享"
+msgstr "分享"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgctxt "plugin-shares-section"
 msgid "分享"
 msgstr "分享"
 
@@ -722,6 +751,7 @@ msgstr "外部插件已暂停"
 msgid "多个标签用逗号分隔"
 msgstr "多个标签用逗号分隔"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "失败"
 msgstr "失败"
@@ -794,6 +824,7 @@ msgstr "工作台"
 msgid "已中断"
 msgstr "已中断"
 
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已停用"
 msgstr "已停用"
@@ -803,6 +834,7 @@ msgstr "已停用"
 msgid "已切换到 {0}"
 msgstr "已切换到 {0}"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "已取消"
 msgstr "已取消"
@@ -831,6 +863,10 @@ msgstr "已安装的插件保留，不再收到更新。"
 msgctxt "workbench-item-status-completed"
 msgid "已完成"
 msgstr "已完成"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "已就绪"
+msgstr "已就绪"
 
 #: src/app/SessionSearchDialog.tsx
 msgid "已归档"
@@ -865,6 +901,10 @@ msgstr "已转为任务 #{0}"
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "已过期"
 msgstr "已过期"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "已连接"
+msgstr "已连接"
 
 #: src/app/ProjectHome.tsx
 msgid "并行尝试"
@@ -949,6 +989,7 @@ msgstr "恢复当前会话"
 msgid "恢复项目"
 msgstr "恢复项目"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "成功"
 msgstr "成功"
@@ -960,6 +1001,10 @@ msgstr "所有设备都会移除，无法恢复。项目文件和 CLI 历史保�
 #: src/app/state/catalogStore.ts
 msgid "所选后端不可用"
 msgstr "所选后端不可用"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "打开"
+msgstr "打开"
 
 #: src/app/Workbench.tsx
 msgid "打开个人助理"
@@ -1157,6 +1202,10 @@ msgstr "搜索终端会话"
 #: src/app/SessionSearchDialog.tsx
 msgid "搜索结果"
 msgstr "搜索结果"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "撤下"
+msgstr "撤下"
 
 #: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
@@ -1428,6 +1477,10 @@ msgstr "无法打开该 Worktree"
 msgid "无法打开这个目录"
 msgstr "无法打开这个目录"
 
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "无法撤下"
+msgstr "无法撤下"
+
 #: src/app/state/marksStore.ts
 msgid "无法收藏"
 msgstr "无法收藏"
@@ -1460,6 +1513,14 @@ msgstr "无法离开扩展管理页面"
 msgid "无法读取"
 msgstr "无法读取"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "无法读取 Agent 配置"
+msgstr "无法读取 Agent 配置"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "无法读取分享"
+msgstr "无法读取分享"
+
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"
 msgstr "无法读取恢复命令"
@@ -1471,6 +1532,10 @@ msgstr "无法读取插件"
 #: src/app/plugins/PluginMarket.tsx
 msgid "无法读取插件目录"
 msgstr "无法读取插件目录"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "无法读取机器人"
+msgstr "无法读取机器人"
 
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "无法读取模型目录"
@@ -1623,6 +1688,7 @@ msgid "未安装"
 msgstr "未安装"
 
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 msgid "未登录"
 msgstr "未登录"
 
@@ -1633,6 +1699,11 @@ msgstr "未读"
 #: src/app/SidebarUserMenu.tsx
 msgid "本机"
 msgstr "本机"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgctxt "plugin-channels-section"
+msgid "机器人"
+msgstr "机器人"
 
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1704,6 +1775,7 @@ msgstr "模型选择已保留，目录恢复前暂不能发送。"
 msgid "正在停止"
 msgstr "正在停止"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "正在取消"
 msgstr "正在取消"
@@ -1715,6 +1787,10 @@ msgstr "正在同步"
 #: src/app/plugins/PluginsPage.tsx
 msgid "此配置在当前客户端不可用"
 msgstr "此配置在当前客户端不可用"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "没有仍然有效的分享"
+msgstr "没有仍然有效的分享"
 
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "没有匹配的提供商"
@@ -1770,6 +1846,8 @@ msgid "深色"
 msgstr "深色"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginSources.tsx
 msgid "添加"
@@ -1784,9 +1862,17 @@ msgstr "添加提供商"
 msgid "添加插件源"
 msgstr "添加插件源"
 
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "添加机器人"
+msgstr "添加机器人"
+
 #: src/app/ProjectHome.tsx
 msgid "添加第一个项目"
 msgstr "添加第一个项目"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "添加配置"
+msgstr "添加配置"
 
 #: src/app/AddProjectDialog.tsx
 #: src/app/ProjectHome.tsx
@@ -1830,10 +1916,15 @@ msgctxt "plugin-version-label"
 msgid "版本"
 msgstr "版本"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "版本过旧"
+msgstr "版本过旧"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "状态"
 msgstr "状态"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "状态未知"
 msgstr "状态未知"
@@ -2200,6 +2291,7 @@ msgid "运行"
 msgstr "运行"
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 #: src/plugins/TasksView.tsx
@@ -2234,9 +2326,20 @@ msgstr "近 7 天"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
 msgid "返回"
 msgstr "返回"
+
+#. placeholder {0}: backendLabel(primary)
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "还没有 {0} 配置"
+msgstr "还没有 {0} 配置"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "还没有{platform}机器人"
+msgstr "还没有{platform}机器人"
 
 #: src/app/SessionSearchDialog.tsx
 #: src/app/Sidebar.tsx
@@ -2250,6 +2353,10 @@ msgstr "还没有可用的 Agent"
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "还没有提供商使用 {pluginName}"
 msgstr "还没有提供商使用 {pluginName}"
+
+#: src/app/plugins/PluginTasksBlock.tsx
+msgid "还没有运行过任务"
+msgstr "还没有运行过任务"
 
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
@@ -2274,8 +2381,13 @@ msgid "连不上 Riffet 服务器"
 msgstr "连不上 Riffet 服务器"
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 msgid "连接中"
 msgstr "连接中"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "连接失败"
+msgstr "连接失败"
 
 #: src/app/App.tsx
 msgid "退出登录失败"
@@ -2369,9 +2481,13 @@ msgid "重新读取"
 msgstr "重新读取"
 
 #: src/app/App.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr "重试"
@@ -2437,6 +2553,7 @@ msgstr "首次运行这条命令"
 msgid "黑马跑酷"
 msgstr "黑马跑酷"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "默认"
 msgstr "默认"

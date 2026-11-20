@@ -10,7 +10,7 @@ export const FEISHU_CHANNEL = 'riffet.feishu/feishu';
 export const feishu: Plugin = {
   manifest: {
     id: 'riffet.feishu', vendor: 'riffet', name: 'feishu', apiVersion: PLUGIN_API_VERSION, defaultEnabled: true, version: '1.0.0',
-    title: { 'zh-Hans': '飞书', en: 'Feishu' },
+    title: { 'zh-Hans': '飞书机器人', en: 'Feishu Bot' },
     description: { 'zh-Hans': '在飞书或 Lark 里和 Riffet 的会话对话。', en: 'Talk to Riffet conversations from Feishu or Lark.' },
     activation: ['startup'],
     contributes: {

@@ -41,6 +41,11 @@ msgstr "{0} not signed in"
 msgid "{0} 读取失败"
 msgstr "{0} could not be read"
 
+#. placeholder {0}: formatDate(share.expiresAt, { month: 'long', day: 'numeric' })
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "{0}到期"
+msgstr "Expires {0}"
+
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, one {Also deletes # side chat.} other {Also deletes # side chats.}}"
@@ -61,6 +66,10 @@ msgstr "Agents and models"
 #: src/app/onboarding/Onboarding.tsx
 msgid "Agent 会在所选目录里读写文件"
 msgstr "The Agent reads and writes files in the chosen directory"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "Agent 配置"
+msgstr "Agent configurations"
 
 #: src/app/ProjectHome.tsx
 msgid "CLI 与终端工具"
@@ -125,6 +134,7 @@ msgstr "Download {0}"
 msgid "不兼容"
 msgstr "Incompatible"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "不可用"
 msgstr "Unavailable"
@@ -132,6 +142,10 @@ msgstr "Unavailable"
 #: src/app/DirectoryPicker.tsx
 msgid "不存在"
 msgstr "Missing"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "不过期"
+msgstr "No expiry"
 
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
@@ -305,8 +319,13 @@ msgstr "Choose a project for this task first"
 msgid "全部"
 msgstr "All"
 
+#. placeholder {0}: formatNumber(accounts.length)
+#. placeholder {0}: formatNumber(items.length)
 #. placeholder {0}: formatNumber(providers.length)
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
 msgid "全部 {0} 个"
 msgstr "All {0}"
 
@@ -388,6 +407,11 @@ msgstr "Built-in plugins cannot be uninstalled"
 msgid "最后一个标签"
 msgstr "Last tab"
 
+#: src/app/plugins/PluginTasksBlock.tsx
+msgctxt "plugin-tasks-section"
+msgid "最近任务"
+msgstr "Recent tasks"
+
 #: src/app/ProjectHome.tsx
 #: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
@@ -414,6 +438,11 @@ msgstr "Failed"
 msgctxt "plugin-feature"
 msgid "分享"
 msgstr "Sharing"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgctxt "plugin-shares-section"
+msgid "分享"
+msgstr "Shares"
 
 #: src/app/SessionInfo.tsx
 msgid "分支"
@@ -722,6 +751,7 @@ msgstr "External plugins are paused"
 msgid "多个标签用逗号分隔"
 msgstr "Separate multiple tags with commas"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "失败"
 msgstr "Failed"
@@ -794,6 +824,7 @@ msgstr "Workbench"
 msgid "已中断"
 msgstr "Interrupted"
 
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已停用"
 msgstr "Disabled"
@@ -803,6 +834,7 @@ msgstr "Disabled"
 msgid "已切换到 {0}"
 msgstr "Switched to {0}"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "已取消"
 msgstr "Cancelled"
@@ -831,6 +863,10 @@ msgstr "Installed plugins stay but no longer receive updates."
 msgctxt "workbench-item-status-completed"
 msgid "已完成"
 msgstr "Completed"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "已就绪"
+msgstr "Ready"
 
 #: src/app/SessionSearchDialog.tsx
 msgid "已归档"
@@ -865,6 +901,10 @@ msgstr "Made task #{0}"
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "已过期"
 msgstr "Expired"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "已连接"
+msgstr "Connected"
 
 #: src/app/ProjectHome.tsx
 msgid "并行尝试"
@@ -949,6 +989,7 @@ msgstr "Restore current session"
 msgid "恢复项目"
 msgstr "Restore project"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "成功"
 msgstr "Success"
@@ -960,6 +1001,10 @@ msgstr "It will be removed from every device and can't be recovered. Project fil
 #: src/app/state/catalogStore.ts
 msgid "所选后端不可用"
 msgstr "The selected backend is unavailable"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "打开"
+msgstr "Open"
 
 #: src/app/Workbench.tsx
 msgid "打开个人助理"
@@ -1157,6 +1202,10 @@ msgstr "Search terminal sessions"
 #: src/app/SessionSearchDialog.tsx
 msgid "搜索结果"
 msgstr "Search results"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "撤下"
+msgstr "Unpublish"
 
 #: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
@@ -1428,6 +1477,10 @@ msgstr "Couldn't open that Worktree"
 msgid "无法打开这个目录"
 msgstr "Couldn't open this folder"
 
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "无法撤下"
+msgstr "Couldn't unpublish"
+
 #: src/app/state/marksStore.ts
 msgid "无法收藏"
 msgstr "Couldn't add to favorites"
@@ -1460,6 +1513,14 @@ msgstr "Couldn't leave the extensions page"
 msgid "无法读取"
 msgstr "Could not read"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "无法读取 Agent 配置"
+msgstr "Couldn't read Agent configurations"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "无法读取分享"
+msgstr "Couldn't read shares"
+
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"
 msgstr "Couldn't read the resume command"
@@ -1471,6 +1532,10 @@ msgstr "Could not load plugins"
 #: src/app/plugins/PluginMarket.tsx
 msgid "无法读取插件目录"
 msgstr "Couldn’t load the plugin directory"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "无法读取机器人"
+msgstr "Couldn't load bots"
 
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "无法读取模型目录"
@@ -1623,6 +1688,7 @@ msgid "未安装"
 msgstr "Not installed"
 
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 msgid "未登录"
 msgstr "Not signed in"
 
@@ -1633,6 +1699,11 @@ msgstr "Unread"
 #: src/app/SidebarUserMenu.tsx
 msgid "本机"
 msgstr "This machine"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgctxt "plugin-channels-section"
+msgid "机器人"
+msgstr "Bots"
 
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1704,6 +1775,7 @@ msgstr "Your model choice is kept; sending stays unavailable until the catalog i
 msgid "正在停止"
 msgstr "Stopping"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "正在取消"
 msgstr "Cancelling"
@@ -1715,6 +1787,10 @@ msgstr "Syncing"
 #: src/app/plugins/PluginsPage.tsx
 msgid "此配置在当前客户端不可用"
 msgstr "This configuration is unavailable in this client"
+
+#: src/app/plugins/PluginSharesBlock.tsx
+msgid "没有仍然有效的分享"
+msgstr "No active shares"
 
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "没有匹配的提供商"
@@ -1770,6 +1846,8 @@ msgid "深色"
 msgstr "Dark"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginSources.tsx
 msgid "添加"
@@ -1784,9 +1862,17 @@ msgstr "Add provider"
 msgid "添加插件源"
 msgstr "Add plugin source"
 
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "添加机器人"
+msgstr "Add bot"
+
 #: src/app/ProjectHome.tsx
 msgid "添加第一个项目"
 msgstr "Add your first project"
+
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "添加配置"
+msgstr "Add configuration"
 
 #: src/app/AddProjectDialog.tsx
 #: src/app/ProjectHome.tsx
@@ -1830,10 +1916,15 @@ msgctxt "plugin-version-label"
 msgid "版本"
 msgstr "Version"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "版本过旧"
+msgstr "Outdated"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "状态"
 msgstr "Status"
 
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "状态未知"
 msgstr "Status unknown"
@@ -2200,6 +2291,7 @@ msgid "运行"
 msgstr "Run"
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 #: src/plugins/TasksView.tsx
@@ -2234,9 +2326,20 @@ msgstr "Last 7 days"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
 msgid "返回"
 msgstr "Back"
+
+#. placeholder {0}: backendLabel(primary)
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+msgid "还没有 {0} 配置"
+msgstr "No {0} configurations yet"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "还没有{platform}机器人"
+msgstr "No {platform} bots yet"
 
 #: src/app/SessionSearchDialog.tsx
 #: src/app/Sidebar.tsx
@@ -2250,6 +2353,10 @@ msgstr "No Agent is available yet"
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "还没有提供商使用 {pluginName}"
 msgstr "No providers use {pluginName} yet"
+
+#: src/app/plugins/PluginTasksBlock.tsx
+msgid "还没有运行过任务"
+msgstr "No tasks have run yet"
 
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
@@ -2274,8 +2381,13 @@ msgid "连不上 Riffet 服务器"
 msgstr "Can't reach the Riffet server"
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 msgid "连接中"
 msgstr "Connecting"
+
+#: src/app/plugins/PluginChannelsBlock.tsx
+msgid "连接失败"
+msgstr "Connection failed"
 
 #: src/app/App.tsx
 msgid "退出登录失败"
@@ -2369,9 +2481,13 @@ msgid "重新读取"
 msgstr "Reload"
 
 #: src/app/App.tsx
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
+#: src/app/plugins/PluginChannelsBlock.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
+#: src/app/plugins/PluginSharesBlock.tsx
+#: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr "Retry"
@@ -2437,6 +2553,7 @@ msgstr "First run of this command"
 msgid "黑马跑酷"
 msgstr "Dark Horse Run"
 
+#: src/app/plugins/PluginAgentBackendsBlock.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "默认"
 msgstr "Default"

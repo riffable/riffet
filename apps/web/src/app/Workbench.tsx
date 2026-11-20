@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeBackendId, Session, StatsRunRow, WorkItem } from '@contracts';
+import type { NativeBackendId, Session, StatsRunRow, Task, WorkItem } from '@contracts';
+import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
@@ -45,6 +46,7 @@ import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
 import { useSessionViews, setViewVisible } from './session/viewPrefs';
 import { shownView, useSidebarViews } from './panels/useSidebarViews';
 import { DockHost, loadingPanel, PanelHost } from './WorkbenchPanels';
+import { useViewCatalog } from '@/plugins/registry';
 import { TabChromeContext } from './tabs/chrome';
 import { TabBar } from './tabs/TabBar';
 import { useTabs } from './tabs/useTabs';
@@ -244,6 +246,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const standInCatalog = catalogLoading && !catalogSession && held?.agent === catalogAgent ? held.result.entry.models : undefined;
   const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
+  const viewCatalog = useViewCatalog();
   const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || designOpen;
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
@@ -320,6 +323,17 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     return Boolean(await createNative({ ...(target ? { projectId: target.id } : { projectless: true }), title: item.title, prompt, attachments: [], context: [], backendId: item.assignee.backendId, ...run(item.assignee), workItemId: item.id, follow: false }));
   };
   const { projectAction, addProject, startSessionInDirectory, startIsolatedDirectory, openWorktreeProject, onWorktreeMerged, chooseSessionDirectory, openInEditor } = useProjectActions({ project, loadBootstrap, selectProject });
+  /** Opens a plugin task from its details page: its project, then the sidebar view that lists that provider's tasks (as a command's `task` result does). */
+  const openPluginTask = useCallback((task: Task) => {
+    const target = projects.find((entry) => entry.id === task.projectId);
+    if (!target) return;
+    const view = viewCatalog.find((entry) => entry.location === 'sidebar' && entry.render?.kind === 'declarative' && entry.render.declaration.renderer?.provider === task.providerId);
+    void selectProject(target).then((moved) => {
+      if (!moved) return;
+      focusTask(task.id);
+      if (view) { ui.set({ panelTab: view.id }); ui.setPanelOpen(true); }
+    });
+  }, [projects, viewCatalog, selectProject, ui]);
   const { createShell, closeTerminal } = useTerminalActions();
 
   // Stable, so the memoized sidebar rows and pages are not re-rendered by the shell's own renders.
@@ -482,7 +496,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
   let content: ReactNode;
   if (pluginsOpen) {
-    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews].map(view => view.id)} onOpenModels={() => openSettingsAt('providers')} onOpenProviderSettings={(target) => { void nav.navigate(() => { ui.openProviderSettings(target); ui.setMobileSidebar(false); }); }} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
+    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews].map(view => view.id)} onOpenModels={() => openSettingsAt('providers')} onOpenProviderSettings={(target) => { void nav.navigate(() => { ui.openProviderSettings(target); ui.setMobileSidebar(false); }); }} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} onOpenSettings={openSettingsAt} onOpenTask={openPluginTask} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
       onSelect={(id, tab = 'overview') => nav.set({ pluginId: id, pluginViewId: '', pluginDetailTab: tab })}
       onClose={() => { void nav.navigate(() => nav.set({ pluginsOpen: false })); }}
       onBeforeLeaveChange={nav.registerPluginBeforeLeave}

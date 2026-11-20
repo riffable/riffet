@@ -295,6 +295,13 @@ export class TaskService {
     return Promise.all(this.store.list(projectId, Math.max(1, Math.min(limit, 100))).map(stored => this.view(stored)));
   }
 
+  /** A plugin's recent tasks across the projects `visible` accepts, newest first. A project that is gone is skipped. */
+  async listByPlugin(pluginId: string, limit: number, visible: (projectId: string) => boolean): Promise<Task[]> {
+    const wanted = Math.max(1, Math.min(limit, 100));
+    const rows = this.store.listByPlugin(pluginId, 100).filter(stored => visible(stored.task.projectId)).slice(0, wanted);
+    return Promise.all(rows.map(stored => this.view(stored)));
+  }
+
   /** The bytes `[from, to)` of the log. `to` stops at a character boundary, so `from = to` continues exactly where this ended. */
   async log(id: string, from: number, limit: number): Promise<TaskLogChunk> {
     const stored = this.stored(id);

@@ -11,6 +11,9 @@ const enc = encodeURIComponent;
 export const tasksApi = {
   list: async (projectId: string, limit: number, signal?: AbortSignal): Promise<Task[]> =>
     (await request<TasksResponse>(`/api/tasks?projectId=${enc(projectId)}&limit=${limit}`, { ...(signal ? { signal } : {}) })).tasks,
+  /** One plugin's recent tasks across projects, newest first. */
+  listByPlugin: async (pluginId: string, limit: number, signal?: AbortSignal): Promise<Task[]> =>
+    (await request<TasksResponse>(`/api/tasks?pluginId=${enc(pluginId)}&limit=${limit}`, { ...(signal ? { signal } : {}) })).tasks,
   get: (id: string, signal?: AbortSignal) => request<Task>(`/api/tasks/${enc(id)}`, { ...(signal ? { signal } : {}) }),
   start: (body: TaskCreate) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
   cancel: (id: string) => request<Task>(`/api/tasks/${enc(id)}/cancel`, { method: 'POST' }),

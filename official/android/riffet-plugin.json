@@ -10,6 +10,12 @@
     "en": "Android Build"
   },
   "contributes": {
+    "page": {
+      "title": {
+        "zh-Hans": "设置",
+        "en": "Settings"
+      }
+    },
     "tasks": [
       {
         "id": "riffet.android/gradle",

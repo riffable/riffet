@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeBackendId, PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
+import type { NativeBackendId, PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, Task, ViewDeclaration } from '@contracts';
 import { IconEllipsis, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { SearchField } from '@/components/ui/search-field';
@@ -33,6 +33,11 @@ import { AddPluginSourceDialog, EnablePluginSource, PluginSourceMenu } from './P
 import { CapabilityFacts, PLUGIN_GROUPS, PluginMark, installedGroup, useGroupTitles } from './PluginMark';
 import { ALL_SOURCES, PluginsAside, PluginsScopeMenu, sourceScope, type PluginScope } from './PluginsNav';
 import { PluginPageView } from './PluginPageView';
+import type { SettingsSection } from '../settings/settingsSections';
+import { PluginAgentBackendsBlock, hasAgentBackendsBlock } from './PluginAgentBackendsBlock';
+import { PluginChannelsBlock, hasChannelsBlock } from './PluginChannelsBlock';
+import { PluginSharesBlock, hasSharesBlock } from './PluginSharesBlock';
+import { PluginTasksBlock, hasTasksBlock } from './PluginTasksBlock';
 import { PluginModelSourceProviders, hasFallbackConnectionSettings, pluginModelSources, type ModelSourceSubpage } from './PluginModelSourceProviders';
 import { SettingsGroup, SettingsRow } from '../settings/SettingsLayout';
 import { Markdown } from '../session/Markdown';
@@ -44,7 +49,8 @@ const removable = (plugin: PluginDescriptor) => plugin.source === 'installed' ? 
 const deviceFlows = (plugin: PluginDescriptor) => [...(plugin.declared?.actions ?? []), ...plugin.actions].some(action => action.kind === 'device-flow');
 const hasPluginStatus = (plugin: PluginDescriptor) => Boolean(plugin.status && (plugin.status.state !== 'ready' || plugin.status.message));
 /** Whether the plugin has a page of its own: status, extension-point sections, its page, settings, a settings view or a sign-in. */
-const hasPage = (plugin: PluginDescriptor) => Boolean(hasPluginStatus(plugin) || pluginModelSources(plugin).length || plugin.declared?.page || plugin.settings.length || plugin.declared?.views?.some(view => view.locations.includes('settings') && view.clients.includes('web')) || deviceFlows(plugin));
+const hasHostBlock = (plugin: PluginDescriptor) => hasAgentBackendsBlock(plugin) || hasTasksBlock(plugin) || hasSharesBlock(plugin) || hasChannelsBlock(plugin);
+const hasPage = (plugin: PluginDescriptor) => Boolean(hasPluginStatus(plugin) || pluginModelSources(plugin).length || hasHostBlock(plugin) || plugin.declared?.page || plugin.settings.length || plugin.declared?.views?.some(view => view.locations.includes('settings') && view.clients.includes('web')) || deviceFlows(plugin));
 /** The source an installed package came from, read from its install record (`market:<source>/<id>@<version>`; the older `market:<id>@<version>` is the built-in one). */
 function originOf(plugin: PluginDescriptor): string | undefined {
   const record = plugin.installed?.versions.find(version => version.selected)?.source;
@@ -53,7 +59,7 @@ function originOf(plugin: PluginDescriptor): string | undefined {
 }
 
 /** Workbench-owned management. Reading this page never activates or probes a plugin. */
-export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, sidebarCollapsed, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels, onOpenProviderSettings }: {
+export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, sidebarCollapsed, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels, onOpenProviderSettings, onOpenSettings, onOpenTask }: {
   selectedId: string;
   selectedViewId?: string;
   initialTab?: PluginDetailTab;
@@ -73,6 +79,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   onOpenModels(): void;
   onOpenProviderSettings(target: { kind: 'edit'; backendId: NativeBackendId; profileId: string } | { kind: 'add'; backendId?: NativeBackendId; modelSource: string }): void;
   onOpenFeature(view: ViewDeclaration): void;
+  onOpenSettings(section: SettingsSection): void;
+  onOpenTask(task: Task): void;
 }) {
   const { t, i18n } = useLingui();
   const list = usePlugins();
@@ -143,7 +151,9 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const pageTitle = (p: PluginDescriptor) => localizedText(p.declared?.page?.title, [i18n.locale]) ?? t({ message: '设置', context: 'plugin-detail-tab' });
   const selectedHasModelSources = Boolean(selected && pluginModelSources(selected).length > 0);
   const selectedHasStatus = Boolean(selected && hasPluginStatus(selected));
-  const hasPrimaryPage = Boolean(selected && (selected.declared?.page || selected.settings.length || selectedHasModelSources || selectedHasStatus));
+  // Host-drawn blocks for the plugin's extension points (docs/design/system/plugins.md §6.3).
+  const selectedHasHostBlock = Boolean(selected && hasHostBlock(selected));
+  const hasPrimaryPage = Boolean(selected && (selected.declared?.page || selected.settings.length || selectedHasModelSources || selectedHasStatus || selectedHasHostBlock));
   // The plugin's own page (and host-drawn sections) comes first; without one, its settings as a form.
   const configurationOptions = [...(selected?.declared?.page ? [{ value: '', label: pageTitle(selected) }] : hasPrimaryPage ? [{ value: '', label: t({ message: '通用', context: 'plugin-configuration' }) }] : []), ...settingsViews.map(view => ({ value: view.id, label: localizedText(view.title, [i18n.locale]) ?? view.id }))];
   const configurationId = configurationOptions.some(option => option.value === customView) ? customView : configurationOptions[0]?.value;
@@ -286,7 +296,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const deviceFlowActions = pluginActions.filter(action => action.kind === 'device-flow');
   const statusTone = selected?.status?.state === 'unavailable' ? 'danger' : selected?.status?.state === 'attention' ? 'warning' : 'success';
   const selectedModelSources = pluginModelSources(selected);
-  const showDisabledStatus = Boolean(selected && !selected.enabled && !missing && selectedHasModelSources);
+  const showDisabledStatus = Boolean(selected && !selected.enabled && !missing && (selectedHasModelSources || selectedHasHostBlock));
   const showStatusGroup = Boolean(selected && (selectedHasStatus || showDisabledStatus));
   const statusAction = selected && selectedHasStatus && !showDisabledStatus && selected.status?.state !== 'ready' ? deviceFlowActions[0] : undefined;
   const remainingFlowActions = configurationId === '' && statusAction ? deviceFlowActions.filter((action) => action.id !== statusAction.id) : deviceFlowActions;
@@ -331,6 +341,20 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
           />
         )}
 
+        {/* An Agent's configurations are read through its driver, which exists only while the plugin is on. */}
+        {!modelSourceSubpage && selected.enabled && !missing && hasAgentBackendsBlock(selected) && (
+          <PluginAgentBackendsBlock
+            plugin={selected}
+            disabled={working || missing}
+            onOpenAgentSettings={(backendId, profileId) => profileId ? onOpenProviderSettings({ kind: 'edit', backendId, profileId }) : onOpenSettings('providers')}
+          />
+        )}
+        {!modelSourceSubpage && hasTasksBlock(selected) && <PluginTasksBlock plugin={selected} onOpenTask={onOpenTask} />}
+        {!modelSourceSubpage && hasSharesBlock(selected) && <PluginSharesBlock plugin={selected} />}
+        {!modelSourceSubpage && hasChannelsBlock(selected) && (
+          <PluginChannelsBlock plugin={selected} disabled={working || missing} onOpenChannels={() => onOpenSettings('channels')} onAddBot={() => onOpenSettings('channels')} />
+        )}
+
         {!modelSourceSubpage && selected.declared?.page && (!selected.enabled || missing
           ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可用</Trans></p>{!missing && <Button size="sm" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>}</div>
           : <PluginPageView key={selected.id} pluginId={selected.id} disabled={working || !reachable} onChanged={() => { void reloadPlugins().catch(() => undefined); }} />)}
@@ -338,7 +362,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
         {!modelSourceSubpage && !selected.declared?.page && selected.settings.length > 0 && (
           <form onSubmit={e => { e.preventDefault(); void save(); }}>
             <SettingsGroup
-              title={fallbackConnection ? t`默认连接` : (selectedHasModelSources || showStatusGroup) ? t({ message: '设置', context: 'plugin-detail-tab' }) : undefined}
+              title={fallbackConnection ? t`默认连接` : (selectedHasModelSources || selectedHasHostBlock || showStatusGroup) ? t({ message: '设置', context: 'plugin-detail-tab' }) : undefined}
               note={fallbackConnection ? t`提供商没填地址和 Key 时使用` : undefined}
             >
               {selected.settings.map(field => {

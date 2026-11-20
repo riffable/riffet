@@ -146,8 +146,9 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   // is an un-echoed receipt, so a remount can still show the first prompt inline; once the server
   // lists the run or it settles, the seed is ignored.
 
+  /** Resolves false when the navigation was refused (a page with unsaved changes stayed open). */
   const selectProject = useCallback((next: ProjectRecord) => {
-    void nav.navigate(() => {
+    return nav.navigate(() => {
       if (next.id !== nav.get().projectId) clearContext(ui);
       nav.rememberTaskProject(next.system === 'task-workspace' ? null : next.id);
       nav.set({ projectId: next.id, sessionId: '', ...NO_PAGE });

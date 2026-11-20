@@ -8,6 +8,7 @@ import manifest from './riffet-plugin.json';
 import { type Plugin } from '@riffet/plugin-api';
 import { configsProvider } from './configs.js';
 import { workspaces } from './workspaces.js';
+import { androidPage, status } from './page.js';
 import { type ActionId, GRADLE_PROVIDER, LOGCAT_PROVIDER, gradleProvider, logcatProvider } from './gradle.js';
 
 const COMMANDS: Record<string, { action: ActionId; provider: string }> = {
@@ -20,6 +21,8 @@ export const android: Plugin = {
   manifest: manifest as Plugin['manifest'],
   activate: host => ({
     services: { workspaces },
+    page: androidPage(host),
+    status: () => status(host),
     taskProviders: [gradleProvider(host), logcatProvider(host), configsProvider(host)],
     commands: Object.fromEntries(Object.entries(COMMANDS).map(([id, { action, provider }]) => [id, {
       async run({ projectId, confirm }) {

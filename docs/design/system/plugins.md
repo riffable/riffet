@@ -157,9 +157,10 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 | 扩展点 | 组 | 每行 | 行尾摘要 | 展开或进入 |
 |---|---|---|---|---|
 | `modelSources` | 提供商 | 使用这个来源的提供商 | 剩余最少的额度；没有 `usage` 时写模型数 | 额度条、模型子页、编辑（§6.3.1） |
-| `agentBackends` | Agent 配置 | 这个 Agent 的各项配置 | 命令行工具和登录状态 | 跳到「设置 › Agent」 |
+| `agentBackends` | Agent 配置 | 这个 Agent 的各项配置 | 命令行工具和登录状态 | 跳到「设置 › 模型提供商」里这个配置；空状态的按钮打开同一页 |
 | `taskProviders` | 最近任务 | 各项目最近的运行，条数取自 `budgets.ts` | 状态和时间 | 跳到这个任务 |
 | `sharePublisher` | 分享 | 经它发布、仍然有效的分享 | 到期时间 | 打开；撤下（先确认） |
+| `imChannels` | 机器人 | 这个插件服务的平台上的机器人 | 连接状态：已连接、连接中、已停用、连接失败 | 跳到「设置 › 机器人」；空状态的按钮打开同一页 |
 
 - `agentTools`、`views`、`commands`、`keybindings`、`avatarStyles`、外观资源、`services`、`runtimeHooks`：没有区块。哪些对话开了某个工具，属于对话本身；视图和命令的入口在「介绍」；外观和头像在各自的设置里选。
 - 新增扩展点时，先判断它是否满足上面三条。满足的，在这张表里加一行，宿主实现，三端同时画。
@@ -269,7 +270,10 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 
 ### 6.9 现状
 
-- 以下内容都还没有实现（2026-11-16 写入规范）：§6.3 中除 `modelSources` 以外的扩展点区块（`agentBackends`、`taskProviders`、`sharePublisher`）；§6.4 新增的 `link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及 `meter` 的 `time`；§6.5 的插件自定义子页。
+- Web 已画 §6.3 的 `agentBackends`、`taskProviders`、`sharePublisher`、`imChannels` 区块（2026-11-20，`app/plugins/Plugin*Block.tsx`）；Mac 与手机尚未跟进。「最近任务」只列最近 `summaryRows` 条，没有「全部 n 个」；其余三组的「全部 n 个」在组内切换，没有按 §6.5 做成子页；`agentBackends` 每个配置单独读一次目录来取登录状态；`imChannels` 空状态的按钮只打开「设置 › 机器人」，不直接开始添加。
+- `status()` 拿不到客户端语言，`PluginStatus.message` 只能是一种语言：Android 构建和 TRAE 排队加速的状态只带 `state`，原因写在插件页里。
+- Android 构建的插件页（`official/android/page.ts`）只有缺失的工具和设备，没有 §6.8 的「产物」：插件页读不到项目目录（`PluginHost` 没有列出项目、读写项目目录的接口）。
+- 以下内容都还没有实现（2026-11-16 写入规范）：§6.4 新增的 `link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及 `meter` 的 `time`；§6.5 的插件自定义子页。
 - Web 已实现 §6.2 状态行、§6.3.1 的 `modelSources` 提供商与额度区块（含展开额度条、模型子页、超过 5 行的全部提供商子页和筛选，以及直达「设置 › 模型提供商」编辑/添加），并与提供商编辑、模型菜单共用额度缓存；网关适配器的 `settings` 按 §6.8 呈现为带回退说明的「默认连接」组。Mac 与手机尚未跟进。
 - `meter` 与按客户端能力降级已实现（2026-11-17）：客户端在读取和修改页面时带 `?kinds=meter`（`PLUGIN_PAGE_KINDS_PARAM`），没带的客户端收到一行 `row`，数值是「n%」或带 `value`。Web（`app/plugins/PluginPageView.tsx`）画 `meter`；Mac（`Features/Plugins/PluginPageForm.swift`）和手机仍只画原有的六种条目。
 - 手机端客户端已有接口（`apps/mobile/client/src/commonMain/kotlin/riffet/shared/RiffetApiPlugins.kt`），但没有绘制，手机上看不到插件页。

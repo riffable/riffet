@@ -1,20 +1,20 @@
-# Paper
+Paper: a colour palette of near-neutral ink and low-chroma paper, with the Inter font and a paper grain background, plus a preset of the same name. It contains only palette, font, background and preset, with no server entry. The font licence is in `assets/Inter-OFL.txt`.
 
-仅包含配色、字体、背景和预设，无服务端入口。字体许可位于 `assets/Inter-OFL.txt`。
+## Development
 
-不需要 package.json、Node 依赖、锁文件或 SDK。安装 Riffet 后直接操作：
+No package.json, Node dependencies, lockfile or SDK is needed. With Riffet installed:
 
 ```sh
 riffet plugin pack .
 riffet plugin install "$PWD/dist/riffet.appearance-paper-1.0.0.tgz" --trusted
 
-# 修改资源后自动校验并刷新本机 Riffet
+# After editing assets: validate and refresh the local Riffet automatically
 riffet plugin dev .
 riffet plugin unlink riffet.appearance-paper
 ```
 
-开发前如已安装同 ID 版本，先卸载该安装版本；退出监听保留开发关联，`unlink` 才会解除。
+If a version with the same ID is already installed, uninstall it before developing. Quitting the watcher keeps the development link; only `unlink` removes it.
 
-`--trusted` 用于保留官方 `riffet.` 身份，纯资源包不会启动服务端代码。构建目录与归档自动写入本插件的 `dist/`；可用 `--format zip` 或 `--format tar` 切换归档格式。失败保留上次成功产物。
+`--trusted` keeps the official `riffet.` identity; a resource-only package never starts server code. The build directory and archive are written to this plugin's `dist/`; `--format zip` or `--format tar` switches the archive format. A failed build keeps the last successful output.
 
-`riffet-plugin.json` 是声明来源，资源位于 `assets/`。`scripts/generate-grain.mjs` 仅用于重新生成纸纹，使用 Node 内置模块，打包时不会执行或分发该脚本。
+`riffet-plugin.json` is the source of the declaration and the resources are in `assets/`. `scripts/generate-grain.mjs` only regenerates the paper grain, uses Node built-ins, and is neither run nor shipped when packing.

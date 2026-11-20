@@ -66,6 +66,11 @@ export class TaskStore {
     return (this.sql('SELECT json FROM tasks WHERE project_id=? ORDER BY started_at DESC, rowid DESC LIMIT ?').all(projectId, limit) as Array<{ json: string }>).map(row => JSON.parse(row.json) as StoredTask);
   }
 
+  /** One plugin's tasks across projects, newest first. */
+  listByPlugin(pluginId: string, limit: number): StoredTask[] {
+    return (this.sql("SELECT json FROM tasks WHERE json_extract(json,'$.task.pluginId')=? ORDER BY started_at DESC, rowid DESC LIMIT ?").all(pluginId, limit) as Array<{ json: string }>).map(row => JSON.parse(row.json) as StoredTask);
+  }
+
   open(): StoredTask[] {
     return (this.sql("SELECT json FROM tasks WHERE state IN ('running','cancelling') ORDER BY started_at").all() as Array<{ json: string }>).map(row => JSON.parse(row.json) as StoredTask);
   }
