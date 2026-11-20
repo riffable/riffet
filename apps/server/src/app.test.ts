@@ -580,6 +580,30 @@ describe('app route surface after ACP removal', () => {
     expect(sent.json().native.input.attachmentIds).toEqual(attachments.map(attachment => attachment.id));
   });
 
+  it('streams a previewed media file by range through an address scoped to that file', async () => {
+    const { app, cookie, projectDir, call } = await boot(undefined, undefined, undefined, true);
+    const project = (await call('POST', '/api/projects', { cwd: projectDir })).json();
+    await writeFile(join(projectDir, 'clip.mp4'), Buffer.from('0123456789'));
+    await writeFile(join(projectDir, 'notes.txt'), 'neighbour');
+    const preview = await call('GET', `/api/projects/${project.id}/file/raw?path=clip.mp4&render=preview`);
+    expect(preview.statusCode).toBe(200);
+    const src = /<video[^>]* src="([^"]+)"/.exec(preview.body)?.[1];
+    expect(src).toMatch(/^\.\.\/\.\.\/\.\.\/file-sites\/[^/]+\/clip\.mp4$/);
+    const media = new URL(src!.replaceAll('&amp;', '&'), `http://127.0.0.1:4317/api/projects/${project.id}/file/raw`).pathname;
+    const fromPage = (url: string, range?: string) => app.inject({ method: 'GET', url, headers: { host: '127.0.0.1:4317', 'sec-fetch-site': 'cross-site', ...(range ? { range } : {}) } });
+    const part = await fromPage(media, 'bytes=2-5');
+    expect(part.statusCode).toBe(206);
+    expect(part.headers['content-range']).toBe('bytes 2-5/10');
+    expect(part.body).toBe('2345');
+    expect((await fromPage(media, 'bytes=-3')).body).toBe('789');
+    expect((await fromPage(media, 'bytes=20-')).statusCode).toBe(416);
+    expect((await fromPage(media)).body).toBe('0123456789');
+    // The address names one file; the folder it sits in stays closed.
+    expect((await fromPage(media.replace(/clip\.mp4$/, 'notes.txt'))).statusCode).toBe(404);
+    const raw = await app.inject({ method: 'GET', url: `/api/projects/${project.id}/file/raw?path=clip.mp4`, headers: { host: '127.0.0.1:4317', cookie, range: 'bytes=0-0' } });
+    expect(raw.statusCode).toBe(206);
+  });
+
   it('serves a previewed page its own folder, reached from its opaque origin, until the session ends', async () => {
     const { app, projectDir, call } = await boot(undefined, undefined, undefined, true);
     const project = (await call('POST', '/api/projects', { cwd: projectDir })).json();

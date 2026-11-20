@@ -15,8 +15,8 @@ const COMPRESSED_EXT = /\.(png|jpe?g|gif|webp|avif|ico|zip|gz|tgz|bz2|xz|7z|zst|
 const INLINE_TYPES: Record<string, string> = {
   pdf: 'application/pdf',
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', ico: 'image/x-icon', svg: 'image/svg+xml',
-  mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
-  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4', flac: 'audio/flac',
+  mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', ogv: 'video/ogg',
+  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', flac: 'audio/flac',
   html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8',
 };
 

@@ -98,6 +98,21 @@ export async function renderFilePreview(data: Buffer, name: string, query: Previ
   return task;
 }
 
+/**
+ * A player for a media file streamed from `src` rather than inlined: the file is not read here, so its
+ * size is not bound by the preview limit, and the player seeks with range requests. The page runs no
+ * script, so the wider `media-src` admits only the element written here.
+ */
+export function mediaPreviewPage(name: string, src: string, query: PreviewQuery = {}): Page {
+  const page = mediaPage(name, src, previewTheme(query));
+  return { html: page.html, csp: page.csp.replace('media-src data: blob:', 'media-src data: blob: http: https:') };
+}
+
+function mediaPage(name: string, src: string, theme: PreviewTheme): Page {
+  const tag = mediaMime[extensionOf(name)]?.startsWith('video/') ? 'video' : 'audio';
+  return previewDocument(`<main class="media"><${tag} controls preload="metadata" playsinline src="${escapeHtml(src)}"></${tag}></main>`, theme, [], '', name);
+}
+
 async function renderUncached(data: Buffer, name: string, query: PreviewQuery = {}, resource?: Resource): Promise<Page> {
   if (data.byteLength > MAX_PREVIEW_FILE_BYTES) throw new AppError('PREVIEW_TOO_LARGE', 'Preview exceeds the 32 MB limit; download the original file', 413, undefined, { limit: '32 MB' });
   const kind = previewKind(name, data);
@@ -115,11 +130,7 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
   if (kind === 'pdf' || kind === 'model') {
     return previewDocument('<main id="preview"></main>', theme, [await browserScript(kind)], '', name, { data: data.toString('base64'), name, extension, theme, ...(kind === 'pdf' ? { assets: await pdfFonts() } : {}) });
   }
-  if (kind === 'media') {
-    const type = mediaMime[extension];
-    const tag = type.startsWith('video/') ? 'video' : 'audio';
-    return previewDocument(`<main class="media"><${tag} controls preload="metadata" playsinline src="data:${type};base64,${data.toString('base64')}"></${tag}></main>`, theme, [], '', name);
-  }
+  if (kind === 'media') return mediaPage(name, `data:${mediaMime[extension]};base64,${data.toString('base64')}`, theme);
   if (kind === 'font') {
     return previewDocument(`<main><div class="font-sample" contenteditable="true" spellcheck="false">Aa Bb Cc Dd Ee Ff Gg Hh Ii Jj Kk Ll Mm Nn<br>Oo Pp Qq Rr Ss Tt Uu Vv Ww Xx Yy Zz<br>0123456789<br>天地玄黄，宇宙洪荒。<br>The quick brown fox jumps over the lazy dog.</div></main>`, theme, [], `@font-face{font-family:RiffetPreview;src:url(data:font/${extension};base64,${data.toString('base64')})}`, name);
   }

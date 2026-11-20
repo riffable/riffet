@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Audio and video in the Files view play at any size and can be seeked, on the web, Mac, and phones; they previously had to be under 32 MB and played only from the start.
 - The web app now opens with a full-window first-run guide: pick the default Agent (with install commands when none is available), choose the directory to start in, and scan to connect your phone; every step can be skipped. It appears once per browser, and not at all on a server that already has conversations.
 
 ### Fixes

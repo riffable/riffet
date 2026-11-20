@@ -431,6 +431,11 @@ export class WorkspaceService {
     try { info = await stat(target); } catch { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); }
     if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');
     const path = isWithin(root, target) ? toProjectRelative(root, target) : target;
+    // A player streams the file by range (`routes/workspace.ts#sendFile`): nothing here needs its bytes,
+    // and its size does not decide whether it can be shown.
+    if (previewKind(path) === 'media') {
+      return { path, content: '', hash: hash(`${info.size}:${info.mtimeMs}`), size: info.size, binary: true, truncated: info.size > MAX_FILE_READ_BYTES, render: { kind: 'media' } };
+    }
     if (info.size > MAX_FILE_READ_BYTES) {
       // An app package or archive this large is still a file to name and download: its first bytes tell
       // binary from text without reading the rest. Text this large has nothing it could show.

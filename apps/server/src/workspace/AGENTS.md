@@ -30,6 +30,7 @@ verify:
 
 - 依赖 git（`ls-files`、`archive`）与 ripgrep（`file-index.ts#ripgrepSearch`）；两者都不可用时调用方自己遍历目录。已跟踪文件清单随 git index 的 mtime 重读，未跟踪文件按 `UNTRACKED_TTL_MS` 在后台刷新。
 - 大仓库预算：列目录页大小、遍历条目与深度、归档 2 万文件与 2 GiB、定义搜索的时间预算，均为 `index.ts`、`download.ts`、`code-nav.ts` 顶部的常量。
+- 音视频不读进内存也不受预览上限约束：预览页的播放器经只含这一个文件的 file-site 地址按字节范围取（`apps/server/src/routes/workspace.ts#sendFile`，单段 `Range`，多段按整文件回答）；AVPlayer 不支持范围请求的地址不播放。
 - macOS 用 osascript 唤起 Finder 选择器，其他平台回退到内置浏览器（`index.ts#directoryPickerCommand`）。
 
 ## 排障

@@ -8,8 +8,8 @@ import path from 'node:path';
 import { previewImageData, readFileBounded } from '../workspace/index.js';
 import { MAX_VISUALIZATION_BYTES, renderVisualization, VISUALIZATION_CSP } from '../visualization.js';
 import { contentDisposition } from '../workspace/download.js';
-import { renderFilePreview } from '../previews/index.js';
-import { MAX_PREVIEW_FILE_BYTES } from '../previews/formats.js';
+import { mediaPreviewPage, renderFilePreview } from '../previews/index.js';
+import { MAX_PREVIEW_FILE_BYTES, previewKind } from '../previews/formats.js';
 import type { PreviewQuery } from '../previews/document.js';
 import { EMPTY_INDEX_MARKER, extractIndexable, likePattern, normalizeQuery, snippet } from '../search/messages.js';
 import { mergeMessageHits } from '../search/merge.js';
@@ -86,6 +86,13 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
   });
   app.get<{Params:{id:string};Querystring:{path:string;download?:string;render?:string;page?:string} & PreviewQuery}>('/api/projects/:id/file/raw',async(request,reply)=>{
     const file=await workspace.rawFile(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers)});
+    if(request.query.render==='preview'&&request.query.download!=='1'&&previewKind(file.name)==='media'){
+      // Streamed through a file-site address: the player runs in an opaque origin without the session cookie.
+      const token=auth.issueFileSite(request,{projectId:request.params.id,root:path.dirname(file.path),only:file.name});
+      const page=mediaPreviewPage(file.name,`../../../file-sites/${token}/${encodeURIComponent(file.name)}`,request.query);
+      return reply.type('text/html; charset=utf-8').header('Content-Security-Policy',page.csp)
+        .header('Referrer-Policy','no-referrer').header('X-Content-Type-Options','nosniff').header('Cache-Control','no-store').send(page.html);
+    }
     if(request.query.render==='preview'&&request.query.download!=='1'){
       const data=await readFileBounded(file.path,MAX_PREVIEW_FILE_BYTES);
       const page=await renderFilePreview(data,file.name,request.query,async source=>{
@@ -119,7 +126,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     // An opened file runs in an opaque origin, away from the app's session. Chrome will not render
     // a PDF in a sandbox, and its viewer is isolated already.
     if(!file.contentType.startsWith('application/pdf'))reply.header('Content-Security-Policy',`sandbox ${FILE_SITE_SANDBOX}`);
-    return reply.send(createReadStream(file.path));
+    return sendFile(request,reply,file);
   });
   // A previewed page and the files its links name. Visibility was checked when the token was minted
   // under `/api/projects/:id`; the page's requests cannot carry the client's feature declaration.
@@ -139,7 +146,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       reply.header('Content-Type',file.contentType).header('Content-Disposition',contentDisposition(file.inline?'inline':'attachment',file.name));
       if(file.contentType.startsWith('text/html')&&file.size<=MAX_PREVIEW_FILE_BYTES)
         return reply.send(reportsLocation((await readFileBounded(file.path,MAX_PREVIEW_FILE_BYTES)).toString('utf8')));
-      return reply.header('Content-Length',String(file.size)).send(createReadStream(file.path));
+      return sendFile(request,reply,file);
     }catch(error){
       // A link followed inside the preview gets a page rather than a JSON envelope; an expired one
       // tells the panel, which opens the same page again under a fresh token.
@@ -181,6 +188,36 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
       .header('Content-Disposition',`${inlineImage?'inline':'attachment'}; filename*=UTF-8''${encodeURIComponent(attachment.name)}`);
     return reply.send(data);
   });
+}
+/**
+ * The file's bytes, or the one range a player or viewer asks for (RFC 9110 §14). AVPlayer will not
+ * play a file it cannot seek, and a browser's player only seeks within what it has downloaded unless
+ * the server answers ranges. Several ranges in one request are answered with the whole file, which
+ * the RFC allows; no client here asks for them.
+ */
+function sendFile(request: FastifyRequest, reply: FastifyReply, file: { path: string; size: number; mtime: Date }) {
+  reply.header('Accept-Ranges','bytes');
+  const range=byteRange(request.headers.range,file.size);
+  // `If-Range` names the version the client holds; a file changed since gets the whole new file.
+  const current=request.headers['if-range']===undefined||request.headers['if-range']===file.mtime.toUTCString()||request.headers['if-range']===reply.getHeader('etag');
+  if(range==='unsatisfiable'&&current)return reply.code(416).header('Content-Range',`bytes */${file.size}`).send();
+  if(!range||range==='unsatisfiable'||!current)return reply.header('Content-Length',String(file.size)).send(createReadStream(file.path));
+  return reply.code(206).header('Content-Range',`bytes ${range.start}-${range.end}/${file.size}`).header('Content-Length',String(range.end-range.start+1))
+    .send(createReadStream(file.path,{start:range.start,end:range.end}));
+}
+/** A single `bytes=` range resolved against the size; anything else is ignored and the whole file sent. */
+export function byteRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | undefined {
+  const match=/^bytes=(\d*)-(\d*)$/.exec(header?.trim()??'');
+  if(!match||(!match[1]&&!match[2]))return undefined;
+  if(!match[1]){
+    const suffix=Number(match[2]);
+    if(!suffix||!size)return 'unsatisfiable';
+    return {start:Math.max(0,size-suffix),end:size-1};
+  }
+  const start=Number(match[1]);
+  if(start>=size)return 'unsatisfiable';
+  const end=match[2]?Math.min(Number(match[2]),size-1):size-1;
+  return end<start?undefined:{start,end};
 }
 /** What an opened or previewed file may do: run in an opaque origin, away from the app's session. */
 const FILE_SITE_SANDBOX='allow-scripts allow-popups allow-forms allow-modals allow-downloads';
