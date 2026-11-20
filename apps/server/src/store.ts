@@ -2,7 +2,7 @@ import { DatabaseSync, backup, type StatementSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { STORAGE_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite } from '../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
 import { sessionReferenceInputs } from './context-references/input.js';
 import { isNativeBackendId } from './backends/registry.js';
@@ -341,7 +341,7 @@ export class Store {
           text TEXT NOT NULL,
           at TEXT NOT NULL,
           PRIMARY KEY (session_id, message_id));
-        CREATE INDEX IF NOT EXISTS message_index_session ON message_index(session_id);
+        CREATE INDEX IF NOT EXISTS message_index_session ON message_index(session_id); CREATE INDEX IF NOT EXISTS message_index_at ON message_index(at);
         CREATE TABLE IF NOT EXISTS message_index_sessions (session_id TEXT PRIMARY KEY, indexed_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS derived_meta (key TEXT PRIMARY KEY, json TEXT NOT NULL);`);
       return db;
@@ -1316,7 +1316,7 @@ export class Store {
     if (!allowed.size) return [];
     // The trigram index answers a plain substring of three characters or more; it cannot take an
     // ESCAPE clause, so a query holding a wildcard character keeps the scan. Either way the LIKE
-    // on `message_index` decides, which keeps the result exactly what the scan would return.
+    // on `message_index` decides; the scan (no index) reads only the newest `MESSAGE_SEARCH_BUDGET.scanRows` rows.
     const indexed = /^%[^%_\\]+%$/.test(pattern) && [...pattern.slice(1, -1)].length >= 3;
     const hits: MessageSearchHit[] = [];
     const pushRows = (rows: Array<{ sessionId: string; messageId: string; kind: MessageSearchHit['kind']; text: string; at: string }>) => {
@@ -1344,7 +1344,7 @@ export class Store {
         FROM message_index_fts f JOIN message_index m ON m.rowid = f.rowid
         WHERE f.text LIKE ? AND m.text LIKE ? ESCAPE '\\' ORDER BY m.at DESC`).iterate(pattern, pattern)
       : this.derivedSql(`SELECT m.session_id AS sessionId, m.message_id AS messageId, m.kind AS kind, m.text AS text, m.at AS at
-        FROM message_index m
+        FROM (SELECT session_id, message_id, kind, text, at FROM message_index ORDER BY at DESC LIMIT ${MESSAGE_SEARCH_BUDGET.scanRows}) m
         WHERE m.text LIKE ? ESCAPE '\\' ORDER BY m.at DESC`).iterate(pattern)) as IterableIterator<{ sessionId: string; messageId: string; kind: MessageSearchHit['kind']; text: string; at: string }>;
     try {
       for (const row of iter) {

@@ -382,3 +382,14 @@ export const INTEGRITY_BUDGET = {
   /** The worker is stopped after this long; `journal.db` of several gigabytes takes about 7 s. */
   timeoutMs: 10 * 60_000,
 } as const;
+
+/** Message search over `derived.db` (`store.ts#searchIndexedMessages`). */
+export const MESSAGE_SEARCH_BUDGET = {
+  /**
+   * A query the trigram index cannot answer (under three characters, or holding a wildcard) reads at
+   * most this many of the newest indexed messages across all conversations. It runs synchronously on
+   * the main thread: measured at about 100 ms for 316,000 rows read through the time index, so this
+   * bounds the stall near 150 ms and leaves an index of ordinary size searched in full.
+   */
+  scanRows: 500_000,
+} as const;
