@@ -23,7 +23,7 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
-import { nativeTaskOutcome, sendPhase } from './delivery';
+import { nativeDeliveryStatus, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
 import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, taskLabel, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
@@ -51,18 +51,16 @@ export const toolIcons: Record<string, typeof IconWrench> = {
  * outcome, not the prompt's: `stopShown` false leaves 已停止 to the row that ends the turn.
  */
 export function nativeDeliveryLabel(run: Run, stopShown = true, hasTurnOutput = false): string {
-  if (!run.native) return '';
-  const native = run.native;
-  const received = hasTurnOutput || run.state === 'running' || Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
-  switch (native.delivery) {
-    case 'queued': return received ? '' : i18n._(msg`发送中`);
-    case 'preparing': return received ? '' : native.stage === 'resuming' ? i18n._(msg`恢复中`) : i18n._(msg`发送中`);
-    case 'dispatching': return received ? '' : i18n._(msg`发送中`);
-    case 'input_sent': return received || run.state === 'completed' ? '' : i18n._(msg`发送中`);
-    case 'observed': return '';
-    case 'uncertain': return received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`);
-    case 'failed': return received ? i18n._(msg`任务失败`) : i18n._(msg`发送失败`);
-    case 'cancelled': return native.stage === 'acknowledged' ? received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`) : native.stage === 'turn_outcome_unknown' ? i18n._(msg`暂时无法获取任务状态`) : native.nativeMessageId || run.state === 'interrupted' ? stopShown ? i18n._(msg`已停止`) : '' : i18n._(msg`已取消`);
+  switch (nativeDeliveryStatus(run, stopShown, hasTurnOutput)) {
+    case '': return '';
+    case 'sending': return i18n._(msg`发送中`);
+    case 'resuming': return i18n._(msg`恢复中`);
+    case 'outcome_unknown': return i18n._(msg`暂时无法获取任务状态`);
+    case 'unconfirmed': return i18n._(msg`暂时无法确认是否已发送`);
+    case 'task_failed': return i18n._(msg`任务失败`);
+    case 'send_failed': return i18n._(msg`发送失败`);
+    case 'stopped': return i18n._(msg`已停止`);
+    case 'cancelled': return i18n._(msg`已取消`);
   }
 }
 

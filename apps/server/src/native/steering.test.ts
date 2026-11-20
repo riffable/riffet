@@ -20,7 +20,7 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 const input = (text: string) => ({ text, attachmentIds: [], context: [] });
 const config = { mode: 'agent', model: 'original-model' };
 
-function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: number } = {}) {
+function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: number; confirmationMs?: number } = {}) {
   const store = new Store(':memory:');
   cleanups.push(() => store.close());
   const project = store.createProject('/tmp/riffet-steering-test', 'steering');
@@ -517,6 +517,37 @@ describe('native steering through HTTP and durable dispatch', () => {
     await vi.waitFor(() => {
       expect(h.store.getRun(gone.id).native).toMatchObject({ delivery: 'queued', stage: 'steer_fallback' });
       expect(h.store.getRun(gone.id).native?.intent).toBeUndefined();
+    });
+  });
+
+  it('marks an unaccepted deferred steer uncertain after confirmationMs even while the owner turn remains busy, and recovers if a late receipt arrives', async () => {
+    const h = harness({ confirmationMs: 40 });
+    // Submit the provider-accepted RPC steer first so its inputSentAt is guaranteed <= the deferred
+    // steer's inputSentAt: once the deferred steer times out, this one has also passed confirmationMs.
+    h.setMode('silent');
+    const acceptedSteer = (await h.submit('accepted-busy')).json<Run>();
+    expect(h.store.getRun(acceptedSteer.id).native).toMatchObject({ delivery: 'input_sent', stage: 'steer_confirmation' });
+    expect(h.store.getRun(acceptedSteer.id).native?.timings?.providerAcceptedAt).toBeTypeOf('number');
+
+    h.setMode('deferred');
+    const deferredSteer = (await h.submit('deferred-timeout')).json<Run>();
+    h.claim(deferredSteer, false);
+    expect(h.store.getRun(deferredSteer.id).native).toMatchObject({ delivery: 'input_sent', stage: 'steer_confirmation' });
+    expect(h.store.getRun(deferredSteer.id).native?.timings?.providerAcceptedAt).toBeUndefined();
+
+    await vi.waitFor(() => {
+      expect(h.store.getRun(deferredSteer.id)).toMatchObject({
+        state: 'interrupted',
+        native: { delivery: 'uncertain', stage: 'confirmation', diagnostic: { code: 'NATIVE_RECEIPT_TIMEOUT' } },
+      });
+    }, { timeout: 2_000 });
+    expect(h.store.getRun(acceptedSteer.id).native).toMatchObject({ delivery: 'input_sent', stage: 'steer_confirmation' });
+
+    // A late receipt still recovers the timed-out steer to observed.
+    h.internal(deferredSteer, 'native_input_receipt', { receiptKind: 'hook_context', content: { text: deferredSteer.prompt } });
+    expect(h.store.getRun(deferredSteer.id)).toMatchObject({
+      state: 'running',
+      native: { delivery: 'observed', stage: 'executing', nativeMessageId: 'native_input_receipt:deferred-timeout' },
     });
   });
 });

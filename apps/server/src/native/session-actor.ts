@@ -422,7 +422,10 @@ export class SessionActor {
         // A live, correctly linked CLI that is still busy or showing a dialog may simply be
         // taking a long time to persist its transcript echo. Keep the write fenced as
         // input_sent; status alone is never a receipt and must not fabricate observed.
-        if (status?.phase === 'busy' || status?.phase === 'attention') continue;
+        // A hook-based steer (no `providerAcceptedAt`) enters an already-busy turn, so the
+        // owner turn's busy/attention status is never evidence that the steer is being processed.
+        const unacceptedSteer = run.native.intent === 'steer' && !run.native.timings?.providerAcceptedAt;
+        if (!unacceptedSteer && (status?.phase === 'busy' || status?.phase === 'attention')) continue;
         this.store.transitionNativeRun(run.id, ['input_sent'], { delivery: 'uncertain', stage: 'confirmation',
           diagnostic: { code: 'NATIVE_RECEIPT_TIMEOUT', message: 'The provider receipt did not arrive within the confirmation window', stage: 'confirmation', at: new Date().toISOString() },
         }, { state: 'interrupted', error: '暂时无法确认是否已发送' });

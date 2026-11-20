@@ -225,8 +225,8 @@ fun deliveryLabel(run: Run?, stopShown: Boolean, hasTurnOutput: Boolean): String
     val native = run?.native ?: return null
     val recovery = riffet.ui.state.messageRecovery(run)
     if (recovery.needsCheck) return L10n.uiText(if (recovery.taskOutcomeUnknown) "delivery.resultUnknown" else "delivery.unconfirmed")
-    val received = hasTurnOutput
-        || run.state == RunState.RUNNING
+    val isSteer = native.intent == "steer"
+    val received = (!isSteer && (hasTurnOutput || run.state == RunState.RUNNING))
         || native.nativeMessageId != null
         || native.timings?.get("observedAt") != null
         || native.timings?.get("providerAcceptedAt") != null

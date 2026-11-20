@@ -1,6 +1,29 @@
 import type { NativeQueue, Run, SessionControlSnapshot } from '@contracts';
 export { nativeTaskOutcome } from '../../../../../packages/timeline/src/failures';
 
+export type NativeDeliveryStatus = '' | 'sending' | 'resuming' | 'outcome_unknown' | 'unconfirmed' | 'task_failed' | 'send_failed' | 'stopped' | 'cancelled';
+
+/**
+ * What a prompt says about its delivery. A turn stopped after the prompt arrived is the turn's
+ * outcome, not the prompt's: `stopShown` false leaves `stopped` to the row that ends the turn.
+ */
+export function nativeDeliveryStatus(run: Run, stopShown = true, hasTurnOutput = false): NativeDeliveryStatus {
+  if (!run.native) return '';
+  const native = run.native;
+  const isSteer = native.intent === 'steer';
+  const received = (!isSteer && (hasTurnOutput || run.state === 'running')) || Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
+  switch (native.delivery) {
+    case 'queued': return received ? '' : 'sending';
+    case 'preparing': return received ? '' : native.stage === 'resuming' ? 'resuming' : 'sending';
+    case 'dispatching': return received ? '' : 'sending';
+    case 'input_sent': return received || run.state === 'completed' ? '' : 'sending';
+    case 'observed': return '';
+    case 'uncertain': return received ? 'outcome_unknown' : 'unconfirmed';
+    case 'failed': return received ? 'task_failed' : 'send_failed';
+    case 'cancelled': return native.stage === 'acknowledged' ? received ? 'outcome_unknown' : 'unconfirmed' : native.stage === 'turn_outcome_unknown' ? 'outcome_unknown' : native.nativeMessageId || run.state === 'interrupted' ? stopShown ? 'stopped' : '' : 'cancelled';
+  }
+}
+
 /**
  * Where a message sent to the CLI stands, as the client sees it. The places that ask "is it still
  * queued", "can it still be sent now or withdrawn" and "where does it show" all read it here, so
