@@ -353,6 +353,7 @@ export function contextWithBreakdown(next: NativeContext, contextBreakdown: Nati
 /** Whether a new meter reading says nothing the shown one does not. */
 export function sameContext(current: NativeContext | undefined, merged: NativeContext): boolean {
   return Boolean(current && current.used === merged.used && current.size === merged.size
+    && Boolean(current.breakdownEstimated) === Boolean(merged.breakdownEstimated)
     && JSON.stringify(current.breakdown) === JSON.stringify(merged.breakdown));
 }
 
@@ -440,8 +441,10 @@ export class CodexContextMeter {
    * throttles the rollout lookup a provider that never states a window would otherwise repeat.
    */
   context: NativeContext | undefined;
-  /** The provider's last per-category split of the window, kept across usage frames that carry none. */
+  /** The provider's last per-category split of the window, kept while occupancy matches. */
   contextBreakdown: NativeContext['breakdown'] | undefined;
+  /** Occupancy when `contextBreakdown` was captured; a live move invalidates the settled split. */
+  private contextBreakdownForUsed: number | undefined;
   private contextWindow: number | undefined;
   private contextWindowLookupAt = 0;
 
@@ -451,6 +454,7 @@ export class CodexContextMeter {
   reset(): void {
     this.context = undefined;
     this.contextBreakdown = undefined;
+    this.contextBreakdownForUsed = undefined;
     this.contextWindow = undefined;
     this.contextWindowLookupAt = 0;
   }
@@ -471,6 +475,9 @@ export class CodexContextMeter {
    */
   noteContext(next: NativeContext | undefined): void {
     if (!next) return;
+    if (this.contextBreakdown && this.contextBreakdownForUsed === undefined) {
+      this.contextBreakdownForUsed = next.used;
+    }
     const merged = contextWithBreakdown(next, this.contextBreakdown);
     const current = this.context;
     if (sameContext(current, merged)) return;
@@ -519,12 +526,23 @@ export class CodexContextMeter {
   async applyUsageFrame(tokenUsage: Record<string, unknown> | undefined, params: Record<string, unknown>): Promise<void> {
     const immediate = codexNativeContext(tokenUsage, params, this.contextWindow);
     if (immediate) {
+      this.invalidateStaleBreakdown(immediate.used);
       this.noteContext(immediate);
       return;
     }
     await this.seedContextWindow();
     const merged = codexNativeContext(tokenUsage, params, this.contextWindow);
-    if (merged) this.noteContext(merged);
+    if (merged) {
+      this.invalidateStaleBreakdown(merged.used);
+      this.noteContext(merged);
+    }
+  }
+
+  private invalidateStaleBreakdown(used: number): void {
+    if (this.contextBreakdown && this.contextBreakdownForUsed !== undefined && used !== this.contextBreakdownForUsed) {
+      this.contextBreakdown = undefined;
+      this.contextBreakdownForUsed = undefined;
+    }
   }
 
   /** The provider's own context breakdown, for the meter's popover. Only read when a turn settles. */
@@ -535,6 +553,7 @@ export class CodexContextMeter {
       const breakdown = contextBreakdownOf(response);
       if (!breakdown.length) return;
       this.contextBreakdown = breakdown;
+      this.contextBreakdownForUsed = this.context?.used;
       if (this.context) this.noteContext({ ...this.context, breakdown });
     } catch { /* the meter keeps its single bar */ }
   }

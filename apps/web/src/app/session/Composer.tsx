@@ -76,6 +76,11 @@ function contextPartLabel(id: string, parts: readonly { id: string }[]): string 
   return contextLabels[id] ? i18n._(contextLabels[id]!) : undefined;
 }
 
+function formatContextShare(tokens: number, base: number): string {
+  const pct = (tokens / Math.max(1, base)) * 100;
+  return tokens > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%`;
+}
+
 const ContextMeter = memo(function ContextMeter({ usage, onCompact, compacting = false, compactDisabled = false }: {
   usage: ContextUsage;
   onCompact?: () => Promise<boolean> | boolean;
@@ -98,6 +103,9 @@ const ContextMeter = memo(function ContextMeter({ usage, onCompact, compacting =
   const circumference = 2 * Math.PI * 6;
   const parts = usage.breakdown?.filter((item) => item.tokens > 0) ?? [];
   const breakdownTotal = parts.reduce((total, item) => total + item.tokens, 0);
+  const breakdownBase = usage.breakdownEstimated
+    ? Math.max(1, breakdownTotal)
+    : Math.max(1, usage.size, usage.used, breakdownTotal);
   const compactBusy = compacting || submitting;
   const compactBlocked = compactDisabled || usage.used <= 0;
   const handleCompact = async () => {
@@ -151,7 +159,7 @@ const ContextMeter = memo(function ContextMeter({ usage, onCompact, compacting =
               <li key={item.id} className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-fg-2">{contextPartLabel(item.id, parts) ?? item.label}</span>
                 <span className="tabular-nums text-fg-3">{usage.breakdownEstimated ? '~' : ''}{compactTokens(item.tokens)}</span>
-                <span className="w-10 text-right tabular-nums text-fg-3">{((item.tokens / Math.max(1, breakdownTotal)) * 100).toFixed(0)}%</span>
+                <span className="w-10 text-right tabular-nums text-fg-3">{formatContextShare(item.tokens, breakdownBase)}</span>
               </li>
             ))}
           </ul>

@@ -124,7 +124,13 @@ export class ClaudeHookRoutes {
     if (string(payload.session_id) !== this.deps.nativeSessionId) return;
     const next = claudeNativeContext(payload);
     if (!next) return;
-    if (this.context && this.context.used === next.used && this.context.size === next.size) return;
+    if (
+      this.context
+      && this.context.used === next.used
+      && this.context.size === next.size
+      && Boolean(this.context.breakdownEstimated) === Boolean(next.breakdownEstimated)
+      && JSON.stringify(this.context.breakdown) === JSON.stringify(next.breakdown)
+    ) return;
     this.context = next;
     this.deps.emit({ type: 'context', context: next });
   }

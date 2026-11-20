@@ -505,18 +505,39 @@ private struct SessionContextUsageSection: View {
         guard let context, context.size > 0, context.used >= 0 else { return nil }
         return context
     }
-    private func label(_ part: NativeContextBreakdown) -> String {
+    private func label(_ part: NativeContextBreakdown, in parts: [NativeContextBreakdown]) -> String {
         switch part.id {
-        case "system_prompt": String(localized: "系统提示词", bundle: .riffet)
-        case "tools": String(localized: "工具定义", bundle: .riffet)
+        case "system_prompt", "systemPrompt": String(localized: "系统提示词", bundle: .riffet)
+        case "tools", "toolDefinitions": String(localized: "工具定义", bundle: .riffet)
         case "rules": String(localized: "规则", bundle: .riffet)
         case "skills": "Skills"
         case "mcp": String(localized: "MCP 与动态工具", bundle: .riffet)
         case "subagents": String(localized: "子 Agent 定义", bundle: .riffet)
         case "summarized_conversation": String(localized: "已压缩的对话", bundle: .riffet)
         case "conversation": String(localized: "对话", bundle: .riffet)
+        case "cached_input": String(localized: "缓存输入", bundle: .riffet)
+        case "cacheRead": String(localized: "缓存读取", bundle: .riffet)
+        case "cache_write", "cacheWrite": String(localized: "缓存写入", bundle: .riffet)
+        case "input":
+            parts.contains { ["cached_input", "cacheRead", "cacheWrite"].contains($0.id) }
+                ? String(localized: "未缓存输入", bundle: .riffet)
+                : String(localized: "输入", bundle: .riffet)
+        case "output":
+            parts.contains { $0.id == "reasoning_output" }
+                ? String(localized: "回复输出", bundle: .riffet)
+                : String(localized: "输出", bundle: .riffet)
+        case "reasoning_output": String(localized: "思考输出", bundle: .riffet)
+        case "developerMessages": String(localized: "指令", bundle: .riffet)
+        case "userMessages": String(localized: "你的消息", bundle: .riffet)
+        case "assistantMessages": String(localized: "回复", bundle: .riffet)
+        case "toolResponses": String(localized: "工具结果", bundle: .riffet)
+        case "otherMessages": String(localized: "其他", bundle: .riffet)
         default: part.label.isEmpty ? part.id : part.label
         }
+    }
+    private func shareText(_ tokens: Int64, base: Int64) -> String {
+        let share = Double(tokens) / Double(max(1, base))
+        return tokens > 0 && share < 0.001 ? "<0.1%" : share.formatted(.percent.precision(.fractionLength(0...1)))
     }
     var body: some View {
         Section("上下文用量") {
@@ -531,20 +552,24 @@ private struct SessionContextUsageSection: View {
                     HStack { Text("使用比例"); Spacer(); Text(ratio.formatted(.percent.precision(.fractionLength(0...1)))).monospacedDigit().foregroundStyle(tone) }
                     ProgressView(value: min(1, ratio)).tint(tone).accessibilityHidden(true)
                 }.accessibilityElement(children: .combine).accessibilityIdentifier("modelContextUsage")
-                let parts = context.breakdown.filter { $0.tokens >= 0 }
+                let parts = context.breakdown.filter { $0.tokens > 0 }
+                let breakdownTotal = parts.reduce(Int64(0)) { $0 + $1.tokens }
+                let breakdownBase = context.breakdownEstimated ? max(1, breakdownTotal) : max(1, max(context.size, max(context.used, breakdownTotal)))
                 if parts.isEmpty { Text("当前 Agent 尚未提供用量分解。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2) }
                 else {
                     DisclosureGroup("用量分解") {
+                        if context.breakdownEstimated {
+                            Text(String(localized: "内容估算 · ~\(breakdownTotal.formatted()) tokens", bundle: .riffet))
+                                .riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
+                        }
                         ForEach(parts, id: \.id) { part in
                             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                Text(label(part)).fixedSize(horizontal: false, vertical: true)
+                                Text(label(part, in: parts)).fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 4)
                                 VStack(alignment: .trailing, spacing: 3) {
-                                    Text(part.tokens.formatted() + " tokens").monospacedDigit()
-                                    if context.used > 0 {
-                                        Text((Double(part.tokens) / Double(context.used)).formatted(.percent.precision(.fractionLength(0...1))))
-                                            .riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
-                                    }
+                                    Text("\(context.breakdownEstimated ? "~" : "")\(part.tokens.formatted()) tokens").monospacedDigit()
+                                    Text(shareText(part.tokens, base: breakdownBase))
+                                        .riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
                                 }
                             }.riffetFont(.label, weight: .regular).padding(.vertical, 3).accessibilityElement(children: .combine)
                                 .accessibilityIdentifier("modelContextPart.\(part.id)")

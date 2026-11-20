@@ -162,12 +162,23 @@ export function reasoningChannel(signature: unknown): string | undefined {
 }
 
 function decodeContext(buffer: Uint8Array): NativeContext | undefined {
+  // Root field 5 is `ConversationTokenDetails`: f1 = used_tokens, f2 = max_tokens, f3 =
+  // `PromptTokenBreakdownSnapshot` (f1 = total_used_tokens, f2 = max_tokens, f3 = categories[]).
+  // Cursor CLI's own meter reads the outer f1/f2; after compaction or a reset the inner snapshot
+  // can lag behind or linger after outer f1/f2 return to 0, so outer values always lead and a
+  // mismatched inner snapshot is omitted rather than mixed with them.
   const fields = protoFields(buffer);
-  const detail = bytesOf(fields, 3)[0];
-  const inner = detail ? protoFields(detail) : fields;
-  const used = numberOf(inner, 1) ?? numberOf(fields, 1);
-  const size = numberOf(inner, 2) ?? numberOf(fields, 2);
+  const used = numberOf(fields, 1);
+  const size = numberOf(fields, 2);
   if (!used || !size) return undefined;
+  const detail = bytesOf(fields, 3)[0];
+  if (!detail) return { used, size, breakdown: [] };
+  const inner = protoFields(detail);
+  const innerUsed = numberOf(inner, 1);
+  const innerSize = numberOf(inner, 2);
+  if ((innerUsed !== undefined && innerUsed !== used) || (innerSize !== undefined && innerSize !== size)) {
+    return { used, size, breakdown: [] };
+  }
   const text = (value: Uint8Array | undefined) => (value ? Buffer.from(value).toString('utf8') : '');
   const breakdown = bytesOf(inner, 3).map((entry) => {
     const item = protoFields(entry);

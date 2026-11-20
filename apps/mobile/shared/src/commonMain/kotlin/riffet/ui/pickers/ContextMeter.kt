@@ -60,22 +60,44 @@ import riffet.ui.design.LocalRiffetSurfaces
 
 /** The web's `contextLabels`: the breakdown ids the server sends, in the operator's language. */
 @Composable
-private fun contextPartLabel(id: String, fallback: String): String = when (id) {
-    "system_prompt" -> stringResource(Res.string.pickers_context_system_prompt)
-    "tools" -> stringResource(Res.string.pickers_context_tools)
+private fun contextPartLabel(id: String, parts: List<riffet.contracts.NativeContextBreakdown>, fallback: String): String = when (id) {
+    "system_prompt", "systemPrompt" -> stringResource(Res.string.pickers_context_system_prompt)
+    "tools", "toolDefinitions" -> stringResource(Res.string.pickers_context_tools)
     "rules" -> stringResource(Res.string.pickers_context_rules)
     "skills" -> "Skills"
     "mcp" -> stringResource(Res.string.pickers_context_mcp)
     "subagents" -> stringResource(Res.string.pickers_context_subagents)
     "summarized_conversation" -> stringResource(Res.string.pickers_context_summarized)
     "conversation" -> stringResource(Res.string.pickers_context_conversation)
+    "cached_input" -> stringResource(Res.string.pickers_context_cached_input)
+    "cacheRead" -> stringResource(Res.string.pickers_context_cache_read)
+    "cache_write", "cacheWrite" -> stringResource(Res.string.pickers_context_cache_write)
+    "input" -> {
+        val splitFromCache = parts.any { it.id == "cached_input" || it.id == "cacheRead" || it.id == "cacheWrite" }
+        stringResource(if (splitFromCache) Res.string.pickers_context_uncached_input else Res.string.pickers_context_input)
+    }
+    "output" -> {
+        val splitFromReasoning = parts.any { it.id == "reasoning_output" }
+        stringResource(if (splitFromReasoning) Res.string.pickers_context_response_output else Res.string.pickers_context_output)
+    }
+    "reasoning_output" -> stringResource(Res.string.pickers_context_reasoning_output)
+    "developerMessages" -> stringResource(Res.string.pickers_context_developer_messages)
+    "userMessages" -> stringResource(Res.string.pickers_context_user_messages)
+    "assistantMessages" -> stringResource(Res.string.pickers_context_assistant_messages)
+    "toolResponses" -> stringResource(Res.string.pickers_context_tool_responses)
+    "otherMessages" -> stringResource(Res.string.pickers_context_other_messages)
     else -> fallback
+}
+
+private fun formatContextShare(tokens: Long, base: Long): String {
+    val pct = tokens.toDouble() / maxOf(1L, base).toDouble() * 100.0
+    return if (tokens > 0L && pct < 1.0) "<1%" else "${pct.roundToInt()}%"
 }
 
 /** `compactTokens` from the web: `1.2k`, `42k`, `900`. */
 internal fun compactTokens(value: Long): String = when {
     value >= 10_000L -> "${(value + 500L) / 1_000L}k"
-    value >= 1_000L -> "${(value / 100L) / 10.0}k"
+    value >= 1_000L -> "${((value + 50L) / 100L) / 10.0}k"
     else -> value.toString()
 }
 
@@ -191,6 +213,11 @@ internal fun ContextBreakdownSheet(usage: NativeContext, onDismiss: () -> Unit, 
     val tone = toneFor(ratio, colors)
     val parts = usage.breakdown.filter { it.tokens > 0L }
     val breakdownTotal = parts.sumOf { it.tokens }
+    val breakdownBase = if (usage.breakdownEstimated) {
+        maxOf(1L, breakdownTotal)
+    } else {
+        maxOf(1L, usage.size, usage.used, breakdownTotal)
+    }
     PickerOverlay(
         title = "${titleOf(usage)} ${percentOf(usage)}%",
         subtitle = "${compactTokens(usage.used)} / ${compactTokens(usage.size)} tokens",
@@ -255,7 +282,7 @@ internal fun ContextBreakdownSheet(usage: NativeContext, onDismiss: () -> Unit, 
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = contextPartLabel(part.id, part.label),
+                        text = contextPartLabel(part.id, parts, part.label),
                         style = SheetRowText,
                         color = colors.fg,
                         maxLines = 1,
@@ -265,7 +292,7 @@ internal fun ContextBreakdownSheet(usage: NativeContext, onDismiss: () -> Unit, 
                     Text(text = "${if (usage.breakdownEstimated) "~" else ""}${compactTokens(part.tokens)}", style = typography.bodySmall, color = colors.fg2)
                     Spacer(Modifier.width(metrics.controlInset))
                     Text(
-                        text = "${if (breakdownTotal > 0L) part.tokens * 100L / breakdownTotal else 0L}%",
+                        text = formatContextShare(part.tokens, breakdownBase),
                         style = typography.bodySmall,
                         color = colors.fg3,
                         textAlign = TextAlign.End,

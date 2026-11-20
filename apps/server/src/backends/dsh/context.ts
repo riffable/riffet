@@ -121,12 +121,14 @@ export function dshNativeContext(facts: DshContextFacts, breakdown?: DshContextB
   if (facts.used === undefined || facts.window === undefined) return undefined;
   // Without a breakdown the popover draws the ratio as one bar. It never invents shares, and it
   // never folds the composition into `used`: the three parts are an estimate of what the prompt is
-  // made of, while `used` is what the provider billed for it.
+  // made of, while `used` is what the provider billed for it, so they are flagged estimated.
+  const parts = breakdown
+    ? BREAKDOWN_PARTS.map(part => ({ id: part.id, label: part.label, tokens: breakdown[part.key] })).filter(part => part.tokens > 0)
+    : [];
   return {
     used: facts.used,
     size: facts.window,
-    breakdown: breakdown
-      ? BREAKDOWN_PARTS.map(part => ({ id: part.id, label: part.label, tokens: breakdown[part.key] })).filter(part => part.tokens > 0)
-      : [],
+    breakdown: parts,
+    ...(parts.length ? { breakdownEstimated: true } : {}),
   };
 }

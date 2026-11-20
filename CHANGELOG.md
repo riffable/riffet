@@ -28,6 +28,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Context usage meters now report accurate figures and matching breakdowns across Agents and clients: Claude Code shows its exact prompt-side cache/input breakdown instead of labeling it estimated or adding output tokens, Cursor reads the CLI's live token count instead of lagging or stale breakdown snapshots, DSH marks its heuristic breakdown as estimated, Codex/TRAE drops stale previous-turn categories when a new turn moves usage, and breakdown percentages on Web, Mac, Android, and iPhone now divide by the context window with complete localized labels.
 - When Cursor refuses the model a new conversation started with and its first message runs only after you pick another model and resume, that message is now confirmed as delivered, instead of showing “Waiting for the previous message to be confirmed” and holding every later message.
 - After switching a Claude Code model or provider while a background task (such as a dev server) is still running, the conversation now says the new settings apply once background tasks finish and offers End background tasks and apply, instead of leaving later messages queued with no explanation.
 - A Claude Code message sent just as the CLI reports a background task left over from before a restart is now confirmed as delivered, instead of showing “Waiting for the previous message to be confirmed” and holding every later message in the queue.

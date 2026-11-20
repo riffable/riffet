@@ -57,6 +57,7 @@ describe('DSH context facts', () => {
     expect(dshNativeContext(facts, { systemTokens: 623, toolsTokens: 4633, messageTokens: 245_877 })).toEqual({
       used: 273_706,
       size: 1_000_000,
+      breakdownEstimated: true,
       breakdown: [
         { id: 'system_prompt', label: '系统提示词', tokens: 623 },
         { id: 'tools', label: '工具定义', tokens: 4633 },

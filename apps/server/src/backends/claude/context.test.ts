@@ -9,23 +9,35 @@ describe('Claude status line context', () => {
       .toEqual({ used: 274_244, size: 1_000_000, breakdown: [] });
   });
 
-  it('describes the newest response as an estimated breakdown, never as the measured usage', () => {
+  it('splits the newest response into measured prompt buckets, leaving output out', () => {
     const context = claudeNativeContext(frame({
       context_window_size: 1_000_000, total_input_tokens: 274_244,
       current_usage: { input_tokens: 4_244, cache_creation_input_tokens: 20_000, cache_read_input_tokens: 250_000, output_tokens: 1_500 },
     }));
     expect(context).toEqual({
-      used: 274_244, size: 1_000_000, breakdownEstimated: true,
+      used: 274_244, size: 1_000_000,
       breakdown: [
         { id: 'cacheRead', label: '缓存读取', tokens: 250_000 },
         { id: 'cacheWrite', label: '缓存写入', tokens: 20_000 },
         { id: 'input', label: '未缓存输入', tokens: 4_244 },
-        { id: 'output', label: '输出', tokens: 1_500 },
       ],
     });
-    // Zero buckets are left out, and an all-zero response keeps the meter measured-only.
+    // Upstream builds whose `total_input_tokens` is a session-wide cumulative total still report
+    // the current turn's exact prompt occupancy from `current_usage`.
+    expect(claudeNativeContext(frame({
+      context_window_size: 200_000, total_input_tokens: 900_000,
+      current_usage: { input_tokens: 500, cache_creation_input_tokens: 1_500, cache_read_input_tokens: 48_000, output_tokens: 900 },
+    }))).toEqual({
+      used: 50_000, size: 200_000,
+      breakdown: [
+        { id: 'cacheRead', label: '缓存读取', tokens: 48_000 },
+        { id: 'cacheWrite', label: '缓存写入', tokens: 1_500 },
+        { id: 'input', label: '未缓存输入', tokens: 500 },
+      ],
+    });
+    // Zero buckets are left out, and an empty `current_usage` falls back to `total_input_tokens`.
     expect(claudeNativeContext(frame({ context_window_size: 200_000, total_input_tokens: 12, current_usage: { input_tokens: 12, output_tokens: 0 } })))
-      .toEqual({ used: 12, size: 200_000, breakdown: [{ id: 'input', label: '未缓存输入', tokens: 12 }], breakdownEstimated: true });
+      .toEqual({ used: 12, size: 200_000, breakdown: [{ id: 'input', label: '未缓存输入', tokens: 12 }] });
     expect(claudeNativeContext(frame({ context_window_size: 200_000, total_input_tokens: 12, current_usage: {} })))
       .toEqual({ used: 12, size: 200_000, breakdown: [] });
   });

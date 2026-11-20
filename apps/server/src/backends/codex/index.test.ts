@@ -2358,6 +2358,20 @@ describe('Codex native protocol controls', () => {
         { id: 'systemPrompt', label: 'System prompt', tokens: 5_000 },
         { id: 'userMessages', label: 'Your messages', tokens: 200 },
       ] });
+      // When a later turn's occupancy moves, the previous turn's settled `contextUsage` breakdown
+      // must not be overlaid on the new turn's reading.
+      h.transport!.emitNativeNotification('thread/tokenUsage/updated', {
+        threadId: 'native-thread', turnId: 'turn-2',
+        tokenUsage: { last: { inputTokens: 8_000, cachedInputTokens: 6_000, outputTokens: 200, totalTokens: 8_200 }, modelContextWindow: 272_000 },
+      });
+      expect(await waitFor(() => contexts().find(context => context.used === 8_200))).toEqual({
+        used: 8_200, size: 272_000,
+        breakdown: [
+          { id: 'cached_input', label: '缓存输入', tokens: 6_000 },
+          { id: 'input', label: '未缓存输入', tokens: 2_000 },
+          { id: 'output', label: '输出', tokens: 200 },
+        ],
+      });
       unsubscribe();
       await h.adapter.dispose(h.host, h.session.id);
     });

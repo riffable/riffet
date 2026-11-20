@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ChatReader, cursorSteerContext, mapTranscript, parsePromptTimestamp, reasoningChannel, TranscriptMapper, userQuery, type ChatMessage } from './chat-store.js';
+import { ChatReader, cursorSteerContext, decodeRoot, mapTranscript, parsePromptTimestamp, reasoningChannel, TranscriptMapper, userQuery, type ChatMessage } from './chat-store.js';
 import { parseScreen, turnControls } from './screen.js';
 import { readCompleteTranscript, Transcript } from './transcript.js';
 
@@ -103,6 +103,17 @@ describe('chat store', () => {
     expect(snapshot.context).toEqual({ used: 1200, size: 200000, breakdown: [{ id: 'conversation', label: 'Conversation', tokens: 1200 }] });
     expect(reader.message(snapshot.messageIds[2]!)?.role).toBe('user');
     reader.close();
+  });
+
+  it('prefers outer token counts and drops stale inner breakdown snapshots', () => {
+    const category = Buffer.concat([field(1, text('conversation')), field(2, text('Conversation')), intField(3, 20_294), intField(4, 80_000)]);
+    const staleInner = Buffer.concat([intField(1, 20_294), intField(2, 300_000), field(3, category)]);
+    // Outer updated after compaction while inner breakdown snapshot still holds pre-compaction total.
+    const divergedRoot = field(5, Buffer.concat([intField(1, 18_962), intField(2, 300_000), field(3, staleInner)]));
+    expect(decodeRoot(divergedRoot).context).toEqual({ used: 18_962, size: 300_000, breakdown: [] });
+    // Outer cleared to proto3 zero (omitted on wire) while stale inner snapshot lingers: publish nothing.
+    const clearedOuterRoot = field(5, field(3, staleInner));
+    expect(decodeRoot(clearedOuterRoot).context).toBeUndefined();
   });
 
   it('returns nothing for a chat that does not exist yet', () => {

@@ -34,29 +34,45 @@ function finite(value: unknown): number | undefined {
  * rather than guessed.
  *
  * `used` is the measurement: the prompt side of the newest response, which is what the next request
- * resends. The breakdown is the same response's own accounting (`current_usage`: uncached input,
- * cache reads, cache writes, output), which is not a composition of the window — it is the shape the
- * status line itself publishes and what the third-party context bars draw — so it is labelled
- * estimated and never added to `used`.
+ * resends (`input_tokens + cache_creation_input_tokens + cache_read_input_tokens`). We prefer the
+ * sum from `current_usage` when present — some upstream Claude Code builds publish a cumulative
+ * session sum in `total_input_tokens` — and fall back to `total_input_tokens` otherwise.
+ *
+ * `breakdown` splits that exact prompt occupancy into its API-measured buckets (`cacheRead`,
+ * `cacheWrite`, `input`), leaving `output_tokens` out so the parts sum to `used` without being
+ * marked estimated.
  */
 export function claudeNativeContext(payload: unknown): NativeContext | undefined {
   const window = record(record(payload)?.context_window);
   if (!window) return undefined;
   const size = finite(window.context_window_size);
-  const used = finite(window.total_input_tokens);
+  const usage = record(window.current_usage);
+  const used = claudePromptTokens(usage) ?? finite(window.total_input_tokens);
   if (size === undefined || size <= 0 || used === undefined || used < 0) return undefined;
-  const breakdown = claudeUsageBreakdown(record(window.current_usage));
-  return { used: Math.round(used), size: Math.round(size), breakdown, ...(breakdown.length ? { breakdownEstimated: true } : {}) };
+  return { used: Math.round(used), size: Math.round(size), breakdown: claudeUsageBreakdown(usage) };
 }
 
-/** The last response's token buckets, in the order a reader spends them. */
+/** Prompt-side occupancy of the newest response from `current_usage`, or undefined when absent. */
+function claudePromptTokens(usage: Record<string, unknown> | undefined): number | undefined {
+  if (!usage) return undefined;
+  let total = 0;
+  let reported = false;
+  for (const key of ['input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens']) {
+    const value = finite(usage[key]);
+    if (value === undefined || value < 0) continue;
+    total += value;
+    reported = true;
+  }
+  return reported ? total : undefined;
+}
+
+/** The last response's prompt-side token buckets, in the order a reader spends them. */
 function claudeUsageBreakdown(usage: Record<string, unknown> | undefined): NativeContext['breakdown'] {
   if (!usage) return [];
   const parts: Array<[string, string, unknown]> = [
     ['cacheRead', '缓存读取', usage.cache_read_input_tokens],
     ['cacheWrite', '缓存写入', usage.cache_creation_input_tokens],
     ['input', '未缓存输入', usage.input_tokens],
-    ['output', '输出', usage.output_tokens],
   ];
   return parts.flatMap(([id, label, value]) => {
     const tokens = finite(value);

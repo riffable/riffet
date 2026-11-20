@@ -829,11 +829,32 @@ struct ContextMeter: View {
     private static let labels = [
         "system_prompt": String(localized: "系统提示词"), "tools": String(localized: "工具定义"), "rules": String(localized: "规则"), "skills": "Skills",
         "mcp": String(localized: "MCP 与动态工具"), "subagents": String(localized: "子 Agent 定义"), "summarized_conversation": String(localized: "已压缩的对话"), "conversation": String(localized: "对话"),
+        "cached_input": String(localized: "缓存输入"), "cacheRead": String(localized: "缓存读取"), "cache_write": String(localized: "缓存写入"), "cacheWrite": String(localized: "缓存写入"), "reasoning_output": String(localized: "思考输出"),
+        "systemPrompt": String(localized: "系统提示词"), "toolDefinitions": String(localized: "工具定义"), "developerMessages": String(localized: "指令"), "userMessages": String(localized: "你的消息"),
+        "assistantMessages": String(localized: "回复"), "toolResponses": String(localized: "工具结果"), "otherMessages": String(localized: "其他"),
     ]
+
+    private func partLabel(_ part: NativeContextBreakdown) -> String {
+        if part.id == "input" {
+            let splitFromCache = parts.contains { ["cached_input", "cacheRead", "cacheWrite"].contains($0.id) }
+            return splitFromCache ? String(localized: "未缓存输入") : String(localized: "输入")
+        }
+        if part.id == "output" {
+            return parts.contains { $0.id == "reasoning_output" } ? String(localized: "回复输出") : String(localized: "输出")
+        }
+        return Self.labels[part.id] ?? (part.label.isEmpty ? part.id : part.label)
+    }
 
     private var ratio: Double { min(1, max(0, Double(context.used) / Double(context.size))) }
     private var title: String { String(localized: "上下文用量") }
     private var breakdownTotal: Int64 { parts.reduce(0) { $0 + $1.tokens } }
+    private var breakdownBase: Int64 {
+        context.breakdownEstimated ? max(breakdownTotal, 1) : max(1, max(context.size, max(context.used, breakdownTotal)))
+    }
+    private func formatShare(_ tokens: Int64) -> String {
+        let pct = Double(tokens) / Double(breakdownBase) * 100
+        return tokens > 0 && pct < 1 ? "<1%" : "\(Int(pct.rounded()))%"
+    }
     /// The chip's own ink until the window runs short: the ring is a glance, not an accent.
     private var tone: Color { ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.fg2 }
 
@@ -877,10 +898,10 @@ struct ContextMeter: View {
                         }
                         ForEach(parts, id: \.id) { part in
                             HStack(spacing: Space.sm) {
-                                Text(Self.labels[part.id] ?? part.label).font(.riffet(size: S(12))).foregroundStyle(palette.fg2).lineLimit(1)
+                                Text(partLabel(part)).font(.riffet(size: S(12))).foregroundStyle(palette.fg2).lineLimit(1)
                                 Spacer(minLength: Space.sm)
                                 Text("\(context.breakdownEstimated ? "~" : "")\(Self.compactTokens(part.tokens))").font(.riffet(size: S(12)).monospacedDigit()).foregroundStyle(palette.fg3)
-                                Text("\(Int((Double(part.tokens) / Double(max(breakdownTotal, 1)) * 100).rounded()))%")
+                                Text(formatShare(part.tokens))
                                     .font(.riffet(size: S(12)).monospacedDigit())
                                     .foregroundStyle(palette.fg3)
                                     .frame(width: 40, alignment: .trailing)
@@ -924,7 +945,7 @@ struct ContextMeter: View {
 
     static func compactTokens(_ value: Int64) -> String {
         if value >= 10_000 { return "\((value + 500) / 1000)k" }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value / 100) / 10) }
+        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1000.0) }
         return "\(value)"
     }
 }

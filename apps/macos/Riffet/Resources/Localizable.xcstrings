@@ -10755,6 +10755,96 @@
         }
       }
     },
+    "工具结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tool results"
+          }
+        }
+      }
+    },
+    "你的消息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your messages"
+          }
+        }
+      }
+    },
+    "回复输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Response output"
+          }
+        }
+      }
+    },
+    "思考输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reasoning output"
+          }
+        }
+      }
+    },
+    "指令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instructions"
+          }
+        }
+      }
+    },
+    "未缓存输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uncached input"
+          }
+        }
+      }
+    },
+    "缓存写入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache writes"
+          }
+        }
+      }
+    },
+    "缓存读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache reads"
+          }
+        }
+      }
+    },
+    "缓存输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cached input"
+          }
+        }
+      }
+    },
     "工具输出和图片不会带过去；原会话保留可读。": {
       "localizations": {
         "en": {

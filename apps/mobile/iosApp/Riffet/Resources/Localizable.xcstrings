@@ -4360,6 +4360,116 @@
         }
       }
     },
+    "工具结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tool results"
+          }
+        }
+      }
+    },
+    "你的消息" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your messages"
+          }
+        }
+      }
+    },
+    "其他" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        }
+      }
+    },
+    "内容估算 · ~%@ tokens" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated content · ~%@ tokens"
+          }
+        }
+      }
+    },
+    "回复输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Response output"
+          }
+        }
+      }
+    },
+    "思考输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reasoning output"
+          }
+        }
+      }
+    },
+    "指令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instructions"
+          }
+        }
+      }
+    },
+    "未缓存输入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uncached input"
+          }
+        }
+      }
+    },
+    "输入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Input"
+          }
+        }
+      }
+    },
+    "输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Output"
+          }
+        }
+      }
+    },
+    "缓存输入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cached input"
+          }
+        }
+      }
+    },
     "工具调用" : {
       "localizations" : {
         "en" : {

@@ -150,12 +150,13 @@ function ContextValue({ usage }: { usage: ContextUsage }) {
   const { t } = useLingui();
   const limitLabel = usage.limitKind === 'compaction' ? t`自动压缩阈值` : t`上下文长度`;
   const ratio = Math.min(1, Math.max(0, usage.used / usage.size));
+  const percent = Math.round(usage.used / usage.size * 100);
   const tone = ratio >= 0.9 ? 'danger' : ratio >= 0.75 ? 'warning' : 'neutral';
   return (
     <span className="flex min-w-0 items-center gap-2" title={`${limitLabel} ${compactTokens(usage.size)} tokens`}>
       <Progress role="meter" value={ratio} tone={tone} label={limitLabel} className="h-1 w-16 shrink-0" />
       <span className="min-w-0 truncate text-xs tabular-nums text-fg-2">
-        {Math.round(ratio * 100)}% · {compactTokens(usage.used)} / {compactTokens(usage.size)}
+        {percent}% · {compactTokens(usage.used)} / {compactTokens(usage.size)}
         {usage.cost && <span className="text-fg-3"> · {usage.cost.currency} {usage.cost.amount.toFixed(2)}</span>}
       </span>
     </span>
