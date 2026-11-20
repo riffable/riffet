@@ -25,6 +25,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - In Cursor conversations, a queued message offers "Add to current task" as soon as the turn starts; with some gateways it previously appeared only after the Agent's first tool call.
 - A message no longer stays running, holding back the ones queued behind it, when the agent answers quickly and its transcript record arrives a moment later.
 - A queued message no longer waits indefinitely when the previous turn has ended but the idle status never arrived; it goes out within half a second.
+- A task worktree whose directory was deleted by hand can be created again at the same path instead of failing as already registered.
 - With a very large message history, a two-character search across conversations reads at most the newest 500,000 messages instead of slowing the whole server as history grows.
 
 ## 0.9.0 - 2026-11-19

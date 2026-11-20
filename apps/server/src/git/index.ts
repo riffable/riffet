@@ -1569,7 +1569,7 @@ export class GitService {
       }
       try { await lstat(target); throw new AppError('WORKTREE_PATH_EXISTS', 'Worktree destination already exists', 409); }
       catch (error) { if (error instanceof AppError) throw error; if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-      const args = ['worktree', 'add', '-b', branch, target];
+      const args = ['worktree', 'add', '-f', '-b', branch, target]; // -f: a tree deleted behind git's back stays registered, and `add` would refuse its path
       if (base) {
         if (base.length > 255 || base.startsWith('-') || base.includes('\0')) throw new AppError('INVALID_BASE', 'Worktree base is invalid');
         const verified = await this.git(repo, ['rev-parse', '--verify', '--end-of-options', `${base}^{commit}`], { maxOutputBytes: 4096 });
