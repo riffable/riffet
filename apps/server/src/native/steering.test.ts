@@ -494,4 +494,29 @@ describe('native steering through HTTP and durable dispatch', () => {
     h.finish('run_failed');
     expect(h.store.getRun(h.owner.id).state).toBe('failed');
   });
+
+  it('fails non-transient pre-write steer rejections instead of silently requeuing them as steer_fallback', async () => {
+    const h = harness();
+    h.native.steerRun.mockRejectedValueOnce(new AppError('STEER_REJECTED', 'Steer text exceeds limit', 400));
+    const response = await h.submit('reject-me');
+    expect(response.statusCode).toBe(202);
+    const run = response.json<Run>();
+    await vi.waitFor(() => {
+      expect(h.store.getRun(run.id).state).toBe('failed');
+    });
+    expect(h.store.getRun(run.id).native).toMatchObject({
+      delivery: 'failed',
+      stage: 'steer_rejected',
+      intent: 'steer',
+    });
+    expect(h.store.getRun(run.id).error).toContain('Steer text exceeds limit');
+
+    // Claude's missing-runtime turn-ended error must still fall back cleanly to a queued message.
+    h.native.steerRun.mockRejectedValueOnce(new AppError('NATIVE_STEER_TARGET_GONE', 'turn ended before hook', 409));
+    const gone = (await h.submit('claude-gone')).json<Run>();
+    await vi.waitFor(() => {
+      expect(h.store.getRun(gone.id).native).toMatchObject({ delivery: 'queued', stage: 'steer_fallback' });
+      expect(h.store.getRun(gone.id).native?.intent).toBeUndefined();
+    });
+  });
 });

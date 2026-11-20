@@ -663,13 +663,27 @@ export class SessionActor {
       } catch (error) {
         const failed = this.store.getRun(runId);
         const delivery = failed.native!.delivery;
-        // Nothing was written: what could not reach this turn reaches the next one instead.
-        if (delivery === 'queued' || delivery === 'preparing') this.requeueSteer(runId);
-        else if (!['observed', 'failed', 'cancelled'].includes(delivery)) {
-          const definite = error instanceof AppError && ['STEER_TARGET_CHANGED', 'STEER_REJECTED', 'STEER_UNSUPPORTED', 'RUN_CANCELLED'].includes(error.code);
+        const code = error instanceof AppError ? error.code : undefined;
+        // Only a steer that missed its turn (target changed, stop in progress, or shutdown before write)
+        // falls back as the next message. Explicit rejections (invalid/oversized input, unsupported backend,
+        // archived session, pending interaction, unconfirmed delivery) fail without silently re-queueing.
+        if (delivery === 'queued' || delivery === 'preparing') {
+          if (code === 'STEER_TARGET_CHANGED' || code === 'NATIVE_STEER_TARGET_GONE' || code === 'NATIVE_INTERRUPT_IN_PROGRESS' || code === 'DISPATCH_STOPPED') {
+            this.requeueSteer(runId);
+          } else {
+            this.pendingSteerOutcomes.delete(runId);
+            this.store.transitionNativeRun(runId, [delivery], {
+              delivery: 'failed', stage: 'steer_rejected',
+              diagnostic: { ...(code ? { code } : {}), message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000), stage: failed.native?.stage, at: new Date().toISOString() },
+            }, {
+              state: 'failed', error: error instanceof Error ? error.message : '引导消息未发送',
+            });
+          }
+        } else if (!['observed', 'failed', 'cancelled'].includes(delivery)) {
+          const definite = code !== undefined && ['STEER_TARGET_CHANGED', 'STEER_REJECTED', 'STEER_UNSUPPORTED', 'RUN_CANCELLED'].includes(code);
           if (definite) this.pendingSteerOutcomes.delete(runId);
           this.store.transitionNativeRun(runId, [delivery], { delivery: definite ? 'failed' : 'uncertain', stage: definite ? 'steer_rejected' : 'steer_confirmation',
-            diagnostic: { ...(error instanceof AppError ? { code: error.code } : {}), message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000), stage: failed.native?.stage, at: new Date().toISOString() },
+            diagnostic: { ...(code ? { code } : {}), message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000), stage: failed.native?.stage, at: new Date().toISOString() },
           }, {
             state: definite ? 'failed' : 'interrupted', error: definite && error instanceof Error ? error.message : '暂时无法确认是否已发送',
           });

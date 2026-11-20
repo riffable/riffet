@@ -1922,6 +1922,65 @@ describe('orchestration submissions', () => {
     expect(roundedFork.json().run.prompt).toContain('P0 P1 P2 proposal');
     expect(roundedFork.json().run.prompt).not.toContain('explain messages');
   });
+
+  it('rejects non-isolated fork while actively running, restores checkpoint in isolated fork, and enriches session references', async () => {
+    const { projectDir, stateDir, store, nativeBackends, git, dispatch, call } = await boot();
+    await dispatch.close();
+    const project = store.createProject(projectDir, 'fork-and-ref');
+
+    // 1) Non-isolated fork must reject an actively running conversation; isolated fork rolls back worktree on launch error.
+    const active = store.createSession({ projectId: project.id, kind: 'native', title: 'Active task' });
+    store.updateSession(active.id, { state: 'running' });
+    const blocked = await call('POST', `/api/sessions/${active.id}/fork`, { clientSessionId: 'blocked-fork', commandId: 'blocked-cmd' });
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json()).toMatchObject({ error: { code: 'SESSION_BUSY' } });
+
+    // 2) Exact identity cutoff when two turns share identical prompt text.
+    const dup = store.createSession({ projectId: project.id, kind: 'native', title: 'Repeated prompt' });
+    const r1 = store.acceptNativeRun(dup.id, 'dup-1', { text: 'continue', attachmentIds: [], context: [] }, { mode: 'agent' });
+    const r2 = store.acceptNativeRun(dup.id, 'dup-2', { text: 'continue', attachmentIds: [], context: [] }, { mode: 'agent' });
+    store.transitionNativeRun(r1.id, ['queued'], { delivery: 'observed', nativeMessageId: 'u-dup-1', nativeTurnId: 't-dup-1' }, { state: 'completed' });
+    store.transitionNativeRun(r2.id, ['queued'], { delivery: 'observed', nativeMessageId: 'u-dup-2', nativeTurnId: 't-dup-2' }, { state: 'completed' });
+    store.journal.append(dup.id, [
+      { kind: 'user_message_chunk', nativeId: 'u-dup-1', turnId: 't-dup-1', at: '2026-01-01T00:00:01.000Z', payload: { type: 'user_message_chunk', nativeId: 'u-dup-1', nativeTurnId: 't-dup-1', runId: r1.id, createdAt: '2026-01-01T00:00:01.000Z', data: { content: { type: 'text', text: 'continue' } } } },
+      { kind: 'agent_message_chunk', nativeId: 'a-dup-1', turnId: 't-dup-1', at: '2026-01-01T00:00:02.000Z', payload: { type: 'agent_message_chunk', nativeId: 'a-dup-1', nativeTurnId: 't-dup-1', runId: r1.id, createdAt: '2026-01-01T00:00:02.000Z', data: { content: { type: 'text', text: 'FIRST-TURN-ONLY' } } } },
+      { kind: 'user_message_chunk', nativeId: 'u-dup-2', turnId: 't-dup-2', at: '2026-01-01T00:00:03.000Z', payload: { type: 'user_message_chunk', nativeId: 'u-dup-2', nativeTurnId: 't-dup-2', runId: r2.id, createdAt: '2026-01-01T00:00:03.000Z', data: { content: { type: 'text', text: 'continue' } } } },
+      { kind: 'agent_message_chunk', nativeId: 'a-dup-2', turnId: 't-dup-2', at: '2026-01-01T00:00:04.000Z', payload: { type: 'agent_message_chunk', nativeId: 'a-dup-2', nativeTurnId: 't-dup-2', runId: r2.id, createdAt: '2026-01-01T00:00:04.000Z', data: { content: { type: 'text', text: 'SECOND-TURN-EXCLUDED' } } } },
+    ]);
+    vi.spyOn(nativeBackends, 'indexableTranscript').mockResolvedValue([]);
+    const midFork = await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'dup-mid-fork', commandId: 'dup-mid-cmd', runId: r1.id });
+    expect(midFork.statusCode).toBe(202);
+    expect(midFork.json().run.prompt).toContain('FIRST-TURN-ONLY');
+    expect(midFork.json().run.prompt).not.toContain('SECOND-TURN-EXCLUDED');
+    expect(midFork.json().run.prompt).toContain('## Next step');
+
+    // 3) Session reference skips fork/handoff brief boilerplate in excerpt and records compact tool summaries.
+    const forkedSource = store.createSession({ projectId: project.id, kind: 'native', title: 'Forked thread' });
+    const recipient = store.createSession({ projectId: project.id, kind: 'native', title: 'Reader' });
+    store.journal.append(forkedSource.id, [
+      { kind: 'user_message_chunk', nativeId: 'fu-1', turnId: 'ft-1', at: '2026-01-01T00:00:01.000Z', payload: { type: 'user_message_chunk', nativeId: 'fu-1', nativeTurnId: 'ft-1', createdAt: '2026-01-01T00:00:01.000Z', data: { content: { type: 'text', text: 'Below is the context of another conversation ("Old").\n\n## Next step\nRefactor auth token rotation' } } } },
+      { kind: 'tool_call', nativeId: 'ftool-1', turnId: 'ft-1', at: '2026-01-01T00:00:02.000Z', payload: { type: 'tool_call', nativeId: 'ftool-1', nativeTurnId: 'ft-1', createdAt: '2026-01-01T00:00:02.000Z', data: { toolName: 'Edit', title: 'Edit src/auth.ts' } } },
+      { kind: 'agent_message_chunk', nativeId: 'fa-1', turnId: 'ft-1', at: '2026-01-01T00:00:03.000Z', payload: { type: 'agent_message_chunk', nativeId: 'fa-1', nativeTurnId: 'ft-1', createdAt: '2026-01-01T00:00:03.000Z', data: { content: { type: 'text', text: 'Rotated tokens with sliding expiry.' } } } },
+    ]);
+    const refs = new SessionReferenceService(store, stateDir);
+    const prepared = await refs.prepare(recipient.id, { text: 'check', attachmentIds: [], context: [], references: [{ kind: 'session', sessionId: forkedSource.id }] });
+    expect(prepared[0]!.metadata.excerpt).toContain('Refactor auth token rotation');
+    expect(prepared[0]!.metadata.excerpt).not.toContain('Below is the context of another conversation');
+    const snapshot = JSON.parse(prepared[0]!.bytes!.toString('utf8'));
+    expect(snapshot.messages[1].tools).toEqual(['Edit src/auth.ts']);
+    expect(refs.markdown(snapshot)).toContain('Tools: Edit src/auth.ts');
+
+    // 4) Isolated fork uses turn checkpoint when available.
+    const checkpointSpy = vi.spyOn(git, 'checkpoints').mockResolvedValue([{ id: 'cp-1', sessionId: dup.id, runId: r1.id, createdAt: '2026-01-01T00:00:02.000Z', partial: false, excluded: [], files: 1 } as never]);
+    const fromCpSpy = vi.spyOn(git, 'createWorktreeFromCheckpoint').mockResolvedValue(undefined);
+    const wtSpy = vi.spyOn(git, 'createWorktree').mockResolvedValue({ path: projectDir, branch: 'fork-cp', head: '1234567890abcdef', locked: false, prunable: false, main: false } as never);
+    const isolated = await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'iso-cp-fork', commandId: 'iso-cp-cmd', runId: r1.id, isolate: true });
+    expect(isolated.statusCode).toBe(202);
+    expect(fromCpSpy).toHaveBeenCalledWith(expect.objectContaining({ id: project.id }), expect.objectContaining({ checkpointId: 'cp-1' }));
+    checkpointSpy.mockRestore();
+    fromCpSpy.mockRestore();
+    wtSpy.mockRestore();
+  });
 });
 
 describe('automations', () => {

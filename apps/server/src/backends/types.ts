@@ -645,6 +645,19 @@ export interface NativeBackendDriver {
    */
   rename?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): Promise<void>;
 
+  /**
+   * Creates an independent native session copied from `source` (optionally truncated through a
+   * specific turn/message) so same-backend forks preserve tool history and prompt cache natively.
+   * Returns `undefined` when the source cannot be natively forked so the caller falls back to a brief.
+   */
+  forkSession?(
+    host: NativeBackendHost,
+    source: Session,
+    targetProject: Project,
+    profile: NativeBackendProfileConfig,
+    options: { upToRunId?: string; upToNativeTurnId?: string; upToNativeMessageId?: string },
+  ): Promise<{ nativeSessionId: string; cleanup?: () => Promise<void> } | undefined>;
+
   listModels(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<ModelInfo[]>;
   /** Drops a model catalog the driver keeps itself (see `cachesModels`), so the next listing reads the provider again. */
   invalidateModels?(): void;

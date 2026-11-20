@@ -26,7 +26,7 @@ export interface BriefSource {
    * can be read, else what the search index holds — where replies may be clipped, or missing for a
    * conversation never opened here.
    */
-  messages: Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string }>;
+  messages: Array<{ kind: 'user' | 'assistant' | 'tool'; text: string; at: string; messageId?: string; turnId?: string; runId?: string }>;
   status?: GitStatus;
   /** Only turns up to and including this run, for a fork from the middle of a conversation. */
   upToRunId?: string;
@@ -47,6 +47,20 @@ const clipEnd = (text: string, limit: number) => text.length > limit ? `…${tex
 /** Both ends of a text, for an earlier brief: its goal leads and its latest state trails. */
 const clipMiddle = (text: string, limit: number) => text.length > limit
   ? `${text.slice(0, Math.floor(limit * 0.4))}\n\n…\n\n${text.slice(text.length - Math.ceil(limit * 0.6))}` : text;
+
+interface SegmentedTurn extends Turn {
+  at: string;
+  messageId?: string;
+  turnId?: string;
+  runId?: string;
+}
+
+function matchesRunIdentity(run: Run, seg: Pick<SegmentedTurn, 'messageId' | 'turnId' | 'runId'>): boolean {
+  if (seg.runId && seg.runId === run.id) return true;
+  if (seg.messageId && run.native?.nativeMessageId && seg.messageId === run.native.nativeMessageId) return true;
+  if (seg.turnId && run.native?.nativeTurnId && seg.turnId === run.native.nativeTurnId && run.native.intent !== 'steer') return true;
+  return false;
+}
 
 function matchesRunPrompt(run: Run, messageText: string): boolean {
   const cleaned = messageText.replace(/^<system-reminder>[\s\S]*?<\/system-reminder>\s*/, '').trim();
@@ -98,11 +112,17 @@ function collect(source: BriefSource): { inherited?: string; turns: Turn[] } {
   // Provider transcripts carry each turn's user message in order, while their item timestamps can
   // be rounded to whole seconds or minutes (before `dispatchAt`); segmenting by user message keeps
   // every turn's tools and replies with the turn that ran them.
-  if (source.messages[0]?.kind === 'user' && (!allDispatched.length || source.messages.some(message => message.kind === 'user' && allDispatched.some(run => matchesRunPrompt(run, message.text))))) {
-    const segmented: Array<Turn & { at: string }> = [];
+  if (source.messages[0]?.kind === 'user' && (!allDispatched.length || source.messages.some(message => message.kind === 'user' && allDispatched.some(run => matchesRunIdentity(run, message) || matchesRunPrompt(run, message.text))))) {
+    const segmented: SegmentedTurn[] = [];
     for (const message of source.messages) {
-      if (message.kind === 'user') segmented.push({ prompt: message.text.trim(), at: message.at, replies: [], actions: [] });
-      else if (segmented.length) {
+      if (message.kind === 'user') {
+        segmented.push({
+          prompt: message.text.trim(), at: message.at, replies: [], actions: [],
+          ...(message.messageId ? { messageId: message.messageId } : {}),
+          ...(message.turnId ? { turnId: message.turnId } : {}),
+          ...(message.runId ? { runId: message.runId } : {}),
+        });
+      } else if (segmented.length) {
         if (message.kind === 'assistant') segmented.at(-1)!.replies.push(message.text);
         else if (!segmented.at(-1)!.actions.includes(message.text)) segmented.at(-1)!.actions.push(message.text);
       }
@@ -110,25 +130,32 @@ function collect(source: BriefSource): { inherited?: string; turns: Turn[] } {
     let cursor = 0, lastTargetSegment = -1, lastTargetRun: Run | undefined, firstExcludedSegment = segmented.length;
     for (let index = 0; index < segmented.length && cursor < allDispatched.length; index++) {
       const seg = segmented[index]!;
-      const laterSegments = segmented.slice(index + 1).filter(later => samePromptText(seg.prompt, later.prompt)).length;
-      const match = allDispatched.slice(cursor).findIndex((run, offset) => {
-        if (!matchesRunPrompt(run, seg.prompt)) return false;
-        // Hook-delivered steers do not emit a separate user_message_chunk, so do
-        // not let an un-echoed steer claim a prompt that a later non-steer turn needs.
-        if (run.native?.intent === 'steer') {
-          const laterNonSteer = allDispatched.slice(cursor + offset + 1).filter(later => later.native?.intent !== 'steer' && matchesRunPrompt(later, seg.prompt)).length;
-          if (laterSegments < laterNonSteer) return false;
-        }
-        return true;
-      });
+      const identityMatch = allDispatched.slice(cursor).findIndex(run => matchesRunIdentity(run, seg));
+      let match = identityMatch;
+      if (match < 0) {
+        const laterSegments = segmented.slice(index + 1).filter(later => samePromptText(seg.prompt, later.prompt)).length;
+        match = allDispatched.slice(cursor).findIndex((run, offset) => {
+          if (!matchesRunPrompt(run, seg.prompt)) return false;
+          // Hook-delivered steers do not emit a separate user_message_chunk, so do
+          // not let an un-echoed steer claim a prompt that a later non-steer turn needs.
+          if (run.native?.intent === 'steer') {
+            const laterNonSteer = allDispatched.slice(cursor + offset + 1).filter(later => later.native?.intent !== 'steer' && matchesRunPrompt(later, seg.prompt)).length;
+            if (laterSegments < laterNonSteer) return false;
+          }
+          return true;
+        });
+      }
       if (match < 0) continue;
       // Do not skip an earlier dispatched run that still has a matching transcript turn ahead, or
       // spend a run on an older CLI-typed turn when later segments need the same prompt.
-      if (match > 0 && allDispatched.slice(cursor, cursor + match).some(skipped => skipped.native?.intent !== 'steer' && segmented.slice(index + 1).some(later => matchesRunPrompt(skipped, later.prompt)))) continue;
+      if (identityMatch < 0) {
+        if (match > 0 && allDispatched.slice(cursor, cursor + match).some(skipped => skipped.native?.intent !== 'steer' && segmented.slice(index + 1).some(later => matchesRunIdentity(skipped, later) || matchesRunPrompt(skipped, later.prompt)))) continue;
+        const candidate = allDispatched[cursor + match]!;
+        const laterMatchingSegments = segmented.slice(index + 1).filter(later => matchesRunPrompt(candidate, later.prompt)).length;
+        const laterRuns = allDispatched.slice(cursor + match + 1).filter(later => matchesRunPrompt(later, seg.prompt)).length;
+        if (laterMatchingSegments > laterRuns) continue;
+      }
       const run = allDispatched[cursor + match]!;
-      const laterMatchingSegments = segmented.slice(index + 1).filter(later => matchesRunPrompt(run, later.prompt)).length;
-      const laterRuns = allDispatched.slice(cursor + match + 1).filter(later => matchesRunPrompt(later, seg.prompt)).length;
-      if (laterMatchingSegments > laterRuns) continue;
       if (run === opening) seg.continues = true;
       const matchedIndex = cursor + match;
       cursor = matchedIndex + 1;
@@ -144,7 +171,7 @@ function collect(source: BriefSource): { inherited?: string; turns: Turn[] } {
         ? lastTargetSegment + 1
         : Math.min(firstExcludedSegment, segmented.filter(seg => firstRunTime === undefined || Date.parse(seg.at) < firstRunTime).length))
       : segmented.length;
-    const turns: Turn[] = segmented.slice(0, cutoff).map(({ at: _at, ...turn }) => turn);
+    const turns: Turn[] = segmented.slice(0, cutoff).map(({ at: _at, messageId: _m, turnId: _t, runId: _r, ...turn }) => turn);
     const trailingFrom = lastTargetRun ? runs.indexOf(lastTargetRun) + 1 : 0;
     for (const run of runs.slice(trailingFrom)) {
       if (run.native?.intent === 'steer' || (startedAt(run) === undefined && run.native?.delivery !== 'failed' && run.state !== 'failed')) continue;
@@ -179,8 +206,23 @@ function collect(source: BriefSource): { inherited?: string; turns: Turn[] } {
 const agentOf = (session: IdentifiedSession) => `${session.backendId}${session.model ? ` · ${session.model}` : ''}`;
 
 /** The line a model-written handoff note opens with, naming where it came from. */
-export function summaryHeading(session: IdentifiedSession): string {
-  return `以下是对话「${session.title}」（${agentOf(session)}）的交接摘要，你将接着它继续工作。以仓库里的实际文件为准。`;
+export function summaryHeading(session: IdentifiedSession, language: BriefLanguage = 'zh'): string {
+  return language === 'en'
+    ? `Below is the handoff note from "${session.title}" (${agentOf(session)}), which you will now continue. Trust the actual files in the repository.`
+    : `以下是对话「${session.title}」（${agentOf(session)}）的交接摘要，你将接着它继续工作。以仓库里的实际文件为准。`;
+}
+
+/** Language-matched closing section appended to a fork or handoff brief. */
+export function continuationSection(language: BriefLanguage, kind: 'fork' | 'handoff', note?: string): string {
+  const heading = language === 'en' ? '## Next step' : '## 接下来';
+  const body = note?.trim() || (kind === 'fork'
+    ? (language === 'en'
+      ? 'Briefly confirm your understanding of the current state, then wait for my next instruction without modifying files yet.'
+      : '先用几句话确认你理解的现状，然后等我的下一步指示，暂时不要修改文件。')
+    : (language === 'en'
+      ? 'Briefly confirm your understanding of the current state and what remains, then continue completing it.'
+      : '先用几句话确认你理解的现状和尚未完成的部分，然后继续完成它。'));
+  return `\n\n${heading}\n${body}`;
 }
 
 /** Every changed file with its line counts, as the tree stands now. */
@@ -234,8 +276,13 @@ export function writeBrief(source: BriefSource): string {
  * The server keeps no interface language, so the brief follows the conversation: Chinese when any
  * of its text (title, earlier handoff, prompts) holds CJK characters, English otherwise.
  */
-function briefLanguage(texts: string[]): BriefLanguage {
+export function briefLanguage(texts: string[]): BriefLanguage {
   return texts.some(text => /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)) ? 'zh' : 'en';
+}
+
+export function sourceLanguage(source: BriefSource): BriefLanguage {
+  const { inherited, turns } = collect(source);
+  return briefLanguage([source.session.title, inherited ?? '', ...turns.map(turn => turn.prompt), ...turns.flatMap(turn => turn.replies)]);
 }
 
 /**

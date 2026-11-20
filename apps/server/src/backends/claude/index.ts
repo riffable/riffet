@@ -2,7 +2,7 @@ import { readContextFile } from '../../context-references/read-file.js';
 import { queryDirectory } from '../shared/query-directory.js';
 import { probeClaudeLoadedExtensions } from './loaded-extensions.js';
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelInfo, NativeActivity, NativeBackendCapabilities, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
@@ -22,7 +22,7 @@ import { warmTerminals } from '../shared/warm-terminals.js';
 import { claudeWarmKey, sessionClaudeWarmKey, startClaudeWarm, stopClaudeWarm, type ClaudeWarm } from './warm.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { claudeHistoryMetrics, claudeUsageRecord, runForClaudeStep } from './metering.js';
-import { findClaudeTranscript } from './history.js';
+import { findClaudeTranscript, forkClaudeTranscript } from './history.js';
 import { readClaudeMeasurements } from './step-meter.js';
 import { mapRow, type MapperState } from './row-mapper.js';
 import { claudePromptKey, parseRow, type ClaudeRow } from './rows.js';
@@ -665,6 +665,23 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       return true;
     });
     return taken === true;
+  }
+
+  async forkSession(
+    host: NativeBackendHost,
+    source: Session,
+    targetProject: Project,
+    profile: NativeBackendProfileConfig,
+    options: { upToRunId?: string; upToNativeTurnId?: string; upToNativeMessageId?: string },
+  ): Promise<{ nativeSessionId: string; cleanup?: () => Promise<void> } | undefined> {
+    if (!source.nativeSessionId) return undefined;
+    if (options.upToRunId && !options.upToNativeTurnId && !options.upToNativeMessageId) return undefined;
+    const sourceProject = host.getProject(source.projectId);
+    const forked = await forkClaudeTranscript(configDirOf(profile), source.nativeSessionId, sourceProject.cwd, targetProject.cwd, {
+      ...(options.upToNativeTurnId ? { upToNativeTurnId: options.upToNativeTurnId } : {}),
+      ...(options.upToNativeMessageId ? { upToNativeMessageId: options.upToNativeMessageId } : {}),
+    });
+    return forked ? { nativeSessionId: forked.nativeSessionId, cleanup: () => rm(forked.path, { force: true }).catch(() => undefined) } : undefined;
   }
 
   async close(): Promise<void> {

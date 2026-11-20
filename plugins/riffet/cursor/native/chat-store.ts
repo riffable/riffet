@@ -1218,7 +1218,9 @@ export function cursorSteerContext(part: ChatPart): string | undefined {
   function visit(value: unknown, depth = 0): void {
     if (--remaining < 0 || depth > 8) return;
     if (typeof value === 'string') {
-      for (const context of parseSteerContexts(value.slice(-20_000))) carriers.add(context.carrier);
+      // Scan the full string (parseSteerContexts short-circuits when the opening tag is absent)
+      // so large tool outputs never push a steer carrier outside a fixed tail window.
+      for (const context of parseSteerContexts(value)) carriers.add(context.carrier);
     } else if (value && typeof value === 'object') {
       for (const child of Object.values(value)) visit(child, depth + 1);
     }

@@ -1,3 +1,4 @@
+import { rm } from 'node:fs/promises';
 import { readContextFile } from '../../context-references/read-file.js';
 import type {
   ModelInfo, NativeBackendCapabilities, NativeBackendId, NativeInteraction,
@@ -13,7 +14,7 @@ import type {
   NativeShareReadOptions, NativeShareTranscript,
   NativeDriverStored,
 } from '../types.js';
-import { findPiTranscript, piEntryUsage, parsePiTranscript, readPiTranscript, validatePiSessionId, type PiEntry } from './history.js';
+import { findPiTranscript, forkPiTranscript, piEntryUsage, parsePiTranscript, readPiTranscript, validatePiSessionId, type PiEntry } from './history.js';
 import { invalidatePiModels, listPiModels, listPiSlashItems, probePiCli, PI_MINIMUM_VERSION } from './models.js';
 import { projectPiChain } from './projection.js';
 import { closePiRuntime, getPiRuntime } from './runtime.js';
@@ -257,6 +258,25 @@ export class PiBackendAdapter implements NativeBackendDriver {
 
   async dispose(host: NativeBackendHost, sessionId: string): Promise<void> {
     await getPiRuntime(host, this.stateDir).dispose(sessionId);
+  }
+
+  async forkSession(
+    host: NativeBackendHost,
+    source: Session,
+    targetProject: Project,
+    profile: NativeBackendProfileConfig,
+    options: { upToRunId?: string; upToNativeTurnId?: string; upToNativeMessageId?: string },
+  ): Promise<{ nativeSessionId: string; cleanup?: () => Promise<void> } | undefined> {
+    if (!source.nativeSessionId) return undefined;
+    if (options.upToRunId && !options.upToNativeTurnId && !options.upToNativeMessageId) return undefined;
+    const sourceProject = host.getProject(source.projectId);
+    const sessionDir = typeof profile.config.configDir === 'string' ? profile.config.configDir : undefined;
+    const forked = await forkPiTranscript(source.nativeSessionId, sourceProject.cwd, targetProject.cwd, {
+      ...(sessionDir ? { sessionDir } : {}),
+      ...(options.upToNativeTurnId ? { upToNativeTurnId: options.upToNativeTurnId } : {}),
+      ...(options.upToNativeMessageId ? { upToNativeMessageId: options.upToNativeMessageId } : {}),
+    });
+    return forked ? { nativeSessionId: forked.nativeSessionId, cleanup: () => rm(forked.path, { force: true }).catch(() => undefined) } : undefined;
   }
 
   async close(host: NativeBackendHost): Promise<void> {

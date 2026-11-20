@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
-import type { CapturedSessionReference, AttemptCleanup, AttemptComparison, AttemptGroup, HandoffDraft, LaunchTarget, MergeResult, NativeRunInput, NativeSessionInput, Project, Run, ReviewComment, Session, SessionOrigin, RiffetWakeup, Automation, AutomationRun, AutomationTrigger } from '../../../../packages/contracts/src/index.js';
+import type { CapturedSessionReference, AttemptCleanup, AttemptComparison, AttemptGroup, HandoffDraft, LaunchTarget, MergeResult, NativeRunInput, NativeSessionInput, Project, Run, ReviewComment, Session, SessionOrigin, RiffetWakeup, Automation, AutomationRun, AutomationTrigger, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeBackendService } from '../backends/service.js';
 import { AppError, requireString } from '../errors.js';
@@ -16,7 +16,7 @@ import type { Store } from '../store.js';
 import { auxiliaryEndpoint, resolveAuxiliaryModel } from '../auxiliary/models.js';
 import type { CompletionMetrics } from '../auxiliary/gateway.js';
 import type { AuxiliaryCallRecorder } from '../auxiliary/telemetry.js';
-import { summaryHeading, writeBrief, writeMaterial, type BriefSource } from './brief.js';
+import { continuationSection, sourceLanguage, summaryHeading, writeBrief, writeMaterial, type BriefSource } from './brief.js';
 import { requestHandoffSummary } from './handoff-summary.js';
 import type { SessionCommands } from './session-commands.js';
 import { nextCronTime, parseCron } from './cron.js';
@@ -56,7 +56,6 @@ export interface OrchestrationDeps { store: Store; settings: SettingsService; na
   /** Told of every wake-up that was scheduled or left `pending`; device leases follow it (docs/DEVICES.md §3). */
   onWakeup?: (wakeup: RiffetWakeup) => void; }
 interface Ids { sessionId?: string; commandId?: string }
-const HANDOFF_NEXT = '先用几句话确认你理解的现状和尚未完成的部分，然后继续完成它。';
 type StoredAttemptGroup = AttemptGroup & { requestId?: string; requestFingerprint?: string; warnings?: string[]; runInput?: NativeRunInput };
 
 const now = () => new Date().toISOString();
@@ -175,6 +174,16 @@ export class OrchestrationService {
       || ['starting', 'busy', 'attention'].includes(this.deps.nativeBackends.status(sessionId).phase);
   }
 
+  /** True when a turn is actively executing (not merely queued behind a paused dispatcher). */
+  private activelyRunning(sessionId: string): boolean {
+    const session = this.deps.store.getSession(sessionId);
+    if (['starting', 'running', 'waiting', 'cancelling'].includes(session.state)) return true;
+    if (['starting', 'busy', 'attention'].includes(this.deps.nativeBackends.status(sessionId).phase)) return true;
+    return this.deps.store.listUnfinishedNativeRuns(sessionId).some(run =>
+      ['preparing', 'dispatching', 'input_sent', 'observed'].includes(run.native?.delivery ?? ''),
+    );
+  }
+
   /**
    * A retried launch. The first message of a fork or handoff is written from live state, so a retry
    * would not reproduce it byte for byte and `createNativeSubmission` would call it a conflict;
@@ -215,10 +224,14 @@ export class OrchestrationService {
   }
 
   /** [shadow]: an attempt, which a directory outside Git can also start (see `GitService.worktreeBase`). */
-  private async worktreeProject(origin: Project, base: string, label?: string, shadow = false): Promise<Project> {
+  private async worktreeProject(origin: Project, base: string, label?: string, shadow = false, checkpointId?: string): Promise<Project> {
     const namingOrigin = this.deps.store.getProject(this.deps.store.originChain(origin.id).at(-1) ?? origin.id);
     if (origin.system === 'task-workspace') throw new AppError('TASK_WORKSPACE_SAVE_REQUIRED', 'Save this task as a project before creating worktrees', 409);
-    const created = await this.deps.git.createWorktree(origin, { branch: generatedBranch(namingOrigin.name, { suffix: label }), base }, { shadow });
+    const branchName = generatedBranch(namingOrigin.name, { suffix: label });
+    const created = (checkpointId && !shadow
+      ? await this.deps.git.createWorktreeFromCheckpoint(origin, { branch: branchName, checkpointId }).catch(() => undefined)
+      : undefined)
+      ?? await this.deps.git.createWorktree(origin, { branch: branchName, base }, { shadow });
     const branch = created.branch ?? created.head.slice(0, 8);
     return this.deps.store.createProject(await realpath(created.path), `${origin.name} · ${branch}`, { originProjectId: origin.id, branch });
   }
@@ -267,6 +280,34 @@ export class OrchestrationService {
 
   // ---- Fork and handoff ------------------------------------------------------------------------
 
+  private briefMessagesFromEvents(sessionId: string, events: readonly WorkbenchEvent[]): BriefSource['messages'] {
+    const meta = new Map<string, { turnId?: string; runId?: string }>();
+    for (const event of events) {
+      const nativeId = (event as { nativeId?: unknown }).nativeId;
+      const messageId = typeof nativeId === 'string' && nativeId ? nativeId : `${event.sequence}`;
+      const existing = meta.get(messageId);
+      const turnId = (event as { nativeTurnId?: unknown }).nativeTurnId;
+      const runId = event.runId;
+      if (!existing) {
+        meta.set(messageId, {
+          ...(typeof turnId === 'string' && turnId ? { turnId } : {}),
+          ...(typeof runId === 'string' && runId ? { runId } : {}),
+        });
+      } else {
+        if (!existing.turnId && typeof turnId === 'string' && turnId) existing.turnId = turnId;
+        if (!existing.runId && typeof runId === 'string' && runId) existing.runId = runId;
+      }
+    }
+    return extractIndexable(sessionId, events, Number.POSITIVE_INFINITY).map(row => {
+      const ids = meta.get(row.messageId);
+      return {
+        kind: row.kind, text: row.text, at: row.at, messageId: row.messageId,
+        ...(ids?.turnId ? { turnId: ids.turnId } : {}),
+        ...(ids?.runId ? { runId: ids.runId } : {}),
+      };
+    });
+  }
+
   /**
    * What a continuing conversation is written from. When a backend can be read without starting
    * it, its transcript is the source, uncapped, and is indexed on the way so search catches up too;
@@ -279,26 +320,22 @@ export class OrchestrationService {
     try {
       const events = await nativeBackends.indexableTranscript(session.id);
       store.indexMessages(extractIndexable(session.id, events));
-      messages = extractIndexable(session.id, events, Number.POSITIVE_INFINITY);
+      messages = this.briefMessagesFromEvents(session.id, events);
     } catch { /* the transcript and the index are best-effort sources */ }
     if (!messages.length) {
       const { key } = servingKey(store.journal, session.id, 'main');
       const events = new NativeEventLog(store.journal, session.id, key).tail(Number.MAX_SAFE_INTEGER);
-      messages = extractIndexable(session.id, events, Number.POSITIVE_INFINITY);
+      messages = this.briefMessagesFromEvents(session.id, events);
     }
     if (!messages.length) messages = store.indexedMessages(session.id, { tools: true });
     const status = await git.status(store.getProject(session.projectId)).catch(() => undefined);
     return { session, runs: store.listRuns(session.id), messages, ...(status ? { status } : {}), ...(upToRunId ? { upToRunId } : {}) };
   }
 
-  private async brief(session: IdentifiedSession, upToRunId?: string): Promise<string> {
-    return writeBrief(await this.briefSource(session, upToRunId));
-  }
-
   /**
    * Continues a conversation in a new one, optionally from an earlier turn, on another backend, or
-   * in a fresh worktree. Code is not rewound here: undoing a turn's edits is a checkpoint restore,
-   * a separate and previewed step, so a fork never silently changes files.
+   * in a fresh worktree. Code is not rewound in place: an isolated fork from an earlier turn starts
+   * from that turn's checkpoint when one exists, and otherwise from `HEAD`.
    */
   async fork(sessionId: string, options: { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string } & Ids): Promise<{ session: Session; run: Run }> {
     return this.withOperation(`launch:${options.sessionId ?? randomUUID()}`, async () => {
@@ -307,9 +344,12 @@ export class OrchestrationService {
       const again = this.relaunched(options, provenance);
       if (again) return again;
       const source = store.getSession(sessionId);
-      if (options.runId) { const run = store.getRun(options.runId); if (run.sessionId !== source.id) throw new AppError('RUN_NOT_FOUND', 'Run does not belong to this conversation', 404); }
+      const targetRun = options.runId ? store.getRun(options.runId) : undefined;
+      if (targetRun && targetRun.sessionId !== source.id) throw new AppError('RUN_NOT_FOUND', 'Run does not belong to this conversation', 404);
+      if (!options.isolate && this.activelyRunning(source.id)) {
+        throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before forking in the same workspace, or isolate the fork in a new worktree', 409);
+      }
       const origin = store.getProject(source.projectId);
-      const text = `${await this.brief(source, options.runId)}\n\n## 接下来\n${options.note?.trim() || '先用几句话确认你理解的现状，然后等我的下一步指示，暂时不要修改文件。'}`;
       // Inherit the source's provider only while it still exists: a fork of a conversation whose
       // provider was removed must land on the backend's default, not fail on the dangling id.
       const sourceBackend = source.backendId;
@@ -318,9 +358,50 @@ export class OrchestrationService {
         ? source.backendProfileId : undefined;
       const target = options.target ?? { backendId: sourceBackend, ...(inheritProfile ? { backendProfileId: inheritProfile } : {}), ...(source.model ? { model: source.model } : {}), mode: source.mode, ...(source.approval ? { approval: source.approval } : {}) };
       const input = await resolveNativeSessionInput(this.deps, { ...target, projectId: origin.id, title: `${source.title} · 新会话` });
-      const project = options.isolate ? await this.worktreeProject(origin, 'HEAD', 'fork') : origin;
-      // A continuation keeps the tool groups its source was created with (docs/DEVICES.md §2).
-      return this.launch({ ...input, projectId: project.id, ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}), ...sameLaunchExtensions(source, input) }, text, provenance, options);
+      const checkpoint = options.isolate && options.runId
+        ? (await this.deps.git.checkpoints(origin).catch(() => [])).find(item => item.sessionId === source.id && item.runId === options.runId)
+        : undefined;
+      const project = options.isolate ? await this.worktreeProject(origin, 'HEAD', 'fork', false, checkpoint?.id) : origin;
+      let nativeFork: Awaited<ReturnType<NativeBackendService['forkNativeSession']>>;
+      try {
+        nativeFork = await this.deps.nativeBackends.forkNativeSession(source, project, {
+          backendId: input.backendId,
+          ...(input.backendProfileId ? { backendProfileId: input.backendProfileId } : {}),
+        }, {
+          ...(options.runId ? { upToRunId: options.runId } : {}),
+          ...(targetRun?.native?.nativeTurnId ? { upToNativeTurnId: targetRun.native.nativeTurnId } : {}),
+          ...(targetRun?.native?.nativeMessageId ? { upToNativeMessageId: targetRun.native.nativeMessageId } : {}),
+        });
+        let text: string;
+        if (nativeFork) {
+          const lang = sourceLanguage({ session: source, runs: store.listRuns(source.id), messages: store.indexedMessages(source.id), ...(options.runId ? { upToRunId: options.runId } : {}) });
+          text = options.note?.trim() || (lang === 'en'
+            ? 'Briefly confirm your understanding of the current state, then wait for my next instruction without modifying files yet.'
+            : '先用几句话确认你理解的现状，然后等我的下一步指示，暂时不要修改文件。');
+        } else {
+          const material = await this.briefSource(source, options.runId);
+          text = `${writeBrief(material)}${continuationSection(sourceLanguage(material), 'fork', options.note)}`;
+        }
+        // Recheck at the synchronous acceptance boundary for non-isolated forks.
+        if (!options.isolate && this.activelyRunning(source.id)) {
+          throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before forking in the same workspace, or isolate the fork in a new worktree', 409);
+        }
+        // A continuation keeps the tool groups its source was created with (docs/DEVICES.md §2).
+        return this.launch({
+          ...input,
+          projectId: project.id,
+          ...(nativeFork ? { nativeSessionId: nativeFork.nativeSessionId } : {}),
+          ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}),
+          ...sameLaunchExtensions(source, input),
+        }, text, provenance, options);
+      } catch (error) {
+        await nativeFork?.cleanup?.().catch(() => undefined);
+        if (options.isolate && project.id !== origin.id) {
+          await this.deps.git.discardWorktree(origin, project.cwd, project.worktree?.branch).catch(() => undefined);
+          try { store.deleteProject(project.id); } catch { /* best-effort rollback */ }
+        }
+        throw error;
+      }
     });
   }
 
@@ -336,7 +417,8 @@ export class OrchestrationService {
     if (!options.target.backendId) throw new AppError('INVALID_BACKEND', 'Choose the backend to hand this conversation to');
     if (this.busy(source.id)) throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before handing this conversation off', 409);
     const material = await this.briefSource(source);
-    const next = `\n\n## 接下来\n${options.goal?.trim() || HANDOFF_NEXT}`;
+    const language = sourceLanguage(material);
+    const next = continuationSection(language, 'handoff', options.goal);
     const ref = resolveAuxiliaryModel(settings.getSettings(), 'handoff');
     if (!ref) return { text: `${writeBrief(material)}${next}` };
     const authStartedAt = Date.now();
@@ -363,7 +445,7 @@ export class OrchestrationService {
         reasoningTokens: metrics?.reasoningTokens ?? null, reasoningChars: metrics?.reasoningChars ?? 0,
         thinkingDetected: metrics?.thinkingDetected ?? false, streaming: metrics?.streaming ?? false,
       });
-      return { text: `${summaryHeading(source)}\n\n${note}${next}`, generatedBy: { ...ref, profileName } };
+      return { text: `${summaryHeading(source, language)}\n\n${note}${next}`, generatedBy: { ...ref, profileName } };
     } catch (error) {
       if (options.signal?.aborted) throw error;
       if (endpoint) {
@@ -400,14 +482,28 @@ export class OrchestrationService {
       if (!options.target.backendId) throw new AppError('INVALID_BACKEND', 'Choose the backend to hand this conversation to');
       if (this.busy(source.id)) throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before handing this conversation off', 409);
       // A reviewed draft is sent as the reader left it; without one the brief is written here.
-      const text = options.text ?? `${await this.brief(source)}\n\n## 接下来\n${options.note?.trim() || HANDOFF_NEXT}`;
+      let text = options.text;
+      if (text === undefined) {
+        const material = await this.briefSource(source);
+        text = `${writeBrief(material)}${continuationSection(sourceLanguage(material), 'handoff', options.note)}`;
+      }
       const input = await resolveNativeSessionInput(this.deps, { ...options.target, projectId: source.projectId, title: source.title });
       // Transcript reads and backend validation await I/O. Recheck at the synchronous acceptance
       // boundary, since a user may have submitted another turn while the brief was being prepared.
       if (this.busy(source.id)) throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before handing this conversation off', 409);
-      const result = this.launch({ ...input, ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}), ...sameLaunchExtensions(source, input) }, text, provenance, options);
-      const updated = store.updateSession(source.id, { handedOffTo: result.session.id });
+      if (this.closed) throw new AppError('SERVICE_CLOSED', 'The workbench is shutting down', 503);
+      const { result, updated } = store.transaction(() => {
+        const created = store.createNativeSubmission(
+          options.sessionId ?? randomUUID(),
+          { ...input, ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}), ...sameLaunchExtensions(source, input), origin: provenance },
+          options.commandId ?? randomUUID(),
+          textInput(text),
+        );
+        const marked = store.updateSession(source.id, { handedOffTo: created.session.id });
+        return { result: created, updated: marked };
+      });
       store.appendEvent(source.id, 'session', { session: updated });
+      this.deps.dispatch.kick();
       return result;
     });
   }

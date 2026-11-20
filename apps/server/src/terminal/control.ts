@@ -32,11 +32,25 @@ export function unescapeOctal(input: Buffer): Buffer {
   return out.subarray(0, length);
 }
 
-/** `send-keys -H` command lines for raw bytes, at most `chunk` bytes each, in order. */
+/**
+ * `send-keys -H` command lines for raw bytes, at most `chunk` bytes each, in order.
+ * Splits never cut across a multi-byte UTF-8 character so TUIs that decode each read
+ * chunk independently do not see stray replacement characters.
+ */
 export function sendKeysLines(pane: string, data: Buffer, chunk = 512): string[] {
   const lines: string[] = [];
-  for (let at = 0; at < data.length; at += chunk) {
-    lines.push(`send-keys -H -t ${pane} ${Array.from(data.subarray(at, at + chunk), byte => `0x${byte.toString(16).padStart(2, '0')}`).join(' ')}`);
+  for (let at = 0; at < data.length; ) {
+    let end = Math.min(at + chunk, data.length);
+    if (end < data.length) {
+      let back = 0;
+      while (end > at && back < 3 && (data[end]! & 0xc0) === 0x80) {
+        end -= 1;
+        back += 1;
+      }
+      if (end === at) end = Math.min(at + chunk, data.length);
+    }
+    lines.push(`send-keys -H -t ${pane} ${Array.from(data.subarray(at, end), byte => `0x${byte.toString(16).padStart(2, '0')}`).join(' ')}`);
+    at = end;
   }
   return lines;
 }

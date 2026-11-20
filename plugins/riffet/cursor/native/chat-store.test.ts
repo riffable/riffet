@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ChatReader, mapTranscript, parsePromptTimestamp, reasoningChannel, TranscriptMapper, userQuery, type ChatMessage } from './chat-store.js';
+import { ChatReader, cursorSteerContext, mapTranscript, parsePromptTimestamp, reasoningChannel, TranscriptMapper, userQuery, type ChatMessage } from './chat-store.js';
 import { parseScreen, turnControls } from './screen.js';
 import { readCompleteTranscript, Transcript } from './transcript.js';
 
@@ -72,6 +72,20 @@ const conversation: ChatMessage[] = [
   expect(events.slice(0, 3).map(event => event.runId)).toEqual(['turn:first', 'turn:first', 'turn:first']);
   expect(events.slice(0, 3).map(event => event.nativeTurnId)).toEqual(['generation-1', 'generation-1', 'generation-1']);
   expect(events[3]).toMatchObject({ runId: 'turn:next', nativeTurnId: 'generation-2' });
+});
+
+it('extracts Cursor steer context receipts even when tool output exceeds 20KB after the carrier', () => {
+  const meta = Buffer.from(JSON.stringify({
+    backendId: 'cursor',
+    sessionId: 'sess-1',
+    commandId: 'steer-25k',
+    nonce: '0123456789abcdef0123456789abcdef',
+    target: { nativeSessionId: 'chat-1', turnId: 'gen-1' },
+  })).toString('base64url');
+  const carrier = `<riffet-steer v="1" data="${meta}">\nnarrow the scope\n</riffet-steer>`;
+  const largeResult = `${carrier}\n${'x'.repeat(25_000)}`;
+  const extracted = cursorSteerContext({ type: 'tool-result', toolCallId: 't1', toolName: 'Shell', result: largeResult });
+  expect(extracted).toBe(carrier);
 });
 
 describe('chat store', () => {

@@ -1,4 +1,5 @@
-import { open, readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
 import { AppError } from '../../errors.js';
@@ -144,7 +145,7 @@ async function verify(path: string, nativeSessionId: string, cwd: string): Promi
   const header = await readHeader(path);
   if (!header || header.id !== nativeSessionId) return false;
   // Old sessions may carry no cwd; a header that names one must name this project.
-  return !header.cwd || samePath(header.cwd, cwd);
+  return !header.cwd || samePath(header.cwd, cwd) || (await canonical(header.cwd)) === (await canonical(cwd));
 }
 
 const located = new Map<string, string>();
@@ -383,4 +384,76 @@ export function parsePiTranscript(content: string, path: string, nativeSessionId
     ...(usage ? { usage } : {}),
     ...settings,
   };
+}
+
+/** Where a newly written pi session file belongs for `cwd`, matching `findPiTranscript`'s search order. */
+function piSessionsRoot(sessionDir?: string): string {
+  const environmentDir = process.env.PI_CODING_AGENT_SESSION_DIR?.trim();
+  if (environmentDir) return resolve(expandHome(environmentDir));
+  const configuredDir = sessionDir?.trim();
+  if (configuredDir) return join(resolve(expandHome(configuredDir)), 'sessions');
+  return join(piAgentDir(), 'sessions');
+}
+
+function normalizePiEntryId(value?: string): string | undefined {
+  if (!value) return undefined;
+  return value.startsWith('msg:') ? value.slice(4) : value;
+}
+
+/**
+ * Clones a pi session's active branch into a brand-new native session JSONL file for `targetCwd`,
+ * optionally truncated through the turn identified by `upToNativeTurnId` / `upToNativeMessageId`.
+ * Returns `undefined` if the source file or requested cutoff entry cannot be located cleanly.
+ */
+export async function forkPiTranscript(
+  sourceNativeSessionId: string,
+  sourceCwd: string,
+  targetCwd: string,
+  options: { sessionDir?: string; upToNativeTurnId?: string; upToNativeMessageId?: string } = {},
+): Promise<{ nativeSessionId: string; path: string } | undefined> {
+  const sourcePath = await findPiTranscript(sourceNativeSessionId, sourceCwd, options.sessionDir);
+  if (!sourcePath) return undefined;
+  const transcript = await readPiTranscript(sourcePath, sourceNativeSessionId);
+  if (!transcript.chain.length) return undefined;
+
+  let entries = transcript.chain;
+  const targetId = normalizePiEntryId(options.upToNativeTurnId) ?? normalizePiEntryId(options.upToNativeMessageId);
+  if (targetId) {
+    const startIndex = entries.findIndex(entry => entry.id === targetId);
+    if (startIndex < 0) return undefined;
+    let endIndex = entries.length;
+    for (let index = startIndex + 1; index < entries.length; index += 1) {
+      if (piMessageRole(entries[index]!) === 'user') {
+        endIndex = index;
+        break;
+      }
+    }
+    entries = entries.slice(0, endIndex);
+  }
+
+  const newSessionId = randomUUID();
+  const timestamp = new Date().toISOString();
+  const resolvedTarget = resolve(targetCwd);
+  const header: PiSessionHeader = {
+    type: 'session',
+    version: 3,
+    id: newSessionId,
+    timestamp,
+    cwd: resolvedTarget,
+    parentSession: sourcePath,
+  };
+  const targetDir = join(piSessionsRoot(options.sessionDir), projectDirectory(resolvedTarget));
+  await mkdir(targetDir, { recursive: true, mode: 0o700 });
+  const stamp = timestamp.replace(/[:.]/g, '-');
+  const destPath = join(targetDir, `${stamp}_${newSessionId}.jsonl`);
+  const tempPath = `${destPath}.${randomUUID()}.tmp`;
+  const lines = [JSON.stringify(header), ...entries.map(entry => JSON.stringify(entry))].join('\n') + '\n';
+  try {
+    await writeFile(tempPath, lines, { mode: 0o600, flag: 'wx' });
+    await rename(tempPath, destPath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+  return { nativeSessionId: newSessionId, path: destPath };
 }

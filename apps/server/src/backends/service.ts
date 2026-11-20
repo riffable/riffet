@@ -2,7 +2,7 @@ import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
 import type {
   ModelInfo, NativeActivity, NativeBackendId,
   NativeContext, NativeInteraction, NativeJob, NativeInteractionResponse, NativeInteractionResult, NativeStopRequest, NativeWorkbenchEvent,
-  NativeBackendProfilesResponse, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, NativeTurnTarget, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
+  NativeBackendProfilesResponse, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, NativeTurnTarget, Project, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError, sessionInTerminal } from '../errors.js';
 import type { Store } from '../store.js';
@@ -1388,6 +1388,38 @@ export class NativeBackendService {
   async models(session: Session): Promise<ModelInfo[]> {
     const { driver, profile } = await this.resolve(session);
     return curateModels(await this.catalog.listModels(driver, this.options.store.getProject(session.projectId), profile, session), profile, session, modelNormalizer(driver, profile));
+  }
+
+  /**
+   * Attempts a native same-backend session fork when the driver supports it and the target profile
+   * can continue from the source profile. Returns `undefined` on any mismatch or failure so the
+   * caller safely falls back to a text-brief fork.
+   */
+  async forkNativeSession(
+    source: Session,
+    targetProject: Project,
+    target: { backendId?: NativeBackendId; backendProfileId?: string },
+    options: { upToRunId?: string; upToNativeTurnId?: string; upToNativeMessageId?: string } = {},
+  ): Promise<{ nativeSessionId: string; cleanup?: () => Promise<void> } | undefined> {
+    if (source.kind !== 'native' || !source.nativeSessionId) return undefined;
+    if (target.backendId && target.backendId !== source.backendId) return undefined;
+    try {
+      const { driver, profile: from } = await this.resolve(source);
+      if (!driver.forkSession) return undefined;
+      const to = target.backendProfileId && target.backendProfileId !== from.id
+        ? (await this.resolve(source, target.backendProfileId)).profile
+        : from;
+      if (to.id !== from.id) {
+        const key = driver.continuationKey?.(from);
+        if (key === undefined || driver.continuationKey!(to) !== key
+          || (driver.canContinueProfile && !driver.canContinueProfile(from, to, source))) {
+          return undefined;
+        }
+      }
+      return await driver.forkSession(this.host, source, targetProject, to, options);
+    } catch {
+      return undefined;
+    }
   }
 
   async dispose(sessionId: string): Promise<void> {

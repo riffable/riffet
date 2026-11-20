@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../store.js';
+import { sendKeysLines } from './control.js';
 import { TerminalService, type TerminalBehaviour } from './service.js';
 
 /**
@@ -547,4 +548,18 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     await vi.waitFor(() => expect(kept.map(message => 'data' in message ? message.data : '').join('')).toContain('FLOW_DONE'));
     expect(kept.filter(message => message.type === 'snapshot')).toHaveLength(1);
   }, 40_000);
+});
+
+describe('sendKeysLines UTF-8 chunking', () => {
+  it('never splits multi-byte UTF-8 characters across 512-byte chunks', () => {
+    const payload = `a${'中文🚀'.repeat(200)}`;
+    const lines = sendKeysLines('%0', Buffer.from(payload, 'utf8'));
+    expect(lines.length).toBeGreaterThan(1);
+    const decodedChunks = lines.map(line => {
+      const hex = line.replace(/^send-keys -H -t %0 /, '').trim().split(/\s+/).map(byte => Number.parseInt(byte, 16));
+      return Buffer.from(hex).toString('utf8');
+    });
+    expect(decodedChunks.some(chunk => chunk.includes('\uFFFD'))).toBe(false);
+    expect(decodedChunks.join('')).toBe(payload);
+  });
 });

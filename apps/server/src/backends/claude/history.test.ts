@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -1345,5 +1345,45 @@ describe('Claude system activities', () => {
     for (const bad of ['/etc/passwd', '/private/tmp/claude-501/../../etc/passwd', '/private/tmp/other/s/tasks/b1.output', '/private/tmp/claude-501/s/notes/b1.output', 'tasks/b1.output']) {
       expect(taskOutputPath(bad)).toBeUndefined();
     }
+  });
+
+  it('forks a Claude JSONL transcript with rewritten sessionId/cwd and optional mid-turn cutoff', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-fork-'));
+    dirs.push(dir);
+    const configDir = join(dir, 'claude-config');
+    const sourceRepo = join(dir, 'repo-a');
+    const targetRepo = join(dir, 'repo-b');
+    mkdirSync(sourceRepo, { recursive: true });
+    mkdirSync(targetRepo, { recursive: true });
+    const srcId = '11111111-1111-4111-8111-111111111111';
+    const srcFolder = join(configDir, 'projects', '-source');
+    mkdirSync(srcFolder, { recursive: true });
+    const rows = [
+      { type: 'user', uuid: 'u1', promptId: 'p1', sessionId: srcId, cwd: sourceRepo, timestamp: at(1), message: { role: 'user', content: 'first prompt' } },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'u1', promptId: 'p1', sessionId: srcId, cwd: sourceRepo, timestamp: at(2), message: { role: 'assistant', content: [{ type: 'tool_use', id: 'c1', name: 'Read', input: { file_path: 'a.ts' } }] } },
+      { type: 'user', uuid: 'r1', parentUuid: 'a1', promptId: 'p1', sessionId: srcId, cwd: sourceRepo, timestamp: at(3), message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'c1', content: 'contents' }] } },
+      { type: 'assistant', uuid: 'a2', parentUuid: 'r1', promptId: 'p1', sessionId: srcId, cwd: sourceRepo, timestamp: at(4), message: { role: 'assistant', content: [{ type: 'text', text: 'first answer' }] } },
+      { type: 'user', uuid: 'u2', parentUuid: 'a2', promptId: 'p2', sessionId: srcId, cwd: sourceRepo, timestamp: at(5), message: { role: 'user', content: 'second prompt' } },
+      { type: 'assistant', uuid: 'a3', parentUuid: 'u2', promptId: 'p2', sessionId: srcId, cwd: sourceRepo, timestamp: at(6), message: { role: 'assistant', content: [{ type: 'text', text: 'second answer' }] } },
+    ];
+    writeFileSync(join(srcFolder, `${srcId}.jsonl`), rows.map(item => JSON.stringify(item)).join('\n') + '\n');
+
+    const { forkClaudeTranscript, findClaudeTranscript } = await import('./history.js');
+    const forked = await forkClaudeTranscript(configDir, srcId, sourceRepo, targetRepo, { upToNativeTurnId: 'p1' });
+    expect(forked).toBeDefined();
+    expect(forked!.nativeSessionId).not.toBe(srcId);
+    await expect(findClaudeTranscript(configDir, forked!.nativeSessionId)).resolves.toBe(forked!.path);
+    const copied = readFileSync(forked!.path, 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(copied.map(item => item.uuid)).toEqual(['u1', 'a1', 'r1', 'a2']);
+    expect(copied.every(item => item.sessionId === forked!.nativeSessionId)).toBe(true);
+    expect(copied.every(item => typeof item.cwd === 'string' && (item.cwd as string).endsWith('repo-b'))).toBe(true);
+
+    const byPersistedIds = await forkClaudeTranscript(configDir, srcId, sourceRepo, targetRepo, {
+      upToNativeTurnId: 'claude-turn:u1',
+      upToNativeMessageId: `claude:${srcId}:u1:0`,
+    });
+    expect(byPersistedIds).toBeDefined();
+    const copiedByPersisted = readFileSync(byPersistedIds!.path, 'utf8').trim().split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    expect(copiedByPersisted.map(item => item.uuid)).toEqual(['u1', 'a1', 'r1', 'a2']);
   });
 });

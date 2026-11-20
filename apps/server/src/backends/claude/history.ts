@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
-import { open, readFile, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { activeTurnOf, initialState, reduce, type BackgroundAgent, type ClaudeSessionState, type ClaudeSignal } from './session-state.js';
@@ -9,7 +9,7 @@ import { ActivityLedger, activityEvent, activityId, activityOfEvent, isLiveActiv
 import { firstHumanMessage } from '../../session-title.js';
 import { claudeGoalChange } from './goal.js';
 import { ClaudeSubagentDiscovery } from './subagents.js';
-import { MAX_TRANSCRIPT_BYTES, record, string, CLAUDE_TURN_FAILED, isTerminalType, type ClaudeRow, subagentWake, subagentSettles, claudeRowOwesStep, claudeRowSignals, parseRow, transcriptLines } from './rows.js';
+import { MAX_TRANSCRIPT_BYTES, record, string, CLAUDE_TURN_FAILED, INTERRUPTED_MARKER, isTerminalType, isTranscriptOnly, promptIdOf, rowText, type ClaudeRow, subagentWake, subagentSettles, claudeRowOwesStep, claudeRowSignals, parseRow, transcriptLines } from './rows.js';
 import { type MapperState, type ClaudeTranscriptHooks, mapRow } from './row-mapper.js';
 import { type ClaudeStepMeasurement, ClaudeStepMeter } from './step-meter.js';
 /** Bytes just before the read offset that must still match, or the file was rewritten in place. */
@@ -883,4 +883,115 @@ export async function findClaudeTranscript(configDir: string, nativeSessionId: s
     } catch { /* exact transcript is not present in this project folder */ }
   }
   return undefined;
+}
+
+const MAX_FORK_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+
+function claudeProjectSlug(cwd: string): string {
+  return cwd.replace(/[^A-Za-z0-9-]/g, '-');
+}
+
+/**
+ * Extracts a raw Claude row UUID from Riffet's persisted event/turn identifiers:
+ * - `claude:<nativeSessionId>:<uuid>[:<part>]` (from `row-mapper.ts` / `transcript-source.ts`)
+ * - `claude-turn:<uuid>` (fallback turn id when a row has no `promptId`)
+ */
+function normalizeClaudeRowUuid(value: string | undefined, sourceNativeSessionId: string): string | undefined {
+  if (!value) return undefined;
+  const prefix = `claude:${sourceNativeSessionId}:`;
+  if (value.startsWith(prefix)) {
+    const rest = value.slice(prefix.length);
+    return rest.split(':')[0] || undefined;
+  }
+  if (value.startsWith('claude-turn:')) return value.slice('claude-turn:'.length) || undefined;
+  return value;
+}
+
+function isClaudeHumanTurnRow(row: ClaudeRow): boolean {
+  if (row.type !== 'user' || row.isMeta === true || row.isSidechain === true || row.agentId !== undefined
+    || row.isCompactSummary === true || isTranscriptOnly(row)) return false;
+  const content = record(row.message)?.content;
+  if (Array.isArray(content) && content.some(block => record(block)?.type === 'tool_result')) return false;
+  const text = rowText(content);
+  if (text.startsWith(INTERRUPTED_MARKER)) return false;
+  return true;
+}
+
+/**
+ * Clones a Claude Code JSONL transcript into a new UUID session under `configDir/projects/...`,
+ * optionally truncated through the turn matching `upToNativeTurnId` (`promptId` or `claude-turn:<uuid>`)
+ * or `upToNativeMessageId` (`uuid` or `claude:<sid>:<uuid>:<part>`). Rewrites `sessionId` and `cwd`
+ * on each copied row so Claude CLI resumes it cleanly as an independent conversation.
+ */
+export async function forkClaudeTranscript(
+  configDir: string,
+  sourceNativeSessionId: string,
+  sourceCwd: string,
+  targetCwd: string,
+  options: { upToNativeTurnId?: string; upToNativeMessageId?: string } = {},
+): Promise<{ nativeSessionId: string; path: string } | undefined> {
+  const sourcePath = await findClaudeTranscript(configDir, sourceNativeSessionId);
+  if (!sourcePath) return undefined;
+  const info = await stat(sourcePath).catch(() => undefined);
+  if (!info?.isFile() || info.size === 0 || info.size > MAX_FORK_TRANSCRIPT_BYTES) return undefined;
+  const raw = await readFile(sourcePath, 'utf8');
+  const lines = raw.split('\n');
+  if (!raw.endsWith('\n')) lines.pop();
+  const parsed: Array<{ row: ClaudeRow; raw: string }> = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const value = JSON.parse(line) as unknown;
+      const obj = record(value);
+      if (obj) parsed.push({ row: obj as ClaudeRow, raw: line });
+    } catch { /* ignore truncated trailing line */ }
+  }
+  if (!parsed.length) return undefined;
+
+  let selected = parsed;
+  const turnTarget = options.upToNativeTurnId;
+  const turnUuid = normalizeClaudeRowUuid(turnTarget, sourceNativeSessionId);
+  const messageUuid = normalizeClaudeRowUuid(options.upToNativeMessageId, sourceNativeSessionId);
+  if (turnTarget || messageUuid) {
+    const startIndex = parsed.findIndex(({ row }) =>
+      (turnTarget !== undefined && (promptIdOf(row) === turnTarget || (turnUuid !== undefined && row.uuid === turnUuid)))
+      || (messageUuid !== undefined && row.uuid === messageUuid));
+    if (startIndex < 0) return undefined;
+    const matchedPromptId = promptIdOf(parsed[startIndex]!.row) ?? (turnTarget && !turnTarget.startsWith('claude-turn:') ? turnTarget : undefined);
+    let endIndex = parsed.length;
+    for (let index = startIndex + 1; index < parsed.length; index += 1) {
+      const row = parsed[index]!.row;
+      if (!isClaudeHumanTurnRow(row)) continue;
+      const pid = promptIdOf(row);
+      if (matchedPromptId && pid === matchedPromptId) continue;
+      endIndex = index;
+      break;
+    }
+    selected = parsed.slice(0, endIndex);
+  }
+
+  const canonicalSource = await realpath(sourceCwd).catch(() => resolve(sourceCwd));
+  const canonicalTarget = await realpath(targetCwd).catch(() => resolve(targetCwd));
+  const sameDirectory = canonicalSource === canonicalTarget;
+  const targetDir = sameDirectory ? dirname(sourcePath) : join(configDir, 'projects', claudeProjectSlug(canonicalTarget));
+  await mkdir(targetDir, { recursive: true, mode: 0o700 });
+
+  const newSessionId = randomUUID();
+  const destPath = join(targetDir, `${newSessionId}.jsonl`);
+  const tempPath = `${destPath}.${randomUUID()}.tmp`;
+  const rewritten = selected.map(({ row }) => {
+    const copy: Record<string, unknown> = { ...row };
+    if (typeof copy.sessionId === 'string') copy.sessionId = newSessionId;
+    if (typeof copy.cwd === 'string') copy.cwd = canonicalTarget;
+    return JSON.stringify(copy);
+  }).join('\n') + '\n';
+
+  try {
+    await writeFile(tempPath, rewritten, { mode: 0o600, flag: 'wx' });
+    await rename(tempPath, destPath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+  return { nativeSessionId: newSessionId, path: destPath };
 }

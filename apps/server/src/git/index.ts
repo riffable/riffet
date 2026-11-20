@@ -1585,6 +1585,55 @@ export class GitService {
     });
   }
 
+  /**
+   * Creates a worktree starting at a turn checkpoint's exact commit and file state (worktree + index).
+   * Returns `undefined` when the checkpoint is partial, has excluded paths, or its commit is gone,
+   * allowing the caller to fall back to `HEAD`.
+   */
+  async createWorktreeFromCheckpoint(project: ProjectRef, input: { branch: string; checkpointId: string }): Promise<WorktreeInfo | undefined> {
+    const originRepo = await this.repo(project);
+    const manifest = await this.readManifest(originRepo, input.checkpointId).catch(() => undefined);
+    if (!manifest || manifest.checkpoint.partial || manifest.checkpoint.excluded.length || !manifest.head) return undefined;
+    const verified = await this.revision(originRepo, `${manifest.head}^{commit}`);
+    if (!verified) return undefined;
+    const created = await this.createWorktree(project, { branch: input.branch, base: verified });
+    if (!manifest.files.length) return created;
+    const originSubpath = path.relative(originRepo.root, originRepo.projectRoot);
+    const canonicalRoot = await realpath(created.path);
+    const targetProjectRoot = originSubpath ? path.join(canonicalRoot, originSubpath) : canonicalRoot;
+    const targetRepo: Repo = {
+      root: canonicalRoot,
+      projectRoot: await realpath(targetProjectRoot).catch(() => targetProjectRoot),
+      projectId: originRepo.projectId,
+    };
+    const folder = this.checkpointPath(originRepo, manifest.checkpoint.id);
+    try {
+      for (const file of manifest.files) {
+        await this.atomicWorktreeImage(targetRepo, file.path, file.worktree, folder);
+        await this.setIndexImage(targetRepo, file.path, file.index, folder);
+      }
+      return created;
+    } catch (error) {
+      await this.discardWorktree(project, created.path, created.branch ?? input.branch).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /**
+   * Force-removes a freshly created worktree (even if dirty from a restored checkpoint) and deletes
+   * its newly created branch, used only when rolling back an aborted fork/attempt before launch.
+   */
+  async discardWorktree(project: ProjectRef, worktreePath: string, branch?: string): Promise<void> {
+    const repo = await this.repo(project);
+    return this.mutate(repo, async () => {
+      await this.git(repo, ['worktree', 'remove', '--force', '--', worktreePath], { timeoutMs: 30_000, maxOutputBytes: 256 * 1024 }).catch(() => undefined);
+      await rm(worktreePath, { recursive: true, force: true }).catch(() => undefined);
+      if (branch && !branch.startsWith('-')) {
+        await this.git(repo, ['branch', '-D', '--', branch], { timeoutMs: 15_000, maxOutputBytes: 64 * 1024 }).catch(() => undefined);
+      }
+    });
+  }
+
   async removeWorktree(project: ProjectRef, worktreePath: string, options: { shadow?: boolean } = {}): Promise<void> {
     const repo = await this.worktreeRepo(project, options.shadow);
     return this.mutate(repo, async () => {
