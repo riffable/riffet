@@ -33,6 +33,8 @@ export interface ListsState {
   /** The server can delete conversations (`session-delete-v1`); older ones only archive. */
   sessionDelete: boolean;
   projects: ProjectRecord[];
+  /** The server saves, creates, moves and deletes project files (`file-write-v1`). */
+  fileWrites: boolean;
   sessions: Session[];
   terminals: TerminalInfo[];
   /** The workbench owner's personal info (docs/OWNER.md); absent until a server that has one has answered. */
@@ -73,6 +75,7 @@ export function createListsStore(deps: ListsDeps) {
     sessionReferences: cached?.bootstrap.protocol?.features.includes('session-references-v1') ?? false,
     sessionDelete: cached?.bootstrap.protocol?.features.includes('session-delete-v1') ?? false,
     projects: cached?.bootstrap.projects ?? [],
+    fileWrites: cached?.bootstrap.protocol?.features.includes('file-write-v1') ?? false,
     sessions: cached?.bootstrap.sessions ?? [],
     terminals: cached?.bootstrap.terminals ?? [],
     owner: cached?.bootstrap.owner,
@@ -193,6 +196,7 @@ export function createListsStore(deps: ListsDeps) {
           sessionReferences: data.protocol?.features.includes('session-references-v1') ?? false,
           sessionDelete: data.protocol?.features.includes('session-delete-v1') ?? false,
           projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
+          fileWrites: data.protocol?.features.includes('file-write-v1') ?? false,
           sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id))),
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).

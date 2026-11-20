@@ -1,7 +1,7 @@
 import {
   Clock, Blocks, Activity, Archive, ArchiveRestore, ArrowDown, ArrowLeft, ArrowRightLeft, ArrowUp, ArrowUpRight, AtSign, Bookmark, BookmarkMinus, BookmarkPlus,
   BookOpen, Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
-  CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
+  CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine, FilePlus,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   Keyboard, KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, Mic, MessageCirclePlus,
@@ -72,6 +72,7 @@ export const IconFolder = icon(Folder);
 export const IconFolderClosed = icon(FolderClosed);
 export const IconFolderOpen = icon(FolderOpen);
 export const IconFolderPlus = icon(FolderPlus);
+export const IconFilePlus = icon(FilePlus);
 export const IconGitBranch = icon(GitBranch);
 /** The conversation canvas: nodes and the edges between them. */
 export const IconGraph = icon(Workflow);

@@ -40,6 +40,8 @@ export const FILE_BUDGET = {
   /** Deleted files kept for undo, all together, and for how long. */
   trashBytes: 1024 * MIB,
   trashRetentionMs: 24 * 60 * 60_000,
+  /** Files a client holds unsaved edits of at once; a further one is refused rather than another dropped. */
+  draftsKept: 20,
 } as const;
 
 /** Parsed and laid-out text kept for reuse: markdown, highlighted code, measured rows; all such caches together. */

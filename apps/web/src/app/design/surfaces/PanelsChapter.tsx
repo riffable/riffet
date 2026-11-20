@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { IconMaximize, IconPictureInPicture, IconPlus, IconRefreshCw, IconTerminal, IconX } from '@/components/icons';
+import { IconArrowLeft, IconEllipsis, IconMaximize, IconPencilLine, IconPictureInPicture, IconPlus, IconRefreshCw, IconTerminal, IconX } from '@/components/icons';
+import { Notice } from '@/components/ui/notice';
+import { FILE_BUDGET } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Segmented, UnderlineTabs } from '@/components/ui/controls';
 import { DOCK_DEFAULT, DOCK_MAX, DOCK_MIN, PANEL_DEFAULT, PANEL_MAX, PANEL_MIN, SIDEBAR_DEFAULT, panelDockMinWidth } from '@/app/state/uiStore';
@@ -154,6 +156,48 @@ function Terminal() {
   );
 }
 
+/** The preview header of the files view: read, edited with changes unsaved, and in conflict with the disk. */
+function Files() {
+  const { t } = useLingui();
+  const states: Array<{ label: string; editing: boolean; dirty: boolean; conflict: boolean }> = [
+    { label: t`只读`, editing: false, dirty: false, conflict: false },
+    { label: t`编辑中，有未保存的修改`, editing: true, dirty: true, conflict: false },
+    { label: t`冲突`, editing: true, dirty: true, conflict: true },
+  ];
+  return (
+    <div className="flex flex-col gap-8">
+      <Frame className="grid gap-6 p-6 md:grid-cols-3 max-md:p-3">
+        {states.map((state) => (
+          <div key={state.label} className="flex flex-col gap-2">
+            <div className="flex flex-col overflow-hidden rounded-xl bg-bg shadow-[0_0_0_1px_var(--line-strong)]">
+              <div className="flex h-9 shrink-0 items-center gap-1 edge-b px-2">
+                <Button size="icon-xs" variant="quiet" aria-label={t`返回`}><IconArrowLeft /></Button>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-2">src/app.ts</span>
+                {state.dirty && <Button size="xs" variant="primary" className="mx-1">{state.conflict ? t`覆盖保存` : t`保存`}</Button>}
+                <Button size="icon-xs" variant="quiet" className={cn(state.editing && 'bg-active text-fg')} aria-label={t`编辑`} aria-pressed={state.editing}><IconPencilLine /></Button>
+                <Button size="icon-xs" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button>
+              </div>
+              {state.conflict && (
+                <Notice tone="warning" className="m-2"><p>{t`这个文件在你编辑时被改过`}</p><div className="mt-2 flex flex-wrap gap-1"><Button size="xs" variant="secondary">{t`比较`}</Button><Button size="xs" variant="ghost">{t`用磁盘上的版本`}</Button></div></Notice>
+              )}
+              <div className="flex h-20 flex-col gap-3 p-4"><Line w="w-3/4" /><Line w="w-1/2" /><Line w="w-2/3" /></div>
+            </div>
+            <span className="text-sm text-fg">{state.label}</span>
+          </div>
+        ))}
+      </Frame>
+      <Matrix
+        columns={[t`取值`]}
+        rows={[
+          { label: t`可编辑`, cells: [<Value key="a">UTF-8 · ≤ {FILE_BUDGET.previewTextBytes / 1024} KB · file-write-v1</Value>] },
+          { label: t`未保存的文件`, cells: [<Value key="a">≤ {FILE_BUDGET.draftsKept}</Value>] },
+          { label: t`删除后可撤销`, cells: [<Value key="a">{FILE_BUDGET.trashRetentionMs / 3_600_000} h · ≤ {FILE_BUDGET.trashItemBytes / 1024 / 1024} MB</Value>] },
+        ]}
+      />
+    </div>
+  );
+}
+
 export function PanelsChapter() {
   const { t } = useLingui();
   return (
@@ -162,6 +206,7 @@ export function PanelsChapter() {
       <Plate number={2} title={t`标题栏与页签`}><Header /></Plate>
       <Plate number={3} title="Git" note={t`面板内的文案整块用英文，与界面语言无关。`}><Git /></Plate>
       <Plate number={4} title={t`终端`}><Terminal /></Plate>
+      <Plate number={5} title={t`文件`}><Files /></Plate>
     </Chapter>
   );
 }

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowLeft, IconChevronRight, IconCopy, IconCornerUpRight, IconDownload, IconEllipsis, IconExternalLink, IconEye, IconFile, IconFileCode2, IconFolder, IconImage, IconPlus, IconRefreshCw, IconSearch, IconSquareArrowOutUpRight, IconStar, IconTarget, IconX } from '@/components/icons';
+import { IconArrowLeft, IconChevronRight, IconCopy, IconCornerUpRight, IconDownload, IconEllipsis, IconExternalLink, IconEye, IconFile, IconFileCode2, IconFilePlus, IconFolder, IconFolderPlus, IconImage, IconPencilLine, IconPlus, IconRefreshCw, IconSearch, IconSquareArrowOutUpRight, IconStar, IconTarget, IconTrash2, IconX } from '@/components/icons';
 import type { CodeLocation, FileEntry, FilePreview, SearchHit } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { ContentPreview } from '@/components/ContentPreview';
@@ -22,13 +22,17 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { ImageViewer, loadedImageSize, rememberImageSize } from '../session/ImageViewer';
 import { ZoomPanImage } from '../session/ZoomPanImage';
 import { FavoriteMenu, FavoriteStar, favoriteName, useFolderFavorites } from '../FolderFavorites';
-import { useUi } from '../state/stores';
 import type { SidebarBodyProps } from './sidebarViews';
 import type { CodeTarget, SymbolAt } from './CodeView';
 import { FileTree } from './FileTree';
 import { DirectoryHint, FileIcon, Matched, splitPath } from './fileVisuals';
 import { QuickOpen, type QuickOpenMode } from './QuickOpen';
 import { useRecentFiles } from './recentFiles';
+import { useDraftPaths, useDraftsGuard } from './fileDrafts';
+import { useFileEditing } from './useFileEditing';
+import { useFileOperations } from './useFileOperations';
+import { Notice } from '@/components/ui/notice';
+import { useLists, useUi } from '../state/stores';
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })));
 const previewFallback = <div className="flex flex-1 justify-center py-10"><Spinner /></div>;
 
@@ -39,12 +43,14 @@ const isHtmlPath = (path: string) => /\.html?$/i.test(path);
 const rowAction = 'grid size-5 shrink-0 place-items-center rounded text-fg-3 opacity-0 transition-opacity pointer-events-none hover:bg-active hover:text-fg group-hover/file:opacity-100 group-hover/file:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto data-[state=open]:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:bg-active no-hover:size-11 no-hover:opacity-100 no-hover:pointer-events-auto';
 
 /** The actions a file manager offers on an entry; also opened by right-clicking the row. */
-function FileMenu({ projectId, root, path, kind, open, onOpenChange, onReference, onOpenInEditor, onRevealInFinder, favorited, onToggleFavorite }: {
+function FileMenu({ projectId, root, path, kind, open, onOpenChange, onReference, onOpenInEditor, onRevealInFinder, favorited, onToggleFavorite, writes }: {
   projectId: string; root: string; path: string; kind: FileEntry['kind'];
   open: boolean; onOpenChange: (open: boolean) => void;
   onReference?: () => void; onOpenInEditor: () => void; onRevealInFinder?: () => void;
   /** Folders only: whether it is one of the project's favorites, and the switch. */
   favorited?: boolean; onToggleFavorite?: () => void;
+  /** Where the server writes files: creating inside a folder, renaming and deleting. */
+  writes?: { onCreate: (kind: FileEntry['kind']) => void; onRename: () => void; onDelete: () => void } | undefined;
 }) {
   const { t } = useLingui();
   return (
@@ -67,9 +73,20 @@ function FileMenu({ projectId, root, path, kind, open, onOpenChange, onReference
         )}
         <DropdownMenuItem onSelect={onOpenInEditor}><IconSquareArrowOutUpRight /><Trans>在编辑器中打开</Trans></DropdownMenuItem>
         {onRevealInFinder && <DropdownMenuItem onSelect={onRevealInFinder}><IconFolder /><Trans>在 Finder 中显示</Trans></DropdownMenuItem>}
+        {writes && kind === 'directory' && <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => writes.onCreate('file')}><IconFilePlus /><Trans>新建文件</Trans></DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => writes.onCreate('directory')}><IconFolderPlus /><Trans>新建文件夹</Trans></DropdownMenuItem>
+        </>}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => void copyWithToast(path, t`已复制相对路径`)}><IconCopy /><Trans>复制相对路径</Trans></DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void copyWithToast(absolutePath(root, path), t`已复制绝对路径`)}><IconCopy /><Trans>复制绝对路径</Trans></DropdownMenuItem>
+        {writes && <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={writes.onRename}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="danger" onSelect={writes.onDelete}><IconTrash2 /><Trans>删除</Trans></DropdownMenuItem>
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -118,8 +135,31 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   const previewFilePath = preview?.path ?? previewPath;
   const [rendered, setRendered] = useState(true);
   const previewTheme = usePreviewTheme();
+  const fileWrites = useLists((state) => state.fileWrites);
+  const edit = useFileEditing({
+    projectId: project.id, preview, writable: fileWrites,
+    watching: panelOpen && shown && Boolean(preview) && !preview?.binary,
+    onPreview: (next) => setPreview((current) => (current?.path === next.path ? next : current)),
+  });
+  useDraftsGuard();
+  const drafts = useDraftPaths(project.id);
+  const operations = useFileOperations({
+    projectId: project.id,
+    onChanged: () => setRefreshToken((value) => value + 1),
+    onCreated: (created, kind) => { if (kind === 'file') { edit.startOnOpen(created); void openPreviewRef.current(created); } },
+    onMoved: (from, to) => {
+      const moved = (file: string) => file === from || file.startsWith(`${from}/`);
+      for (const file of recent.files.map((item) => item.path).filter(moved)) recent.remove(file);
+      if (previewFilePath !== undefined && moved(previewFilePath)) void openPreviewRef.current(to + previewFilePath.slice(from.length));
+    },
+    onRemoved: (removed) => {
+      const gone = (file: string) => file === removed || file.startsWith(`${removed}/`);
+      for (const file of recent.files.map((item) => item.path).filter(gone)) recent.remove(file);
+      if (previewFilePath !== undefined && gone(previewFilePath)) { previewRequest.current += 1; setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); }
+    },
+  });
   const renderable = Boolean(preview?.render || (preview && isHtmlPath(preview.path)));
-  const showingRendered = renderable && rendered && !preview?.image;
+  const showingRendered = renderable && rendered && !preview?.image && !edit.editing;
   const [imageLoadError, setImageLoadError] = useState(false);
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const previewImageThumb = useRef<HTMLImageElement>(null);
@@ -128,6 +168,8 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   const [previewMissing, setPreviewMissing] = useState(false);
   const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
+  /** `openPreview`, for handlers set up before it. */
+  const openPreviewRef = useRef<(path: string) => Promise<void>>(async () => undefined);
   /** The line (and column) the code view goes to, for the file it belongs to. */
   const [jump, setJump] = useState<CodeTarget & { path: string }>();
   /** Where ⌘-click jumps came from, newest last, for Back. */
@@ -298,6 +340,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     }
     finally { if (request === previewRequest.current) setPreviewLoading(false); }
   }, [project.id, onError, show, rememberScroll, recent.touch]);
+  openPreviewRef.current = openPreview;
 
   /** Opens `to`, remembering the place it was asked from for Back. */
   const jumpTo = (to: Place & { column?: number }) => {
@@ -546,6 +589,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
           onOpenInEditor={() => openInEditor(full)}
           {...(canRevealInFinder ? { onRevealInFinder: () => revealInFinder(full) } : {})}
           {...(entry.kind === 'directory' ? { favorited: Boolean(favoriteAt(full)), onToggleFavorite: () => toggleFavorite(full) } : {})}
+          writes={fileWrites ? { onCreate: (kind) => void operations.create(kind, full), onRename: () => void operations.rename(full), onDelete: () => void operations.remove(full) } : undefined}
         />
       </>
     );
@@ -604,7 +648,8 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   );
 
   /** Closing the shown tab shows the one viewed before it. */
-  const closeTab = (file: string) => {
+  const closeTab = async (file: string) => {
+    if (!await edit.discard(file)) return;
     recent.remove(file);
     topLines.current.delete(file);
     if (file !== previewFilePath) return;
@@ -612,12 +657,23 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     if (next) void openPreview(next.path);
     else { previewRequest.current += 1; setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); }
   };
+  /** Creating a file or a folder in [folder], where the server writes files. */
+  const newMenu = (folder: string) => fileWrites && (
+    <DropdownMenu>
+      <Tip label={t`新建`}><DropdownMenuTrigger asChild><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`新建`}><IconPlus /></Button></DropdownMenuTrigger></Tip>
+      <DropdownMenuContent align="end" className="min-w-40">
+        <DropdownMenuItem onSelect={() => void operations.create('file', folder)}><IconFilePlus /><Trans>新建文件</Trans></DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void operations.create('directory', folder)}><IconFolderPlus /><Trans>新建文件夹</Trans></DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
   const locate = () => { if (previewFilePath) setReveal((current) => ({ path: previewFilePath, token: (current?.token ?? 0) + 1 })); };
   // Kept mounted under the usages, so what was open in it stays open.
   const treePage = (
     <div className={cn('flex min-h-0 flex-1 flex-col', usages && 'hidden')}>
       <div className="flex h-9 shrink-0 items-center gap-1 pl-3 pr-1.5">
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-2">{project.name}</span>
+        {newMenu('')}
         <Tip label={t`定位当前文件`}><Button size="icon-xs" variant="quiet" aria-label={t`定位当前文件`} disabled={!previewFilePath} onClick={locate}><IconTarget /></Button></Tip>
       </div>
       {favoritesRow(undefined, showFolder)}
@@ -640,7 +696,17 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
         <span className={cn('min-w-0 flex-1 truncate text-left font-mono text-xs text-fg-2 [direction:rtl]', wide && !history.length && 'pl-1')} title={previewFilePath}><bdi>{previewFilePath}</bdi></span>
         <div className="flex shrink-0 items-center">
           {navigating && <Spinner className="mx-1.5" />}
-          {renderable && preview && !preview.image && !preview.binary && (
+          {edit.editing && edit.dirty && (
+            <Tip label={edit.conflict ? t`覆盖保存` : t`保存`} kbd={shortcutLabel('S')}>
+              <Button size="xs" variant="primary" className="mx-1 max-md:h-10" busy={edit.saving} onClick={() => void edit.save()}>{edit.conflict ? <Trans>覆盖保存</Trans> : <Trans>保存</Trans>}</Button>
+            </Tip>
+          )}
+          {edit.editable && (
+            <Tip label={edit.editing ? t`结束编辑` : t`编辑`}>
+              <Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', edit.editing && 'bg-active text-fg')} aria-label={edit.editing ? t`结束编辑` : t`编辑`} aria-pressed={edit.editing} onClick={() => { if (edit.editing) void edit.stop(); else { setRendered(false); edit.start(); } }}><IconPencilLine /></Button>
+            </Tip>
+          )}
+          {renderable && preview && !preview.image && !preview.binary && !edit.editing && (
             <Tip label={rendered ? t`显示源码` : t({ message: '渲染预览', context: 'panels-render-preview-toggle' })}>
               <Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={rendered ? t`显示源码` : t({ message: '渲染预览', context: 'panels-render-preview-toggle' })} aria-pressed={rendered} onClick={() => setRendered((value) => !value)}>
                 {rendered ? <IconFileCode2 /> : <IconEye />}
@@ -717,7 +783,23 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
           </div>
         </EmptyState>
       ) : (
-        <Suspense fallback={previewFallback}><CodeView preview={preview} target={jump?.path === preview.path ? jump : undefined} onReference={onReference} onSymbol={onSymbol} onTopLine={(line) => topLines.current.set(preview.path, line)} /></Suspense>
+        <>
+          {edit.editing && edit.conflict && (
+            <Notice tone="warning" className="m-2 shrink-0">
+              <p><Trans>这个文件在你编辑时被改过</Trans></p>
+              {/* Under the sentence: beside it, the panel's 380 leaves the sentence a few characters a line. */}
+              <div className="mt-2 flex flex-wrap gap-1">
+                <Button size="xs" variant="secondary" aria-pressed={edit.comparing} onClick={() => edit.setComparing((value) => !value)}>{edit.comparing ? <Trans>收起比较</Trans> : <Trans>比较</Trans>}</Button>
+                <Button size="xs" variant="ghost" onClick={() => void edit.takeDisk()}><Trans>用磁盘上的版本</Trans></Button>
+              </div>
+            </Notice>
+          )}
+          <Suspense fallback={previewFallback}><CodeView
+            preview={preview} text={edit.text} editing={edit.editing} original={edit.original}
+            target={jump?.path === preview.path ? jump : undefined} onReference={onReference} onSymbol={onSymbol} onTopLine={(line) => topLines.current.set(preview.path, line)}
+            onChange={edit.change} onSave={() => void edit.save()} onEscape={edit.escape}
+          /></Suspense>
+        </>
       )}
     </div>
   );
@@ -819,6 +901,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
         <>
         {wide && <Tip label={t`搜索文件`} kbd={shortcutLabel('P')}><Button size="icon-xs" variant="quiet" aria-label={t`搜索文件`} onClick={() => setQuickOpen('name')}><IconSearch /></Button></Tip>}
         {!wide && previewPath === undefined && <Tip label={searchOpen ? t`返回文件列表` : t`搜索文件`}><Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', searchOpen && 'bg-active text-fg')} aria-label={searchOpen ? t`返回文件列表` : t`搜索文件`} onClick={() => { if (searchOpen) goBack(); else openSearch(); }}>{searchOpen ? <IconArrowLeft /> : <IconSearch />}</Button></Tip>}
+        {!wide && previewPath === undefined && !searchOpen && !usages && newMenu(path)}
         {!wide && previewPath === undefined && !searchOpen && !usages && <Tip label={path ? t`下载此文件夹（ZIP）` : t`下载整个项目（ZIP）`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`下载文件夹`} onClick={() => void downloadProjectFolder(project.id, path)}><IconDownload /></Button></Tip>}
         {(wide || !searchOpen || previewPath !== undefined) && <Tip label={t`刷新`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`刷新`} onClick={refreshFiles}><IconRefreshCw /></Button></Tip>}
         </>,
@@ -836,7 +919,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
             />
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
-            {recent.files.length > 0 && <EditorTabs files={recent.files.map((file) => file.path)} active={previewFilePath} onOpen={(file) => void openPreview(file)} onClose={closeTab} />}
+            {recent.files.length > 0 && <EditorTabs files={recent.files.map((file) => file.path)} active={previewFilePath} onOpen={(file) => void openPreview(file)} onClose={(file) => void closeTab(file)} dirty={drafts} />}
             {previewPage || <div className="m-auto text-sm text-fg-4"><Trans>按 {shortcutLabel('P')} 搜索文件</Trans></div>}
           </div>
         </div>
@@ -893,7 +976,7 @@ function Occurrence({ location, word }: { location: CodeLocation; word: string }
 }
 
 /** The files viewed last, as an IDE's editor tabs: one click back to any of them. */
-function EditorTabs({ files, active, onOpen, onClose }: { files: string[]; active?: string | undefined; onOpen: (path: string) => void; onClose: (path: string) => void }) {
+function EditorTabs({ files, active, dirty, onOpen, onClose }: { files: string[]; active?: string | undefined; dirty: string[]; onOpen: (path: string) => void; onClose: (path: string) => void }) {
   const { t } = useLingui();
   const row = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -919,7 +1002,13 @@ function EditorTabs({ files, active, onOpen, onClose }: { files: string[]; activ
               <span className="truncate">{name}</span>
               {(names.get(name) ?? 0) > 1 && <span className="truncate text-fg-4">{splitPath(dir).name}</span>}
             </button>
-            <button type="button" aria-label={t`关闭`} onClick={() => onClose(file)} className={cn('grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:bg-hover hover:text-fg', !selected && 'opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100')}><IconX className="size-3" /></button>
+            {/* An unsaved file shows a dot where its close button is, until pointed at, as editors do. */}
+            <button type="button" aria-label={dirty.includes(file) ? t`关闭（有未保存的修改）` : t`关闭`} onClick={() => onClose(file)} className={cn('group/close grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:bg-hover hover:text-fg', !selected && !dirty.includes(file) && 'opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100')}>
+              {dirty.includes(file) ? <>
+                <span className="size-2 rounded-full bg-fg-3 group-hover/tab:hidden group-focus-visible/close:hidden" />
+                <IconX className="hidden size-3 group-hover/tab:block group-focus-visible/close:block" />
+              </> : <IconX className="size-3" />}
+            </button>
           </div>
         );
       })}

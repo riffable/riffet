@@ -913,6 +913,14 @@ msgstr "不存在"
 msgid "二进制文件"
 msgstr "二进制文件"
 
+#: src/app/panels/FilesPanel.tsx
+msgid "保存"
+msgstr "保存"
+
+#: src/app/panels/CodeView.tsx
+msgid "保留这处修改"
+msgstr "保留这处修改"
+
 #: src/app/panels/ContextPanel.tsx
 msgid "停靠到侧边"
 msgstr "停靠到侧边"
@@ -926,6 +934,10 @@ msgstr "全屏"
 msgid "关闭"
 msgstr "关闭"
 
+#: src/app/panels/FilesPanel.tsx
+msgid "关闭（有未保存的修改）"
+msgstr "关闭（有未保存的修改）"
+
 #: src/app/panels/ContextPanel.tsx
 msgid "关闭面板"
 msgstr "关闭面板"
@@ -935,10 +947,19 @@ msgstr "关闭面板"
 msgid "内容"
 msgstr "内容"
 
+#. placeholder {0}: FILE_BUDGET.draftsKept
+#: src/app/panels/useFileEditing.ts
+msgid "最多同时保留 {0} 个未保存的文件，先保存或放弃其中一些"
+msgstr "最多同时保留 {0} 个未保存的文件，先保存或放弃其中一些"
+
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/QuickOpen.tsx
 msgid "最近查看"
 msgstr "最近查看"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "删除"
+msgstr "删除"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "刷新"
@@ -1001,9 +1022,18 @@ msgstr "复制绝对路径"
 msgid "复制路径"
 msgstr "复制路径"
 
+#: src/app/panels/useFileOperations.ts
+msgid "它太大，删除后无法撤销。"
+msgstr "它太大，删除后无法撤销。"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "定位当前文件"
 msgstr "定位当前文件"
+
+#. placeholder {0}: nameOf(path)
+#: src/app/panels/useFileOperations.ts
+msgid "已删除「{0}」"
+msgstr "已删除「{0}」"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "已复制"
@@ -1080,6 +1110,10 @@ msgstr "搜索方式"
 msgid "搜索结果"
 msgstr "搜索结果"
 
+#: src/app/panels/useFileOperations.ts
+msgid "撤销"
+msgstr "撤销"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "收藏文件夹"
 msgstr "收藏文件夹"
@@ -1091,6 +1125,18 @@ msgstr "收藏此文件夹"
 #: src/app/panels/FilesPanel.tsx
 msgid "收藏的文件夹"
 msgstr "收藏的文件夹"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "收起比较"
+msgstr "收起比较"
+
+#: src/app/panels/useFileEditing.ts
+msgid "放弃修改"
+msgstr "放弃修改"
+
+#: src/app/panels/useFileEditing.ts
+msgid "放弃未保存的修改？"
+msgstr "放弃未保存的修改？"
 
 #: src/app/panels/FileTree.tsx
 msgid "文件"
@@ -1119,6 +1165,29 @@ msgid "文件预览"
 msgstr "文件预览"
 
 #: src/app/panels/FilesPanel.tsx
+#: src/app/panels/useFileOperations.ts
+msgid "新建"
+msgstr "新建"
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/useFileOperations.ts
+msgid "新建文件"
+msgstr "新建文件"
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/useFileOperations.ts
+msgid "新建文件夹"
+msgstr "新建文件夹"
+
+#: src/app/panels/useFileEditing.ts
+msgid "无法保存文件"
+msgstr "无法保存文件"
+
+#: src/app/panels/useFileOperations.ts
+msgid "无法删除"
+msgstr "无法删除"
+
+#: src/app/panels/FilesPanel.tsx
 #: src/app/panels/FileTree.tsx
 msgid "无法加载更多"
 msgstr "无法加载更多"
@@ -1136,9 +1205,21 @@ msgstr "无法在编辑器中打开"
 msgid "无法打开文件"
 msgstr "无法打开文件"
 
+#: src/app/panels/useFileOperations.ts
+msgid "无法撤销删除"
+msgstr "无法撤销删除"
+
+#: src/app/panels/useFileOperations.ts
+msgid "无法新建"
+msgstr "无法新建"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "无法读取完整的文件内容"
 msgstr "无法读取完整的文件内容"
+
+#: src/app/panels/useFileEditing.ts
+msgid "无法读取文件"
+msgstr "无法读取文件"
 
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/FileTree.tsx
@@ -1148,6 +1229,10 @@ msgstr "无法读取目录"
 #: src/app/panels/FilesPanel.tsx
 msgid "无法跳转到定义"
 msgstr "无法跳转到定义"
+
+#: src/app/panels/useFileOperations.ts
+msgid "无法重命名"
+msgstr "无法重命名"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "显示源码"
@@ -1168,6 +1253,18 @@ msgstr "查找用法"
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法失败"
 msgstr "查找用法失败"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "比较"
+msgstr "比较"
+
+#: src/app/panels/useFileOperations.ts
+msgid "永久删除"
+msgstr "永久删除"
+
+#: src/app/panels/useFileOperations.ts
+msgid "永久删除「{name}」？"
+msgstr "永久删除「{name}」？"
 
 #. placeholder {0}: at.word
 #: src/app/panels/FilesPanel.tsx
@@ -1192,6 +1289,14 @@ msgctxt "panels-render-preview-toggle"
 msgid "渲染预览"
 msgstr "渲染预览"
 
+#: src/app/panels/CodeView.tsx
+msgid "用磁盘上的"
+msgstr "用磁盘上的"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "用磁盘上的版本"
+msgstr "用磁盘上的版本"
+
 #: src/app/panels/ContextPanel.tsx
 msgid "视图设置"
 msgstr "视图设置"
@@ -1199,6 +1304,18 @@ msgstr "视图设置"
 #: src/app/panels/FilesPanel.tsx
 msgid "空目录"
 msgstr "空目录"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "结束编辑"
+msgstr "结束编辑"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "编辑"
+msgstr "编辑"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "覆盖保存"
+msgstr "覆盖保存"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。"
@@ -1228,9 +1345,18 @@ msgstr "返回搜索结果"
 msgid "返回文件列表"
 msgstr "返回文件列表"
 
+#: src/app/panels/FilesPanel.tsx
+msgid "这个文件在你编辑时被改过"
+msgstr "这个文件在你编辑时被改过"
+
 #: src/app/panels/ContextPanel.tsx
 msgid "退出全屏"
 msgstr "退出全屏"
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/useFileOperations.ts
+msgid "重命名"
+msgstr "重命名"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "重试"

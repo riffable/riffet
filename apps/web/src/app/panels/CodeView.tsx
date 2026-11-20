@@ -1,12 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Compartment, EditorState, StateEffect, StateField, type Range } from '@codemirror/state';
-import { Decoration, EditorView, highlightActiveLine, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { Compartment, EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
+import { Decoration, EditorView, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
+import { unifiedMergeView } from '@codemirror/merge';
 import type { FilePreview } from '@contracts';
 import type { PromptContextReference } from '@/lib/api';
 import { codeTokens } from '@/lib/code-tokens';
 import { isApplePlatform } from '@/lib/platform';
 import { useTheme } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 
 /** An identifier in the shown file; `line` and `column` are 1-based. */
 export interface SymbolAt { word: string; line: number; column: number }
@@ -18,13 +22,15 @@ export interface CodeTarget { line?: number | undefined; column?: number | undef
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 const FLASH_MS = 1800;
+/** Tokens are worked out again this long after the last keystroke; until then the old ones move with the text. */
+const RETOKENIZE_MS = 250;
 /** ⌘ on a Mac, Ctrl elsewhere: the key that turns an identifier into a link, as in IDEs. */
 const modifier = (event: MouseEvent | KeyboardEvent) => (isApplePlatform ? event.metaKey : event.ctrlKey);
 
 const setSyntax = StateEffect.define<DecorationSet>();
 const syntax = StateField.define<DecorationSet>({
   create: () => Decoration.none,
-  update: (value, tr) => tr.effects.reduce((current, effect) => (effect.is(setSyntax) ? effect.value : current), value),
+  update: (value, tr) => tr.effects.reduce((current, effect) => (effect.is(setSyntax) ? effect.value : current), value.map(tr.changes)),
   provide: (field) => EditorView.decorations.from(field),
 });
 
@@ -63,26 +69,40 @@ function symbolAt(view: EditorView, x: number, y: number): (SymbolAt & { from: n
 }
 
 /**
- * A text file as a read-only CodeMirror, which draws only its visible ranges, for long lines and
- * long files alike. Tokens come from VS Code's TextMate grammars, in a worker, coloured from the
- * theme's `--code-*` palette. ⌘-click (Ctrl-click) on an identifier and the context menu hand it to the caller,
- * which resolves it; a click on a line number quotes the line.
+ * A text file in CodeMirror, which draws only its visible ranges, for long lines and long files alike.
+ * Tokens come from VS Code's TextMate grammars, in a worker, coloured from the theme's `--code-*`
+ * palette; while it is edited they move with the text and are worked out again after a pause, so
+ * the colours are the same as when it is read. ⌘-click (Ctrl-click) on an identifier and the context
+ * menu hand it to the caller, which resolves it; a click on a line number quotes the line.
+ *
+ * `text` is what to show, the caller's draft while one is kept; a different `text` from outside
+ * replaces the document. `original` shows the document against it, change by change, each of which
+ * can be kept or taken back.
  */
-export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: {
+export function CodeView({ preview, text = preview.content, editing = false, original, target, onReference, onSymbol, onTopLine, onChange, onSave, onEscape }: {
   preview: FilePreview;
+  text?: string;
+  editing?: boolean;
+  original?: string | undefined;
   target?: CodeTarget | undefined;
   onReference: (reference: PromptContextReference) => void;
   /** `menu` carries where the pointer was, for a menu at it. */
   onSymbol?: (at: SymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }) => void;
   /** The first line in view, as the reader scrolls. */
   onTopLine?: (line: number) => void;
+  /** The document after an edit. */
+  onChange?: (text: string) => void;
+  /** ⌘S (Ctrl-S) while editing. */
+  onSave?: () => void;
+  /** Escape while editing, with nothing of the editor's own (search) to close. */
+  onEscape?: () => void;
 }) {
   const { t } = useLingui();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | undefined>(undefined);
-  const themeCompartmentRef = useRef<Compartment | null>(null);
-  if (themeCompartmentRef.current === null) themeCompartmentRef.current = new Compartment();
-  const themeCompartment = themeCompartmentRef.current;
+  const compartments = useRef<{ theme: Compartment; edit: Compartment; merge: Compartment } | null>(null);
+  if (compartments.current === null) compartments.current = { theme: new Compartment(), edit: new Compartment(), merge: new Compartment() };
+  const { theme: themeCompartment, edit: editCompartment, merge: mergeCompartment } = compartments.current;
   const { resolved } = useTheme();
   const dark = resolved === 'dark';
   const darkRef = useRef(dark);
@@ -94,17 +114,48 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
   symbol.current = onSymbol;
   const topLine = useRef(onTopLine);
   topLine.current = onTopLine;
+  const callbacks = useRef({ onChange, onSave, onEscape });
+  callbacks.current = { onChange, onSave, onEscape };
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const originalRef = useRef(original);
+  originalRef.current = original;
+  /** Starts the document over from `text`, as a file read again; set while a view exists. */
+  const rebuild = useRef<((text: string) => void) | undefined>(undefined);
+  const mergeLabels = useRef({ accept: '', reject: '' });
+  mergeLabels.current = { accept: t`保留这处修改`, reject: t`用磁盘上的` };
+
+  /** The parts that follow the props, as they are now: a fresh state is built with these. */
+  const editExtension = (on: boolean): Extension => on ? [
+    history(),
+    keymap.of([
+      { key: 'Mod-s', preventDefault: true, run: () => { callbacks.current.onSave?.(); return true; } },
+      { key: 'Escape', run: () => { callbacks.current.onEscape?.(); return Boolean(callbacks.current.onEscape); } },
+      indentWithTab, ...historyKeymap, ...defaultKeymap,
+    ]),
+    EditorView.updateListener.of((update) => { if (update.docChanged) callbacks.current.onChange?.(update.state.doc.toString()); }),
+  ] : [EditorState.readOnly.of(true), EditorView.editable.of(false)];
+  const mergeExtension = (against: string | undefined): Extension => against === undefined ? [] : unifiedMergeView({
+    original: against, gutter: true, highlightChanges: false, syntaxHighlightDeletions: false,
+    mergeControls: (type, action) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `cm-chunk-action cm-chunk-${type}`;
+      button.textContent = mergeLabels.current[type];
+      button.onmousedown = action;
+      return button;
+    },
+  });
 
   useEffect(() => {
     if (!host.current) return;
     const clearLink = (view: EditorView) => { if (view.state.field(link).size) view.dispatch({ effects: setLink.of(null) }); };
-    const view = new EditorView({
-      parent: host.current,
-      state: EditorState.create({ doc: preview.content, extensions: [
-        EditorState.readOnly.of(true), EditorView.editable.of(false),
+    const extensions = (): Extension[] => [
+        editCompartment.of(editExtension(editingRef.current)),
+        mergeCompartment.of(mergeExtension(originalRef.current)),
         themeCompartment.of(EditorView.theme({}, { dark: darkRef.current })),
         EditorView.contentAttributes.of({ tabindex: '0', 'aria-label': preview.path }),
-        highlightActiveLine(), syntax, link, flash,
+        highlightActiveLine(), highlightSelectionMatches(), search({ top: true }), keymap.of(searchKeymap), syntax, link, flash,
         lineNumbers({ domEventHandlers: { mousedown(view, block, event) {
           if (!(event instanceof MouseEvent) || event.button !== 0) return false;
           const line = view.state.doc.lineAt(block.from);
@@ -142,6 +193,7 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
             return true;
           },
         }),
+        EditorView.updateListener.of((update) => { if (update.docChanged) scheduleTokens(update.view); }),
         EditorView.theme({
           '&': { height: '100%', color: 'var(--fg)', backgroundColor: 'transparent', fontSize: '12px' },
           '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono)', lineHeight: '20px' },
@@ -151,12 +203,39 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
           '.cm-activeLine': { backgroundColor: 'var(--bg-hover)' },
           '.cm-flash-line': { backgroundColor: 'var(--accent-soft)' },
           '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--accent-soft) !important' },
+          '.cm-selectionMatch': { backgroundColor: 'var(--bg-active)' },
+          '.cm-cursor': { borderLeftColor: 'var(--accent)' },
           '.cm-symbol-link, .cm-symbol-link *': { color: 'var(--accent) !important', textDecoration: 'underline', cursor: 'pointer' },
           '&.cm-focused': { outline: 'none' },
         }),
-      ] }),
-    });
+    ];
+    let active = true;
+    let tokenTimer = 0;
+    let tokenRun = 0;
+    const tokenize = (view: EditorView) => {
+      const run = ++tokenRun;
+      const doc = view.state.doc.toString();
+      void codeTokens(doc, preview.path).then((tokens) => {
+        // An answer for text since edited would colour the wrong ranges; the next run follows.
+        if (!active || !tokens || run !== tokenRun || view.state.doc.toString() !== doc) return;
+        const styles = tokens.styles.map(({ color, italic }) => Decoration.mark({ attributes: { style: `${color ? `color:${color};` : ''}${italic ? 'font-style:italic;' : ''}` } }));
+        const marks: Range<Decoration>[] = [];
+        const { ranges } = tokens;
+        const end = view.state.doc.length;
+        for (let index = 0; index + 2 < ranges.length; index += 3) {
+          const from = ranges[index]!, to = Math.min(ranges[index + 1]!, end);
+          if (to > from) marks.push(styles[ranges[index + 2]!]!.range(from, to));
+        }
+        view.dispatch({ effects: setSyntax.of(Decoration.set(marks, true)) });
+      });
+    };
+    function scheduleTokens(view: EditorView) {
+      window.clearTimeout(tokenTimer);
+      tokenTimer = window.setTimeout(() => tokenize(view), RETOKENIZE_MS);
+    }
+    const view = new EditorView({ parent: host.current, state: EditorState.create({ doc: text, extensions: extensions() }) });
     editor.current = view;
+    rebuild.current = (next) => { view.setState(EditorState.create({ doc: next, extensions: extensions() })); tokenize(view); };
     appliedDark.current = darkRef.current;
     let frame = 0;
     const scrolled = () => {
@@ -169,21 +248,27 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
     view.scrollDOM.addEventListener('scroll', scrolled, { passive: true });
     // As on the small preview's line numbers: a click quotes the line.
     view.dom.querySelector('.cm-lineNumbers')?.setAttribute('title', t`引用这一行`);
-    let active = true;
-    void codeTokens(view.state.doc.toString(), preview.path).then((tokens) => {
-      if (!active || !tokens) return;
-      const styles = tokens.styles.map(({ color, italic }) => Decoration.mark({ attributes: { style: `${color ? `color:${color};` : ''}${italic ? 'font-style:italic;' : ''}` } }));
-      const marks: Range<Decoration>[] = [];
-      const { ranges } = tokens;
-      const end = view.state.doc.length;
-      for (let index = 0; index + 2 < ranges.length; index += 3) {
-        const from = ranges[index]!, to = Math.min(ranges[index + 1]!, end);
-        if (to > from) marks.push(styles[ranges[index + 2]!]!.range(from, to));
-      }
-      view.dispatch({ effects: setSyntax.of(Decoration.set(marks, true)) });
-    });
-    return () => { active = false; cancelAnimationFrame(frame); view.scrollDOM.removeEventListener('scroll', scrolled); editor.current = undefined; view.destroy(); };
-  }, [preview.path, preview.content]);
+    tokenize(view);
+    return () => { active = false; window.clearTimeout(tokenTimer); cancelAnimationFrame(frame); view.scrollDOM.removeEventListener('scroll', scrolled); editor.current = undefined; rebuild.current = undefined; view.destroy(); };
+  }, [preview.path]);
+
+  useEffect(() => {
+    const view = editor.current;
+    if (!view || view.state.doc.toString() === text) return;
+    // Text from outside (the file read again, a draft dropped): what was in view stays in view.
+    const top = view.scrollDOM.scrollTop;
+    rebuild.current?.(text);
+    view.scrollDOM.scrollTop = top;
+  }, [text]);
+
+  useEffect(() => {
+    const view = editor.current;
+    if (!view) return;
+    view.dispatch({ effects: editCompartment.reconfigure(editExtension(editing)) });
+    if (editing) view.focus();
+  }, [editing]);
+
+  useEffect(() => { editor.current?.dispatch({ effects: mergeCompartment.reconfigure(mergeExtension(original)) }); }, [original]);
 
   useEffect(() => {
     const view = editor.current;
@@ -194,7 +279,7 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
     view.dispatch({ selection: { anchor }, effects: [EditorView.scrollIntoView(anchor, { y: 'center' }), setFlash.of(line.from)] });
     const timer = window.setTimeout(() => { if (editor.current === view) view.dispatch({ effects: setFlash.of(null) }); }, FLASH_MS);
     return () => window.clearTimeout(timer);
-  }, [preview.path, preview.content, target?.line, target?.column, target?.restore, target?.token]);
+  }, [preview.path, target?.line, target?.column, target?.restore, target?.token]);
 
   useEffect(() => {
     const view = editor.current;
@@ -204,7 +289,8 @@ export function CodeView({ preview, target, onReference, onSymbol, onTopLine }: 
   }, [dark, themeCompartment]);
 
   return <div className="flex min-h-0 flex-1 flex-col">
-    <div ref={host} className="min-h-0 flex-1 overflow-hidden" />
+    {/* The diff palette of `MergeDiff`, while the document is shown against another. */}
+    <div ref={host} className={cn('min-h-0 flex-1 overflow-hidden', original !== undefined && 'cm-host')} />
     {preview.truncated && <div className="px-4 py-2 text-xs text-fg-3"><Trans>文件过大，仅显示前一部分</Trans></div>}
   </div>;
 }

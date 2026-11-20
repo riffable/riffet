@@ -1503,6 +1503,7 @@ msgstr "保存后清除已存 Key"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "保存后读取额度"
 msgstr "保存后读取额度"
+#: src/app/design/surfaces/PanelsChapter.tsx
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "保存在服务器，所有设备生效。"
@@ -1995,6 +1996,10 @@ msgstr "出错了"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "函数"
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "冲突"
+msgstr "冲突"
+
 msgstr "函数"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -2241,6 +2246,10 @@ msgstr "刷新额度"
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "前一个命令已占用"
 msgstr "前一个命令已占用"
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "删除后可撤销"
+msgstr "删除后可撤销"
+
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
@@ -2703,6 +2712,7 @@ msgstr "可重建缓存"
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
 msgid "右侧栏：会话详情，宽 {0}"
+#: src/app/design/surfaces/PanelsChapter.tsx
 msgstr "右侧栏：会话详情，宽 {0}"
 
 #: src/app/design/mac/notes.ts
@@ -2742,6 +2752,10 @@ msgstr "右键菜单用系统菜单"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "各栏独立"
 msgstr "各栏独立"
+
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "可编辑"
+msgstr "可编辑"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "各端的宿主组件"
@@ -5971,6 +5985,7 @@ msgid "未下载模型"
 msgstr "未下载模型"
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "未关思考"
@@ -6080,6 +6095,10 @@ msgstr "机器人"
 #: src/app/design/android/PlatformChapter.tsx
 msgid "权限、文件选择与分享"
 msgstr "权限、文件选择与分享"
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "未保存的文件"
+msgstr "未保存的文件"
+
 
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -6686,6 +6705,10 @@ msgstr "浏览器"
 msgid "浏览器已拒绝通知，请在网站设置中允许后重试。"
 msgstr "浏览器已拒绝通知，请在网站设置中允许后重试。"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "比较"
+msgstr "比较"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "浏览器拒绝了通知权限。"
 msgstr "浏览器拒绝了通知权限。"
@@ -7145,6 +7168,10 @@ msgid "看板"
 msgstr "看板"
 
 #: src/app/design/patterns/PagesChapter.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "用磁盘上的版本"
+msgstr "用磁盘上的版本"
+
 msgid "看板页"
 msgstr "看板页"
 
@@ -7935,10 +7962,18 @@ msgstr "自动增高上限"
 #: src/app/settings/PreferencesSections.tsx
 msgid "自动审查"
 msgstr "自动审查"
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "编辑"
+msgstr "编辑"
+
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "自动归档"
+
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "编辑中，有未保存的修改"
+msgstr "编辑中，有未保存的修改"
 
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "自动消失，时长 2.8 · 3.5 · 6.5 秒；带操作的至少 6 秒。"
@@ -8274,6 +8309,10 @@ msgid "设置窗口"
 msgstr "设置窗口"
 
 #: src/app/design/catalog.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "覆盖保存"
+msgstr "覆盖保存"
+
 msgid "设置行、校验、保存"
 msgstr "设置行、校验、保存"
 
@@ -8977,6 +9016,7 @@ msgstr "进行中"
 
 #. placeholder {0}: requests.inFlight
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
 msgid "进行中 {0}"
 msgstr "进行中 {0}"
 
@@ -9051,6 +9091,10 @@ msgid "选中项在行尾打勾"
 msgstr "选中项在行尾打勾"
 
 #: src/app/design/android/notes.ts
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "这个文件在你编辑时被改过"
+msgstr "这个文件在你编辑时被改过"
+
 msgid "选中项在行尾打勾，分组标题用次级墨色"
 msgstr "选中项在行尾打勾，分组标题用次级墨色"
 
