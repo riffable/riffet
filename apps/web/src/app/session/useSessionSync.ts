@@ -606,7 +606,9 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   const expandRow = useCallback((key: string) => engine.current?.expand(key) ?? Promise.resolve(false), []);
   const findInLane = useCallback((query: string, signal?: AbortSignal) => engine.current?.find(query, signal) ?? Promise.resolve(undefined), []);
   const loadPlace = useCallback(async (pos: number, signal?: AbortSignal) => (await engine.current?.jump(pos, signal)) === 'progress', []);
-  const commands = useNativeRunCommands({ session, store, tracking, latest });
+  const controlNow = useRef(synced.control);
+  controlNow.current = synced.control;
+  const commands = useNativeRunCommands({ session, store, tracking, latest, control: controlNow });
 
   const respondInteraction = useCallback(async (_interaction: NativeInteraction, response: NativeInteractionResponse): Promise<NativeInteractionResult> => {
     const sync = engine.current;

@@ -1,4 +1,4 @@
-import type { NativeQueue, Run } from '@contracts';
+import type { NativeQueue, Run, SessionControlSnapshot } from '@contracts';
 export { nativeTaskOutcome } from '../../../../../packages/timeline/src/failures';
 
 /**
@@ -25,8 +25,13 @@ export function sendPhase(run: Run): SendPhase | undefined {
   }
 }
 
-/** A queued message (not a steer) the server holds: it can still be sent now, edited or withdrawn. */
-export function inQueue(run: Run): boolean {
+/**
+ * A queued message (not a steer) the server holds: it can still be sent now, edited or withdrawn.
+ * The control snapshot decides (`placement === 'queued'`); only a server that sends none (an older
+ * one) leaves it to the run's own delivery state.
+ */
+export function inQueue(run: Run, control?: SessionControlSnapshot): boolean {
+  if (control) return control.inbox.some((entry) => entry.placement === 'queued' && (entry.id === run.id || entry.commandId === run.commandId));
   return run.native?.intent !== 'steer' && sendPhase(run) === 'queued';
 }
 

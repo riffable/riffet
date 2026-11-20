@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
-import type { Attachment, NativeTurnTarget, NativeStopRequest, NativeRunRecovery, Run, Session } from '@contracts';
+import type { Attachment, NativeTurnTarget, NativeStopRequest, NativeRunRecovery, Run, Session, SessionControlSnapshot } from '@contracts';
 import { api, HttpError, messageContext, restoreContext, listNativeSendRequests, removeNativeSendRequest, saveNativeSendRequest, submitNativeSendRequest, type NativeMessageInput, type NativeSendOutboxEntry, type PromptContextReference } from '@/lib/api';
 import { onSessionCommand } from '@/lib/session-commands';
 import { errorMessage, newId } from '@/lib/utils';
@@ -16,6 +16,8 @@ interface NativeRunCommandOptions {
   store: NativeSessionStore;
   tracking: NativeSessionTracking;
   latest: { readonly current: NativeSessionLatest };
+  /** The server's control snapshot as of now; absent from an older server. */
+  control: { readonly current: SessionControlSnapshot | undefined };
 }
 
 type RequestWorkbenchConnection = () => Promise<string | undefined> | undefined;
@@ -29,7 +31,7 @@ const steerQueuedNotice = () => i18n._(msg`未能补充到当前任务，已排�
  * outcome is unknown. Every command reads the store when it runs rather than a rendered copy, and
  * drops its answer once the view has moved to another conversation.
  */
-export function useNativeRunCommands({ session, store, tracking, latest }: NativeRunCommandOptions) {
+export function useNativeRunCommands({ session, store, tracking, latest, control }: NativeRunCommandOptions) {
   const [recoveries, setRecoveries] = useState<Record<string, NativeRunRecovery>>({});
   const updateRun = useCallback((run: Run) => {
     if (tracking.sessionId !== session.id || run.sessionId !== session.id) return;
@@ -41,7 +43,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     if (!prompt || tracking.sendInFlight || store.get().interrupting || store.get().runs.some((run) => run.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown') || tracking.sessionId !== session.id) return false;
     const { connected, status } = store.get();
     if (steerTarget && (!connected || status.connection?.state && status.connection.state !== 'connected' || status.phase !== 'busy' || status.interaction || store.get().runs.some(run => run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt))) { latest.current.onError(i18n._(msg`暂时无法补充当前任务，输入已保留`)); return false; }
-    if (sourceRun && (!inQueue(sourceRun) || listNativeSendRequests(session.id).some(entry => entry.sourceRunId === sourceRun.id && !entry.invalidReason))) return false;
+    if (sourceRun && (!inQueue(sourceRun, control.current) || listNativeSendRequests(session.id).some(entry => entry.sourceRunId === sourceRun.id && !entry.invalidReason))) return false;
     const body: NativeMessageInput = {
       commandId: newId(),
       text: prompt,
@@ -143,7 +145,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
 
   const sendQueuedNow = useCallback(async (run: Run) => {
     const current = store.get().runs.find((item) => item.id === run.id);
-    if (hasPendingQueuedSteer(run.id) || !current || !inQueue(current) || tracking.sendInFlight || store.get().interrupting || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id
+    if (hasPendingQueuedSteer(run.id) || !current || !inQueue(current, control.current) || tracking.sendInFlight || store.get().interrupting || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id
       || store.get().runs.some((item) => item.native?.delivery === 'uncertain' && item.native.stage === 'http_unknown')) return;
     store.set({ interrupting: true });
     setRunActionPending(store, run.id, true);

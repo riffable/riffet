@@ -523,8 +523,12 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     && (run.state === 'running' || (run.state === 'queued' && (run.native?.delivery === 'observed' || Boolean(run.native?.nativeMessageId || run.native?.timings?.observedAt || run.native?.timings?.providerAcceptedAt))))
     && !run.native?.timings?.busyAt
     && (preBusyPhase || phase === 'idle'));
-  const causallyBusy = !connectionNotice && (turnOutputActive || runObservedActive);
-  const busy = !silentConfigBoot && ((native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy);
+  // Fallback for a server that sends no control snapshot: with one, `activeTurn` already counts an observed
+  // foreground run, so the client does not rederive it from run and timeline state.
+  const causallyBusy = !native.control && !connectionNotice && (turnOutputActive || runObservedActive);
+  const busy = !silentConfigBoot && (native.control
+    ? native.control.activeTurn !== null && native.control.activeTurn.phase !== 'attention'
+    : (native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling') || causallyBusy);
   const needsYou = !silentConfigBoot && (native.statusKnown ? phase === 'attention' : session.state === 'waiting');
   const working = busy || needsYou;
   // The main agent is idle while background agents keep going; only then is there something to stop that `working` does not cover.
