@@ -103,6 +103,11 @@ msgid "error.CONFIGURATION_CHANGING"
 msgstr "{action, select, steer {模型正在切换，请稍后补充} other {模型正在切换，请稍后发送}}"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.DELETE_UNRECOVERABLE"
+msgstr "它太大，删除后无法撤销"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr "侧边聊天的上下文快照已不可用"
@@ -201,6 +206,31 @@ msgstr "这个会话已不在本机"
 #: ../../i18n/errors/sessions.json
 msgid "error.FEATURE_REQUIRED"
 msgstr "请更新客户端后重试"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_CHANGED"
+msgstr "文件已在别处改动，请重新打开"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_EXISTS"
+msgstr "已有同名的文件或文件夹"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_EDITABLE"
+msgstr "只能编辑 UTF-8 文本文件"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_FOUND"
+msgstr "文件不存在"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_TOO_LARGE"
+msgstr "文件太大"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/git.json
@@ -468,6 +498,11 @@ msgid "error.NATIVE_STOP_UNCONFIRMED"
 msgstr "暂时无法确认任务是否已停止，请检查状态"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.PATH_DENIED"
+msgstr "这个位置不能通过工作台修改"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_CONFIG_CONFLICT"
 msgstr "插件配置已被修改，请重新读取后保存"
@@ -526,6 +561,11 @@ msgstr "文件超过 {limit} 预览上限，可下载原文件查看"
 #: ../../i18n/errors/sessions.json
 msgid "error.PROJECT_PROMOTION_CONFLICT"
 msgstr "该任务已用其他名称保存为项目"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.RESTORE_EXPIRED"
+msgstr "这次删除已无法撤销"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json

@@ -8,10 +8,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentLength
 import io.ktor.utils.io.readAvailable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import riffet.contracts.ArchiveInfo
 import riffet.contracts.Attachment
 import riffet.contracts.FileEntry
 import riffet.contracts.FilePreview
+import riffet.contracts.FileVersion
 import riffet.contracts.SearchHit
 import riffet.i18n.L10n
 
@@ -44,6 +47,18 @@ suspend fun RiffetApi.search(projectId: String, query: String): List<SearchHit> 
 @Throws(Exception::class)
 suspend fun RiffetApi.preview(projectId: String, path: String): FilePreview =
     get("/api/projects/${projectId.enc()}/file", listOf("path" to path)).decode()
+
+/**
+ * Writes [content] over a text file, only if it is still the version [expectedHash] names (the
+ * `hash` of the preview the edit started from); otherwise the server refuses with 409
+ * `FILE_CHANGED` and nothing is written. Line endings and a byte-order mark stay as the file had
+ * them. Needs the `file-write-v1` protocol feature.
+ */
+@Throws(Exception::class)
+suspend fun RiffetApi.saveFile(projectId: String, path: String, content: String, expectedHash: String): FileVersion =
+    put("/api/projects/${projectId.enc()}/file", buildJsonObject {
+        put("path", path); put("content", content); put("expectedHash", expectedHash)
+    }).decode()
 
 /** The server-prepared interactive HTML; authentication stays in the HTTP client. */
 @Throws(Exception::class)

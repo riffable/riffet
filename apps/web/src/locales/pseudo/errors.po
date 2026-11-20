@@ -103,6 +103,11 @@ msgid "error.CONFIGURATION_CHANGING"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.DELETE_UNRECOVERABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr ""
@@ -200,6 +205,31 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/sessions.json
 msgid "error.FEATURE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_EXISTS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_EDITABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_TOO_LARGE"
 msgstr ""
 
 #. js-lingui-explicit-id
@@ -468,6 +498,11 @@ msgid "error.NATIVE_STOP_UNCONFIRMED"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.PATH_DENIED"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_CONFIG_CONFLICT"
 msgstr ""
@@ -525,6 +560,11 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/sessions.json
 msgid "error.PROJECT_PROMOTION_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.RESTORE_EXPIRED"
 msgstr ""
 
 #. js-lingui-explicit-id

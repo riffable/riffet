@@ -30,10 +30,16 @@ data class FilePreview(
     val truncated: Boolean,
     val image: FilePreviewImage? = null,
     val render: FilePreviewRender? = null,
+    /** UTF-8 text read whole, which a server with `file-write-v1` saves (`RiffetApi.saveFile`). */
+    val editable: Boolean = false,
 )
 
 @Serializable
 data class FilePreviewRender(val kind: String)
+
+/** A file as just written: the hash the next save names as `expectedHash`. */
+@Serializable
+data class FileVersion(val path: String, val hash: String, val size: Long)
 
 @Serializable
 data class FilePreviewImage(val mimeType: String)

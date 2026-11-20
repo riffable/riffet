@@ -1,0 +1,34 @@
+{
+  "FILE_CHANGED": {
+    "zh": "文件已在别处改动，请重新打开",
+    "en": "The file was changed elsewhere; open it again"
+  },
+  "FILE_EXISTS": {
+    "zh": "已有同名的文件或文件夹",
+    "en": "Something with this name already exists"
+  },
+  "FILE_NOT_EDITABLE": {
+    "zh": "只能编辑 UTF-8 文本文件",
+    "en": "Only UTF-8 text files can be edited"
+  },
+  "FILE_NOT_FOUND": {
+    "zh": "文件不存在",
+    "en": "The file does not exist"
+  },
+  "FILE_TOO_LARGE": {
+    "zh": "文件太大",
+    "en": "The file is too large"
+  },
+  "PATH_DENIED": {
+    "zh": "这个位置不能通过工作台修改",
+    "en": "This location cannot be changed through the workbench"
+  },
+  "DELETE_UNRECOVERABLE": {
+    "zh": "它太大，删除后无法撤销",
+    "en": "It is too large to keep for undo"
+  },
+  "RESTORE_EXPIRED": {
+    "zh": "这次删除已无法撤销",
+    "en": "This deletion can no longer be undone"
+  }
+}

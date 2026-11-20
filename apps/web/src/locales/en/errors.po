@@ -103,6 +103,11 @@ msgid "error.CONFIGURATION_CHANGING"
 msgstr "{action, select, steer {The model is switching; add your follow-up after it finishes} other {The model is switching; send after it finishes}}"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.DELETE_UNRECOVERABLE"
+msgstr "It is too large to keep for undo"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr "The side chat context snapshot is unavailable"
@@ -201,6 +206,31 @@ msgstr "This conversation is no longer stored on this machine"
 #: ../../i18n/errors/sessions.json
 msgid "error.FEATURE_REQUIRED"
 msgstr "Update the client and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_CHANGED"
+msgstr "The file was changed elsewhere; open it again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_EXISTS"
+msgstr "Something with this name already exists"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_EDITABLE"
+msgstr "Only UTF-8 text files can be edited"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_NOT_FOUND"
+msgstr "The file does not exist"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.FILE_TOO_LARGE"
+msgstr "The file is too large"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/git.json
@@ -468,6 +498,11 @@ msgid "error.NATIVE_STOP_UNCONFIRMED"
 msgstr "The stop has not been confirmed; check the task status"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.PATH_DENIED"
+msgstr "This location cannot be changed through the workbench"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_CONFIG_CONFLICT"
 msgstr "Plugin configuration changed; reload it before saving"
@@ -526,6 +561,11 @@ msgstr "The file exceeds the {limit} preview limit; download the original instea
 #: ../../i18n/errors/sessions.json
 msgid "error.PROJECT_PROMOTION_CONFLICT"
 msgstr "This task was already saved as a project under another name"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/files.json
+msgid "error.RESTORE_EXPIRED"
+msgstr "This deletion can no longer be undone"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
