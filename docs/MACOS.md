@@ -419,6 +419,7 @@ String Catalog，源语言 `zh-Hans`，键就是中文原文。每个 target 一
 | 小组件 | WidgetKit（`RiffetWidgets`，沙盒） | 小 / 中尺寸：待确认与运行中数量和最多 3 个会话，点击打开会话。App 把快照写到 `~/Library/Application Support/Riffet/widget-snapshot.json`，小组件凭只读临时例外读取（不用 App Group：ad-hoc 签名下不可靠） |
 | 文件 | Quick Look、拖出、`NSWorkspace` | 预览附件与文件面板；本机服务时「在编辑器中打开」直接调用本机应用，远程服务时隐藏 |
 | 审批前验证 | `LocalAuthentication` | 可选：危险操作前要求 Touch ID，对应 Android 的 `BiometricGate` |
+| 设备能力（T0） | `ScreenCaptureKit`、`NSPasteboard`、`NSWorkspace`、`UNUserNotificationCenter` | 开关「允许 Agent 操作这台 Mac」开启后，Agent 可列出并截取窗口（不激活）、读写剪贴板文本、打开 http(s) 链接、发通知；连接期间始终服务，只剩菜单栏时也在线；见 [DEVICES.md](DEVICES.md)「实现（Mac，T0）」 |
 | 令牌存储 | Keychain / 0600 文件 | 每个服务端一个设备令牌。带 Team ID 签名的构建用钥匙串；ad-hoc 构建的签名每次构建都变，钥匙串会反复询问授权，改存 `~/Library/Application Support/Riffet/secrets.json`（0600），与服务端保护 `access-token` 的方式相同 |
 | 自动更新 | Sparkle 2 | 见「签名、公证与分发」 |
 

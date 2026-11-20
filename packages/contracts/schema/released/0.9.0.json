@@ -16996,7 +16996,8 @@
                 "screen.observe",
                 "screen.act",
                 "app.launch",
-                "riffet.appearance"
+                "riffet.appearance",
+                "window.capture"
               ],
               "open": true
             }
@@ -17156,7 +17157,8 @@
                 "screen.observe",
                 "screen.act",
                 "app.launch",
-                "riffet.appearance"
+                "riffet.appearance",
+                "window.capture"
               ],
               "open": true
             }
@@ -17228,7 +17230,8 @@
               "screen.observe",
               "screen.act",
               "app.launch",
-              "riffet.appearance"
+              "riffet.appearance",
+              "window.capture"
             ],
             "open": true
           },

@@ -17,6 +17,7 @@ import { discoveryTools, type CapabilityCatalog } from './capability-catalog.js'
 import { workbenchAppearanceTools, type WorkbenchAppearance } from './workbench-appearance.js';
 import { deviceGroupIds, type DeviceChannel, type StoredDeviceCall } from './devices.js';
 import type { NoticeLog } from './notices.js';
+import { isWindowDevice, WINDOW_TOOLS } from './window.js';
 import { isScreenDevice, SCREEN_ERRORS, SCREEN_HELP_TOOL, SCREEN_TOOLS, screenHelp, stoppedLine } from './screen.js';
 
 /** The MCP server name every CLI sees; Claude Code names its tools `mcp__riffet__<tool>`. */
@@ -143,6 +144,8 @@ export interface DeviceTool {
   wait?: { initial: number; max: number };
   /** Calls that change the device's screen are recorded (`RiffetDeviceAction.kind`). */
   audit?: 'act' | 'launch' | 'authorize';
+  /** Text shown to the agent in place of the result JSON. */
+  render?: (result: Record<string, unknown>) => string;
 }
 
 const DEFAULT_WAIT = { initial: 30, max: 120 };
@@ -191,7 +194,7 @@ const DEVICE_TOOLS: readonly DeviceTool[] = [
   },
   {
     name: 'device_open_url', capability: 'open_url',
-    description: 'Open a URL on a paired device: a web page, or an app link / custom scheme the device can handle.',
+    description: 'Open a URL on a paired device: a web page, or an app link / custom scheme the device can handle (a Mac opens only http and https links, not local files).',
     properties: { url: { type: 'string', description: 'An absolute URL with a scheme, at most 4000 characters.' } }, required: ['url'],
     args: input => {
       const url = stringArg(input, 'url', 4000, true)!.trim();
@@ -253,7 +256,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
 
   registerCapabilities(catalog: CapabilityCatalog): void {
     const reserved = new Set([...CORE_NAMES, ...TASK_NAMES, ...this.deps.assistant?.()?.tools.keys() ?? [],
-      ...DEVICE_TOOLS.map(tool => tool.name), ...SCREEN_TOOLS.map(tool => tool.name), SCREEN_HELP_TOOL.name]);
+      ...DEVICE_TOOLS.map(tool => tool.name), ...WINDOW_TOOLS.map(tool => tool.name), ...SCREEN_TOOLS.map(tool => tool.name), SCREEN_HELP_TOOL.name]);
     for (const name of catalog.commands.keys()) {
       if (reserved.has(name)) throw new Error(`Duplicate Riffet tool: ${name}`);
     }
@@ -344,6 +347,11 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     return this.devicesOf(session).some(id => isScreenDevice(this.deps.auth.device(id)!));
   }
 
+  /** Whether the snapshot has a Mac (or a device reporting `window.capture`); by platform, so stable while a CLI runs. */
+  private windowTools(session: Session): boolean {
+    return this.devicesOf(session).some(id => isWindowDevice(this.deps.auth.device(id)!));
+  }
+
   /** The snapshot's plugin groups whose plugin is on now, in the snapshot's order. */
   private pluginGroupsOf(session: Session) {
     const selected = session.toolGroups ?? [];
@@ -398,7 +406,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       device: { type: 'string', enum: devices, description: `Which device: ${devices.map(id => `${id} (${names[id]})`).join(', ')}.${devices.length === 1 ? ' May be omitted.' : ''}` },
       timeoutSeconds: { type: 'number', description: 'How long to wait for the device, in seconds.' },
     };
-    const screen = this.screenTools(session);
+    const screen = this.screenTools(session), windows = this.windowTools(session);
     const listed = (tool: DeviceTool, errors: string) => ({
       name: tool.name,
       description: `${tool.description} Errors: ${errors}.`,
@@ -406,6 +414,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     });
     return [
       ...core, ...DEVICE_TOOLS.map(tool => listed(tool, DEVICE_ERRORS)),
+      ...(windows ? WINDOW_TOOLS.map(tool => listed(tool, DEVICE_ERRORS)) : []),
       ...(screen ? [...SCREEN_TOOLS.map(tool => listed(tool, `${DEVICE_ERRORS}, ${SCREEN_ERRORS}`)), SCREEN_HELP_TOOL] : []),
     ];
   }
@@ -500,7 +509,8 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       if (plugin) return plugin;
     }
     const screenTool = SCREEN_TOOLS.find(item => item.name === raw.name);
-    const deviceTool = DEVICE_TOOLS.find(item => item.name === raw.name) ?? screenTool;
+    const windowTool = WINDOW_TOOLS.find(item => item.name === raw.name);
+    const deviceTool = DEVICE_TOOLS.find(item => item.name === raw.name) ?? windowTool ?? screenTool;
     const tool = TOOLS.find(item => item.name === raw.name);
     if (raw.name === 'schedule_task' && this.inAssistant(session)) return errorResult('TOOL_NOT_AVAILABLE', 'schedule_task is not available to the assistant; use schedule_wakeup');
     const boardTool = typeof raw.name === 'string' ? this.deps.assistant?.()?.tools.get(raw.name) : undefined;
@@ -524,6 +534,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     }
     // A group removed from the conversation stops working at once, even in a CLI launched with it.
     const available = screenTool || raw.name === SCREEN_HELP_TOOL.name ? this.screenTools(session)
+      : windowTool ? this.windowTools(session)
       : deviceTool ? this.devicesOf(session).length > 0 : Boolean(tool);
     if (!available) return errorResult('TOOL_NOT_AVAILABLE', `${String(raw.name)} is not available in this conversation`);
     try {
@@ -655,7 +666,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     const call = await this.deps.devices.call({ sessionId: session.id, deviceId, capability: tool.capability, args, timeoutMs: timeout * 1000, ...(signal ? { signal } : {}) });
     if (tool.audit) this.deps.devices.audit.record(tool.audit, call);
     const screen = SCREEN_TOOLS.includes(tool);
-    const result = await this.deviceResult(call, device.name, screen);
+    const result = await this.deviceResult(call, device.name, screen, tool.render);
     // A batch that stopped at a failing step answered, but did not do what was asked.
     const outcome = call.receipt?.outcome;
     const stopped = screen && outcome?.ok ? stoppedLine(outcome.result) : undefined;
@@ -664,13 +675,13 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   }
 
   /** `compact` keeps screen trees on one line: they are large, and the agent reads them often. */
-  private async deviceResult(call: StoredDeviceCall, name: string, compact = false): Promise<McpToolResult> {
+  private async deviceResult(call: StoredDeviceCall, name: string, compact = false, render?: DeviceTool['render']): Promise<McpToolResult> {
     const outcome = call.receipt?.outcome;
     if (!outcome) return errorResult(call.error?.code ?? 'DEVICE_UNREACHABLE', `${name}: ${call.error?.message ?? 'The call ended without an answer'}`);
     if (!outcome.ok) return errorResult(outcome.code, `${name}: ${outcome.message ?? 'The device could not complete the call'}`);
     const json = (value: Record<string, unknown>) => compact ? JSON.stringify(value) : JSON.stringify(value, null, 2);
     const fileIds = Array.isArray(outcome.result.fileIds) ? outcome.result.fileIds as string[] : [];
-    if (!fileIds.length) { const value = { device: { id: call.deviceId, name }, result: outcome.result }; return { content: [{ type: 'text', text: json(value) }], structuredContent: value }; }
+    if (!fileIds.length) { const value = { device: { id: call.deviceId, name }, result: outcome.result }; return { content: [{ type: 'text', text: render ? `${name}\n${render(outcome.result)}` : json(value) }], structuredContent: value }; }
     const { fileIds: _ids, ...rest } = outcome.result;
     const files: Array<Record<string, unknown>> = [];
     const images: McpToolResult['content'] = [];

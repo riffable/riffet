@@ -7965,6 +7965,24 @@
     },
     "futureField": 4
   },
+  "DeviceReport#$.capabilities[]=window.capture": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "window.capture"
+    ],
+    "allowControl": true,
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
   "DeviceReport#$.push=branch1": {
     "platform": "android",
     "appVersion": "text",
@@ -8267,6 +8285,26 @@
     },
     "futureField": 4
   },
+  "DeviceInfo#$.capabilities[]=window.capture": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "window.capture"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
   "DeviceInfo#$.push.route=none": {
     "id": "text",
     "name": "text",
@@ -8441,6 +8479,17 @@
     "callId": "text",
     "sessionId": "text",
     "capability": "riffet.appearance",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text",
+    "futureField": 4
+  },
+  "DeviceCall#$.capability=window.capture": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "window.capture",
     "args": {
       "key": null
     },

@@ -110,6 +110,7 @@ final class AppModel {
     var deviceName: String { Host.current().localizedName ?? "Mac" }
 
     private init() {
+        host.configureDevice(appVersion: Self.bundledVersion, actions: MacDeviceService.shared)
         host.configureAppearance(appVersion: Self.bundledVersion) { [weak self] themeId, mode, style in
             MainActor.assumeIsolated {
                 self?.applyDeviceAppearance(themeId: themeId, mode: mode, style: style)

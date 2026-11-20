@@ -51,6 +51,12 @@ internal class ForegroundAppearance(private val scope: CoroutineScope, private v
     private var work: Job? = null
     private var stream: DeviceStreamSession? = null
 
+    /**
+     * Set by a host that runs the one device stream itself (the Mac, which also serves T0 calls): state
+     * changes are passed to it instead of opening a stream here, and it asks [usableExecutor] what to serve.
+     */
+    internal var hosted: (() -> Unit)? = null
+
     fun configure(appVersion: String, installationId: String, apply: (String?, String?, String?) -> DeviceAppearanceSnapshot?) {
         settings = Settings(appVersion, installationId, apply)
         allowedDevice = preferences.string(permissionKey)
@@ -112,7 +118,16 @@ internal class ForegroundAppearance(private val scope: CoroutineScope, private v
     private fun canExecute(selected: Target, id: String?): Boolean =
         foreground && target === selected && selected.authorized() && id != null && id == allowedDevice
 
+    /** The appearance executor when this client may serve appearance calls right now, else null. */
+    internal suspend fun usableExecutor(): DeviceExecutor? {
+        val selected = target ?: return null
+        val config = settings ?: return null
+        val id = selected.api.readToken()?.let(::deviceIdOf)
+        return if (canExecute(selected, id)) executor(config, selected, id) else null
+    }
+
     private fun refresh() {
+        hosted?.let { it(); return }
         val previous = work
         val wasListening = previous?.isActive == true
         previous?.cancel()

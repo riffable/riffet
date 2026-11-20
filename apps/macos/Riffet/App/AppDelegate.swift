@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             AppModel.shared.host.foreground = true
             AppPresence.refreshAppearanceAccess()
+            MacDeviceService.shared.permissionsChanged()
             PluginsStore.shared.appBecameActive()
             Task {
                 await AppModel.shared.checkService()

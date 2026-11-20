@@ -133,6 +133,7 @@ class MacHost(private val secrets: SecretStore) {
     }
     private val scope = MainScope() + failures
     private val appearance = ForegroundAppearance(scope, "mac")
+    private val device = MacDevice(scope, appearance)
 
     private val _store = MutableStateFlow<SessionStore?>(null)
     val store: StateFlow<SessionStore?> = _store.asStateFlow()
@@ -167,6 +168,18 @@ class MacHost(private val secrets: SecretStore) {
         appearance.configure(appVersion, DeviceControl.installationId, apply)
 
     fun appearanceForeground(active: Boolean) = appearance.foreground(active)
+
+    fun configureDevice(appVersion: String, actions: MacDeviceActions) = device.configure(appVersion, actions)
+
+    /** A permission or preference behind a device capability changed: report what is usable now. */
+    fun refreshDevice() = device.refresh()
+
+    @Throws(Exception::class)
+    suspend fun deviceControlAllowed(api: RiffetApi): Boolean = device.controlAllowed(api)
+
+    /** The app verifies the owner (Touch ID) before turning it on. */
+    @Throws(Exception::class)
+    suspend fun setDeviceControlAllowed(api: RiffetApi, enabled: Boolean): Boolean = device.setControlAllowed(api, enabled)
 
     @Throws(Exception::class)
     suspend fun appearanceAllowed(api: RiffetApi): Boolean = appearance.isAllowed(api)
@@ -264,6 +277,7 @@ class MacHost(private val secrets: SecretStore) {
         _store.value = created
         AppLog.log("app", "store installed for $url")
         appearance.install(api) { connection === next && !created.unauthenticated.value }
+        device.install(api) { connection === next && !created.unauthenticated.value }
         created.refresh()
         // Always connected: the server pushes list changes and the poll below is the fallback.
         val pushed = ListsFeed(api, created, child, onMarks = { savedMarks.poll() })
@@ -295,6 +309,7 @@ class MacHost(private val secrets: SecretStore) {
 
     fun uninstall() {
         appearance.clear()
+        device.clear()
         poll?.cancel()
         poll = null
         feed?.cancel()
@@ -336,6 +351,7 @@ class MacHost(private val secrets: SecretStore) {
     fun poke() {
         if (detached) return
         appearance.kick()
+        device.kick()
         listsFeed?.kick()
         pokes.trySend(Unit)
     }

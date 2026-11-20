@@ -22,6 +22,9 @@ struct ConnectionSettings: View {
     @State private var pushKey = PushKeyStore()
     @State private var appearanceAllowed: Bool?
     @State private var savingAppearance = false
+    @State private var controlAllowed: Bool?
+    @State private var savingControl = false
+    @State private var captureGranted = WindowCapture.hasAccess
 
     var body: some View {
         Form {
@@ -64,6 +67,23 @@ struct ConnectionSettings: View {
                         .labelsHidden()
                         .toggleStyle(.switch)
                         .disabled(appearanceAllowed == nil || savingAppearance)
+                    }
+                    SettingsRow("允许 Agent 操作这台 Mac", detail: "仅对当前连接的服务器生效。") {
+                        Toggle("允许 Agent 操作这台 Mac", isOn: Binding(
+                            get: { controlAllowed ?? false },
+                            set: { enabled in Task { await setControlAllowed(enabled) } }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(controlAllowed == nil || savingControl)
+                    }
+                    if controlAllowed == true, !captureGranted {
+                        SettingsRow("窗口截图") {
+                            SettingsActionButton("授予权限") {
+                                MacDeviceService.shared.requestScreenCapture()
+                                captureGranted = WindowCapture.hasAccess
+                            }
+                        }
                     }
                 }
                 SettingsRow("设备令牌") {
@@ -116,6 +136,15 @@ struct ConnectionSettings: View {
             guard let workbench = model.workbench, let api = workbench.host.api else { return }
             let allowed = try? await workbench.host.appearanceAllowed(api: api)
             if model.workbench === workbench { appearanceAllowed = allowed?.boolValue }
+        }
+        .task(id: model.workbench.map { ObjectIdentifier($0) }) {
+            controlAllowed = nil
+            guard let workbench = model.workbench, let api = workbench.host.api else { return }
+            let allowed = try? await workbench.host.deviceControlAllowed(api: api)
+            if model.workbench === workbench { controlAllowed = allowed?.boolValue }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            captureGranted = WindowCapture.hasAccess
         }
         .onReceive(NotificationCenter.default.publisher(for: .settingsSectionDidShow)) { note in
             guard note.object as? String == SettingsSection.connection.rawValue,
@@ -375,7 +404,7 @@ struct ConnectionSettings: View {
     }
 
     private func status(_ device: PublicDevice) -> String {
-        let phone = device.platform == "android" || device.platform == "ios"
+        let phone = device.platform == "android" || device.platform == "ios" || device.platform == "mac"
         let duplicated = devices.filter { $0.name == device.name }.count > 1
         return [
             device.online ? String(localized: "在线") : ServerTime.relative(device.lastSeenAt).map { String(localized: "最后在线 \($0)") },
@@ -408,6 +437,21 @@ struct ConnectionSettings: View {
         do {
             let allowed = try await workbench.host.setAppearanceAllowed(api: api, enabled: enabled)
             if model.workbench === workbench { appearanceAllowed = allowed.boolValue }
+        } catch {
+            if model.workbench === workbench { self.error = error.riffetMessage }
+        }
+    }
+
+    private func setControlAllowed(_ enabled: Bool) async {
+        guard !savingControl, let workbench = model.workbench, let api = workbench.host.api else { return }
+        savingControl = true
+        defer { savingControl = false }
+        // Turning it on is the owner's decision; turning it off needs nothing.
+        if enabled, !(await TouchID.confirm(String(localized: "允许 Agent 操作这台 Mac"))) { return }
+        do {
+            let allowed = try await workbench.host.setDeviceControlAllowed(api: api, enabled: enabled)
+            if model.workbench === workbench { controlAllowed = allowed.boolValue }
+            MacDeviceService.shared.permissionsChanged()
         } catch {
             if model.workbench === workbench { self.error = error.riffetMessage }
         }

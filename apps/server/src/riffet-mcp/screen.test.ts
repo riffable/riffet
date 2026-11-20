@@ -20,7 +20,7 @@ async function boot() {
   const bearer = (token: string) => ({ host, authorization: `Bearer ${token}` });
   const streams: IncomingMessage[] = [];
   /** A paired device that reports `report` and answers each call it receives with `answer(call)`. */
-  const device = async (report: object, answer?: (call: Call) => unknown) => {
+  const device = async (report: object, answer?: (call: Call, upload: (name: string, mimeType: string, dataBase64: string) => Promise<string>) => unknown) => {
     const issued = booted.auth.issueDevice('Phone');
     await booted.app.inject({ method: 'PUT', url: '/api/devices/me', headers: bearer(issued.token), payload: report });
     const calls: Call[] = [];
@@ -40,7 +40,8 @@ async function boot() {
           if (!/^event: call$/m.test(block) || !data) continue;
           const call = JSON.parse(data) as Call;
           calls.push(call);
-          void booted.app.inject({ method: 'POST', url: `/api/devices/me/calls/${call.callId}/result`, headers: bearer(issued.token), payload: { ok: true, result: answer(call) as object } });
+          const upload = async (name: string, mimeType: string, dataBase64: string) => (await booted.app.inject({ method: 'POST', url: `/api/devices/me/calls/${call.callId}/files`, headers: bearer(issued.token), payload: { name, mimeType, dataBase64 } })).json().fileId as string;
+          void (async () => booted.app.inject({ method: 'POST', url: `/api/devices/me/calls/${call.callId}/result`, headers: bearer(issued.token), payload: { ok: true, result: await answer(call, upload) as object } }))();
         }
       });
       response.on('error', () => undefined);
@@ -117,6 +118,50 @@ describe('screen tools (T1)', () => {
       const ios = await names({ platform: 'ios', appVersion: '1.0', capabilities: ['notify'], allowControl: true });
       expect(ios).toContain('device_notify');
       expect(ios.filter(name => ['device_observe', 'device_act', 'device_authorize', 'device_help'].includes(name))).toEqual([]);
+    } finally { await booted.close(); }
+  });
+});
+
+describe('window tools (Mac, T0)', () => {
+  const MAC = { platform: 'mac', appVersion: '1.0', capabilities: ['notify', 'window.capture'], allowControl: true };
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
+
+  it('lists the window tools for a Mac only', async () => {
+    const booted = await boot();
+    try {
+      const names = async (report: object) => ((await booted.mcp((await booted.device(report)).id).rpc('tools/list')).tools as Array<{ name: string }>).map(tool => tool.name);
+      expect(await names({ ...MAC, capabilities: [], allowControl: false })).toEqual(expect.arrayContaining(['device_list_windows', 'device_capture_window']));
+      expect((await names(ANDROID)).filter(name => name.includes('window'))).toEqual([]);
+    } finally { await booted.close(); }
+  });
+
+  it('dispatches list and capture calls and returns the uploaded image', async () => {
+    const booted = await boot();
+    try {
+      const mac = await booted.device(MAC, async (call, upload) => call.args.list
+        ? { windows: [{ id: 42, app: 'Safari', title: 'Docs', width: 1200, height: 800, onScreen: true }] }
+        : { fileIds: [await upload('window.png', 'image/png', PNG)] });
+      const { rpc } = booted.mcp(mac.id);
+      const listed = await rpc('tools/call', { name: 'device_list_windows', arguments: {} });
+      expect(listed.isError).toBeUndefined();
+      expect(listed.content[0].text).toContain('42\tSafari\tDocs\t1200x800');
+      const captured = await rpc('tools/call', { name: 'device_capture_window', arguments: { windowId: 42, extra: true } });
+      expect(captured.isError).toBeUndefined();
+      expect(captured.content.some((block: { type: string }) => block.type === 'image')).toBe(true);
+      expect(captured.structuredContent.result.files[0]).toMatchObject({ name: 'window.png', mimeType: 'image/png' });
+      expect(mac.calls.map(call => [call.capability, call.args])).toEqual([['window.capture', { list: true }], ['window.capture', { windowId: 42 }]]);
+      const bad = await rpc('tools/call', { name: 'device_capture_window', arguments: { windowId: 'x' } });
+      expect(bad.content[0].text).toMatch(/^INVALID_ARGUMENT/);
+    } finally { await booted.close(); }
+  });
+
+  it('reports DEVICE_CAPABILITY_MISSING when the Mac does not offer window capture', async () => {
+    const booted = await boot();
+    try {
+      const mac = await booted.device({ ...MAC, capabilities: ['notify'] });
+      const result = await booted.mcp(mac.id).rpc('tools/call', { name: 'device_capture_window', arguments: { windowId: 1 } });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/^DEVICE_CAPABILITY_MISSING/);
     } finally { await booted.close(); }
   });
 });

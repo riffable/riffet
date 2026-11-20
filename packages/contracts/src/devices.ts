@@ -25,7 +25,7 @@ export interface RiffetNotice { id: string; sessionId: string; title?: string; b
 export const DEVICE_PLATFORMS = ['android', 'ios', 'mac'] as const;
 export type DevicePlatform = typeof DEVICE_PLATFORMS[number];
 /** T0 first, then T1. A device reports only those it can serve right now. */
-export const DEVICE_CAPABILITIES = ['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch', 'riffet.appearance'] as const;
+export const DEVICE_CAPABILITIES = ['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch', 'riffet.appearance', 'window.capture'] as const;
 export type DeviceCapability = typeof DEVICE_CAPABILITIES[number];
 /** One paired client's own local workbench preferences. An empty request reads them. */
 export interface DeviceAppearanceRequest {

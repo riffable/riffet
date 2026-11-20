@@ -49,7 +49,7 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
     private static let openAction = "riffet.open"
     private static let replyAction = "riffet.reply"
 
-    static var enabled: Bool {
+    nonisolated static var enabled: Bool {
         get { UserDefaults.standard.object(forKey: "riffet.notifications") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "riffet.notifications") }
     }
@@ -63,7 +63,26 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
         guard !authorized else { return }
         Task {
             authorized = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+            MacDeviceService.shared.permissionsChanged()
         }
+    }
+
+    /// Whether the system lets Riffet post now, read from the system rather than from the first request's answer.
+    func authorizationGranted() async -> Bool {
+        let status = await center.notificationSettings().authorizationStatus
+        authorized = status == .authorized || status == .provisional
+        return authorized
+    }
+
+    /// A notification an agent asked this Mac to show. A click opens the session it came from, like a
+    /// session alert; it carries no answers to a dialog.
+    func postDevice(callId: String, sessionId: String, title: String?, body: String) async throws {
+        let content = UNMutableNotificationContent()
+        content.title = title ?? "Riffet"
+        content.body = body
+        content.sound = .default
+        content.userInfo = ["sessionId": sessionId]
+        try await center.add(UNNotificationRequest(identifier: "device." + callId, content: content, trigger: nil))
     }
 
     func handle(_ activity: SessionActivity) {

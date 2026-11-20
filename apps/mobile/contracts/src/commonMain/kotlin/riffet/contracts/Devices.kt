@@ -25,6 +25,9 @@ object DeviceCapability {
     const val APP_LAUNCH = "app.launch"
     const val RIFFET_APPEARANCE = "riffet.appearance"
 
+    /** T0 on a Mac only (Screen Recording permission); not part of [T0], which Android reports. */
+    const val WINDOW_CAPTURE = "window.capture"
+
     val T0: List<String> = listOf(NOTIFY, CLIPBOARD_READ, CLIPBOARD_WRITE, LOCATION, PHOTO, OPEN_URL, ALARM)
     val T1: List<String> = listOf(SCREEN_OBSERVE, SCREEN_ACT, APP_LAUNCH)
 }

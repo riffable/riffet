@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The Mac can be handed to Agents as a device: after turning on “Allow agents to operate this Mac” in Settings › Connection & devices (owner verification required) and picking this Mac under Skills & Tools for a conversation, an Agent can list and capture windows, read and write the clipboard, open web links, and post notifications. A capture never brings the window to the front, and it works with only the menu bar left. The switch is off by default and saved per server; content copied from a password manager is not read, and only http and https links are opened.
 - On the Mac, Stats, Extensions, Plugins, Automations, Marks, Activity, and the settings sections stored on the server have an Open in Web toolbar button that lands on the same page on the web, already signed in. Collaboration, the task board, title rules, and voice input now have entries on the Mac that open the web (sidebar, settings, or command palette). The web is the reference for these management pages from now on; the ones the Mac already has stay as they are.
 - Web settings sections have addresses: `/settings/<section>` opens that section directly.
 - Exported pictures of a selection or a highlight keep the answer’s formatting: headings, lists, code, tables, and bold text. Under Display, the conversation title, Agent, model, project, and date can each be turned on or off; the model is the one that wrote that answer.

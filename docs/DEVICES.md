@@ -1,6 +1,6 @@
 # Riffet 能力与设备
 
-日期：2026-11-04，2026-11-10 修订。状态：§2 Riffet MCP、按对话的工具组、会话快照与一次性唤醒已在服务端实现（R1，见 §2「实现（R1）」）；§3 设备通道已实现（R2）；T1 主屏操控与 §5 的设备侧安全规则已实现（R3，见 §3「协议（R3，T1）」、§4「实现（R3，T1）」、§5「实现（R3）」）。Web 与 Android 输入框的「技能与工具」、Web「设置 › 设备管理」、Android 无障碍引导、iOS 输入框的「技能与工具」已做；唤醒 / 操作记录的客户端展示、按 App 的知识与 skill、虚拟屏与 T2（R4）仍为设计稿。Android 真机 2026-11-10 跑通：T0 通知与剪贴板，T1 打开计算器、读屏、批量点按算出结果；系统「信息」里点发送被判为 `send`、在手机上弹确认、允许后才执行（`authorizedBy: owner`；测试机无 SIM 卡，没有实际发出）。触摸即停止、自愈重启、经电脑开启、定位与拍照尚未在真机上验证。移动端的定位与分期见 [MOBILE.md](MOBILE.md)「路线」。
+日期：2026-11-04，2026-11-10 修订。状态：§2 Riffet MCP、按对话的工具组、会话快照与一次性唤醒已在服务端实现（R1，见 §2「实现（R1）」）；§3 设备通道已实现（R2）；T1 主屏操控与 §5 的设备侧安全规则已实现（R3，见 §3「协议（R3，T1）」、§4「实现（R3，T1）」、§5「实现（R3）」）。Web 与 Android 输入框的「技能与工具」、Web「设置 › 设备管理」、Android 无障碍引导、iOS 输入框的「技能与工具」已做；唤醒 / 操作记录的客户端展示、按 App 的知识与 skill、虚拟屏与 T2（R4）仍为设计稿。Android 真机 2026-11-10 跑通：T0 通知与剪贴板，T1 打开计算器、读屏、批量点按算出结果；系统「信息」里点发送被判为 `send`、在手机上弹确认、允许后才执行（`authorizedBy: owner`；测试机无 SIM 卡，没有实际发出）。触摸即停止、自愈重启、经电脑开启、定位与拍照尚未在真机上验证。移动端的定位与分期见 [MOBILE.md](MOBILE.md)「路线」。Mac 的 T0 能力 `window.capture`（窗口截图）服务端已实现（§3「窗口截图」），Mac 客户端的 T0（通知、剪贴板、打开链接、窗口截图）已实现（「实现（Mac，T0）」），尚未在运行的 App 里验证。
 
 Agent 会话除了读写代码，还可以调用 Riffet 自身的能力（定时唤醒、通知）和已连接设备的能力（读屏、点击、输入、打开 App、定位、拍照）。典型例子：在手机或 Web 上说“打开微信给 X 发一条消息”，同一个会话里的 Agent 操作手机完成；R4 起可以定时执行（“20 分钟后……”），那时手机多半已锁屏，需要后台屏或解锁。
 
@@ -9,7 +9,7 @@ Agent 会话除了读写代码，还可以调用 Riffet 自身的能力（定时
 ```
 入口（任意端）              大脑（服务端会话）            设备（能力提供方）
 手机 / Web / Mac      →   Claude Code / Codex …   →   手机：读屏、手势、输入、传感器
-定时 / 唤醒 / 触发器        经 Riffet MCP 调用           Mac：通知、剪贴板（后续）
+定时 / 唤醒 / 触发器        经 Riffet MCP 调用           Mac：通知、剪贴板、窗口截图
 ```
 
 - **入口**只把一句话送进某个会话。手机、Web、Mac、自动化与设备触发器地位相同。
@@ -132,7 +132,7 @@ Codex 的两条实测结论：
 
 **设备自报**：`PUT /api/devices/me`（只认设备令牌，`Authorization: Bearer wkn_…`）`DeviceReport {platform: 'android'|'ios'|'mac', appVersion, capabilities: DeviceCapability[], allowControl: boolean}`，返回本机的 `DeviceInfo`。每次连上设备流前发送一次，能力或开关变化时再发。服务端合并进 `DeviceRecord`（存 `devices.json`），不认识的能力 id 丢弃。`GET /api/devices` 返回 `{devices: DeviceInfo[]}`，`DeviceInfo {id, name, platform?, appVersion?, createdAt, lastSeenAt?, online, capabilities, allowControl}`；从未自报的设备（含配对的浏览器）`capabilities: []`、`allowControl: false`。
 
-**能力 id**（`DeviceCapability`）：T0 为 `notify`、`clipboard.read`、`clipboard.write`、`location`、`photo`、`open_url`、`alarm`；T1 起追加 `screen.observe`、`screen.act`、`app.launch`。设备只上报本机当前真正可用的能力（权限已授予、系统支持）。
+**能力 id**（`DeviceCapability`）：T0 为 `notify`、`clipboard.read`、`clipboard.write`、`location`、`photo`、`open_url`、`alarm`，Mac 另有 `window.capture`；T1 起追加 `screen.observe`、`screen.act`、`app.launch`。设备只上报本机当前真正可用的能力（权限已授予、系统支持）。
 
 **设备流**：`GET /api/devices/me/stream`（SSE，只认设备令牌）。连接即在线，断开即离线；撤销设备时立即断开。每个事件都带 `data`（JSON）：
 
@@ -155,10 +155,13 @@ Codex 的两条实测结论：
 | `photo` | `{source?: 'camera' \| 'gallery'}`，缺省 `camera` | `{fileIds: string[]}` |
 | `open_url` | `{url}` | `{}` |
 | `alarm` | `{hour: 0–23, minute: 0–59, label?}` | `{}` |
+| `window.capture` | `{list: true}` 列窗口；`{windowId: number}` 截一个窗口 | 列窗口：`{windows: [{id, app, title, width, height, onScreen}]}`（尺寸为点）；截图：`{fileIds: [string]}` |
+
+**窗口截图**（`window.capture`，T0，Mac）：两个工具共用一个能力，用 `args.list` 区分（同 `device_list_apps`）。`device_list_windows({device?})` 下发 `{list: true}`，设备回 `{windows: [{id, app, title, width, height, onScreen}]}`，`id` 是窗口 id、尺寸单位为点，Agent 看到的是紧凑文本列表。`device_capture_window({windowId, device?})` 下发 `{windowId}`，设备把一张图 `POST .../files` 上传后回 `{fileIds: [fileId]}`，结果映射与 `device_take_photo` 相同（路径加缩小后的图片块）。截图不激活、不抬起窗口。等待 30 / 120 秒。错误：设备没有屏幕录制权限时不上报该能力，返回 `DEVICE_CAPABILITY_MISSING`；窗口 id 不存在或截图失败回 `DEVICE_FAILED` 并带 `message`；`windowId` 不是 1 到 4294967295 的整数时服务端直接 `INVALID_ARGUMENT`。`open_url` 在 Mac 上只接受 http / https，其余回 `DEVICE_FAILED`。
 
 **回传**：`POST /api/devices/me/calls/:callId/result`，body `DeviceCallOutcome = {ok: true, result} | {ok: false, code, message?}`，返回 `DeviceCallReceipt {callId, outcome, receivedAt}`。按 `callId` 幂等：重复回传返回第一次的回执。其他设备的调用或不存在的调用返回 404 `DEVICE_CALL_NOT_FOUND`；已超时或已撤销的返回 409 `DEVICE_CALL_CLOSED`，设备丢弃即可。文件类结果（照片）先 `POST /api/devices/me/calls/:callId/files` 上传，body 与 `POST /api/attachments` 相同 `{name, mimeType, dataBase64, width?, height?}`（单个最大 24 MB，每次调用最多 10 个），返回 `DeviceFile {fileId, name, mimeType, size}`，再在 `result.fileIds` 里引用。服务端把文件存为附件（会话的 Agent 可按路径读取），MCP 结果给出路径和缩小后的图片内容块。
 
-**MCP 工具**：会话快照含任一 `device:<id>` 组时注入；`device` 参数取值限定为快照里仍存在的设备，只有一台时可省略。工具名稳定，按能力映射：`device_notify`、`device_clipboard_read`、`device_clipboard_write`、`device_location`、`device_take_photo`、`device_open_url`、`device_set_alarm`；T1 起追加 `device_observe`、`device_act`、`device_launch_app`。工具清单不随设备上下线或能力变化而变。
+**MCP 工具**：会话快照含任一 `device:<id>` 组时注入；`device` 参数取值限定为快照里仍存在的设备，只有一台时可省略。工具名稳定，按能力映射：`device_notify`、`device_clipboard_read`、`device_clipboard_write`、`device_location`、`device_take_photo`、`device_open_url`、`device_set_alarm`；`window.capture` 对应 `device_list_windows`、`device_capture_window`，只在快照里有平台为 `mac` 或上报 `window.capture` 的设备时列出（平台不变，清单仍不随上下线变化）；T1 起追加 `device_observe`、`device_act`、`device_launch_app`。工具清单不随设备上下线或能力变化而变。
 
 **等待与错误码**：调用默认等待 30 秒（拍照默认 120 秒）；工具可传 `timeoutSeconds`，上限 120，拍照上限 300。设备离线时在截止前等待重连，到期返回 `DEVICE_UNREACHABLE`。其余：`DEVICE_NOT_ALLOWED`（设备最后上报的 `allowControl` 不是 `true`，或会话快照不含该设备）、`DEVICE_CAPABILITY_MISSING`（设备最后上报的能力不含此项）、`DEVICE_TIMEOUT`（调用已送达设备但未在截止前回传）、`DEVICE_DENIED`（用户在设备上拒绝）、`DEVICE_FAILED`（设备尝试过但做不到：参数不合法、取不到定位、没有能处理的 App，`message` 说明原因）。设备回传的 `code` 原样交给 Agent；设备侧只用上述 `DEVICE_*` 码。
 
@@ -338,6 +341,21 @@ T2 后端按顺序接入：
 - 设备报告 `riffet.appearance` 后，已经为本会话授权的在线设备可以接收本机 Riffet 外观请求。空参数读取当前选择和可用选项，写入携带 `themeId`、`mode` 或 `interfaceStyle`。设备只写入本次指定的字段。
 - Android 通过现有本机控制开关和调用去重门禁执行。已配对的 Riffet 界面挂载时提供能力，工作台切换服务器或卸载后旧连接无法改动偏好。设备回读保存值后返回结果。
 
+### 实现（Mac，T0）
+
+- **文件**：Kotlin `riffet/mac/MacDevice.kt`（接入与门禁）、`ForegroundAppearance.kt`（外观开关，Mac 上不再自己开流）；Swift `Services/MacDeviceActions.swift`（执行）、`Services/WindowCapture.swift`（ScreenCaptureKit）、`Services/Notifications.swift`（通用通知）；开关在设置 › 连接。
+- **一个写入方、一条流**：`PUT /api/devices/me` 整体替换能力表，所以 `MacDevice` 是 Mac 上唯一的上报方和设备流持有者：能力 = 「控制开关开启时当前可用的 T0」∪「`riffet.appearance`（主窗口在前台且外观开关开启）」；`allowControl` = 控制开关开启或外观可用。只要任一开关放行就保持连接，主窗口全关、只剩菜单栏或 App 在后台时照常服务；两个开关都不放行时上报一次空能力并断开。外观开关、权限、通知偏好、App 激活变化时重报（`reportIfChanged`）。iOS 仍由 `ForegroundAppearance` 自己持有流。
+- **开关**：「允许 Agent 操作这台 Mac」，默认关，存在本机 `UserDefaults` 的 `riffet.pref.mac.device-control.allowed-devices`，值是设备令牌里的设备 id 列表，按配对分别保存，连接另一台服务器不继承。开启前 Swift 先做 Touch ID（`TouchID.confirm`），关闭不需要验证；关闭立即生效：同步取消 Swift 里进行中的动作（每个动作在产生效果前再查一次取消），并重启设备流。本机没有可用的验证方式（未设登录密码）时不验证，与 Android 相同。调用经 `DeviceGate`（截止时间 → 去重 → 开关 → 能力可用 → 执行 → 记录 → 回传），`Router` 在到达 Swift 前再按存储的开关核对一次。
+- **Kotlin 与 Swift 的边界**：`MacDeviceActions` 由 Swift 实现且不含 `suspend`，Kotlin 传能力对应的类型化参数，Swift 通过一次性的 `MacActionReply` 回答（完成、文本、窗口列表、图片字节、失败）；协议信封、文件上传（`uploadDeviceCallFile`）、取消（调用被撤回或到期时 `cancel(callId)`）都在 Kotlin。
+- **上报哪些能力**：`window.capture` 仅当 `CGPreflightScreenCaptureAccess()` 为真；`notify` 仅当系统通知已授权且 App 的通知偏好开启；`clipboard.read`、`clipboard.write`、`open_url` 在开关开启时都报。
+- **各能力**：
+  - `window.capture`：`SCShareableContent` 列出普通应用窗口（layer 0、有所属应用、边长不小于 40 pt，含 Riffet 自己的窗口）；截图用 `SCContentFilter(desktopIndependentWindow:)`，按像素尺寸、不含光标和单窗口阴影，不激活、不抬起、不移动窗口。先传 PNG；服务端以 413 拒绝时依次改 JPEG 原尺寸、½、¼ 重传，用尽回 `DEVICE_FAILED`（共享预算里没有设备文件上限常量，不在客户端写数字，由服务端的拒绝决定）。
+  - `open_url`：按解析后的 scheme 只放行 `http`、`https`，其余（含 `file:`）回 `DEVICE_FAILED` 并说明原因；用 `NSWorkspace.OpenConfiguration`（`activates = false`）打开，不把浏览器带到前台。
+  - `clipboard.read` / `clipboard.write`：`NSPasteboard.general`，只处理纯文本。剪贴板带 `org.nspasteboard.ConcealedType` 标记（密码管理器复制的内容）时不读，回 `DEVICE_FAILED`。
+  - `notify`：经 `NotificationCenterBridge` 发系统通知，点按打开调用所属的会话，不带审批按钮。
+- **权限**：开关开启且缺屏幕录制权限时，设置里多一行「窗口截图」；首次点按弹系统授权，之后打开系统设置的屏幕录制面板。授权后系统可能要求重启 App 才生效。
+- **限制**：这个开关防的是另一台机器上的 Agent；服务端在同一台 Mac 上时，Agent 本来就有这个用户的 shell，开关在那里不构成边界。
+
 ### 工具与观察
 
 - 工具粒度参照 mobile-mcp 的批量命令：动作合并进 `device_act` 的 `steps`，工具清单见 §3「协议（R3，T1）」。
@@ -380,7 +398,7 @@ T1 的设备侧规则，全部在手机上判定，不信任 Agent 的任何参�
 | Android | 胶囊、语音、分享、磁贴、快捷方式 | T0–T2 | 通知审批、状态栏胶囊与厂商岛、生物识别 |
 | iOS | AppIntents / 快捷指令、分享 | T0 子集 | Live Activities、Face ID |
 | Web | 输入框 | — | 右侧常驻区显示设备实时画面、操作记录与待确认项 |
-| Mac | 菜单栏、全局快捷键 | 后续可提供 AX 操控与通知 | 原生通知 |
+| Mac | 菜单栏、全局快捷键 | T0：通知、剪贴板、打开链接、窗口截图 | 原生通知 |
 
 ## 7. 约束与风险
 

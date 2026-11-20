@@ -1937,6 +1937,46 @@
         }
       }
     },
+    "允许 Agent 操作这台 Mac": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow agents to operate this Mac"
+          }
+        }
+      }
+    },
+    "仅对当前连接的服务器生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies only to the connected server."
+          }
+        }
+      }
+    },
+    "窗口截图": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window capture"
+          }
+        }
+      }
+    },
+    "授予权限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grant access"
+          }
+        }
+      }
+    },
     "全部撤销": {
       "localizations": {
         "en": {

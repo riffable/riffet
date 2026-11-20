@@ -159,6 +159,8 @@ struct NotificationSettings: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await refreshPermission() }
         }
+        // An agent's notify call is served only while this is on.
+        .onChange(of: notifications) { _, _ in MacDeviceService.shared.permissionsChanged() }
     }
 
     /// Denied or not yet asked. The first read is still in flight while it shows 检测中.
@@ -206,6 +208,7 @@ struct NotificationSettings: View {
     private func requestPermission() async {
         let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
         await refreshPermission()
+        MacDeviceService.shared.permissionsChanged()
         if !granted { openNotificationSettings() }
     }
 
