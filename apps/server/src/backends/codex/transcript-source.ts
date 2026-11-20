@@ -195,8 +195,10 @@ export class CodexTranscriptSource implements TranscriptSource {
       if (w.scratch) {
         const window = decode(w.scratch.cursor);
         this.children.restoreAgents(w.scratch, window, 0);
-        if (current && this.repairNow() && window?.phase === 'ready') await this.refresh(w.scratch, reader, current, 0, true);
-        if (current) this.flushLive(w.scratch, current);
+        if (current && this.repairNow() && window?.phase === 'ready') {
+          if (!await this.refresh(w.scratch, reader, current, 0, true)) return false;
+        }
+        if (current && w.scratch) this.flushLive(w.scratch, current);
       }
       const state = decode(w.cursor) ?? { phase: 'importing' as const };
       this.children.restoreAgents(w, state, 0);
@@ -259,8 +261,10 @@ export class CodexTranscriptSource implements TranscriptSource {
     if (scratch) {
       const window = decode(scratch.cursor);
       this.children.restoreAgents(scratch, window, 0);
-      if (this.repairNow() && window?.phase === 'ready') await this.refresh(scratch, reader, threadId, 0, true);
-      this.flushLive(scratch, threadId);
+      if (this.repairNow() && window?.phase === 'ready') {
+        if (!await this.refresh(scratch, reader, threadId, 0, true)) return false;
+      }
+      if (w.scratch === scratch) this.flushLive(scratch, threadId);
     }
     if (!state || state.phase === 'importing') return await this.importSteps(w, reader, threadId, state, 0, signal);
     // Reconcile the boundary before consuming its live ops. A formerly poisoned cursor must not
@@ -345,8 +349,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     }
     const newer = collected.reverse();
     if (found || (complete && !state.settled)) {
-      await this.writeTurns(w, threadId, newer, state, depth);
-      return true;
+      return Boolean(await this.writeTurns(w, threadId, newer, state, depth));
     }
     if (complete) {
       // An empty answer is a thread not readable yet (a resume still materializing), not one without the turn.
@@ -357,8 +360,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     }
     // A scratch window is only a tail: it takes the newest turns as they are. The lane itself is imported forward.
     if (window) {
-      await this.writeTurns(w, threadId, newer, state, depth);
-      return true;
+      return Boolean(await this.writeTurns(w, threadId, newer, state, depth));
     }
     w.commit({ events: [], cursor: encode(threadId, { ...state, phase: 'importing' }) });
     return await this.importSteps(w, reader, threadId, { ...state, phase: 'importing' }, depth, new AbortController().signal);
@@ -399,7 +401,9 @@ export class CodexTranscriptSource implements TranscriptSource {
         if (index >= 0) { turns = turns.slice(index + 1); delete at.skip; } else turns = [];
       }
       const open = turns.findIndex(turn => !isFinalTurnStatus(turn.status));
-      state = await this.writeTurns(w, threadId, open < 0 ? turns : turns.slice(0, open), state, depth);
+      const nextState = await this.writeTurns(w, threadId, open < 0 ? turns : turns.slice(0, open), state, depth);
+      if (!nextState) return false;
+      state = nextState;
       if (open >= 0 || !page.nextCursor) {
         // The settled history is in: the running turn and whatever follows are read the way a ready lane is.
         this.imports.delete(w.lane);
@@ -457,10 +461,11 @@ export class CodexTranscriptSource implements TranscriptSource {
   }
 
   /**
-   * Writes `turns` in order and moves the cursor past the settled ones; returns the state it stored. It gives
+   * Writes `turns` in order and moves the cursor past the settled ones; returns the state it stored,
+   * or `undefined` when an out-of-order late materialization required rebuilding the lane. It gives
    * the event loop back every {@link SLICE_MS} between commits: one running turn can hold thousands of items.
    */
-  private async writeTurns(w: LaneWriter, threadId: string, turns: readonly RpcTurn[], from: LaneState, depth: number): Promise<LaneState> {
+  private async writeTurns(w: LaneWriter, threadId: string, turns: readonly RpcTurn[], from: LaneState, depth: number): Promise<LaneState | undefined> {
     const state: LaneState = { ...from };
     let { settled } = from;
     // An unresolved positional snapshot can precede this import page. Do not advance the
@@ -474,9 +479,11 @@ export class CodexTranscriptSource implements TranscriptSource {
       await new Promise(resolve => setImmediate(resolve));
       since = performance.now();
     };
-    for (const turn of turns) {
-      const final = await this.writeTurn(w, threadId, turn, state, depth, pause, spans);
-      if (final && open === undefined) { settled = turn.id; count += 1; } else open ??= turn.id;
+    const lastPersisted = w.cursor === null ? -1 : this.lastPersistedTurnIndex(w, threadId, turns, depth, spans);
+    for (const [turnIndex, turn] of turns.entries()) {
+      const outcome = await this.writeTurn(w, threadId, turn, turnIndex < lastPersisted, state, depth, pause, spans);
+      if (outcome === 'rebuilt') return undefined;
+      if (outcome && open === undefined) { settled = turn.id; count += 1; } else open ??= turn.id;
     }
     Object.assign(state, { ...(settled ? { settled } : {}), turns: count, agents: this.children.agentsOf(w) });
     if (open) state.open = open; else delete state.open;
@@ -484,7 +491,27 @@ export class CodexTranscriptSource implements TranscriptSource {
     return state;
   }
 
-  private async writeTurn(w: LaneWriter, threadId: string, turn: RpcTurn, state: LaneState, depth: number, pause: () => Promise<void>, spans?: ItemSpans): Promise<boolean> {
+  /** Highest index in `turns` that already has a persisted row or turn end in `w`, or `-1`. */
+  private lastPersistedTurnIndex(w: LaneWriter, threadId: string, turns: readonly RpcTurn[], depth: number, spans?: ItemSpans): number {
+    const main = depth === 0;
+    for (let index = turns.length - 1; index >= 0; index -= 1) {
+      const turn = turns[index]!;
+      if (w.turnEndStatus(turn.id) !== undefined) return index;
+      const items = asArray<RpcItem>(turn.items);
+      const at = turnTime(turn.startedAt) ?? new Date().toISOString();
+      for (const item of items) {
+        if (item.type === 'contextCompaction') continue;
+        const cmd = main && item.type === 'userMessage' ? this.options.commandOf(item, turn.id) : undefined;
+        const run = cmd ? this.options.runOf(cmd) : undefined;
+        for (const ev of this.project(item, turn, threadId, cmd, run, at, main, spans?.(item))) {
+          if (w.event(ev.nativeId)) return index;
+        }
+      }
+    }
+    return -1;
+  }
+
+  private async writeTurn(w: LaneWriter, threadId: string, turn: RpcTurn, hasLaterPersisted: boolean, state: LaneState, depth: number, pause: () => Promise<void>, spans?: ItemSpans): Promise<boolean | 'rebuilt'> {
     const items = asArray<RpcItem>(turn.items);
     const final = isFinalTurnStatus(turn.status);
     const previous = w.turnEndStatus(turn.id);
@@ -492,18 +519,12 @@ export class CodexTranscriptSource implements TranscriptSource {
     // A completed/failed history result is durable; a stale running snapshot cannot reopen it.
     // Interrupted is different: Codex can synthesize it while the turn is still materializing.
     if (previous && previous !== 'interrupted' && previous !== status) return true;
-    if (previous === 'interrupted' && status !== 'interrupted') {
-      const recovery = decode(w.cursor) ?? { phase: 'ready' as const };
-      w.turnReopened(turn.id, new Date().toISOString(), encode(threadId, { ...recovery, open: turn.id }));
-      this.ended.delete(`${threadId}:${turn.id}`);
-    }
     const main = depth === 0;
     // A subagent's items carry no workbench commands; the conversation's carry the runs that sent them.
     const commands = items.map(item => main && item.type === 'userMessage' ? this.options.commandOf(item, turn.id) : undefined);
     const owner = commands.find((id): id is string => Boolean(id));
     const turnRun = owner ? this.options.runOf(owner) : undefined;
     const at = turnTime(turn.startedAt) ?? new Date().toISOString();
-    w.turnStarted(turn.id, at, turnRun);
     const key = `${threadId}:${turn.id}`;
     const projected: NativeWorkbenchEvent[][] = [];
     for (const [index, item] of items.entries()) {
@@ -513,6 +534,40 @@ export class CodexTranscriptSource implements TranscriptSource {
     // TRAE CLI serves a running turn under positional ids it renames once written: a positional copy of
     // text the turn shows under a lasting id is the same row, and the settled read retires the copies.
     const copies = copiesOf(state, turn.id);
+    const reconciled = items.map((item, index) =>
+      item.type === 'contextCompaction' ? { events: [] as NativeWorkbenchEvent[], retire: [] as string[] } : reconcile(copies, subagentToolCallId(item), projected[index]!),
+    );
+    const renamed = final && items.every(item => !isProvisionalItemId(subagentToolCallId(item)));
+    const allRetired = new Set<string>(reconciled.flatMap(rows => rows.retire));
+    if (renamed) for (const [id] of copies.positional) allRetired.add(id);
+    // Journal pins each entity's sort order to its rev=1 seq. If a new event (e.g. a renamed lasting
+    // id or late-materializing item) would land before an already-committed row in this turn or a
+    // later turn, or two existing rows were already committed out of order, rebuild the lane so the
+    // next pull imports everything in chronological order.
+    let seenNew = false;
+    let lastOrder = -1;
+    for (const rows of reconciled) {
+      for (const ev of rows.events) {
+        if (allRetired.has(ev.nativeId)) continue;
+        const order = w.eventOrder ? w.eventOrder(ev.nativeId) : (w.event(ev.nativeId) ? 0 : undefined);
+        if (order !== undefined) {
+          if (seenNew || order < lastOrder) { this.rewritten(w, depth); return 'rebuilt'; }
+          lastOrder = order;
+        } else {
+          seenNew = true;
+        }
+      }
+    }
+    if (seenNew && hasLaterPersisted) {
+      this.rewritten(w, depth);
+      return 'rebuilt';
+    }
+    if (previous === 'interrupted' && status !== 'interrupted') {
+      const recovery = decode(w.cursor) ?? { phase: 'ready' as const };
+      w.turnReopened(turn.id, new Date().toISOString(), encode(threadId, { ...recovery, open: turn.id }));
+      this.ended.delete(`${threadId}:${turn.id}`);
+    }
+    w.turnStarted(turn.id, at, turnRun);
     let events: NativeWorkbenchEvent[] = [];
     let retire: string[] = [];
     const flush = () => {
@@ -526,7 +581,7 @@ export class CodexTranscriptSource implements TranscriptSource {
         if (main && str(item.id)) { flush(); this.compaction(w, item, turn, final); }
         continue;
       }
-      const rows = reconcile(copies, subagentToolCallId(item), projected[index]!);
+      const rows = reconciled[index]!;
       events.push(...rows.events);
       retire.push(...rows.retire);
       this.children.noteChildren(w, item, depth, flush);
@@ -535,7 +590,6 @@ export class CodexTranscriptSource implements TranscriptSource {
     flush();
     if (!final) return false;
     // The settled copy names every item by the id it keeps: the positional rows were stand-ins for them.
-    const renamed = items.every(item => !isProvisionalItemId(subagentToolCallId(item)));
     const replaced = renamed ? copies.positional.map(([id]) => id) : [];
     if (renamed) state.copies = state.copies?.filter(copy => copy !== copies);
     w.commit({ events: [], retire: replaced, cursor: encode(threadId, state) });

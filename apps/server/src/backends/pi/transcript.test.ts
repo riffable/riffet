@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { JournalLaneWriter, pullLane } from '../../journal/ingest.js';
 import {
-  assertUnchanged, runIngestContract, snapshot, visibleLanes, type IngestContractFixture,
+  assertUnchanged, checkSession, runIngestContract, snapshot, visibleLanes, type IngestContractFixture,
 } from '../../journal/ingest-contract.js';
 import { DRAFT_KIND, Journal, TOMBSTONE_KIND } from '../../journal/journal.js';
 import { parsePiTranscript } from './history.js';
@@ -243,6 +243,39 @@ describe('pi transcript source', () => {
     expect(journal.entity('wb', 'turn:u1:end')?.payload).toMatchObject({
       runId: 'run-1', data: { commandId: 'c1', error: 'pi exited' },
     });
+    db.close();
+  });
+
+  it('rebuilds when switching back to a previously retired branch so entries keep chronological order', async () => {
+    const dir = workspace();
+    const file = join(dir, 's1.jsonl');
+    const session = new SessionFile(file, 's1');
+    session.prompt('u1').assistant('a1', [{ type: 'text', text: 'first' }]);
+    const fork = session.leaf;
+    session.prompt('u2').assistant('a2', [{ type: 'text', text: 'branch A' }]);
+    const branchALeaf = session.leaf;
+    const source = new PiTranscriptSource({ sessionId: 'wb', nativeSessionId: () => 's1', locate: async () => file });
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    const writer = JournalLaneWriter.open(journal, 'wb');
+    const signal = new AbortController().signal;
+    await pullLane(source, writer, signal);
+
+    // First rewind: switch to branch B (retires u2/a2 in place without rebuilding).
+    const genBefore = writer.generation;
+    session.leaf = fork;
+    session.prompt('u3').assistant('a3', [{ type: 'text', text: 'branch B' }]);
+    await pullLane(source, writer, signal);
+    expect(writer.generation).toBe(genBefore);
+
+    // Switch back to branch A (resurrecting u2/a2): must rebuild cleanly with u1 -> a1 -> u2 -> a2 -> u4 -> a4.
+    session.leaf = branchALeaf;
+    session.prompt('u4').assistant('a4', [{ type: 'text', text: 'continued A' }]);
+    await pullLane(source, writer, signal);
+    expect(writer.generation).not.toBe(genBefore);
+    const visibleIds = visibleLanes(journal, 'wb').main!.filter(e => !e.kind.startsWith('meta.')).map(e => e.nativeId);
+    expect(visibleIds.filter(id => id.startsWith('msg:'))).toEqual(['msg:u1', 'msg:a1:0', 'msg:u2', 'msg:a2:0', 'msg:u4', 'msg:a4:0']);
+    checkSession(journal, 'wb');
     db.close();
   });
 });

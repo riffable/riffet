@@ -557,4 +557,26 @@ describe('Cursor transcript source', () => {
     expect(turnEnds(lanes).at(-1)).toEqual(['req-2', 'interrupted']);
     checkSession(lanes);
   });
+
+  it('rebuilds when a rewind expands parts at an earlier slot or reuses slots after a retired turn barrier', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-ingest-'));
+    dirs.push(dir);
+    const stepOne: ChatMessage = { role: 'assistant', content: [{ type: 'text', text: 'One.' }] };
+    const stepTwoParts: ChatMessage = { role: 'assistant', content: [{ type: 'reasoning', text: 'Think.' }, { type: 'text', text: 'One expanded.' }] };
+    writeChat(dir, 'chat-1', { messages: [...SYSTEM, ask('turn 1', 'req-1'), stepOne, ask('turn 2', 'req-2'), say('Two.')] });
+    const source = new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1' });
+    const { lanes, writer } = openLanes();
+    const pull = () => pullLane(source, writer, new AbortController().signal);
+    await pull();
+    const gen1 = writer.generation;
+
+    // Replacing slot 3 (1 part -> 2 parts) while slots 4..5 already exist would sort 3:1 after 4:0 without a rebuild.
+    writeChat(dir, 'chat-1', { messages: [...SYSTEM, ask('turn 1', 'req-1'), stepTwoParts, ask('turn 2', 'req-2'), say('Two.')] });
+    expect(await pull()).toEqual({ caughtUp: false });
+    expect(writer.generation).not.toBe(gen1);
+    expect(await pull()).toEqual({ caughtUp: true });
+    const visible = rowsOf(lanes).filter(row => !row.kind.startsWith('meta.'));
+    expect(visible.map(row => row.nativeId)).toEqual(['2:0', '3:0', '3:1', '4:0', '5:0']);
+    checkSession(lanes);
+  });
 });

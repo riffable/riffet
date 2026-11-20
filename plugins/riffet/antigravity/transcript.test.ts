@@ -183,3 +183,46 @@ it('separates executions at reused source coordinates and retains ancestor ident
   expect(agyStepIdentity({ ...s, trajectoryId: '33333333-3333-3333-3333-333333333333' }, user, 0)).toBe(original);
   expect(agyStepIdentity(s, { ...user, metadata: { ...user.metadata, executionId: 'run-b' } }, 0)).not.toBe(original);
 });
+
+it('rebuilds when a step is inserted ahead of existing steps and commits in snapshot step order', async () => {
+  const s = snapshot();
+  s.steps[1].status = 'CORTEX_STEP_STATUS_DONE';
+  const batches: any[] = [];
+  let rebuilds = 0;
+  const w = {
+    lane: 'main',
+    generation: 'g1',
+    cursor: null as string | null,
+    commit(batch: any) {
+      batches.push(batch);
+      w.cursor = batch.cursor;
+    },
+    turnStarted() {},
+    turnEnded() {},
+    turnEndStatus() { return undefined; },
+    turnReopened() {},
+    retireSubagent() {},
+    rebuild() {
+      rebuilds += 1;
+      w.generation = `g${rebuilds + 1}`;
+      w.cursor = null;
+      batches.length = 0;
+    },
+  };
+  const reader = source(() => s),
+    signal = new AbortController().signal;
+  await reader.pull(w as unknown as AgentLaneWriter, signal);
+  expect(rebuilds).toBe(0);
+
+  // Insert an orphan notice between turn 1's user input and planner response (ahead of an existing step).
+  s.steps.splice(1, 0, {
+    type: 'CORTEX_STEP_TYPE_SYSTEM_MESSAGE',
+    status: 'CORTEX_STEP_STATUS_DONE',
+    metadata: { createdAt: '2026-11-13T00:00:00Z', sourceTrajectoryStepInfo: { trajectoryId: tid, stepIndex: 99, cascadeId: cid } },
+    systemMessage: { message: 'Injected notice' },
+  });
+  await reader.pull(w as unknown as AgentLaneWriter, signal);
+  expect(rebuilds).toBe(1);
+  const committedIds = batches.flatMap(b => (b.events ?? []).map((e: any) => e.nativeId));
+  expect(committedIds).toEqual(mapAgySnapshot(s).order);
+});

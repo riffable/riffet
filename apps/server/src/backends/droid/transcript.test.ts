@@ -227,4 +227,38 @@ describe('Droid transcript source', () => {
     checkSession(journal, 'wb');
     db.close();
   });
+
+  it('rebuilds and restores retired ancestors when rewinding back onto an earlier branch', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-droid-transcript-'));
+    dirs.push(dir);
+    const file = new SessionFile(join(dir, 's1.jsonl'), 's1').turn('u1');
+    const fork = file.leaf;
+    file.turn('u2');
+    const branchALeaf = file.leaf;
+    const source = () => new DroidTranscriptSource({ sessionId: 'wb', nativeSessionId: () => 's1', locate: async id => join(dir, `${id}.jsonl`) });
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    const writer = await importAll(source(), journal);
+
+    // First rewind: branch B retires u2 in place without rebuilding.
+    const gen1 = writer.generation;
+    file.leaf = fork;
+    file.turn('u3');
+    await pullLane(source(), writer, new AbortController().signal);
+    expect(writer.generation).toBe(gen1);
+    expect(journal.entity('wb', 'msg:u2')?.kind).toBe('tombstone');
+
+    // Second rewind: return to branch A after u2 -> rebuilds cleanly, restores u2 before u4, and stays stable.
+    file.leaf = branchALeaf;
+    file.turn('u4');
+    await pullLane(source(), writer, new AbortController().signal);
+    expect(writer.generation).not.toBe(gen1);
+    const promptIds = visibleLanes(journal, 'wb').main!.filter(row => row.kind === 'user_message_chunk').map(row => row.nativeId);
+    expect(promptIds).toEqual(['msg:u1', 'msg:u2', 'msg:u4']);
+    const head = journal.peek('wb')!.lastSeq;
+    await pullLane(source(), writer, new AbortController().signal);
+    expect(journal.peek('wb')!.lastSeq).toBe(head);
+    checkSession(journal, 'wb');
+    db.close();
+  });
 });

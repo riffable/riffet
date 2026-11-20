@@ -34,7 +34,7 @@ verify:
 
 ## 排障
 
-- 会话页行重复或顺序错乱：查该会话 `journal_events` 中同一 `native_id` 是否有多个 `seq` 且 `rev` 不递增，再回到后端的 id 生成。
+- 会话页行重复或顺序错乱：查该会话 `journal_events` 中同一 `native_id` 是否有多个 `seq` 且 `rev` 不递增，以及后端是否在新实体落到已有实体之前、改名/扩充 part 或复活已 tombstone 槽位时未调用 `rebuild('identity-changed')`（`Journal` 按 `rev=1` 的 `seq` 永久固定 `identity` 排序）。
 - 回合不结束或被误判结束：查 `kind='meta.turn_ended'` 行与随后的 tombstone，对照 `ingest.ts#hasTurnEnded`。
 - 读回日志失败：`riffet logs --scope journal`（`reading <key> back failed`）。
 - 存储迁移或整理问题：`riffet logs --scope storage`；`riffet doctor --compact` 整理数据库。

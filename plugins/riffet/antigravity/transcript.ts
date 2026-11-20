@@ -84,6 +84,8 @@ interface MappedTurn {
 export interface MappedAgyTranscript {
   events: NativeWorkbenchEvent[];
   drafts: Array<{ finalId: string; event: NativeWorkbenchEvent }>;
+  /** Unique `nativeId`s of `events` and `drafts` in snapshot step order. */
+  order: string[];
   turns: MappedTurn[];
   children: Array<{ toolCallId: string; agentId: string; title?: string; prompt?: string; subagentType?: string; model?: string }>;
   usage: Array<{ runId?: string; usage: AgentUsageRecord }>;
@@ -104,9 +106,15 @@ export function mapLiveSnapshot(snapshot: AgySnapshot, sessionId: string): Mappe
   return mapped;
 }
 export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgyTranscript {
-  const out: MappedAgyTranscript = { events: [], drafts: [], turns: [], children: [], usage: [], jobs: [], warnings: [] };
+  const out: MappedAgyTranscript = { events: [], drafts: [], order: [], turns: [], children: [], usage: [], jobs: [], warnings: [] };
   const turns = new Map<string, MappedTurn>(),
-    calls = new Set<string>();
+    calls = new Set<string>(),
+    ordered = new Set<string>();
+  const noteOrder = (id: string) => {
+    if (ordered.has(id)) return;
+    ordered.add(id);
+    out.order.push(id);
+  };
   snapshot.steps.forEach((step, index) => {
     const md = record(step.metadata),
       baseId = agyStepIdentity(snapshot, step, index),
@@ -131,6 +139,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
         nativeAliases: [`agy:${baseId}`],
         ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}),
       };
+      noteOrder(nativeId);
       if (final) out.events.push(value);
       else out.drafts.push({ finalId: nativeId, event: value });
     };
@@ -338,6 +347,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
           },
           { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
         );
+        noteOrder(activity.nativeId);
         if (settled(step)) out.events.push(activity);
         else out.drafts.push({ finalId: activity.nativeId, event: activity });
       } else {
@@ -358,28 +368,29 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
             },
             { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
           );
+          noteOrder(activity.nativeId);
           out.events.push(activity);
         } else {
           const kind = text(step.type) ?? String(index);
           out.warnings.push(`Unmapped Antigravity step ${kind}.`);
           // Keep a visible placeholder when a native format grows a new non-tool payload.
-          out.events.push(
-            activityEvent(
-              sessionId,
-              {
-                id: `antigravity:${baseId}:notice`,
-                kind: 'local_command',
-                status: settled(step)
-                  ? /_(?:ERROR|CANCELED|INTERRUPTED)$/.test(text(step.status) ?? '')
-                    ? 'failed'
-                    : 'completed'
-                  : 'unknown',
-                title: kind.replace(/^CORTEX_STEP_TYPE_/, ''),
-                startedAt: createdAt,
-              },
-              { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
-            ),
+          const activity = activityEvent(
+            sessionId,
+            {
+              id: `antigravity:${baseId}:notice`,
+              kind: 'local_command',
+              status: settled(step)
+                ? /_(?:ERROR|CANCELED|INTERRUPTED)$/.test(text(step.status) ?? '')
+                  ? 'failed'
+                  : 'completed'
+                : 'unknown',
+              title: kind.replace(/^CORTEX_STEP_TYPE_/, ''),
+              startedAt: createdAt,
+            },
+            { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
           );
+          noteOrder(activity.nativeId);
+          out.events.push(activity);
         }
       }
     }
@@ -420,6 +431,11 @@ interface Cursor {
   drafts: Array<[string, string]>;
   turns: Array<[string, string]>;
   children: Array<[string, string]>;
+  order?: string[];
+  retired?: string[];
+}
+function stringList(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.length <= 400_000 && value.every(i => typeof i === 'string'));
 }
 function cursor(raw: string | null): Cursor | undefined {
   if (!raw) return undefined;
@@ -439,66 +455,123 @@ function cursor(raw: string | null): Cursor | undefined {
         Array.isArray(c[key]) &&
         c[key].length <= 400_000 &&
         c[key].every((entry: unknown) => Array.isArray(entry) && entry.length === 2 && entry.every(i => typeof i === 'string')),
-    )
+    ) ||
+    !stringList(c.order) ||
+    !stringList(c.retired)
   )
     throw new Error('Invalid Antigravity transcript cursor');
   return c as Cursor;
 }
+function needsIdentityRebuild(previous: Cursor, nextOrder: readonly string[]): boolean {
+  const prevOrder = previous.order ?? [...previous.events.map(([id]) => id), ...previous.drafts.map(([id]) => id)];
+  const prevIndex = new Map(prevOrder.map((id, index) => [id, index]));
+  const prevRetired = new Set(previous.retired);
+  let lastExisting = -1;
+  let seenNew = false;
+  for (const id of nextOrder) {
+    if (prevRetired.has(id)) return true;
+    const idx = prevIndex.get(id);
+    if (idx === undefined) {
+      seenNew = true;
+    } else {
+      if (seenNew || idx < lastExisting) return true;
+      lastExisting = idx;
+    }
+  }
+  return false;
+}
 function apply(w: AgentLaneWriter, snapshot: AgySnapshot, mapped: MappedAgyTranscript): void {
-  const previous = cursor(w.cursor);
-  if (previous && previous.conversationId !== snapshot.conversationId) {
+  let previous = cursor(w.cursor);
+  if (previous && (previous.conversationId !== snapshot.conversationId || needsIdentityRebuild(previous, mapped.order))) {
     w.rebuild('identity-changed');
-    return;
+    previous = undefined;
   }
   const events = mapped.events.map(e => [e.nativeId, digest(e)] as [string, string]),
     drafts = mapped.drafts.map(e => [e.finalId, digest(e.event)] as [string, string]),
     turns = mapped.turns.map(t => [t.id, digest(t)] as [string, string]),
     children = mapped.children.map(c => [c.toolCallId, c.agentId] as [string, string]);
-  const next: Cursor = { version: 1, conversationId: snapshot.conversationId, events, drafts, turns, children },
-    encoded = JSON.stringify(next);
-  if (encoded === w.cursor) return;
   const oldEvents = new Map(previous?.events),
     oldDrafts = new Map(previous?.drafts),
     oldTurns = new Map(previous?.turns),
     currentIds = new Set([...events, ...drafts].map(([id]) => id)),
     turnIds = new Set(turns.map(([id]) => id));
   const retire: string[] = [];
+  const retiredContent = new Set(previous?.retired);
   for (const [id] of previous?.turns ?? []) if (!turnIds.has(id)) retire.push(`meta:turn:${id}:ended`, `meta:turn:${id}:started`);
-  for (const [id] of [...(previous?.events ?? []), ...(previous?.drafts ?? [])]) if (!currentIds.has(id)) retire.push(id);
+  for (const [id] of [...(previous?.events ?? []), ...(previous?.drafts ?? [])]) {
+    if (!currentIds.has(id)) {
+      retire.push(id);
+      retiredContent.add(id);
+    }
+  }
+  const next: Cursor = {
+      version: 1,
+      conversationId: snapshot.conversationId,
+      events,
+      drafts,
+      turns,
+      children,
+      order: mapped.order,
+      ...(retiredContent.size ? { retired: [...retiredContent] } : {}),
+    },
+    encoded = JSON.stringify(next);
+  if (previous && encoded === w.cursor) return;
   for (const [id, child] of previous?.children ?? [])
     if (!children.some(([call, agent]) => call === id && agent === child)) w.retireSubagent(id);
   // Retire first; retain end-before-start ordering for wholly removed turns.
   if (retire.length) w.commit({ events: [], retire: [...new Set(retire)], cursor: w.cursor });
-  const changedEvents = mapped.events.filter(e => oldEvents.get(e.nativeId) !== digest(e));
-  const changedDrafts = mapped.drafts.filter(e => oldDrafts.get(e.finalId) !== digest(e.event));
-  const turnSet = new Set(mapped.turns.map(t => t.id));
-  const orphanEvents = changedEvents.filter(e => !e.nativeTurnId || !turnSet.has(e.nativeTurnId));
-  const orphanDrafts = changedDrafts.filter(e => !e.event.nativeTurnId || !turnSet.has(e.event.nativeTurnId));
-  if (orphanEvents.length || orphanDrafts.length) w.commit({ events: orphanEvents, drafts: orphanDrafts, cursor: w.cursor });
-  const byTurn = new Map<string, NativeWorkbenchEvent[]>(),
-    draftsByTurn = new Map<string, MappedAgyTranscript['drafts']>();
-  for (const e of changedEvents)
-    if (e.nativeTurnId) {
-      const rows = byTurn.get(e.nativeTurnId) ?? [];
-      rows.push(e);
-      byTurn.set(e.nativeTurnId, rows);
+  const changedEvents = new Map(mapped.events.filter(e => oldEvents.get(e.nativeId) !== digest(e)).map(e => [e.nativeId, e]));
+  const changedDrafts = new Map(mapped.drafts.filter(e => oldDrafts.get(e.finalId) !== digest(e.event)).map(e => [e.finalId, e]));
+  const turnById = new Map(mapped.turns.map(t => [t.id, t]));
+  const lastIndexByTurn = new Map<string, number>();
+  mapped.order.forEach((id, index) => {
+    const turnId = (changedEvents.get(id) ?? changedDrafts.get(id)?.event)?.nativeTurnId;
+    if (turnId && turnById.has(turnId)) lastIndexByTurn.set(turnId, index);
+  });
+  const startedTurns = new Set<string>(),
+    endedTurns = new Set<string>();
+  let pendingEvents: NativeWorkbenchEvent[] = [],
+    pendingDrafts: MappedAgyTranscript['drafts'] = [];
+  const flushPending = () => {
+    if (!pendingEvents.length && !pendingDrafts.length) return;
+    w.commit({ events: pendingEvents, drafts: pendingDrafts, cursor: w.cursor });
+    pendingEvents = [];
+    pendingDrafts = [];
+  };
+  const openTurn = (t: MappedTurn) => {
+    if (startedTurns.has(t.id)) return;
+    startedTurns.add(t.id);
+    if (oldTurns.get(t.id) === digest(t)) return;
+    flushPending();
+    if (!t.status && w.turnEndStatus(t.id)) w.turnReopened(t.id, t.at);
+    w.turnStarted(t.id, t.at);
+  };
+  mapped.order.forEach((id, index) => {
+    const ev = changedEvents.get(id),
+      dr = changedDrafts.get(id);
+    if (!ev && !dr) return;
+    const turnId = (ev ?? dr!.event).nativeTurnId,
+      turn = turnId ? turnById.get(turnId) : undefined;
+    if (turn) openTurn(turn);
+    // Keep events and drafts strictly in snapshot order since commit() appends events before drafts.
+    if (ev) {
+      if (pendingDrafts.length) flushPending();
+      pendingEvents.push(ev);
+    } else if (dr) {
+      if (pendingEvents.length) flushPending();
+      pendingDrafts.push(dr);
     }
-  for (const d of changedDrafts)
-    if (d.event.nativeTurnId) {
-      const rows = draftsByTurn.get(d.event.nativeTurnId) ?? [];
-      rows.push(d);
-      draftsByTurn.set(d.event.nativeTurnId, rows);
+    if (turn && lastIndexByTurn.get(turn.id) === index && oldTurns.get(turn.id) !== digest(turn) && turn.status) {
+      flushPending();
+      w.turnEnded(turn.id, turn.status, turn.endedAt ?? turn.at, turn.error);
+      endedTurns.add(turn.id);
     }
+  });
+  flushPending();
   for (const t of mapped.turns) {
-    const changed = oldTurns.get(t.id) !== digest(t);
-    if (changed) {
-      if (!t.status && w.turnEndStatus(t.id)) w.turnReopened(t.id, t.at);
-      w.turnStarted(t.id, t.at);
-    }
-    const events = byTurn.get(t.id) ?? [],
-      drafts = draftsByTurn.get(t.id) ?? [];
-    if (events.length || drafts.length) w.commit({ events, drafts, cursor: w.cursor });
-    if (changed && t.status) w.turnEnded(t.id, t.status, t.endedAt ?? t.at, t.error);
+    if (oldTurns.get(t.id) === digest(t)) continue;
+    openTurn(t);
+    if (!endedTurns.has(t.id) && t.status) w.turnEnded(t.id, t.status, t.endedAt ?? t.at, t.error);
   }
   // Persist the cursor after lifecycle marks; a crash before this point replays idempotently.
   w.commit({ events: [], cursor: encoded });

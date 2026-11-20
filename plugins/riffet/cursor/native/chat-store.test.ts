@@ -182,6 +182,24 @@ describe('chat store', () => {
     reader.close();
   });
 
+  it('keeps an unarchived message after archived prefix items instead of hoisting it to index 0', () => {
+    dir = mkdtempSync(join(tmpdir(), 'chat-store-'));
+    const path = join(dir, 'store.db');
+    const [system, info] = conversation as [ChatMessage, ChatMessage];
+    const said = (value: string): ChatMessage => ({ role: 'assistant', content: [{ type: 'text', text: value }] });
+    const summary = (value: string): ChatMessage => ({ role: 'user', content: query(`Your conversation was summarized. ${value}`) });
+    const first: ChatMessage = { role: 'user', content: query('first') };
+    const notice: ChatMessage = { role: 'user', content: '<task_notification>done</task_notification>' };
+    const second: ChatMessage = { role: 'user', content: query('second') };
+    const opening = { messages: [system, info, first, said('one')], summary: summary('1') };
+    // Root retains archived system/info followed by an unarchived notice right before summary.
+    writeChat(path, [system, info, notice, opening.summary, second, said('two')], {}, undefined, [opening]);
+
+    const snap = new ChatReader(path).snapshot()!;
+    expect(snap.messageIds).toEqual([system, info, first, said('one'), notice, second, said('two')].map(blobId));
+    expect(snap.compactions).toMatchObject([{ summaryId: blobId(opening.summary), boundary: 4 }]);
+  });
+
   describe('the step in flight', () => {
     const asking = { id: 'step-1', role: 'assistant', content: [{ type: 'text', text: 'Two ways to go.' }, { type: 'tool-call', toolCallId: 'q1', toolName: 'AskQuestion', args: { questions: [] } }] };
     const answer: ChatMessage = { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'q1', toolName: 'AskQuestion', result: 'A' }] };

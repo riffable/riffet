@@ -795,10 +795,18 @@ describe('Codex transcript source', () => {
     native.turns().push(turn('t2', 20, [answer('msg_2', 'Next answer')]));
     await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
     native.turns()[0] = turn('t1', 10, [answer('msg_1', 'Same answer'), command('fc_1', 'files')], status);
-    await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
-    expect(journal.entity('s', 'thread-1:t1:item-1:assistant')?.kind).toBe('tombstone');
+    // Resolving t1 after t2 was already persisted rebuilds so t1's lasting rows stay before t2.
+    const recovery = fixture.source();
+    const recoveryWriter = JournalLaneWriter.open(journal, 's');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if ((await pullLane(recovery, recoveryWriter, signal)).caughtUp) break;
+    }
+    expect(journal.entity('s', 'thread-1:t1:item-1:assistant')).toBeUndefined();
     for (const part of ['call', 'result']) expect(journal.entity('s', `thread-1:t1:item-2:${part}`)).toBeUndefined();
     expect(journal.entity('s', 'thread-1:t1:msg_1:assistant')?.kind).toBe('agent_message_chunk');
+    const orderedIds = rowsOf(journal, 's').map(row => row.nativeId);
+    expect(orderedIds.indexOf('thread-1:t1:msg_1:assistant')).toBeLessThan(orderedIds.indexOf('thread-1:t2:msg_2:assistant'));
+    expect(orderedIds.indexOf('thread-1:t1:fc_1:call')).toBeLessThan(orderedIds.indexOf('thread-1:t2:msg_2:assistant'));
     expect(JSON.parse(journal.peek('s')!.ingestCursor!)).toMatchObject({ settled: 't2' });
     expect(JSON.parse(journal.peek('s')!.ingestCursor!).copies).toBeUndefined();
     const lastSeq = journal.head('s').lastSeq;
@@ -847,10 +855,12 @@ describe('Codex transcript source', () => {
     native.turns()[0] = turn('t0', 10, [answer('msg_0', 'Answer 0')]);
     const restarted = fixture.source();
     const recovered = JournalLaneWriter.open(journal, 's');
-    for (let attempt = 0; attempt < 5 && JSON.parse(recovered.cursor!).settled !== 't29'; attempt += 1) await pullLane(restarted, recovered, signal);
+    for (let attempt = 0; attempt < 6 && JSON.parse(recovered.cursor ?? '{}').settled !== 't29'; attempt += 1) await pullLane(restarted, recovered, signal);
     expect(JSON.parse(recovered.cursor!)).toMatchObject({ settled: 't29' });
-    expect(journal.entity('s', 'thread-1:t0:item-1:assistant')?.kind).toBe('tombstone');
+    expect(journal.entity('s', 'thread-1:t0:item-1:assistant')).toBeUndefined();
     expect(journal.entity('s', 'thread-1:t0:msg_0:assistant')?.kind).toBe('agent_message_chunk');
+    const orderedIds = rowsOf(journal, 's').map(row => row.nativeId);
+    expect(orderedIds.indexOf('thread-1:t0:msg_0:assistant')).toBeLessThan(orderedIds.indexOf('thread-1:t1:msg_1:assistant'));
     checkSession(journal, 's');
   });
 
@@ -882,6 +892,30 @@ describe('Codex transcript source', () => {
     expect(journal.entity(laneKey('s', 'sub:ctc_1'), 'child-1:c1-t1:c1-a1:assistant')?.kind).toBe('agent_message_chunk');
     native.turns()[0] = turn('t1', 10, stable);
     await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
+    checkSession(journal, 's');
+  });
+
+  it('rebuilds when a provisional item resolves to a lasting id ahead of an already-committed lasting item in the same turn', async () => {
+    const fixture = codexFixture();
+    const { native } = fixture;
+    native.threads.set('thread-1', [turn('t1', 10, [answer('item-1', 'Before tool'), command('fc_1', 'files')], 'inProgress')]);
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const signal = new AbortController().signal;
+    const writer = JournalLaneWriter.open(journal, 's');
+    const source = fixture.source();
+    await pullLane(source, writer, signal);
+    const gen1 = writer.generation;
+
+    // Resolving item-1 -> msg_1 after fc_1 was already committed would put msg_1 after fc_1 without a rebuild.
+    native.turns()[0] = turn('t1', 10, [answer('msg_1', 'Before tool'), command('fc_1', 'files')], 'completed');
+    const recovery = fixture.source();
+    const recoveryWriter = JournalLaneWriter.open(journal, 's');
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if ((await pullLane(recovery, recoveryWriter, signal)).caughtUp) break;
+    }
+    expect(recoveryWriter.generation).not.toBe(gen1);
+    const orderedIds = rowsOf(journal, 's').map(row => row.nativeId);
+    expect(orderedIds.indexOf('thread-1:t1:msg_1:assistant')).toBeLessThan(orderedIds.indexOf('thread-1:t1:fc_1:call'));
     checkSession(journal, 's');
   });
 });

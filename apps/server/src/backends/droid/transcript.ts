@@ -59,6 +59,8 @@ export interface DroidTranscriptOptions {
 interface ReadState {
   /** Byte offset of the next line. */
   o: number;
+  /** Starting byte offset of this lane's read window (non-zero only for a tail scratch window). */
+  start?: number;
   /** The last message read; a message naming another parent starts a new branch (a rewind). */
   leaf?: string;
   /** The turn events go to, and whether it still runs. */
@@ -83,9 +85,9 @@ interface ReadState {
 }
 
 function encode(state: ReadState, offset: number): string {
-  const { leaf, turn, open, run, auto, pending, cue, at, ff, kids, sa } = state;
+  const { start, leaf, turn, open, run, auto, pending, cue, at, ff, kids, sa } = state;
   return JSON.stringify({
-    o: offset, leaf, turn, open, run, auto, ...(pending?.length ? { pending } : {}), cue, at,
+    o: offset, ...(start ? { start } : {}), leaf, turn, open, run, auto, ...(pending?.length ? { pending } : {}), cue, at,
     ...(ff && Object.keys(ff).length ? { ff } : {}), ...(kids && Object.keys(kids).length ? { kids } : {}),
     ...(sa && Object.keys(sa).length ? { sa } : {}),
   });
@@ -202,8 +204,11 @@ export class DroidTranscriptSource implements TranscriptSource {
       if (window > 0) w.openScratch();
     }
     const scratch = w.scratch;
-    if (scratch && !await this.read(scratch, path, decode(scratch.cursor) ?? { o: window ?? await tailStart(path, size) }, Infinity, signal, true)) return { caughtUp: false };
-    const caughtUp = await this.read(w, path, decode(w.cursor) ?? { o: 0 }, PULL_BYTES, signal, !scratch);
+    if (scratch) {
+      const start = window ?? await tailStart(path, size);
+      if (!await this.read(scratch, path, decode(scratch.cursor) ?? { o: start, start }, Infinity, signal, true, true)) return { caughtUp: false };
+    }
+    const caughtUp = await this.read(w, path, decode(w.cursor) ?? { o: 0 }, PULL_BYTES, signal, !scratch, false);
     return { caughtUp: caughtUp && !signal.aborted };
   }
 
@@ -221,8 +226,10 @@ export class DroidTranscriptSource implements TranscriptSource {
   async drain(w: LaneWriter): Promise<void> {
     const path = await this.path();
     if (!path) return;
+    const isScratch = w.scratch !== undefined;
     const target = w.scratch ?? w;
-    await this.read(target, path, decode(target.cursor) ?? { o: 0 }, Infinity, undefined, false);
+    const done = await this.read(target, path, decode(target.cursor) ?? { o: 0 }, Infinity, undefined, false, isScratch);
+    if (!done && isScratch && w.scratch === undefined) await this.read(w, path, { o: 0 }, Infinity, undefined, false, false);
   }
 
   command(messageId: string): { commandId?: string; runId?: string } | undefined {
@@ -255,8 +262,8 @@ export class DroidTranscriptSource implements TranscriptSource {
   }
 
   /** Reads `path` into `w` from `state`; resolves whether it reached the end. `live` adds what the process knows to a log that serves. */
-  private async read(w: LaneWriter, path: string, state: ReadState, limit: number, signal: AbortSignal | undefined, live: boolean): Promise<boolean> {
-    return await new LaneRead(this, w, path, state, w.lane === 'main', signal).run(limit, live);
+  private async read(w: LaneWriter, path: string, state: ReadState, limit: number, signal: AbortSignal | undefined, live: boolean, isScratch: boolean): Promise<boolean> {
+    return await new LaneRead(this, w, path, state, w.lane === 'main', isScratch, signal).run(limit, live);
   }
 }
 
@@ -272,6 +279,7 @@ class LaneRead {
     readonly state: ReadState,
     /** The conversation's own lane: its turns are runs, with outcomes to show. */
     private readonly main: boolean,
+    private readonly isScratch: boolean,
     private readonly signal: AbortSignal | undefined,
   ) {}
 
@@ -285,7 +293,7 @@ class LaneRead {
       else if (entry?.type === 'compaction_state') this.compaction(entry, line);
       else {
         const message = messageFromJsonl(entry);
-        if (message) await this.message(message, line);
+        if (message && !await this.message(message, line)) return false;
       }
       if (this.events.length >= COMMIT_EVENTS || performance.now() - slice >= SLICE_MS) this.flush(line.end);
       if (performance.now() - slice >= SLICE_MS) {
@@ -324,9 +332,11 @@ class LaneRead {
     this.retired = [];
   }
 
-  private async message(message: DroidMessage, line: Line): Promise<void> {
+  private async message(message: DroidMessage, line: Line, replaying = false): Promise<boolean> {
     const { state, w } = this;
-    if (message.parentId && state.leaf && message.parentId !== state.leaf) await this.rewind(message, line.start);
+    if (!replaying && message.parentId && state.leaf && message.parentId !== state.leaf) {
+      if (!await this.rewind(message, line.start)) return false;
+    }
     const hidden = isHiddenMessage(message);
     const prompt = !hidden && isDroidPrompt(message);
     const command = prompt && this.main ? this.source.command(message.id) : undefined;
@@ -376,6 +386,7 @@ class LaneRead {
     this.noteBackgroundCalls(message);
     state.leaf = message.id;
     state.at = message.createdAt;
+    return true;
   }
 
   private outcome(entry: Record<string, unknown>, line: Line): void {
@@ -419,23 +430,71 @@ class LaneRead {
   /**
    * A message continuing from another than the last one: Droid rewound, and what the branch it left holds
    * leaves the transcript. Read from the start of the file, which is rare enough to afford.
+   * When an ancestor in the resumed branch is missing (retired by an earlier rewind, or outside a
+   * tail scratch window), rebuild the lane and replay only the kept ancestor chain in order.
    */
-  private async rewind(message: DroidMessage, at: number): Promise<void> {
+  private async rewind(message: DroidMessage, at: number): Promise<boolean> {
     const { lines } = await readLines(this.path, 0, at);
-    const byId = new Map<string, DroidMessage>();
+    const byId = new Map<string, { message: DroidMessage; start: number }>();
     for (const line of lines) {
       const known = messageFromJsonl(entryOf(line.text));
-      if (known) byId.set(known.id, known);
+      if (known) byId.set(known.id, { message: known, start: line.start });
     }
     const kept = new Set([message.id]);
-    for (let id = message.parentId; id && !kept.has(id); id = byId.get(id)?.parentId) kept.add(id);
+    const ancestors: Array<{ message: DroidMessage; start: number }> = [];
+    for (let id = message.parentId; id && !kept.has(id); id = byId.get(id)?.message.parentId) {
+      kept.add(id);
+      const found = byId.get(id);
+      if (found) ancestors.push(found);
+    }
+    const windowStart = this.state.start ?? 0;
+    const buffered = new Set(this.events.map(event => event.nativeId));
+    const parentRow = message.parentId ? byId.get(message.parentId) : undefined;
+    let missingAncestor = Boolean(parentRow && parentRow.start < windowStart);
+    if (!missingAncestor) {
+      for (const { message: ancestor, start } of ancestors) {
+        if (start < windowStart || isHiddenMessage(ancestor)) continue;
+        const projected = projectDroidMessage({ ...ancestor, seq: ancestor.seq ?? 0 }, { sessionId: this.source.sessionId });
+        if (projected.some(event => !buffered.has(event.nativeId) && !this.w.event(event.nativeId))) {
+          missingAncestor = true;
+          break;
+        }
+      }
+    }
+    if (missingAncestor) {
+      this.w.rebuild('identity-changed');
+      if (this.isScratch) return false;
+      this.events = [];
+      this.retired = [];
+      for (const key of Object.keys(this.state) as Array<keyof ReadState>) delete this.state[key];
+      this.state.o = 0;
+      let onKeptBranch = false;
+      for (const line of lines) {
+        const entry = entryOf(line.text);
+        if (entry?.type === 'agent_turn_outcome') {
+          const turnId = str(entry.turnId);
+          if (turnId && kept.has(turnId)) this.outcome(entry, line);
+        } else if (entry?.type === 'compaction_state') {
+          if (onKeptBranch) this.compaction(entry, line);
+        } else {
+          const prior = messageFromJsonl(entry);
+          if (prior) {
+            onKeptBranch = kept.has(prior.id);
+            if (onKeptBranch) await this.message(prior, line, true);
+          }
+        }
+        if (this.events.length >= COMMIT_EVENTS) this.flush(line.end);
+      }
+      this.flush(at);
+      return true;
+    }
     const left: DroidMessage[] = [];
-    for (let id = this.state.leaf, seen = new Set<string>(); id && !kept.has(id) && !seen.has(id); id = byId.get(id)?.parentId) {
+    for (let id = this.state.leaf, seen = new Set<string>(); id && !kept.has(id) && !seen.has(id); id = byId.get(id)?.message.parentId) {
       seen.add(id);
-      const gone = byId.get(id);
+      const gone = byId.get(id)?.message;
       if (gone) left.push(gone);
     }
-    if (!left.length) return;
+    if (!left.length) return true;
     const prompts = new Set(left.filter(isDroidPrompt).map(item => item.id));
     for (const item of left) this.retired.push(...projectDroidMessage({ ...item, seq: item.seq ?? 0 }, { sessionId: this.source.sessionId }).map(event => event.nativeId));
     this.retired.push(...[...prompts].map(droidTurnEndId));
@@ -448,13 +507,14 @@ class LaneRead {
       w.turnEnded(state.turn!, 'interrupted', when);
       Object.assign(state, { open: undefined, run: undefined, auto: undefined });
     }
+    return true;
   }
 
   /** Reads a subagent's own session file into its lane; resolves whether it is still worth following. */
   private async follow(toolCallId: string, childId: string, settled: boolean, info: SubagentInfo = {}): Promise<boolean> {
     try { validateDroidSessionId(childId); } catch { return false; }
     const child = this.w.child(toolCallId, childId, { ...this.state.sa?.[toolCallId], ...info });
-    const read = new LaneRead(this.source, child, join(dirname(this.path), `${childId}.jsonl`), decode(child.cursor) ?? { o: 0 }, false, this.signal);
+    const read = new LaneRead(this.source, child, join(dirname(this.path), `${childId}.jsonl`), decode(child.cursor) ?? { o: 0 }, false, false, this.signal);
     const reached = await read.run(Infinity, false);
     // Its result in the parent means it is done; a live one is done once its turn has ended.
     return !(reached && (settled || (read.state.turn !== undefined && !read.state.open)));

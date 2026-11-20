@@ -100,13 +100,15 @@ interface ReadState {
   d?: Array<{ i: string; t: string }>;
   /** Assistant message times whose entry is already committed; a stale live block for one must not return as a draft. */
   c?: string[];
+  /** Entry ids retired by an earlier rewind; switching back to one rebuilds so Journal keeps chronological order. */
+  r?: string[];
 }
 
 function encode(state: ReadState, offset: number): string {
-  const { p, leaf, turn, open, run, cmd, last, at, b, d, c } = state;
+  const { p, leaf, turn, open, run, cmd, last, at, b, d, c, r } = state;
   return JSON.stringify({
     o: offset, p, leaf, turn, open, run, cmd, last, at,
-    ...(b?.length ? { b } : {}), ...(d?.length ? { d } : {}), ...(c?.length ? { c } : {}),
+    ...(b?.length ? { b } : {}), ...(d?.length ? { d } : {}), ...(c?.length ? { c } : {}), ...(r?.length ? { r } : {}),
   });
 }
 
@@ -312,7 +314,7 @@ export class PiTranscriptSource implements TranscriptSource {
     const state = decode(w.cursor) ?? { o: 0 };
     // A moved or truncated file is read again by id, never as another conversation (G8).
     if ((state.p && state.p !== path) || state.o > size) {
-      await this.reimport(w, path, state, signal);
+      await this.reimport(w, path, state, signal, false);
       return { caughtUp: !signal.aborted };
     }
     let window: number | undefined;
@@ -321,8 +323,8 @@ export class PiTranscriptSource implements TranscriptSource {
       if (window > 0) w.openScratch();
     }
     const scratch = w.scratch;
-    if (scratch && !await this.read(scratch, path, decode(scratch.cursor) ?? { o: window ?? await tailStart(path, size) }, Infinity, signal, true)) return { caughtUp: false };
-    const caughtUp = await this.read(w, path, decode(w.cursor) ?? { o: 0 }, PULL_BYTES, signal, !scratch);
+    if (scratch && !await this.read(scratch, path, decode(scratch.cursor) ?? { o: window ?? await tailStart(path, size) }, Infinity, signal, true, true)) return { caughtUp: false };
+    const caughtUp = await this.read(w, path, decode(w.cursor) ?? { o: 0 }, PULL_BYTES, signal, !scratch, false);
     return { caughtUp: caughtUp && !signal.aborted };
   }
 
@@ -340,14 +342,17 @@ export class PiTranscriptSource implements TranscriptSource {
   async drain(w: LaneWriter): Promise<void> {
     const path = await this.path();
     if (!path) return;
+    const isScratch = w.scratch !== undefined;
     const target = w.scratch ?? w;
     const state = decode(target.cursor) ?? { o: 0 };
     const size = await sizeOf(path);
     if (size !== undefined && ((state.p && state.p !== path) || state.o > size)) {
-      await this.reimport(target, path, state, new AbortController().signal);
+      const done = await this.reimport(target, path, state, new AbortController().signal, isScratch);
+      if (!done && isScratch) await this.reimport(w, path, { o: 0 }, new AbortController().signal, false);
       return;
     }
-    await this.read(target, path, state, Infinity, undefined, false);
+    const done = await this.read(target, path, state, Infinity, undefined, false, isScratch);
+    if (!done && isScratch && w.scratch === undefined) await this.reimport(w, path, { o: 0 }, new AbortController().signal, false);
   }
 
   /**
@@ -392,23 +397,53 @@ export class PiTranscriptSource implements TranscriptSource {
 
   /** Publishes what a running process streams even when its file does not exist or names no prompt yet. */
   private publish(w: LaneWriter, state: ReadState): void {
-    new LaneRead(this, w, '', state, true, undefined).publishDrafts(state.o);
+    new LaneRead(this, w, '', state, true, false, undefined).publishDrafts(state.o);
   }
 
   /** Reads `path` into `w` from `state`; resolves whether it reached the end. `live` adds what the process knows to a log that serves. */
-  private async read(w: LaneWriter, path: string, state: ReadState, limit: number, signal: AbortSignal | undefined, live: boolean): Promise<boolean> {
-    return await new LaneRead(this, w, path, state, w.lane === 'main', signal).run(limit, live);
+  private async read(w: LaneWriter, path: string, state: ReadState, limit: number, signal: AbortSignal | undefined, live: boolean, isScratch: boolean): Promise<boolean> {
+    return await new LaneRead(this, w, path, state, w.lane === 'main', isScratch, signal).run(limit, live);
   }
 
-  /** A moved, truncated or rewound file: retire the branch it left and project the active chain again. */
-  async reimport(w: LaneWriter, path: string, state: ReadState, signal: AbortSignal | undefined): Promise<void> {
+  /**
+   * A moved, truncated or rewound file: retire the branch it left and project the active chain again.
+   * Returns `false` when a scratch writer had to rebuild the lane (caller must stop writing to scratch).
+   */
+  async reimport(w: LaneWriter, path: string, state: ReadState, signal: AbortSignal | undefined, isScratch = false): Promise<boolean> {
     const nativeSessionId = this.options.nativeSessionId();
-    if (!nativeSessionId) return;
+    if (!nativeSessionId) return true;
     const loaded = await loadFile(path, nativeSessionId);
+    const prevIndex = new Map((state.b ?? []).map((row, index) => [row.i, index]));
+    const prevRetired = new Set(state.r);
+    let lastExisting = -1;
+    let seenNew = false;
+    let needsRebuild = false;
+    for (const entry of loaded.chain) {
+      if (prevRetired.has(entry.id)) { needsRebuild = true; break; }
+      const idx = prevIndex.get(entry.id);
+      if (idx === undefined) {
+        seenNew = true;
+      } else {
+        if (seenNew || idx < lastExisting) { needsRebuild = true; break; }
+        lastExisting = idx;
+      }
+    }
+    if (needsRebuild) {
+      w.rebuild('identity-changed');
+      if (isScratch) return false;
+      state.b = undefined;
+      state.d = undefined;
+      state.c = undefined;
+      state.r = undefined;
+      state.open = undefined;
+      state.turn = undefined;
+    }
     const newIds = new Set(loaded.chain.map(entry => entry.id));
     const retired: string[] = [...(state.d ?? []).map(draft => draft.i)];
+    const retiredEntries = new Set(state.r);
     for (const row of state.b ?? []) {
       if (newIds.has(row.i)) continue;
+      retiredEntries.add(row.i);
       retired.push(...row.e);
       retired.push(...this.options.live?.superseded?.(row.i) ?? []);
     }
@@ -417,6 +452,7 @@ export class PiTranscriptSource implements TranscriptSource {
     Object.assign(state, {
       o: loaded.end, p: path, leaf: loaded.leaf, turn: undefined, open: undefined, run: undefined,
       cmd: undefined, last: undefined, at: loaded.chain.at(-1)?.timestamp ?? at, d: undefined,
+      r: retiredEntries.size ? [...retiredEntries] : undefined,
     });
     const projected = loaded.chain.map(entry => ({
       entry,
@@ -504,7 +540,8 @@ export class PiTranscriptSource implements TranscriptSource {
       } else if (w.turnEndStatus(turn)) w.turnReopened(turn, new Date().toISOString());
       w.commit({ events: [], cursor: encode(state, loaded.end) });
     }
-    if (signal?.aborted) return;
+    if (signal?.aborted) return false;
+    return true;
   }
 
   private outcomeOf(chain: readonly PiEntry[], turnId: string, cold: boolean): PiTurnOutcome | undefined {
@@ -553,6 +590,7 @@ class LaneRead {
     readonly state: ReadState,
     /** The conversation's own lane: its turns are runs, with outcomes to show. */
     private readonly main: boolean,
+    private readonly isScratch: boolean,
     private readonly signal: AbortSignal | undefined,
   ) {}
 
@@ -567,8 +605,7 @@ class LaneRead {
       if (entry?.type !== 'session') {
         if (entry && this.state.leaf && entry.parentId !== this.state.leaf) {
           this.flush(line.start);
-          await this.source.reimport(this.w, this.path, this.state, this.signal);
-          return true;
+          return await this.source.reimport(this.w, this.path, this.state, this.signal, this.isScratch);
         }
         if (entry) this.entry(entry, line.start);
       }

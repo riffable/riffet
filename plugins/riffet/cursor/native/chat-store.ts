@@ -322,8 +322,21 @@ export class ChatReader {
         // next compaction archives the copy again. The archive already holds the prompt where it
         // was sent; keeping a copy repeats it and shifts every later position, so a receipt taken
         // before the compaction no longer finds its message.
+        // Unarchived messages ahead of the first archived message in the root prefix (e.g. system
+        // prompts excluded from the archive) belong before the archives; unarchived messages after
+        // an archived prefix item (e.g. a task_notification hoisted ahead of the summary) belong
+        // right after the archives rather than at index 0.
         const archived = new Set([...archives.values()].flat());
-        const expanded = messageIds.slice(0, summaryPosition).filter((id) => !archived.has(id));
+        const prefix = messageIds.slice(0, summaryPosition);
+        const firstArchived = prefix.findIndex((id) => archived.has(id));
+        const expanded = firstArchived < 0 ? [...prefix] : prefix.slice(0, firstArchived);
+        const preservedAfterArchive: Array<{ id: string; raw: number }> = [];
+        if (firstArchived >= 0) {
+          for (let index = firstArchived; index < prefix.length; index += 1) {
+            const id = prefix[index]!;
+            if (!archived.has(id)) preservedAfterArchive.push({ id, raw: index });
+          }
+        }
         const rawMessagePositions = new Map<number, number>();
         let previousShift: number | undefined;
         const append = (id: string) => {
@@ -345,6 +358,11 @@ export class ChatReader {
           // invent aliases in earlier roots that may never have contained these messages.
           previousShift = expanded.length - summaryPosition - 1;
         }
+        for (const { id, raw } of preservedAfterArchive) {
+          rawMessagePositions.set(expanded.length, raw);
+          expanded.push(id);
+        }
+        if (archives.size) previousShift = expanded.length - summaryPosition - 1;
         messageIds.slice(summaryPosition + 1).forEach(append);
         return { ...complete(expanded, rawMessagePositions), ...(compactions.length ? { compactions } : {}) };
       }

@@ -149,6 +149,10 @@ interface LaneState {
   compacting?: NativeActivity[];
   /** Ids a rewound history held past the point it changed and no read has written again yet; retired at the end. */
   stale?: string[];
+  /** Positions whose `<pos>:<part>` slots were retired in this generation (`[position, partCount]`). */
+  retired?: Array<[number, number]>;
+  /** True when a newer entity (e.g. compaction activity or abandoned live turn end) landed after a slot was retired. */
+  retiredBarrier?: true;
 }
 
 function parseState(cursor: string): LaneState | undefined {
@@ -481,6 +485,10 @@ class LaneRead {
   private readonly produced = new Map<number, number>();
   /** See `LaneState.stale`. */
   private stale: Set<string>;
+  /** See `LaneState.retired`. */
+  private readonly retired: Map<number, number>;
+  /** See `LaneState.retiredBarrier`. */
+  private retiredBarrier: boolean;
   /** See `LaneState.tasks`. */
   private readonly tasks: Map<string, AgentSubagentInfo>;
   /** See `LaneState.stopped`. */
@@ -497,8 +505,31 @@ class LaneRead {
     this.mapper = this.source.restoreMapper(this.state.mapper);
     this.children = new Map(this.state.children);
     this.stale = new Set(this.state.stale);
+    this.retired = new Map(this.state.retired);
+    this.retiredBarrier = this.state.retiredBarrier === true;
     this.tasks = new Map(this.state.tasks);
     this.stopped = new Set(this.state.stopped);
+  }
+
+  /** Retires a positional entity and remembers its slot so a later message never reuses a tombstoned identity out of order. */
+  private retireId(id: string): void {
+    this.retire.push(id);
+    const match = /^(\d+):(\d+)$/.exec(id);
+    if (match) {
+      const pos = Number(match[1]), part = Number(match[2]);
+      this.retired.set(pos, Math.max(this.retired.get(pos) ?? 0, part + 1));
+    }
+  }
+
+  /** Whether writing `count` parts at `position` would invert journal `identity` order against retired slots. */
+  private conflictsRetired(position: number, count: number): boolean {
+    if (count <= 0) return false;
+    const oldParts = this.retired.get(position);
+    if (oldParts === undefined) return false;
+    if (this.retiredBarrier) return true;
+    let maxRetired = -1;
+    for (const pos of this.retired.keys()) if (pos > maxRetired) maxRetired = pos;
+    return count > oldParts && maxRetired > position;
   }
 
   async run(end?: TurnEnd): Promise<boolean> {
@@ -508,7 +539,7 @@ class LaneRead {
     let done = true;
     if (this.fresh || this.state.mapping !== MAPPING_VERSION || this.state.root !== meta.latestRootBlobId || this.state.n < this.state.len || this.stale.size) done = await this.readStore();
     // The store is where the last read left it; only the live step can have moved, unless the store has a step of its own.
-    else if (this.state.live && (!this.state.draft || this.state.draft.live)) this.draft(this.state.len, undefined);
+    else if (this.state.live && (!this.state.draft || this.state.draft.live)) done = this.draft(this.state.len, undefined);
     if (this.abandoned) return !end && done;
     this.settleTail(end);
     if (this.options.serving) {
@@ -710,8 +741,23 @@ class LaneRead {
       const blob = ids[position]!;
       const result = this.view.reader.readMessage(blob);
       if (result.status === 'missing') { blocked = true; break; }
+      // A positional slot retired by an earlier rewind or dropped draft keeps its old rev=1
+      // identity in the journal; rebuild if writing this message would invert identity order.
+      const hadRetired = this.retired.has(position);
+      if (result.status === 'ok' && hadRetired) {
+        const previewCount = this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }).length;
+        if (this.conflictsRetired(position, previewCount)) { this.w.rebuild('identity-changed'); return this.abandon(); }
+        if (previewCount >= (this.retired.get(position) ?? 0)) {
+          this.retired.delete(position);
+          if (!this.retired.size) this.retiredBarrier = false;
+        }
+      }
       // A committed blob that is not a message never becomes one; it is passed over, as the in-memory transcript does.
-      if (result.status === 'ok') { this.message(position, blob, result.message); bytes += result.bytes; }
+      if (result.status === 'ok') {
+        this.message(position, blob, result.message);
+        bytes += result.bytes;
+        if (!hadRetired && this.retired.size && (this.produced.get(position) ?? 0) > 0) this.retiredBarrier = true;
+      }
       this.settleDraftAt(position);
       this.state.n = position + 1;
       this.hash.update(blob).update('\0');
@@ -727,9 +773,9 @@ class LaneRead {
       const pending = snapshot.pending && !sameStep(snapshot.pending, ids.length ? this.view.reader.message(ids.at(-1)!) : undefined) ? snapshot.pending : undefined;
       // Caught up: a step the CLI is already streaming is drafted by this read, not the next one.
       this.state.live = true;
-      this.draft(ids.length, pending);
+      if (!this.draft(ids.length, pending)) return false;
       const drafted = new Set(this.drafts.map(draft => draft.finalId));
-      for (const id of this.stale) if (!drafted.has(id)) this.retire.push(id);
+      for (const id of this.stale) if (!drafted.has(id)) this.retireId(id);
       this.stale.clear();
       this.historyAnswered = !pending && !this.mapper.awaitingReply;
     }
@@ -780,13 +826,40 @@ class LaneRead {
     }
     this.state.n = at;
     const replay = this.mapper.fork();
+    const oldCounts = new Map<number, number>();
     for (let position = at; position < Math.min(before.n, oldIds.length); position += 1) {
       const message = this.view.reader.message(oldIds[position]!);
       const count = message ? replay.map({ id: `${position}:${oldIds[position]}`, message }).length : 0;
+      if (count > 0) oldCounts.set(position, count);
       for (let part = 0; part < count; part += 1) this.stale.add(`${position}:${part}`);
       if (slice.due && await slice.yield()) return this.abandon();
     }
-    if (before.draft) for (let part = 0; part < before.draft.count; part += 1) this.stale.add(`${before.draft.at}:${part}`);
+    if (before.draft) {
+      if (before.draft.at >= at) oldCounts.set(before.draft.at, Math.max(oldCounts.get(before.draft.at) ?? 0, before.draft.count));
+      if (before.draft.prompt && before.draft.at - 1 >= at) oldCounts.set(before.draft.at - 1, Math.max(oldCounts.get(before.draft.at - 1) ?? 0, 1));
+      for (let part = 0; part < before.draft.count; part += 1) this.stale.add(`${before.draft.at}:${part}`);
+      if (before.draft.prompt) this.stale.add(`${before.draft.at - 1}:0`);
+    }
+    // Check whether rewriting `<position>:<part>` in place preserves journal identity order:
+    // a new part (`rev=1`) before a higher already-occupied slot, a new part before an already-placed
+    // compaction activity, or reusing a previously retired slot would invert timeline ordering.
+    const preview = this.mapper.fork();
+    let maxExisting = -1;
+    for (const pos of oldCounts.keys()) if (pos > maxExisting) maxExisting = pos;
+    for (const pos of this.retired.keys()) if (pos >= at && pos > maxExisting) maxExisting = pos;
+    const maxCompactionBound = (snapshot.compactions ?? [])
+      .filter(c => before.placed[c.summaryId] && c.boundary > before.from)
+      .reduce((max, c) => Math.max(max, c.boundary), -1);
+    for (let position = at; position < ids.length; position += 1) {
+      const message = this.view.reader.message(ids[position]!);
+      const count = message ? preview.map({ id: `${position}:${ids[position]}`, message }).length : 0;
+      const oldCount = Math.max(oldCounts.get(position) ?? 0, this.retired.get(position) ?? 0);
+      if (count > 0 && (this.conflictsRetired(position, count) || (count > oldCount && (maxExisting > position || maxCompactionBound > position)))) {
+        this.w.rebuild('identity-changed');
+        return this.abandon();
+      }
+      if (slice.due && await slice.yield()) return this.abandon();
+    }
     // A rewind that cut back before `before.turn` started leaves that turn behind and ends the
     // earlier turn where the history now breaks off; an in-place rewrite of a tool/assistant blob
     // inside the current turn keeps `this.state.turn`'s open/ended state intact.
@@ -890,11 +963,11 @@ class LaneRead {
     if (!draft) return;
     // The store records the turn a live step opened: its prompt is the store's from here on.
     if (draft.prompt && position === draft.at - 1) {
-      if (!this.produced.get(position)) this.retire.push(`${position}:0`);
+      if (!this.produced.get(position)) this.retireId(`${position}:0`);
       delete draft.prompt;
     }
     if (draft.at !== position) return;
-    for (let part = this.produced.get(position) ?? 0; part < draft.count; part += 1) this.retire.push(`${position}:${part}`);
+    for (let part = this.produced.get(position) ?? 0; part < draft.count; part += 1) this.retireId(`${position}:${part}`);
     delete this.state.draft;
   }
 
@@ -905,7 +978,7 @@ class LaneRead {
    * store has not recorded yet brings that turn's prompt, drafted first where the store will record it with the step after it,
    * under the request id the store will file both under; the turn ends here if the store never does.
    */
-  private draft(length: number, pending: ChatMessage | undefined): void {
+  private draft(length: number, pending: ChatMessage | undefined): boolean {
     const turn = this.state.turn;
     const mapper = this.mapper.fork();
     let at = length, turnId = turn?.id, message = pending, prompt: NativeWorkbenchEvent | undefined, live = false;
@@ -929,6 +1002,10 @@ class LaneRead {
     if (this.state.draft && this.state.draft.at !== at) this.dropDraft();
     const previous = this.state.draft?.count ?? 0;
     const mapped = message && turnId ? mapper.map({ id: `${at}:draft`, message }) : [];
+    if (mapped.length && (this.conflictsRetired(at, mapped.length) || (prompt && this.conflictsRetired(at - 1, 1)))) {
+      this.w.rebuild('identity-changed');
+      return this.abandon();
+    }
     // The prompt goes first: a draft keeps the place its first version took.
     if (mapped.length && prompt) this.drafts.push({ finalId: prompt.nativeId, event: prompt });
     mapped.forEach((event, part) => {
@@ -936,16 +1013,17 @@ class LaneRead {
       this.noteTask(event);
       this.drafts.push({ finalId: `${at}:${part}`, event: this.eventOf(event, at, '', part, turnId!) });
     });
-    for (let part = mapped.length; part < previous; part += 1) this.retire.push(`${at}:${part}`);
-    if (!mapped.length) { this.endLivePrompt(); delete this.state.draft; return; }
+    for (let part = mapped.length; part < previous; part += 1) this.retireId(`${at}:${part}`);
+    if (!mapped.length) { this.endLivePrompt(); delete this.state.draft; return true; }
     this.state.draft = { at, count: mapped.length, ...(live ? { live: true as const } : {}), ...(prompt ? { prompt: turnId! } : {}) };
+    return true;
   }
 
   /** The drafts of the step in flight go. */
   private dropDraft(result?: CursorTurnResult): void {
     const draft = this.state.draft;
     if (!draft) return;
-    for (let part = 0; part < draft.count; part += 1) this.retire.push(`${draft.at}:${part}`);
+    for (let part = 0; part < draft.count; part += 1) this.retireId(`${draft.at}:${part}`);
     this.endLivePrompt(result);
     delete this.state.draft;
   }
@@ -954,9 +1032,10 @@ class LaneRead {
   private endLivePrompt(result?: CursorTurnResult): void {
     const turnId = this.state.draft?.prompt;
     if (!turnId) return;
-    this.retire.push(`${this.state.draft!.at - 1}:0`);
+    this.retireId(`${this.state.draft!.at - 1}:0`);
     delete this.state.draft!.prompt;
     this.state.liveEnded = [...(this.state.liveEnded ?? []).filter(id => id !== turnId), turnId].slice(-RECENT_TURNS);
+    this.retiredBarrier = true;
     this.w.turnEnded(turnId, result?.status ?? 'interrupted', result?.at ?? new Date().toISOString(), result?.error);
   }
 
@@ -988,6 +1067,7 @@ class LaneRead {
     const id = open.length === 1 ? open[0]!.id : this.compactionId(this.state.turn.id);
     const at = this.state.turn.at || new Date().toISOString();
     this.w.activities.apply({ id, kind: 'compaction', status: 'completed', title: '上下文压缩', ...(compaction.summary ? { detail: clipDetail(compaction.summary) } : {}), endedAt: at });
+    if (this.retired.size) this.retiredBarrier = true;
     this.state.placed = { ...this.state.placed, [compaction.summaryId]: id };
   }
 
@@ -997,6 +1077,7 @@ class LaneRead {
       id: this.compactionId(signal.generationId ?? this.state.turn?.id), kind: 'compaction', status: 'running', title: '上下文压缩', startedAt: signal.at,
       compaction: { trigger: signal.trigger ?? 'auto', ...(signal.preTokens !== undefined ? { preTokens: signal.preTokens } : {}) },
     });
+    if (this.retired.size) this.retiredBarrier = true;
   }
 
   /** What a `Task` call asks of the subagent it starts, kept for that subagent's row (`child`). */
@@ -1036,6 +1117,8 @@ class LaneRead {
       ...(draft ? { draft } : {}), ...(liveEnded?.length ? { liveEnded } : {}), children: [...this.children], ...(this.tasks.size ? { tasks: [...this.tasks] } : {}),
       ...(this.stopped.size ? { stopped: [...this.stopped] } : {}),
       ...(compacting.length ? { compacting } : {}), ...(this.stale.size ? { stale: [...this.stale] } : {}),
+      ...(this.retired.size ? { retired: [...this.retired.entries()].sort((a, b) => a[0] - b[0]) } : {}),
+      ...(this.retired.size && this.retiredBarrier ? { retiredBarrier: true as const } : {}),
     };
     return JSON.stringify(state);
   }
