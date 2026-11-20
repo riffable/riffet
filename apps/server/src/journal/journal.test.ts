@@ -185,6 +185,77 @@ describe('session journal', () => {
     upgraded.close();
   });
 
+  describe('upgrading a journal database from each earlier schema version', () => {
+    // Markers: absent (0, the shape before any marker was written), then 1..3. Each has the tables as that release created them.
+    const HEADS = { 0: 'session_id TEXT PRIMARY KEY, generation TEXT NOT NULL, last_seq INTEGER NOT NULL DEFAULT 0, ingest_cursor TEXT, projection TEXT, projection_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL',
+      2: ', identity TEXT', 3: ', compacted_seq INTEGER NOT NULL DEFAULT 0' };
+    const big = 'a line of transcript text\n'.repeat(200);
+    const seeded = () => {
+      const source = new Journal(new DatabaseSync(':memory:'));
+      source.append('s', [event('a', 'small'), event('big', big), { kind: 'meta.turn_ended', nativeId: 'end', turnId: 't1', payload: { turnId: 't1', status: 'completed' } }], { cursor: 'c1' });
+      const db = source.db;
+      return {
+        heads: db.prepare('SELECT * FROM journal_heads').all() as Array<Record<string, unknown>>,
+        events: db.prepare('SELECT * FROM journal_events').all() as Array<Record<string, unknown>>,
+        blobs: db.prepare('SELECT * FROM blobs').all() as Array<{ hash: string; size: number; stored_size: number; codec: string; external: number; bytes: Uint8Array; created_at: string }>,
+        range: source.range('s', 0, 10), projection: source.projection('s'), blob: (hash: string) => source.getBlob(hash),
+      };
+    };
+    const insert = (db: DatabaseSync, table: string, rows: Array<Record<string, unknown>>) => {
+      for (const row of rows) {
+        const keys = Object.keys(row);
+        db.prepare(`INSERT INTO ${table}(${keys.join(',')}) VALUES(${keys.map(() => '?').join(',')})`).run(...keys.map(key => row[key] as never));
+      }
+    };
+    /** Writes the database as `version` left it, holding the seeded session. */
+    const writeOld = (path: string, version: 0 | 1 | 2 | 3, data: ReturnType<typeof seeded>) => {
+      const db = new DatabaseSync(path);
+      const columns = (version >= 2 ? HEADS[0] + HEADS[2] : HEADS[0]) + (version >= 3 ? HEADS[3] : '');
+      db.exec(`CREATE TABLE journal_heads (${columns});
+        CREATE TABLE journal_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, kind TEXT NOT NULL, native_id TEXT NOT NULL, rev INTEGER NOT NULL, turn_id TEXT, at TEXT NOT NULL, digest TEXT NOT NULL, blob_ref TEXT, payload TEXT NOT NULL, PRIMARY KEY (session_id, seq));
+        CREATE UNIQUE INDEX journal_native ON journal_events(session_id, native_id, rev);
+        CREATE INDEX journal_turn ON journal_events(session_id, turn_id) WHERE turn_id IS NOT NULL;
+        CREATE INDEX journal_blob_ref ON journal_events(blob_ref) WHERE blob_ref IS NOT NULL;
+        CREATE TABLE settings (key TEXT PRIMARY KEY, json TEXT NOT NULL);`);
+      db.exec(version >= 3
+        ? "CREATE TABLE blobs (hash TEXT PRIMARY KEY, size INTEGER NOT NULL, stored_size INTEGER NOT NULL DEFAULT 0, codec TEXT NOT NULL DEFAULT 'raw', external INTEGER NOT NULL DEFAULT 0, bytes BLOB, created_at TEXT NOT NULL)"
+        : 'CREATE TABLE blobs (hash TEXT PRIMARY KEY, size INTEGER NOT NULL, bytes BLOB NOT NULL, created_at TEXT NOT NULL)');
+      const head = (row: Record<string, unknown>) => ({ ...row, ...(version >= 2 ? { identity: 'native-1' } : {}) });
+      const drop = (row: Record<string, unknown>, ...names: string[]) => Object.fromEntries(Object.entries(row).filter(([key]) => !names.includes(key)));
+      insert(db, 'journal_heads', data.heads.map(row => head(version >= 3 ? row : drop(row, 'identity', 'compacted_seq'))));
+      insert(db, 'journal_events', data.events);
+      // Before v3 every blob was stored whole; from v3 on the row carries its codec.
+      insert(db, 'blobs', data.blobs.map(blob => version >= 3 ? blob : { hash: blob.hash, size: blob.size, bytes: data.blob(blob.hash)!, created_at: blob.created_at }));
+      if (version > 0) db.prepare('INSERT INTO settings(key,json) VALUES(?,?)').run('journal-schema', JSON.stringify(version));
+      db.close();
+    };
+
+    for (const version of [0, 1, 2, 3] as const) {
+      it(`keeps the log, cursor and blobs of a v${version} database readable and records v4, once`, async () => {
+        const path = (await dbPath()).replace('workbench.db', 'journal.db');
+        const data = seeded();
+        expect(data.blobs.length).toBeGreaterThan(0);
+        writeOld(path, version, data);
+
+        for (const pass of [1, 2]) {
+          const db = new DatabaseSync(path);
+          const journal = new Journal(db);
+          try {
+            expect(JSON.parse((db.prepare("SELECT json FROM settings WHERE key='journal-schema'").get() as { json: string }).json)).toBe(4);
+            const turnIndex = (db.prepare("SELECT sql FROM sqlite_master WHERE name='journal_turn'").get() as { sql: string }).sql;
+            expect(turnIndex).toContain("payload<>'{}'");
+            expect(journal.range('s', 0, 3)).toEqual(data.range);
+            expect(data.blobs.every(blob => journal.getBlob(blob.hash)?.equals(data.blob(blob.hash)!))).toBe(true);
+            expect(journal.peek('s')).toMatchObject({ ingestCursor: 'c1', lastSeq: pass === 1 ? 3 : 4, ...(version >= 2 ? { identity: 'native-1' } : {}) });
+            if (pass === 1) expect(journal.projection('s')).toEqual(data.projection);
+            if (pass === 1) expect(journal.append('s', [event('b', 'after upgrade')]).rows).toHaveLength(1);
+            else expect(journal.range('s', 0, 10).map(row => row.nativeId)).toEqual(['a', 'big', 'end', 'b']);
+          } finally { db.close(); }
+        }
+      });
+    }
+  });
+
   it('appends each state of an activity as a new version, and the projection counts what is live', () => {
     const journal = new Journal(new DatabaseSync(':memory:'));
     const activity = (id: string, kind: 'compaction' | 'background_task', status: string, turnId?: string) => ({

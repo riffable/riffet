@@ -161,6 +161,48 @@ describe('Store schema v2 migration', () => {
   });
 });
 
+/** The v1 fixture advanced to what `version` left behind: v2 has no ACP rows, v3 adds spaces and unreleased project tables, v4 has neither. */
+function writeDatabaseAt(path: string, version: 1 | 2 | 3 | 4): void {
+  writeLegacyDatabase(path);
+  if (version === 1) return;
+  const db = new DatabaseSync(path);
+  db.exec(`PRAGMA foreign_keys=ON; DROP TABLE interactions; DELETE FROM events WHERE session_id='s-acp'; DELETE FROM runs WHERE session_id='s-acp'; DELETE FROM sessions WHERE id='s-acp';`);
+  if (version === 3) {
+    db.exec(`CREATE TABLE spaces (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, json TEXT NOT NULL);
+      CREATE TABLE space_messages (id TEXT PRIMARY KEY, space_id TEXT NOT NULL, to_session_id TEXT NOT NULL, sequence INTEGER NOT NULL, created_at TEXT NOT NULL, json TEXT NOT NULL);
+      CREATE TABLE project_entries (id TEXT PRIMARY KEY, json TEXT NOT NULL);
+      INSERT INTO spaces(id,revision,json) VALUES('space-1',1,'{}');
+      UPDATE sessions SET json=json_set(json,'$.spaceId','space-1');
+      UPDATE runs SET json=json_set(json,'$.native',json_object('spaceContext',json_object('spaceId','space-1')));`);
+  }
+  db.exec(`PRAGMA user_version=${version};`);
+  db.close();
+}
+
+describe('Store upgrade from each earlier schema version', () => {
+  for (const version of [1, 2, 3, 4] as const) {
+    it(`brings a v${version} database to the current version with its native history intact, once`, () => {
+      const path = scratch();
+      writeDatabaseAt(path, version);
+      for (let pass = 1; pass <= 2; pass++) {
+        const store = new Store(path);
+        try {
+          expect((store.db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(5);
+          expect(store.listSessions().map(session => session.id)).toEqual(['s-native']);
+          expect(store.getProject('p1').name).toBe('legacy');
+          expect(store.getEvents('s-native')).toHaveLength(1);
+          expect(store.getEvents('s-acp')).toEqual([]);
+          expect(store.listRuns('s-native').map(run => run.id)).toEqual(['r-native']);
+          const tables = (store.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as Array<{ name: string }>).map(row => row.name);
+          for (const gone of ['interactions', 'spaces', 'space_messages', 'project_entries']) expect(tables, gone).not.toContain(gone);
+          expect(store.db.prepare("SELECT COUNT(*) AS n FROM sessions WHERE json_extract(json,'$.spaceId') IS NOT NULL").get()).toEqual({ n: 0 });
+          expect(store.db.prepare("SELECT COUNT(*) AS n FROM runs WHERE json_extract(json,'$.native.spaceContext') IS NOT NULL").get()).toEqual({ n: 0 });
+        } finally { store.close(); }
+      }
+    });
+  }
+});
+
 describe('session updates', () => {
   it('leaves an unchanged session untouched so streams are not pushed a no-op frame', async () => {
     const store = new Store(':memory:');
