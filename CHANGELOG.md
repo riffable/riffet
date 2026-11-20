@@ -10,6 +10,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Text files in the Files view can be edited on the web: turn on Edit, save with ⌘S, and keep unsaved edits while you look at other files. A save never overwrites changes an Agent made meanwhile; you compare the two versions and choose per change, take the disk version, or save over it. Files and folders can also be created, renamed, and deleted from the file list, and a deletion can be undone from its notice.
 - Audio and video in the Files view play at any size and can be seeked, on the web, Mac, and phones; they previously had to be under 32 MB and played only from the start.
 - The web app now opens with a full-window first-run guide: pick the default Agent (with install commands when none is available), choose the directory to start in, and scan to connect your phone; every step can be skipped. It appears once per browser, and not at all on a server that already has conversations.
+- `riffet doctor` has a Storage section: the integrity of the three databases, blobs the log refers to that are missing, and records that belong to no conversation. A minute after start the server also checks the two databases that cannot be rebuilt in the background; damage is reported in the log with the restore command, and no file is touched.
 - `riffet logs --scope dispatch` shows each message's delivery steps and the phase its conversation is in, for finding out why a message was not sent or keeps running.
 
 ### Fixes

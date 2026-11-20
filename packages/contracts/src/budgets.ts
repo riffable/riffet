@@ -368,3 +368,17 @@ export const COUNCIL_BUDGET = {
   /** Deleting a discussion waits this long for a seat's turn to stop before giving up on its conversation. */
   removeWaitMs: 30_000,
 } as const;
+
+/** Integrity checks of the databases that cannot be rebuilt (`storage/integrity.ts`). */
+export const INTEGRITY_BUDGET = {
+  /** The background `quick_check` of `workbench.db` and `journal.db` starts this long after the server has started. */
+  startDelayMs: 60_000,
+  /** Most distinct `journal_events.blob_ref` hashes looked up in `blobs` by one run. */
+  maxBlobRefs: 500_000,
+  /** Most `blobs` rows tested for being referenced by one run. */
+  maxBlobRows: 500_000,
+  /** Most conversation ids compared across databases by one run. */
+  maxSessionIds: 200_000,
+  /** The worker is stopped after this long; `journal.db` of several gigabytes takes about 7 s. */
+  timeoutMs: 10 * 60_000,
+} as const;

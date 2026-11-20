@@ -29,4 +29,5 @@ verify:
 
 - 新会话没有用上预热的进程：服务日志里出现 `prewarm: a new session did not match the warm one`（`packages/plugin-api/src/kit/warm-pool.ts`），日志里带着持有的键和想要的键，对比二者即可知道哪个字段不同。
 - 环境与依赖问题：`riffet doctor --json` 逐项列出 Node、tmux、各 CLI、端口和数据目录。
+- 数据库疑似损坏：服务启动一分钟后在 worker 里对 `workbench.db`、`journal.db` 各跑一次只读 `quick_check`（`storage/integrity.ts`），失败只写一条 `[riffet] <库>.db failed its integrity check` 错误日志，不删不改；`riffet doctor` 的 Storage 一节另做跨库一致性（缺失的大块数据、孤儿块、没有会话的日志、derived 超前于日志）。恢复用 `riffet restore --backup <dir> --state-dir <空目录>`。
 - 越层导入：`node scripts/check-layers.mjs --list` 按模块对列出每个越层导入及所在文件。

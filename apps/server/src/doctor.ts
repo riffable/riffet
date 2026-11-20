@@ -15,6 +15,7 @@ import { PI_CLI_VERSIONS } from './backends/pi/index.js';
 import { cliCheck } from './backends/shared/cli-check.js';
 import { parseVersion, versionAtLeast, type CliVersionRange } from './backends/shared/cli-version.js';
 import { runProcess } from './git/exec.js';
+import { RESTORE_HINT, runIntegrityChecks, type IntegrityCheckId } from './storage/integrity.js';
 import { TMUX_MIN_VERSION } from './terminal/control.js';
 import { PluginRegistry } from './plugins/registry.js';
 import type { SettingsService } from './settings/index.js';
@@ -166,6 +167,26 @@ async function stateDirCheck(stateDir: string): Promise<DoctorCheck> {
   return { id: 'state-dir', label, status: 'ok', detail: `${stateDir} (private)` };
 }
 
+const STORAGE_CHECKS: Array<{ id: IntegrityCheckId; label: string; fix?: string }> = [
+  { id: 'workbench', label: 'workbench.db', fix: RESTORE_HINT },
+  { id: 'journal', label: 'journal.db', fix: RESTORE_HINT },
+  { id: 'derived', label: 'derived.db', fix: 'It is rebuilt from journal.db at the next start.' },
+  { id: 'blob-refs', label: 'Journal blobs', fix: RESTORE_HINT },
+  { id: 'blob-orphans', label: 'Unreferenced blobs', fix: 'They are removed by the periodic cleanup.' },
+  { id: 'journal-sessions', label: 'Conversation logs', fix: 'They are removed by the periodic cleanup.' },
+  { id: 'derived-watermark', label: 'Timeline positions', fix: 'derived.db is rebuilt from journal.db when it is deleted while Riffet is stopped.' },
+];
+
+/** Reads the databases through read-only connections in a worker; a running server is not disturbed. */
+async function storageChecks(stateDir: string): Promise<DoctorCheck[]> {
+  if (!existsSync(join(stateDir, 'workbench.db'))) return [];
+  const results = await runIntegrityChecks(stateDir, STORAGE_CHECKS.map(check => check.id));
+  return STORAGE_CHECKS.map(({ id, label, fix }) => {
+    const result = results.find(entry => entry.id === id);
+    if (!result) return { id: `storage:${id}`, label, status: 'warn' as const, detail: 'could not be checked' };
+    return { id: `storage:${id}`, label, status: result.status, detail: `${result.detail} (${(result.ms / 1000).toFixed(1)}s)`, ...(result.status === 'ok' || !fix ? {} : { fix }) };
+  });
+}
 
 export async function machineReport(): Promise<MachineReport> {
   const cwd = process.cwd();
@@ -176,7 +197,7 @@ export async function machineReport(): Promise<MachineReport> {
   return { tmux: tmux.code === 0 && !old, tailscale, warnings, checkedAt: new Date().toISOString() };
 }
 
-export interface DoctorSection { title: 'Runtime' | 'Agents' | 'Server' | 'Plugins'; checks: DoctorCheck[] }
+export interface DoctorSection { title: 'Runtime' | 'Agents' | 'Server' | 'Storage' | 'Plugins'; checks: DoctorCheck[] }
 
 /**
  * The rows of every enabled integration, grouped. An Agent that a plugin provides (Cursor) reports with the
@@ -197,6 +218,7 @@ export async function doctorChecks(input: { stateDir: string; host: string; port
       ...installed ? [] : [{ id: 'backend:any', label: 'Agent CLIs', status: 'fail' as const, detail: 'none of the supported agent CLIs could be found', fix: 'Install and sign in to at least one of the CLIs above.' }],
     ]) },
     { title: 'Server' as const, checks: [await portCheck(input.host, input.port, input.daemon), await stateDirCheck(input.stateDir), officeCheck()] },
+    { title: 'Storage' as const, checks: await storageChecks(input.stateDir) },
     { title: 'Plugins' as const, checks: strip(others) },
   ].filter(section => section.checks.length);
 }
