@@ -46,6 +46,46 @@ function points(raw: string | number | undefined, close: boolean): string {
   return close ? `${d}Z` : d;
 }
 
+/** Which parameters of each absolute command are y coordinates (relative commands and H carry none). */
+const Y_PARAMS: Record<string, { size: number; ys: number[] }> = {
+  M: { size: 2, ys: [1] }, L: { size: 2, ys: [1] }, T: { size: 2, ys: [1] }, V: { size: 1, ys: [0] },
+  C: { size: 6, ys: [1, 3, 5] }, S: { size: 4, ys: [1, 3] }, Q: { size: 4, ys: [1, 3] }, A: { size: 7, ys: [6] },
+};
+
+/** Moves path data down by [dy] without wrapping it in a group, so the result stays one flat path. */
+export function translateY(d: string, dy: number): string {
+  let out = '';
+  let i = 0;
+  let command = '';
+  let index = 0;
+  const number = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/;
+  while (i < d.length) {
+    const char = d[i]!;
+    if (/[\s,]/.test(char)) { i++; continue; }
+    if (/[a-zA-Z]/.test(char)) {
+      command = char;
+      index = 0;
+      out += char;
+      i++;
+      continue;
+    }
+    const upper = command.toUpperCase();
+    const spec = Y_PARAMS[upper];
+    const size = spec?.size ?? 1;
+    const slot = index % size;
+    // An arc's two flags are single digits and may be written without separators ("a1 1 0 011 1").
+    const flag = upper === 'A' && (slot === 3 || slot === 4);
+    const match = flag ? /^[01]/.exec(d.slice(i)) : number.exec(d.slice(i));
+    if (!match) throw new Error(`Bad path data at ${i}: ${d}`);
+    const value = Number(match[0]);
+    const shifted = command === upper && spec?.ys.includes(slot) ? value + dy : value;
+    out += `${out && !/[a-zA-Z]$/.test(out) ? ' ' : ''}${flag ? match[0] : num(shifted)}`;
+    i += match[0].length;
+    index++;
+  }
+  return out;
+}
+
 export function toPath([tag, attrs]: Node): string {
   switch (tag) {
     // A leading relative move would resolve from the previous element's end once the elements are

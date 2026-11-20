@@ -403,19 +403,19 @@ internal object LucideIcons {
         )
     }
 
-    /** lucide `message-square-plus`. */
+    /** lucide `message-square-plus`, moved down 1.5. */
     val MessageSquarePlus: ImageVector by lazy {
         lucide(
             "MessageSquarePlus",
-            "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v6M9 10h6",
+            "M21 16.5a2 2 0 0 1 -2 2H7l-4 4V6.5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2zM12 8.5v6M9 11.5h6",
         )
     }
 
-    /** lucide `message-square-plus`, stroke 1.75. */
+    /** lucide `message-square-plus`, stroke 1.75, moved down 1.5. */
     val MessageSquarePlusFilled: ImageVector by lazy {
         lucide(
             "MessageSquarePlusFilled",
-            "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v6M9 10h6",
+            "M21 16.5a2 2 0 0 1 -2 2H7l-4 4V6.5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2zM12 8.5v6M9 11.5h6",
             strokeWidth = 1.75f,
         )
     }

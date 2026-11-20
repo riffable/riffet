@@ -1,4 +1,4 @@
-import { num, toPath } from './svg-icon-path.js';
+import { num, toPath, translateY } from './svg-icon-path.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -36,6 +36,11 @@ interface Spec {
   stroke?: number;
   /** Also fill the closed outline, for a glyph whose meaning is a solid shape (a favourite star, the stop square). */
   filled?: boolean;
+  /**
+   * Moves the glyph down on the 24 grid so its visual centre, not its bounding box, lines up with its
+   * neighbours: a speech bubble's body sits above centre, with only the tail below it.
+   */
+  dy?: number;
 }
 
 /**
@@ -88,8 +93,8 @@ const ICONS: Record<string, string | Spec> = {
   ListTodo: 'list-todo',
   Message: 'message-square',
   MessageQuestion: 'message-circle-question-mark',
-  MessageSquarePlus: 'message-square-plus',
-  MessageSquarePlusFilled: { icon: 'message-square-plus', stroke: HEAVY },
+  MessageSquarePlus: { icon: 'message-square-plus', dy: 1.5 },
+  MessageSquarePlusFilled: { icon: 'message-square-plus', stroke: HEAVY, dy: 1.5 },
   Mic: 'mic',
   Monitor: 'monitor',
   Moon: 'moon',
@@ -155,13 +160,14 @@ function kotlinNumber(value: number): string {
 
 const entries = names.map((name) => {
   const spec: Spec = typeof ICONS[name] === 'string' ? { icon: ICONS[name] as string } : ICONS[name] as Spec;
-  const pathData = loadNodes(spec.icon).map(toPath).join('');
+  const joined = loadNodes(spec.icon).map(toPath).join('');
+  const pathData = spec.dy ? translateY(joined, spec.dy) : joined;
   const extra = [
     spec.stroke !== undefined ? `strokeWidth = ${kotlinNumber(spec.stroke)}` : '',
     spec.filled ? 'filled = true' : '',
   ].filter(Boolean).join(', ');
   return [
-    `    /** lucide \`${spec.icon}\`${spec.filled ? ', filled' : ''}${spec.stroke !== undefined ? `, stroke ${num(spec.stroke)}` : ''}. */`,
+    `    /** lucide \`${spec.icon}\`${spec.filled ? ', filled' : ''}${spec.stroke !== undefined ? `, stroke ${num(spec.stroke)}` : ''}${spec.dy ? `, moved down ${num(spec.dy)}` : ''}. */`,
     `    val ${name}: ImageVector by lazy {`,
     `        lucide(`,
     `            "${name}",`,
