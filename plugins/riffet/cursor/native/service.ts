@@ -62,6 +62,11 @@ export interface NativeTurnObserver {
    * journal reads the last messages, since the CLI can start another turn in the meantime.
    */
   answered?(session: AgentSessionView, answer: SettledCursorTurn, stillIdle: () => boolean): void;
+  /**
+   * The CLI is busy and no hook has named its turn. Some gateways never send `beforeSubmitPrompt`, so
+   * without this the turn stays unnamed — and cannot be steered — until its first tool call.
+   */
+  unnamedBusy?(session: AgentSessionView): void;
 }
 
 /**
@@ -1185,6 +1190,7 @@ export class NativeService {
       this.turnObserver?.offline(session);
     }
     const activeTurn = status.phase !== 'offline' ? this.turnObserver?.activeTurn(session) : undefined;
+    if (!activeTurn && status.phase === 'busy') this.turnObserver?.unnamedBusy?.(session);
     this.observeSettledTurn(watch, session, idlePane, activeTurn?.turnId);
     const next: NativeStatus = {
       ...status,

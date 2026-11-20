@@ -25,6 +25,8 @@ interface Entry {
   /** The last verified idle root and the read currently checking one. */
   answered?: { key: string; hasError: boolean };
   settling?: true;
+  /** A `hydrate` read of the host's runs is in flight. */
+  hydrating?: true;
 }
 /**
  * A hook ends a turn as soon as the CLI stops it, which can be before the CLI has committed the step it
@@ -94,6 +96,7 @@ export class CursorSteerBridge {
       transcript: (session, events) => { for (const receipt of this.receiptEvents(session, events)) host.emitEvent(session.id, receipt); },
       offline: session => this.reject(session.id, 'Cursor connection is no longer writable'),
       answered: (session, target, stillIdle) => { void this.answered(session, target, stillIdle).catch(() => undefined); },
+      unnamedBusy: session => { void this.hydrate(session, true).catch(() => undefined); },
     });
   }
 
@@ -136,17 +139,24 @@ export class CursorSteerBridge {
   }
 
   /**
-   * A restarted process has no hook memory. A foreground run still executing on the live terminal
-   * becomes the active turn again, unless this bridge already ended it or the chat store has.
+   * A foreground run executing on the live terminal is the active turn when no hook has named one: after
+   * a restart, which leaves no hook memory, and on gateways that never send `beforeSubmitPrompt`. Not
+   * when this bridge already ended it or the chat store has. [storeShowsOpen] also refuses a store that
+   * has not been read: only a restart has a reason to trust the run before the store confirms it.
    */
-  async hydrate(session: AgentSessionView): Promise<void> {
+  async hydrate(session: AgentSessionView, storeShowsOpen = false): Promise<void> {
     if (this.closed || session.archivedAt || !session.nativeSessionId || !session.terminalId
       || ['failed', 'interrupted', 'cancelling'].includes(session.state)) return;
     const entry = this.bind(session.id);
-    if (entry.active) return;
-    const terminal = this.port.findTerminal(session.terminalId);
+    if (entry.active || entry.hydrating) return;
+    entry.hydrating = true;
+    try { await this.hydrateEntry(session, entry, session.nativeSessionId, session.terminalId, storeShowsOpen); }
+    finally { delete entry.hydrating; }
+  }
+
+  private async hydrateEntry(session: AgentSessionView, entry: Entry, nativeSessionId: string, terminalId: string, storeShowsOpen: boolean): Promise<void> {
+    const terminal = this.port.findTerminal(terminalId);
     if (!terminal || terminal.state === 'exited') return;
-    const nativeSessionId = session.nativeSessionId;
     const runs = await this.port.unfinishedRuns(session.id);
     if (this.closed || entry.active) return;
     const run = runs.find(candidate => {
@@ -161,7 +171,7 @@ export class CursorSteerBridge {
     if (entry.retired.has(turnId) || entry.ended.has(turnKey(target))) return;
     const state = this.native.turnState(session.id, target);
     // `undefined` means the store has not been read yet; `open` means the turn is still in it.
-    if (state !== undefined && state !== 'open') return;
+    if (state === undefined ? storeShowsOpen : state !== 'open') return;
     const current = this.port.getSession(session.id);
     const fresh = this.port.findTerminal(terminal.id);
     if (!fresh || fresh.state === 'exited' || this.closed || entry.active || current.archivedAt

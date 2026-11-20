@@ -20,6 +20,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On the web, the composer no longer shows the microphone when the selected voice recognizer's plugin is turned off or uninstalled; Settings › Voice input marks that recognizer as unavailable.
 - On Android, the new-session icon in the bottom bar now lines up vertically with the other tabs instead of sitting slightly higher.
 - A message queued while the Agent is answering no longer shows above that answer for a few seconds after it goes out.
+- In Cursor conversations, a queued message offers "Add to current task" as soon as the turn starts; with some gateways it previously appeared only after the Agent's first tool call.
 
 ## 0.9.0 - 2026-11-19
 
