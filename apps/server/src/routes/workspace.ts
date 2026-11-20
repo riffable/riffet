@@ -162,6 +162,12 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     return reply.send(archive.stream());
   });
   app.post<{Params:{id:string};Body:{path:string;line?:number}}>('/api/projects/:id/open',async(request)=>workspace.openInEditor(store.getProject(request.params.id),requireString(request.body?.path,'path',8192),request.body.line,settings.getSettings().editorCommand,{allowOutside:allowOutsideRead(request.headers)}));
+  // Changes to project files (`workspace/write.ts`); a save names the version it was edited from.
+  app.put<{Params:{id:string};Body:{path:string;content:string;expectedHash:string}}>('/api/projects/:id/file',async(request)=>workspace.writes.save(store.getProject(request.params.id),{path:requireString(request.body?.path,'path',8192),content:request.body.content,expectedHash:requireString(request.body.expectedHash,'expectedHash',128)}));
+  app.post<{Params:{id:string};Body:{path:string;kind:'file'|'directory'}}>('/api/projects/:id/file/create',async(request)=>workspace.writes.create(store.getProject(request.params.id),{path:requireString(request.body?.path,'path',8192),kind:request.body.kind}));
+  app.post<{Params:{id:string};Body:{from:string;to:string}}>('/api/projects/:id/file/move',async(request)=>workspace.writes.move(store.getProject(request.params.id),{from:requireString(request.body?.from,'from',8192),to:requireString(request.body.to,'to',8192)}));
+  app.post<{Params:{id:string};Body:{path:string;permanent?:boolean}}>('/api/projects/:id/file/delete',async(request)=>workspace.writes.remove(store.getProject(request.params.id),{path:requireString(request.body?.path,'path',8192),permanent:request.body.permanent===true}));
+  app.post<{Params:{id:string};Body:{restoreId:string}}>('/api/projects/:id/file/restore',async(request)=>workspace.writes.restore(store.getProject(request.params.id),requireString(request.body?.restoreId,'restoreId',64)));
   app.get<{Params:{id:string}}>('/api/projects/:id/reveal',async(request)=>{
     store.getProject(request.params.id);
     return {supported:process.platform==='darwin'&&localFileActions(request)};

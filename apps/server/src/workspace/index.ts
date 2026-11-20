@@ -11,13 +11,15 @@ import { expandHomePath, projectRoot, isSecretPath, isWithin, resolveReadablePat
 import { FileIndex, rankPaths, ripgrepSearch } from './file-index.js';
 import { CodeNav, findDefinitions, findReferences, type DefinitionQuery, type ReferenceQuery } from './code-nav.js';
 import { decodePreviewText, MAX_PREVIEW_FILE_BYTES, previewKind } from '../previews/formats.js';
+import { FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
+import { editableText, FileWrites } from './write.js';
 
 const MAX_LIST_PAGE = 200;
 const MAX_WALK_ENTRIES = 20_000;
 const MAX_WALK_DEPTH = 24;
 const MAX_DIRECTORY_SCAN = 20_000;
 const MAX_SEARCH_TOTAL_BYTES = 64 * 1024 * 1024;
-const MAX_PREVIEW_BYTES = 512 * 1024;
+const MAX_PREVIEW_BYTES = FILE_BUDGET.previewTextBytes;
 const MAX_FILE_READ_BYTES = MAX_PREVIEW_FILE_BYTES;
 const MAX_ATTACHMENT_BYTES = 24 * 1024 * 1024;
 const IGNORED_DIRS = new Set(['.git', 'node_modules', '.next', 'dist', 'build', 'coverage']);
@@ -241,9 +243,13 @@ export class WorkspaceService {
   readonly stateDir: string;
   private readonly fileIndex = new FileIndex();
 
-  constructor(options: { stateDir: string }) {
+  /** Saves, creations, moves and deletions (`write.ts`). */
+  readonly writes: FileWrites;
+
+  constructor(options: { stateDir: string; noteWrite?: (absolutePath: string) => void }) {
     if (!options?.stateDir || !path.isAbsolute(options.stateDir)) throw new AppError('INVALID_STATE_DIR', 'stateDir must be an absolute path');
     this.stateDir = path.resolve(options.stateDir);
+    this.writes = new FileWrites({ stateDir: this.stateDir, noteWrite: options.noteWrite });
   }
 
   async scopedPath(project: ProjectRef, filePath: string): Promise<string> {
@@ -449,6 +455,9 @@ export class WorkspaceService {
     const text = imageMimeType ? undefined : decodePreviewText(data.subarray(0, MAX_PREVIEW_BYTES));
     const binary = Boolean(imageMimeType) || text === undefined;
     const kind = previewKind(path, sample);
+    const inside = isWithin(root, target);
+    // What `write.ts#FileWrites.save` accepts: the whole file, UTF-8, inside the project, outside `.git`.
+    const editable = inside && !binary && data.byteLength <= MAX_PREVIEW_BYTES && !path.split('/').includes('.git') && editableText(data) !== undefined;
     return {
       // Outside files keep their absolute path: there is no project-relative form for them,
       // and the UI echoes this value back when referencing a line or opening the editor.
@@ -460,6 +469,7 @@ export class WorkspaceService {
       truncated: data.byteLength > MAX_PREVIEW_BYTES,
       ...(imageMimeType ? { image: { mimeType: imageMimeType } } : {}),
       ...(kind ? { render: { kind } } : {}),
+      ...(editable ? { editable } : {}),
     };
   }
 

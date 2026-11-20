@@ -1,5 +1,13 @@
 export interface FileEntry { path: string; name: string; kind: 'file' | 'directory'; size?: number; modifiedAt?: string; }
-export interface FilePreview { path: string; content: string; hash: string; size: number; binary: boolean; truncated: boolean; image?: { mimeType: string }; render?: { kind: string }; }
+/**
+ * `hash` is the version a save names as `expectedHash`. `editable` marks a whole UTF-8 text file inside
+ * the project that the workbench may write (`apps/server/src/workspace/write.ts`).
+ */
+export interface FilePreview { path: string; content: string; hash: string; size: number; binary: boolean; truncated: boolean; image?: { mimeType: string }; render?: { kind: string }; editable?: boolean; }
+/** A project file after a save or a creation: the version the next save names. */
+export interface FileVersion { path: string; hash: string; size: number; }
+/** A deletion kept for undo carries the id that restores it; one deleted for good carries none. */
+export interface FileDeletion { path: string; restoreId?: string; }
 export interface SearchHit { path: string; line: number; text: string; }
 /** A place in a project file that code navigation points at; `line` and `column` are 1-based, `text` is the line. */
 export interface CodeLocation { path: string; line: number; column: number; text: string; }

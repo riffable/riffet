@@ -199,7 +199,9 @@ export async function createApp(options: AppOptions = {}) {
   const notices=new NoticeLog(store);
   riffetMcpCredentials.prune(id=>{try{return !store.getSession(id).archivedAt;}catch{return false;}});
   let orchestrationRef:OrchestrationService|undefined;
-  const workspace=new WorkspaceService({stateDir});
+  // A save from the workbench is the user's edit: a command running meanwhile does not claim the file.
+  const workspace=new WorkspaceService({stateDir,noteWrite:file=>workspaceObserver(stateDir).noteEdit(file)});
+  void workspace.writes.prune().catch(()=>undefined);
   // Paired devices' calls and leases (docs/DEVICES.md §3); leases follow the scheduler's wake-ups.
   const devices=new DeviceChannel({store,auth,workspace,pendingWakeups:()=>orchestrationRef?.pendingWakeups()??[]});
   const adb=new DeviceAdb(options.adbRunner?{runner:options.adbRunner,locate:()=>'adb'}:{});

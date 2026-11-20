@@ -27,6 +27,21 @@ export const IMAGE_CACHE = {
 /** Long edge, in pixels, of the copy an inline image is decoded to; the viewer decodes the original. */
 export const IMAGE_DISPLAY_EDGE_PX = { mac: 1_600, web: 1_600, phone: 1_080 } as const;
 
+/** Reads and writes of project files (`apps/server/src/workspace`). */
+export const FILE_BUDGET = {
+  /** Most bytes a preview reads; larger text is refused, a larger binary is named and downloaded. */
+  previewReadBytes: 32 * MIB,
+  /** Text a preview carries; past it the preview is cut short and the file cannot be edited from it. */
+  previewTextBytes: 512 * KIB,
+  /** Largest text one save writes. */
+  saveBytes: 2 * MIB,
+  /** A deletion larger than this is not kept for undo; the client asks before deleting it for good. */
+  trashItemBytes: 256 * MIB,
+  /** Deleted files kept for undo, all together, and for how long. */
+  trashBytes: 1024 * MIB,
+  trashRetentionMs: 24 * 60 * 60_000,
+} as const;
+
 /** Parsed and laid-out text kept for reuse: markdown, highlighted code, measured rows; all such caches together. */
 export const TEXT_CACHE_BYTES = { mac: 32 * MIB, web: 32 * MIB, phone: 16 * MIB } as const;
 

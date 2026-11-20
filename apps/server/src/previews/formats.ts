@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
+import { FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 
-export const MAX_PREVIEW_FILE_BYTES = 32 * 1024 * 1024;
+export const MAX_PREVIEW_FILE_BYTES = FILE_BUDGET.previewReadBytes;
 export type PreviewKind = 'markdown' | 'html' | 'image' | 'pdf' | 'document' | 'presentation' | 'spreadsheet' | 'table' | 'notebook' | 'structured' | 'diagram' | 'media' | 'archive' | 'database' | 'model' | 'font';
 
 const formats: Record<string, PreviewKind> = {};
