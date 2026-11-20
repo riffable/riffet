@@ -3,6 +3,7 @@ package riffet.ui.state
 import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeQueue
 import riffet.contracts.Run
+import riffet.contracts.SessionControlSnapshot
 
 /**
  * Where a message sent to the CLI stands, as the client sees it: the web's `delivery.ts`. The places
@@ -29,8 +30,14 @@ fun sendPhase(run: Run): SendPhase? {
     }
 }
 
-/** A queued message (not a steer) the server holds: it can still be sent now, edited or withdrawn. */
-fun inQueue(run: Run): Boolean = run.native?.intent != "steer" && sendPhase(run) == SendPhase.QUEUED
+/**
+ * A queued message (not a steer) the server holds: it can still be sent now, edited or withdrawn.
+ * The [control] snapshot decides (an inbox entry placed `queued`); only a server that sends none (an
+ * older one) leaves it to the run's own delivery state.
+ */
+fun inQueue(run: Run, control: SessionControlSnapshot? = null): Boolean =
+    if (control != null) control.inbox.any { it.placement == "queued" && (it.id == run.id || it.commandId == run.commandId) }
+    else run.native?.intent != "steer" && sendPhase(run) == SendPhase.QUEUED
 
 enum class MessagePlace { DOCK, TRANSCRIPT }
 

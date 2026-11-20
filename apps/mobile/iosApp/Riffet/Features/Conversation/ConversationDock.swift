@@ -264,7 +264,7 @@ private struct QueueDockCard: View {
             }
         }
         .riffetFont(.caption).foregroundStyle(palette.fg3)
-        .disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run))
+        .disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control))
     }
 
     private func steer(_ run: Run) {

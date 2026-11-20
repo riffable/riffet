@@ -968,7 +968,7 @@ struct ComposerDocks: View {
             }
             ForEach(recoveryOnly ? [] : workbench.queued, id: \.id) { run in
                 // A send still submitting has no run on the server to act on yet.
-                let blocked = workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run)
+                let blocked = workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control)
                 let governed = workbench.control != nil
                 let showSteer = governed ? allows("steer", on: run) : (supportsSteer && workbench.status?.activeTurn != nil)
                 let showSendNow = governed ? allows("send_now", on: run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop

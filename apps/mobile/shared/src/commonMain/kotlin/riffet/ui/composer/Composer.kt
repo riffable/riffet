@@ -1253,7 +1253,7 @@ private fun QueueDock(
             Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
                 runs.forEach { run ->
                     // A send still submitting has no run on the server to act on yet.
-                    val blocked = run.id in pendingRunIds || !enabled || !inQueue(run)
+                    val blocked = run.id in pendingRunIds || !enabled || !inQueue(run, control)
                     val actions = control?.let { queuedActions(it, run.id, run.commandId) }
                     // Without a snapshot the row still offers steer or send-now from local rules.
                     // With one, a missing action is not shown: a direct send never grows "停止并发送".

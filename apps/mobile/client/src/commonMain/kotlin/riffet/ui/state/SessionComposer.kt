@@ -169,7 +169,7 @@ internal class SessionComposer(
 
     suspend fun steerQueued(run: Run, target: NativeTurnTarget): Boolean {
         val current = core.value.runs.firstOrNull { it.id == run.id } ?: return false
-        if (!inQueue(current)) return false
+        if (!inQueue(current, core.value.control)) return false
         if (outbox.entries(current.sessionId).any { it.sourceRunId == current.id && it.failure == null }) return false
         return submit(current.native?.input?.text ?: current.prompt, emptyList(), emptyList(), false, target, current)
     }
@@ -290,7 +290,7 @@ internal class SessionComposer(
         val epoch = opened.epoch
         if (opened.sessionId != session.id) return@async false
         val current = opened.runs.firstOrNull { it.id == run.id } ?: return@async false
-        if (!inQueue(current) || run.id in opened.steerSources) return@async false
+        if (!inQueue(current, opened.control) || run.id in opened.steerSources) return@async false
         if (core.value.send.sending || core.value.send.interrupting) return@async false
         if (hasUnknownSubmission()) return@async false
         markRunPending(epoch, run.id, true)
