@@ -7,7 +7,7 @@ import type { NativeBackendTraits, NativeDispatchBinding } from '../backends/typ
 import { AppError } from '../errors.js';
 import { backendIdOf } from '../session-identity.js';
 import { admission, queueOf } from './lane.js';
-import { SessionActor, type SessionActorHost } from './session-actor.js';
+import { SessionActor, type SessionActorHost, type SessionDispatchOptions } from './session-actor.js';
 
 const now = () => Date.now();
 /** How long a drain holds deliveries without being renewed; whoever waits for a restart renews it as it polls. */
@@ -95,7 +95,7 @@ export class NativeDispatcher {
   private readonly drainLeases = new Map<string, number>();
   private readonly host: SessionActorHost;
 
-  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: NativeDispatcherRuntime, private readonly workspace: WorkspaceService, private readonly options: { intervalMs?: number; confirmationMs?: number; beforeTurn?: (session: Session, run: Run, since: number) => Promise<unknown>; busyLimitMs?: number; idleReconcileMs?: number; idleOutcomeGraceMs?: number } = {}) {
+  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: NativeDispatcherRuntime, private readonly workspace: WorkspaceService, private readonly options: SessionDispatchOptions = {}) {
     const dispatcher = this;
     this.host = {
       store, native, runtime, workspace, options,

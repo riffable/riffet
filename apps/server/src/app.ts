@@ -297,7 +297,7 @@ export async function createApp(options: AppOptions = {}) {
   // A project outside Git simply has none; checkpoint failure never fails the turn.
   const beforeTurn=async(session:import('../../../packages/contracts/src/index.js').Session,run:import('../../../packages/contracts/src/index.js').Run,since:number)=>
     session.backendId==='chat'?undefined:git.createTurnCheckpoint(store.getProject(session.projectId),{sessionId:session.id,runId:run.id,title:run.prompt.trim().split('\n')[0]!.slice(0,120)||'Turn',since});
-  const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn});
+  const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn,log:entry=>console.log(`[dispatch] ${JSON.stringify(entry)}`)});
   // A provider that keeps names of its own (Codex) is told whenever the workbench or the reader names a conversation.
   const renameNative=(session:import('../../../packages/contracts/src/index.js').Session)=>{void nativeBackends.rename(session).catch(()=>undefined);};
   const titles=new TitleService({store,titleModel:()=>resolveAuxiliaryModel(settings.getSettings(),'title'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative,record:recordAuxiliaryCall});

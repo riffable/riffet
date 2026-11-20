@@ -10,6 +10,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Text files in the Files view can be edited on the web: turn on Edit, save with ⌘S, and keep unsaved edits while you look at other files. A save never overwrites changes an Agent made meanwhile; you compare the two versions and choose per change, take the disk version, or save over it. Files and folders can also be created, renamed, and deleted from the file list, and a deletion can be undone from its notice.
 - Audio and video in the Files view play at any size and can be seeked, on the web, Mac, and phones; they previously had to be under 32 MB and played only from the start.
 - The web app now opens with a full-window first-run guide: pick the default Agent (with install commands when none is available), choose the directory to start in, and scan to connect your phone; every step can be skipped. It appears once per browser, and not at all on a server that already has conversations.
+- `riffet logs --scope dispatch` shows each message's delivery steps and the phase its conversation is in, for finding out why a message was not sent or keeps running.
 
 ### Fixes
 
@@ -21,6 +22,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On Android, the new-session icon in the bottom bar now lines up vertically with the other tabs instead of sitting slightly higher.
 - A message queued while the Agent is answering no longer shows above that answer for a few seconds after it goes out.
 - In Cursor conversations, a queued message offers "Add to current task" as soon as the turn starts; with some gateways it previously appeared only after the Agent's first tool call.
+- A message no longer stays running, holding back the ones queued behind it, when the agent answers quickly and its transcript record arrives a moment later.
+- A queued message no longer waits indefinitely when the previous turn has ended but the idle status never arrived; it goes out within half a second.
 
 ## 0.9.0 - 2026-11-19
 

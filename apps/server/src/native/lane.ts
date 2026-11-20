@@ -99,3 +99,53 @@ export function admission(facts: LaneFacts): Admission {
 export function queueOf(admitted: Admission): NativeQueue {
   return { ...(admitted.next ? { next: admitted.next.id } : {}), ...(admitted.held ? { held: admitted.held } : {}) };
 }
+
+/** A message is next and only the provider's status holds it: no run of ours, no operation of ours. */
+export function heldByProvider(admitted: Admission): boolean {
+  return Boolean(admitted.next && admitted.held && !admitted.held.runId && (admitted.held.reason === 'turn_running' || admitted.held.reason === 'attention'));
+}
+
+export interface LookFacts {
+  runs: readonly Run[];
+  now: number;
+  /** How often something that has no deadline of its own is looked at again. */
+  intervalMs: number;
+  confirmationMs: number;
+  retryAt(runId: string): number;
+  /** Since when an observed run's provider has been idle with no turn, if it has. */
+  idleSince(runId: string): number | undefined;
+  idleWindow(run: Run): number;
+  /** `heldByProvider` for these runs; asked only when a message is queued. */
+  held(): boolean;
+}
+
+/**
+ * The next moment a conversation has to be looked at again: a retry, a receipt window, an idle grace, a
+ * status read while an observed run is not idle yet, or a queue that only the provider's status holds —
+ * the push that would free it may never come. Undefined when nothing waits on the clock.
+ */
+export function nextLook(facts: LookFacts): number | undefined {
+  const at = facts.now;
+  let next: number | undefined;
+  let queued = false;
+  const consider = (when: number) => { if (next === undefined || when < next) next = when; };
+  for (const run of facts.runs) {
+    const native = run.native;
+    if (!native || native.queueReleasedAt) continue;
+    if (native.delivery === 'queued' && native.intent !== 'steer') {
+      queued = true;
+      const retry = facts.retryAt(run.id);
+      if (retry > at) consider(retry);
+    } else if (native.delivery === 'input_sent') {
+      const due = (native.timings?.inputSentAt ?? at) + facts.confirmationMs + 1;
+      // Past the window but still input_sent: the provider was busy. Look again on this conversation only.
+      consider(due > at ? due : at + facts.intervalMs);
+    } else if (native.delivery === 'observed') {
+      const since = facts.idleSince(run.id);
+      if (since !== undefined) consider(since + facts.idleWindow(run) > at ? since + facts.idleWindow(run) : at + facts.intervalMs);
+      else consider(at + facts.intervalMs);
+    }
+  }
+  if (queued && facts.held()) consider(at + facts.intervalMs);
+  return next;
+}

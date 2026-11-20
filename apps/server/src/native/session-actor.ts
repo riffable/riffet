@@ -7,9 +7,12 @@ import type { NativeBackendTraits } from '../backends/types.js';
 import { AppError, UNSPECIFIED_NATIVE_RUN_FAILURE } from '../errors.js';
 import { isAgentTerminal } from '../terminal/kinds.js';
 import { redactSensitiveText } from '../settings/config-documents.js';
-import { admission, holdsUnconfirmed, queueOf, steerTurnEnded, type Admission } from './lane.js';
+import { admission, heldByProvider, holdsUnconfirmed, nextLook, queueOf, steerTurnEnded, type Admission } from './lane.js';
 import type { DispatchObservation, NativeDispatcherBackend } from './dispatch.js';
 import { ExecutionAdapter, type TurnDeliveryResult } from './execution-adapter.js';
+import { Mailbox } from './mailbox.js';
+import { assertStopBinding, readStopReceipt, saveStopReceipt, stopFingerprint, type StopReceipt } from './stop-receipt.js';
+import { DispatchTrace, phaseOf, type DispatchTraceEntry, type SessionPhase } from './trace.js';
 
 const now = () => Date.now();
 /** The turn an event speaks for: a steer's receipt names its target, whatever turn its row was grouped into. */
@@ -57,13 +60,6 @@ function canApplyTurnOutcome(run: Run): boolean {
 const isTurnOutcome = (event: NativeWorkbenchEvent) => ['run_completed', 'run_failed', 'run_cancelled', 'native_turn_reopened'].includes(event.type);
 const outcomeRevision = (event: NativeWorkbenchEvent): number => Number.isSafeInteger(event.data.outcomeRevision) && Number(event.data.outcomeRevision) > 0 ? Number(event.data.outcomeRevision) : 1;
 
-interface StopReceipt {
-  request: NativeStopRequest; operation: string; state: 'pending' | 'completed';
-  runId?: string; createdAt: string; replacementFingerprint?: string;
-  targets?: Array<[string, NativeDeliveryState]>; terminalId?: string; terminalEpoch?: number;
-  error?: { code?: string; message: string };
-}
-
 export interface SessionDispatchOptions {
   intervalMs?: number;
   confirmationMs?: number;
@@ -71,7 +67,19 @@ export interface SessionDispatchOptions {
   busyLimitMs?: number;
   idleReconcileMs?: number;
   idleOutcomeGraceMs?: number;
+  /** Where phase and delivery changes are reported (`trace.ts`). Absent: nothing is traced. */
+  log?: (entry: DispatchTraceEntry) => void;
 }
+
+/**
+ * What a conversation's mailbox carries. `wake`: look at the queue and the deadlines again (a new
+ * message, a timer, an operation that finished). `observation`: events or a status from the provider.
+ * `settle`: a command that does not itself dispatch has returned.
+ */
+type ActorMessage =
+  | { type: 'wake' }
+  | { type: 'observation'; sessionId: string; observation: DispatchObservation }
+  | { type: 'settle' };
 
 /** Process-wide services a session actor may use. Cross-session state stays on the coordinator. */
 export interface SessionActorHost {
@@ -95,6 +103,12 @@ export interface SessionActorHost {
  * One conversation's dispatch mailbox: its in-flight work, retry and confirmation deadlines, and the
  * single timer that wakes it. Idle actors are dropped by the coordinator so a long-lived process does
  * not keep a timer and an observer for every session it has ever touched.
+ *
+ * Everything that reaches the conversation from outside — a wake, a provider observation, a settled
+ * command — goes through `post` and is handled one message at a time, in arrival order. A message
+ * that arrives while another is being handled waits its turn; no handler runs inside another. The
+ * asynchronous operations (a delivery, a steer, a stop, a recovery read) run under the session lock
+ * and come back through the same mailbox when they observe something or finish.
  */
 export class SessionActor {
   /** The delivery worker, when one holds this conversation. Replaces the coordinator's worker and lease maps. */
@@ -127,12 +141,15 @@ export class SessionActor {
   timer: NodeJS.Timeout | undefined;
 
   private timerAt: number | undefined;
-  private depth = 0;
-  private pendingWake = false;
+  /** A wake right behind another looks at nothing new, and a wake also does what a settle does. */
+  private readonly mailbox = new Mailbox<ActorMessage>(message => this.receive(message),
+    (last, next) => next.type !== 'observation' && (last.type === 'wake' || last.type === next.type),
+    (message, error) => console.warn(`[dispatch] a queued ${message.type} for ${this.sessionId} failed:`, error));
   private waking = false;
   private subscribing = false;
   /** A completion is allowed to deliver the rest of the current turn's events before the watch is dropped. */
   private idleQueued = false;
+  private readonly traced: DispatchTrace | undefined;
 
   private readonly adapter: ExecutionAdapter;
 
@@ -144,6 +161,7 @@ export class SessionActor {
       workspace: host.workspace,
       traits: backendId => (backendId && host.native.traits?.(backendId)) || {},
     });
+    if (host.options.log) this.traced = new DispatchTrace(sessionId, host.options.log);
   }
 
   private get store() { return this.host.store; }
@@ -168,11 +186,29 @@ export class SessionActor {
     return queueOf(this.admission(this.sessionId, this.store.listUnfinishedNativeRuns(this.sessionId), status));
   }
 
+  /** Ask for a scheduling step. It runs now, or after the message being handled. */
+  step(): void { this.mailbox.post({ type: 'wake' }); }
+  /** What the provider reported. Applied now, or after the message being handled. */
+  observe(sessionId: string, message: DispatchObservation): void { this.mailbox.post({ type: 'observation', sessionId, observation: message }); }
+
+  /** Arm the timer and drop this actor once a command that does not itself dispatch has settled. */
+  settle(): void { this.mailbox.post({ type: 'settle' }); }
+
+  private receive(message: ActorMessage): void {
+    if (message.type === 'wake') { this.wake(); return; }
+    if (message.type === 'settle') {
+      if (!this.host.closed && this.attached()) this.finish(false, message.type);
+      return;
+    }
+    if (this.host.closed) return;
+    // A status or correction that arrives on its own arms the next deadline once it is applied.
+    try { this.apply(message.sessionId, message.observation); }
+    finally { this.finish(false, message.type); }
+  }
+
   /** Run one scheduling step: admit a queued run, then apply confirmation and idle deadlines that are already due. */
-  step(): void {
+  private wake(): void {
     if (this.host.closed || !this.attached()) return;
-    if (this.depth > 0) { this.pendingWake = true; return; }
-    this.depth++;
     let startedIdle = false;
     try {
       let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
@@ -203,16 +239,8 @@ export class SessionActor {
       }
       this.watchDeliveries(runs);
     } finally {
-      this.depth--;
-      this.finish(startedIdle);
+      this.finish(startedIdle, 'wake');
     }
-  }
-
-  /** Arm the timer and drop this actor once a command that does not itself dispatch has settled. */
-  settle(): void {
-    if (this.host.closed || !this.attached()) return;
-    if (this.depth > 0) { this.pendingWake = true; return; }
-    this.finish(false);
   }
 
   /** Stop the timer, detach the observer, and wait for work already inside the session lock. */
@@ -230,6 +258,8 @@ export class SessionActor {
     this.idleSince.clear();
     this.nextAttempt.clear();
     this.drainHeldSteers.clear();
+    this.traced?.clear();
+    this.mailbox.clear();
     return Promise.allSettled(pending).then(() => undefined);
   }
 
@@ -237,7 +267,8 @@ export class SessionActor {
     return this.host.current(this.sessionId) === this;
   }
 
-  private finish(evictNow: boolean): void {
+  /** After every message: re-arm the watch and the timer, trace what changed, then wake again or let go. */
+  private finish(evictNow: boolean, cause: ActorMessage['type']): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
     let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     // Re-arm the watch when a correction reopened a turn. Releasing it waits until a later step
@@ -246,16 +277,19 @@ export class SessionActor {
     if (!this.attached()) { this.clearTimer(); return; }
     runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     this.scheduleTimer(runs);
-    if (this.pendingWake) {
-      this.pendingWake = false;
-      this.step();
-      return;
-    }
+    this.traced?.record(runs, this.phase(runs), cause, id => { try { return this.store.getRun(id); } catch { return undefined; } });
+    // The message behind this one finishes in its turn, against what it leaves.
+    if (this.mailbox.pending) return;
     if (this.shouldDispatch(runs)) this.wakeSoon();
     else if (this.isIdle(runs)) {
       if (evictNow) this.host.onIdle(this.sessionId, this);
       else this.deferIdle();
     }
+  }
+
+  /** Where the conversation stands (`trace.ts#SessionPhase`). */
+  phase(runs: readonly Run[] = this.store.listUnfinishedNativeRuns(this.sessionId)): SessionPhase {
+    return phaseOf(runs, { stopping: this.interrupting || this.interruptionTask !== undefined, recovering: this.recoveryActive, sending: this.worker !== undefined || this.steerTasks.size > 0 });
   }
 
   /** Let the caller finish delivering this turn, then drop the actor if nothing new arrived. */
@@ -340,7 +374,9 @@ export class SessionActor {
    */
   private scheduleTimer(runs: readonly Run[]): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
-    const at = this.nextDeadline(runs);
+    const idleWindow = (run: Run) => run.native?.expectsTurnOutcome ? (this.options.idleOutcomeGraceMs ?? IDLE_OUTCOME_GRACE_MS) : (this.options.idleReconcileMs ?? IDLE_RECONCILE_MS);
+    const at = nextLook({ runs, now: now(), intervalMs: this.options.intervalMs ?? 500, confirmationMs: this.options.confirmationMs ?? 30_000,
+      retryAt: id => this.nextAttempt.get(id) ?? 0, idleSince: id => this.idleSince.get(id), idleWindow, held: () => this.providerHold(runs) });
     if (at === undefined) { this.clearTimer(); return; }
     if (this.timer && this.timerAt !== undefined && this.timerAt <= at) return;
     this.clearTimer();
@@ -353,32 +389,10 @@ export class SessionActor {
     this.timer.unref?.();
   }
 
-  private nextDeadline(runs: readonly Run[]): number | undefined {
-    const at = now();
-    let next: number | undefined;
-    const consider = (when: number) => { if (next === undefined || when < next) next = when; };
-    const interval = this.options.intervalMs ?? 500;
-    for (const run of runs) {
-      const native = run.native;
-      if (!native || native.queueReleasedAt) continue;
-      if (native.delivery === 'queued' && native.intent !== 'steer') {
-        const retry = this.nextAttempt.get(run.id) ?? 0;
-        if (retry > at) consider(retry);
-      } else if (native.delivery === 'input_sent') {
-        const due = (native.timings?.inputSentAt ?? at) + (this.options.confirmationMs ?? 30_000) + 1;
-        // Past the window but still input_sent: the provider was busy. Look again on this actor only.
-        consider(due > at ? due : at + interval);
-      } else if (native.delivery === 'observed') {
-        const since = this.idleSince.get(run.id);
-        if (since !== undefined) {
-          const window = native.expectsTurnOutcome
-            ? (this.options.idleOutcomeGraceMs ?? IDLE_OUTCOME_GRACE_MS)
-            : (this.options.idleReconcileMs ?? IDLE_RECONCILE_MS);
-          consider(since + window > at ? since + window : at + interval);
-        } else consider(at + interval);
-      }
-    }
-    return next;
+  /** Whether a queued message waits only on what the provider says (a turn Riffet did not start, a dialog). */
+  private providerHold(runs: readonly Run[]): boolean {
+    if (this.worker !== undefined || this.host.closed || this.host.draining()) return false;
+    try { return heldByProvider(this.admission(this.sessionId, runs)); } catch { return false; }
   }
 
   private turnKey(nativeSessionId: string, turnId: string): string {
@@ -389,9 +403,11 @@ export class SessionActor {
   private watchDeliveries(runs: readonly Run[]): void {
     for (const run of runs) {
       if (run.native?.queueReleasedAt) continue;
+      // A receipt alone starts the status reads: a turn over before its echo was seen gets no further status push.
+      const since = run.native?.timings?.firstOutputAt ?? run.native?.timings?.busyAt ?? run.native?.timings?.observedAt;
       if (run.native?.delivery === 'observed' && typeof this.native.status === 'function'
-        && (run.native.expectsTurnOutcome || run.native.intent === 'steer' || this.idleSince.has(run.id) || (run.native.timings?.firstOutputAt ?? run.native.timings?.busyAt ?? 0) > 0 && now() - (run.native.timings?.firstOutputAt ?? run.native.timings?.busyAt ?? now()) >= 500)) {
-        this.observe(run.sessionId, { type: 'status', status: this.native.status(run.sessionId) });
+        && (run.native.expectsTurnOutcome || run.native.intent === 'steer' || this.idleSince.has(run.id) || since === undefined || now() - since >= 500)) {
+        this.apply(run.sessionId, { type: 'status', status: this.native.status(run.sessionId) });
       }
       if (run.native?.delivery === 'input_sent' && now() - (run.native.timings?.inputSentAt ?? now()) > (this.options.confirmationMs ?? 30_000)) {
         const terminal = this.matchingTerminal(run);
@@ -665,13 +681,9 @@ export class SessionActor {
     return task;
   }
 
-  observe(sessionId: string, message: DispatchObservation): void {
+  /** Applies one observation to the conversation's runs. Handlers call it directly for what they read themselves. */
+  private apply(sessionId: string, message: DispatchObservation): void {
     if (this.host.closed) return;
-    // A status or correction that arrives on its own arms the next deadline. One delivered from
-    // inside a step is finished by that step, once, after the whole observation returns.
-    const root = this.depth === 0;
-    if (root) this.depth++;
-    try {
     if (message.type === 'events') {
       this.reconcileTurnCorrections(sessionId, message.events);
       for (const source of message.events) {
@@ -716,7 +728,7 @@ export class SessionActor {
           // already be settled while receipted steers in that turn still await its real outcome.
           const outcomes = turnRuns.filter(run => run.native?.nativeMessageId && canApplyTurnOutcome(run))
             .map(run => ({ ...event, runId: owner.id, data: { ...event.data, commandId: run.commandId } }));
-          if (outcomes.length) this.observe(sessionId, { type: 'events', events: outcomes });
+          if (outcomes.length) this.apply(sessionId, { type: 'events', events: outcomes });
           continue;
         }
         const matchingRun = taggedCommandId ? this.store.findRunByCommand(sessionId, taggedCommandId)
@@ -812,7 +824,7 @@ export class SessionActor {
               timings: { ...current.native.timings, observedAt: current.native.timings?.observedAt ?? now(), ...(event.type === 'native_input_receipt' ? { providerAcceptedAt: now() } : {}) },
             }, isFinished ? {} : { state: stoppedSteer || current.native.queueReleasedAt ? 'interrupted' : 'running', error: undefined });
           const outcome = this.pendingSteerOutcomes.get(current.id);
-          if (outcome) { this.pendingSteerOutcomes.delete(current.id); this.observe(sessionId, { type: 'events', events: [outcome] }); }
+          if (outcome) { this.pendingSteerOutcomes.delete(current.id); this.apply(sessionId, { type: 'events', events: [outcome] }); }
         }
         if (event.type === 'user_message_chunk' || event.type === 'native_input_receipt') {
           const bound = this.store.getRun(current.id);
@@ -945,9 +957,6 @@ export class SessionActor {
         this.reconcileIdleRun(sessionId, run.id, message.status);
       }
     }
-    } finally {
-      if (root) { this.depth--; this.finish(false); }
-    }
   }
 
   private turnOutcomeScope(sessionId: string, event: NativeWorkbenchEvent): { key: string; nativeSessionId: string; turnId: string } | undefined {
@@ -1077,7 +1086,7 @@ export class SessionActor {
     const outcome = this.pendingTurnOutcomes.get(key);
     if (!outcome) return;
     this.pendingTurnOutcomes.delete(key);
-    this.observe(run.sessionId, { type: 'events', events: [outcome] });
+    this.apply(run.sessionId, { type: 'events', events: [outcome] });
   }
 
   /** Returns persisted terminal state only when the Run still belongs to this exact session/chat. */
@@ -1230,37 +1239,8 @@ export class SessionActor {
     });
   }
 
-  private stopReceipt(sessionId: string, stop: NativeStopRequest): StopReceipt | undefined {
-    return this.store.getSetting<Record<string, StopReceipt>>(`native-stops:${sessionId}`, {})[JSON.stringify(stop.requestId)];
-  }
-
-  private saveStopReceipt(sessionId: string, receipt: StopReceipt): void {
-    const key = `native-stops:${sessionId}`;
-    // Keep the request tombstone: eviction would turn an old retry into another Stop.
-    this.store.setSetting(key, { ...this.store.getSetting<Record<string, StopReceipt>>(key, {}), [JSON.stringify(receipt.request.requestId)]: receipt });
-  }
-
-  private stopFingerprint(stop: NativeStopRequest, operation: string, replacementFingerprint?: string): string {
-    return JSON.stringify([operation, stop.requestId, stop.nativeSessionId, stop.turnId ?? null,
-      stop.terminalId ?? null, stop.terminalEpoch ?? null, replacementFingerprint ?? null]);
-  }
-
-  private assertStopBinding(sessionId: string, stop: NativeStopRequest, receipt?: StopReceipt): void {
-    const session = this.store.getSession(sessionId);
-    const terminalId = receipt?.terminalId ?? stop.terminalId;
-    const epoch = receipt?.terminalEpoch ?? stop.terminalEpoch;
-    let terminal: TerminalInfo | undefined;
-    if (terminalId) { try { terminal = this.store.getTerminal(terminalId); } catch { /* missing identity is not a stop receipt */ } }
-    if ((session.nativeSessionId ?? '') !== stop.nativeSessionId
-      || (terminalId !== undefined && (session.terminalId !== terminalId || !terminal || terminal.sessionId !== sessionId || terminal.projectId !== session.projectId))
-      || (epoch !== undefined && terminal?.epoch !== epoch)
-      || (receipt && session.terminalId && !terminalId)) {
-      throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'The original task changed; no stop was sent', 409);
-    }
-  }
-
   private assertStopTarget(sessionId: string, stop: NativeStopRequest): void {
-    this.assertStopBinding(sessionId, stop);
+    assertStopBinding(this.store, sessionId, stop);
     const status = this.native.status(sessionId);
     if (status.phase === 'offline' || status.connection && status.connection.state !== 'connected') {
       throw new AppError('NATIVE_STOP_UNCONFIRMED', 'Reconnect before stopping the original task', 409);
@@ -1319,12 +1299,12 @@ export class SessionActor {
   }
 
   private async recoverStop(sessionId: string, receipt: StopReceipt, submit?: () => Run, promotedRunId?: string): Promise<Run | undefined> {
-    this.assertStopBinding(sessionId, receipt.request, receipt);
+    assertStopBinding(this.store, sessionId, receipt.request, receipt);
     await this.native.reconcile?.(sessionId);
     const snapshot = await this.native.snapshot(sessionId);
     this.observe(sessionId, { type: 'events', events: snapshot.events });
     this.observe(sessionId, { type: 'status', status: snapshot.status });
-    this.assertStopBinding(sessionId, receipt.request, receipt);
+    assertStopBinding(this.store, sessionId, receipt.request, receipt);
     if (!this.stopEnded(sessionId, receipt, snapshot.events)) {
       throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The previous stop has not been confirmed; check the original task status', 409);
     }
@@ -1343,7 +1323,7 @@ export class SessionActor {
         || !original || !await this.native.canReleaseInput?.(session, original)) {
         throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The original input has not been confirmed safe to continue', 409);
       }
-      this.assertStopBinding(sessionId, receipt.request, receipt);
+      assertStopBinding(this.store, sessionId, receipt.request, receipt);
       const latest = this.native.status(sessionId);
       if (latest.phase !== 'idle' || latest.activeTurn || latest.activity?.background || latest.activity?.compacting
         || latest.connection && latest.connection.state !== 'connected') {
@@ -1353,7 +1333,7 @@ export class SessionActor {
     const settled = this.store.transaction(() => {
       const interrupted = this.settleInterrupted(targets, this.traits(session.backendId));
       const run = submit ? this.acceptFollowUp(submit, promotedRunId) : interrupted;
-      this.saveStopReceipt(sessionId, { ...receipt, state: 'completed', ...(run ? { runId: run.id } : {}) });
+      saveStopReceipt(this.store, sessionId, { ...receipt, state: 'completed', ...(run ? { runId: run.id } : {}) });
       return run;
     });
     await this.adapter.endInterruptedTurns(sessionId, targets, receipt.request);
@@ -1364,9 +1344,9 @@ export class SessionActor {
     if (this.host.workspaceReserved(this.store.getSession(sessionId))) return Promise.reject(this.host.workspaceBusy());
     const operation = commandId ?? 'stop';
     const operationKey = stop ? `stop:${stop.requestId}` : commandId;
-    const fingerprint = stop ? this.stopFingerprint(stop, operation, replacementFingerprint) : undefined;
-    const receipt = stop ? this.stopReceipt(sessionId, stop) : undefined;
-    if (receipt && this.stopFingerprint(receipt.request, receipt.operation, receipt.replacementFingerprint) !== fingerprint) {
+    const fingerprint = stop ? stopFingerprint(stop, operation, replacementFingerprint) : undefined;
+    const receipt = stop ? readStopReceipt(this.store, sessionId, stop) : undefined;
+    if (receipt && stopFingerprint(receipt.request, receipt.operation, receipt.replacementFingerprint) !== fingerprint) {
       return Promise.reject(new AppError('NATIVE_STOP_CONFLICT', 'This stop request belongs to a different operation', 409));
     }
     if (receipt?.state === 'completed') return Promise.resolve(receipt.runId ? this.store.getRun(receipt.runId) : undefined);
@@ -1395,7 +1375,7 @@ export class SessionActor {
           this.assertStopTarget(sessionId, stop);
           const session = this.store.getSession(sessionId);
           const terminal = session.terminalId ? this.store.getTerminal(session.terminalId) : undefined;
-          this.saveStopReceipt(sessionId, { request: stop, operation, state: 'pending', createdAt: new Date().toISOString(),
+          saveStopReceipt(this.store, sessionId, { request: stop, operation, state: 'pending', createdAt: new Date().toISOString(),
             ...(replacementFingerprint ? { replacementFingerprint } : {}), targets: [...targets],
             ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}) });
         }
@@ -1403,13 +1383,13 @@ export class SessionActor {
         try { run = await this.performInterrupt(sessionId, submit, targets, promotedRunId, stop); }
         catch (error) {
           if (!stop || error instanceof AppError && error.code === 'NATIVE_STOP_TARGET_CHANGED') throw error;
-          this.saveStopReceipt(sessionId, { ...this.stopReceipt(sessionId, stop)!, error: {
+          saveStopReceipt(this.store, sessionId, { ...readStopReceipt(this.store, sessionId, stop)!, error: {
             ...(error instanceof AppError ? { code: error.code } : {}),
             message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
           } });
           throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The stop has not been confirmed; check the original task status', 409);
         }
-        if (stop) this.saveStopReceipt(sessionId, { ...this.stopReceipt(sessionId, stop)!, state: 'completed', ...(run ? { runId: run.id } : {}) });
+        if (stop) saveStopReceipt(this.store, sessionId, { ...readStopReceipt(this.store, sessionId, stop)!, state: 'completed', ...(run ? { runId: run.id } : {}) });
         return run;
       });
     }).finally(() => {

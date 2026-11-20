@@ -1,6 +1,6 @@
 # 会话调度与控制面架构设计（Dispatch v2）
 
-日期：2026-11-19。状态：M1–M4 已全部落地并通过核心验证。
+日期：2026-11-19，实现状态更新于 2026-11-20。状态：M1 已落地；M2 已落地，与设计有两处差异；M3 未做，范围已调整；M4 的 Web 部分已落地，macOS 与移动端有残留。逐项见 §6「实现状态」。
 
 本文定义 Riffet 会话调度、多后端执行适配、权威控制投影以及客户端过程块/队列展示的目标架构。本次升级**不保留旧客户端兼容约束**（同步升级 Web、macOS、KMP/iOS/Android 并提升契约大版本），以换取单一权威数据源、清晰领域边界和可证明的状态机收口。
 
@@ -310,6 +310,29 @@ const canAutoFold =
 
 整套方案拆为 4 个可独立编译、测试、灰度验证的里程碑，**每步均朝最终架构单向收敛，不写临时过渡代码**：
 
+### 实现状态（2026-11-20）
+
+| 里程碑 | 状态 | 与设计的差异 |
+|---|---|---|
+| M1 | 已落地 | 无 |
+| M2 | 已落地 | 见下方两条 |
+| M3 | 未做 | 范围调整，见下 |
+| M4 | Web 已落地；macOS、移动端有残留 | Web 保留无快照时的回退 |
+
+**M2 的差异。**
+
+- 邮箱在 actor 的边界上：唤醒、后端观测、命令结束三类消息经 `native/mailbox.ts#Mailbox` 逐条处理，处理函数不嵌套。发送、引导、停止、恢复检查仍是会话锁下的异步操作，它们在 `await` 之间直接做比较后写入，观测到的内容和完成信号回到同一个邮箱。没有改写成「状态 + 消息 → 状态 + 副作用」的纯函数：Node 单线程下同步处理函数本身是原子的，跨 `await` 的一致性由 `transitionNativeRun` 的比较后写入保证，改写不会增加保证，只会增加一份与 `runs` 表并存的内存状态。
+- 阶段不是存储的状态机，而是推导值（`native/trace.ts#SessionPhase`，取值 `stopping`、`recovering`、`sending`、`running`、`unconfirmed`、`queued`、`idle`），与 `SessionControlSnapshot` 一样由未完结的 run 和在途操作算出。§4.2 的五个主状态对应客户端看到的 `ActiveTurnState.phase`。按 run 记录证据的几个 Map（回执前到达的回合结果、修订号、空闲起点）保留为字段，各自有上限或随 run 结束清除。
+- 验收里的「并发 stop/steer/send/configure 零竞态」由 `native/dispatch.property.test.ts` 检查：模拟 CLI 加随机交错，覆盖终端型和协议型两种后端，性质是 S1、S3、A3 和静止后无残留。它找出并已修复两处活性缺陷：回执晚于回合结束时 run 永远停在 `running`；队列只被后端状态挡住且空闲推送缺失时不再前进。
+- 可观测性：阶段变化与每个 run 的投递状态变化写入服务日志的 `dispatch` 范围（`native/trace.ts#DispatchTrace`）。
+
+**M3 的范围调整。**
+
+- `DispatchFeed` 保留。它是调度器的观测通道：把日志主通道、驱动在转录之外发出的事件和后端状态合成 `DispatchObservation`。回合的自然结束只能从后端的转录或 hook 观测到，这条路径不是回环；由调度器裁决的结束（停止确认）已在 M1 改为调度器直接写 `meta.turn_ended`。
+- `ExecutionAdapter` 仍是一个类，内部按三种传输分支（启动参数、驱动 `sendRun`、终端粘贴）。拆成终端型和协议型两个实现是纯结构整理，尚未做。
+
+**M4 的残留。** macOS 与移动端仍调用本地的 `inQueue`：`apps/macos/Riffet/Features/Conversation/ConversationView.swift`、`apps/mobile/iosApp/Riffet/Features/Conversation/ConversationDock.swift`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/composer/Composer.kt`，定义在 `apps/mobile/client/src/commonMain/kotlin/riffet/ui/state/SendPhase.kt`（`inQueue`、`messagePlace`）。
+
 ### M1：止血闭环 + 契约地基（核心故障一次性根治）
 - **契约**：`packages/contracts` 新增 `SessionControlSnapshot` / `InboxEntry` / `ActiveTurnState`，扩展 `TurnOutlineV3.status`，收敛 `NativeStopRequest`（停止匹配不再依赖 `terminalEpoch`）。
 - **服务端**：
@@ -334,6 +357,6 @@ const canAutoFold =
 - **验收**：全后端集成测试通过、`pnpm check:layers` 通过。
 
 ### M4：全端切齐 `SessionControlSnapshot` + 契约固化与旧代码清理
-- Web 全面切换消费 `control` 帧，删除本地重复推导（`inQueue`、`messagePlace`、`causallyBusy`、`canSteerQueued`）；
+- Web 已切换为读 `control` 帧：`inQueue` 在有快照时只看 `inbox` 的 `placement === 'queued'`（`delivery.ts`，发送立即与补充的守卫在 `nativeRunCommands.ts`），队列区取 `inbox`（`useSessionTranscript.ts`）；忙碌取 `activeTurn`，`causallyBusy` 仅在无快照时才计算；`canSteerQueued` 取 `control.capabilities` 与 `activeTurn.canSteer`，逐项动作取 `entry.actions`。`inQueue`、`messagePlace`、`causallyBusy`、`canSteerQueued` 的本地分支作为回退保留，只服务不下发 `control` 的旧服务端，有快照时不执行；待旧服务端退出支持范围后删除；
 - 同步升级 `apps/macos`（SwiftUI）与 `apps/mobile`（KMP `SessionStore` / `SessionComposer` + iOS / Android UI）消费新 `SessionControlSnapshot`；
 - 清理 `client-features` 中旧协议兜底、旧 `Run` 兼容字段，执行 `pnpm version:bump`、`pnpm gen:contracts`、`pnpm gen:timeline-fixtures`，运行全仓 `pnpm verify`。
