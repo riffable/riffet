@@ -33,7 +33,7 @@ import { WAIT_GRACE_MS, useLingering } from '../session/sessionLayout';
 import { useMarks, useStores } from '../state/stores';
 import { MarkDetailDialog } from './MarkDetailDialog';
 import { MarksAside, MarksScopeMenu } from './MarksNav';
-import { ShareImageDialog, type ShareSource } from './ShareImage';
+import { ShareImageDialog, shareModelName, type ShareSource } from './ShareImage';
 import {
   HighlightedText,
   markBorderClass,
@@ -648,12 +648,16 @@ export function MarksPage({
       kind: shareMark.kind,
       text: shareMark.kind === 'span' ? shareMark.quote?.exact ?? '' : shareMark.snapshot.text,
       ...(shareMark.kind === 'span' ? { color: shareMark.color ?? 'yellow' } : {}),
+      ...(shareMark.kind === 'span' && shareMark.quote ? { answer: { markdown: shareMark.snapshot.text, quote: shareMark.quote } } : {}),
       ...(shareMark.note ? { note: shareMark.note } : {}),
       title: shareMark.snapshot.sessionTitle || t`未命名会话`,
       ...(shareMark.backendId ? { backendId: shareMark.backendId } : {}),
       projectName: projectName(shareMark.projectId),
       at: shareMark.snapshot.at,
-      ...(shareMark.kind === 'message' ? { prompt: () => api.markPrompt(shareMark.id).then((result) => result.text) } : {}),
+      turn: () => api.markPrompt(shareMark.id).then((result) => {
+        const model = shareModelName(result.model);
+        return { ...(result.text ? { prompt: result.text } : {}), ...(model ? { model } : {}) };
+      }),
     };
   }, [shareMark, projectName, t]);
 

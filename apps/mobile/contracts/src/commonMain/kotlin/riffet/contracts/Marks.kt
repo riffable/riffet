@@ -138,6 +138,9 @@ data class MarkLocation(
     val sequence: Long? = null,
 )
 
-/** `GET /api/marks/:id/prompt`: the user message that led to the marked answer, when it is known. */
+/**
+ * `GET /api/marks/:id/prompt`: the user message that led to the marked answer and the model selection of the
+ * run that wrote it (else the conversation's current one), each when it is known.
+ */
 @Serializable
-data class MarkPrompt(val text: String? = null)
+data class MarkPrompt(val text: String? = null, val model: String? = null)

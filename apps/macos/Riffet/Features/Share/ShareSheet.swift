@@ -1,4 +1,5 @@
 import AppKit
+import RiffetKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -63,6 +64,7 @@ private struct ShareImageView: View {
     private let content: ShareContent
     @State private var options = ShareOptions.load()
     @State private var prompt: String?
+    @State private var promptModel: String?
     @State private var promptLoading: Bool
     @State private var cardHeight: CGFloat = 0
     /// Bumped once the code blocks are coloured; the highlighter's cache is not observable.
@@ -79,13 +81,20 @@ private struct ShareImageView: View {
         self.source = source
         self.close = close
         content = ShareContent(source)
-        _promptLoading = State(initialValue: source.kind == .message && source.prompt != nil)
+        _promptLoading = State(initialValue: source.prompt != nil)
     }
 
     private var metrics: ShareMetrics { ShareMetrics(kind: source.kind, width: options.width, content: content) }
     private var colors: ShareColors { ShareColors(options.theme, dark: colorScheme == .dark, palette: palette) }
     private var card: ShareCard {
-        ShareCard(source: source, content: content, options: options, metrics: metrics, colors: colors, prompt: options.ask && source.kind == .message ? prompt : nil)
+        ShareCard(source: source, content: content, options: options, metrics: metrics, colors: colors, prompt: options.ask && source.kind == .message ? prompt : nil, model: modelName)
+    }
+
+    /// The model's display name from the catalog, else its id without parameters.
+    private var modelName: String? {
+        guard let raw = source.model ?? promptModel else { return nil }
+        let name = modelLabel(catalog: source.models, value: raw)
+        return name.isEmpty ? nil : name
     }
 
     var body: some View {
@@ -98,14 +107,16 @@ private struct ShareImageView: View {
         .background(palette.bg)
         // Re-run when the card's colours change: a formula is painted in them.
         .task(id: "\(options.theme.rawValue)|\(colorScheme)|\(palette.values.id)|\(palette.revision)") {
-            guard source.kind == .message else { return }
-            await ShareMarkdown.prepare(content.text, colors: colors, projectId: source.projectId)
+            guard let blocks = richBlocks else { return }
+            await ShareMarkdown.prepare(blocks: blocks, colors: colors, projectId: source.projectId)
             colored += 1
         }
         .task {
             guard promptLoading, let load = source.prompt else { return }
-            let text = await load()?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let loaded = await load()
+            let text = loaded?.text?.trimmingCharacters(in: .whitespacesAndNewlines)
             prompt = text?.isEmpty == false ? text : nil
+            promptModel = loaded?.model
             promptLoading = false
         }
         .onChange(of: options) { _, next in next.save() }
@@ -181,10 +192,19 @@ private struct ShareImageView: View {
                     option(String(localized: "主题")) { Segments(selection: $options.theme, values: ShareTheme.allCases, title: \.title) }
                     option(String(localized: "字体")) { Segments(selection: $options.face, values: ShareFace.allCases, title: \.title) }
                     option(String(localized: "宽度")) { Segments(selection: $options.width, values: ShareWidth.allCases, title: \.title) }
-                    VStack(alignment: .leading, spacing: 12) {
-                        toggle(String(localized: "显示提问"), hint: askHint, isOn: $options.ask, disabled: source.kind != .message || prompt == nil)
-                        toggle(String(localized: "显示批注"), hint: source.note == nil ? String(localized: "这条收藏没有备注") : String(localized: "收藏时写的备注"), isOn: $options.note, disabled: source.note == nil)
-                        toggle(String(localized: "显示来源"), hint: String(localized: "会话标题、Agent、项目与日期"), isOn: $options.source, disabled: false)
+                    option(String(localized: "显示")) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            if source.kind == .message, promptLoading || prompt != nil {
+                                toggle(String(localized: "提问"), isOn: $options.ask, disabled: prompt == nil)
+                            }
+                            if source.note != nil { toggle(String(localized: "批注"), isOn: $options.note) }
+                            toggle(String(localized: "会话标题"), isOn: $options.title)
+                            if source.agent != nil { toggle(String(localized: "Agent"), isOn: $options.agent) }
+                            // Held in place, off, while the server is asked: a row appearing late shifts the ones below.
+                            if modelName != nil || promptLoading { toggle(String(localized: "模型"), isOn: $options.model, disabled: modelName == nil) }
+                            if source.project != nil { toggle(String(localized: "项目"), isOn: $options.project) }
+                            if source.at != nil { toggle(String(localized: "日期"), isOn: $options.date) }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -209,10 +229,9 @@ private struct ShareImageView: View {
         }
     }
 
-    private var askHint: String {
-        if source.kind != .message { return String(localized: "仅整条回复可用") }
-        if promptLoading { return String(localized: "正在查找对应的提问…") }
-        return prompt == nil ? String(localized: "找不到对应的提问") : String(localized: "这条回复对应的用户提问")
+    /// What the card lays out with Markdown: an answer, or a passage that has structure.
+    private var richBlocks: [MarkdownBlock]? {
+        source.kind == .message ? ShareMarkdown.blocks(content.text) : content.structure
     }
 
     private var dimensions: String {
@@ -228,12 +247,9 @@ private struct ShareImageView: View {
         }
     }
 
-    private func toggle(_ title: String, hint: String, isOn: Binding<Bool>, disabled: Bool) -> some View {
+    private func toggle(_ title: String, isOn: Binding<Bool>, disabled: Bool = false) -> some View {
         HStack(spacing: Space.md) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.riffet(size: S(13))).foregroundStyle(palette.fg2)
-                Text(hint).font(.riffet(size: S(11.5))).foregroundStyle(palette.fg4)
-            }
+            Text(title).font(.riffet(size: S(13))).foregroundStyle(palette.fg2)
             Spacer(minLength: 0)
             Toggle(title, isOn: Binding(get: { isOn.wrappedValue && !disabled }, set: { isOn.wrappedValue = $0 }))
                 .labelsHidden()
@@ -259,7 +275,7 @@ private struct ShareImageView: View {
             guard !exporting else { return }
             exporting = true
             defer { exporting = false }
-            if source.kind == .message { await ShareMarkdown.prepare(content.text, colors: colors, projectId: source.projectId) }
+            if let blocks = richBlocks { await ShareMarkdown.prepare(blocks: blocks, colors: colors, projectId: source.projectId) }
             colored += 1
             guard let (png, rep) = picture() else { return }
             let item = NSPasteboardItem()
@@ -276,7 +292,7 @@ private struct ShareImageView: View {
             guard !exporting else { return }
             exporting = true
             defer { exporting = false }
-            if source.kind == .message { await ShareMarkdown.prepare(content.text, colors: colors, projectId: source.projectId) }
+            if let blocks = richBlocks { await ShareMarkdown.prepare(blocks: blocks, colors: colors, projectId: source.projectId) }
             colored += 1
             guard let (png, _) = picture() else { return }
             let panel = NSSavePanel()

@@ -15,15 +15,26 @@ struct ShareSource {
     var note: String?
     var sessionTitle = ""
     var agent: String?
+    /// The model selection (`model[k=v]`) of the run that wrote the passage; nil until known.
+    var model: String?
+    /// The catalog the model's display name is read from; empty when the Mac has none.
+    var models: [ModelInfo] = []
     var project: String?
     var projectId: String?
     var at: Date?
-    /// The question that started the answer; resolves to nil when it cannot be found.
-    var prompt: (@MainActor () async -> String?)?
+    /// A passage's place in the answer's full Markdown, which it is laid out in when it has structure.
+    var fullText: String?
+    var quote: MarkQuote?
+    /// The run of the answer's turn, whose model the transcript can name.
+    var runId: String?
+    /// The question that started the answer and the model that wrote it, as far as the server knows;
+    /// resolves to nil when it cannot be read.
+    var prompt: (@MainActor () async -> (text: String?, model: String?)?)?
 }
 
 extension ShareSource {
-    init(mark: Mark, project: String?) {
+    init(mark: Mark, project: String?, models: [ModelInfo] = []) {
+        self.models = models
         kind = mark.isSpan ? .span : .message
         text = mark.isSpan ? (mark.quote?.exact ?? mark.snapshot.text) : mark.snapshot.text
         color = mark.isSpan ? mark.markColor : nil
@@ -33,10 +44,12 @@ extension ShareSource {
         self.project = project
         projectId = mark.projectId
         at = ServerTime.date(mark.snapshot.at)
-        if mark.isMessage {
-            let id = mark.id
-            prompt = { await MarksStore.shared.prompt(id) }
+        if mark.isSpan {
+            fullText = mark.snapshot.text
+            quote = mark.quote
         }
+        let id = mark.id
+        prompt = { await MarksStore.shared.prompt(id) }
     }
 
     /// The label the rest of the app shows for a backend id sent as a string.
@@ -76,13 +89,17 @@ enum ShareWidth: String, CaseIterable {
     }
 }
 
-/// The export panel's choices. Theme, face, width and the source line are remembered; the question
+/// The export panel's choices. Theme, face, width and the source items are remembered; the question
 /// and the note start off every time.
 struct ShareOptions: Equatable {
     var theme: ShareTheme
     var face: ShareFace
     var width: ShareWidth
-    var source: Bool
+    var title = true
+    var agent = true
+    var model = true
+    var project = true
+    var date = true
     var ask = false
     var note = false
 
@@ -90,11 +107,14 @@ struct ShareOptions: Equatable {
 
     static func load() -> ShareOptions {
         let defaults = UserDefaults.standard
+        // The single source switch this replaced: off turns every item off until chosen again.
+        let legacy = defaults.object(forKey: prefix + "source") as? Bool
+        func item(_ name: String) -> Bool { defaults.object(forKey: prefix + "show." + name) as? Bool ?? legacy ?? true }
         return ShareOptions(
             theme: defaults.string(forKey: prefix + "theme").flatMap(ShareTheme.init) ?? .paper,
             face: defaults.string(forKey: prefix + "font").flatMap(ShareFace.init) ?? .sans,
             width: defaults.string(forKey: prefix + "width").flatMap(ShareWidth.init) ?? .auto,
-            source: defaults.object(forKey: prefix + "source") as? Bool ?? true
+            title: item("title"), agent: item("agent"), model: item("model"), project: item("project"), date: item("date")
         )
     }
 
@@ -103,7 +123,9 @@ struct ShareOptions: Equatable {
         defaults.set(theme.rawValue, forKey: Self.prefix + "theme")
         defaults.set(face.rawValue, forKey: Self.prefix + "font")
         defaults.set(width.rawValue, forKey: Self.prefix + "width")
-        defaults.set(source, forKey: Self.prefix + "source")
+        for (name, on) in [("title", title), ("agent", agent), ("model", model), ("project", project), ("date", date)] {
+            defaults.set(on, forKey: Self.prefix + "show." + name)
+        }
     }
 }
 
@@ -114,6 +136,8 @@ struct ShareContent {
     /// "全文约 3,200 字" when a long answer was cut.
     let excerpt: String?
     let suggestsWide: Bool
+    /// A passage's own Markdown structure, when it has one; nil sets it as a large quotation.
+    let structure: [MarkdownBlock]?
 
     static let limit = 3000
     static let maxPixels: CGFloat = 16384
@@ -123,9 +147,12 @@ struct ShareContent {
         guard source.kind == .message else {
             text = trimmed
             excerpt = nil
-            suggestsWide = false
+            let blocks = source.fullText.flatMap { ShareSpan.blocks(of: trimmed, prefix: source.quote?.prefix ?? "", suffix: source.quote?.suffix ?? "", in: $0) }
+            structure = blocks
+            suggestsWide = blocks.map(Self.needsWide(blocks:)) ?? false
             return
         }
+        structure = nil
         // Lengths are counted in UTF-16 units, as the web counts them.
         if trimmed.utf16.count > Self.limit {
             let head = String(trimmed.utf16.prefix(Self.limit)) ?? String(trimmed.prefix(Self.limit))
@@ -166,20 +193,21 @@ struct ShareContent {
 
     /// A table, or a code line longer than 60 characters, reads badly at the narrow width.
     private static func needsWide(_ markdown: String) -> Bool {
-        func check(_ blocks: [MarkdownBlock]) -> Bool {
-            blocks.contains { block in
-                switch block {
-                case .table: true
-                case let .code(_, text): text.components(separatedBy: "\n").contains { $0.utf16.count > 60 }
-                case let .list(_, _, items): items.contains { check($0.blocks) }
-                case let .quote(parts): check(ShareMarkdown.flatten(parts))
-                default: false
-                }
-            }
-        }
-        return MarkdownModel.segments(markdown).contains { segment in
-            if case let .blocks(parts) = segment { return check(ShareMarkdown.flatten(parts)) }
+        MarkdownModel.segments(markdown).contains { segment in
+            if case let .blocks(parts) = segment { return needsWide(blocks: ShareMarkdown.flatten(parts)) }
             return false
+        }
+    }
+
+    static func needsWide(blocks: [MarkdownBlock]) -> Bool {
+        blocks.contains { block in
+            switch block {
+            case .table: true
+            case let .code(_, text): text.components(separatedBy: "\n").contains { $0.utf16.count > 60 }
+            case let .list(_, _, items): items.contains { needsWide(blocks: $0.blocks) }
+            case let .quote(parts): needsWide(blocks: ShareMarkdown.flatten(parts))
+            default: false
+            }
         }
     }
 }
@@ -197,7 +225,7 @@ struct ShareMetrics {
         switch width {
         case .narrow: wide = false
         case .wide: wide = true
-        case .auto: wide = kind == .message && content.suggestsWide
+        case .auto: wide = content.suggestsWide
         }
     }
 
@@ -335,6 +363,8 @@ struct ShareCard: View {
     let colors: ShareColors
     /// The question, when it is to be shown.
     let prompt: String?
+    /// The model's display name, when there is one.
+    let model: String?
 
     private var type: ShareType { ShareType(serif: options.face == .serif) }
     private var note: String? { options.note ? source.note : nil }
@@ -380,6 +410,11 @@ struct ShareCard: View {
             .padding(.bottom, 7)
     }
 
+    private var title: String? {
+        guard options.title else { return nil }
+        return source.sessionTitle.isEmpty ? String(localized: "未命名会话") : source.sessionTitle
+    }
+
     private func ask(_ prompt: String) -> some View {
         let font = type.body(14)
         return VStack(alignment: .leading, spacing: 0) {
@@ -401,12 +436,16 @@ struct ShareCard: View {
         return VStack(alignment: .leading, spacing: 0) {
             QuoteGlyph(color: (colors.accent(source.color) ?? colors.ink3).opacity(0.85))
                 .padding(.bottom, 14)
-            Text(content.text)
-                .font(Font(font))
-                .tracking(size * (type.serif ? 0.02 : 0.01))
-                .foregroundStyle(colors.ink)
-                .shareLines(type.lineGap(font, lineHeight: size * height))
-                .fixedSize(horizontal: false, vertical: true)
+            if let structure = content.structure {
+                ShareMarkdown(blocks: structure, colors: colors, type: type, wide: metrics.wide, projectId: source.projectId)
+            } else {
+                Text(content.text)
+                    .font(Font(font))
+                    .tracking(size * (type.serif ? 0.02 : 0.01))
+                    .foregroundStyle(colors.ink)
+                    .shareLines(type.lineGap(font, lineHeight: size * height))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -441,17 +480,21 @@ struct ShareCard: View {
         VStack(spacing: 0) {
             Rectangle().fill(colors.hair).frame(height: 1)
             HStack(alignment: .bottom, spacing: 20) {
-                if options.source {
+                if title != nil || !sublineParts.isEmpty {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(source.sessionTitle.isEmpty ? String(localized: "未命名会话") : source.sessionTitle)
-                            .font(Font(ShareType.sans(13, .medium)))
-                            .foregroundStyle(colors.ink2)
-                            .lineLimit(1)
-                        subline
-                            .font(Font(ShareType.sans(12)))
-                            .monospacedDigit()
-                            .foregroundStyle(colors.ink4)
-                            .lineLimit(1)
+                        if let title {
+                            Text(title)
+                                .font(Font(ShareType.sans(13, .medium)))
+                                .foregroundStyle(colors.ink2)
+                                .lineLimit(1)
+                        }
+                        if !sublineParts.isEmpty {
+                            subline
+                                .font(Font(ShareType.sans(12)))
+                                .monospacedDigit()
+                                .foregroundStyle(colors.ink4)
+                                .lineLimit(1)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -466,9 +509,15 @@ struct ShareCard: View {
         }
     }
 
-    private var subline: Text {
-        let parts = [source.agent, source.project, source.at.map(Self.date), content.excerpt.map { String(localized: "节选 · \($0)") }]
+    /// Agent · model · project · date, then the excerpt note: what is on and has a value.
+    private var sublineParts: [String] {
+        [options.agent ? source.agent : nil, options.model ? model : nil, options.project ? source.project : nil,
+         options.date ? source.at.map(Self.date) : nil, content.excerpt.map { String(localized: "节选 · \($0)") }]
             .compactMap { $0 }.filter { !$0.isEmpty }
+    }
+
+    private var subline: Text {
+        let parts = sublineParts
         var result = AttributedString()
         for (index, part) in parts.enumerated() {
             if index > 0 {

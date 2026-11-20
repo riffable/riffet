@@ -3365,6 +3365,11 @@ html[data-density='relaxed'] {
 .share-quote-l { font-size: 26px; line-height: 1.62; text-wrap: balance; }
 .share-quote-m { font-size: 21px; line-height: 1.72; }
 .share-quote-s { font-size: 18px; line-height: 1.8; }
+/* A passage keeps its inline Markdown; line breaks are the answer's, not the source text's. */
+.share-quote-rich { white-space: normal; }
+.share-quote-rich code { padding: 0.12em 0.36em; border-radius: 5px; background: var(--bg-subtle); color: var(--fg-2); font-size: 0.8em; letter-spacing: 0; }
+.share-quote-rich em { font-style: normal; text-emphasis: filled dot; text-emphasis-position: under right; }
+.share-quote-rich a { color: inherit; text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .share-more { margin-top: 0.4em; color: var(--fg-4); font-size: 15px; letter-spacing: 0.2em; }
 .share-note { margin-top: 30px; padding-left: 14px; border-left: 2px solid var(--share-accent); }
 .share-note p { margin: 0; color: var(--fg-2); font-size: 14px; line-height: 1.75; white-space: pre-wrap; }

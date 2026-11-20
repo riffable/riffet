@@ -358,13 +358,17 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   const share = () => {
     if (!selected?.target || !session) return;
     const text = document.getSelection()?.toString().trim() || selected.text.slice(selected.start, selected.end).trim();
+    const quote = quoteAt(selected.text, selected.start, selected.end);
+    const { at, text: markdown } = selected.target;
     document.getSelection()?.removeAllRanges();
     setSelected(undefined);
     if (!text) return;
     setSharing({
-      kind: 'span', text, title: session.title, at: selected.target.at,
+      kind: 'span', text, title: session.title, at,
+      ...(quote ? { answer: { markdown, quote } } : {}),
       ...(session.backendId ? { backendId: session.backendId } : {}),
       ...(session.projectName ? { projectName: session.projectName } : {}),
+      turn: async () => session.turnBefore(at),
     });
     setSharingOpen(true);
   };

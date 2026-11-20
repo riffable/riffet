@@ -15,16 +15,13 @@ msgstr ""
 msgid "主题"
 msgstr ""
 
-#: src/app/marks/ShareImage.tsx
-msgid "仅整条回复可用"
-msgstr ""
-
 #: src/app/marks/MarksPage.tsx
 msgid "仍未找到原文"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
-msgid "会话标题、Agent、项目与日期"
+msgctxt "share-image-meta"
+msgid "会话标题"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
@@ -201,10 +198,6 @@ msgid "找不到原文"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
-msgid "找不到对应的提问"
-msgstr ""
-
-#: src/app/marks/ShareImage.tsx
 msgid "提问"
 msgstr ""
 
@@ -226,10 +219,6 @@ msgstr ""
 
 #: src/app/marks/MarksPage.tsx
 msgid "收藏夹"
-msgstr ""
-
-#: src/app/marks/ShareImage.tsx
-msgid "收藏时写的备注"
 msgstr ""
 
 #: src/app/marks/MarkDetailDialog.tsx
@@ -260,15 +249,11 @@ msgid "无法生成图片"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
-msgid "显示批注"
+msgid "日期"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
-msgid "显示提问"
-msgstr ""
-
-#: src/app/marks/ShareImage.tsx
-msgid "显示来源"
+msgid "显示"
 msgstr ""
 
 #: src/app/marks/MarkDetailDialog.tsx
@@ -281,11 +266,7 @@ msgid "查看大图"
 msgstr ""
 
 #: src/app/marks/ShareImage.tsx
-msgid "正在查找…"
-msgstr ""
-
-#: src/app/marks/ShareImage.tsx
-msgid "没有备注"
+msgid "模型"
 msgstr ""
 
 #: src/app/marks/MarksPage.tsx
@@ -339,10 +320,6 @@ msgstr ""
 msgid "还没有收藏"
 msgstr ""
 
-#: src/app/marks/ShareImage.tsx
-msgid "这条回复对应的用户提问"
-msgstr ""
-
 #: src/app/marks/MarksPage.tsx
 msgid "选择"
 msgstr ""
@@ -360,6 +337,7 @@ msgid "重试"
 msgstr ""
 
 #: src/app/marks/MarksNav.tsx
+#: src/app/marks/ShareImage.tsx
 msgid "项目"
 msgstr ""
 

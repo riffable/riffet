@@ -1121,6 +1121,13 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             if let single = row as? TimelineRowSingle { at = ServerTime.date(single.item.event.createdAt) }
             else if let process = row as? TimelineRowProcess { at = process.endedAt.flatMap(ServerTime.date) }
         }
+        var runId: String?
+        var fullText: String?
+        if case let .timeline(row, _, _, _) = entries[index].source {
+            let turnKey = (row as? TimelineRowSingle)?.turnKey ?? (row as? TimelineRowProcess)?.turnKey
+            runId = turnKey.flatMap { runIdFromTurnKey(turnKey: $0) }
+            if kind == .span { fullText = Self.assistant(entries[index])?.text ?? Self.answer(of: row)?.text }
+        }
         var question: String?
         if kind == .message {
             for entry in entries[..<index].reversed() {
@@ -1130,7 +1137,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
                 break
             }
         }
-        return ShareSource(kind: kind, text: text, projectId: feed?.projectId, at: at, prompt: { [question] in question })
+        return ShareSource(kind: kind, text: text, projectId: feed?.projectId, at: at, fullText: fullText, runId: runId, prompt: { [question] in (question, nil) })
     }
 
     /// The settled answer of [row] and its run: what a plugin command runs on and a result is matched by.

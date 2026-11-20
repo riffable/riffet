@@ -58,7 +58,7 @@ import { useSessionSync } from '../session/useSessionSync';
 import { useSlashCatalog } from '../session/useSlashCatalog';
 import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
-import { ShareSessionContext, type ShareSession } from '../marks/ShareImage';
+import { shareModelName, ShareSessionContext, type ShareSession } from '../marks/ShareImage';
 import { MessageCommandsContext } from '../session/messageCommands';
 import { useLists, useStores } from '../state/stores';
 import { ViewDots, useViewShortcuts, viewShortcut } from '../session/ViewDots';
@@ -621,19 +621,22 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const projectName = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.name);
   const shareSession = useMemo<ShareSession>(() => ({
     title: session.title || t`未命名会话`, backendId, ...(projectName ? { projectName } : {}),
-    promptBefore: (at) => {
+    turnBefore: (at) => {
       let prompt: string | undefined;
-      for (const item of timelineRef.current) {
+      let model = session.model;
+      if (at) for (const item of timelineRef.current) {
         if (item.kind !== 'user') continue;
         // A follow-up still on its way has no answer yet: it is not the question this one replied to,
         // even though the store already stamped it with an earlier time.
         if (item.run?.native && ['queued', 'preparing', 'dispatching', 'input_sent', 'uncertain'].includes(item.run.native.delivery)) continue;
         if (timelineItemTime(item) > at) break;
         prompt = item.text;
+        model = item.run?.native?.resolvedConfig?.model ?? item.run?.native?.config.model ?? session.model;
       }
-      return prompt;
+      const name = shareModelName(model, catalog);
+      return { ...(prompt ? { prompt } : {}), ...(name ? { model: name } : {}) };
     },
-  }), [session.title, backendId, projectName, t]);
+  }), [session.title, session.model, backendId, projectName, catalog, t]);
   const messageCommands = useMemo(() => ({ sessionId: session.id, openModelSettings: (section: 'auxiliary' | 'quickchat') => stores.ui.openSettings(section) }), [session.id, stores.ui]);
   const liveActivities = useMemo(() => native.activities ?? liveBackgroundActivities(visibleTimeline), [native.activities, visibleTimeline, native.timelineVersion]);
   // The header and the side column list these; they keep their memo while the transcript streams.

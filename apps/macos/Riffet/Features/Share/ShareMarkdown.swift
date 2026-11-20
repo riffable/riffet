@@ -6,7 +6,7 @@ import SwiftUI
 /// tables ruled by hairlines only. SwiftUI rather than the transcript's AppKit views, so the card
 /// renders offscreen with `ImageRenderer` and the in-app reading style stays untouched.
 struct ShareMarkdown: View {
-    let source: String
+    let blocks: [MarkdownBlock]
     let colors: ShareColors
     let type: ShareType
     let wide: Bool
@@ -15,8 +15,20 @@ struct ShareMarkdown: View {
     static let imageLanguage = "riffet-share-image"
     static let base: CGFloat = 16
 
+    init(source: String, colors: ShareColors, type: ShareType, wide: Bool, projectId: String? = nil) {
+        self.init(blocks: Self.blocks(source), colors: colors, type: type, wide: wide, projectId: projectId)
+    }
+
+    init(blocks: [MarkdownBlock], colors: ShareColors, type: ShareType, wide: Bool, projectId: String? = nil) {
+        self.blocks = blocks
+        self.colors = colors
+        self.type = type
+        self.wide = wide
+        self.projectId = projectId
+    }
+
     var body: some View {
-        BlockStack(blocks: Self.blocks(source), context: Context(colors: colors, type: type, wide: wide, quoted: false, projectId: projectId))
+        BlockStack(blocks: blocks, context: Context(colors: colors, type: type, wide: wide, quoted: false, projectId: projectId))
     }
 
     /// Every block in reading order, retaining image references for the export renderer.
@@ -44,7 +56,11 @@ struct ShareMarkdown: View {
     /// reads both from their caches, so the exported pixels never wait on a web view.
     @MainActor
     static func prepare(_ source: String, colors: ShareColors, projectId: String? = nil) async {
-        let parts = blocks(source)
+        await prepare(blocks: blocks(source), colors: colors, projectId: projectId)
+    }
+
+    @MainActor
+    static func prepare(blocks parts: [MarkdownBlock], colors: ShareColors, projectId: String? = nil) async {
         func codes(_ blocks: [MarkdownBlock]) -> [(String, String)] {
             blocks.flatMap { block -> [(String, String)] in
                 switch block {
@@ -443,5 +459,76 @@ private struct BlockView: View {
             result += part
         }
         return result
+    }
+}
+
+/// Finds a passage in its answer's Markdown blocks, so a span exported as an image keeps the
+/// structure it had: the covering blocks, the first and last paragraph cut to the passage. Matching
+/// compares letters and digits only, which survives the whitespace, list markers and punctuation
+/// that a rendered selection and the source write differently.
+enum ShareSpan {
+    /// The blocks covering [exact] in [full]; nil when it is not found, or is one plain paragraph.
+    static func blocks(of exact: String, prefix: String, suffix: String, in full: String) -> [MarkdownBlock]? {
+        let top = ShareMarkdown.blocks(full.trimmingCharacters(in: .whitespacesAndNewlines))
+        let needle = key(exact)
+        guard !needle.isEmpty else { return nil }
+        // One entry per letter or digit of the answer: its block, and its rank within that block.
+        var hay: [Character] = []
+        var owner: [(block: Int, rank: Int, offset: Int)] = []
+        var counts: [Int] = []
+        for (index, block) in top.enumerated() {
+            var rank = 0
+            for (offset, character) in plain(block).enumerated() where character.isLetter || character.isNumber {
+                hay.append(Character(character.lowercased()))
+                owner.append((index, rank, offset))
+                rank += 1
+            }
+            counts.append(rank)
+        }
+        guard hay.count >= needle.count else { return nil }
+        let before = key(prefix), after = key(suffix)
+        var best: (start: Int, score: Int)?
+        for start in 0...(hay.count - needle.count) where hay[start] == needle[0] && Array(hay[start..<start + needle.count]) == needle {
+            let score = common(hay[..<start].reversed(), before.reversed()) + common(hay[(start + needle.count)...], after)
+            if best == nil || score > best!.score { best = (start, score) }
+        }
+        guard let best else { return nil }
+        let first = owner[best.start], last = owner[best.start + needle.count - 1]
+        var result = Array(top[first.block...last.block])
+        if result.count == 1, case .paragraph = result[0] { return nil }
+        if first.rank > 0, case let .paragraph(text) = result[0] {
+            result[0] = .paragraph(slice(text, from: first.offset, to: nil))
+        }
+        if last.rank < counts[last.block] - 1, result.count > 1, case let .paragraph(text) = result[result.count - 1] {
+            result[result.count - 1] = .paragraph(slice(text, from: nil, to: last.offset + 1))
+        }
+        return result
+    }
+
+    private static func key(_ text: String) -> [Character] {
+        text.filter { $0.isLetter || $0.isNumber }.map { Character($0.lowercased()) }
+    }
+
+    private static func common<A: Sequence, B: Sequence>(_ left: A, _ right: B) -> Int where A.Element == Character, B.Element == Character {
+        zip(left, right).prefix { $0 == $1 }.count
+    }
+
+    private static func slice(_ text: AttributedString, from: Int?, to: Int?) -> AttributedString {
+        let characters = text.characters
+        let lower = from.map { characters.index(characters.startIndex, offsetBy: $0) } ?? characters.startIndex
+        let upper = to.map { characters.index(characters.startIndex, offsetBy: $0) } ?? characters.endIndex
+        return AttributedString(text[lower..<upper])
+    }
+
+    /// A block's text as the reader sees it, without markup.
+    private static func plain(_ block: MarkdownBlock) -> String {
+        switch block {
+        case let .paragraph(text), let .heading(_, text): String(text.characters)
+        case let .code(_, text): text
+        case let .list(_, _, items): items.map { $0.blocks.map(plain).joined(separator: "\n") }.joined(separator: "\n")
+        case let .quote(parts): ShareMarkdown.flatten(parts).map(plain).joined(separator: "\n")
+        case let .table(header, rows, _): ([header] + rows).map { $0.map { String($0.characters) }.joined(separator: " ") }.joined(separator: "\n")
+        case .rule: ""
+        }
     }
 }

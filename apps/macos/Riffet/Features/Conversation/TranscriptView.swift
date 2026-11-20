@@ -67,6 +67,10 @@ struct TranscriptView: View {
                 source.sessionTitle = session.shownTitle
                 source.agent = session.agent.map(backendLabel)
                 source.project = workbench.project(session.projectId)?.name
+                // The model of the turn's run when the transcript has it, else the conversation's current one.
+                let run = source.runId.flatMap { id in workbench.runs.first { $0.id == id } }
+                source.model = run?.native?.resolvedConfig?.model ?? run?.native?.config.model ?? session.model
+                source.models = workbench.catalogs.cached(for: session)?.models ?? []
                 ShareImage.present(source)
             },
             focusMissed: { [workbench, sessionId = session.id] in

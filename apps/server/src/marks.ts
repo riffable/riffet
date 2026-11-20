@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { StatementSync } from 'node:sqlite';
-import type { Mark, MarkAnchor, MarkAsset, MarkColor, MarkFacets, MarkKind, MarkListPage, MarkListQuery, MarkLocation, MarkPrompt, MarkQuote, NativeBackendId, Session, WorkbenchEvent } from '../../../packages/contracts/src/index.js';
+import type { Mark, MarkAnchor, MarkAsset, MarkColor, MarkFacets, MarkKind, MarkListPage, MarkListQuery, MarkLocation, MarkPrompt, MarkQuote, NativeBackendId, Run, Session, WorkbenchEvent } from '../../../packages/contracts/src/index.js';
 import { AppError, requireString } from './errors.js';
 import { isNativeBackendId } from './backends/registry.js';
 import { likePattern, MAX_INDEXED_TEXT, MAX_TOOL_INDEXED_TEXT } from './search/messages.js';
@@ -250,12 +250,16 @@ export class MarkStore {
 
   /**
    * The prompt mark [id]'s answer replied to: the last indexed user message written before the
-   * answer. Only the search index is read, so a conversation never indexed has none.
+   * answer. Only the search index is read, so a conversation never indexed has none. `model` is the
+   * one the answer's run used, or the conversation's current one when the run is not known.
    */
   prompt(id: string): MarkPrompt {
     const mark = this.get(id);
     const text = this.store.latestIndexedPromptBefore(mark.sessionId, mark.snapshot.at);
-    return text ? { text: capBytes(text, MAX_PROMPT_BYTES) } : {};
+    let run: Run | undefined;
+    try { run = mark.anchor.runId ? this.store.getRun(mark.anchor.runId) : undefined; } catch { run = undefined; }
+    const model = run?.native?.resolvedConfig?.model ?? run?.native?.config.model ?? this.store.findSession(mark.sessionId)?.model;
+    return { ...(text ? { text: capBytes(text, MAX_PROMPT_BYTES) } : {}), ...(model ? { model } : {}) };
   }
 
   list(query: { [K in keyof MarkListQuery]?: unknown }, limit: number, excludeTaskWorkspaces = false): MarkListPage {

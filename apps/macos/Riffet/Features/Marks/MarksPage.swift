@@ -126,7 +126,7 @@ struct MarksPage: View {
                                 openFile: { open(mark, file: true) },
                                 saveNote: { note in Task { await model.saveNote(mark, note) } },
                                 delete: { Task { _ = await model.delete([mark.id]) } },
-                                export: { ShareImage.present(ShareSource(mark: mark, project: workbench.project(mark.projectId)?.name)) }
+                                export: { ShareImage.present(ShareSource(mark: mark, project: workbench.project(mark.projectId)?.name, models: mark.backendId.flatMap { workbench.catalogs.cached($0.lowercased(), profileId: nil, projectId: mark.projectId)?.models } ?? [])) }
                             )
                             .onAppear { if mark.id == model.marks.last?.id, model.moreError == nil { Task { await model.loadMore() } } }
                         }

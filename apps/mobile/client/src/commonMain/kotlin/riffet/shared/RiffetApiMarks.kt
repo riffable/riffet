@@ -61,9 +61,9 @@ suspend fun RiffetApi.deleteMarks(ids: List<String>) {
 @Throws(Exception::class)
 suspend fun RiffetApi.locateMark(id: String): MarkLocation = get("/api/marks/${id.enc()}/locate").decode()
 
-/** The question that started a saved answer; null when the server does not know it. */
+/** The question that started a saved answer and the model that wrote it; each null when the server does not know it. */
 @Throws(Exception::class)
-suspend fun RiffetApi.markPrompt(id: String): String? = get("/api/marks/${id.enc()}/prompt").decode<MarkPrompt>().text
+suspend fun RiffetApi.markPrompt(id: String): MarkPrompt = get("/api/marks/${id.enc()}/prompt").decode()
 
 private fun MarkListQuery.pairs(): List<Pair<String, String>> = buildList {
     add("limit" to limit.toString())

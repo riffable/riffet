@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Exported pictures of a selection or a highlight keep the answer’s formatting: headings, lists, code, tables, and bold text. Under Display, the conversation title, Agent, model, project, and date can each be turned on or off; the model is the one that wrote that answer.
 - The web task board shows a 14-day chart of new and completed tasks, all six task statuses, inbox and running counts, and linked conversations for the current filters. Cards sit directly under their column headings, and status details, assignees, and timestamps line up across the inbox and watching sections.
 - Text files can be edited on the Mac, iPhone, and Android too: the pencil in the Mac file preview edits in place and ⌘S saves; on phones, Edit opens an editing page. A file an Agent changed meanwhile is never overwritten without asking. On the Mac and iPhone, PDF, Word, PowerPoint, and spreadsheet files open in Quick Look; Android draws PDFs natively.
 - Plugins can show project files they understand: a plugin that declares a viewer for some file extensions appears in the Files view’s ⋯ menu for those files, beside View as hex. Viewing the end of an empty file no longer fails.

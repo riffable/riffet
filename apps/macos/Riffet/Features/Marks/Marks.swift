@@ -274,9 +274,11 @@ final class MarksStore {
         return try await api.locateMark(id: id)
     }
 
-    /// The question that started a saved answer; nil when it is not known or cannot be read.
-    func prompt(_ id: String) async -> String? {
-        try? await AppModel.shared.host.api?.markPrompt(id: id)
+    /// The question that started a saved mark's answer and the model selection of the run that wrote
+    /// it, each nil when not known; nil as a whole when the server cannot be read.
+    func prompt(_ id: String) async -> (text: String?, model: String?)? {
+        guard let found = try? await AppModel.shared.host.api?.markPrompt(id: id) else { return nil }
+        return (found.text, found.model)
     }
 
     // MARK: Note
