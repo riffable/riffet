@@ -4,7 +4,7 @@ import { SYNC_BUDGET } from '../../../../../packages/contracts/src/sync.js';
 import { activityId, activityOfEvent } from '../../journal/activity.js';
 import { subagentMetaId, turnMetaId, type LaneWriter, type TranscriptSource, type TurnEndStatus } from '../../journal/ingest.js';
 import { ClaudeActivities, type ClaudeActivitiesState } from './activity.js';
-import { activeTurnOf, initialState, reduce } from './session-state.js';
+import { activeTurnOf, initialState, isNotificationText, reduce } from './session-state.js';
 import { ClaudeSubagentDiscovery, type ClaudeSubagentMeta as SubagentMeta } from './subagents.js';
 import { mapRow, type ClaudeTranscriptHooks, type MapperState } from './row-mapper.js';
 import { claudeApiFailure, claudeFailureText, claudePromptKey, claudeRowSignals, clip, subagentSettles, subagentWake, type ClaudeRow } from './rows.js';
@@ -80,7 +80,8 @@ type SuffixStep =
   | { op: 'dequeue' }
   | { op: 'popAll' }
   | { op: 'remove'; text?: string }
-  | { op: 'prompt'; offset: number; event?: NativeWorkbenchEvent };
+  /** `notification`: a task report the CLI took from its queue; it opens a turn or only settles background work. */
+  | { op: 'prompt'; offset: number; event?: NativeWorkbenchEvent; notification?: true };
 
 /** A human prompt of the suffix; `queued` when the CLI ran it from its queue, placed at the row that queued it. */
 interface SuffixPrompt { event: NativeWorkbenchEvent; offset: number; at: number; queued?: true }
@@ -114,7 +115,9 @@ function suffixPrompts(steps: readonly SuffixStep[]): SuffixPrompt[] {
         if (index < 0) index = queue.findIndex(item => !item.dequeued && item.text === undefined);
         if (index >= 0) queue.splice(index, 1); else missing += 1;
       } else {
-        const index = queue.findIndex(item => item.dequeued);
+        // A task report and a person's message never take each other's queued entry: a report taken from the
+        // queue just before a send would otherwise be paired with the sent prompt and leave it unconfirmed.
+        const index = queue.findIndex(item => item.dequeued && (item.text === undefined || isNotificationText(item.text) === (step.notification === true)));
         const input = index >= 0 ? queue.splice(index, 1)[0] : undefined;
         const text = step.event && promptText(step.event);
         if (!step.event || text === undefined) continue;
@@ -388,7 +391,12 @@ export class ClaudeTranscriptSource implements TranscriptSource {
             && (record(row.origin)?.kind === undefined || record(row.origin)?.kind === 'human');
           const mapper: MapperState = { turnAt: '', calls: new Map(), tasks: new Map(), activities: new ClaudeActivities(this.sessionId) };
           const event = human ? mapRow(row, line.start, { ...this.session(), nativeSessionId }, mapper, { unbounded: true }, false).find(event => event.type === 'user_message_chunk') : undefined;
-          if (prompt || event) steps.push({ op: 'prompt', offset: line.start, ...(event ? { event: { ...event, sequence: 0 } } : {}) });
+          // A report that only settles background work opens no turn, yet still took its entry off the queue.
+          const content = record(row.message)?.content;
+          const notification = record(row.origin)?.kind === 'task-notification' || (typeof content === 'string' && isNotificationText(content));
+          if (prompt || event || notification) {
+            steps.push({ op: 'prompt', offset: line.start, ...(event ? { event: { ...event, sequence: 0 } } : {}), ...(notification ? { notification: true as const } : {}) });
+          }
         }
         const last = joined.lastIndexOf(0x0a);
         if (last >= 0) { buffer = joined.subarray(last + 1); skipPartial = false; }

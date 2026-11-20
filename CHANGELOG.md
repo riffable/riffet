@@ -26,6 +26,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- A Claude Code message sent just as the CLI reports a background task left over from before a restart is now confirmed as delivered, instead of showing “Waiting for the previous message to be confirmed” and holding every later message in the queue.
 - When a Claude Code answer is cut off mid-stream (`API Error: Connection lost mid-response`), the text it had already written stays in the conversation instead of disappearing, and when the part of a conversation you were reading is removed, the view moves to what remains instead of showing a blank screen.
 - Plugin Agent icons (such as Doubao) load from cache and preload on the web instead of re-reading and revalidating on every model-picker open.
 - Named Cursor model families (such as Gemini, Composer, and Grok) now show the 300K / 1M / MAX context window selector in the model picker instead of hiding it behind a partial prefix allowlist.

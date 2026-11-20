@@ -54,6 +54,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 状态描述文件由 `hook-cli.mjs` 每次 hook 时重读，所以比服务活得更久的 CLI 能找到重启后的服务。
 - 流在输出中途断开时（`isApiErrorMessage`、`truncatedAfterOutput: true`，2.1.322 的 `API Error: Connection lost mid-response`），CLI 只写这条错误行，已经画到屏幕上的正文不进转写。错误在屏幕上是回答下面单独的一个 `⏺` 块（`fixtures/transcript-hooks/2.1.322/stop-failure.jsonl`），会接替草稿的 id，所以要记住它接替的那一块；StopFailure hook 先于错误行到达。草稿若按普通的回合结束收回，这段回答会从时间线上消失，阅读中的视图也会落在空白处。
 - 子 agent 的后台任务（例如 Bash 超时后被转入后台）完成时，CLI 也会在主转写里写一条 `queue-operation` enqueue/remove，`<tool-use-id>` 指向子 agent 的调用，随后由子 agent 取走。主会话既没发起也没挂着这个调用的报告不建活动（`activity.ts#notified`），否则它会作为孤立的一行出现在主时间线末尾。
+- CLI 重启后会补报上一进程遗留的后台任务：先写 `queue-operation` enqueue/dequeue，再写一条 `queueTranscriptOnly: true` 的 task-notification 行，这一行不开回合。回执扫描（`transcript-source.ts#suffixPrompts`）照样要让它消耗队列里取出的那一项，而且通知只配对通知、消息只配对消息；否则紧跟其后发出的消息会被配给这条通知，回执永远找不到，run 一直停在「等待上一条消息确认」。
 
 ## 排障
 

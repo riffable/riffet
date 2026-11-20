@@ -738,6 +738,32 @@ describe('Claude transcript source', () => {
     checkSession(journal, 'wb');
   });
 
+  it('confirms a send whose prompt follows a task report the CLI took from its queue without opening a turn', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-report-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').turn('t1');
+    const run = { id: 'run-sent', commandId: 'riffet-command', sessionId: 'wb', native: {
+      backendId: 'claude', nativeSessionId: file.id, input: { text: 'resume all tasks', attachmentIds: [], context: [] }, renderedText: 'resume all tasks',
+      delivery: 'uncertain', timings: { dispatchAt: Date.UTC(2026, 9, 20) },
+    } } as unknown as Run;
+    const receipts: NativeWorkbenchEvent[] = [];
+    const source = new ClaudeTranscriptSource({
+      sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path,
+      hooks: { inputRuns: () => [run], inputReceipt: event => receipts.push(event) },
+    });
+    run.native!.nativeInputBoundary = JSON.stringify({ type: 'claude-transcript', nativeSessionId: file.id, offset: statSync(file.path).size });
+    // A resumed CLI reports a shell the previous process left behind, then takes the message just sent.
+    const report = '<task-notification>\n<task-id>bsh1</task-id>\n<status>stopped</status>\n</task-notification>';
+    file.write(
+      { type: 'queue-operation', operation: 'enqueue', content: report },
+      { type: 'queue-operation', operation: 'dequeue' },
+      { type: 'user', uuid: 'u-report', promptId: 'p-report', origin: { kind: 'task-notification' }, queueTranscriptOnly: true, message: { role: 'user', content: report } },
+      { type: 'user', uuid: 'u-sent', promptId: 'p-sent', origin: { kind: 'human' }, message: { role: 'user', content: 'resume all tasks' } },
+    ).answer('sent').duration('sent');
+    await importAll(source, new Journal(new DatabaseSync(':memory:')));
+    expect(receipts).toMatchObject([{ type: 'native_input_receipt', runId: run.id, nativeTurnId: 'p-sent', data: { commandId: run.commandId } }]);
+  });
+
   it('settles a finished background subagent and an ended task from the files beside the transcript, once, across restarts', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-settle-'));
     // Only a file under the CLI's own temporary directory is read as a task's output.
