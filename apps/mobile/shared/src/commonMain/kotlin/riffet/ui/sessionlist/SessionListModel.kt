@@ -3,15 +3,13 @@ package riffet.ui.sessionlist
 import riffet.contracts.Project
 import riffet.contracts.Session
 import riffet.contracts.SessionState
-import riffet.shared.isQuickChat
 
 /**
  * The list page's filter chips, the iPhone's `HomeFilter`. 已归档 is the old 显示已归档 toggle: it
  * shows what the live list hides (archived sessions and those of archived projects), nothing else.
- * 快速会话 is the quick chat history, which the other filters leave out as the drawer always did.
  * 未读 is what finished while nobody looked ([isDoneUnseen]), as on every client.
  */
-enum class SessionFilter { ALL, RUNNING, WAITING, UNREAD, QUICK_CHAT, ARCHIVED }
+enum class SessionFilter { ALL, RUNNING, WAITING, UNREAD, ARCHIVED }
 
 /** The stored form of [SessionFilter]; anything unrecognized is 全部. */
 fun sessionFilter(raw: String?): SessionFilter = SessionFilter.entries.firstOrNull { it.name == raw } ?: SessionFilter.ALL
@@ -63,32 +61,12 @@ fun sessionListContent(
                 SessionFilter.WAITING -> needsYou(session)
                 // The open conversation stays put while it is being read.
                 SessionFilter.UNREAD -> session.id == openSessionId || isDoneUnseen(session)
-                SessionFilter.ALL, SessionFilter.ARCHIVED, SessionFilter.QUICK_CHAT -> true
+                SessionFilter.ALL, SessionFilter.ARCHIVED -> true
             }
     fun lifted(matched: List<Session>): Pair<List<Session>, List<Session>> {
         val waiting = matched.filter { it.state == SessionState.WAITING }.sortedWith(::compareSessions)
         val pinned = matched.filter { it.pinnedAt != null && it.state != SessionState.WAITING }.sortedWith(::compareSessions)
         return waiting to pinned
-    }
-
-    // Quick chats have no project to scope by: 快速会话 lists the live ones, and 已归档 without a
-    // project scope adds the archived ones.
-    val chatProject = projects.firstOrNull { it.isQuickChat }
-    val needle = query.trim().lowercase()
-    val withChats = filter == SessionFilter.QUICK_CHAT || (archived && scope == null)
-    val chats = if (chatProject == null || !withChats) emptyList()
-    else sessions.filter { session ->
-        session.projectId == chatProject.id && (session.archivedAt != null) == archived &&
-            (needle.isEmpty() || "${session.shownTitle} ${session.tags.joinToString(" ")}".lowercase().contains(needle))
-    }.sortedWith(::compareSessions)
-    if (filter == SessionFilter.QUICK_CHAT) {
-        val (waiting, pinned) = lifted(chats)
-        val moved = (waiting + pinned).mapTo(mutableSetOf()) { it.id }
-        val rest = chats.filter { it.id !in moved }
-        return when (layout) {
-            SidebarLayout.PROJECT -> SessionListContent(waiting, pinned, listOfNotNull(chatProject?.takeIf { rest.isNotEmpty() }?.let { ProjectGroup(it, rest, forceOpen = false) }), emptyList())
-            SidebarLayout.TIME -> SessionListContent(waiting, pinned, emptyList(), timeBands(rest, dayStartMillis))
-        }
     }
 
     return when (layout) {
@@ -102,11 +80,10 @@ fun sessionListContent(
                 val keepEmpty = group.sessions.isEmpty() && filter == SessionFilter.ALL
                 if (remaining.isEmpty() && !keepEmpty) null else group.copy(sessions = remaining)
             }
-            val archivedChats = chatProject?.takeIf { chats.isNotEmpty() }?.let { ProjectGroup(it, chats, forceOpen = false) }
-            SessionListContent(waiting, pinned, rest + listOfNotNull(archivedChats), emptyList())
+            SessionListContent(waiting, pinned, rest, emptyList())
         }
         SidebarLayout.TIME -> {
-            val matched = (timeBuckets(projects, sessions, query, archived, dayStartMillis).flatMap { it.sessions }.filter(::keep) + chats)
+            val matched = timeBuckets(projects, sessions, query, archived, dayStartMillis).flatMap { it.sessions }.filter(::keep)
                 .sortedWith(::compareSessions)
             val (waiting, pinned) = lifted(matched)
             val moved = (waiting + pinned).mapTo(mutableSetOf()) { it.id }

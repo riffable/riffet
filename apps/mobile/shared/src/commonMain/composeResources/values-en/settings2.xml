@@ -102,29 +102,7 @@
     <string name="settings_extra_pair_scanned_invalid_body">%1$s Reverted to manual entry; make sure the QR code comes from riffet status on the Mac.</string>
     <string name="settings_extra_pair_scanned_unreadable">Could not parse the QR code.</string>
     <string name="settings_extra_pair_server_status">Server returned %1$d</string>
-    <string name="settings_extra_section_quick_chat">Quick chat</string>
-    <string name="settings_quick_chat">Quick chat</string>
-    <string name="settings_quick_chat_default_model">Default model</string>
-    <string name="settings_quick_chat_none">Not set</string>
-    <string name="settings_quick_chat_archive">Auto-archive</string>
-    <string name="settings_quick_chat_days">%1$d days</string>
-    <string name="settings_quick_chat_never">Never</string>
-    <string name="settings_quick_chat_hint">Pinned chats and chats with saved replies are never archived</string>
-    <string name="settings_quick_chat_models_failed">Could not load available models</string>
-    <string name="settings_quick_chat_open_mode">Open in</string>
-    <string name="settings_quick_chat_open_sheet">Sheet</string>
-    <string name="settings_quick_chat_open_page">Full page</string>
-    <string name="settings_quick_chat_presets">Presets</string>
-    <string name="settings_quick_chat_add">Add</string>
-    <string name="settings_quick_chat_new_preset">New preset</string>
-    <string name="settings_quick_chat_edit_preset">Edit preset</string>
-    <string name="settings_quick_chat_preset_name">Name</string>
-    <string name="settings_quick_chat_preset_prompt">Prompt</string>
-    <string name="settings_quick_chat_delete">Delete</string>
-    <string name="settings_quick_chat_restore_defaults">Restore default presets</string>
-    <string name="settings_quick_chat_restore">Restore</string>
-    <string name="settings_quick_chat_restore_title">Restore the default presets?</string>
-    <string name="settings_quick_chat_presets_limit">Up to 12 presets; names are 20 characters or fewer</string>
+    <string name="settings_auxiliary_models_failed">Could not load available models</string>
 
     <!-- Keep-alive (通知与后台) -->
     <string name="settings_keepalive_allow">Allow</string>

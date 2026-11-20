@@ -23,7 +23,7 @@ internal fun ProjectHomeUnconnected(onOpenMenu: () -> Unit, modifier: Modifier =
         ) { insets ->
             HomeSetupPage(
                 api = null, projects = emptyList(), contentPadding = insets,
-                onSelectProject = {}, onAddDirectory = null, onSkipProject = null,
+                onSelectProject = {}, onAddDirectory = null,
             )
         }
     }

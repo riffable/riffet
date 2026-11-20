@@ -74,13 +74,20 @@ fun LiveBrandMark(
     val interaction = remember { MutableInteractionSource() }
     val scratch = remember { Scratch() }
 
-    LaunchedEffect(current, reduced) {
-        clock.longValue = 0L
-        if (reduced) return@LaunchedEffect
+    // A hidden page (a tab out of view, a page under another) stops the loop and resumes it from
+    // the same frame; nothing redraws while nobody can see it.
+    val running = riffet.ui.theme.visualWorkActive()
+    LaunchedEffect(current) { clock.longValue = 0L }
+    LaunchedEffect(current, reduced, running) {
+        if (reduced) {
+            clock.longValue = 0L
+            return@LaunchedEffect
+        }
+        if (!running) return@LaunchedEffect
         var origin = -1L
         while (true) {
             withFrameNanos { now ->
-                if (origin < 0L) origin = now
+                if (origin < 0L) origin = now - clock.longValue
                 clock.longValue = if (once) minOf(now - origin, ONCE_SETTLED_NANOS) else now - origin
             }
             if (once && clock.longValue >= ONCE_SETTLED_NANOS) break

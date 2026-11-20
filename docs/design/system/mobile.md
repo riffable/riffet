@@ -174,7 +174,6 @@
 | 地方 | 问题 | 级 |
 |---|---|---|
 | 首次连接页 `app/RiffetApp.kt`、`settings/PairedServersSection.kt` | 标题与已配对服务器列表没有按整页字阶 | 2 |
-| 快速对话面板 `quickchat/QuickChatSheet.kt` | 仍是 Material `ModalBottomSheet`：它跑在系统入口的独立窗口里，换成自己的面板要连带处理键盘与高度 | 2 |
 | 配对 `pairing/PairingIcons.kt` | 扫码、粘贴两个图标不在 `RiffetIcons` 里，不随图标包切换：图标包的快照要从上游源文件生成，仓库里没有 | 1 |
 | 文件 `files/FilesPanel.kt` | 只能收藏文件夹，文件没有长按菜单 | 1 |
 | 统计 `stats/` | 每日活跃只画最近 12 周，年视图的其余月份只在其他图表里 | 1 |

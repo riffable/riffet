@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -72,9 +73,11 @@ internal data class AdaptiveWorkbenchLayout(val rail: Boolean, val twoPane: Bool
 /**
  * Width belongs to the current window, not the physical display. A resized Pad therefore follows
  * the same rules as a phone. Only an actual separating/occluding feature creates physical panes.
+ * [tasks] is read through a derived state: a tab change recomposes this only when the split changes.
  */
 @Composable
-internal fun AdaptiveWorkbench(tasks: Boolean, content: @Composable (AdaptiveWorkbenchLayout) -> Unit) {
+internal fun AdaptiveWorkbench(tasks: () -> Boolean, content: @Composable (AdaptiveWorkbenchLayout) -> Unit) {
+    val latestTasks by rememberUpdatedState(tasks)
     var origin by remember { mutableStateOf(Offset.Zero) }
     val density = LocalDensity.current
     val window = LocalRiffetWindowInfo.current
@@ -88,7 +91,8 @@ internal fun AdaptiveWorkbench(tasks: Boolean, content: @Composable (AdaptiveWor
                     (constraints.maxHeight - it.bounds.bottom).toDp() >= 320.dp
             }
         } ?: false
-        val twoPane = tasks && if (fold != null) canSplit else maxWidth >= TwoPaneMinWidth && maxHeight >= 480.dp
+        val wide = if (fold != null) canSplit else maxWidth >= TwoPaneMinWidth && maxHeight >= 480.dp
+        val twoPane by remember(wide) { derivedStateOf { wide && latestTasks() } }
         // A single page uses one physical screen segment. Centering it across the hinge would put
         // titles, fields and floating windows in an inaccessible area. Prefer the larger segment.
         val safe = if (fold == null || twoPane) Rect(0f, 0f, constraints.maxWidth.toFloat(), constraints.maxHeight.toFloat())

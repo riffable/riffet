@@ -5,7 +5,6 @@
     <string name="session_cancel">取消</string>
     <string name="session_save">保存</string>
     <string name="session_stop">停止</string>
-    <string name="session_expand">展开</string>
     <string name="session_open_sidebar">打开侧边栏</string>
     <string name="session_remove">移除</string>
     <string name="session_failed">失败</string>
@@ -159,9 +158,6 @@
     <string name="session_list_empty">没有会话</string>
     <string name="session_tab_new">新会话</string>
     <string name="session_tab_tasks">任务</string>
-    <string name="session_mode_task">新建任务</string>
-    <string name="session_mode_chat">快速对话</string>
-    <string name="session_quick_chat_plain">对话</string>
 
     <!-- Home and directory picker -->
     <string name="session_no_directory">还没有目录</string>
@@ -190,7 +186,6 @@
     <string name="session_use_directory">使用此目录</string>
     <string name="session_cannot_read_directory">无法读取该目录</string>
     <string name="session_quick_chat">快速对话</string>
-    <string name="session_quick_chat_unavailable">快速对话不可用</string>
     <string name="session_mark_failed">无法保存收藏</string>
     <string name="session_profile_pending">新配置将在后端重启后生效</string>
     <string name="session_profile_restart">重启并应用</string>

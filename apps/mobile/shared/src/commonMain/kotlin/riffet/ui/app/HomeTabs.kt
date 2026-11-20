@@ -1,5 +1,18 @@
 package riffet.ui.app
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.animate
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.PointerInputModifierNode
+import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+
 import riffet.ui.theme.appearancePageBackground
 
 import riffet.ui.design.riffetMaterial
@@ -43,6 +56,7 @@ import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.offset
 import kotlin.math.roundToInt
+import kotlin.math.abs
 import riffet.ui.design.keyboardUnfoldSpan
 import riffet.ui.design.tabDockBottomPadding
 import riffet.ui.design.tabDockInset
@@ -107,10 +121,10 @@ enum class HomeTab(val key: String) {
     NEW_SESSION("new"), ASSISTANT("assistant"), TASKS("tasks"), SETTINGS("settings")
 }
 
-/** The tab a launch opens: the stored [HomeTab.key]; anything unrecognized (and a first launch) is 助理. */
-internal fun homeTab(raw: String?): HomeTab = HomeTab.entries.firstOrNull { it.key == raw } ?: HomeTab.ASSISTANT
+/** The tab a launch opens: the stored [HomeTab.key]; anything unrecognized (and a first launch) is 新会话. */
+internal fun homeTab(raw: String?): HomeTab = HomeTab.entries.firstOrNull { it.key == raw } ?: HomeTab.NEW_SESSION
 
-/** The key a stored launch choice stands for: an unrecognized one is the default, 助理. */
+/** The key a stored launch choice stands for: an unrecognized one is the default, 新会话. */
 internal fun homeTabKey(raw: String?): String = homeTab(raw).key
 
 /** From this width the bottom bar becomes a rail at the start edge. */
@@ -190,6 +204,140 @@ internal class TabBackTarget(private val onBack: () -> Unit) : PageBackTarget {
 }
 
 /**
+ * The bottom tabs as a pager: a horizontal drag on a tab root scrolls [pager] by the finger's
+ * pixels, and the release settles on the next or previous tab, so the page and the bar follow the
+ * hand exactly. [SideDrawers] hands it the drags (see [PageSwipe]); the first tab has no previous
+ * one, so a rightward drag there still opens the drawer.
+ *
+ * Each release commits to a tab at once ([heading]), and a swipe during the settle counts from
+ * that tab: quick swipes advance one tab each instead of waiting for the pages to land.
+ */
+@Stable
+internal class TabSwipe(
+    private val pager: PagerState,
+    private val backDispatcher: PageBackDispatcher,
+    private val scope: CoroutineScope,
+) : PageSwipe {
+    /** Written after each composition: false on the rail, under a session, or while something is pushed. */
+    var enabled = false
+    /** The settle after a release; null jumps (reduced motion). */
+    var settle: AnimationSpec<Float>? = null
+    /** Release speed, in px/s, past which a short swipe still turns the page. */
+    var minFlingVelocity = 0f
+
+    /** The tab the last release settles on, until it lands or another scroll takes over. */
+    private var committed by mutableStateOf<Int?>(null)
+
+    /** The tab the pages are going to: a release's choice the moment the finger lifts. */
+    val heading: Int get() = committed ?: pager.targetPage
+
+    /** The drag in progress; each drag keeps its own distance and release, so a quick next one cannot take them. */
+    private var drag: Drag? = null
+
+    private class Drag(val from: Int) {
+        /** Wakes the scroll session; the distance itself adds up in [pending], so none is lost. */
+        val moved = Channel<Unit>(Channel.CONFLATED)
+        var pending = 0f
+        var travelled = 0f
+        var velocity = 0f
+        fun take(): Float = pending.also { pending = 0f }
+    }
+
+    override fun begin(forward: Boolean): Boolean {
+        if (!enabled) return false
+        // Only a tab root: a pushed page, sheet or menu keeps the drag.
+        val back = backDispatcher.current
+        if (back != null && back !is TabBackTarget && back !is InlineBackTarget) return false
+        val from = heading
+        if (HomeTab.entries.getOrNull(from + if (forward) 1 else -1) == null) return false
+        val current = Drag(from)
+        drag = current
+        // One scroll session per drag: it takes over from the previous settle or a tap's animation,
+        // follows every delta, then settles from the release velocity. The pager reports the settled tab.
+        scrollSession {
+            for (signal in current.moved) scrollBy(-current.take())
+            scrollBy(-current.take())
+            val to = target(current)
+            committed = to
+            settleTo(to, -current.velocity)
+        }
+        return true
+    }
+
+    /**
+     * A tab chosen on the bar while a swipe's release is still settling: the tap takes over the way
+     * a new drag would. Otherwise the pager's own tap animation runs, which a settle would refuse.
+     */
+    fun select(page: Int) {
+        if (committed == null || committed == page || drag != null) return
+        committed = page
+        scrollSession { settleTo(page, 0f, jumpFar = true) }
+    }
+
+    /** The scroll session that owns [committed]; an earlier one, taken over, leaves it alone. */
+    private var session = 0
+
+    private fun scrollSession(block: suspend ScrollScope.() -> Unit) {
+        val mine = ++session
+        scope.launch {
+            try {
+                pager.scroll(MutatePriority.UserInput, block)
+            } finally {
+                if (session == mine) committed = null
+            }
+        }
+    }
+
+    private suspend fun ScrollScope.settleTo(page: Int, velocity: Float, jumpFar: Boolean = false) {
+        val size = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat()
+        val pages = page - pager.currentPage - pager.currentPageOffsetFraction
+        val spec = settle
+        // A tap two or more pages away switches at once, as the pager's own far tap does. A quick
+        // swipe's release can be more than a page off its tab, and still slides.
+        if (spec == null || (jumpFar && abs(pages) > 1f)) scrollBy(pages * size)
+        else {
+            var done = 0f
+            animate(0f, pages * size, velocity, spec) { value, _ -> done += scrollBy(value - done) }
+        }
+    }
+
+    /**
+     * One tab per swipe, counted from where the drag began heading. A fling turns it in the drag's
+     * direction, a fling back against the drag cancels it, and a slow release turns it past halfway.
+     */
+    private fun target(current: Drag): Int {
+        val page = (pager.layoutInfo.pageSize + pager.layoutInfo.pageSpacing).toFloat().coerceAtLeast(1f)
+        // Forward (towards later tabs) is leftward: +1.
+        val moved = if (current.travelled < 0f) 1 else -1
+        val flung = when {
+            current.velocity < -minFlingVelocity -> 1
+            current.velocity > minFlingVelocity -> -1
+            else -> 0
+        }
+        val step = when {
+            flung != 0 -> if (flung == moved) moved else 0
+            abs(current.travelled) > page / 2f -> moved
+            else -> 0
+        }
+        return (current.from + step).coerceIn(0, HomeTab.entries.size - 1)
+    }
+
+    override fun drag(delta: Float) {
+        val current = drag ?: return
+        current.pending += delta
+        current.travelled += delta
+        current.moved.trySend(Unit)
+    }
+
+    override fun end(velocity: Float) {
+        val current = drag ?: return
+        current.velocity = velocity
+        current.moved.close()
+        drag = null
+    }
+}
+
+/**
  * The tab chrome around [content]: the app's [RiffetTabBar] on a phone (centred icons, one
  * sliding pill), a navigation rail when [rail]. The keyboard covers the bar, and a page pushed
  * inside a tab slides it away. 任务 carries the number of conversations waiting on the reader.
@@ -200,10 +348,18 @@ internal fun HomeShell(
     onTab: (HomeTab) -> Unit,
     waiting: Int,
     rail: Boolean,
-    /** The current tab's page ends in a docked composer ([TabComposerDock]): the bar folds beside it. */
-    dock: Boolean = false,
+    /** The tab whose page ends in a docked composer ([TabComposerDock]): there the bar folds beside it. */
+    dockTab: HomeTab? = null,
+    /** The pages' scroll position in tabs (0 is the first), read while laying out and drawing. */
+    position: () -> Float = { tab.ordinal.toFloat() },
+    /**
+     * The tab the pages are heading to: the drag's nearer page, or where a release or a tap lands.
+     * The bar shows it as selected at once, rather than after the pages settle and [tab] follows.
+     */
+    heading: () -> HomeTab = { tab },
     content: @Composable () -> Unit,
 ) {
+    val dock = tab == dockTab
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
     val colors = LocalRiffetColors.current
@@ -290,7 +446,16 @@ internal fun HomeShell(
     var navOpen by remember { mutableStateOf(false) }
     LaunchedEffect(dock) { if (!dock) navOpen = false }
     val folded = dock && !navOpen
-    val fold = animateFloatAsState(if (folded) 1f else 0f, motion.spatial(), label = "dock")
+    // The fold follows the pages: the docked tab's page coming into view folds the bar, leaving it
+    // unfolds it, at the finger's pace. Opening the disc unfolds it on its own spring.
+    val unfolded = animateFloatAsState(if (navOpen) 1f else 0f, motion.spatial(), label = "dock")
+    val latestPosition by rememberUpdatedState(position)
+    val fold = remember(dockTab) {
+        derivedStateOf {
+            val docked = dockTab ?: return@derivedStateOf 0f
+            (1f - kotlin.math.abs(latestPosition() - docked.ordinal)).coerceIn(0f, 1f) * (1f - unfolded.value)
+        }
+    }
     val opened = rememberUpdatedState(dock && navOpen)
     chrome.dockOpen = animateFloatAsState(if (opened.value) 1f else 0f, motion.effects(), label = "dockOpen")
     PageBackHandler(enabled = dock && navOpen) { navOpen = false }
@@ -317,17 +482,21 @@ internal fun HomeShell(
             },
             {
                 if (barShown || barComposed) {
+                    // Read here, so only the bar recomposes when the heading changes.
+                    val latestHeading by rememberUpdatedState(heading)
+                    val shown by remember { derivedStateOf { latestHeading() } }
                     val gesture = WindowInsets.navigationBars.getBottom(density).toFloat()
                     val faces = HomeTab.entries.map { tabFace(it) }
                     RiffetTabBar(
                         items = HomeTab.entries.mapIndexed { index, entry ->
                             TabBarItem(faces[index].icon, faces[index].selected, faces[index].label, if (entry == HomeTab.TASKS) waiting else 0)
                         },
-                        selected = HomeTab.entries.indexOf(tab),
+                        selected = HomeTab.entries.indexOf(shown),
                         onSelect = { onTab(HomeTab.entries[it]) },
                         onReselect = { if (dock) navOpen = false else chrome.reselected += 1 },
-                        folded = folded,
+                        folded = shown == dockTab && !navOpen,
                         fold = { fold.value },
+                        position = { latestPosition() },
                         onUnfold = { navOpen = true },
                         // The page is padded off the gesture bar; the bar's colour runs under it anyway.
                         modifier = Modifier
@@ -409,4 +578,25 @@ internal fun EmptyPane() {
     Box(Modifier.fillMaxSize().appearancePageBackground(colors.bg), contentAlignment = Alignment.Center) {
         LiveBrandMark(fg = colors.fg4, accent = colors.fg4, modifier = Modifier.size(metrics.controlHeight))
     }
+}
+
+/**
+ * Over a page: while [blocking], the page's own controls get no touches, yet nothing is consumed,
+ * so an ancestor's gesture (the tab swipe) still sees the whole drag. Otherwise touches pass
+ * through to the page as usual. Read when a touch lands.
+ */
+internal fun Modifier.blockTouchesWhen(blocking: () -> Boolean): Modifier = this then BlockTouchesElement(blocking)
+
+private class BlockTouchesElement(val blocking: () -> Boolean) : ModifierNodeElement<BlockTouchesNode>() {
+    override fun create() = BlockTouchesNode(blocking)
+    override fun update(node: BlockTouchesNode) { node.blocking = blocking }
+    override fun equals(other: Any?) = other is BlockTouchesElement && other.blocking === blocking
+    override fun hashCode() = blocking.hashCode()
+}
+
+private class BlockTouchesNode(var blocking: () -> Boolean) : Modifier.Node(), PointerInputModifierNode {
+    override fun onPointerEvent(pointerEvent: PointerEvent, pass: PointerEventPass, bounds: IntSize) = Unit
+    override fun onCancelPointerInput() = Unit
+    // Sharing lets the page beneath receive the touch; not sharing keeps it on this layer alone.
+    override fun sharePointerInputWithSiblings(): Boolean = !blocking()
 }

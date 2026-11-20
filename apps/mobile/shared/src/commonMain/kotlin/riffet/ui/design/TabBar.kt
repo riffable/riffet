@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import kotlin.math.roundToInt
+import kotlin.math.abs
 import riffet.ui.theme.LocalRiffetColors
 
 /** One destination of a [RiffetTabBar]. */
@@ -93,6 +94,8 @@ internal fun RiffetTabBar(
     folded: Boolean = false,
     fold: () -> Float = { 0f },
     onUnfold: () -> Unit = {},
+    /** Where the selection stands, in items, while the pages behind the bar move; null springs to [selected]. */
+    position: (() -> Float)? = null,
 ) {
     val style = LocalInterfaceStyle.current
     val recipe = style.components.navigation
@@ -103,7 +106,8 @@ internal fun RiffetTabBar(
     // The island's geometry is the same under every material; SOLID only swaps blur for a plain fill.
     val panelShape = RoundedCornerShape(50)
     val geometry = remember { BarGeometry() }
-    val pill = animateFloatAsState(selected.toFloat(), motion.spatial(), label = "tabPill")
+    val spring = animateFloatAsState(selected.toFloat(), motion.spatial(), label = "tabPill")
+    val pill: () -> Float = position ?: { spring.value }
     // Folded, the disc itself says where you are; the face would only repeat its outline.
     val face by animateColorAsState(s.selected.copy(alpha = if (folded) 0f else 0.32f), motion.effects(), label = "tabFace")
     // What the folded disc hides: the other destinations' counts.
@@ -119,10 +123,10 @@ internal fun RiffetTabBar(
                     if (full <= 0f || items.isEmpty()) return@drawBehind
                     val slot = full / items.size
                     val inset = 4.dp.toPx()
-                    val leading = slot * selected + slot / 2f
+                    val leading = slot * pill() + slot / 2f
                     val centre = if (layoutDirection == LayoutDirection.Rtl) full - leading else leading
                     val shift = (centre - size.width / 2f) * fold()
-                    val start = slot * pill.value
+                    val start = slot * pill()
                     val x = (if (layoutDirection == LayoutDirection.Rtl) full - start - slot else start) - shift
                     drawRoundRect(face, topLeft = Offset(x + inset, inset), size = Size(slot - inset * 2, size.height - inset * 2),
                         cornerRadius = CornerRadius(size.height / 2f))
@@ -133,7 +137,7 @@ internal fun RiffetTabBar(
                     val full = geometry.full
                     val placeable = measurable.measure(Constraints.fixed(full, constraints.maxHeight))
                     val slot = full / items.size.coerceAtLeast(1)
-                    val leading = slot * selected + slot / 2f
+                    val leading = slot * pill() + slot / 2f
                     val centre = if (layoutDirection == LayoutDirection.Rtl) full - leading else leading
                     val shift = ((centre - constraints.maxWidth / 2f) * fold()).roundToInt()
                     layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(-shift, 0) }
@@ -151,7 +155,8 @@ internal fun RiffetTabBar(
                                 motion.effects(), label = "tabInk",
                             )
                             Box(Modifier.weight(1f).fillMaxHeight()
-                                .graphicsLayer { alpha = if (on) 1f else 1f - fold() }
+                                // The destination the selection stands on stays; the rest fade as the bar folds.
+                                .graphicsLayer { alpha = 1f - fold() * (abs(pill() - index)).coerceIn(0f, 1f) }
                                 // Folded, the current destination's slot is the whole disc. A disabled slot still takes
                                 // its touches, so the others cannot be reached through the disc's edge.
                                 .selectable(on, enabled = on || !folded, role = Role.Tab, interactionSource = source, indication = null,
@@ -171,7 +176,9 @@ internal fun RiffetTabBar(
                     }
                 }
             }
-            Box(Modifier.graphicsLayer { alpha = fold() }) {
+            // The disc's count takes over in the fold's second half, after the items' own counts have
+            // faded, so the two never show at once while the bar folds with a swipe.
+            Box(Modifier.graphicsLayer { alpha = ((fold() - 0.5f) * 2f).coerceIn(0f, 1f) }) {
                 if (elsewhere > 0) Badge { Text(if (elsewhere > 99) "99+" else elsewhere.toString()) }
             }
         },

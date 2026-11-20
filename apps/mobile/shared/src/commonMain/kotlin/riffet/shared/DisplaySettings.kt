@@ -137,8 +137,8 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         preferences?.setString(SPACING_KEY, value.key)
     }
 
-    /** The tab a launch opens (`HomeTab.key`); 助理 until chosen. */
-    var launchTab: String by mutableStateOf(preferences?.string(LAUNCH_TAB_KEY) ?: "assistant")
+    /** The tab a launch opens (`HomeTab.key`); 新会话 until chosen. */
+    var launchTab: String by mutableStateOf(preferences?.string(LAUNCH_TAB_KEY) ?: "new")
         private set
 
     fun changeLaunchTab(key: String) {

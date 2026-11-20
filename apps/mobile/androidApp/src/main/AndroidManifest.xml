@@ -160,34 +160,6 @@
         </activity>
 
         <!--
-          The single entry for text selection, sharing, the launcher shortcut and the Quick Settings
-          tile. It is exported because PROCESS_TEXT and SEND come from other apps, and translucent
-          so the sheet can sit over whatever app the reader was in; it never appears in recents.
-        -->
-        <activity
-            android:name=".QuickChatActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:label="@string/quick_chat"
-            android:launchMode="singleTop"
-            android:theme="@style/Theme.Riffet.QuickChat"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.PROCESS_TEXT" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-            <!-- Text, or any files: they become attachments under the composer's own limits. -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="*/*" />
-            </intent-filter>
-        </activity>
-
-        <!--
           The default alias keeps the activity's old name, so home-screen pins and
           `adb shell am start -n io.github.riffable.android/riffet.android.MainActivity` still resolve.
         -->
@@ -202,10 +174,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -219,10 +187,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -236,10 +200,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -253,10 +213,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -270,10 +226,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -287,10 +239,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -304,10 +252,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -321,10 +265,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -338,10 +278,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -355,10 +291,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -372,10 +304,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity-alias
@@ -389,10 +317,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <activity
@@ -435,7 +359,7 @@
             android:exported="false"
             android:launchMode="singleTop"
             android:taskAffinity=""
-            android:theme="@style/Theme.Riffet.QuickChat" />
+            android:theme="@style/Theme.Riffet.Overlay" />
         <!--
           T1 screen control (docs/DEVICES.md §3「协议（R3，T1）」): reads and drives the main display
           only for calls the owner allowed on this device; see ScreenActionGate.
@@ -470,17 +394,6 @@
             android:name=".RiffetNotificationReceiver"
             android:exported="false" />
 
-        <!-- 快速对话 in the Quick Settings panel; it opens the same entry as the shortcut. -->
-        <service
-            android:name=".QuickChatTileService"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/quick_chat"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
     </application>
 
 </manifest>

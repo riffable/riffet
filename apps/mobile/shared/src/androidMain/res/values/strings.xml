@@ -9,7 +9,6 @@
     <string name="host_attachment_read_failed">无法读取附件，这一批没有添加</string>
     <string name="host_attachment_too_large">「%1$s」超过 24 MiB，这一批没有添加</string>
     <string name="host_attachment_unreadable">无法读取「%1$s」，这一批没有添加</string>
-    <string name="host_quick_chat_attachments_not_sent">附件未发送</string>
 
     <!-- InstallDownloadActivity -->
     <string name="host_install_bad_package">无法读取安装包，请重新下载</string>

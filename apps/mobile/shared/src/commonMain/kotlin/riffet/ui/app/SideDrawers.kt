@@ -45,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.paneTitle
@@ -113,6 +112,8 @@ internal fun SideDrawers(
     modifier: Modifier = Modifier,
     /** The system back gesture while it would close the open drawer; read outside composition. */
     backSwipe: () -> BackSwipe? = { null },
+    /** Takes the horizontal drags that would otherwise open a drawer, before the drawers do. */
+    pageSwipe: PageSwipe? = null,
     content: @Composable () -> Unit,
 ) {
     val style = LocalInterfaceStyle.current
@@ -144,6 +145,7 @@ internal fun SideDrawers(
 
     val latestEndEnabled by rememberUpdatedState(endEnabled)
     val latestStartEnabled by rememberUpdatedState(startEnabled)
+    val latestPageSwipe by rememberUpdatedState(pageSwipe)
     val latestActive by rememberUpdatedState(LocalPageActive.current)
     val backDispatcher = LocalPageBackDispatcher.current
     val latestStartChange by rememberUpdatedState(onStartOpenChange)
@@ -191,7 +193,17 @@ internal fun SideDrawers(
                         // Rightward moves the left drawer open; for the right drawer it is the reverse.
                         var sign = 1f
                         var progress = 0f
+                        // A page swipe instead: the pages follow the finger's pixels.
+                        var paging: PageSwipe? = null
                         val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, overSlop ->
+                            val drawerOpen = start.target > 0f || start.value > 0f || end.target > 0f || end.value > 0f
+                            val pages = latestPageSwipe
+                            if (!drawerOpen && overSlop != 0f && pages != null && pages.begin(forward = overSlop < 0f)) {
+                                paging = pages
+                                pages.drag(overSlop)
+                                change.consume()
+                                return@awaitHorizontalTouchSlopOrCancellation
+                            }
                             val chosen = when {
                                 start.target > 0f || start.value > 0f -> start
                                 end.target > 0f || end.value > 0f -> end
@@ -205,10 +217,24 @@ internal fun SideDrawers(
                             chosen.drag(progress)
                             change.consume()
                         } ?: return@awaitEachGesture
-                        val moving = side ?: return@awaitEachGesture
 
                         val tracker = VelocityTracker()
                         tracker.addPosition(drag.uptimeMillis, drag.position)
+                        paging?.let { pages ->
+                            var velocity = 0f
+                            try {
+                                horizontalDrag(drag.id) { change ->
+                                    tracker.addPosition(change.uptimeMillis, change.position)
+                                    pages.drag(change.positionChange().x)
+                                    change.consume()
+                                }
+                                velocity = tracker.calculateVelocity().x
+                            } finally {
+                                pages.end(velocity)
+                            }
+                            return@awaitEachGesture
+                        }
+                        val moving = side ?: return@awaitEachGesture
                         horizontalDrag(drag.id) { change ->
                             tracker.addPosition(change.uptimeMillis, change.position)
                             progress = (progress + sign * change.positionChange().x / sheetPx).coerceIn(0f, 1f)
@@ -333,12 +359,6 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
         Box(
             modifier.width(width).fillMaxHeight().semantics { paneTitle = title }
                 .clip(shape)
-                .drawWithContent {
-                    drawContent()
-                    val stroke = style.metrics.hairlineWidth.toPx()
-                    val x = if (navigation) size.width - stroke / 2 else stroke / 2
-                    drawLine(surface.hairline, Offset(x, 0f), Offset(x, size.height), strokeWidth = stroke)
-                }
                 // Keep blank header and safe-area taps on the sheet, above the scrim.
                 // Do not consume: child actions and the ancestor's drawer drag still receive input.
                 .pointerInput(Unit) {},
@@ -371,4 +391,17 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
             }
         }
     }
+}
+
+/**
+ * Horizontal swipes between neighbouring pages (the bottom tabs), arbitrated by [SideDrawers] with
+ * its own drags so one gesture never moves both. Called on the pointer thread, outside composition.
+ */
+internal interface PageSwipe {
+    /** A drag toward the next page ([forward]) or the previous one starts; false leaves it to the drawers. */
+    fun begin(forward: Boolean): Boolean
+    /** The finger moved by [delta] px (positive is rightward). */
+    fun drag(delta: Float)
+    /** The finger lifted at [velocity] px/s (positive is rightward); the pages settle from there. */
+    fun end(velocity: Float)
 }

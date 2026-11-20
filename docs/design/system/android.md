@@ -87,7 +87,7 @@
 
 | 区域 | Android | 来源 |
 |---|---|---|
-| 底栏 | 新会话、助理、任务、设置四个目的地，只有图标；启动时停在「设置 → 通用 → 启动时打开」选的一项（默认助理，仅存本机）；助理页在 tab 里直接画主对话，没有主对话时是新会话页的输入框加 记忆 / 规则 / 能力 三张卡片；宽屏换成侧边导航栏。`variants.navigation` 决定平铺（贴底、表面延伸到手势区）或浮动（胶囊外壳、四周留白）。页面底部是会话输入框的 tab（助理的主对话）里，底栏收成一个圆钮，只留当前目的地的图标，停在输入框左侧同一行（`TabComposerDock`）；点圆钮展开成完整底栏，盖住输入框，选一个目的地、点别处或返回都会收回；键盘弹出后输入框恢复整行宽；被收起的目的地上的未读数画在圆钮右上角 | `ui/app/HomeTabs.kt`、`ui/design/TabBar.kt` |
+| 底栏 | 新会话、助理、任务、设置四个目的地，只有图标；启动时停在「设置 → 通用 → 启动时打开」选的一项（默认新会话，仅存本机）；有底栏时，tab 根页上左右滑动切到相邻 tab，只有新会话上右滑打开侧栏；助理页在 tab 里直接画主对话，没有主对话时是新会话页的输入框加 记忆 / 规则 / 能力 三张卡片；宽屏换成侧边导航栏。`variants.navigation` 决定平铺（贴底、表面延伸到手势区）或浮动（胶囊外壳、四周留白）。页面底部是会话输入框的 tab（助理的主对话）里，底栏收成一个圆钮，只留当前目的地的图标，停在输入框左侧同一行（`TabComposerDock`）；点圆钮展开成完整底栏，盖住输入框，选一个目的地、点别处或返回都会收回；键盘弹出后输入框恢复整行宽；被收起的目的地上的未读数画在圆钮右上角 | `ui/app/HomeTabs.kt`、`ui/design/TabBar.kt` |
 | 页面栈 | 统计、下载、Git、文件、子 Agent、终端等压栈打开，二级页隐藏底栏；会话页是工作台上的一层 | `ui/app/PageStack.kt`、`PageHost` |
 | 左侧栏 | 头部是你的头像和名字；服务器卡片（点开在选择面板里切换）、下载和统计磁贴、收藏的文件夹 | `ui/app/SideDrawers.kt`、`WorkbenchDrawer`；部件在 `ui/app/PaneParts.kt` |
 | 右侧栏 | 会话详情：变更、文件、终端、查找磁贴，正在进行的子 Agent 与后台任务，紧凑的详情，一行操作，删除；宽 `drawerWidth`（304），与屏幕边至少留 `drawerMinGap`；结构见 [移动端页面](mobile.md) §2.7 | `ui/app/SideDrawers.kt`、`session/SessionDetailsPane.kt` |
@@ -147,7 +147,7 @@
 - 底部面板：`PickerSheetFrame` / `PickerSheet`（`ui/pickers/PickerUi.kt`）。最高为屏高的 70%，宽屏不超过 `sheetMaxWidth`；遮罩挂在窗口层，盖住顶栏和底栏。ios 风格的简单操作面板把取消单独放在下方。
 - 侧栏（§3.1）不是浮层：固定标题与关闭按钮，正文独立滚动，点遮罩关闭。
 
-**现状**：`quickchat/QuickChatSheet.kt` 直接用 Material 的 `ModalBottomSheet`；`ui/pickers/PickerUi.kt` 里还有第二个自定义 `Popup`。
+**现状**：`ui/pickers/PickerUi.kt` 里还有第二个自定义 `Popup`。
 
 ### 4.4 反馈
 
@@ -235,7 +235,7 @@
 2. **页面**：`GitPanel`、`PairingScreen` 改用 `RiffetPageScaffold`。
 3. **间距**：从 §2.2 列出的文件开始，把 `.dp` 字面量换成 `DesignMetrics` 的字段；缺的档位先补进 `mobile-styles.ts`。之后给 `check:design` 加上 Android 的按文件基线，只降不升。
 4. **线与文字**：`HorizontalDivider` 换成读 `hairline` 的分隔线；收掉业务代码里的 `.sp`；`RiffetText`、`RiffetProse`、`RiffetRadius` 并入角色或删除。
-5. **浮层**：`QuickChatSheet` 和 `PickerUi` 里的第二个 `Popup` 归入 `PickerSheetFrame` 和 `RiffetDropdownMenu`，做不到的在本文写明例外。
+5. **浮层**：`PickerUi` 里的第二个 `Popup` 归入 `PickerSheetFrame` 和 `RiffetDropdownMenu`，做不到的在本文写明例外。
 6. **无障碍**：逐个核对只有图标的按钮的 `contentDescription`，以及 20–47dp 按钮的点击区。
 7. **设计规范页**：Android 部分随上面各步更新组件对照。
 

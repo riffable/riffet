@@ -20,7 +20,6 @@ import riffet.contracts.NativeBackendId
 import riffet.contracts.NativeBackendProfileSettings
 import riffet.contracts.NativeBackendProfileSettingsUpdate
 import riffet.contracts.PatchValue
-import riffet.contracts.QuickChatPreset
 import riffet.shared.ProbeBackendModelsBody
 import riffet.shared.RiffetApi
 import riffet.shared.RiffetUnauthenticatedException
@@ -38,7 +37,6 @@ import riffet.shared.setAuxiliaryModel
 import riffet.shared.setPluginModel
 import riffet.shared.settings
 import riffet.shared.updateBackendProfile
-import riffet.shared.updateQuickChat
 import riffet.shared.updateSettings
 
 /**
@@ -304,36 +302,6 @@ class SettingsController(
             _state.update { it.copy(error = null, notice = null) }
             try {
                 publish(api.updateSettings(patch))
-                successMessage?.let { message -> _state.update { it.copy(notice = message) } }
-                onSaved()
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (failure: Throwable) {
-                _state.update { it.copy(error = failure.settingsMessage(failureMessage)) }
-            } finally {
-                _state.update { it.copy(saving = false) }
-            }
-        }
-    }
-
-    /**
-     * Writes quick chat settings. Only the supplied keys change; [resetPresets] restores the server's
-     * default presets instead of [presets] (the two are mutually exclusive).
-     */
-    fun saveQuickChat(
-        retentionDays: Int? = null,
-        openMode: String? = null,
-        presets: List<QuickChatPreset>? = null,
-        resetPresets: Boolean = false,
-        successMessage: String? = null,
-        failureMessage: String = L10n.uiText("settings.saveFailed"),
-        onSaved: () -> Unit = {},
-    ) {
-        if (!beginWrite()) return
-        scope.launch {
-            _state.update { it.copy(error = null, notice = null) }
-            try {
-                publish(api.updateQuickChat(retentionDays, openMode, presets, resetPresets))
                 successMessage?.let { message -> _state.update { it.copy(notice = message) } }
                 onSaved()
             } catch (cancellation: CancellationException) {

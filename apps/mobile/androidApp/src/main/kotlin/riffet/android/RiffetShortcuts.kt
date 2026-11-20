@@ -9,8 +9,8 @@ import riffet.contracts.Session
 import riffet.shared.AppLog
 
 /**
- * The launcher's long-press list: the static 快速对话 (`res/xml/shortcuts.xml`) plus the three
- * conversations with the latest activity on the paired server. A shortcut opens its conversation
+ * The launcher's long-press list: the three conversations with the latest activity on the paired
+ * server. A shortcut opens its conversation
  * through the same extras a notification press uses, so a shortcut from another server is refused
  * the same way.
  */

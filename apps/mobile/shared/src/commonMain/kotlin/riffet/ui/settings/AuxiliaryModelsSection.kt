@@ -22,7 +22,7 @@ import riffet_mobile.shared.generated.resources.*
 internal fun rememberAuxiliaryModelOptions(api: RiffetApi): Pair<List<AuxiliaryModelOption>?, String?> {
     var options by remember(api) { mutableStateOf<List<AuxiliaryModelOption>?>(null) }
     var loadError by remember(api) { mutableStateOf<Throwable?>(null) }
-    val loadFailed = stringResource(Res.string.settings_quick_chat_models_failed)
+    val loadFailed = stringResource(Res.string.settings_auxiliary_models_failed)
     LaunchedEffect(api) {
         options = try {
             api.auxiliaryModels()

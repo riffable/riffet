@@ -56,7 +56,7 @@ internal fun UnconnectedWorkbench(
     val tabBackTarget = remember { TabBackTarget { tabBack.value() } }
     RegisterPageBackTarget(tabBackTarget, enabled = navigation.tab != HomeTab.NEW_SESSION)
 
-    AdaptiveWorkbench(tasks = false) { layout ->
+    AdaptiveWorkbench(tasks = { false }) { layout ->
         SideDrawers(
             startOpen = navigation.drawerOpen,
             onStartOpenChange = { open -> navigation.drawerOpen = open },

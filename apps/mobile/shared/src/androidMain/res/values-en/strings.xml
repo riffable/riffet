@@ -5,7 +5,6 @@
     <string name="host_attachment_read_failed">Cannot read these attachments. This selection was not added.</string>
     <string name="host_attachment_too_large">“%1$s” is over 24 MiB. This selection was not added.</string>
     <string name="host_attachment_unreadable">Cannot read “%1$s”. This selection was not added.</string>
-    <string name="host_quick_chat_attachments_not_sent">The attachments were not sent.</string>
 
     <!-- InstallDownloadActivity -->
     <string name="host_install_bad_package">Cannot read the installer. Download it again.</string>

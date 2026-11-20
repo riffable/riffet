@@ -5,7 +5,6 @@
     <string name="session_cancel">Cancel</string>
     <string name="session_save">Save</string>
     <string name="session_stop">Stop</string>
-    <string name="session_expand">Expand</string>
     <string name="session_open_sidebar">Open sidebar</string>
     <string name="session_remove">Remove</string>
     <string name="session_failed">Failed</string>
@@ -159,9 +158,6 @@
     <string name="session_list_empty">No sessions</string>
     <string name="session_tab_new">New</string>
     <string name="session_tab_tasks">Tasks</string>
-    <string name="session_mode_task">New task</string>
-    <string name="session_mode_chat">Quick chat</string>
-    <string name="session_quick_chat_plain">Chat</string>
 
     <!-- Home and directory picker -->
     <string name="session_no_directory">No directories yet</string>
@@ -190,7 +186,6 @@
     <string name="session_use_directory">Use this directory</string>
     <string name="session_cannot_read_directory">Could not read this directory</string>
     <string name="session_quick_chat">Quick chat</string>
-    <string name="session_quick_chat_unavailable">Quick chat is unavailable</string>
     <string name="session_mark_failed">Could not save the reply</string>
     <string name="session_profile_pending">New settings take effect after the backend restarts</string>
     <string name="session_profile_restart">Restart and apply</string>

@@ -41,7 +41,6 @@ import riffet.contracts.Project
 import riffet.shared.RiffetApi
 import riffet.shared.backends
 import riffet.shared.isAssistant
-import riffet.shared.isQuickChat
 import riffet.ui.app.LocalTabContentBottomPadding
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.LocalRiffetSurfaces
@@ -62,7 +61,6 @@ import riffet.ui.timeline.Spinner
 import riffet_mobile.shared.generated.resources.Res
 import riffet_mobile.shared.generated.resources.onboarding_enter_address
 import riffet_mobile.shared.generated.resources.onboarding_scan
-import riffet_mobile.shared.generated.resources.onboarding_skip
 import riffet_mobile.shared.generated.resources.settings_recheck
 import riffet_mobile.shared.generated.resources.setup_agent
 import riffet_mobile.shared.generated.resources.setup_no_agent
@@ -99,8 +97,6 @@ internal fun HomeSetupPage(
     onSelectProject: (Project) -> Unit,
     /** Opens the directory browser; null where the server cannot add one. */
     onAddDirectory: (() -> Unit)?,
-    /** Continues without a project (the quick chat); null when there is none to continue in. */
-    onSkipProject: (() -> Unit)?,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
@@ -126,7 +122,7 @@ internal fun HomeSetupPage(
         }
     }
     val choices = remember(projects) {
-        projects.filter { it.archivedAt == null && !it.isQuickChat && !it.isAssistant && it.system != "task-workspace" }
+        projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" }
     }
     var sheet by remember { mutableStateOf(false) }
 
@@ -176,7 +172,6 @@ internal fun HomeSetupPage(
                         val lookup = agent
                         if (agentStep is StepState.Current) AgentBody(lookup, onRecheck = { recheck++ })
                         if (projectStep is StepState.Current) ProjectBody(
-                            onSkip = onSkipProject,
                             onPick = { if (choices.isEmpty()) onAddDirectory?.invoke() else sheet = true },
                         )
                     }
@@ -221,17 +216,14 @@ private fun AgentBody(lookup: AgentLookup, onRecheck: () -> Unit) {
 }
 
 @Composable
-private fun ProjectBody(onSkip: (() -> Unit)?, onPick: () -> Unit) {
+private fun ProjectBody(onPick: () -> Unit) {
     val metrics = LocalInterfaceStyle.current.metrics
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(metrics.controlInset)) {
         Text(
             stringResource(Res.string.setup_project_hint), style = LocalRiffetTypography.current.bodySmall, color = LocalRiffetColors.current.fg3,
             modifier = Modifier.padding(horizontal = metrics.controlInset / 2),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
-            if (onSkip != null) RiffetButton(stringResource(Res.string.onboarding_skip), onSkip, modifier = Modifier.weight(1f))
-            RiffetButton(stringResource(Res.string.setup_pick_project), onPick, primary = true, modifier = Modifier.weight(2f))
-        }
+        RiffetButton(stringResource(Res.string.setup_pick_project), onPick, primary = true, modifier = Modifier.fillMaxWidth())
     }
 }
 

@@ -102,29 +102,7 @@
     <string name="settings_extra_pair_scanned_invalid_body">%1$s 已退回手输，请确认二维码来自 Mac 上的 riffet status。</string>
     <string name="settings_extra_pair_scanned_unreadable">二维码内容无法解析。</string>
     <string name="settings_extra_pair_server_status">服务器返回 %1$d</string>
-    <string name="settings_extra_section_quick_chat">快速对话</string>
-    <string name="settings_quick_chat">快速对话</string>
-    <string name="settings_quick_chat_default_model">默认模型</string>
-    <string name="settings_quick_chat_none">不设置</string>
-    <string name="settings_quick_chat_archive">自动归档</string>
-    <string name="settings_quick_chat_days">%1$d 天</string>
-    <string name="settings_quick_chat_never">永不</string>
-    <string name="settings_quick_chat_hint">置顶或有收藏的对话不会归档</string>
-    <string name="settings_quick_chat_models_failed">无法读取可用模型</string>
-    <string name="settings_quick_chat_open_mode">打开方式</string>
-    <string name="settings_quick_chat_open_sheet">浮层</string>
-    <string name="settings_quick_chat_open_page">完整页面</string>
-    <string name="settings_quick_chat_presets">预设</string>
-    <string name="settings_quick_chat_add">添加</string>
-    <string name="settings_quick_chat_new_preset">新建预设</string>
-    <string name="settings_quick_chat_edit_preset">编辑预设</string>
-    <string name="settings_quick_chat_preset_name">名称</string>
-    <string name="settings_quick_chat_preset_prompt">提示词</string>
-    <string name="settings_quick_chat_delete">删除</string>
-    <string name="settings_quick_chat_restore_defaults">恢复默认预设</string>
-    <string name="settings_quick_chat_restore">恢复</string>
-    <string name="settings_quick_chat_restore_title">恢复默认预设？</string>
-    <string name="settings_quick_chat_presets_limit">最多 12 个预设，名称 20 字以内</string>
+    <string name="settings_auxiliary_models_failed">无法读取可用模型</string>
 
     <!-- Keep-alive (通知与后台) -->
     <string name="settings_keepalive_allow">允许</string>

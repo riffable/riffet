@@ -6,33 +6,13 @@ import riffet.ui.app.LocalTabContentBottomPadding
 
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
-import riffet.ui.design.pressScale
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
-import androidx.compose.runtime.mutableFloatStateOf
-import kotlinx.coroutines.Job
 import riffet.ui.theme.LocalRiffetMotion
 import riffet.ui.theme.LocalRiffetPageMotion
-import androidx.compose.material3.TabRowDefaults
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.lerp
-import riffet.contracts.NativeBackendOption
 import riffet.ui.app.TabTopBar
 import riffet.ui.assistant.AssistantEntries
 import riffet.ui.assistant.AssistantSheet
@@ -43,30 +23,13 @@ import riffet_mobile.shared.generated.resources.assistant_memory
 import riffet_mobile.shared.generated.resources.assistant_rules
 import riffet_mobile.shared.generated.resources.assistant_abilities
 import riffet.ui.app.RiffetPageScaffold
-import riffet.ui.design.materialBackdropEnabled
-import riffet_mobile.shared.generated.resources.session_quick_chat_plain
 import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.unit.LayoutDirection
-import riffet_mobile.shared.generated.resources.session_mode_chat
-import riffet_mobile.shared.generated.resources.session_mode_task
 import riffet_mobile.shared.generated.resources.session_tab_new
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.heightIn
 import riffet.ui.timeline.Spinner
-import riffet.ui.timeline.rememberReducedMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -120,11 +83,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -178,14 +139,10 @@ import riffet.ui.composer.ComposerSettings
 import riffet.ui.pickers.SendSettingsPage
 import riffet.ui.settings.SettingsNoticeKind
 import androidx.compose.ui.text.style.TextOverflow
-import riffet.ui.quickchat.QuickChatModeChips
-import riffet.ui.quickchat.QuickChatPresetPrompt
 import riffet.ui.pickers.modelLabel
 import riffet.ui.pickers.modelSelectionSummary
 import riffet.ui.pickers.optionLabelOf
 import riffet.ui.session.backendName
-import riffet.ui.sessionlist.activityAt
-import riffet.ui.timeline.instantMillis
 import riffet.ui.sessionlist.compareSessions
 import riffet.ui.sessionlist.relativeTimeLabel
 import riffet.ui.state.SessionStore
@@ -196,7 +153,6 @@ import riffet.shared.backendUsage
 import riffet.shared.updateSettings
 import riffet.shared.backends
 import riffet.shared.isAssistant
-import riffet.shared.isQuickChat
 import riffet.shared.slashCatalog
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
@@ -224,7 +180,6 @@ import riffet_mobile.shared.generated.resources.session_no_directory
 import riffet_mobile.shared.generated.resources.session_permission
 import riffet_mobile.shared.generated.resources.session_provider_not_read
 import riffet_mobile.shared.generated.resources.session_provider_unavailable
-import riffet_mobile.shared.generated.resources.session_quick_chat
 import riffet_mobile.shared.generated.resources.session_refresh
 import riffet_mobile.shared.generated.resources.session_remove
 import riffet_mobile.shared.generated.resources.external_import_action
@@ -237,32 +192,25 @@ import riffet.ui.design.agentMarkTint
 /*
  * The workbench with no session open: `apps/web/src/app/ProjectHome.tsx`.
  *
- * 新建任务 / 快速会话 under the top bar (the web's `UnderlineTabs`) are two launch targets for one
- * draft, as on the web: switching is local state on this page, not a project change. One composer
- * stays in place with its text and attachments; only the launch target, its placeholder and
- * settings chip, and the slot below the composer (the directory for a task, the presets for a chat)
- * change. Both run configurations live above the page ([HomeConfigs]), so switching back and forth,
- * or leaving the tab, reads no catalog again. The agent, model, mode and permission start from the
- * server's saved defaults (`settings.nativeBackendDefaults`) exactly as the web's home does.
+ * The run configuration lives above the page ([HomeConfigs]), so leaving the tab reads no catalog
+ * again. The agent, model, mode and permission start from the server's saved defaults
+ * (`settings.nativeBackendDefaults`) exactly as the web's home does.
  */
 
-/** The page's one draft, shared by both launch targets (the web's `new:home`). */
+/** The page's one draft (the web's `new:home`). */
 internal const val HOME_DRAFT_ID = "home"
 
 /** The assistant page's own draft: what is typed there is not 新会话's. */
 private const val ASSISTANT_DRAFT_ID = "assistant"
 
 
-/** A fling faster than this settles the mode the way it was flung. */
-private val ModeSettleVelocity = 400.dp
-
 /**
- * 新会话's two run configurations, one per launch target. Held by the workbench rather than the page,
- * so a mode switch or a tab switch keeps the loaded catalogs; they reload only when the providers
+ * 新会话's and the assistant's run configurations. Held by the workbench rather than the page, so a
+ * tab switch keeps the loaded catalogs; they reload only when the providers
  * change (`backendRevision`), the saved defaults change, or the reader retries.
  */
 @Stable
-class HomeConfigs internal constructor(internal val task: HomeConfig, internal val chat: HomeConfig, internal val assistant: HomeConfig)
+class HomeConfigs internal constructor(internal val task: HomeConfig, internal val assistant: HomeConfig)
 
 @Composable
 fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): HomeConfigs {
@@ -272,7 +220,6 @@ fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): H
     return remember(api, preferences, catalogReadFailed, providerNotRead) {
         HomeConfigs(
             task = HomeConfig(api, scope, catalogReadFailed, providerNotRead, preferences = preferences, remembersPicks = true),
-            chat = HomeConfig(api, scope, catalogReadFailed, providerNotRead, quickChat = true),
             assistant = HomeConfig(api, scope, catalogReadFailed, providerNotRead, offers = { it in ASSISTANT_BACKENDS }),
         )
     }
@@ -285,11 +232,6 @@ fun ProjectHome(
     /** 新建任务's project; null while there is none yet. */
     project: Project?,
     onSelectProject: (Project) -> Unit,
-    /** The server's quick chat project; null hides 快速会话. */
-    chatProject: Project?,
-    /** 快速会话 is showing. */
-    chat: Boolean,
-    onChatChange: (Boolean) -> Unit,
     configs: HomeConfigs,
     /** Opens the navigation drawer: the 新会话 tab's top bar leads with it. */
     onOpenMenu: () -> Unit,
@@ -299,15 +241,8 @@ fun ProjectHome(
     /** Shows a terminal by id and title. */
     onOpenTerminal: (String, String) -> Unit,
     modifier: Modifier = Modifier,
-    /** A quick chat entry's preselected mode, e.g. `preset:translate`; null is the plain 对话. */
-    initialMode: String? = null,
 ) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val motion = LocalRiffetMotion.current
     val pageMotion = LocalRiffetPageMotion.current
-    val reduced = rememberReducedMotion()
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
     val list by store.list.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -333,7 +268,6 @@ fun ProjectHome(
                 val target = store.openDirectory(path)
                 pickerOpen = false
                 onSelectProject(target)
-                onChatChange(false)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Throwable) {
@@ -344,48 +278,11 @@ fun ProjectHome(
         }
     }
 
-    // Both configurations follow the server's settings while the page is up; an unchanged key reads
-    // nothing, so coming back to the tab or switching modes costs no request.
-    val recentChatModel = chatProject?.let { latestQuickChatModel(list.sessions, it.id) }
+    // The configuration follows the server's settings while the page is up; an unchanged key reads
+    // nothing, so coming back to the tab costs no request.
     LaunchedEffect(configs, project?.id, list.settings, list.backendRevision) {
         project?.let { configs.task.sync(it.id, list.settings, list.backendRevision) }
     }
-    LaunchedEffect(configs, chatProject?.id, list.settings, list.backendRevision, recentChatModel) {
-        chatProject?.let { configs.chat.sync(it.id, list.settings, list.backendRevision, recentChatModel) }
-    }
-    LaunchedEffect(configs, initialMode) { configs.chat.preselect(initialMode) }
-
-    // 0 is 新建任务, 1 is 快速会话; a swipe drags it and the tab indicator and slot follow. Plain
-    // state rather than an `Animatable`: a drag stores into it on every pointer event, which should
-    // be a write, not a coroutine launched per event just to `snapTo`.
-    var position by remember { mutableFloatStateOf(if (chat) 1f else 0f) }
-    var dragging by remember { mutableStateOf(false) }
-    val glide = remember { PositionGlide(if (chat) 1f else 0f) }
-    /** Runs [position] to [target]; a release passes its fling velocity, a tab tap does not. */
-    fun glideTo(target: Float, velocity: Float? = null) {
-        glide.job?.cancel()
-        glide.target = target
-        if (!pageMotion.enabled || reduced) {
-            position = target
-            return
-        }
-        glide.job = scope.launch {
-            animate(
-                initialValue = position,
-                targetValue = target,
-                initialVelocity = velocity ?: 0f,
-                animationSpec = if (velocity != null) motion.settle() else
-                    tween(pageMotion.motion.pageEnter, easing = pageMotion.motion.EmphasizedDecelerate),
-            ) { value, _ -> position = value }
-        }
-    }
-    LaunchedEffect(chat) {
-        val target = if (chat) 1f else 0f
-        if (!dragging && glide.target != target) glideTo(target)
-    }
-    val latestChat by rememberUpdatedState(chat)
-    val latestChatChange by rememberUpdatedState(onChatChange)
-    val settlePx = with(LocalDensity.current) { ModeSettleVelocity.toPx() }
 
     // A Box, so the sheets emitted after the page cover the header too.
     Box(
@@ -398,73 +295,18 @@ fun ProjectHome(
     ) {
         RiffetPageScaffold(
             modifier = Modifier.fillMaxSize(),
-            topBar = {
-                Column {
-                    TabTopBar(title = stringResource(Res.string.session_tab_new), onOpenMenu = onOpenMenu)
-                    if (chatProject != null) {
-                        Box(Modifier.fillMaxWidth().padding(horizontal = metrics.pageInset), contentAlignment = Alignment.Center) {
-                            HomeModeTabs(chat = chat, position = { position }, onSelect = onChatChange)
-                        }
-                    }
-                }
-            },
+            topBar = { TabTopBar(title = stringResource(Res.string.session_tab_new), onOpenMenu = onOpenMenu) },
         ) { contentInsets ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    // A horizontal swipe drags between the two targets, pager-like. A swipe with
-                    // nowhere to go (rightward on 新建任务) is left to the parent: the drawer.
-                    .pointerInput(chatProject != null, motion, pageMotion, reduced) {
-                        if (chatProject == null) return@pointerInput
-                        val widthPx = size.width.toFloat().coerceAtLeast(1f)
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            val from = latestChat
-                            var progress = if (from) 1f else 0f
-                            val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-                                if ((over < 0f && !from) || (over > 0f && from)) {
-                                    progress = (progress - over / widthPx).coerceIn(0f, 1f)
-                                    dragging = true
-                                    // A finger on the page stops whatever was still settling.
-                                    glide.job?.cancel()
-                                    glide.target = Float.NaN
-                                    position = progress
-                                    change.consume()
-                                }
-                            } ?: return@awaitEachGesture
-                            val tracker = VelocityTracker()
-                            tracker.addPosition(drag.uptimeMillis, drag.position)
-                            try {
-                                horizontalDrag(drag.id) { change ->
-                                    tracker.addPosition(change.uptimeMillis, change.position)
-                                    progress = (progress - change.positionChange().x / widthPx).coerceIn(0f, 1f)
-                                    position = progress
-                                    change.consume()
-                                }
-                            } finally {
-                                dragging = false
-                            }
-                            // Positive is toward 快速会话.
-                            val velocity = -tracker.calculateVelocity().x
-                            val toChat = when {
-                                velocity > settlePx -> true
-                                velocity < -settlePx -> false
-                                else -> progress > 0.5f
-                            }
-                            glideTo(if (toChat) 1f else 0f, velocity = velocity / widthPx)
-                            if (toChat != from) latestChatChange(toChat)
-                        }
-                    },
-            ) {
+            Box(Modifier.fillMaxSize()) {
                 // What the composer was last showing: while it fades out after the project is gone,
                 // it still has something to draw.
-                val last = remember { arrayOfNulls<Pair<Boolean, Project>>(1) }
-                (if (chat) chatProject else project)?.let { last[0] = chat to it }
+                val last = remember { arrayOfNulls<Project>(1) }
+                project?.let { last[0] = it }
                 // The empty state and the composer replace each other in place (loading, then the
                 // first project, then the composer); the composer's sheets overflow this box over the
                 // system bars, so no size transform and no clip.
                 AnimatedContent(
-                    targetState = !chat && project == null,
+                    targetState = project == null,
                     transitionSpec = { pageMotion.transition() using null },
                     label = "homeContent",
                 ) { empty ->
@@ -485,36 +327,23 @@ fun ProjectHome(
                             api = api,
                             projects = list.projects,
                             contentPadding = contentInsets,
-                            onSelectProject = { picked -> onSelectProject(picked); onChatChange(false) },
+                            onSelectProject = onSelectProject,
                             onAddDirectory = if (api != null) ({
                                 bindError = null
                                 pickerOpen = true
                             }) else null,
-                            onSkipProject = if (chatProject != null) ({ onChatChange(true) }) else null,
                         )
                     } else {
-                        val (shownChat, shownTarget) = last[0]!!
+                        val shownTarget = last[0]!!
                         HomeContent(
                             store = store,
                             api = api,
                             target = shownTarget,
-                            chat = shownChat,
-                            config = if (shownChat) configs.chat else configs.task,
+                            config = configs.task,
                             slot = {
-                                HomeSlot(
-                                    position = { position },
-                                    task = { if (project != null) ProjectContext(project, onClick = { projectSheet = true }) },
-                                    chat = {
-                                        val modes = quickChatModes(list.settings, configs.chat.capabilities?.modes)
-                                        if (modes.size > 1) {
-                                            QuickChatModeChips(
-                                                options = modes,
-                                                value = configs.chat.mode,
-                                                onSelect = { configs.chat.mode = it },
-                                            )
-                                        }
-                                    },
-                                )
+                                Box(Modifier.fillMaxWidth().height(SlotHeight), contentAlignment = Alignment.CenterStart) {
+                                    if (project != null) ProjectContext(project, onClick = { projectSheet = true })
+                                }
                             },
                             onOpenSession = onOpenSession,
                             onImport = if (api != null) onImportSession else null,
@@ -528,7 +357,7 @@ fun ProjectHome(
 
         if (projectSheet && project != null) {
             ProjectPickerSheet(
-                projects = list.projects.filter { it.archivedAt == null && !it.isQuickChat && !it.isAssistant && it.system != "task-workspace" },
+                projects = list.projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" },
                 selectedId = project.id,
                 onSelect = { picked -> if (picked != null && picked.id != project.id) onSelectProject(picked) },
                 onDismiss = { projectSheet = false },
@@ -552,55 +381,8 @@ fun ProjectHome(
     }
 }
 
-/**
- * 快速会话's modes for the chips: 对话 and the presets. They come from the settings the list already
- * holds (the server returns the effective presets in `GET /api/settings`), so they show before the
- * chat catalog answers; a server that predates presets falls back to the catalog's modes.
- */
-@Composable
-private fun quickChatModes(settings: riffet.contracts.AppSettings?, catalog: List<NativeBackendOption>?): List<NativeBackendOption> {
-    val presets = settings?.quickChat?.presets ?: return catalog.orEmpty()
-    val plain = stringResource(Res.string.session_quick_chat_plain)
-    return remember(presets, plain) {
-        listOf(NativeBackendOption(QUICK_CHAT_PLAIN_MODE, plain)) +
-            presets.map { NativeBackendOption("$QUICK_CHAT_PRESET_MODE${it.id}", it.name, it.prompt) }
-    }
-}
-
-/** The chat backend's plain mode and its preset prefix (`backends/chat` on the server). */
-private const val QUICK_CHAT_PLAIN_MODE = "agent"
-private const val QUICK_CHAT_PRESET_MODE = "preset:"
-
-/** The slot above the composer reserves the same height in both modes. */
+/** The slot above the composer: a fixed line, so the composer does not move when the project loads. */
 private val SlotHeight = 48.dp
-
-/** The slot above the composer follows the global page motion at the current swipe [position]. */
-@Composable
-private fun HomeSlot(position: () -> Float, task: @Composable () -> Unit, chat: @Composable () -> Unit) {
-    val pageMotion = LocalRiffetPageMotion.current
-    val taskShown by remember { derivedStateOf { position() < 1f } }
-    val chatShown by remember { derivedStateOf { position() > 0f } }
-    Box(Modifier.fillMaxWidth().height(SlotHeight), contentAlignment = Alignment.CenterStart) {
-        if (taskShown) {
-            Box(Modifier.graphicsLayer {
-                val progress = position()
-                alpha = if (pageMotion.enabled) pageMotion.alpha(progress) else if (progress < 0.5f) 1f else 0f
-                translationX = -pageMotion.translation(progress, size.width)
-                scaleX = pageMotion.scale(progress)
-                scaleY = scaleX
-            }) { task() }
-        }
-        if (chatShown) {
-            Box(Modifier.fillMaxWidth().graphicsLayer {
-                val progress = 1f - position()
-                alpha = if (pageMotion.enabled) pageMotion.alpha(progress) else if (progress <= 0.5f) 1f else 0f
-                translationX = pageMotion.translation(progress, size.width)
-                scaleX = pageMotion.scale(progress)
-                scaleY = scaleX
-            }, contentAlignment = Alignment.CenterStart) { chat() }
-        }
-    }
-}
 
 /**
  * Where the task starts, as the line the composer hangs from: the directory's name, where it lives,
@@ -658,112 +440,6 @@ internal fun HomeActionButton(
     primary: Boolean = false,
 ) {
     riffet.ui.design.RiffetButton(label, onClick, enabled, primary)
-}
-
-/**
- * Centred launch targets use the current theme's segmented or underline variant.
- * Both variants preserve the same task/chat state and swipe-driven page position.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeModeTabs(chat: Boolean, position: () -> Float, onSelect: (Boolean) -> Unit) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    val taskLabel = stringResource(Res.string.session_mode_task)
-    val chatLabel = stringResource(Res.string.session_mode_chat)
-    val style = LocalInterfaceStyle.current
-    val labelStyle = typography.segmented
-    val textMeasurer = rememberTextMeasurer()
-    // Size the group to both labels plus Material Tab's 16dp padding on each side.
-    // The parent centres the whole group; larger fonts and translated labels keep their width.
-    // The native Material text-tab API supplies 16dp on each side; its padding cannot be
-    // changed by controlInset. Reserve that actual width so translated/scaled labels do not scroll.
-    val tabPadding = if ((style.components.navigation.tabs == riffet.ui.design.ComponentBackend.MATERIAL) && style.variants.homeTabs == riffet.ui.design.HomeTabPresentation.UNDERLINE) 16.dp else metrics.controlInset
-    val groupWidth = with(LocalDensity.current) {
-        (textMeasurer.measure(taskLabel, labelStyle, maxLines = 1).size.width +
-            textMeasurer.measure(chatLabel, labelStyle, maxLines = 1).size.width).toDp() + tabPadding * 4
-    }
-    if (style.variants.homeTabs == riffet.ui.design.HomeTabPresentation.SEGMENTED) {
-        riffet.ui.design.SegmentedControl(
-            options = listOf(taskLabel, chatLabel), selected = if (chat) 1 else 0,
-            onSelect = { onSelect(it == 1) }, modifier = Modifier.width(groupWidth),
-        )
-        return
-    }
-    if (!(style.components.navigation.tabs == riffet.ui.design.ComponentBackend.MATERIAL)) {
-        val surfaces = LocalRiffetSurfaces.current
-        val density = LocalDensity.current
-        val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-        val taskWidth = with(density) { textMeasurer.measure(taskLabel, labelStyle, maxLines = 1).size.width.toDp() }
-        val chatWidth = with(density) { textMeasurer.measure(chatLabel, labelStyle, maxLines = 1).size.width.toDp() }
-        Row(
-            Modifier.width(groupWidth).height(metrics.controlHeight).selectableGroup().drawBehind {
-                val fraction = position().coerceIn(0f, 1f)
-                val width = lerp(taskWidth, chatWidth, fraction).toPx()
-                val taskCenter = (taskWidth / 2 + metrics.controlInset).toPx()
-                val chatCenter = (taskWidth + chatWidth / 2 + metrics.controlInset * 3).toPx()
-                val logicalCenter = taskCenter + (chatCenter - taskCenter) * fraction
-                val center = if (rtl) size.width - logicalCenter else logicalCenter
-                drawLine(colors.accent, Offset(center - width / 2, size.height - 1.dp.toPx()),
-                    Offset(center + width / 2, size.height - 1.dp.toPx()), strokeWidth = 2.dp.toPx())
-            },
-        ) {
-            listOf(taskLabel, chatLabel).forEachIndexed { index, label ->
-                val selected = chat == (index == 1)
-                val source = remember { MutableInteractionSource() }
-                val focused by source.collectIsFocusedAsState()
-                val shape = RoundedCornerShape(style.controlRadius)
-                Box(
-                    Modifier.width((if (index == 0) taskWidth else chatWidth) + metrics.controlInset * 2)
-                        .fillMaxHeight().pressScale(source).clip(shape)
-                        .then(if (focused) Modifier.border(metrics.focusWidth, surfaces.focus, shape) else Modifier)
-                        .selectable(selected, interactionSource = source, indication = LocalIndication.current,
-                            role = Role.Tab, onClick = { onSelect(index == 1) }),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(label, style = labelStyle, color = if (selected) colors.fg else colors.fg3, maxLines = 1)
-                }
-            }
-        }
-        return
-    }
-    PrimaryScrollableTabRow(
-        modifier = Modifier.width(groupWidth),
-        edgePadding = 0.dp,
-        minTabWidth = 0.dp,
-        selectedTabIndex = if (chat) 1 else 0,
-        containerColor = if (materialBackdropEnabled) Color.Transparent else LocalRiffetSurfaces.current.page,
-        divider = {},
-        indicator = {
-            TabRowDefaults.PrimaryIndicator(
-                width = Dp.Unspecified,
-                color = colors.accent,
-                height = 2.dp,
-                modifier = Modifier.tabIndicatorLayout { measurable, constraints, tabs ->
-                    if (tabs.size < 2) return@tabIndicatorLayout layout(0, 0) {}
-                    val fraction = position()
-                    val width = lerp(tabs[0].contentWidth, tabs[1].contentWidth, fraction).roundToPx()
-                    val center = lerp(tabs[0].left + tabs[0].width / 2, tabs[1].left + tabs[1].width / 2, fraction).roundToPx()
-                    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
-                    // ScrollableTabRow centres this layout inside the selected tab before placing it.
-                    // Remove that parent inset so the interpolated centre stays under the text.
-                    val selectedWidth = tabs[if (chat) 1 else 0].width.roundToPx()
-                    val parentInset = ((selectedWidth - constraints.maxWidth) / 2).coerceAtLeast(0)
-                    layout(constraints.maxWidth, placeable.height) {
-                        placeable.placeRelative(center - width / 2 - parentInset, 0)
-                    }
-                },
-            )
-        },
-    ) {
-        val selected = colors.fg
-        val unselected = colors.fg3
-        Tab(selected = !chat, onClick = { onSelect(false) }, selectedContentColor = selected, unselectedContentColor = unselected,
-            text = { Text(taskLabel, style = labelStyle, maxLines = 1) })
-        Tab(selected = chat, onClick = { onSelect(true) }, selectedContentColor = selected, unselectedContentColor = unselected,
-            text = { Text(chatLabel, style = labelStyle, maxLines = 1) })
-    }
 }
 
 /** The mark's size when the page has room for it, and the room below which it gives way. */
@@ -844,11 +520,10 @@ internal fun HomeBands(
 private fun HomeContent(
     store: SessionStore,
     api: RiffetApi?,
-    /** The project the next session starts in: the task project, or the quick chat one. */
+    /** The project the next session starts in. */
     target: Project,
-    chat: Boolean,
     config: HomeConfig,
-    /** Above the composer: where the session starts (the directory, or the quick chat mode). */
+    /** Above the composer: where the session starts. */
     slot: @Composable () -> Unit,
     onOpenSession: (Session) -> Unit,
     /** Continue a terminal conversation; null where the server cannot import. */
@@ -882,8 +557,7 @@ private fun HomeContent(
     var thumbnails by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var uploading by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
-    // An error belongs to the target it came from.
-    var error by remember(chat) { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
     // The project's running shell if it has one, as the iPhone's terminal page opens; otherwise a new one.
     fun openShell() {
         val client = api ?: return
@@ -900,7 +574,7 @@ private fun HomeContent(
     var sheet by remember { mutableStateOf<HomeSheet?>(null) }
     val catalogReady = config.capabilities != null
     // The phones the agent may control: offered only where the backend takes tools and there is a phone to pick.
-    val toolsSupported = !chat && config.capabilities?.supportsRiffetTools == true
+    val toolsSupported = config.capabilities?.supportsRiffetTools == true
     val toolDevices = rememberToolDevices(api, enabled = toolsSupported)
     val pluginTools = rememberPluginToolGroups(api, enabled = toolsSupported, value = emptyList())
     val pickedTools = offeredPicks(toolDevices, config.toolGroups, pluginTools)
@@ -908,7 +582,7 @@ private fun HomeContent(
     // MCP servers and Skills switched off for this conversation only; a new one starts with everything on.
     var extensionsOff by remember(config.backendId, config.profileId, target.id) { mutableStateOf(emptyList<String>()) }
     val extensions = extensionsPick(
-        api, allowed = !chat, capabilities = config.capabilities, backendId = config.backendId, profileId = config.profileId,
+        api, allowed = true, capabilities = config.capabilities, backendId = config.backendId, profileId = config.profileId,
         projectId = target.id, off = extensionsOff, onChange = { extensionsOff = ExtensionsOff.clean(it) },
     )
     // Nothing to switch, nothing to show: the row waits only on a list it cannot read yet.
@@ -955,7 +629,7 @@ private fun HomeContent(
     // While the page shows an Agent that keeps a warm CLI (`supportsPrewarm`), one is held for its choice;
     // leaving the page or choosing otherwise releases it, and a send hands it to the new conversation.
     val prewarm = remember { PrewarmLease() }
-    val prewarmBody = if (pageActive && !chat && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(
+    val prewarmBody = if (pageActive && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(
         projectId = target.id, backendId = config.backendId, backendProfileId = config.profileId,
         model = config.model.takeIf { it.isNotBlank() }, mode = config.mode, approval = config.approval,
     ) else null
@@ -974,11 +648,11 @@ private fun HomeContent(
                     projectId = target.id,
                     prompt = prompt,
                     attachments = attachments,
-                    backendId = if (chat) NativeBackendId.CHAT else config.backendId,
-                    backendProfileId = if (chat) null else config.profileId,
-                    model = if (chat) config.model.takeIf { it.isNotBlank() } else config.model,
+                    backendId = config.backendId,
+                    backendProfileId = config.profileId,
+                    model = config.model,
                     mode = config.mode,
-                    approval = if (chat) null else config.approval,
+                    approval = config.approval,
                     context = references,
                     agentId = null,
                     toolGroups = if (phonesShown) pickedTools else null,
@@ -1011,15 +685,15 @@ private fun HomeContent(
     val controlsEnabled = api != null && !creating
     // What the composer's model chip opens.
     val rows = buildList {
-        if (!chat && config.backends.size > 1) {
+        if (config.backends.size > 1) {
             val mark = config.backendId.name.lowercase()
             add(SendSettingRow(label = "Agent", value = backendName(config.backendId), icon = AgentMarks.vector(mark),
                 iconTint = colors.agentMarkTint(mark)) { sheet = HomeSheet.Agent })
         }
-        if (!chat) caps?.modes?.takeIf { it.size > 1 }?.let { modes ->
+        caps?.modes?.takeIf { it.size > 1 }?.let { modes ->
             add(SendSettingRow(label = stringResource(Res.string.session_mode), value = optionLabelOf(modes, config.mode, stringResource(Res.string.session_mode))) { sheet = HomeSheet.Mode })
         }
-        if (!chat) caps?.permissions?.takeIf { it.isNotEmpty() }?.let { permissions ->
+        caps?.permissions?.takeIf { it.isNotEmpty() }?.let { permissions ->
             add(SendSettingRow(label = stringResource(Res.string.session_permission), value = optionLabelOf(permissions, config.approval, stringResource(Res.string.pickers_approval_title))) { sheet = HomeSheet.Approval })
         }
         add(SendSettingRow(label = stringResource(Res.string.session_model), value = modelText, loading = config.catalogLoading, error = config.catalogError != null) { sheet = HomeSheet.Model })
@@ -1052,13 +726,6 @@ private fun HomeContent(
             tools = {
                 Column {
                     Spacer(Modifier.height(10.dp))
-                    if (chat) {
-                        val modes = quickChatModes(list.settings, config.capabilities?.modes)
-                        if (modes.any { it.id == config.mode && it.id != QUICK_CHAT_PLAIN_MODE && !it.description.isNullOrBlank() }) {
-                            QuickChatPresetPrompt(options = modes, value = config.mode)
-                            Spacer(Modifier.height(10.dp))
-                        }
-                    }
                     // Keep the last message during its exit animation.
                     val shownError = remember { arrayOfNulls<String>(1) }
                     if (error != null) shownError[0] = error
@@ -1071,7 +738,7 @@ private fun HomeContent(
                     }
                     if (assistant != null) {
                         Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { assistant.cards(this) }
-                    } else if (!chat && onImport != null) {
+                    } else if (onImport != null) {
                         Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             HomeToolCard(RiffetIcons.Terminal, stringResource(Res.string.session_terminal), ::openShell, Modifier.weight(1f))
                             HomeToolCard(RiffetIcons.Clock, stringResource(Res.string.external_import_action), onImport, Modifier.weight(1f))
@@ -1086,7 +753,7 @@ private fun HomeContent(
                     ComposerCard(
                         text = text,
                         onTextChange = { text = it },
-                        placeholder = if (chat || assistant != null) stringResource(Res.string.composer_placeholder_online) else stringResource(Res.string.session_task_placeholder),
+                        placeholder = if (assistant != null) stringResource(Res.string.composer_placeholder_online) else stringResource(Res.string.session_task_placeholder),
                         attachments = attachments,
                         thumbnails = thumbnails,
                         uploading = uploading,
@@ -1097,8 +764,8 @@ private fun HomeContent(
                         onAttach = if (picker.available) ({ picker.launch() }) else null,
                         settings = ComposerSettings(
                             label = modelSummary,
-                            icon = if (chat) RiffetIcons.Message else AgentMarks.vector(agentMark) ?: RiffetIcons.Bot,
-                            iconTint = if (chat) null else colors.agentMarkTint(agentMark),
+                            icon = AgentMarks.vector(agentMark) ?: RiffetIcons.Bot,
+                            iconTint = colors.agentMarkTint(agentMark),
                             enabled = controlsEnabled,
                             onOpen = { sheet = if (rooted) HomeSheet.Settings else HomeSheet.Model },
                             loading = config.catalogLoading,
@@ -1111,11 +778,11 @@ private fun HomeContent(
                         hero = true,
                         heroMinLines = 4,
                         slash = config.slash,
-                        sessionCandidates = if (!chat && config.capabilities?.supportsSessionReferences == true) list.sessions else emptyList(),
+                        sessionCandidates = if (config.capabilities?.supportsSessionReferences == true) list.sessions else emptyList(),
                         sessionProjects = list.projects,
                         referenceProjectId = target.id,
                         sessionReferences = references.filter { it.kind == "session" },
-                        onReferenceSession = if (!chat && config.capabilities?.supportsSessionReferences == true) ({ selected ->
+                        onReferenceSession = if (config.capabilities?.supportsSessionReferences == true) ({ selected ->
                             if (references.count { it.kind == "session" } >= 5) error = referenceLimitText
                             else if (references.none { it.sessionId == selected.id }) references = references + sessionReference(selected)
                         }) else null,
@@ -1182,7 +849,6 @@ private fun HomeContent(
                     usageScopeKey = "${config.backendId}|${target.id}|${config.profileId ?: ""}",
                     onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection); config.rememberPick(store::applySavedSettings) },
                     onRetryGroup = { profileId -> config.retryProviderCatalog(target.id, profileId) },
-                    showSubtitle = !chat,
                     onBack = back,
                 )
                 HomeSheet.Mode -> caps?.let {
@@ -1221,11 +887,6 @@ private fun HomeContent(
 /** The pages of the composer's one settings sheet; Settings is the root, the rest are one step deeper. */
 private enum class HomeSheet { Settings, Agent, Model, Mode, Approval, Tools }
 
-/** Where the page-to-page glide is headed, so a tab change does not restart one a swipe already started. */
-private class PositionGlide(var target: Float) {
-    var job: Job? = null
-}
-
 /** What the assistant's page adds to the home composer: the setup cards under it, and what to do once the first message is sent. */
 internal class AssistantHomeParts(
     val cards: @Composable RowScope.() -> Unit,
@@ -1259,7 +920,7 @@ internal fun AssistantHome(
             topBar = { TabTopBar(title = stringResource(Res.string.assistant_title), onOpenMenu = onOpenMenu) },
         ) { contentInsets ->
             HomeContent(
-                store = store, api = api, target = project, chat = false, config = config, slot = {},
+                store = store, api = api, target = project, config = config, slot = {},
                 onOpenSession = onOpenSession, onImport = null, onOpenTerminal = { _, _ -> },
                 contentPadding = contentInsets,
                 assistant = AssistantHomeParts(
@@ -1285,11 +946,6 @@ internal fun tildePath(path: String): String =
  *
  * [error] is a failed read. The other providers still list, and this one can be retried on its own.
  */
-/** The model of the most recently active quick chat in [projectId], by activity rather than list order. */
-internal fun latestQuickChatModel(sessions: List<Session>, projectId: String): String? =
-    sessions.filter { it.projectId == projectId && it.backendId == NativeBackendId.CHAT && !it.model.isNullOrBlank() }
-        .maxByOrNull { instantMillis(activityAt(it)) ?: 0L }?.model
-
 internal data class ProviderCatalog(
     val profile: NativeBackendProfile,
     val models: List<ModelInfo>,
@@ -1316,10 +972,6 @@ internal class HomeConfig(
     private val scope: kotlinx.coroutines.CoroutineScope,
     private val catalogReadFailed: String = "",
     private val providerNotRead: String = "",
-    /** The quick chat composer: one backend, one catalog, no provider or approval choices. */
-    private val quickChat: Boolean = false,
-    /** A quick chat entry's preselected mode, e.g. `preset:translate`. */
-    private var initialMode: String? = null,
     /** Keeps the last tool pick, so the next new conversation starts from it. */
     private val preferences: AppPreferences? = null,
     /** The agents this composer offers; the assistant's are only those that isolate it. */
@@ -1337,14 +989,14 @@ internal class HomeConfig(
     }
 
     var backends by mutableStateOf<List<NativeBackendCatalogEntry>>(emptyList())
-    var backendId by mutableStateOf(if (quickChat) NativeBackendId.CHAT else NativeBackendId.CURSOR)
+    var backendId by mutableStateOf(NativeBackendId.CURSOR)
     var catalog by mutableStateOf<List<ModelInfo>>(emptyList())
     var capabilities by mutableStateOf<NativeBackendCapabilities?>(null)
     var catalogLoading by mutableStateOf(false)
     var catalogError by mutableStateOf<String?>(null)
 
     /** The reader's own picks; the defaults are never written into them, see [NewSessionDraft]. */
-    private var picks by mutableStateOf(NewSessionDraft(mode = initialMode))
+    private var picks by mutableStateOf(NewSessionDraft())
     private var picksBackend: NativeBackendId? = null
     private var choice by mutableStateOf(NewSessionChoice(null, "", null, null))
     private var source: NativeBackendCatalogEntry? = null
@@ -1378,7 +1030,7 @@ internal class HomeConfig(
      */
     fun rememberPick(onSaved: (riffet.contracts.AppSettings) -> Unit) {
         val api = api ?: return
-        if (!remembersPicks || quickChat) return
+        if (!remembersPicks) return
         val backend = backendId
         val profile = choice.profileId
         val model = choice.model
@@ -1398,14 +1050,9 @@ internal class HomeConfig(
     /** Resolves the picks against the loaded catalog: a pick it still offers stays, the rest follow the defaults. */
     private fun settle() {
         val catalog = source
-        // Without a saved default, a new quick chat continues with the latest chat's model and switches.
-        val recent = recentModel.takeIf { quickChat && settings?.auxiliaryModels?.chat == null && picks.model == null }
-        val draft = if (recent != null) picks.copy(model = recent) else picks
-        choice = if (catalog != null) draft.resolve(catalog, settings?.nativeBackendDefaults?.get(catalog.backendId), settings?.defaultModel, listed)
+        choice = if (catalog != null) picks.resolve(catalog, settings?.nativeBackendDefaults?.get(catalog.backendId), settings?.defaultModel, listed)
         else NewSessionChoice(picks.profileId, picks.model.orEmpty(), picks.mode, picks.approval)
     }
-
-    private var recentModel: String? = null
 
     private var loadedKey: String? = null
 
@@ -1548,17 +1195,10 @@ internal class HomeConfig(
      * Follows the list's settings and provider revision: an unchanged key reads nothing, a new
      * [backendRevision] (providers edited) reads the catalog again.
      */
-    fun sync(projectId: String, settings: riffet.contracts.AppSettings?, backendRevision: Long, recentModel: String? = null) {
+    fun sync(projectId: String, settings: riffet.contracts.AppSettings?, backendRevision: Long) {
         val providersChanged = seenRevision != null && seenRevision != backendRevision
         seenRevision = backendRevision
-        load(projectId, settings, force = providersChanged, recentModel = recentModel)
-    }
-
-    /** A quick chat entry's mode; null goes back to the plain 对话. The catalog still has the last word. */
-    fun preselect(mode: String?) {
-        if (mode == initialMode) return
-        initialMode = mode
-        pick(picks.copy(mode = mode))
+        load(projectId, settings, force = providersChanged)
     }
 
     /** The slash commands for the current backend and profile in the last project asked for. */
@@ -1585,57 +1225,8 @@ internal class HomeConfig(
         }
     }
 
-    /** [recentModel]: the latest quick chat's model, offered when no default is saved. */
-    fun load(projectId: String, settings: riffet.contracts.AppSettings?, force: Boolean = false, recentModel: String? = null) {
+    fun load(projectId: String, settings: riffet.contracts.AppSettings?, force: Boolean = false) {
         val api = api ?: return
-        if (quickChat) {
-            if (recentModel != this.recentModel) {
-                this.recentModel = recentModel
-                if (source != null) settle()
-            }
-            backendId = NativeBackendId.CHAT
-            if (backendId != picksBackend) {
-                picks = NewSessionDraft(mode = initialMode)
-                picksBackend = backendId
-            }
-            val key = "$projectId:chat:${settings?.auxiliaryModels?.chat}:${settings?.quickChat?.presets}"
-            if (!force && loadedKey == key) return
-            loadedKey = key
-            val version = ++requestVersion
-            val fetch = ++providerFetch
-            if (force) loadedConfigs.clear()
-            val cached = loadedConfigs[cacheKey(key)]
-            if (cached != null) apply(cached, settings)
-            scope.launch {
-                if (version != requestVersion) return@launch
-                if (cached == null) catalogLoading = true
-                catalogError = null
-                providerCatalogsLoading = false
-                try {
-                    // The chat backend is not in GET /api/backends; its catalog is read directly.
-                    val loaded = api.backendCatalog(NativeBackendId.CHAT, profileId = null, projectId = projectId)
-                    if (version != requestVersion) return@launch
-                    backends = emptyList()
-                    catalog = loaded.models
-                    capabilities = loaded.capabilities
-                    source = loaded
-                    listed = loaded
-                    this@HomeConfig.settings = settings
-                    settle()
-                    loadedConfigs[cacheKey(key)] = LoadedConfig(backends, loaded, listed, knownProfiles, providerCatalogs)
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (failure: Throwable) {
-                    if (version == requestVersion) {
-                        catalogError = failure.message ?: catalogReadFailed
-                        loadedKey = null
-                    }
-                } finally {
-                    if (version == requestVersion) catalogLoading = false
-                }
-            }
-            return
-        }
         if (defaultBackendId != settings?.defaultBackendId) userChoseBackend = false
         defaultBackendId = settings?.defaultBackendId
         if (!userChoseBackend) backendId = settings?.defaultBackendId ?: NativeBackendId.CURSOR

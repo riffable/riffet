@@ -57,7 +57,6 @@ private val sectionAliases = mapOf(
     SettingsSection.FILES to "files editor access wenjian bianjiqi fangwen",
     SettingsSection.BACKENDS to "models provider backend cursor claude codex gemini openai ollama moxing tigongshang",
     SettingsSection.AUXILIARY to "auxiliary models title summary fuzhu moxing biaoti zhaiyao",
-    SettingsSection.QUICK_CHAT to "quick chat prompts retention kuaisu liaotian duihua",
     SettingsSection.TASK_BOARD to "task board work items composer sessions default agent model renwu kanban",
     SettingsSection.ASSISTANT to "personal assistant background runs follow up memory delegations 个人助理 助理 后台运行 委托 gerenzhuli zhuli houtai yunxing weituo",
     SettingsSection.CONNECTION to "connection server pairing lianjie fuwuqi peidui",
@@ -132,10 +131,6 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     row("task-board.composer", SettingsSection.TASK_BOARD, Res.string.task_board_composer_sessions, "new session as task composer", "xin hui hua zuo wei ren wu")
     row("task-board.agent", SettingsSection.TASK_BOARD, Res.string.task_board_agent, "default agent", "mo ren agent")
     row("task-board.model", SettingsSection.TASK_BOARD, Res.string.task_board_model, "default model", "mo ren mo xing")
-    row("quick-chat.model", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_default_model, "quick chat default model", "kuai su dui hua mo ren mo xing")
-    row("quick-chat.open-mode", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_open_mode, "open mode sheet page", "da kai mo shi mian ban ye mian")
-    row("quick-chat.presets", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_presets, "quick chat presets prompts", "kuai su dui hua yu she ti shi ci")
-    row("quick-chat.archive", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_archive, "archive retention days 保留 天数", "gui dang bao liu tian shu")
     group("connection.servers", SettingsSection.CONNECTION, Res.string.settings_paired_servers, "paired servers connection switch", "yi pei dui fu wu qi lian jie")
     row("service.idle", SettingsSection.SERVICE, Res.string.settings_reclaim_idle, "idle reclaim stop cli", "kong xian hou ting zhi cli")
     row("service.limit", SettingsSection.SERVICE, Res.string.settings_reclaim_memory, "cli memory limit", "cli nei cun shang xian")

@@ -1,8 +1,13 @@
 package riffet.ui.app
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import kotlinx.coroutines.delay
+
 import riffet.ui.design.riffetMaterialSource
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -36,8 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -54,7 +57,6 @@ import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.*
 import riffet.cache.ThemeLibraryCache
 import riffet.cache.createLocalFiles
-import riffet.contracts.Attachment
 import riffet.contracts.NativeBackendId
 import riffet.contracts.Project
 import riffet.contracts.Session
@@ -81,7 +83,6 @@ import riffet.shared.RiffetApi
 import riffet.shared.RiffetConnection
 import riffet.shared.createAppPreferences
 import riffet.shared.isAssistant
-import riffet.shared.isQuickChat
 import riffet.ui.downloads.DownloadFeedback
 import riffet.ui.downloads.DownloadsScreen
 import riffet.ui.files.FilesPanel
@@ -128,7 +129,6 @@ import riffet.ui.stats.StatsScreen
 import riffet.ui.state.SessionStore
 import riffet.ui.state.SessionMarks
 import androidx.compose.ui.graphics.toArgb
-import riffet.ui.theme.LocalRiffetPageMotion
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.ThemeEntry
 import riffet.ui.theme.RiffetTheme
@@ -150,11 +150,8 @@ class RiffetNavigation {
     internal val backDispatcher = PageBackDispatcher()
     var session: Session? by mutableStateOf(null)
         private set
-    /** 新建任务's project; null lets it pick the last-used one. A quick chat project here is ignored. */
+    /** 新建任务's project; null lets it pick the last-used one. */
     var projectId: String? by mutableStateOf(null)
-        internal set
-    /** 新会话 shows 快速会话 rather than 新建任务; a local switch on the page, not a project change. */
-    var homeChat: Boolean by mutableStateOf(false)
         internal set
     /** The drawer's project scope over 任务 (a sidebar group id); null is every project. */
     var scope: String? by mutableStateOf(null)
@@ -219,9 +216,7 @@ class RiffetNavigation {
         pairingScan = false
         restored = skipRestore
         requested = null
-        quickChatRequest = null
-        quickChatMode = null
-        homeChat = false
+        startRequest = null
         focus = null
     }
 
@@ -229,11 +224,8 @@ class RiffetNavigation {
     internal var restored = false
     internal var requested: SessionRequest? by mutableStateOf(null)
 
-    /** A one-shot entry into the quick chat home; consumed once the project list knows it. */
-    internal var quickChatRequest: QuickChatRequest? by mutableStateOf(null)
-
-    /** The preset a quick chat entry asked for; kept while the home is composed, cleared on leaving. */
-    internal var quickChatMode: String? by mutableStateOf(null)
+    /** A one-shot entry into 新建任务 with text in the composer (`riffet://new?prompt=`). */
+    internal var startRequest: StartRequest? by mutableStateOf(null)
     internal var focus: TimelineFocus? by mutableStateOf(null)
     var backSwipe: BackSwipe? by mutableStateOf(null)
         private set
@@ -250,18 +242,16 @@ class RiffetNavigation {
 
     fun request(sessionId: String, sequence: Long? = null) { requested = SessionRequest(sessionId, sequence) }
 
-    /** Opens the quick chat home, with [text] and [attachments] in the composer and [mode] preselected. */
-    fun requestQuickChat(text: String?, mode: String?, attachments: List<Attachment> = emptyList()) {
-        quickChatRequest = QuickChatRequest(text, mode, attachments)
+    /** Opens 新建任务 with [text] in the composer. */
+    fun requestStart(text: String?) {
+        startRequest = StartRequest(text)
     }
 
-    /** Opens the 新会话 tab on 新建任务 in [projectId] (or the last-used project), or on 快速会话 when [chat]. */
-    fun openStart(projectId: String? = null, chat: Boolean = false) {
+    /** Opens the 新会话 tab on 新建任务 in [projectId], or the last-used project. */
+    fun openStart(projectId: String? = null) {
         close()
         tab = HomeTab.NEW_SESSION
-        quickChatMode = null
-        homeChat = chat
-        if (projectId != null && !chat) this.projectId = projectId
+        if (projectId != null) this.projectId = projectId
     }
 
     fun open(target: Session) {
@@ -607,7 +597,7 @@ fun RiffetApp(
                                                 owner = owner,
                                                 ownerRequested = navigation.ownerPageRequested,
                                                 onOwnerRequestHandled = { navigation.ownerPageRequested = false },
-                                                projectId = navigation.projectId ?: store.list.value.projects.firstOrNull { !it.isQuickChat && !it.isAssistant }?.id,
+                                                projectId = navigation.projectId ?: store.list.value.projects.firstOrNull { !it.isAssistant }?.id,
                                                 themeMode = themeMode,
                                                 onThemeModeChange = onThemeMode,
                                                 iconPacks = iconPacks,
@@ -742,16 +732,14 @@ internal fun Workbench(
     /** The 设置 tab's content. */
     settings: @Composable () -> Unit,
 ) {
-    val pageMotion = LocalRiffetPageMotion.current
     // Navigation waits for a Compose frame; the host's write scope only carries Dispatchers.Main.
     val navigationScope = rememberCoroutineScope()
     val list by store.list.collectAsState()
     val session = navigation.session
     val drafts = LocalComposerDrafts.current
     val snackbar = LocalRiffetSnackbar.current
-    val quickChatUnavailable = stringResource(Res.string.session_quick_chat_unavailable)
 
-    // A launch opens the tab chosen in 设置 (助理 until then); the tab picked since stays for the run.
+    // A launch opens the tab chosen in 设置 (新会话 until then); the tab picked since stays for the run.
     if (!navigation.tabRestored) {
         navigation.tabRestored = true
         navigation.tab = homeTab(DisplaySettings.shared.launchTab)
@@ -786,7 +774,9 @@ internal fun Workbench(
             ?: assistantStarted?.let { made -> list.sessions.firstOrNull { it.id == made.id } ?: made }
                 ?.takeIf { assistantProject != null && it.projectId == assistantProject.id && it.archivedAt == null }
     }
-    val onAssistantPage = navigation.tab == HomeTab.ASSISTANT && session == null
+    // Derived reads of the tab here and below: a swipe between tabs recomposes this workbench only
+    // when one of these answers changes, not on every tab.
+    val onAssistantPage by remember(navigation) { derivedStateOf { navigation.tab == HomeTab.ASSISTANT && navigation.session == null } }
     // What the session info and the composer's pickers act on: the visit, or the assistant's page.
     val active = session ?: assistantMain.takeIf { onAssistantPage }
     var assistantSheet by remember { mutableStateOf<AssistantSheet?>(null) }
@@ -806,8 +796,6 @@ internal fun Workbench(
             androidx.compose.runtime.withFrameNanos { }
             if (navigation.session?.id == target.id) store.select(target)
         }
-        // A chat opened from the home is a visit; coming back starts from 对话 again.
-        navigation.quickChatMode = null
     }
 
     val requested = navigation.requested
@@ -840,30 +828,18 @@ internal fun Workbench(
         if (navigation.focus?.sessionId != session?.id) navigation.focus = null
     }
 
-    // A system entry opens the quick chat home rather than reopening the last conversation. The
-    // request waits for the project list, because the quick chat project is server-owned. Only a
-    // server-confirmed list without the project is evidence that the entry cannot be handled.
-    LaunchedEffect(navigation.quickChatRequest, list.loaded, list.loading, list.cachedAt, list.error, list.projects) {
-        val request = navigation.quickChatRequest ?: return@LaunchedEffect
-        val project = list.projects.firstOrNull { it.isQuickChat }
-        if (project == null) {
-            if (!list.loaded || list.loading || list.cachedAt != null || list.error != null) return@LaunchedEffect
-            // A one-shot request must not fire later, after the server gains the project.
-            navigation.quickChatRequest = null
-            snackbar?.show(quickChatUnavailable)
-            return@LaunchedEffect
-        }
-        navigation.quickChatRequest = null
+    // A link with a prompt opens 新建任务 rather than reopening the last conversation.
+    LaunchedEffect(navigation.startRequest) {
+        val request = navigation.startRequest ?: return@LaunchedEffect
+        navigation.startRequest = null
         navigation.restored = true
         navigation.statsOpen = false
         navigation.downloadsOpen = false
         navigation.pairingRequested = false
-        navigation.openStart(chat = true)
-        navigation.quickChatMode = request.mode
-        if (!request.text.isNullOrBlank() || request.attachments.isNotEmpty()) {
+        navigation.openStart()
+        if (!request.text.isNullOrBlank()) {
             drafts?.draftFor(HOME_DRAFT_ID)?.let { draft ->
-                draft.text.value = request.text.orEmpty()
-                draft.attachments.value = request.attachments
+                draft.text.value = request.text
                 draft.references.value = emptyList()
                 drafts.save(HOME_DRAFT_ID, draft)
             }
@@ -918,12 +894,12 @@ internal fun Workbench(
     // at the page's own depth, so a settings section pushed over the tab still goes back first.
     val tabBack = rememberUpdatedState { navigation.tab = HomeTab.TASKS }
     val tabBackTarget = remember { TabBackTarget { tabBack.value() } }
-    RegisterPageBackTarget(tabBackTarget, enabled = navigation.tab != HomeTab.TASKS)
+    val offTasks by remember(navigation) { derivedStateOf { navigation.tab != HomeTab.TASKS } }
+    RegisterPageBackTarget(tabBackTarget, enabled = offTasks)
 
     val waiting = remember(list.sessions) { waitingCount(list.sessions) }
-    // 新建任务's project, as the web's `lastTaskProject`; 快速会话 always lands in the server's own.
+    // 新建任务's project, as the web's `lastTaskProject`.
     val homeProject = rememberHomeProject(store, navigation, preferences)
-    val chatProject = remember(list.projects) { list.projects.firstOrNull { it.isQuickChat && it.archivedAt == null } }
     val homeConfigs = rememberHomeConfigs(api, preferences)
     // The terminal import picker: the project it opens in, or none for every project.
     var importScope by remember { mutableStateOf<ImportScope?>(null) }
@@ -935,7 +911,7 @@ internal fun Workbench(
             scope = navigation.scope,
             onSelectSession = openSession,
             onOpenHit = { hit -> navigation.request(hit.sessionId, hit.sequence) },
-            onNewSession = { project -> navigation.openStart(project.id, chat = project.isQuickChat) },
+            onNewSession = { project -> navigation.openStart(project.id) },
             onScope = { project ->
                 navigation.scope = project?.id
                 // A scoped list also points 新会话 at that project.
@@ -1018,11 +994,36 @@ internal fun Workbench(
         runCatching { api.reportAssistantTimeZone(zone) }.getOrNull()?.let(store::applySavedSettings)
     }
 
-    AdaptiveWorkbench(tasks = navigation.tab == HomeTab.TASKS) { layout ->
+    // The tabs are pages side by side: a drag scrolls them by the finger, a tap on the bar scrolls to
+    // the tab, and the bar reads the same position, so its selection and fold move with the pages.
+    val tabPager = rememberPagerState(initialPage = navigation.tab.ordinal) { HomeTab.entries.size }
+    val tabSettle = riffet.ui.pager.rememberTabSettle()
+    val tabFlingVelocity = with(androidx.compose.ui.platform.LocalDensity.current) { TAB_FLING_VELOCITY.toPx() }
+    // A composition scope: the release's settle animation needs the frame clock.
+    val tabSwipeScope = rememberCoroutineScope()
+    // The other tabs are composed once the first frames are out, not in the launch frame.
+    var tabsWarm by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.withFrameNanos { }
+        delay(TABS_WARM_DELAY_MS)
+        tabsWarm = true
+    }
+    val tabSwipe = remember(tabPager, navigation, tabSwipeScope) { TabSwipe(tabPager, navigation.backDispatcher, tabSwipeScope) }
+    SideEffect {
+        tabSwipe.settle = tabSettle
+        tabSwipe.minFlingVelocity = tabFlingVelocity
+    }
+
+    AdaptiveWorkbench(tasks = { navigation.tab == HomeTab.TASKS }) { layout ->
+        // Where the pages are heading: a right swipe while sliding back to 新会话 already opens the drawer.
+        val onFirstTab by remember(tabSwipe) { derivedStateOf { tabSwipe.heading == HomeTab.NEW_SESSION.ordinal } }
         val rail = layout.rail
         val paned = layout.twoPane
         // On a phone the session is a page over the tabs: the bar goes with them.
         val covering = session != null && !paned
+        // With the bottom bar, a horizontal drag moves between tabs and only 新会话 opens the drawer
+        // with it (it has no tab before it); the rail keeps the drawer swipe on every tab.
+        SideEffect { tabSwipe.enabled = !rail && !covering }
         // Hoisted so the tabs under a phone's session can follow its slide (see [coveredBy]).
         val sessionPage = session?.let { open -> key(open.id, paned) { rememberPageBackState(animateEntrance = !paned) } }
         SideDrawers(
@@ -1037,8 +1038,9 @@ internal fun Workbench(
                 navigation.detailsOpen = open
             },
             endEnabled = active != null,
-            startEnabled = !covering,
+            startEnabled = !covering && (rail || onFirstTab),
             backSwipe = { navigation.backSwipeFor(drawerBackTarget) },
+            pageSwipe = tabSwipe,
             startDrawer = {
                 WorkbenchDrawer(
                     api = api,
@@ -1120,32 +1122,40 @@ internal fun Workbench(
                 CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !covering)) {
                     Box(Modifier.fillMaxSize().then(if (covering) Modifier.clearAndSetSemantics { } else Modifier).coveredBy(sessionPage.takeIf { covering })) {
                         val tabs = rememberSaveableStateHolder()
-                        HomeShell(tab = navigation.tab, onTab = { navigation.tab = it }, waiting = waiting, rail = rail,
-                            dock = !rail && navigation.tab == HomeTab.ASSISTANT && assistantMain != null) {
-                            // Use the device's page motion between destinations. The
-                            // leaving tab stays composed during the transition but no longer owns back or input.
+                        HomeShell(tab = navigation.tab, onTab = { tabSwipe.select(it.ordinal); navigation.tab = it }, waiting = waiting, rail = rail,
+                            dockTab = HomeTab.ASSISTANT.takeIf { !rail && assistantMain != null },
+                            position = { tabPager.currentPage + tabPager.currentPageOffsetFraction },
+                            heading = { HomeTab.entries[tabSwipe.heading] }) {
+                            // The leaving tab stays composed while it is in view but no longer owns back or input.
                             val tabInsets = systemBarsPadding(includeDisplayCutout = false)
-                            AnimatedContent(
-                                targetState = navigation.tab,
+                            riffet.ui.pager.RiffetTabPager(
+                                selected = navigation.tab.ordinal,
+                                onSelect = { navigation.tab = HomeTab.entries[it] },
+                                pageCount = HomeTab.entries.size,
                                 // Alpha transitions clip to this layer's bounds. Include the system
-                                // bars, then restore the safe area inside each animated page.
+                                // bars, then restore the safe area inside each page.
                                 modifier = Modifier.coverSystemBars(tabInsets),
-                                transitionSpec = { pageMotion.transition(forward = targetState.ordinal > initialState.ordinal) },
-                                label = "tab",
-                            ) { shown ->
+                                // Drags come through SideDrawers (TabSwipe), which also owns the drawer swipe.
+                                userScrollEnabled = false,
+                                pagerState = tabPager,
+                                followFinger = true,
+                                // Every tab stays composed, so a swipe never builds a page in its first frame.
+                                beyondViewportPageCount = if (tabsWarm) HomeTab.entries.size - 1 else 0,
+                            ) { page ->
+                                val shown = HomeTab.entries[page]
                                 val active = rememberUpdatedState(LocalPageActive.current && shown == navigation.tab)
+                                // Touch follows where the pages are heading, not where they settled: the
+                                // page a release is sliding to takes the next tap at once. A page sliding
+                                // away keeps its controls out of reach without consuming, so a swipe that
+                                // starts on it still reaches the drawers' arbiter. Read at hit time.
+                                val coveredOrHidden = rememberUpdatedState(!LocalPageActive.current)
+                                val inView by remember(tabPager, page) {
+                                    derivedStateOf { kotlin.math.abs(tabPager.currentPage + tabPager.currentPageOffsetFraction - page) < 1f }
+                                }
                                 Box(Modifier.fillMaxSize().padding(tabInsets)
                                     .focusProperties { canFocus = active.value }
-                                    .semantics { if (!active.value) hideFromAccessibility() }
-                                    .pointerInput(Unit) {
-                                        awaitPointerEventScope {
-                                            while (true) {
-                                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                if (!active.value) event.changes.forEach { it.consume() }
-                                            }
-                                        }
-                                    }) {
-                                    CompositionLocalProvider(LocalPageActive provides active.value) {
+                                    .semantics { if (!active.value) hideFromAccessibility() }) {
+                                    CompositionLocalProvider(LocalPageActive provides active.value, LocalPageInView provides (!coveredOrHidden.value && inView)) {
                                         tabs.SaveableStateProvider(shown.name) {
                                             when (shown) {
                                                 HomeTab.NEW_SESSION -> ProjectHome(
@@ -1153,15 +1163,11 @@ internal fun Workbench(
                                                     api = api,
                                                     project = homeProject,
                                                     onSelectProject = { navigation.projectId = it.id },
-                                                    chatProject = chatProject,
-                                                    chat = navigation.homeChat && chatProject != null,
-                                                    onChatChange = { navigation.homeChat = it },
                                                     configs = homeConfigs,
                                                     onOpenMenu = openMenu,
                                                     onOpenSession = openSession,
                                                     onImportSession = { importScope = ImportScope(homeProject?.id) },
                                                     onOpenTerminal = { id, title -> navigation.terminal = TerminalTarget(id, title) },
-                                                    initialMode = navigation.quickChatMode,
                                                 )
                                                 HomeTab.ASSISTANT -> when {
                                                     // A conversation opened over the tabs owns the transcript, so this page waits behind it.
@@ -1224,6 +1230,7 @@ internal fun Workbench(
                                             }
                                         }
                                     }
+                                    Spacer(Modifier.matchParentSize().blockTouchesWhen { coveredOrHidden.value || tabSwipe.heading != page })
                                 }
                             }
                         }
@@ -1264,21 +1271,20 @@ internal fun Workbench(
 private class ImportScope(val projectId: String?)
 
 /**
- * 新建任务's project: the one asked for, else the last used, else the busiest. Quick chat is the
- * other launch target on the same page, never this project, so it is never saved as the last one.
+ * 新建任务's project: the one asked for, else the last used, else the busiest.
  */
 @Composable
 private fun rememberHomeProject(store: SessionStore, navigation: RiffetNavigation, preferences: AppPreferences): Project? {
     val list by store.list.collectAsState()
     val project: Project? = remember(list.projects, list.sessions, navigation.projectId) {
         val live = list.projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" }
-        live.firstOrNull { it.id == navigation.projectId && !it.isQuickChat }
-            ?: live.firstOrNull { it.id == preferences.string(PreferenceKeys.PROJECT) && !it.isQuickChat }
+        live.firstOrNull { it.id == navigation.projectId }
+            ?: live.firstOrNull { it.id == preferences.string(PreferenceKeys.PROJECT) }
             ?: visibleGroups(live, list.sessions, "", false).firstOrNull()?.project
-            ?: live.firstOrNull { !it.isQuickChat }
+            ?: live.firstOrNull()
     }
     LaunchedEffect(project?.id) {
-        project?.takeIf { !it.isQuickChat }?.id?.let { preferences.setString(PreferenceKeys.PROJECT, it) }
+        project?.id?.let { preferences.setString(PreferenceKeys.PROJECT, it) }
     }
     return project
 }
@@ -1288,8 +1294,7 @@ internal enum class ProjectPanel { GIT, FILES }
 
 internal data class SessionRequest(val sessionId: String, val sequence: Long?)
 
-/** A system entry (text selection, share, shortcut, tile) asking for the quick chat home. */
-internal data class QuickChatRequest(val text: String?, val mode: String?, val attachments: List<Attachment> = emptyList())
+internal data class StartRequest(val text: String?)
 
 /** [token] tells two requests for the same event apart, so the second one scrolls again. */
 internal data class TimelineFocus(val sessionId: String, val sequence: Long, val token: Long)
@@ -1334,3 +1339,8 @@ private fun serverPreferences(preferences: AppPreferences, origin: String?): App
 internal const val ONBOARDING_KEY = "onboarding-done"
 private const val ONBOARDING_OFF = -1
 
+/** How long after launch the tabs other than the first one shown are composed. */
+private const val TABS_WARM_DELAY_MS = 600L
+
+/** A release faster than this turns the tab even on a short swipe (the pager's own fling threshold). */
+private val TAB_FLING_VELOCITY = 400.dp

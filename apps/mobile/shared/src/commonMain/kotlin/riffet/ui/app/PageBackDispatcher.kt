@@ -55,6 +55,13 @@ internal class PageBackDispatcher {
 internal val LocalPageBackDispatcher = staticCompositionLocalOf<PageBackDispatcher?> { null }
 // Flips on every push and pop: only its readers recompose, not the whole covered page.
 internal val LocalPageActive = compositionLocalOf { true }
+// On screen without being active: a tab sliding in or out under the finger. Its glass stays live, so
+// the bar over it already blurs the page arriving instead of catching up once the pages settle.
+internal val LocalPageInView = compositionLocalOf { false }
+
+/** Whether this page's glass sources record: only what is on screen feeds the bars above it. */
+internal val pageShowsGlass: Boolean
+    @Composable get() = LocalPageActive.current || LocalPageInView.current
 internal val LocalPageDepth = staticCompositionLocalOf { 0 }
 internal val LocalPageBack = staticCompositionLocalOf<PageBackState?> { null }
 

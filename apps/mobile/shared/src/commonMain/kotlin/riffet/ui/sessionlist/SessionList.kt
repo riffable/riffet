@@ -522,7 +522,7 @@ fun SessionList(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize().nestedScroll(searchReveal.connection)
-                        .then(if (LocalPageActive.current) Modifier.riffetMaterialSource(key = listState) else Modifier),
+                        .riffetMaterialSource(key = listState, enabled = riffet.ui.app.pageShowsGlass),
                     contentPadding = PaddingValues(top = chromeInsets.calculateTopPadding(), bottom = chromeInsets.calculateBottomPadding() + designMetrics.controlInset + LocalTabContentBottomPadding.current),
                 ) {
                     item(key = ITEM_SEARCH, contentType = ITEM_SEARCH) {
@@ -633,7 +633,6 @@ private fun filterLabel(option: SessionFilter): String = when (option) {
     SessionFilter.RUNNING -> stringResource(Res.string.session_state_running)
     SessionFilter.WAITING -> stringResource(Res.string.session_band_waiting)
     SessionFilter.UNREAD -> stringResource(Res.string.session_filter_unread)
-    SessionFilter.QUICK_CHAT -> stringResource(Res.string.session_mode_chat)
     SessionFilter.ARCHIVED -> stringResource(Res.string.session_archived)
 }
 

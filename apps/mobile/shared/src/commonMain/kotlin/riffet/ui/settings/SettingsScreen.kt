@@ -46,7 +46,6 @@ import riffet.contracts.AGENT_PROCESS_BUDGET_IDLE_MINUTES
 import riffet.contracts.AGENT_PROCESS_BUDGET_MEMORY_BYTES
 import riffet.contracts.AppSettingsUpdate
 import riffet.contracts.NativeBackendId
-import riffet.contracts.QuickChatPreset
 import riffet.i18n.L10n
 import riffet.shared.*
 import riffet.ui.app.PageLeaveGuard
@@ -79,7 +78,6 @@ import riffet.ui.timeline.Spinner
 import riffet.ui.terminal.TerminalBenchScreen
 import riffet.ui.settings.appearance.AppearancePage
 import riffet.ui.settings.diagnostics.DiagnosticsPage
-import riffet.ui.design.ConfirmDialog
 
 private sealed interface SettingsPageRoute {
     data object Home : SettingsPageRoute
@@ -87,7 +85,6 @@ private sealed interface SettingsPageRoute {
     data class Profile(val backend: NativeBackendId, val id: String, val launchOnly: Boolean = false) : SettingsPageRoute
     data class Add(val backend: NativeBackendId) : SettingsPageRoute
     data object Owner : SettingsPageRoute
-    data object QuickChatPresets : SettingsPageRoute
     data object TerminalBench : SettingsPageRoute
     data object PairDevice : SettingsPageRoute
 }
@@ -165,7 +162,7 @@ internal fun SettingsScreen(
                 api, controller, route.section.label, back, sectionSearchTarget(route.searchTargetId),
             ) else {
                 val section = route.section
-                val auxiliaryOptions = if (section == SettingsSection.AUXILIARY || section == SettingsSection.QUICK_CHAT) {
+                val auxiliaryOptions = if (section == SettingsSection.AUXILIARY) {
                     rememberAuxiliaryModelOptions(api)
                 } else null to null
                 LaunchedEffect(controller, section) {
@@ -194,7 +191,6 @@ internal fun SettingsScreen(
                         SettingsSection.AUXILIARY -> AuxiliaryModelsSection(controller, auxiliaryOptions.first, auxiliaryOptions.second)
                         SettingsSection.NOTIFICATIONS -> NotificationsSection()
                         SettingsSection.INTERACTION -> InteractionSection(controller)
-                        SettingsSection.QUICK_CHAT -> QuickChatSection(controller, auxiliaryOptions.first, auxiliaryOptions.second) { pages.push(SettingsPageRoute.QuickChatPresets) }
                         SettingsSection.ASSISTANT -> AssistantSettingsSection(api, controller)
                         SettingsSection.TASK_BOARD -> TaskBoardSettingsSection(api, controller)
                         SettingsSection.BACKENDS -> Unit
@@ -217,7 +213,6 @@ internal fun SettingsScreen(
             is SettingsPageRoute.Profile -> BackendProfilePage(controller, route.backend, route.id, back, onDeleted = { pages.pop() }, launchOnly = route.launchOnly)
             is SettingsPageRoute.Add -> AddProfilePage(controller, route.backend, back, onCreated = { pages.pop() })
             SettingsPageRoute.Owner -> OwnerProfilePages(owner, back)
-            SettingsPageRoute.QuickChatPresets -> QuickChatPresetsPage(controller, back)
             SettingsPageRoute.PairDevice -> SettingsPage(stringResource(Res.string.settings_pair_device), back) { PairDeviceSection(api) }
             SettingsPageRoute.TerminalBench -> TerminalBenchScreen(onBack = back)
         }
@@ -717,193 +712,6 @@ internal fun ReclaimSection(controller: SettingsController) {
             value = memoryMb.toString(),
             enabled = !state.saving,
             onSelect = { if (it.toInt() != memoryMb) save(AppSettingsUpdate(maxAgentMemoryMb = it.toInt())) },
-        )
-    }
-}
-
-/**
- * Quick chat's default model and retention. The model list is the gateway catalog, read on its own
- * because a quick chat has no backend configuration page; retention is the server's archive timer.
- */
-@Composable
-private fun QuickChatSection(controller: SettingsController, options: List<riffet.contracts.AuxiliaryModelOption>?, loadError: String?, onEditPresets: () -> Unit) {
-    val state by controller.state.collectAsState()
-    ControllerMessages(controller)
-    val settings = state.settings ?: return
-    val busy = state.saving
-    SettingsGroup(stringResource(Res.string.settings_quick_chat)) {
-        AuxiliaryModelRow(controller, "chat", stringResource(Res.string.settings_quick_chat_default_model), stringResource(Res.string.settings_quick_chat_none), options, loadError)
-        ChoiceRow(
-            title = stringResource(Res.string.settings_quick_chat_open_mode),
-            options = listOf(
-                "sheet" to stringResource(Res.string.settings_quick_chat_open_sheet),
-                "page" to stringResource(Res.string.settings_quick_chat_open_page),
-            ),
-            value = settings.quickChat?.openMode ?: "sheet",
-            enabled = !busy,
-            onSelect = { mode -> controller.saveQuickChat(openMode = mode) },
-        )
-        SettingsNavigationRow(
-            stringResource(Res.string.settings_quick_chat_presets),
-            settings.quickChat?.presets?.size?.toString().orEmpty(),
-            onClick = onEditPresets,
-        )
-        val days = settings.quickChat?.retentionDays ?: 7
-        val never = stringResource(Res.string.settings_quick_chat_never)
-        SettingsChoiceRow(
-            title = stringResource(Res.string.settings_quick_chat_archive),
-            options = listOf(1, 3, 7, 14, 30, 0).map { it.toString() to if (it == 0) never else stringResource(Res.string.settings_quick_chat_days, it) },
-            value = days.toString(),
-            enabled = !busy,
-            onSelect = { controller.saveQuickChat(retentionDays = it.toInt()) },
-        )
-    }
-    SettingsFootnote(stringResource(Res.string.settings_quick_chat_hint))
-}
-
-private const val MAX_QUICK_CHAT_PRESETS = 12
-private const val MAX_PRESET_NAME = 20
-private const val MAX_PRESET_PROMPT = 4000
-
-/** A preset id the server accepts (`[a-z0-9-]{1,32}`), chosen away from the ones already in use. */
-private fun nextPresetId(existing: Collection<String>): String {
-    val used = existing.toHashSet()
-    var index = 1
-    while ("custom-$index" in used) index++
-    return "custom-$index"
-}
-
-private sealed interface PresetRoute {
-    data object List : PresetRoute
-    data class Edit(val preset: QuickChatPreset) : PresetRoute
-}
-
-/**
- * The preset directory, and beneath it one preset's edit page. Every write sends the whole list,
- * which is what the PATCH route replaces.
- */
-@Composable
-private fun QuickChatPresetsPage(controller: SettingsController, onBack: () -> Unit) {
-    val state by controller.state.collectAsState()
-    val pages = remember { PageStack<PresetRoute>(PresetRoute.List) }
-    PageHost(pages) { route, back ->
-        when (route) {
-            PresetRoute.List -> {
-                val presets = state.settings?.quickChat?.presets.orEmpty()
-                QuickChatPresetList(controller, presets, state.saving, onBack, onOpen = { pages.push(PresetRoute.Edit(it)) })
-            }
-            is PresetRoute.Edit -> QuickChatPresetEditPage(controller, route.preset, state.settings?.quickChat?.presets.orEmpty(), state.saving, back)
-        }
-    }
-}
-
-@Composable
-private fun QuickChatPresetList(
-    controller: SettingsController,
-    presets: List<QuickChatPreset>,
-    busy: Boolean,
-    onBack: () -> Unit,
-    onOpen: (QuickChatPreset) -> Unit,
-) {
-    var confirmRestore by remember { mutableStateOf(false) }
-    SettingsPage(
-        stringResource(Res.string.settings_quick_chat_presets),
-        onBack,
-        actions = {
-            riffet.ui.app.PageBarAction(
-                icon = RiffetIcons.Plus,
-                description = stringResource(Res.string.settings_quick_chat_add),
-                enabled = !busy && presets.size < MAX_QUICK_CHAT_PRESETS,
-                onClick = { onOpen(QuickChatPreset(id = "", name = "", prompt = "")) },
-            )
-        },
-    ) {
-        ControllerMessages(controller)
-        if (presets.isNotEmpty()) SettingsGroup(title = "") {
-            presets.forEach { preset ->
-                GroupRow(title = preset.name, subtitle = preset.prompt.replace('\n', ' '), chevron = true, enabled = !busy, onClick = { onOpen(preset) })
-            }
-        }
-        SettingsFootnote(stringResource(Res.string.settings_quick_chat_presets_limit))
-        SettingsGroup(title = "") {
-            SettingsActionRow(stringResource(Res.string.settings_quick_chat_restore_defaults), onClick = { confirmRestore = true }, enabled = !busy)
-        }
-    }
-    if (confirmRestore) {
-        ConfirmDialog(
-            title = stringResource(Res.string.settings_quick_chat_restore_title),
-            message = stringResource(Res.string.setp_restore_presets_message),
-            confirmLabel = stringResource(Res.string.settings_quick_chat_restore),
-            danger = true,
-            onDismiss = { confirmRestore = false },
-            onConfirm = {
-                confirmRestore = false
-                controller.saveQuickChat(resetPresets = true)
-            },
-        )
-    }
-}
-
-@Composable
-private fun QuickChatPresetEditPage(
-    controller: SettingsController,
-    initial: QuickChatPreset,
-    presets: List<QuickChatPreset>,
-    busy: Boolean,
-    back: () -> Unit,
-) {
-    val isNew = initial.id.isEmpty()
-    var name by remember(initial.id) { mutableStateOf(initial.name) }
-    var prompt by remember(initial.id) { mutableStateOf(initial.prompt) }
-    var confirmDelete by remember { mutableStateOf(false) }
-    val pageBack = riffet.ui.app.LocalPageBack.current
-    // The saved list resets the draft; leaving here skips the guard that still sees the old one.
-    val leave: () -> Unit = { pageBack?.leaveConfirmed() ?: back() }
-    val id = initial.id.ifEmpty { nextPresetId(presets.map { it.id }) }
-    val dirty = name != initial.name || prompt != initial.prompt
-    LaunchedEffect(controller) { controller.clearMessages() }
-    EditPage(
-        title = stringResource(if (isNew) Res.string.settings_quick_chat_new_preset else Res.string.settings_quick_chat_edit_preset),
-        onBack = back,
-        dirty = dirty,
-        busy = busy,
-        canSave = dirty && name.isNotBlank() && prompt.isNotBlank(),
-        onSave = {
-            val saved = QuickChatPreset(id, name.trim(), prompt.trim())
-            val next = if (isNew) presets + saved else presets.map { if (it.id == initial.id) saved else it }
-            controller.saveQuickChat(presets = next, onSaved = leave)
-        },
-    ) {
-        ControllerMessages(controller)
-        SettingsGroup(title = "") {
-            riffet.ui.design.GroupField(
-                value = name,
-                onValueChange = { name = it.take(MAX_PRESET_NAME) },
-                placeholder = stringResource(Res.string.settings_quick_chat_preset_name),
-            )
-            riffet.ui.design.GroupField(
-                value = prompt,
-                onValueChange = { prompt = it.take(MAX_PRESET_PROMPT) },
-                placeholder = stringResource(Res.string.settings_quick_chat_preset_prompt),
-                singleLine = false,
-                minLines = 4,
-                maxLines = 8,
-            )
-        }
-        if (!isNew) SettingsGroup(title = "") {
-            SettingsActionRow(stringResource(Res.string.settings_quick_chat_delete), onClick = { confirmDelete = true }, danger = true, enabled = !busy)
-        }
-    }
-    if (confirmDelete) {
-        ConfirmDialog(
-            title = stringResource(Res.string.setp_delete_preset_title, initial.name),
-            confirmLabel = stringResource(Res.string.settings_quick_chat_delete),
-            danger = true,
-            onDismiss = { confirmDelete = false },
-            onConfirm = {
-                confirmDelete = false
-                controller.saveQuickChat(presets = presets.filterNot { it.id == initial.id }, onSaved = leave)
-            },
         )
     }
 }

@@ -41,7 +41,6 @@ internal enum class SettingsSection(
     FILES(Res.string.settings_extra_section_files, Res.string.settings_group_behavior, RiffetIcons.FilePenLine, true),
     ASSISTANT(Res.string.assistant_title, Res.string.settings_group_features, RiffetIcons.Bot, true),
     TASK_BOARD(Res.string.task_board_title, Res.string.settings_group_features, RiffetIcons.ListTodo, true),
-    QUICK_CHAT(Res.string.settings_extra_section_quick_chat, Res.string.settings_group_features, RiffetIcons.Message, true),
     BACKENDS(Res.string.settings_agent_settings, Res.string.settings_group_models, RiffetIcons.Bot, true),
     PROVIDERS(Res.string.settings_model_providers, Res.string.settings_group_models, RiffetIcons.Layers, true),
     AUXILIARY(Res.string.settings_auxiliary_models, Res.string.settings_group_models, RiffetIcons.Brain, true),

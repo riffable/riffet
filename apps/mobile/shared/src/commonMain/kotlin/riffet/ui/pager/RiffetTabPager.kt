@@ -1,7 +1,9 @@
 package riffet.ui.pager
 
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -34,8 +36,9 @@ import kotlin.math.abs
  *
  *  - a swipe that settles on a page reports that page as the selection, *on settle* — dragging past
  *    a tab and releasing back must not fire a load for a page that was never shown;
- *  - a selection made elsewhere (a tap on the strip) scrolls the pager to that page. The animation
- *    is skipped when page motion is disabled or the reader asked for reduced motion. Released
+ *  - a selection made elsewhere (a tap on the strip) scrolls the pager to that page; a page two or
+ *    more away is switched to at once. The animation is also skipped when page motion is disabled
+ *    or the reader asked for reduced motion. Released
  *    swipes also snap immediately there, while the drag keeps following the finger.
  *
  * A page that is swiped away leaves composition, so its scroll position and its remembered fields
@@ -55,6 +58,12 @@ import kotlin.math.abs
  * @param pagerState optional shared state for a tab indicator that follows the swipe position.
  * @param userScrollEnabled false pins the pager: a nested horizontal gesture (a diff's own
  *   horizontal scroll, a page that is not a page yet) then keeps the drag instead of losing it.
+ *   The caller may still drive [pagerState] itself (the bottom tabs do, see `TabSwipe`).
+ * @param beyondViewportPageCount pages kept composed on each side of the visible one. 0 composes a
+ *   neighbour only while it is dragged into view (a panel whose tabs load on demand); the bottom
+ *   tabs keep theirs, so a swipe does not compose a whole page in its first frame.
+ * @param followFinger the pages always slide with the drag. Off, a fade or scale page motion keeps
+ *   the pages in place and cross-fades them instead.
  */
 @Composable
 internal fun RiffetTabPager(
@@ -64,6 +73,8 @@ internal fun RiffetTabPager(
     modifier: Modifier = Modifier,
     userScrollEnabled: Boolean = true,
     pagerState: PagerState? = null,
+    followFinger: Boolean = false,
+    beyondViewportPageCount: Int = 0,
     content: @Composable (Int) -> Unit,
 ) {
     val defaultState = rememberPagerState(initialPage = selected.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) { pageCount }
@@ -72,10 +83,7 @@ internal fun RiffetTabPager(
     val reduced = rememberReducedMotion()
     val layoutDirection = LocalLayoutDirection.current
     val pageDirection = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
-    val fling = PagerDefaults.flingBehavior(
-        state,
-        snapAnimationSpec = if (!pageMotion.enabled || reduced) snap() else pageMotion.motion.settle(),
-    )
+    val fling = rememberTabPagerFling(state)
     // The effects below are keyed on the pager state, so they must not capture a stale selection:
     // the strip can be tapped while a previous settle is still being collected.
     val latestSelected by rememberUpdatedState(selected)
@@ -89,7 +97,8 @@ internal fun RiffetTabPager(
 
     LaunchedEffect(state, selected, pageMotion, reduced) {
         if (state.currentPage != selected || state.currentPageOffsetFraction != 0f) {
-            if (!pageMotion.enabled || reduced) {
+            // A far tap switches at once: sliding past the pages between would compose (and load) them.
+            if (!pageMotion.enabled || reduced || abs(selected - state.currentPage - state.currentPageOffsetFraction) > 1f) {
                 state.scrollToPage(selected)
             } else {
                 state.animateScrollToPage(
@@ -105,14 +114,14 @@ internal fun RiffetTabPager(
         modifier = modifier.fillMaxSize(),
         userScrollEnabled = userScrollEnabled,
         flingBehavior = fling,
-        // Explicit, though it is also the default: a neighbouring tab must not be composed (and so
-        // must not run its own load) until the reader drags it into view.
-        beyondViewportPageCount = 0,
+        // 0 by default: a neighbouring tab must not be composed (and so must not run its own load)
+        // until the reader drags it into view.
+        beyondViewportPageCount = beyondViewportPageCount,
         // Named, not trailing: `pageContent` is the parameter this version of the pager names, and a
         // trailing lambda would silently bind to the last parameter if that ever changes.
         pageContent = { page ->
             Box(Modifier.fillMaxSize().graphicsLayer {
-                if (pageMotion.animation == PageAnimation.FADE || pageMotion.animation == PageAnimation.SCALE) {
+                if (!followFinger && (pageMotion.animation == PageAnimation.FADE || pageMotion.animation == PageAnimation.SCALE)) {
                     val signedOffset = page - state.currentPage - state.currentPageOffsetFraction
                     val progress = abs(signedOffset)
                     translationX = -signedOffset * size.width * pageDirection
@@ -129,3 +138,15 @@ internal fun RiffetTabPager(
         },
     )
 }
+
+/** The settle after a release: null when page motion is off or reduced (the pages jump), else the theme's settle. */
+@Composable
+internal fun rememberTabSettle(): AnimationSpec<Float>? {
+    val pageMotion = LocalRiffetPageMotion.current
+    val reduced = rememberReducedMotion()
+    return if (!pageMotion.enabled || reduced) null else pageMotion.motion.settle()
+}
+
+@Composable
+private fun rememberTabPagerFling(state: PagerState): TargetedFlingBehavior =
+    PagerDefaults.flingBehavior(state, snapAnimationSpec = rememberTabSettle() ?: snap())

@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.res.Configuration
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -30,14 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.decodeFromString
-import riffet.contracts.Attachment
-import riffet.contracts.RiffetJson
 import riffet.shared.AppLog
 import riffet.shared.AppLanguages
 import riffet.shared.NativeFeature
@@ -183,46 +178,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
 
     private fun openRequested(intent: Intent) {
         deepLink(intent)
-        if (intent.hasExtra(EXTRA_QUICK_CHAT)) {
-            val text = intent.getStringExtra(EXTRA_QUICK_CHAT_TEXT)
-            val mode = intent.getStringExtra(EXTRA_QUICK_CHAT_MODE)
-            val attachments = intent.getStringExtra(EXTRA_QUICK_CHAT_ATTACHMENTS)?.let { encoded ->
-                runCatching { RiffetJson.instance.decodeFromString(ListSerializer(Attachment.serializer()), encoded) }.getOrNull()
-            }.orEmpty()
-            // Files the entry could not upload before it knew the project: this Activity owns the
-            // connection, so it uploads them once the store and project are available.
-            val streams = intent.getStringArrayListExtra(EXTRA_QUICK_CHAT_STREAMS).orEmpty()
-                .filter { it.isNotBlank() }
-                .map(Uri::parse)
-            intent.removeExtra(EXTRA_QUICK_CHAT)
-            intent.removeExtra(EXTRA_QUICK_CHAT_TEXT)
-            intent.removeExtra(EXTRA_QUICK_CHAT_MODE)
-            intent.removeExtra(EXTRA_QUICK_CHAT_ATTACHMENTS)
-            intent.removeExtra(EXTRA_QUICK_CHAT_STREAMS)
-            // Wait for the store like a notification press does: installing it resets navigation,
-            // so the request has to be made after that, not before.
-            RiffetHost.launch {
-                val store = RiffetHost.awaitStore()
-                if (store == null) {
-                    if (streams.isNotEmpty()) attachmentsNotSent()
-                    return@launch
-                }
-                val uploaded = if (streams.isNotEmpty()) {
-                    val project = store.awaitQuickChatProject(timeoutMillis = 3_000L)
-                    if (project == null) emptyList() else try {
-                        uploadSharedFiles(applicationContext, store, project, streams)
-                    } catch (cancellation: CancellationException) {
-                        throw cancellation
-                    } catch (_: Throwable) {
-                        emptyList()
-                    }
-                } else {
-                    emptyList()
-                }
-                if (streams.isNotEmpty() && uploaded.isEmpty()) attachmentsNotSent()
-                RiffetHost.navigation.requestQuickChat(text, mode, attachments + uploaded)
-            }
-        }
         val sessionId = intent.getStringExtra(EXTRA_SESSION) ?: return
         intent.removeExtra(EXTRA_SESSION)
         val origin = intent.getStringExtra(RiffetNotificationReceiver.EXTRA_ORIGIN)
@@ -237,15 +192,10 @@ class RiffetActivity : RiffetLocalizedActivity() {
         }
     }
 
-    private fun attachmentsNotSent() {
-        Toast.makeText(applicationContext, AppLanguages.localize(this).getString(riffet.shared.R.string.host_quick_chat_attachments_not_sent), Toast.LENGTH_SHORT).show()
-    }
-
     /**
-     * The iPhone's URL scheme, routed through the entries a notification press and the quick chat
-     * use: `riffet://session?id=<id>` (or `riffet://session/<id>`) opens that conversation on the
-     * paired server, `riffet://new?prompt=<text>` opens the quick chat home with the text in the
-     * composer, unsent. Notification intents carry `riffet://notification/…` only to stay distinct
+     * The iPhone's URL scheme, routed through the entry a notification press uses:
+     * `riffet://session?id=<id>` (or `riffet://session/<id>`) opens that conversation on the paired
+     * server, `riffet://new?prompt=<text>` opens 新建任务 with the text in the composer, unsent. Notification intents carry `riffet://notification/…` only to stay distinct
      * and have no VIEW action, so they never reach this.
      */
     private fun deepLink(intent: Intent) {
@@ -265,7 +215,7 @@ class RiffetActivity : RiffetLocalizedActivity() {
             "new" -> {
                 val prompt = uri.getQueryParameter("prompt")?.takeIf { it.isNotBlank() }
                 RiffetHost.launch {
-                    if (RiffetHost.awaitStore() != null) RiffetHost.navigation.requestQuickChat(prompt, null)
+                    if (RiffetHost.awaitStore() != null) RiffetHost.navigation.requestStart(prompt)
                 }
             }
         }
@@ -300,21 +250,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
         /** The conversation a notification opens. */
         const val EXTRA_SESSION: String = "riffet.open.session"
 
-        /** A system entry asking for the quick chat home; the marker is present even with no text. */
-        const val EXTRA_QUICK_CHAT: String = "riffet.quick-chat"
-
-        /** The text selection or shared text to prefill the quick chat composer with. */
-        const val EXTRA_QUICK_CHAT_TEXT: String = "riffet.quick-chat.text"
-
-        /** The chat mode to preselect, e.g. `preset:translate`. */
-        const val EXTRA_QUICK_CHAT_MODE: String = "riffet.quick-chat.mode"
-
-        /** JSON of the already-uploaded attachments, e.g. an image shared into the quick chat. */
-        const val EXTRA_QUICK_CHAT_ATTACHMENTS: String = "riffet.quick-chat.attachments"
-
-        /** Shared files (URI strings) the entry could not upload before it knew the quick chat project. */
-        const val EXTRA_QUICK_CHAT_STREAMS: String = "riffet.quick-chat.streams"
-
         /** Debug builds: crash on launch, to check the crash record in the exported log. */
         private const val EXTRA_DEBUG_CRASH: String = "riffet.debug.crash"
 
@@ -328,7 +263,7 @@ class RiffetActivity : RiffetLocalizedActivity() {
     }
 }
 
-/** Locale updates keep entry sheets and their in-flight uploads alive. */
+/** Applies the in-app language on create, start and configuration changes. */
 abstract class RiffetLocalizedActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

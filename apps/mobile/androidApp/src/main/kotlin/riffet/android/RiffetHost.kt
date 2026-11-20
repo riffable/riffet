@@ -35,7 +35,6 @@ import riffet.cache.TimelineCache
 import riffet.cache.createLocalFiles
 import riffet.cache.createTranscriptIndex
 import riffet.contracts.LIST_POLL_MS_BACKGROUND
-import riffet.contracts.Project
 import riffet.contracts.Session
 import riffet.contracts.SessionState
 import riffet.shared.AppLog
@@ -49,7 +48,6 @@ import riffet.shared.RiffetConnection
 import riffet.shared.RiffetNetworkException
 import riffet.shared.createServerDiscovery
 import riffet.shared.createAppPreferences
-import riffet.shared.isQuickChat
 import riffet.ui.composer.ComposerDrafts
 import riffet.shared.createDeviceTokenStore
 import riffet.shared.serverOrigin
@@ -83,7 +81,7 @@ object RiffetHost {
     val drafts by lazy { ComposerDrafts(createAppPreferences()) }
     private val tokens by lazy { createDeviceTokenStore() }
     val connection: RiffetConnection by lazy {
-        RiffetConnection(tokens, config = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "antigravity-agent", "projectless-tasks")))
+        RiffetConnection(tokens, config = RiffetClientConfig(features = listOf("pi-agent", "antigravity-agent", "projectless-tasks")))
     }
     var currentOrigin: String? = null
         private set
@@ -543,23 +541,6 @@ object RiffetHost {
 
     /** In the background with only an idle stream open: it still notices a turn started elsewhere. */
     private const val QUIET_POLL_MILLIS = LIST_POLL_MS_BACKGROUND.toLong()
-}
-
-/**
- * The server-owned quick chat project, read after a fresh bootstrap: the device's cached list may
- * predate the project's creation. An unreachable server falls back to the cached copy.
- */
-internal suspend fun SessionStore.awaitQuickChatProject(timeoutMillis: Long = 8_000L): Project? {
-    // A project already in the held list is usable without another read.
-    list.value.projects.firstOrNull { it.isQuickChat }?.let { return it }
-    refresh()
-    // Watch the read this call started even when it finishes before the first emission; a stale
-    // loaded state is not evidence that the project is absent.
-    val started = withTimeoutOrNull(500L) { list.first { it.loading } } != null
-    if (started) {
-        withTimeoutOrNull(timeoutMillis) { list.first { it.loaded && !it.loading } }
-    }
-    return list.value.projects.firstOrNull { it.isQuickChat }
 }
 
 /**

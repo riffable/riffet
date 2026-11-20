@@ -27,10 +27,10 @@
     </style>
 
     <!--
-      The quick chat entry draws a sheet over the app the reader came from, so its window must be
-      transparent and not dim the app itself; the sheet's own scrim does that.
+      A window over the app the owner was using (a device call): transparent, and it does not dim
+      that app.
     -->
-    <style name="Theme.Riffet.QuickChat" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.Riffet.Overlay" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>

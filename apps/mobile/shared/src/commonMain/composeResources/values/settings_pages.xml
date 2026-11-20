@@ -7,6 +7,4 @@
     <string name="setp_notification_blocked_desc">系统已关闭本 App 的通知，会话提醒无法送达。</string>
     <string name="setp_keepalive_battery_allow">允许忽略电池优化</string>
     <string name="setp_keepalive_autostart_allow">允许自启动</string>
-    <string name="setp_delete_preset_title">删除预设「%1$s」？</string>
-    <string name="setp_restore_presets_message">现有预设会被替换。</string>
 </resources>

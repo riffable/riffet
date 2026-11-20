@@ -92,7 +92,7 @@ internal fun RiffetPageScaffold(
     val bottomSurface = Modifier.extendChromeInset(bottomInset, above = false)
         .then(if (floatingBottomBar) Modifier else Modifier.riffetMaterial(MaterialRole.BOTTOM_BAR, RectangleShape, pageColor()))
         .padding(bottom = bars.calculateBottomPadding())
-    val active = LocalPageActive.current
+    val active = pageShowsGlass
     val capture = rememberMaterialCapture()
     val insets = remember { ChromeInsets() }
     val bodyModifier = Modifier.fillMaxSize()

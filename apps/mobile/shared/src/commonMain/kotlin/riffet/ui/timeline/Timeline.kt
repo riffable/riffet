@@ -423,7 +423,7 @@ internal fun Timeline(
     RiffetMaterialSourceContent {
     LazyColumn(
         state = state,
-        modifier = modifier.riffetMaterialSource(key = follow, enabled = LocalPageActive.current).nestedScroll(nestedDrag)
+        modifier = modifier.riffetMaterialSource(key = follow, enabled = riffet.ui.app.pageShowsGlass).nestedScroll(nestedDrag)
             .pointerInput(nestedDrag) { with(nestedDrag) { clearOnRelease() } }
             .onPlaced { listPlace[0] = it },
         // Every tail state clears the composer's edge by the same small amount. A larger
