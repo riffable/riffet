@@ -1,12 +1,25 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { api, HttpError, withClientFeatures } from './api';
+import { api, HttpError, requestResponse, withClientFeatures } from './api';
 import { errorMessage } from './utils';
 import { toast } from './toast';
 
 /** The file as stored: opened in a tab when the browser can show it, otherwise downloaded. */
 export function projectFileUrl(projectId: string, path: string, options: { download?: boolean } = {}): string {
   return withClientFeatures(`/api/projects/${encodeURIComponent(projectId)}/file/raw?path=${encodeURIComponent(path)}${options.download ? '&download=1' : ''}`);
+}
+
+/**
+ * Bytes `from` to `to` (inclusive) of a file at `url` (`projectFileUrl`), and the file's size from `Content-Range`
+ * (`apps/server/src/routes/workspace.ts#sendFile`); `past-end` when `from` is at or past its end.
+ */
+export async function readFileRange(url: string, from: number, to: number, signal?: AbortSignal): Promise<{ bytes: Uint8Array; size: number } | 'past-end'> {
+  let response: Response;
+  try { response = await requestResponse(url, { headers: { Range: `bytes=${from}-${to}` }, ...(signal ? { signal } : {}) }); }
+  catch (error) { if (error instanceof HttpError && error.status === 416) return 'past-end'; throw error; }
+  const total = /\/(\d+)$/.exec(response.headers.get('content-range') ?? '')?.[1];
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return { bytes, size: total ? Number(total) : bytes.length };
 }
 
 export function projectArchiveUrl(projectId: string, path: string): string {

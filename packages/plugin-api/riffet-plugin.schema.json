@@ -338,6 +338,26 @@
             "title"
           ]
         },
+        "speechRecognizer": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            }
+          },
+          "required": [
+            "title"
+          ]
+        },
         "views": {
           "type": "array",
           "items": {
@@ -384,7 +404,8 @@
                     "panel",
                     "main",
                     "navigation",
-                    "settings"
+                    "settings",
+                    "file"
                   ]
                 }
               },
@@ -396,7 +417,8 @@
                   "panel",
                   "main",
                   "navigation",
-                  "settings"
+                  "settings",
+                  "file"
                 ]
               },
               "settingsCategory": {
@@ -732,6 +754,24 @@
                   "type": "string",
                   "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
                 }
+              },
+              "files": {
+                "type": "object",
+                "properties": {
+                  "extensions": {
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9_+-]{0,15}$"
+                    }
+                  }
+                },
+                "required": [
+                  "extensions"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -1081,6 +1121,35 @@
             "additionalProperties": {}
           }
         },
+        "imChannels": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "additionalProperties": {}
+          }
+        },
         "page": {
           "type": "object",
           "properties": {
@@ -1123,6 +1192,7 @@
               "fallback": {
                 "type": "string",
                 "enum": [
+                  "default",
                   "chat"
                 ]
               }

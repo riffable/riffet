@@ -35,6 +35,9 @@ import { useFileOperations } from './useFileOperations';
 import { Notice } from '@/components/ui/notice';
 import { useLists, useUi } from '../state/stores';
 import { quoteIntoComposer } from '../session/composerQuotes';
+import { pluginIcon } from '@/plugins/icons';
+import { PluginView } from '@/plugins/PluginView';
+import { useFileViews } from './useSidebarViews';
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })));
 const previewFallback = <div className="flex flex-1 justify-center py-10"><Spinner /></div>;
 
@@ -169,7 +172,10 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   // A missing or outside-blocked file says so in place; retrying missing cannot help, and a toast would say it twice.
   const [previewMissing, setPreviewMissing] = useState(false);
   /** Another way to look at the open file: its bytes, or the end of a long text. */
-  const [byteView, setByteView] = useState<'hex' | 'tail'>();
+  /** Another way to view the open file: hex, its end, or a plugin's view of it (its view id). */
+  const [viewAs, setViewAs] = useState<'hex' | 'tail' | (string & {})>();
+  const fileViews = useFileViews(project, sessionId, previewFilePath);
+  const pluginFileView = fileViews.find((view) => view.id === viewAs);
   const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
   /** `openPreview`, for handlers set up before it. */
@@ -326,7 +332,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     setImageLoadError(false);
     setPreviewMissing(false);
     setPreviewBlocked(false);
-    setByteView(undefined);
+    setViewAs(undefined);
     setRendered(!line);
     setPreviewLoading(true);
     show();
@@ -340,7 +346,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       // Text too long to read whole: its end, which for a log is what is wanted.
       if (error instanceof HttpError && error.code === 'FILE_TOO_LARGE' && error.params?.size) {
         setPreview({ path: filePath, content: '', hash: '', size: Number(error.params.size), binary: false, truncated: true });
-        setByteView('tail');
+        setViewAs('tail');
         return;
       }
       // The server refuses out-of-project paths when the setting is off; say so in Chinese
@@ -712,7 +718,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
               <Button size="xs" variant="primary" className="mx-1 max-md:h-10" busy={edit.saving} onClick={() => void edit.save()}>{edit.conflict ? <Trans>覆盖保存</Trans> : <Trans>保存</Trans>}</Button>
             </Tip>
           )}
-          {edit.editable && byteView === undefined && (
+          {edit.editable && viewAs === undefined && (
             <Tip label={edit.editing ? t`结束编辑` : t`编辑`}>
               <Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', edit.editing && 'bg-active text-fg')} aria-label={edit.editing ? t`结束编辑` : t`编辑`} aria-pressed={edit.editing} onClick={() => { if (edit.editing) void edit.stop(); else { setRendered(false); edit.start(); } }}><IconPencilLine /></Button>
             </Tip>
@@ -734,9 +740,13 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
               <DropdownMenuItem onSelect={() => downloadProjectFile(project.id, previewFilePath)}><IconDownload /><Trans>下载</Trans></DropdownMenuItem>
               {preview && !preview.binary && <DropdownMenuItem onSelect={() => void copyPreviewContent(preview)}><IconCopy /><Trans>复制文件内容</Trans></DropdownMenuItem>}
               {preview && !edit.editing && <DropdownMenuSeparator />}
-              {preview && !edit.editing && byteView !== undefined && preview.hash && <DropdownMenuItem onSelect={() => setByteView(undefined)}><IconEye /><Trans>返回预览</Trans></DropdownMenuItem>}
-              {preview && !edit.editing && !preview.binary && byteView !== 'tail' && <DropdownMenuItem onSelect={() => setByteView('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></DropdownMenuItem>}
-              {preview && !edit.editing && byteView !== 'hex' && <DropdownMenuItem onSelect={() => setByteView('hex')}><IconBinary /><Trans>以十六进制查看</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && viewAs !== undefined && preview.hash && <DropdownMenuItem onSelect={() => setViewAs(undefined)}><IconEye /><Trans>返回预览</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && !preview.binary && viewAs !== 'tail' && <DropdownMenuItem onSelect={() => setViewAs('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && viewAs !== 'hex' && <DropdownMenuItem onSelect={() => setViewAs('hex')}><IconBinary /><Trans>以十六进制查看</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && fileViews.filter((view) => view.id !== viewAs).map((view) => {
+                const Icon = pluginIcon(view.icon);
+                return <DropdownMenuItem key={view.id} onSelect={() => setViewAs(view.id)}><Icon />{view.title}</DropdownMenuItem>;
+              })}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void copyWithToast(previewFilePath, t`已复制路径`)}><IconCopy /><Trans>复制路径</Trans></DropdownMenuItem>
               {!previewFilePath.startsWith('/') && previewFilePath !== '~' && !previewFilePath.startsWith('~/') && <DropdownMenuItem onSelect={() => void copyWithToast(absolutePath(project.cwd, previewFilePath), t`已复制绝对路径`)}><IconCopy /><Trans>复制绝对路径</Trans></DropdownMenuItem>}
@@ -750,9 +760,11 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
         <EmptyState title={t`无法打开文件`} description={t`该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
       ) : (
         <EmptyState title={t`无法打开文件`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
-      ) : byteView === 'hex' ? (
+      ) : pluginFileView ? (
+        <PluginView entry={pluginFileView} projectId={project.id} path={preview.path} visible={panelOpen && shown} />
+      ) : viewAs === 'hex' ? (
         <HexView key={preview.path} url={projectFileUrl(project.id, preview.path)} size={preview.size} />
-      ) : byteView === 'tail' ? (
+      ) : viewAs === 'tail' ? (
         <TailView
           key={preview.path} url={projectFileUrl(project.id, preview.path)} preview={preview} active={panelOpen && shown}
           render={(tail) => <Suspense fallback={previewFallback}><CodeView preview={tail} onReference={onReference} /></Suspense>}
@@ -804,7 +816,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
           <div className="flex flex-wrap justify-center gap-2">
             <Button variant="primary" onClick={() => downloadProjectFile(project.id, preview.path)}><IconDownload /><Trans>下载</Trans></Button>
             <Button variant="secondary" onClick={() => openProjectFile(project.id, preview.path)}><IconExternalLink /><Trans>在新标签页打开</Trans></Button>
-            <Button variant="secondary" onClick={() => setByteView('hex')}><IconBinary /><Trans>以十六进制查看</Trans></Button>
+            <Button variant="secondary" onClick={() => setViewAs('hex')}><IconBinary /><Trans>以十六进制查看</Trans></Button>
           </div>
         </EmptyState>
       ) : (
@@ -827,7 +839,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
           {preview.truncated && (
             <div className="flex shrink-0 items-center gap-2 edge-t px-4 py-1.5 text-xs text-fg-3">
               <span className="min-w-0 flex-1"><Trans>文件过大，仅显示前一部分</Trans></span>
-              <Button size="xs" variant="ghost" onClick={() => setByteView('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></Button>
+              <Button size="xs" variant="ghost" onClick={() => setViewAs('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></Button>
             </div>
           )}
         </>

@@ -123,6 +123,24 @@ describe('bridge host', () => {
     expect(calls).toEqual(['openSession:s1']);
   });
 
+  it('reads the file a file view was opened for, and other project files only with projects.read', async () => {
+    const reads: string[] = [];
+    const readFile: BridgeServices['readFile'] = async (path, offset, length) => { reads.push(`${path}:${offset}:${length}`); return { path, size: 3, offset, data: 'YWJj' }; };
+    const own = { ...context, path: 'models/a.glb' };
+    const viewer = setup({}, { context: () => own, readFile });
+    expect(await viewer.ask('files.read')).toMatchObject({ result: { path: 'models/a.glb', data: 'YWJj' } });
+    expect(await viewer.ask('files.read', { path: 'models/a.glb', offset: 2, length: 1 })).toMatchObject({ result: { offset: 2 } });
+    expect(code(await viewer.ask('files.read', { path: 'models/a.mtl' }))).toBe('denied');
+    expect(code(await viewer.ask('files.read', { length: BRIDGE_LIMITS.fileBytes + 1 }))).toBe('invalid_params');
+    const reader = setup({ capabilities: ['projects.read'] }, { context: () => own, readFile });
+    expect(await reader.ask('files.read', { path: './models/a.mtl' })).toMatchObject({ result: { path: 'models/a.mtl' } });
+    expect(code(await reader.ask('files.read', { path: '../secret' }))).toBe('invalid_params');
+    // A view opened for no file names one; one with no project reads none.
+    expect(code(await setup({}, { readFile }).ask('files.read'))).toBe('invalid_params');
+    expect(code(await setup({ capabilities: ['projects.read'] }, { context: () => ({ ...own, projectId: undefined }), readFile }).ask('files.read'))).toBe('forbidden');
+    expect(reads).toEqual([`models/a.glb:0:${BRIDGE_LIMITS.fileBytes}`, 'models/a.glb:2:1', `models/a.mtl:0:${BRIDGE_LIMITS.fileBytes}`]);
+  });
+
   it('steers the app only while the user is working in the view', async () => {
     let active = false;
     const { ask, calls } = setup({ capabilities: ['sessions.read'] }, { active: () => active });

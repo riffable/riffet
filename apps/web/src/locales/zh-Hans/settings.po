@@ -5448,6 +5448,10 @@ msgstr "文字"
 #: src/app/settings/PreferencesSections.tsx
 msgid "文字大小"
 msgstr "文字大小"
+#: src/app/design/engineering/PluginsChapter.tsx
+msgid "文件的其他看法"
+msgstr "文件的其他看法"
+
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "文字缩放"
@@ -9722,6 +9726,10 @@ msgstr "需要"
 
 #. placeholder {0}: cliVersion.minimum ?? ''
 #: src/app/settings/AgentSettingsSection.tsx
+#: src/app/design/engineering/PluginsChapter.tsx
+msgid "随文件视图"
+msgstr "随文件视图"
+
 msgid "需要 {0} 或更高"
 msgstr "需要 {0} 或更高"
 

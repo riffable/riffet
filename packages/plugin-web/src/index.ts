@@ -32,6 +32,8 @@ export interface ViewContext {
   readonly serviceId: string;
   readonly projectId?: string;
   readonly sessionId?: string;
+  /** The project file a view located at `file` shows, relative to the project root; each file is its own instance. */
+  readonly path?: string;
   /** Names this instance of the contribution, such as one canvas per session. */
   readonly instanceId: string;
   /** False while the host keeps the view mounted but out of sight; pause polling and animation then. */

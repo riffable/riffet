@@ -33,8 +33,8 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
 
   const current = useMemo<BridgeViewContext>(() => ({
     serviceId: context.serviceId, instanceId: context.instanceId, visible: context.visible, locale: i18n.locale,
-    ...(context.projectId ? { projectId: context.projectId } : {}), ...(context.sessionId ? { sessionId: context.sessionId } : {}),
-  }), [context.serviceId, context.instanceId, context.projectId, context.sessionId, context.visible, i18n.locale]);
+    ...(context.projectId ? { projectId: context.projectId } : {}), ...(context.sessionId ? { sessionId: context.sessionId } : {}), ...(context.path ? { path: context.path } : {}),
+  }), [context.serviceId, context.instanceId, context.projectId, context.sessionId, context.path, context.visible, i18n.locale]);
   const latest = useRef(current);
   latest.current = current;
 

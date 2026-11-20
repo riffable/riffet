@@ -3,21 +3,12 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { FILE_BUDGET, type FilePreview } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner } from '@/components/ui/controls';
-import { requestResponse } from '@/lib/api';
+import { readFileRange } from '@/lib/files';
 import { cn, formatBytes } from '@/lib/utils';
 
 const ROW_BYTES = 16;
 const ROW_HEIGHT = 20;
 const OVERSCAN = 20;
-
-/** A byte range of a project file, and the file's size from `Content-Range` (`apps/server/src/routes/workspace.ts#sendFile`). */
-async function readRange(url: string, from: number, to: number, signal?: AbortSignal): Promise<{ bytes: Uint8Array; size: number } | 'past-end'> {
-  const response = await requestResponse(url, { headers: { Range: `bytes=${from}-${to}` }, signal });
-  if (response.status === 416) return 'past-end';
-  const total = /\/(\d+)$/.exec(response.headers.get('content-range') ?? '')?.[1];
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  return { bytes, size: total ? Number(total) : bytes.length };
-}
 
 const hex = (value: number) => value.toString(16).padStart(2, '0');
 const printable = (value: number) => (value >= 0x20 && value < 0x7f ? String.fromCharCode(value) : '·');
@@ -59,7 +50,7 @@ export function HexView({ url, size }: { url: string; size: number }) {
       if (pages.current.has(page) || loading.current.has(page)) continue;
       loading.current.add(page);
       const from = page * FILE_BUDGET.hexPageBytes;
-      void readRange(url, from, Math.min(size, from + FILE_BUDGET.hexPageBytes) - 1, controller.signal).then((read) => {
+      void readFileRange(url, from, Math.min(size, from + FILE_BUDGET.hexPageBytes) - 1, controller.signal).then((read) => {
         if (read === 'past-end') return;
         pages.current.set(page, read.bytes);
         // The pages read longest ago go first.
@@ -123,7 +114,7 @@ export function TailView({ url, preview, active, render }: {
     setText(undefined); setFailed(false);
     decoder.current = new TextDecoder();
     const from = Math.max(0, preview.size - FILE_BUDGET.tailBytes);
-    void readRange(url, from, Math.max(from, preview.size - 1), controller.signal).then((read) => {
+    void readFileRange(url, from, Math.max(from, preview.size - 1), controller.signal).then((read) => {
       if (read === 'past-end') { setText(''); return; }
       const decoded = decoder.current.decode(read.bytes, { stream: true });
       // Cut to the first whole line unless the file starts here.
@@ -140,7 +131,7 @@ export function TailView({ url, preview, active, render }: {
     const controller = new AbortController();
     const poll = async () => {
       try {
-        const read = await readRange(url, end.current, end.current + FILE_BUDGET.tailBytes - 1, controller.signal);
+        const read = await readFileRange(url, end.current, end.current + FILE_BUDGET.tailBytes - 1, controller.signal);
         if (stopped || read === 'past-end' || !read.bytes.length) return;
         end.current += read.bytes.length;
         setSize(read.size);

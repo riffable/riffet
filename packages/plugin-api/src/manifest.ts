@@ -102,6 +102,10 @@ function view(pluginId: string, value: unknown, path: string): string | undefine
   if (clients) return clients;
   if (!VIEW_INSTANCES.includes(value.instances as never)) return `${path}.instances must be single, per-session or per-project`;
   if (value.requires !== undefined && !(Array.isArray(value.requires) && value.requires.length <= 64 && value.requires.every(item => typeof item === 'string' && /^[a-z0-9][a-z0-9.-]{0,63}$/.test(item)))) return `${path}.requires must list client capabilities`;
+  if (value.files !== undefined || (value.locations as unknown[]).includes('file')) {
+    const files = filesSchema.safeParse(value.files);
+    if (!files.success) return `${path}.files must list the extensions the view shows (lowercase, no dot, at most ${MAX_VIEW_EXTENSIONS})`;
+  }
   if (value.renderer !== undefined) {
     const rendered = rendererSchema.safeParse(value.renderer);
     if (!rendered.success) return `${path}.renderer: ${rendered.error.issues[0]?.message}`;
@@ -342,6 +346,7 @@ const pickView = (view: ViewDeclaration): ViewDeclaration => ({
   ...(view.icon ? { icon: pick(view.icon, ['svg', 'sfSymbol']) } : {}),
   ...(view.when ? { when: pick(view.when, CONDITION_KEYS) } : {}),
   ...(view.renderer ? { renderer: rendererSchema.parse(view.renderer) as ViewDeclaration['renderer'] } : {}),
+  ...(view.files ? { files: { extensions: [...view.files.extensions] } } : {}),
 });
 
 /** Only the kinds and members this version knows: what a client is told is what was validated. */
@@ -414,7 +419,10 @@ export const rendererSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('form'), command: z.string().min(1), fields: paramsSchema.optional(), submit: titleSchema.optional() }),
   z.object({ kind: z.literal('detail'), fields: z.array(z.object({ label: titleSchema, value: localizedSchema(4000) })).max(100), actions: z.array(actionSchema).max(16).optional() }),
 ]);
-const viewSchema = z.object({ id: z.string(), title: titleSchema, icon: iconSchema.optional(), locations: z.array(z.enum(VIEW_LOCATIONS)).min(1), defaultLocation: z.enum(VIEW_LOCATIONS).optional(), settingsCategory: z.enum(['agent', 'providers']).optional(), clients: z.array(z.enum(PLUGIN_CLIENTS)).min(1), instances: z.enum(VIEW_INSTANCES), when: conditionSchema.optional(), renderer: rendererSchema.optional(), requires: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).max(64).optional() }).passthrough();
+/** The extensions a file view declares: lowercase, no dot, as `extname` gives them without it. */
+const MAX_VIEW_EXTENSIONS = 32;
+const filesSchema = z.object({ extensions: z.array(z.string().regex(/^[a-z0-9][a-z0-9_+-]{0,15}$/)).min(1).max(MAX_VIEW_EXTENSIONS) }).strict();
+const viewSchema = z.object({ id: z.string(), title: titleSchema, icon: iconSchema.optional(), locations: z.array(z.enum(VIEW_LOCATIONS)).min(1), defaultLocation: z.enum(VIEW_LOCATIONS).optional(), settingsCategory: z.enum(['agent', 'providers']).optional(), clients: z.array(z.enum(PLUGIN_CLIENTS)).min(1), instances: z.enum(VIEW_INSTANCES), when: conditionSchema.optional(), renderer: rendererSchema.optional(), requires: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).max(64).optional(), files: filesSchema.optional() }).passthrough();
 const modelSourceSchema = z.object({ role: z.enum(['source', 'adapter']).optional(), usage: z.boolean().optional(), id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), title: titleSchema, protocols: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).min(1).max(8).optional(), backends: z.array(z.enum(['claude', 'codex'])).optional(), defaultEndpoint: z.url().refine(value => /^https?:/.test(value), 'must use http or https').optional(), overridable: z.array(z.enum(['apiEndpoint', 'apiKey'])).optional(), loginAction: z.string().max(64).optional(), hint: z.object({ text: z.string().max(2000), command: z.string().max(2000).optional() }).optional(), hosts: z.array(z.string().refine(validSourceHost, 'must be a lowercase hostname, optionally with a leading "*." and a ":port"')).max(MAX_SOURCE_HOSTS).optional() }).passthrough();
 const licenseSchema = z.object({ redistributable: z.boolean() });
 const contributionSchema = { id: z.string(), title: titleSchema };

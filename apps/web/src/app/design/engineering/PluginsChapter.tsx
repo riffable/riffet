@@ -68,6 +68,7 @@ function Workbench() {
     sidebar: { location: 'sidebar', name: t`辅助侧栏`, size: '320–720 · 380' },
     panel: { location: 'panel', name: t`底部面板`, size: t`宽度随主区，高度由用户拖动` },
     settings: { location: 'settings', name: t`设置页`, size: '768 · min(42rem, 100dvh − 32px)' },
+    file: { location: 'file', name: t`文件的其他看法`, size: t`随文件视图` },
   };
   const slot = (location: ViewLocation, className?: string) => (
     <div className={cn('flex min-w-0 flex-col justify-between gap-2 rounded-xl bg-accent/10 p-3', className)}>

@@ -1,7 +1,7 @@
 import type { SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
 import {
   BRIDGE_CAPABILITY, BRIDGE_LIMITS, BRIDGE_VERSION, PLUGIN_BASE_STYLE_VERSION,
-  type BridgeHostInfo, type BridgePage, type BridgeProject, type BridgeRun, type BridgeCommandResult, type BridgeErrorBody, type BridgeErrorCode, type BridgeEvent, type BridgeEvents, type BridgeMethod, type BridgeMethods, type BridgeSession, type BridgeTheme, type BridgeViewContext,
+  type BridgeFileBytes, type BridgeHostInfo, type BridgePage, type BridgeProject, type BridgeRun, type BridgeCommandResult, type BridgeErrorBody, type BridgeErrorCode, type BridgeEvent, type BridgeEvents, type BridgeMethod, type BridgeMethods, type BridgeSession, type BridgeTheme, type BridgeViewContext,
 } from '@riffet/plugin-web';
 
 /*
@@ -38,6 +38,8 @@ export interface BridgeServices {
   active(): boolean;
   openSession(sessionId: string): void;
   openPath(path: string): void;
+  /** Bytes of a file of the view's project, read as the user reads it; absent where the host cannot read files. */
+  readFile?(path: string, offset: number, length: number, signal: AbortSignal): Promise<BridgeFileBytes>;
   notify(tone: 'info' | 'error', text: string): void;
   /** Runs a command of the package through the server and answers what it answered; absent where the host has no command path, which answers `unsupported`. */
   execute?(commandId: string, args: Record<string, string | number | boolean> | undefined, signal: AbortSignal): Promise<BridgeCommandResult>;
@@ -126,7 +128,7 @@ function page<T>(params: unknown, keys: string[], values: readonly T[]): BridgeP
   return { items: values.slice(offset, end), ...(end < values.length ? { next: end } : {}) };
 }
 function hostInfo(services: BridgeServices): BridgeHostInfo {
-  const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary);
+  const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary).filter(method => method !== 'files.read' || services.readFile);
   return { platform: 'web', webApiVersion: 1, bridgeVersion: BRIDGE_VERSION, baseStyleVersion: PLUGIN_BASE_STYLE_VERSION, renderers: ['tasks', 'list', 'form', 'detail'], methods, execution: { server: services.context().serviceId, client: 'web' } };
 }
 
@@ -183,6 +185,19 @@ const methods: Methods = {
     interacting(call);
     call.services.openSession(call.ownSession(sessionId).id);
     return null;
+  },
+  'files.read': (params, { services, grant, signal }) => {
+    const input = only(params ?? {}, ['path', 'offset', 'length']);
+    const own = services.context();
+    if (!services.readFile) throw new Failure('unsupported', 'This host cannot read files');
+    if (!own.projectId) throw new Failure('forbidden', 'This view has no project');
+    const path = input.path === undefined ? own.path : projectPath(input);
+    if (path === undefined) throw invalid('path is required: this view shows no file');
+    // The file the view was opened for is what it is for; reading others is reading the project.
+    if (path !== own.path && !grant.capabilities.has('projects.read')) throw new Failure('denied', 'This package does not hold projects.read');
+    const offset = input.offset === undefined ? 0 : integer(input, 'offset', 0, Number.MAX_SAFE_INTEGER);
+    const length = input.length === undefined ? BRIDGE_LIMITS.fileBytes : integer(input, 'length', 1, BRIDGE_LIMITS.fileBytes);
+    return services.readFile(path, offset, length, signal);
   },
   'navigation.openPath': (params, call) => {
     const path = projectPath(only(params, ['path']));

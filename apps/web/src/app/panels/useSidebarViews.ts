@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { ProjectRecord } from '@/lib/api';
 import { useProjectTypes } from '@/lib/tasks';
-import { matches, type ViewEntry } from '@/plugins/catalog';
+import { fileViewsFor, matches, type ViewEntry } from '@/plugins/catalog';
 import { useViewCatalog } from '@/plugins/registry';
 import { orderViews, useViewPrefs } from '../session/viewPrefs';
 import { useHasGit } from '../state/gitStatusStore';
@@ -35,4 +35,13 @@ export function useSidebarViews(project: ProjectRecord | undefined, sessionId: s
  */
 export function shownView(views: readonly ViewEntry[], tab: string): ViewEntry | undefined {
   return views.find((view) => view.id === tab) ?? views[0];
+}
+
+/** Plugin views of the project file at [path] (views located at `file`), judged like the side panel's. */
+export function useFileViews(project: ProjectRecord, sessionId: string | undefined, path: string | undefined): ViewEntry[] {
+  const catalog = useViewCatalog();
+  const hasGit = useHasGit(project);
+  const projectTypes = useProjectTypes(project.id);
+  const hasSession = Boolean(sessionId);
+  return useMemo(() => (path === undefined ? [] : fileViewsFor(catalog, path, { hasProject: true, hasSession, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES, projectTypes })), [catalog, path, hasSession, hasGit, projectTypes]);
 }

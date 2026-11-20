@@ -15,7 +15,7 @@ import { localizedText } from '@/lib/plugins';
 /** Ids a stored value may still carry from before views had stable ids. Applied wherever one is read. */
 const LEGACY_VIEW_IDS: Readonly<Record<string, string>> = { git: 'changes', canvas: 'riffet.canvas/canvas' };
 
-export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.notify.info', 'bridge.notify.error']);
+export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.files.read', 'bridge.notify.info', 'bridge.notify.error']);
 
 export const migrateViewId = (id: string): string => LEGACY_VIEW_IDS[id] ?? id;
 
@@ -57,6 +57,8 @@ export interface ViewEntry {
   icon: PluginIconName;
   instances: ViewInstancing;
   when?: Condition;
+  /** For a view located at `file`: the extensions it shows. */
+  extensions?: readonly string[];
   /** Set for a plugin's view; the app's own views are drawn by their layouts. */
   render?: ViewRender;
 }
@@ -147,18 +149,28 @@ export function buildCatalog({ descriptors, plugins, pending, icons, renderers, 
         else if (!pending?.has(descriptor.id)) continue;
       }
       for (const location of view.locations) {
-        if (location !== 'session-view' && location !== 'sidebar') continue;
+        if (location !== 'session-view' && location !== 'sidebar' && location !== 'file') continue;
+        if (location === 'file' && !view.files?.extensions.length) continue;
         entries.push({
           id: view.id, pluginId: descriptor.id, active: descriptor.active, activateOnView: descriptor.activation?.events.includes('view'), activationState: descriptor.activation?.state, unavailable: !compatible || Boolean(view.requires?.some(capability => !WEB_VIEW_CAPABILITIES.has(capability))), location, instances: view.instances,
           ...(render ? { render } : {}),
           title: localizedText(view.title, [locale]) ?? view.id,
           icon: plugins.get(descriptor.id)?.icons?.[view.id] ?? icons?.[view.id] ?? 'square-terminal',
           ...(view.when ? { when: view.when } : {}),
+          ...(location === 'file' ? { extensions: view.files!.extensions } : {}),
         });
       }
     }
   }
   return entries;
+}
+
+/** The views located at `file` that show [path], by its extension, and whose conditions hold. */
+export function fileViewsFor(entries: readonly ViewEntry[], path: string, facts: ViewFacts): ViewEntry[] {
+  const name = path.split('/').at(-1) ?? path;
+  const dot = name.lastIndexOf('.');
+  const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : '';
+  return extension ? entries.filter((entry) => entry.location === 'file' && entry.extensions?.includes(extension) && matches(entry.when, facts)) : [];
 }
 
 /**

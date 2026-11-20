@@ -24,6 +24,8 @@ export interface BridgeViewContext {
   serviceId: string;
   projectId?: string;
   sessionId?: string;
+  /** The project file a view located at `file` shows, relative to the project root. */
+  path?: string;
   instanceId: string;
   visible: boolean;
   /** The app's language as a BCP-47 tag. */
@@ -70,6 +72,8 @@ export interface BridgeHostInfo {
   execution: { server: string; client: 'web' | 'macos' };
 }
 export interface BridgePage<T> { items: T[]; next?: number }
+/** Bytes of a project file, base64: `size` is the whole file's, `offset` where these start; fewer than asked for at its end, none past it (`size` is then at most `offset`). */
+export interface BridgeFileBytes { path: string; size: number; offset: number; data: string }
 export interface BridgeProject { id: string; name: string }
 export interface BridgeRun { id: string; state: string; startedAt?: string; endedAt?: string; outputTokens?: number }
 
@@ -94,6 +98,12 @@ export interface BridgeMethods {
   'sessions.timeline': { params: { sessionId: string; lane?: SyncLane; from: number; rows?: number }; result: TimelinePage };
   /** Selects a conversation of the view's own project. */
   'navigation.openSession': { params: { sessionId: string }; result: null };
+  /**
+   * Up to `length` (at most `BRIDGE_LIMITS.fileBytes`, the default) bytes of a file of the view's own project from `offset`. `path`
+   * defaults to the context's; the view's own file needs nothing, any other file `projects.read`. Read as the user reads it, under the
+   * same limits on what is outside the project or holds credentials.
+   */
+  'files.read': { params: { path?: string; offset?: number; length?: number }; result: BridgeFileBytes };
   /** Previews a file of the view's own project; `path` is relative to the project root. */
   'navigation.openPath': { params: { path: string }; result: null };
   'notify.info': { params: { text: string }; result: null };
@@ -127,6 +137,8 @@ export const BRIDGE_CAPABILITY: Readonly<Record<BridgeMethod, string | undefined
   'sessions.turnSummary': 'sessions.read',
   'sessions.turnSummaries': 'sessions.read',
   'sessions.timeline': 'sessions.read',
+  // Checked against the path: the view's own file needs nothing, another `projects.read`.
+  'files.read': undefined,
   'navigation.openSession': undefined,
   'navigation.openPath': undefined,
   'notify.info': undefined,
@@ -157,6 +169,8 @@ export const BRIDGE_LIMITS = {
   perSecond: 30,
   /** Characters of a notification or a path. */
   text: 500,
+  /** Bytes of one `files.read`, before base64. */
+  fileBytes: 512 * 1024,
   rows: 200,
   /** How long the client waits for a reply. */
   timeoutMs: 30_000,

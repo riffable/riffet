@@ -1,6 +1,7 @@
 import type { Run, Session, TimelinePage, TurnOutlineV3 } from '@contracts';
 import type { BridgeCommandResult, BridgeSession, BridgeViewContext } from '@riffet/plugin-web';
 import { request } from '@/lib/api';
+import { projectFileUrl, readFileRange } from '@/lib/files';
 import { toast } from '@/lib/toast';
 import type { WorkbenchStores } from '../../app/state/stores';
 import { readTheme } from './document';
@@ -8,6 +9,12 @@ import type { BridgeServices } from './bridgeHost';
 
 /** Largest page a view may ask for, in bytes. */
 const PAGE_BYTES = 128 * 1024;
+
+function base64(bytes: Uint8Array): string {
+  let text = '';
+  for (let index = 0; index < bytes.length; index += 0x8000) text += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  return btoa(text);
+}
 
 /** A conversation reduced to what a view may read (see `BridgeSession`); nothing that routes or resumes it. */
 export function bridgeSession(session: Session): BridgeSession {
@@ -66,6 +73,12 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
     openPath: (path) => {
       // The files panel shows the project that is open; a view of another project does not steer it.
       if (nav.get().projectId === context().projectId) ui.preview(path);
+    },
+    readFile: async (path, offset, length, signal) => {
+      const projectId = context().projectId!;
+      const read = await readFileRange(projectFileUrl(projectId, path), offset, offset + length - 1, signal);
+      if (read === 'past-end') return { path, size: offset, offset, data: '' };
+      return { path, size: read.size, offset, data: base64(read.bytes) };
     },
     notify: (tone, text) => (tone === 'error' ? toast.error : toast.info)(`${label}: ${text}`),
     execute: (commandId, args, signal) => {

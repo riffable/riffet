@@ -24,10 +24,11 @@ export function resolveLocalizedText(text: LocalizedText | undefined, locales: r
   return table.get('zh-hans') ?? table.get('en') ?? entries[0]![1];
 }
 
-export const VIEW_LOCATIONS = ['session-view', 'sidebar', 'panel', 'main', 'navigation', 'settings'] as const;
+export const VIEW_LOCATIONS = ['session-view', 'sidebar', 'panel', 'main', 'navigation', 'settings', 'file'] as const;
 /**
  * Semantic places a view may live, not pixel positions: the workbench decides sizes and order. `settings` is a
- * page of the settings dialog, listed under the plugin's own group while the plugin is on.
+ * page of the settings dialog, listed under the plugin's own group while the plugin is on. `file` is a way to
+ * view a project file the view declares it reads (`ViewDeclaration.files`), offered beside the files view's own.
  */
 export type ViewLocation = typeof VIEW_LOCATIONS[number];
 
@@ -67,6 +68,8 @@ export interface ViewDeclaration {
   renderer?: DeclarativeViewRenderer;
   /** Client capabilities required to draw this view, e.g. renderer.form or bridge.sessions.list. */
   requires?: string[];
+  /** The files a view located at `file` shows, by extension: lowercase, without the dot. Required there, ignored elsewhere. */
+  files?: { extensions: string[] };
 }
 
 /** Actions are commands of this plugin; the server remains authoritative for context and arguments. */

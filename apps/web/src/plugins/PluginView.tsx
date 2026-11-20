@@ -15,6 +15,8 @@ export interface PluginViewProps {
   entry: ViewEntry;
   projectId?: string | undefined;
   sessionId?: string | undefined;
+  /** The project file a view located at `file` shows. */
+  path?: string | undefined;
   visible?: boolean;
   /** Set where the view is a page of the settings dialog: how it reports unsaved edits and a save under way. Both reset when the instance goes. */
   settingsPage?: SettingsPageService | undefined;
@@ -30,14 +32,15 @@ export interface PluginViewProps {
  * session or project is a fresh instance with fresh state, and the previous one's signal aborts,
  * cancelling its requests, before it unmounts.
  */
-export function PluginView({ entry, projectId, sessionId, visible = true, settingsPage, fallback, composer }: PluginViewProps) {
+export function PluginView({ entry, projectId, sessionId, path, visible = true, settingsPage, fallback, composer }: PluginViewProps) {
   const serviceId = window.location.origin;
-  const instanceId = entry.instances === 'per-session' ? `${entry.id}:${sessionId ?? ''}` : entry.instances === 'per-project' ? `${entry.id}:${projectId ?? ''}` : entry.id;
-  const key = [serviceId, projectId ?? '', sessionId ?? '', instanceId].join('|');
-  return <Instance key={key} entry={entry} serviceId={serviceId} instanceId={instanceId} projectId={projectId} sessionId={sessionId} visible={visible} settingsPage={settingsPage} fallback={fallback} composer={composer} />;
+  // A file view is one instance per file, whatever it declares.
+  const instanceId = path !== undefined ? `${entry.id}:${projectId ?? ''}:${path}` : entry.instances === 'per-session' ? `${entry.id}:${sessionId ?? ''}` : entry.instances === 'per-project' ? `${entry.id}:${projectId ?? ''}` : entry.id;
+  const key = [serviceId, projectId ?? '', sessionId ?? '', path ?? '', instanceId].join('|');
+  return <Instance key={key} entry={entry} serviceId={serviceId} instanceId={instanceId} projectId={projectId} sessionId={sessionId} path={path} visible={visible} settingsPage={settingsPage} fallback={fallback} composer={composer} />;
 }
 
-function Instance({ entry, serviceId, instanceId, projectId, sessionId, visible, settingsPage, fallback, composer }: Omit<PluginViewProps, 'visible'> & { serviceId: string; instanceId: string; visible: boolean }) {
+function Instance({ entry, serviceId, instanceId, projectId, sessionId, path, visible, settingsPage, fallback, composer }: Omit<PluginViewProps, 'visible'> & { serviceId: string; instanceId: string; visible: boolean }) {
   const stores = useStores();
   const { i18n } = useLingui();
   // Created in an effect, not in render: React may mount, unmount and mount an instance again, and each mount needs its own live signal.
@@ -65,8 +68,8 @@ function Instance({ entry, serviceId, instanceId, projectId, sessionId, visible,
   useEffect(() => () => { settingsPage?.setDirty(false); settingsPage?.setBusy(false); }, [settingsPage]);
   const context = useMemo<ViewContext | undefined>(() => controller && ({
     serviceId, instanceId, visible, signal: controller.signal,
-    ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}),
-  }), [controller, serviceId, instanceId, projectId, sessionId, visible]);
+    ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), ...(path !== undefined ? { path } : {}),
+  }), [controller, serviceId, instanceId, projectId, sessionId, path, visible]);
   if (activationError) return <p className="p-3 text-sm text-fg-3" role="status">{activationError}</p>;
   if (!activated) return <div className="flex justify-center p-3"><Spinner /></div>;
   if (!context || !render) return null;

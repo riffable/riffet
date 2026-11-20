@@ -149,18 +149,19 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - `version`：包版本（semver），不参与声明 ID。
 - `title`、`description`：`LocalizedText`（BCP-47 标签到文本）。客户端依次取完全匹配、语言前缀、`zh-Hans`、`en`、第一项，都没有则用 `name`。
-- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`imChannels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。声明 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
+- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`imChannels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。声明 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`、`file`；`file` 另须声明 `files.extensions`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
 - `requires`：`[{ id, optional? }]`。
 
 校验分两侧，使用同一个函数 `checkManifest`，以模式区分。加载时（`load`），宿主不认识的值只跳过那一项并写一条说明：视图 `locations`、`clients` 中的未知值被去掉，去空的视图被跳过；`renderer.kind` 未知的视图被跳过；视图或命令的 `when` 含未知条件键时该视图或命令被跳过（宿主无法判断何时可见，所以保持隐藏）；`activation` 中的未知事件被去掉，都未知时插件不按启动激活，也不退回 `startup`。被跳过的项不出现在 `declared`，不占用声明 ID，不能被命令路由执行，也不触发按需激活；说明在插件的诊断和 `riffet doctor` 中以警告显示。打包与检查（`check`、`pack`）使用严格模式，未知值一律报错，因为作者时工具与 SDK 同版本，未知值只会是笔误。`capabilities` 中的未知名称在两侧都拒绝整个包：宿主无法约束的权限不能授予。已知成员的格式错误（类型、ID 格式、命名空间、重复、semver 等）也仍然拒绝。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
 
-视图位置与客户端的承载情况（`locations` 的六个值，截至当前实现）：
+视图位置与客户端的承载情况（`locations` 的七个值，截至当前实现）：
 
 | 位置 | Web | macOS | 移动端 |
 |---|---|---|---|
 | `session-view` | 承载 | 无 | 无 |
 | `sidebar` | 承载 | 承载 | 无 |
 | `settings` | 仅内置入口绘制 | 仅原生注册的渲染器 | 无 |
+| `file` | 承载：文件视图「更多操作」里的另一种看法，按扩展名匹配 | 无 | 无 |
 | `panel`、`main`、`navigation` | 保留，无客户端承载 | 保留，无客户端承载 | 无 |
 
 ### 冲突规则
@@ -209,7 +210,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 非内置包（本地开发包和独立安装包）的 Web 视图不进入应用页面，在隔离的框架里运行，只经消息桥访问应用；内置包（画布、Cursor 设置页）仍用上面的应用内 SDK。包用 `entries.web` 给出一个打包好的单文件经典脚本（IIFE，不依赖任何外部加载），描述符的 `webEntry`（`{ path, integrity? }`，`integrity` 为 `sha256-<hex>`）和 `capabilities`（独立包取所选版本的授权，开发包取 manifest 所请求的，不需授权）交给客户端。
 
-- 入口：与其他插件视图同一套门槛：插件已启用、视图声明 `web`、`compatibility.web.ok` 不为 false；位置为 `session-view` 或 `sidebar`（`settings` 位置只能由内置入口绘制）；没有 `webEntry` 的非内置包没有 Web 视图。实例按上下文定 key，换会话或项目是新框架，旧通道随之关闭。
+- 入口：与其他插件视图同一套门槛：插件已启用、视图声明 `web`、`compatibility.web.ok` 不为 false；位置为 `session-view`、`sidebar` 或 `file`（`settings` 位置只能由内置入口绘制）；没有 `webEntry` 的非内置包没有 Web 视图。实例按上下文定 key，换会话、项目或（`file` 位置的）文件是新框架，旧通道随之关闭。
 - 框架：宿主用用户的会话经 `GET /api/integrations/:id/files/<path>` 取脚本（至多 8 MB），有 `integrity` 先校验，不符或写法不认识都拒绝；再放进 `<iframe sandbox="allow-scripts" srcdoc csp=…>`，没有 `allow-same-origin`，页面的源不透明：没有 cookie、存储，读不到应用页面。`csp` 属性与页面 CSP 相同（嵌入式强制），支持它的浏览器还会拒绝框架被导航到不声明接受该策略的页面，其余浏览器忽略它。页面 CSP：`default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'`；包持有 `network` 时 `connect-src https:`。已知缺口（Web）：在不支持嵌入式强制的浏览器里，CSP 拦不住脚本把自己的框架导航到别处（实测请求照常发出），也拦不住 WebRTC；宿主只能在框架第二次加载时丢弃该视图，拦不住那次请求，也发现不了页面加载中途的导航。所以 Web 上的 `network` 不是对 `sessions.read` 的真实防线：持有 `sessions.read` 的包能读到什么就能送出什么。Mac 的 WebView 拒绝除引导页外的所有导航。
 - 基础样式：引导页的 `<style>` 在颜色变量之后带一份带版本的基础样式（`packages/plugin-web/src/base-style.ts` 的 `PLUGIN_BASE_STYLE`，版本常量 `PLUGIN_BASE_STYLE_VERSION`，现为 1）。Web 的 `document.ts` 直接引用它；Mac 的 `PluginPageDocument.swift` 里是 `pnpm gen:plugin-style` 生成的同一份文本，`gen:plugin-style:check` 在 CI 中核对。内容分两层：`--riffet-*` 自定义属性（间距 4/8/12/16/24、圆角 8/10/12、界面与等宽字体栈、阅读/界面/次要三档字号与行高、控件高度 32、边框宽度 1px、焦点环），数值取自应用自己的控件与 `docs/design/riffet-style.md`；以及只针对原生元素的规则（`body`、`a`、`button`、`input`/`textarea`/`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条），全部包在 `:where()` 里，特异性为零，包自己的 CSS 不需要 `!important` 即可覆盖。没有类名组件、工具类和脚本；CSP 不变（内联 `<style>` 已被 `style-src 'unsafe-inline'` 允许）。`BRIDGE_VERSION` 不变，`host.info` 暂不报告样式版本。
 - 通道：请求通道的是宿主生成的引导页自己，不是视图：引导页的第一段脚本（`document.ts` 的 `CHANNEL_SCRIPT`）先挂上 `riffet-plugin:init` 的监听、把端口的 `Promise` 放在 `window.__riffetPort`，再向父窗口发 `riffet-plugin:ready`，此后才注入视图的脚本；`connect()` 只取这个 `Promise`，不再自己发请求，页面不是宿主生成的则以 `unsupported` 失败。宿主只回应它自己嵌入的那个窗口（以 `event.source` 为准），只回应第一次：同一窗口的消息按序到达，所以第一个请求必然是引导页发的，之后任何请求（包括框架被导航到的页面发的）都被忽略，握手也无法重置通道的限流。不以框架的第一次 `load` 为界：Chrome 实测在页面加载中发出的消息晚于 `load` 才送达（`load,message:ready`），按 `load` 判界会拒绝引导页自己的请求。宿主在框架渲染前就挂好监听（Web 用 layout effect），框架第二次 `load` 仍丢弃该视图。宿主创建 `MessageChannel`，把一个端口随 `riffet-plugin:init` 交给框架。之后所有请求都在这个端口上，包的身份、能力、项目都绑在端口上，载荷里的自报字段不读。请求 `{ id, method, params }`，回复 `{ id, result }` 或 `{ id, error: { code, message } }`，推送 `{ event, data }`。
@@ -217,13 +218,14 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 | 方法 | 参数 | 结果 | 要求 |
 | --- | --- | --- | --- |
-| `context.get` | 无 | `serviceId`、`projectId?`、`sessionId?`、`instanceId`、`visible`、`locale` | 无；变化时推送 `context` |
+| `context.get` | 无 | `serviceId`、`projectId?`、`sessionId?`、`path?`（`file` 位置的视图所看的文件）、`instanceId`、`visible`、`locale` | 无；变化时推送 `context` |
 | `theme.get` | 无 | `{ scheme, vars }`，`vars` 是 `THEME_ROLES` 的 `--<role>` 到颜色 | 无；变化时推送 `theme` |
 | `sessions.get` | `{ sessionId }` | 会话的 id、项目、标题、状态、后端、模型、模式、标签与时间 | `sessions.read`，限视图所属项目 |
 | `sessions.outline` | `{ sessionId, lane? }` | `{ turns }`（`TurnOutlineV3`） | 同上 |
 | `sessions.turnSummary` | `{ sessionId, turn }`（`turn` 为大纲里的键） | `{ summary? }`：已结束一轮的一句话结论，由「画布摘要」辅助模型首次请求时写出并保存；未选模型、该轮未结束或无答案时为空 | 同上；仅 Web 宿主 |
 | `sessions.turnSummaries` | 无 | `{ enabled }`：是否已选「画布摘要」模型 | 同上；仅 Web 宿主 |
 | `sessions.timeline` | `{ sessionId, lane?, from, rows? }` | 一页时间线行（含工具输入输出） | 同上 |
+| `files.read` | `{ path?, offset?, length? }`（`path` 缺省为上下文的文件，`length` 至多 512 KB） | `{ path, size, offset, data }`，`data` 为 base64；到文件末尾后为空 | 视图自己的文件不需要能力，项目里的其他文件要 `projects.read`；按用户自己的读取规则（项目外、凭据文件同样受限），经 `GET /api/projects/:id/file/raw` 的 Range 请求读取 |
 | `navigation.openSession` | `{ sessionId }` | `null` | 限视图所属项目；仅在用户操作过该视图之后（Web：`document.activeElement` 是该框架；Mac：视图可见且是或包含第一响应者），否则 `denied` |
 | `navigation.openPath` | `{ path }`（相对项目根，不含 `..`） | `null` | 同上 |
 | `notify.info` / `notify.error` | `{ text }` | `null` | 无；提示前加包名 |
