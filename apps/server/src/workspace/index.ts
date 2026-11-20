@@ -446,7 +446,8 @@ export class WorkspaceService {
       // An app package or archive this large is still a file to name and download: its first bytes tell
       // binary from text without reading the rest. Text this large has nothing it could show.
       const head = await readFileHead(target, 8192);
-      if (!head.includes(0)) throw new AppError('FILE_TOO_LARGE', `File exceeds the ${MAX_FILE_READ_BYTES} byte preview limit`, 413);
+      // The size lets a client read the end instead (a log), by range.
+      if (!head.includes(0)) throw new AppError('FILE_TOO_LARGE', `File exceeds the ${MAX_FILE_READ_BYTES} byte preview limit`, 413, undefined, { size: String(info.size) });
       return { path, content: '', hash: hash(Buffer.concat([head, Buffer.from(`:${info.size}:${info.mtimeMs}`)])), size: info.size, binary: true, truncated: true };
     }
     const data = await readFileBounded(target, MAX_FILE_READ_BYTES);

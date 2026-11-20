@@ -18,6 +18,7 @@ import { runProcess } from './git/exec.js';
 import { TMUX_MIN_VERSION } from './terminal/control.js';
 import { PluginRegistry } from './plugins/registry.js';
 import type { SettingsService } from './settings/index.js';
+import { officeConverter } from './previews/office-convert.js';
 
 export type { DoctorCheck, DoctorStatus };
 
@@ -195,7 +196,7 @@ export async function doctorChecks(input: { stateDir: string; host: string; port
       ...agents, ...core,
       ...installed ? [] : [{ id: 'backend:any', label: 'Agent CLIs', status: 'fail' as const, detail: 'none of the supported agent CLIs could be found', fix: 'Install and sign in to at least one of the CLIs above.' }],
     ]) },
-    { title: 'Server' as const, checks: [await portCheck(input.host, input.port, input.daemon), await stateDirCheck(input.stateDir)] },
+    { title: 'Server' as const, checks: [await portCheck(input.host, input.port, input.daemon), await stateDirCheck(input.stateDir), officeCheck()] },
     { title: 'Plugins' as const, checks: strip(others) },
   ].filter(section => section.checks.length);
 }
@@ -210,3 +211,11 @@ async function pluginChecks(stateDir: string, settings: SettingsService): Promis
     return { agents: checks.filter(isAgent), others: checks.filter(check => !isAgent(check)) };
   } finally { await plugins.close(); }
 }
+/** Optional: office documents keep their layout in previews only with LibreOffice (`previews/office-convert.ts`). */
+function officeCheck(): DoctorCheck {
+  const executable = officeConverter();
+  return executable
+    ? { id: 'libreoffice', label: 'LibreOffice', status: 'ok', detail: `office previews keep their layout (${executable})` }
+    : { id: 'libreoffice', label: 'LibreOffice', status: 'ok', detail: 'not installed (optional); office previews show their text, and .doc and .ppt files are downloads', fix: 'Install LibreOffice and restart Riffet for laid-out office previews, or set RIFFET_SOFFICE to its soffice.' };
+}
+

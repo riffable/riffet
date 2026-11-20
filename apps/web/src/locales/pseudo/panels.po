@@ -914,6 +914,10 @@ msgid "二进制文件"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx
+msgid "以十六进制查看"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
 msgid "保存"
 msgstr ""
 
@@ -972,6 +976,10 @@ msgstr ""
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/FileTree.tsx
 msgid "加载更多"
+msgstr ""
+
+#: src/app/panels/ByteViews.tsx
+msgid "十六进制"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx
@@ -1155,7 +1163,7 @@ msgstr ""
 msgid "文件名"
 msgstr ""
 
-#: src/app/panels/CodeView.tsx
+#: src/app/panels/FilesPanel.tsx
 msgid "文件过大，仅显示前一部分"
 msgstr ""
 
@@ -1217,6 +1225,7 @@ msgstr ""
 msgid "无法读取完整的文件内容"
 msgstr ""
 
+#: src/app/panels/ByteViews.tsx
 #: src/app/panels/useFileEditing.ts
 msgid "无法读取文件"
 msgstr ""
@@ -1246,12 +1255,22 @@ msgstr ""
 msgid "更多视图"
 msgstr ""
 
+#. placeholder {0}: formatBytes(Math.min(size, FILE_BUDGET.tailBytes))
+#. placeholder {1}: formatBytes(size)
+#: src/app/panels/ByteViews.tsx
+msgid "末尾 {0}，共 {1}"
+msgstr ""
+
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法失败"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "查看末尾"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx
@@ -1325,6 +1344,10 @@ msgstr ""
 msgid "调整文件树宽度"
 msgstr ""
 
+#: src/app/panels/ByteViews.tsx
+msgid "跟随"
+msgstr ""
+
 #: src/app/panels/FilesPanel.tsx
 msgid "跳转到定义"
 msgstr ""
@@ -1343,6 +1366,10 @@ msgstr ""
 
 #: src/app/panels/FilesPanel.tsx
 msgid "返回文件列表"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回预览"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx

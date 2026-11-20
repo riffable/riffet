@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { AppError } from '../errors.js';
 import { browserScript, pdfFonts, mathStyles } from './browser-assets.js';
 import { contentPreviewPage } from './content.js';
+import { convertsToPdf, officePdf } from './office-convert.js';
 import { escapeHtml, inlineScript, previewDocument, previewTheme, scriptHash, scriptJson, type PreviewTheme, type PreviewQuery } from './document.js';
 import { decodePreviewText, diagramLanguage, extensionOf, MAX_PREVIEW_FILE_BYTES, previewKind, type PreviewKind } from './formats.js';
 
@@ -110,7 +111,7 @@ export function mediaPreviewPage(name: string, src: string, query: PreviewQuery 
 
 function mediaPage(name: string, src: string, theme: PreviewTheme): Page {
   const tag = mediaMime[extensionOf(name)]?.startsWith('video/') ? 'video' : 'audio';
-  return previewDocument(`<main class="media"><${tag} controls preload="metadata" playsinline src="${escapeHtml(src)}"></${tag}></main>`, theme, [], '', name);
+  return previewDocument(`<main class="media"><${tag} controls preload="metadata" playsinline src="${escapeHtml(src)}"></${tag}></main>`, theme, [], '', name, undefined, { selection: false });
 }
 
 async function renderUncached(data: Buffer, name: string, query: PreviewQuery = {}, resource?: Resource): Promise<Page> {
@@ -126,6 +127,11 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
     const script = inlineScript(`location.hash=${scriptJson(params.toString())};`);
     // The fragment is populated before the renderer starts, without a second authenticated request.
     return { html: page.html.replace('<head>', `<head><script>${script}</script>`), csp: page.csp.replace('script-src ', `script-src ${scriptHash(script)} `) };
+  }
+  if ((kind === 'document' || kind === 'presentation') && convertsToPdf(extension)) {
+    // Laid out by LibreOffice when the server has it; otherwise, or when it fails, the extracted text below.
+    const pdf = await officePdf(data, name);
+    if (pdf) return previewDocument('<main id="preview"></main>', theme, [await browserScript('pdf')], '', name, { data: pdf.toString('base64'), name, extension: 'pdf', theme, assets: await pdfFonts() });
   }
   if (kind === 'pdf' || kind === 'model') {
     return previewDocument('<main id="preview"></main>', theme, [await browserScript(kind)], '', name, { data: data.toString('base64'), name, extension, theme, ...(kind === 'pdf' ? { assets: await pdfFonts() } : {}) });

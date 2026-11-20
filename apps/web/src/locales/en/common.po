@@ -373,6 +373,11 @@ msgstr "Recovered"
 msgid "常量"
 msgstr "Constant"
 
+#: src/components/ContentPreview.tsx
+msgctxt "session-quote-action"
+msgid "引用"
+msgstr "Quote"
+
 #: src/lib/theme-role-labels.ts
 msgid "弱化背景"
 msgstr "Muted background"

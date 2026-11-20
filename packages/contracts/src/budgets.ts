@@ -42,6 +42,17 @@ export const FILE_BUDGET = {
   trashRetentionMs: 24 * 60 * 60_000,
   /** Files a client holds unsaved edits of at once; a further one is refused rather than another dropped. */
   draftsKept: 20,
+  /** A hex view reads a file in pages of this size, and keeps this many pages of one file. */
+  hexPageBytes: 64 * KIB,
+  hexPagesKept: 16,
+  /** The end of a file a tail view reads and keeps; growth past it pushes out the oldest lines. */
+  tailBytes: 256 * KIB,
+  /** How often a followed file is asked whether it has grown, while the view shows it. */
+  followMs: 2_000,
+  /** A LibreOffice conversion of an office document to PDF is killed past this (`previews/office-convert.ts`). */
+  officeConvertMs: 60_000,
+  /** Converted PDFs kept in memory, all together. */
+  officePdfCacheBytes: 64 * MIB,
 } as const;
 
 /** Parsed and laid-out text kept for reuse: markdown, highlighted code, measured rows; all such caches together. */

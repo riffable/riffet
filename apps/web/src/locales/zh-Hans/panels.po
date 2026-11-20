@@ -914,6 +914,10 @@ msgid "二进制文件"
 msgstr "二进制文件"
 
 #: src/app/panels/FilesPanel.tsx
+msgid "以十六进制查看"
+msgstr "以十六进制查看"
+
+#: src/app/panels/FilesPanel.tsx
 msgid "保存"
 msgstr "保存"
 
@@ -973,6 +977,10 @@ msgstr "加载中…"
 #: src/app/panels/FileTree.tsx
 msgid "加载更多"
 msgstr "加载更多"
+
+#: src/app/panels/ByteViews.tsx
+msgid "十六进制"
+msgstr "十六进制"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "取消收藏"
@@ -1155,7 +1163,7 @@ msgstr "文件可能已更改，或超过图片预览大小上限。"
 msgid "文件名"
 msgstr "文件名"
 
-#: src/app/panels/CodeView.tsx
+#: src/app/panels/FilesPanel.tsx
 msgid "文件过大，仅显示前一部分"
 msgstr "文件过大，仅显示前一部分"
 
@@ -1217,6 +1225,7 @@ msgstr "无法新建"
 msgid "无法读取完整的文件内容"
 msgstr "无法读取完整的文件内容"
 
+#: src/app/panels/ByteViews.tsx
 #: src/app/panels/useFileEditing.ts
 msgid "无法读取文件"
 msgstr "无法读取文件"
@@ -1246,6 +1255,12 @@ msgstr "更多操作"
 msgid "更多视图"
 msgstr "更多视图"
 
+#. placeholder {0}: formatBytes(Math.min(size, FILE_BUDGET.tailBytes))
+#. placeholder {1}: formatBytes(size)
+#: src/app/panels/ByteViews.tsx
+msgid "末尾 {0}，共 {1}"
+msgstr "末尾 {0}，共 {1}"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"
 msgstr "查找用法"
@@ -1253,6 +1268,10 @@ msgstr "查找用法"
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法失败"
 msgstr "查找用法失败"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "查看末尾"
+msgstr "查看末尾"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "比较"
@@ -1325,6 +1344,10 @@ msgstr "该文件在项目目录之外。可在「设置 → 文件与编辑器�
 msgid "调整文件树宽度"
 msgstr "调整文件树宽度"
 
+#: src/app/panels/ByteViews.tsx
+msgid "跟随"
+msgstr "跟随"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "跳转到定义"
 msgstr "跳转到定义"
@@ -1344,6 +1367,10 @@ msgstr "返回搜索结果"
 #: src/app/panels/FilesPanel.tsx
 msgid "返回文件列表"
 msgstr "返回文件列表"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回预览"
+msgstr "返回预览"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "这个文件在你编辑时被改过"

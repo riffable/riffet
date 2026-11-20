@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowLeft, IconChevronRight, IconCopy, IconCornerUpRight, IconDownload, IconEllipsis, IconExternalLink, IconEye, IconFile, IconFileCode2, IconFilePlus, IconFolder, IconFolderPlus, IconImage, IconPencilLine, IconPlus, IconRefreshCw, IconSearch, IconSquareArrowOutUpRight, IconStar, IconTarget, IconTrash2, IconX } from '@/components/icons';
+import { IconArrowDownToLine, IconArrowLeft, IconBinary, IconChevronRight, IconCopy, IconCornerUpRight, IconDownload, IconEllipsis, IconExternalLink, IconEye, IconFile, IconFileCode2, IconFilePlus, IconFolder, IconFolderPlus, IconImage, IconPencilLine, IconPlus, IconRefreshCw, IconSearch, IconSquareArrowOutUpRight, IconStar, IconTarget, IconTrash2, IconX } from '@/components/icons';
 import type { CodeLocation, FileEntry, FilePreview, SearchHit } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { ContentPreview } from '@/components/ContentPreview';
@@ -28,11 +28,13 @@ import { FileTree } from './FileTree';
 import { DirectoryHint, FileIcon, Matched, splitPath } from './fileVisuals';
 import { QuickOpen, type QuickOpenMode } from './QuickOpen';
 import { useRecentFiles } from './recentFiles';
+import { HexView, TailView } from './ByteViews';
 import { useDraftPaths, useDraftsGuard } from './fileDrafts';
 import { useFileEditing } from './useFileEditing';
 import { useFileOperations } from './useFileOperations';
 import { Notice } from '@/components/ui/notice';
 import { useLists, useUi } from '../state/stores';
+import { quoteIntoComposer } from '../session/composerQuotes';
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })));
 const previewFallback = <div className="flex flex-1 justify-center py-10"><Spinner /></div>;
 
@@ -107,7 +109,7 @@ const modifier = (event: { metaKey: boolean; ctrlKey: boolean }) => (isApplePlat
  * panel keeps it mounted once shown, so where the reader was (directory, preview, search) survives
  * a visit to another view; while another view shows, it draws nothing.
  */
-export function FilesPanel({ project, previewTarget, shown, wide = false, headerSlot, show, onReference, onError, onClose }: SidebarBodyProps) {
+export function FilesPanel({ project, sessionId, previewTarget, shown, wide = false, headerSlot, show, onReference, onError, onClose }: SidebarBodyProps) {
   const { t } = useLingui();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const panelOpen = useUi((state) => state.panelOpen);
@@ -166,6 +168,8 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
   useEffect(() => { setImageViewerOpen(false); }, [project.id, previewFilePath, panelOpen, shown]);
   // A missing or outside-blocked file says so in place; retrying missing cannot help, and a toast would say it twice.
   const [previewMissing, setPreviewMissing] = useState(false);
+  /** Another way to look at the open file: its bytes, or the end of a long text. */
+  const [byteView, setByteView] = useState<'hex' | 'tail'>();
   const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
   /** `openPreview`, for handlers set up before it. */
@@ -322,6 +326,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     setImageLoadError(false);
     setPreviewMissing(false);
     setPreviewBlocked(false);
+    setByteView(undefined);
     setRendered(!line);
     setPreviewLoading(true);
     show();
@@ -332,6 +337,12 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
     catch (error) {
       if (request !== previewRequest.current) return;
       if (error instanceof HttpError && error.code === 'FILE_NOT_FOUND') { setPreviewMissing(true); return; }
+      // Text too long to read whole: its end, which for a log is what is wanted.
+      if (error instanceof HttpError && error.code === 'FILE_TOO_LARGE' && error.params?.size) {
+        setPreview({ path: filePath, content: '', hash: '', size: Number(error.params.size), binary: false, truncated: true });
+        setByteView('tail');
+        return;
+      }
       // The server refuses out-of-project paths when the setting is off; say so in Chinese
       // instead of surfacing the raw "Path must stay inside the project directory".
       const blocked = error instanceof HttpError && (error.code === 'PATH_OUTSIDE_PROJECT' || error.code === 'INVALID_PATH');
@@ -701,7 +712,7 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
               <Button size="xs" variant="primary" className="mx-1 max-md:h-10" busy={edit.saving} onClick={() => void edit.save()}>{edit.conflict ? <Trans>覆盖保存</Trans> : <Trans>保存</Trans>}</Button>
             </Tip>
           )}
-          {edit.editable && (
+          {edit.editable && byteView === undefined && (
             <Tip label={edit.editing ? t`结束编辑` : t`编辑`}>
               <Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', edit.editing && 'bg-active text-fg')} aria-label={edit.editing ? t`结束编辑` : t`编辑`} aria-pressed={edit.editing} onClick={() => { if (edit.editing) void edit.stop(); else { setRendered(false); edit.start(); } }}><IconPencilLine /></Button>
             </Tip>
@@ -722,6 +733,10 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
               <DropdownMenuItem onSelect={() => openProjectFile(project.id, previewFilePath)}><IconExternalLink /><Trans>在新标签页打开</Trans></DropdownMenuItem>
               <DropdownMenuItem onSelect={() => downloadProjectFile(project.id, previewFilePath)}><IconDownload /><Trans>下载</Trans></DropdownMenuItem>
               {preview && !preview.binary && <DropdownMenuItem onSelect={() => void copyPreviewContent(preview)}><IconCopy /><Trans>复制文件内容</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && <DropdownMenuSeparator />}
+              {preview && !edit.editing && byteView !== undefined && preview.hash && <DropdownMenuItem onSelect={() => setByteView(undefined)}><IconEye /><Trans>返回预览</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && !preview.binary && byteView !== 'tail' && <DropdownMenuItem onSelect={() => setByteView('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></DropdownMenuItem>}
+              {preview && !edit.editing && byteView !== 'hex' && <DropdownMenuItem onSelect={() => setByteView('hex')}><IconBinary /><Trans>以十六进制查看</Trans></DropdownMenuItem>}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => void copyWithToast(previewFilePath, t`已复制路径`)}><IconCopy /><Trans>复制路径</Trans></DropdownMenuItem>
               {!previewFilePath.startsWith('/') && previewFilePath !== '~' && !previewFilePath.startsWith('~/') && <DropdownMenuItem onSelect={() => void copyWithToast(absolutePath(project.cwd, previewFilePath), t`已复制绝对路径`)}><IconCopy /><Trans>复制绝对路径</Trans></DropdownMenuItem>}
@@ -735,6 +750,13 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
         <EmptyState title={t`无法打开文件`} description={t`该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
       ) : (
         <EmptyState title={t`无法打开文件`}><Button variant="secondary" onClick={() => void openPreview(previewFilePath)}><IconRefreshCw /><Trans>重试</Trans></Button></EmptyState>
+      ) : byteView === 'hex' ? (
+        <HexView key={preview.path} url={projectFileUrl(project.id, preview.path)} size={preview.size} />
+      ) : byteView === 'tail' ? (
+        <TailView
+          key={preview.path} url={projectFileUrl(project.id, preview.path)} preview={preview} active={panelOpen && shown}
+          render={(tail) => <Suspense fallback={previewFallback}><CodeView preview={tail} onReference={onReference} /></Suspense>}
+        />
       ) : preview.image ? imageLoadError ? (
         <EmptyState icon={<IconImage />} title={t`图片无法加载`} description={t`文件可能已更改，或超过图片预览大小上限。`} />
       ) : (() => {
@@ -773,13 +795,16 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
             title={preview.path.split('/').at(-1) ?? t`文件预览`}
             url={`${projectFileUrl(project.id, preview.path)}&render=preview&${previewTheme}`}
             onDownload={() => downloadProjectFile(project.id, preview.path)}
+            // The passage itself, and where it is from: a quote carries no path of its own.
+            onQuote={sessionId ? (text) => { if (!quoteIntoComposer(sessionId, `${text}\n\n— ${preview.path}`)) onReference({ path: preview.path }); } : undefined}
           />
         )
       ) : preview.binary ? (
         <EmptyState icon={<IconFile />} title={t`二进制文件`} description={t`${formatBytes(preview.size)} · 无法在这里预览`}>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Button variant="primary" onClick={() => downloadProjectFile(project.id, preview.path)}><IconDownload /><Trans>下载</Trans></Button>
             <Button variant="secondary" onClick={() => openProjectFile(project.id, preview.path)}><IconExternalLink /><Trans>在新标签页打开</Trans></Button>
+            <Button variant="secondary" onClick={() => setByteView('hex')}><IconBinary /><Trans>以十六进制查看</Trans></Button>
           </div>
         </EmptyState>
       ) : (
@@ -799,6 +824,12 @@ export function FilesPanel({ project, previewTarget, shown, wide = false, header
             target={jump?.path === preview.path ? jump : undefined} onReference={onReference} onSymbol={onSymbol} onTopLine={(line) => topLines.current.set(preview.path, line)}
             onChange={edit.change} onSave={() => void edit.save()} onEscape={edit.escape}
           /></Suspense>
+          {preview.truncated && (
+            <div className="flex shrink-0 items-center gap-2 edge-t px-4 py-1.5 text-xs text-fg-3">
+              <span className="min-w-0 flex-1"><Trans>文件过大，仅显示前一部分</Trans></span>
+              <Button size="xs" variant="ghost" onClick={() => setByteView('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></Button>
+            </div>
+          )}
         </>
       )}
     </div>

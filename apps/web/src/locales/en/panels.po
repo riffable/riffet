@@ -914,6 +914,10 @@ msgid "二进制文件"
 msgstr "Binary file"
 
 #: src/app/panels/FilesPanel.tsx
+msgid "以十六进制查看"
+msgstr "View as hex"
+
+#: src/app/panels/FilesPanel.tsx
 msgid "保存"
 msgstr "Save"
 
@@ -973,6 +977,10 @@ msgstr "Loading…"
 #: src/app/panels/FileTree.tsx
 msgid "加载更多"
 msgstr "Load more"
+
+#: src/app/panels/ByteViews.tsx
+msgid "十六进制"
+msgstr "Hex"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "取消收藏"
@@ -1155,7 +1163,7 @@ msgstr "The file may have changed, or it exceeds the image preview size limit."
 msgid "文件名"
 msgstr "File name"
 
-#: src/app/panels/CodeView.tsx
+#: src/app/panels/FilesPanel.tsx
 msgid "文件过大，仅显示前一部分"
 msgstr "File too large; showing only the first part"
 
@@ -1217,6 +1225,7 @@ msgstr "Couldn't create it"
 msgid "无法读取完整的文件内容"
 msgstr "Couldn't read the full file contents"
 
+#: src/app/panels/ByteViews.tsx
 #: src/app/panels/useFileEditing.ts
 msgid "无法读取文件"
 msgstr "Couldn't read the file"
@@ -1246,6 +1255,12 @@ msgstr "More actions"
 msgid "更多视图"
 msgstr "More views"
 
+#. placeholder {0}: formatBytes(Math.min(size, FILE_BUDGET.tailBytes))
+#. placeholder {1}: formatBytes(size)
+#: src/app/panels/ByteViews.tsx
+msgid "末尾 {0}，共 {1}"
+msgstr "Last {0} of {1}"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"
 msgstr "Find Usages"
@@ -1253,6 +1268,10 @@ msgstr "Find Usages"
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法失败"
 msgstr "Could not find usages"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "查看末尾"
+msgstr "View the end"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "比较"
@@ -1325,6 +1344,10 @@ msgstr "This file is outside the project folder. You can allow read-only preview
 msgid "调整文件树宽度"
 msgstr "Resize file tree"
 
+#: src/app/panels/ByteViews.tsx
+msgid "跟随"
+msgstr "Follow"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "跳转到定义"
 msgstr "Go to Definition"
@@ -1344,6 +1367,10 @@ msgstr "Back to search results"
 #: src/app/panels/FilesPanel.tsx
 msgid "返回文件列表"
 msgstr "Back to file list"
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回预览"
+msgstr "Back to preview"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "这个文件在你编辑时被改过"

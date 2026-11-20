@@ -22,8 +22,9 @@
 | --- | --- |
 | Markdown / MDX | 静态阅读、GFM 表格、数学公式、本地图片、按当前主题选择的 `<picture>` 图片与图表围栏；内嵌 HTML 经过过滤，不执行 MDX 组件 |
 | PDF | 分页画面与可选择文字，最多预览前 200 页；密码文件需下载后打开 |
-| DOCX、ODT、RTF、EPUB、TeX | 文本、标题、表格、图片、公式等静态内容 |
-| PPTX、ODP、ODG | 按文档顺序阅读页面内容，不播放动画或宏 |
+| DOCX、ODT、RTF、EPUB、TeX | 文本、标题、表格、图片、公式等静态内容；服务器装有 LibreOffice 时 DOCX、ODT、RTF 按原排版分页显示 |
+| PPTX、ODP、ODG | 按文档顺序阅读页面内容，不播放动画或宏；有 LibreOffice 时按幻灯片分页显示 |
+| DOC、PPT、PPS | 只在服务器装有 LibreOffice 时预览，转为 PDF 后分页显示；否则作为二进制文件下载 |
 | XLSX、XLS、XLSB、ODS、CSV、TSV | 切换工作表、查看缓存值；最多 12 表、每表 1,000 行 / 100 列、合计 100,000 单元格，不计算公式 |
 | JSON、JSONL、YAML、TOML、XML | 可展开的结构视图；XML 不读取 DTD / 实体 |
 | Jupyter Notebook | Markdown、代码与已保存的文字 / 表格 / 图片输出，不执行代码或 widget |
@@ -33,6 +34,12 @@
 | SQLite | 只读快照中常规数据表的前 200 行，最多 100 表；不执行视图或虚拟表 |
 | GLB、GLTF、OBJ、STL、PLY | 可旋转、缩放的模型；GLTF 资源需内嵌，未接入 Draco / KTX2 / meshopt 解码器 |
 | TTF、OTF、WOFF、WOFF2 | 字体样张，可在样张内临时输入文字 |
+
+**LibreOffice 是可选的**：Riffet 不安装它；服务启动后第一次用到时按 `RIFFET_SOFFICE`、`PATH`、`/Applications/LibreOffice.app` 的顺序找 `soffice`（装好后要重启服务，`riffet doctor` 的 Server 一节显示是否找到）。文档转换一次只跑一个，每次用独立的配置目录，超过 `FILE_BUDGET.officeConvertMs` 被杀掉，转好的 PDF 在内存里按内容缓存（`officePdfCacheBytes`）；转换失败时退回上面的文本阅读。表格不走 LibreOffice，保留可切换工作表的网格（`apps/server/src/previews/office-convert.ts`）。
+
+任何文件都可以从预览的「⋯」里「以十六进制查看」，二进制文件的空状态里也有这个入口：按 `FILE_BUDGET.hexPageBytes` 分页经字节范围读取，只读当前看到的部分，与文件大小无关。文本文件可以「查看末尾」：读最后 `FILE_BUDGET.tailBytes`，从完整的一行开始；超过 32 MiB 的文本直接以这种方式打开。末尾视图里打开「跟随」后每 `followMs` 读一次新写入的部分，面板不可见时暂停，适合看日志。
+
+渲染后的 Markdown、文档、表格、PDF 等预览里选中文字，选区上方出现「引用」，把这段文字连同文件路径作为引用放进当前会话的输入框（会话的输入框不在屏幕上时改为引用整个文件）；新会话页上没有这个按钮。预览页只把选中的文字和位置告诉面板，面板只接受来自这个预览框的消息。
 
 共享预览单文件上限为 32 MiB（音视频除外），服务端解析有 12 秒与内存预算；超限或解析失败时仍可下载。普通文本兼容 UTF-8、带 BOM 的 UTF-16 与常见 GB18030 / GBK 编码。macOS 与 iOS 另保留系统 Quick Look，具体格式由系统及已安装插件决定；旧版 DOC / PPT、RAR / 7z、加密归档和专业设计文件不承诺通用内嵌渲染。Office 内容为静态阅读转换，复杂排版可能与原应用不同。
 

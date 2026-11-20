@@ -1,6 +1,7 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { composerRunningIntent } from '../session/composerRunning';
+import { useComposerQuotes } from '../session/composerQuotes';
 import { IconInfo, IconSquare, IconSquareArrowOutUpRight, IconArrowRightLeft, IconPuzzle, IconBookmarkPlus, IconFileText, IconGitFork, IconMessagesSquare, IconRotateCw, IconSquareTerminal } from '@/components/icons';
 import type { Attachment, AttemptGroup, DiscussionSource, InboxAction, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, SessionControlSnapshot, TerminalInfo, ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
@@ -447,6 +448,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [restoreDraft, setRestoreDraft] = useState<{ text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: import('../session/composerAttachmentIntake').PendingUpload[]; onPersisted?: () => void; nonce: number }>();
   const [quoted, setQuoted] = useState<{ text: string; nonce: number }>();
   const quote = useCallback((text: string) => setQuoted({ text, nonce: Date.now() }), []);
+  // A passage selected in a file preview of the side panel.
+  useComposerQuotes(session.id, quote);
   const [pickedApproval, setPickedApproval] = useState<string>();
   const [switchingApproval, setSwitchingApproval] = useState(false);
   const [switchingModel, setSwitchingModel] = useState(false);

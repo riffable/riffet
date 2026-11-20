@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import { Compartment, EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, highlightActiveLine, keymap, lineNumbers, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -291,6 +291,5 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   return <div className="flex min-h-0 flex-1 flex-col">
     {/* The diff palette of `MergeDiff`, while the document is shown against another. */}
     <div ref={host} className={cn('min-h-0 flex-1 overflow-hidden', original !== undefined && 'cm-host')} />
-    {preview.truncated && <div className="px-4 py-2 text-xs text-fg-3"><Trans>文件过大，仅显示前一部分</Trans></div>}
   </div>;
 }

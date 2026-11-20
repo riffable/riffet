@@ -1,5 +1,8 @@
 import { extname } from 'node:path';
 import { FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
+import { officeConverter } from './office-convert.js';
+
+const LEGACY_OFFICE = new Set(['doc', 'ppt', 'pps']);
 
 export const MAX_PREVIEW_FILE_BYTES = FILE_BUDGET.previewReadBytes;
 export type PreviewKind = 'markdown' | 'html' | 'image' | 'pdf' | 'document' | 'presentation' | 'spreadsheet' | 'table' | 'notebook' | 'structured' | 'diagram' | 'media' | 'archive' | 'database' | 'model' | 'font';
@@ -8,8 +11,8 @@ const formats: Record<string, PreviewKind> = {};
 for (const [kind, extensions] of Object.entries({
   markdown: 'md markdown mdown mkd mdx mdc', html: 'html htm xhtml',
   image: 'svg ico tif tiff heic heif', pdf: 'pdf',
-  document: 'docx docm dotx odt ott rtf epub tex latex ltx',
-  presentation: 'pptx pptm ppsx potx odp otp odg otg',
+  document: 'docx docm dotx odt ott rtf epub tex latex ltx doc',
+  presentation: 'pptx pptm ppsx potx odp otp odg otg ppt pps',
   spreadsheet: 'xlsx xlsm xlsb xls xltx xltm ods ots numbers', table: 'csv tsv',
   notebook: 'ipynb', structured: 'json jsonl ndjson yaml yml xml toml',
   diagram: 'mmd mermaid dot gv puml plantuml wsd d2 vega vl',
@@ -24,6 +27,8 @@ export function previewKind(name: string, sample?: Uint8Array): PreviewKind | un
   if (sample && Buffer.from(sample.subarray(0, 16)).toString('ascii').startsWith('SQLite format 3\0')) return 'database';
   if (sample && Buffer.from(sample.subarray(0, 5)).toString('ascii') === '%PDF-') return 'pdf';
   if (/\.(?:vega|vl|vega-lite)\.json$/i.test(name)) return 'diagram';
+  // The binary formats before OOXML have no reader but LibreOffice; without it they are downloads.
+  if (LEGACY_OFFICE.has(extension) && !officeConverter()) return undefined;
   return formats[extension];
 }
 
