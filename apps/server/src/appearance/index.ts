@@ -8,7 +8,7 @@ import {
 import { AppError } from '../errors.js';
 import { confined } from '../plugins/development.js';
 
-type Kind = 'font' | 'image' | 'palette' | 'iconPack';
+type Kind = 'font' | 'image' | 'palette' | 'iconPack' | 'agentIcon';
 interface Source { id: string; appearance: AppearanceDeclarations; root: string }
 interface Resolved { file: string; sha256: string; size: number; type: string }
 
@@ -210,9 +210,22 @@ export class AppearanceService {
     const file = root && declared ? await confined(root, declared.svg).catch(() => undefined) : undefined;
     if (file && extname(file).toLowerCase() === '.svg') {
       const info = await stat(file).catch(() => undefined);
-      const bytes = info && info.size <= AGENT_ICON_MAX_BYTES ? await readFile(file).catch(() => undefined) : undefined;
-      if (bytes && /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(bytes.subarray(0, 512).toString('utf8'))) {
-        return { file, size: bytes.length, type: 'image/svg+xml', sha256: createHash('sha256').update(bytes).digest('hex') };
+      if (info && info.size <= AGENT_ICON_MAX_BYTES) {
+        const stamp = `${info.ino}:${info.size}:${info.mtimeMs}`;
+        const cached = this.resolved.get(file);
+        if (cached?.stamp === stamp && cached.kind === 'agentIcon') {
+          if (typeof cached.result !== 'string') return cached.result;
+          throw new AppError('AGENT_ICON_NOT_FOUND', 'The Agent declares no icon', 404);
+        }
+        const bytes = await readFile(file).catch(() => undefined);
+        if (bytes) {
+          if (bytes.length <= AGENT_ICON_MAX_BYTES && /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(bytes.subarray(0, 512).toString('utf8'))) {
+            const result: Resolved = { file, size: bytes.length, type: 'image/svg+xml', sha256: createHash('sha256').update(bytes).digest('hex') };
+            this.resolved.set(file, { stamp, kind: 'agentIcon', result });
+            return result;
+          }
+          this.resolved.set(file, { stamp, kind: 'agentIcon', result: 'invalid svg' });
+        }
       }
     }
     throw new AppError('AGENT_ICON_NOT_FOUND', 'The Agent declares no icon', 404);

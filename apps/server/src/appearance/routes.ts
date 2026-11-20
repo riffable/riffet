@@ -12,11 +12,12 @@ export function registerAppearanceRoutes(app: FastifyInstance, deps: { appearanc
     if (request.headers['if-none-match']?.split(',').some(value => value.trim() === `"${sha256}"`)) return reply.code(304).send();
     return reply.type(type).header('Content-Length', size).send(createReadStream(file));
   });
-  // Not content-addressed (the file behind an Agent id may be replaced), so a client revalidates with the ETag.
+  // Not content-addressed (the file behind an Agent id may be replaced), so keep a short TTL with ETag revalidation
+  // instead of forcing a blocking round-trip on every popover mount.
   app.get<{ Params: { agentId: string } }>('/api/agent-icons/:agentId', async (request, reply) => {
     const { file, type, size, sha256 } = await deps.appearance.agentIcon(request.params.agentId);
     // Drawn as an image; if the address is opened as a document instead, nothing in the file may run.
-    reply.header('ETag', `"${sha256}"`).header('Cache-Control', 'private, no-cache').header('X-Content-Type-Options', 'nosniff').header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    reply.header('ETag', `"${sha256}"`).header('Cache-Control', 'private, max-age=300, stale-while-revalidate=86400').header('X-Content-Type-Options', 'nosniff').header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
     if (request.headers['if-none-match']?.split(',').some(value => value.trim() === `"${sha256}"`)) return reply.code(304).send();
     return reply.type(type).header('Content-Length', size).send(createReadStream(file));
   });

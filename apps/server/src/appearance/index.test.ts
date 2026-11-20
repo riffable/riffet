@@ -170,6 +170,9 @@ describe('plugin Agents', () => {
     const sources = [{ agentId: 'acme.agent', svg: 'mark.svg', root }, { agentId: 'acme.agent.fake', svg: 'fake.svg', root }, { agentId: 'acme.agent.up', svg: '../mark.svg', root }];
     const icons = new AppearanceService({ appearanceSources: () => [], agentIconSources: () => sources });
     expect(await icons.agentIcon('acme.agent')).toMatchObject({ type: 'image/svg+xml', sha256: sha(Buffer.from(SVG)) });
+    const updatedSvg = '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12"><path d="M0 0h12v12z"/></svg>';
+    await writeFile(join(root, 'mark.svg'), updatedSvg);
+    expect(await icons.agentIcon('acme.agent')).toMatchObject({ type: 'image/svg+xml', sha256: sha(Buffer.from(updatedSvg)) });
     for (const id of ['acme.agent.fake', 'acme.agent.up', 'acme.agent.other', 'cursor']) await expect(icons.agentIcon(id)).rejects.toMatchObject({ code: 'AGENT_ICON_NOT_FOUND', statusCode: 404 });
   });
 });

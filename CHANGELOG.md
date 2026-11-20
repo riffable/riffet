@@ -21,6 +21,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Plugin Agent icons (such as Doubao) load from cache and preload on the web instead of re-reading and revalidating on every model-picker open.
 - Running `riffet` on an older Node.js version no longer fails with a long list of `styleText` color names in truecolor terminals; the CLI now checks `engines.node` up front with a version-manager-specific upgrade command, and falls back to 16-color output when hex styles are unsupported.
 - When no Agent has been chosen yet, the web new-session page now starts on an installed, available Agent instead of an uninstalled Cursor with the send button disabled; when the Mac guide finds only one Agent, it now also makes it the server's default.
 - `riffet update` on an npm install now checks both your configured registry and `registry.npmjs.org` (plus any `RIFFET_NPM_REGISTRIES`), and installs with `--registry` when a mirror has not synced the new version yet instead of failing with `ETARGET`.

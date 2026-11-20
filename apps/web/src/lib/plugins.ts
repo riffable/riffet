@@ -1,6 +1,7 @@
-import { resolveLocalizedText, type CommandRunRequest, type PluginAction, type PluginDescriptor, type LocalizedText, type ModelSourceDescriptor, type NativeBackendId, type PluginCommandResult } from '@contracts';
+import { AGENT_ICON_ROUTE, isPluginAgentId, resolveLocalizedText, type CommandRunRequest, type PluginAction, type PluginDescriptor, type LocalizedText, type ModelSourceDescriptor, type NativeBackendId, type PluginCommandResult } from '@contracts';
 import { i18n } from '@lingui/core';
 import { api, HttpError, readSseStream, request, requestResponse } from './api';
+import { registerCache } from './cache-registry';
 import { createStore, useStore } from './store';
 import { readStored, writeStored } from './utils';
 
@@ -32,7 +33,7 @@ function readCache(): PluginDescriptor[] | undefined {
 }
 
 /** The list is a server-wide fact, but a sign-out takes it with the rest of what this browser kept. */
-export function clearCachedPlugins(): void { generation += 1; loading = undefined; store.set({ list: undefined, recovery: false }); writeStored(cacheKey(), undefined); }
+export function clearCachedPlugins(): void { generation += 1; loading = undefined; preloadedAgentIcons.clear(); store.set({ list: undefined, recovery: false }); writeStored(cacheKey(), undefined); }
 
 const store = createStore<{ list?: PluginDescriptor[]; recovery: boolean }>({ list: readCache(), recovery: false });
 export const usePluginRecovery = () => useStore(store, value => value.recovery);
@@ -40,9 +41,32 @@ let loading: Promise<PluginDescriptor[]> | undefined;
 let reread = false;
 let generation = 0;
 
+// perf-rules: allow bounded at 64 entries and cleared on sign-out in clearCachedPlugins
+const preloadedAgentIcons = new Map<string, string>();
+registerCache('preloaded-agent-icons', { size: () => preloadedAgentIcons.size, limit: 64, clear: () => preloadedAgentIcons.clear() });
+
+function preloadAgentIcons(list: readonly PluginDescriptor[]): void {
+  if (typeof Image === 'undefined') return;
+  const origin = globalThis.location?.origin ?? '';
+  for (const plugin of list) {
+    for (const agent of plugin.declared?.agentBackends ?? []) {
+      const svg = agent.icon?.svg;
+      if (!svg || !isPluginAgentId(agent.id)) continue;
+      const key = `${origin}\0${agent.id}`;
+      if (preloadedAgentIcons.get(key) === svg) continue;
+      preloadedAgentIcons.delete(key);
+      if (preloadedAgentIcons.size >= 64) preloadedAgentIcons.delete(preloadedAgentIcons.keys().next().value!);
+      preloadedAgentIcons.set(key, svg);
+      const img = new Image();
+      img.src = AGENT_ICON_ROUTE(agent.id);
+    }
+  }
+}
+
 function setList(list: PluginDescriptor[]): void {
   store.set({ list });
   writeStored(cacheKey(), JSON.stringify(list));
+  preloadAgentIcons(list);
 }
 
 /** The server's last evaluation. Concurrent callers share one request. */
