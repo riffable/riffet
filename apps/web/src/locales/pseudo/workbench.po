@@ -20,6 +20,11 @@ msgstr ""
 msgid "{0} 个文件"
 msgstr ""
 
+#. placeholder {0}: paired.name
+#: src/app/onboarding/Onboarding.tsx
+msgid "{0} 已连接"
+msgstr ""
+
 #. placeholder {0}: backend.label
 #: src/app/SidebarUserMenu.tsx
 msgid "{0} 未登录"
@@ -47,12 +52,24 @@ msgstr ""
 msgid "Agent 与模型"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "Agent 会在所选目录里读写文件"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "CLI 与终端工具"
 msgstr ""
 
 #: src/app/state/gitStatusStore.ts
 msgid "Couldn't read Git status"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "Riffet 调用服务器上安装的 CLI，装好任意一个即可"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "Riffet 调用这台电脑上安装的 CLI，装好任意一个即可"
 msgstr ""
 
 #: src/app/ProjectHome.tsx
@@ -138,12 +155,20 @@ msgctxt "plugin-detail-tab"
 msgid "介绍"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "从哪个目录开始"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 msgid "从终端导入…"
 msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "以你的身份运行本机命令"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "以后再说"
 msgstr ""
 
 #: src/app/plugins/PluginMarket.tsx
@@ -253,6 +278,10 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "先不选"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -576,8 +605,16 @@ msgstr ""
 msgid "在“{0}”中新建会话"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "在「技能与工具」里可以让 Agent 操作这台手机"
+msgstr ""
+
 #: src/app/SessionSearchDialog.tsx
 msgid "在内容中搜索「{needle}」"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "在手机上接着看"
 msgstr ""
 
 #: src/app/App.tsx
@@ -594,6 +631,10 @@ msgstr ""
 
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "在浏览器中打开授权页"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "在电脑上运行编程 Agent，在任何设备上查看和接手"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -667,6 +708,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "安装和启停影响连接这台服务器的所有客户端"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "完成"
 msgstr ""
 
 #: src/plugins/hostViews.ts
@@ -788,6 +833,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "开启"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "开始"
 msgstr ""
 
 #: src/app/plugins/PluginsNav.tsx
@@ -1167,6 +1216,10 @@ msgctxt "workbench-sidebar-new-action"
 msgid "新建会话"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "新建会话时可以换"
+msgstr ""
+
 #: src/app/SidebarUpdateButton.tsx
 msgid "新版本 {version} 可用"
 msgstr ""
@@ -1177,6 +1230,10 @@ msgstr ""
 
 #: src/app/plugins/PluginMarket.tsx
 msgid "无"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "无法使用该目录"
 msgstr ""
 
 #: src/app/use-project-actions.ts
@@ -1485,6 +1542,14 @@ msgstr ""
 msgid "未关联项目"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "未安装"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "未登录"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "未读"
 msgstr ""
@@ -1683,6 +1748,10 @@ msgstr ""
 msgid "独立一行"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "用手机上的 Riffet 扫码，离开电脑也能处理审批"
+msgstr ""
+
 #: src/app/FolderFavorites.tsx
 msgid "留空则显示目录名"
 msgstr ""
@@ -1787,6 +1856,10 @@ msgstr ""
 msgid "等待处理"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "等待扫码"
+msgstr ""
+
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "等待授权…"
 msgstr ""
@@ -1849,6 +1922,7 @@ msgid "统计"
 msgstr ""
 
 #: src/app/App.tsx
+#: src/app/onboarding/Onboarding.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/plugins/LogRecords.tsx
 msgid "继续"
@@ -1992,6 +2066,10 @@ msgstr ""
 msgid "跟随系统"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "跳过"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "转为任务"
 msgstr ""
@@ -2041,12 +2119,17 @@ msgid "近 7 天"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
+#: src/app/onboarding/Onboarding.tsx
 msgid "返回"
 msgstr ""
 
 #: src/app/SessionSearchDialog.tsx
 #: src/app/Sidebar.tsx
 msgid "还没有会话"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "还没有可用的 Agent"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -2100,11 +2183,16 @@ msgstr ""
 msgid "选择目录"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "选择目录…"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "选择运行服务器的电脑上的代码目录，所选 Agent 会在其中读写文件、执行命令。"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/onboarding/Onboarding.tsx
 msgid "选择项目目录"
 msgstr ""
 
@@ -2114,6 +2202,7 @@ msgid "通用"
 msgstr ""
 
 #: src/app/App.tsx
+#: src/app/onboarding/Onboarding.tsx
 msgid "配对码"
 msgstr ""
 
@@ -2149,6 +2238,7 @@ msgstr ""
 msgid "重新打开关闭的标签"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/ProjectHome.tsx
 msgid "重新检测"
@@ -2222,6 +2312,14 @@ msgstr ""
 msgid "黑马跑酷"
 msgstr ""
 
+#: src/app/onboarding/Onboarding.tsx
+msgid "默认 Agent"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "默认模型"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "默认用哪个 Agent"
 msgstr ""

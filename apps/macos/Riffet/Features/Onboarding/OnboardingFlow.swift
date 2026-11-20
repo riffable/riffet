@@ -137,6 +137,7 @@ final class OnboardingFlow {
         for _ in 0..<30 where !workbench.list.loaded { try? await Task.sleep(for: .milliseconds(100)) }
         needsProject = !workbench.homeProjectChosen
         readAgents(workbench)
+        await adoptOnlyAgent(workbench)
         await preparePairing(model: model)
     }
 
@@ -154,7 +155,9 @@ final class OnboardingFlow {
         let usable = workbench.backends.filter { $0.isPickable && $0.available && $0.needsLogin?.boolValue != true }
         switch usable.count {
         case 0: agentMode = .missing
-        case 1: agentMode = nil
+        case 1:
+            agentMode = nil
+            agent = usable[0].agent
         default:
             agentMode = .many
             let saved = workbench.settings?.defaultAgent ?? ""
@@ -167,7 +170,15 @@ final class OnboardingFlow {
         await workbench.loadBackends()
         rechecking = false
         readAgents(workbench)
+        await adoptOnlyAgent(workbench)
         if agentMode != .missing { advance(from: .agent, model: model) }
+    }
+
+    /// The one Agent found skips its page, but is still made the server's default when it has none,
+    /// so a browser opening the same server later starts on it too.
+    private func adoptOnlyAgent(_ workbench: Workbench) async {
+        guard agentMode == nil, !agent.isEmpty, workbench.settings?.defaultAgent == nil else { return }
+        await workbench.rememberDefaults(agent: agent, makeDefault: true)
     }
 
     func saveAgent(_ workbench: Workbench, model: AppModel) async {

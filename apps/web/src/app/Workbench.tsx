@@ -50,6 +50,8 @@ import { TabBar } from './tabs/TabBar';
 import { useTabs } from './tabs/useTabs';
 import { AppearanceBackdrop } from '@/components/appearance-backdrop';
 import { WorkbenchOverlays } from './WorkbenchOverlays';
+import { Onboarding } from './onboarding/Onboarding';
+import { useFirstRun } from './onboarding/useFirstRun';
 import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
 import { assistantChoice, isAssistantBackend, withAssistantDefaults } from './work-items/assistant';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
@@ -94,6 +96,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const listsSavedAt = useLists((state) => state.savedAt);
   const bootError = useLists((state) => state.bootError);
   const bootUnreachable = useLists((state) => state.bootUnreachable);
+  const firstRun = useFirstRun({ fresh: loaded && listsState === 'fresh', hasSessions: sessions.length > 0 });
   // Whole, because the new-conversation composer takes the settings object; it changes only on save.
   const settings = useSettings((value) => value);
   const selectedProjectId = useNav((state) => state.projectId);
@@ -702,6 +705,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const panelMaximized = panelFullscreen && desktop;
   const peeking = sidebarPeek.peek;
   const stripTabs = tabbed && tabStyle === 'strip';
+  // The first-run guide stands in for the whole window until it is finished or skipped (patterns §1.5).
+  if (firstRun.open) return <Onboarding loadBootstrap={loadBootstrap} onSelectProject={selectProject} onSelectNoProject={selectNoProject} onFinish={firstRun.finish} />;
   return (
     // Clip, not hide: the context panel and sidebar wait off-screen before they slide in, and a
     // hidden overflow still scrolls, so a `scrollIntoView` inside them would shove the whole window.

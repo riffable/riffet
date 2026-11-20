@@ -233,7 +233,7 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 | `PageScaffold` | `PageScaffold` | 新增 |
 | `SettingsGroup` / `SettingsRow` | `.riffetForm()`、`SettingsRow` | |
 | `EmptyState`（需要连接服务器） | `NeedsServerView`（`Features/Onboarding/`），页面与设置窗格共用 | |
-| 引导页（[模式](patterns.md) §1.5） | `OnboardingColumn`、`OnboardingPrimaryButton`、`ChoiceCard`、`AgentInstallList` | 只在首次启动用；设计规范页还没有样张 |
+| 引导页（[模式](patterns.md) §1.5） | `OnboardingColumn`、`OnboardingPrimaryButton`、`ChoiceCard`、`AgentInstallList` | 只在首次启动用；设计规范页还没有样张。`ChoiceCard` 的规则见[输入](components/inputs.md)「ChoiceCards」，Web 同名组件已有样张 |
 | 设置卡片 | `SetupCard`（输入框的外形，`Radius.floating` 与 `.float` 阴影） | 设计规范页还没有样张 |
 
 新组件按 [架构](architecture.md)「改动的顺序」：先写规范，再实现，再迁移调用点，最后删掉旧写法。

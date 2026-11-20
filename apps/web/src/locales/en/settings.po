@@ -598,6 +598,10 @@ msgstr "One codebase reaches the most users"
 msgid "一张满铺的纸，边缘全部用细线，面板从页头的图标打开。"
 msgstr "A single full-bleed sheet of paper with hairline edges everywhere; panels open from the header icons."
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "一整页只做这一个决定、选项带标志时用；设置里用 RadioGroup。"
+msgstr "For a page that makes this one decision, with options worth showing a mark for; settings use RadioGroup."
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "一条纵向的阅读列，输入框在它下方。回答是正文，过程可折叠，结果独立于过程。"
 msgstr "A vertical reading column with the composer below it. The answer is body text, the process is collapsible, and results stand apart from the process."
@@ -2320,6 +2324,10 @@ msgstr "Single-line label"
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "单行标签截尾；路径截中间，保留文件名；截断的文字在悬停时给出全文。"
 msgstr "A single-line label is truncated at the end; a path is truncated in the middle and keeps the file name; truncated text shows the full text on hover."
+
+#: src/app/design/components/InputsChapter.tsx
+msgid "单选卡片"
+msgstr "Choice cards"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -6008,6 +6016,10 @@ msgstr "Notification permission was not granted."
 msgid "未检测到"
 msgstr "Not detected"
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "未登录"
+msgstr "Not signed in"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "未设置"
 msgstr "Not set"
@@ -6411,6 +6423,10 @@ msgstr "Secondary buttons draw tonal or as tinted text, per the appearance varia
 msgid "次要按钮是浅色填充，危险操作用 error 角色"
 msgstr "Secondary buttons are tonal; destructive actions use the error role"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "欢迎"
+msgstr "Welcome"
+
 #: src/app/design/overview/Opening.tsx
 msgid "正在发生的事最醒目"
 msgstr "What is happening now stands out"
@@ -6567,6 +6583,10 @@ msgstr "Dune"
 #: src/app/design/components/InputsChapter.tsx
 msgid "沙盒"
 msgstr "Sandbox"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "没有 Agent"
+msgstr "No Agent"
 
 #: src/app/design/foundations/IconChapter.tsx
 msgid "没有匹配的图标"
@@ -9284,6 +9304,10 @@ msgstr "Reconnecting"
 msgid "鉴权 {0}"
 msgstr "Auth {0}"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。"
+msgstr "Fills the window, one decision per page; a 440 column, a 40-high main button, Return to go on. A page shown only when there is something to decide counts in the progress only then."
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "错误"
@@ -9518,6 +9542,10 @@ msgstr "Copy inside the panel is entirely in English, regardless of the interfac
 msgid "章节导航"
 msgstr "Chapter navigation"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "页"
+msgstr "Page"
+
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
@@ -9653,6 +9681,7 @@ msgid "顶栏、单一滚动区、转场后淡入的正文"
 msgstr "Top bar, one scroll area, a body that fades in after the transition"
 
 #: src/app/design/components/NavigationChapter.tsx
+#: src/app/design/patterns/PagesChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -9783,6 +9812,10 @@ msgstr "The app in Feishu is not deleted"
 msgid "首条消息开始时生成"
 msgstr "Runs when the first message starts"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "首次引导"
+msgstr "First-run guide"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "首版应当先做 Web 端"
 msgstr "The first version should ship on the web first"
@@ -9861,6 +9894,7 @@ msgstr "Default"
 msgid "默认 14 像素、次级文字色；在按钮里用 text-current。"
 msgstr "14 px by default, secondary text color; use text-current inside buttons."
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx

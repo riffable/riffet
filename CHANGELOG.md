@@ -4,8 +4,13 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Workbench
+
+- The web app now opens with a full-window first-run guide: pick the default Agent (with install commands when none is available), choose the directory to start in, and scan to connect your phone; every step can be skipped. It appears once per browser, and not at all on a server that already has conversations.
+
 ### Fixes
 
+- When no Agent has been chosen yet, the web new-session page now starts on an installed, available Agent instead of an uninstalled Cursor with the send button disabled; when the Mac guide finds only one Agent, it now also makes it the server's default.
 - `riffet update` on an npm install now checks both your configured registry and `registry.npmjs.org` (plus any `RIFFET_NPM_REGISTRIES`), and installs with `--registry` when a mirror has not synced the new version yet instead of failing with `ETARGET`.
 - After a gateway plugin such as AsterGate is turned off or uninstalled, providers that use it keep working with their own address and key instead of failing to load models; only its quota stops showing.
 - On the web, the composer no longer shows the microphone when the selected voice recognizer's plugin is turned off or uninstalled; Settings › Voice input marks that recognizer as unavailable.

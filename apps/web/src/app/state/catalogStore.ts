@@ -26,11 +26,17 @@ export interface CatalogState {
   revision: number;
 }
 
-/** The agent a new session starts with once the one chosen is not offered (its plugin is off or gone): the server's default, else the first that is available. */
-function offeredHome(current: CatalogState, backends: NativeBackendCatalogEntry[], preferred?: NativeBackendId): Partial<CatalogState> {
-  if (!backends.length || backends.some((entry) => entry.backendId === current.homeBackendId)) return {};
-  const next = backends.find((entry) => entry.backendId === preferred) ?? backends.find((entry) => entry.available) ?? backends[0]!;
-  return { homeBackendId: next.backendId, homeProfileId: undefined };
+/**
+ * The agent a new session starts with once the one in place is not offered (its plugin is off or
+ * gone): the server's default, else the first that is available. Nobody having chosen one yet (no
+ * pick in this browser, no server default), the built-in default gives way to an agent that can run.
+ */
+function offeredHome(current: CatalogState, backends: NativeBackendCatalogEntry[], preferred?: NativeBackendId, chosen = true): Partial<CatalogState> {
+  const entry = backends.find((item) => item.backendId === current.homeBackendId);
+  if (!backends.length || (entry && (chosen || entry.available))) return {};
+  const usable = backends.find((item) => item.available && item.backendId !== 'chat');
+  const next = (chosen ? backends.find((item) => item.backendId === preferred) ?? usable : usable) ?? entry ?? backends[0]!;
+  return next.backendId === current.homeBackendId ? {} : { homeBackendId: next.backendId, homeProfileId: undefined };
 }
 
 const profilesCacheKey = (projectId: string, backendId: NativeBackendId, profileId: string) => `${projectId}:${backendId}:${profileId}`;
@@ -58,6 +64,8 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
   const cache = new Map<string, NativeBackendCatalogEntry>();
   let initialized = false;
   let preferredHome: NativeBackendId | undefined;
+  /** An agent was picked in this browser or set as the server's default; until then the start follows availability. */
+  let homeChosen = isNativeBackendId(stored);
   const report = (error: unknown, fallback: string) => { if (!offline() && !isUnreachable(error)) toast.error(errorMessage(error, fallback)); };
 
   const actions = {
@@ -66,7 +74,7 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
         const backends = await api.backends();
         cache.clear();
         publishBackendLabels(backends);
-        store.set((current) => ({ backends, profileCatalogs: undefined, revision: current.revision + 1, ...offeredHome(current, backends, preferredHome) }));
+        store.set((current) => ({ backends, profileCatalogs: undefined, revision: current.revision + 1, ...offeredHome(current, backends, preferredHome, homeChosen) }));
       }
       catch (error) { report(error, i18n._(msg`无法加载 Agent 列表`)); }
     }),
@@ -80,11 +88,12 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
       initialized = true;
       const saved = readStored(STORAGE_KEYS.backend);
       preferredHome = settings.defaultBackendId;
+      homeChosen = isNativeBackendId(saved) || Boolean(settings.defaultBackendId);
       const id = isNativeBackendId(saved) ? saved : settings.defaultBackendId ?? LEGACY_DEFAULT_BACKEND_ID;
       const home = { homeBackendId: id, homeProfileId: settings.nativeBackendDefaults?.[id]?.profileId };
-      store.set((current) => ({ ...home, ...offeredHome({ ...current, ...home }, current.backends, preferredHome) }));
+      store.set((current) => ({ ...home, ...offeredHome({ ...current, ...home }, current.backends, preferredHome, homeChosen) }));
     },
-    setHome(backendId: NativeBackendId, profileId: string | undefined) { store.set({ homeBackendId: backendId, homeProfileId: profileId }); },
+    setHome(backendId: NativeBackendId, profileId: string | undefined) { homeChosen = true; store.set({ homeBackendId: backendId, homeProfileId: profileId }); },
     setHomeProfile(profileId: string | undefined) { store.set({ homeProfileId: profileId }); },
 
     /** Every provider configured for the agent being started, loaded and cached per project/provider. */

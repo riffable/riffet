@@ -598,6 +598,10 @@ msgstr "一套代码覆盖最多用户"
 msgid "一张满铺的纸，边缘全部用细线，面板从页头的图标打开。"
 msgstr "一张满铺的纸，边缘全部用细线，面板从页头的图标打开。"
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "一整页只做这一个决定、选项带标志时用；设置里用 RadioGroup。"
+msgstr "一整页只做这一个决定、选项带标志时用；设置里用 RadioGroup。"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "一条纵向的阅读列，输入框在它下方。回答是正文，过程可折叠，结果独立于过程。"
 msgstr "一条纵向的阅读列，输入框在它下方。回答是正文，过程可折叠，结果独立于过程。"
@@ -2320,6 +2324,10 @@ msgstr "单行标签"
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "单行标签截尾；路径截中间，保留文件名；截断的文字在悬停时给出全文。"
 msgstr "单行标签截尾；路径截中间，保留文件名；截断的文字在悬停时给出全文。"
+
+#: src/app/design/components/InputsChapter.tsx
+msgid "单选卡片"
+msgstr "单选卡片"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -6008,6 +6016,10 @@ msgstr "未授予通知权限。"
 msgid "未检测到"
 msgstr "未检测到"
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "未登录"
+msgstr "未登录"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "未设置"
 msgstr "未设置"
@@ -6411,6 +6423,10 @@ msgstr "次要按钮按外观变体画成浅底或着色文字"
 msgid "次要按钮是浅色填充，危险操作用 error 角色"
 msgstr "次要按钮是浅色填充，危险操作用 error 角色"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "欢迎"
+msgstr "欢迎"
+
 #: src/app/design/overview/Opening.tsx
 msgid "正在发生的事最醒目"
 msgstr "正在发生的事最醒目"
@@ -6567,6 +6583,10 @@ msgstr "沙丘"
 #: src/app/design/components/InputsChapter.tsx
 msgid "沙盒"
 msgstr "沙盒"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "没有 Agent"
+msgstr "没有 Agent"
 
 #: src/app/design/foundations/IconChapter.tsx
 msgid "没有匹配的图标"
@@ -9284,6 +9304,10 @@ msgstr "重连中"
 msgid "鉴权 {0}"
 msgstr "鉴权 {0}"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。"
+msgstr "铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。"
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "错误"
@@ -9518,6 +9542,10 @@ msgstr "面板内的文案整块用英文，与界面语言无关。"
 msgid "章节导航"
 msgstr "章节导航"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "页"
+msgstr "页"
+
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
@@ -9653,6 +9681,7 @@ msgid "顶栏、单一滚动区、转场后淡入的正文"
 msgstr "顶栏、单一滚动区、转场后淡入的正文"
 
 #: src/app/design/components/NavigationChapter.tsx
+#: src/app/design/patterns/PagesChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -9783,6 +9812,10 @@ msgstr "飞书里的应用不会被删除"
 msgid "首条消息开始时生成"
 msgstr "首条消息开始时生成"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "首次引导"
+msgstr "首次引导"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "首版应当先做 Web 端"
 msgstr "首版应当先做 Web 端"
@@ -9861,6 +9894,7 @@ msgstr "默认"
 msgid "默认 14 像素、次级文字色；在按钮里用 text-current。"
 msgstr "默认 14 像素、次级文字色；在按钮里用 text-current。"
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx

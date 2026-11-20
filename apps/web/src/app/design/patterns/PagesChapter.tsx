@@ -1,11 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
+import type { NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
+import { Segmented } from '@/components/ui/controls';
 import { IconPanelLeft, IconPlus, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH } from '@/lib/content-width';
 import { cn } from '@/lib/utils';
 import { COLUMN_GUTTER_TOTAL } from '../../session/ContentWidthHandle';
 import { PANEL_DEFAULT, panelDockMinWidth, SIDEBAR_DEFAULT } from '../../state/uiStore';
+import { AgentChoicePage, AgentMissingPage, OnboardingFrame, PhonePage, ProjectPage, WelcomePage } from '../../onboarding/Onboarding';
 import { Bar, Mark, Sketch, SketchHeader } from './parts';
 import { Chapter, Frame, Plate, Scrubber } from '../specimen';
 
@@ -221,6 +224,46 @@ function SettingsSketch() {
   );
 }
 
+const sampleAgent = (backendId: NativeBackendId, label: string, available: boolean, extra: Partial<NativeBackendCatalogEntry> = {}) =>
+  ({ backendId, label, available, profiles: [], models: [], capabilities: {}, ...extra }) as unknown as NativeBackendCatalogEntry;
+
+type GuidePage = 'welcome' | 'agents' | 'missing' | 'project' | 'phone';
+
+/** The first-run guide's pages, drawn with the guide's own components and sample data. */
+function FirstRun() {
+  const { t } = useLingui();
+  const [page, setPage] = useState<GuidePage>('agents');
+  const [agent, setAgent] = useState<NativeBackendId>('claude');
+  const agents = [
+    sampleAgent('claude', 'Claude Code', true),
+    sampleAgent('codex', 'Codex', true),
+    sampleAgent('cursor', 'Cursor', false, { needsLogin: true }),
+  ];
+  const missing = [sampleAgent('claude', 'Claude Code', false), sampleAgent('codex', 'Codex', false)];
+  const index = page === 'welcome' ? 0 : page === 'project' ? 2 : page === 'phone' ? 3 : 1;
+  const none = () => undefined;
+  return (
+    <div className="flex flex-col gap-3">
+      <Segmented ariaLabel={t`页`} size="xs" value={page} onChange={setPage} className="self-start" options={[
+        { value: 'welcome', label: t`欢迎` },
+        { value: 'agents', label: 'Agent' },
+        { value: 'missing', label: t`没有 Agent` },
+        { value: 'project', label: t`项目` },
+        { value: 'phone', label: t`手机` },
+      ]} />
+      <Frame>
+        <OnboardingFrame className="h-160" segments={3} index={index} onBack={index > 1 ? none : undefined} onSkip={none}>
+          {page === 'welcome' && <WelcomePage key="welcome" onStart={none} />}
+          {page === 'agents' && <AgentChoicePage agents={agents} value={agent} onChange={setAgent} onContinue={none} />}
+          {page === 'missing' && <AgentMissingPage agents={missing} rechecking={false} onRecheck={none} />}
+          {page === 'project' && <ProjectPage path="~/code/kiln" opening={false} onChoose={none} onSkip={none} onContinue={none} />}
+          {page === 'phone' && <PhonePage pairing={undefined} paired={undefined} onLater={none} onDone={none} />}
+        </OnboardingFrame>
+      </Frame>
+    </div>
+  );
+}
+
 export function PagesChapter() {
   const { t } = useLingui();
   return (
@@ -239,6 +282,9 @@ export function PagesChapter() {
       </Plate>
       <Plate number={5} title={t`设置`} note={t`设置是弹窗，不是页面，用工作区一档。`}>
         <SettingsSketch />
+      </Plate>
+      <Plate number={6} title={t`首次引导`} note={t`铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。`}>
+        <FirstRun />
       </Plate>
     </Chapter>
   );

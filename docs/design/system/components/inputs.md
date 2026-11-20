@@ -222,6 +222,32 @@ Radix `role="checkbox"`；Space 切换。用 `<label>` 包住复选框与文字�
 
 - 手写 `role="radio"` 的按钮组。菜单里的单选项（`session/ModelPicker.tsx:40`）是菜单项语义，保持现状，不属于这个组件。
 
+## ChoiceCards
+
+### 用途
+
+一整页只做这一个决定、选项带标志值得看的单选，例如首次引导的「默认用哪个 Agent」（[模式](../patterns.md) §1.5）。设置里的单选用 `RadioGroup`，需要看缩略图的用 `SettingsThumbChoice`。Web `components/ui/choice-card.tsx`（Radix RadioGroup）；Mac `Features/Onboarding/OnboardingComponents.swift` 的 `ChoiceCard`。
+
+### 变体与尺寸
+
+纵向排列，间距 8；每张卡片最小高 64、圆角 12，1px `line` 描边。左侧可选 40 的方块（`bg-subtle`、圆角 10）放标志，中间是名称（`text-sm` medium）和一行说明（`text-xs fg-3`，单行截断），右侧单选圆点 16。
+
+### 状态
+
+未选、选中（描边 1.5px `fg`，圆点实心 `fg`）、悬停（`bg-hover`）、聚焦（`focus` 环）、禁用（不透明度 50%，不可选）。
+
+### 键盘与无障碍
+
+`role="radiogroup"` + `role="radio"`；Tab 进入当前项，方向键移动并选中。必须传 `ariaLabel`。在引导页里回车运行页面的主按钮。
+
+### 文案
+
+名称写选项本身；说明只写读者要知道的状态或差别（「未登录」），不重复名称，所有选项都一样的话（「可用」）不写。
+
+### 不要
+
+- 用在设置或表单里：那里一屏有多项设置，卡片太占地方，用 `RadioGroup`。
+
 ## Slider
 
 ### 用途

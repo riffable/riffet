@@ -4,6 +4,7 @@ import { IconFolder, IconSearch } from '@/components/icons';
 import { AgentMark } from '@/components/agent-marks';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, Input, Kbd, Segmented, Select, Switch, Textarea } from '@/components/ui/controls';
+import { ChoiceCards } from '@/components/ui/choice-card';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { SearchField } from '@/components/ui/search-field';
 import { Slider } from '@/components/ui/slider';
@@ -22,6 +23,7 @@ export function InputsChapter() {
   const [picks, setPicks] = useState<string[]>(['a']);
   const all = picks.length === 2 ? true : picks.length > 0 ? 'indeterminate' : false;
   const [radio, setRadio] = useState('local');
+  const [card, setCard] = useState('claude');
   const [margin, setMargin] = useState(12);
   const modes = [{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }];
   const withIcons = AGENTS.map((item) => ({ ...item, icon: <AgentMark backend={item.value} size={14} /> }));
@@ -130,6 +132,15 @@ export function InputsChapter() {
             { value: 'local', label: t`本机`, description: t`直接使用这台设备上的环境。` },
             { value: 'remote', label: t`远程服务器` },
             { value: 'sandbox', label: t`沙盒`, disabled: true },
+          ]} />
+        </Specimen>
+      </Family>
+      <Family title="ChoiceCards">
+        <Specimen name={t`单选卡片`} prop="options · tile" note={t`一整页只做这一个决定、选项带标志时用；设置里用 RadioGroup。`}>
+          <ChoiceCards ariaLabel={t`默认 Agent`} value={card} onValueChange={setCard} className="w-80" options={[
+            { value: 'claude', label: 'Claude Code', tile: <AgentMark backend="claude" size={20} /> },
+            { value: 'codex', label: 'Codex', tile: <AgentMark backend="codex" size={20} /> },
+            { value: 'cursor', label: 'Cursor', description: t`未登录`, tile: <AgentMark backend="cursor" size={20} />, disabled: true },
           ]} />
         </Specimen>
       </Family>

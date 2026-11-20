@@ -56,11 +56,12 @@ function LivePart({ x, y, part, children }: { x: number; y: number; part: string
 /**
  * The mark as a living logo: it plays one of six loops, a random one each time it appears, and a
  * click swaps it for another. With `fixed` it keeps that one loop and takes no clicks: a loading
- * screen shows it running. Decoration only; it reports nothing else.
+ * screen shows it running. With `once` it draws itself one time and then stays still: the first
+ * launch's welcome page. Decoration only; it reports nothing else.
  */
-export function LiveBrandMark({ fixed, ...props }: SVGProps<SVGSVGElement> & { fixed?: LiveStyle }) {
+export function LiveBrandMark({ fixed, once, ...props }: SVGProps<SVGSVGElement> & { fixed?: LiveStyle; once?: boolean }) {
   const [picked, setStyle] = useState(pickLiveStyle);
-  const style = fixed ?? picked;
+  const style = once ? 'draw' : fixed ?? picked;
   const svgRef = useRef<SVGSVGElement>(null);
   const lookRef = useRef<SVGGElement>(null);
   const maskId = useId();
@@ -110,7 +111,7 @@ export function LiveBrandMark({ fixed, ...props }: SVGProps<SVGSVGElement> & { f
   };
 
   return (
-    <svg ref={svgRef} aria-hidden="true" viewBox={BRAND_VIEWBOX} strokeLinejoin="round" overflow="visible" {...props} className={cn('brand-live', !fixed && 'cursor-pointer', props.className)} data-style={style} onClick={fixed ? undefined : swap}>
+    <svg ref={svgRef} aria-hidden="true" viewBox={BRAND_VIEWBOX} strokeLinejoin="round" overflow="visible" {...props} className={cn('brand-live', !fixed && !once && 'cursor-pointer', props.className)} data-style={style} data-once={once || undefined} onClick={fixed || once ? undefined : swap}>
       <mask id={maskId} maskUnits="userSpaceOnUse" x="-4" y="-4" width="32" height="32">
         <rect x="-4" y="-4" width="32" height="32" fill="#fff" />
         <LivePart x={12.5} y={8.2} part="eye"><g ref={lookRef}><circle cx="12.5" cy="8.2" r="1" /></g></LivePart>
