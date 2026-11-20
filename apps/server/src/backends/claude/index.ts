@@ -4,7 +4,7 @@ import { probeClaudeLoadedExtensions } from './loaded-extensions.js';
 import { randomUUID } from 'node:crypto';
 import { rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { ModelInfo, NativeActivity, NativeBackendCapabilities, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
+import type { ModelInfo, NativeActivity, NativeBackendCapabilities, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest, NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { activityId } from '../../journal/activity.js';
 import { ClaudeActivities } from './activity.js';
@@ -425,6 +425,13 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     const runtime = this.runtimes.get(session.id);
     if (!runtime) throw new AppError('NATIVE_INTERACTION_GONE', 'Claude has no live permission request.', 409);
     return runtime.extendInteraction(interactionId);
+  }
+
+  /** The status's `runtimeControl`: applying a picked setting now (`runtime.ts#relaunchControl`). */
+  async runtimeAction(_host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, request: NativeRuntimeActionRequest): Promise<void> {
+    const runtime = this.runtimes.get(session.id);
+    if (!runtime) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'Claude Code is not running in this conversation', 409);
+    await runtime.runtimeAction(request);
   }
 
   async configure(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, patch: NativeBackendConfigurePatch): Promise<NativeBackendConfigureResult> {

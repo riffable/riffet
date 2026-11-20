@@ -47,8 +47,9 @@ export interface ClaudeTerminalBindingDeps {
   dispatchSignal(signal: ClaudeSignal, status?: Omit<NativeStatus, 'phase'>): Transition;
   emit(message: NativeControlMessage): void;
   endorsesDialog(dialog: NativeInteraction): boolean;
-  idleForRelaunch(): boolean;
-  quiet(): boolean;
+  /** `endingBackground`: the relaunch is asked for in spite of background work, which it ends. */
+  idleForRelaunch(endingBackground?: boolean): boolean;
+  quiet(endingBackground?: boolean): boolean;
   refreshTranscript(follow?: boolean): Promise<void>;
   setScreenAttention(shown: boolean): void;
   setSession(session: Session): void;
@@ -138,16 +139,25 @@ export class ClaudeTerminalBinding {
     return permission;
   }
 
-  /** A recorded switch survives old hooks and is applied only once nothing is running. */
-  async applyPendingConfig(): Promise<void> {
-    if (this.deps.disposed() || this.configuring || this.startTask || Date.now() < this.configSettlesAt || !this.deps.idleForRelaunch()
+  /**
+   * A recorded switch survives old hooks and is applied only once nothing is running. `now`: the reader asked
+   * for it, so it neither waits for the picks to settle nor for background work, which the relaunch ends (a
+   * dev server started in the background never ends by itself); the main turn and a dialog still hold it, and
+   * what stops it is the caller's to report.
+   */
+  async applyPendingConfig(now = false): Promise<void> {
+    if (this.deps.disposed() || this.configuring || this.startTask || (!now && (Date.now() < this.configSettlesAt || !this.deps.idleForRelaunch()))
       || !this.deps.host.getSession(this.deps.session().id).configPending) return;
     this.configuring = true;
     try {
       await this.deps.host.withSessionLock(this.deps.session().id, async () => {
         const current = this.deps.host.getSession(this.deps.session().id);
-        if (this.deps.disposed() || current.archivedAt || !current.configPending || !this.deps.idleForRelaunch()) return;
-        const opened = this.started ? await this.reconfigure(current) : await this.start();
+        if (this.deps.disposed() || current.archivedAt || !current.configPending) return;
+        if (!this.deps.idleForRelaunch(now)) {
+          if (!now) return;
+          throw new AppError(this.deps.status().phase === 'attention' ? 'CLI_INTERACTION_REQUIRED' : 'CLI_BUSY', 'Claude Code must finish its turn before the new settings can be applied', 409);
+        }
+        const opened = this.started ? await this.reconfigure(current, this.profile, now) : await this.start();
         if (this.deps.disposed()) return;
         // A pick that landed while this relaunch ran is still waiting for one of its own.
         const pending = !this.launchedMatches(this.deps.host.getSession(current.id));
@@ -158,6 +168,7 @@ export class ClaudeTerminalBinding {
         if (pending) this.deferConfig();
       });
     } catch (error) {
+      if (now) throw error;
       if (!(error instanceof AppError) || !['CLI_BUSY', 'CLI_INTERACTION_REQUIRED'].includes(error.code)) {
         this.deps.setStatus({ ...this.deps.status(), notice: error instanceof Error ? error.message : 'Claude settings could not be applied.', noticeLevel: 'error' });
       }
@@ -398,14 +409,14 @@ export class ClaudeTerminalBinding {
   /** The profile the next launch uses; a CLI already running keeps its own until it is relaunched. */
   useProfile(profile: NativeBackendProfileConfig): void { this.profile = profile; }
 
-  async reconfigure(next: Session, profile: NativeBackendProfileConfig = this.profile): Promise<{ nativeSessionId: string; terminalId?: string }> {
+  async reconfigure(next: Session, profile: NativeBackendProfileConfig = this.profile, endingBackground = false): Promise<{ nativeSessionId: string; terminalId?: string }> {
     if (this.deps.disposed()) throw new AppError('CLAUDE_RUNTIME_DISPOSED', 'Claude runtime has been closed', 503);
     // A repeated selection is harmless even while work runs. Compare the applied launch settings,
     // not just the record: the latter can already contain a switch waiting for this turn to end.
     if (this.started && !this.terminalExited && this.terminalId && this.launchedMatches(next, profile)) {
       return { nativeSessionId: this.deps.nativeSessionId, terminalId: this.terminalId };
     }
-    if (this.deps.status().phase === 'attention' || this.deps.status().phase === 'starting' || !this.deps.quiet()) {
+    if (this.deps.status().phase === 'attention' || this.deps.status().phase === 'starting' || !this.deps.quiet(endingBackground)) {
       throw new AppError(this.deps.status().phase === 'attention' ? 'CLI_INTERACTION_REQUIRED' : 'CLI_BUSY', 'Claude Code must finish its turn and background work before changing its model or permission mode', 409);
     }
     await validateModelSelection(profile, selectedModel(next, profile));

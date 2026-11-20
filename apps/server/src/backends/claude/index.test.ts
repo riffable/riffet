@@ -787,6 +787,28 @@ describe('Claude per-session Fast and gateway compatibility', () => {
     expect(flagValue(h.launches.at(-1)!.args, '--effort')).toBe('high');
   });
 
+  // A dev server started in the background never ends, so a pick waiting on it would hold the queue for good.
+  it('offers a pick that waits on background work to be applied now, ending that work with one relaunch', async () => {
+    const h = await makeHarness();
+    await h.open();
+    await h.deliverSessionStart('default');
+    await startBackgroundAgent(h);
+    h.store.update(await h.adapter.configure(h.host, h.getSession(), h.profile, { model: 'opus' }));
+    const control = h.adapter.status(h.host, h.getSession()).runtimeControl;
+    expect(control?.notice?.action?.id).toBe('apply-config');
+    const launches = h.launches.length, stops = h.terminals.stopped.length;
+
+    await expect(h.adapter.runtimeAction!(h.host, h.getSession(), h.profile, { action: 'apply-config', revision: 'stale' })).rejects.toMatchObject({ code: 'RUNTIME_CONTROL_UNAVAILABLE' });
+    expect(h.launches).toHaveLength(launches);
+
+    await h.adapter.runtimeAction!(h.host, h.getSession(), h.profile, { action: 'apply-config', revision: control!.revision });
+    expect(h.terminals.stopped).toHaveLength(stops + 1);
+    expect(h.launches).toHaveLength(launches + 1);
+    expect(flagValue(h.launches.at(-1)!.args, '--model')).toBe('opus');
+    expect(h.getSession().configPending).toBe(false);
+    expect(h.adapter.status(h.host, h.getSession()).runtimeControl).toBeUndefined();
+  });
+
   it('rejects unverified Fast selections before touching a live terminal', async () => {
     const h = await makeHarness();
     for (const [model, name] of [

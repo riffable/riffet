@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
+import { AppError } from '../../errors.js';
+import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { isLiveActivity, withActivity } from '../../journal/activity.js';
 import { DeferredSteerInputs } from '../shared/deferred-steer.js';
 import { cliVersionStatus, type CliVersionRange } from '../shared/cli-version.js';
@@ -38,6 +39,8 @@ const SCREEN_CONVERGENCE_VERSIONS: CliVersionRange = { minimum: '2.1.302', teste
  */
 const TURN_SILENCE_MS = 30 * 60_000;
 const TURN_SILENCE_NOTICE = 'Claude Code has shown no activity; check the terminal.';
+/** The runtime action that applies a picked setting at once, ending the background work its relaunch waits on. */
+const APPLY_CONFIG_ACTION = 'apply-config';
 const STARTUP_FAILED_MESSAGE = 'Claude Code startup timed out; check the terminal.';
 
 export class ClaudeSessionRuntime {
@@ -338,13 +341,39 @@ export class ClaudeSessionRuntime {
     return cliVersionStatus(SCREEN_CONVERGENCE_VERSIONS, probe?.parsed) === 'supported';
   }
 
-  /** Nothing is running, waiting or queued: relaunching the CLI would end nothing. */
-  private quiet(): boolean {
-    return this.state.mainTurn.kind === 'idle' && this.state.background.length === 0 && this.state.cliQueue.length === 0;
+  /** Nothing is running, waiting or queued: relaunching the CLI would end nothing. `endingBackground`: but for background work. */
+  private quiet(endingBackground = false): boolean {
+    return this.state.mainTurn.kind === 'idle' && (endingBackground || this.state.background.length === 0) && this.state.cliQueue.length === 0;
   }
 
-  private idleForRelaunch(): boolean {
-    return this.state.process === 'alive' && !this.screenAttention && this.quiet();
+  private idleForRelaunch(endingBackground = false): boolean {
+    return this.state.process === 'alive' && !this.screenAttention && this.quiet(endingBackground);
+  }
+
+  /**
+   * A picked setting whose relaunch only background work holds back: the reader is told, and offered to apply it
+   * now. Messages queued meanwhile wait for the relaunch (`lane.ts#admission`), so without this a background
+   * task that never ends (a dev server) would hold them with nothing on screen saying why.
+   */
+  private relaunchControl(): NativeRuntimeControl | undefined {
+    if (!this.state.background.length || !this.idleForRelaunch(true) || !this.host.getSession(this.session.id).configPending) return undefined;
+    return {
+      owner: backendId, revision: `${APPLY_CONFIG_ACTION}:${this.binding.terminalId ?? ''}`,
+      notice: {
+        tone: 'neutral',
+        label: { 'zh-Hans': '新设置在后台任务结束后生效', en: 'New settings apply once background tasks finish' },
+        action: { id: APPLY_CONFIG_ACTION, label: { 'zh-Hans': '结束后台任务并应用', en: 'End background tasks and apply' } },
+      },
+    };
+  }
+
+  async runtimeAction(request: NativeRuntimeActionRequest): Promise<void> {
+    const control = this.relaunchControl();
+    if (request.action !== APPLY_CONFIG_ACTION || !control || request.revision !== control.revision) {
+      throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'The new settings were already applied or can no longer be applied this way', 409);
+    }
+    try { await this.binding.applyPendingConfig(true); }
+    finally { this.setStatus({ ...this.status }); }
   }
 
   subscribe(listener: (message: NativeControlMessage) => void): () => void {
@@ -398,7 +427,7 @@ export class ClaudeSessionRuntime {
     const phase = this.phase();
     if (phase !== 'starting') this.readyGate.clear();
     // The launch failure is only true while the launch has not recovered.
-    const { activeTurn: _oldTarget, activeTurnId: _oldTurnId, phase: _ignored, connection, notice: requestedNotice, noticeLevel: requestedLevel, interaction: requestedInteraction, ...withoutInteraction } = requested as NativeStatus;
+    const { activeTurn: _oldTarget, activeTurnId: _oldTurnId, phase: _ignored, runtimeControl: _oldControl, connection, notice: requestedNotice, noticeLevel: requestedLevel, interaction: requestedInteraction, ...withoutInteraction } = requested as NativeStatus;
     // A card the CLI raised through a hook lives exactly as long as the request behind it: a status built before the request
     // went away must not bring it back.
     const interaction = requestedInteraction?.transport === 'protocol' && !this.interactions.has(requestedInteraction.id) ? undefined : requestedInteraction;
@@ -406,9 +435,11 @@ export class ClaudeSessionRuntime {
     // The long-silence notice is withdrawn as soon as the CLI shows life or the turn ends.
     const notice = requestedNotice === TURN_SILENCE_NOTICE && !this.silenceNoticed ? undefined : requestedNotice;
     const activeTurnId = this.activeTurnId(phase);
+    const runtimeControl = this.relaunchControl();
     // Background work and compaction in progress, independent of the main turn. A CLI that has exited has none: its tasks died with it.
     const status: NativeStatus = withActivity({ ...rest, ...(notice !== undefined ? { notice, noticeLevel: requestedLevel } : {}), ...(activeTurnId ? { activeTurnId } : {}), phase, transcript: this.transcript.state,
-      ...(connection && !(phase !== 'starting' && connection.state === 'failed') ? { connection } : {}), ...(this.nativeTurn && (phase === 'busy' || phase === 'attention') ? { activeTurn: this.nativeTurn } : {}) },
+      ...(connection && !(phase !== 'starting' && connection.state === 'failed') ? { connection } : {}), ...(this.nativeTurn && (phase === 'busy' || phase === 'attention') ? { activeTurn: this.nativeTurn } : {}),
+      ...(runtimeControl ? { runtimeControl } : {}) },
     this.state.process === 'exited' ? [] : this.transcript.activities(), { upgradePhase: false });
     if (JSON.stringify(this.status) === JSON.stringify(status)) return;
     this.current = status;
@@ -620,7 +651,8 @@ export class ClaudeSessionRuntime {
   isLive(): boolean { return this.binding.isLive(); }
   setConfiguring(configuring: boolean): void { this.binding.setConfiguring(configuring); }
   launchedMatches(next: Session, profile?: NativeBackendProfileConfig): boolean { return this.binding.launchedMatches(next, profile); }
-  deferConfig(): void { this.binding.deferConfig(); }
+  /** A pick was recorded; the status says whether its relaunch waits on background work. */
+  deferConfig(): void { this.binding.deferConfig(); this.setStatus({ ...this.status }); }
   useProfile(profile: NativeBackendProfileConfig): void { this.binding.useProfile(profile); }
   reconfigure(next: Session, profile?: NativeBackendProfileConfig): Promise<{ nativeSessionId: string; terminalId?: string }> { return this.binding.reconfigure(next, profile); }
   /** Reads the saved terminal now, as the tests ask for it. */

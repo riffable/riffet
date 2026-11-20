@@ -117,7 +117,11 @@ export class ClaudeScreenWatch {
       void this.deps.binding.refreshTerminalStatus().catch(() => undefined);
       // An idle conversation nobody watches shows nothing new on its screen; a turn, a hook or a client wakes it.
       if (!this.pollDormant) void this.refreshScreenState().catch(() => undefined);
-      void this.deps.binding.applyPendingConfig().catch(() => undefined);
+      // A pick recorded through another route (tools, extensions) shows or drops its waiting notice from here
+      // (`runtime.ts#relaunchControl`); only a conversation with background work can have one.
+      void this.deps.binding.applyPendingConfig().catch(() => undefined).finally(() => {
+        if (!this.deps.disposed() && (this.deps.state().background.length || this.deps.status().runtimeControl)) this.deps.setStatus({ ...this.deps.status() });
+      });
       this.deps.checkSilence();
       this.schedulePolling();
     }, dormant ? DORMANT_POLL_MS : SCREEN_POLL_MS);
