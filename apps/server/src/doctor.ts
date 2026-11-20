@@ -1,7 +1,7 @@
-import { constants as fsConstants, existsSync, readFileSync } from 'node:fs';
+import { constants as fsConstants, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { MachineReport, NativeBackendId } from '../../../packages/contracts/src/index.js';
 export type { MachineReport };
@@ -33,14 +33,14 @@ const BACKENDS: Record<string, { label: string; env?: string; command: string; i
 };
 
 /** The bundled CLI and the TypeScript source sit at different depths, so look upward for our own manifest. */
-function packageManifest(): { engines?: { node?: string } } | undefined {
+function packageManifest(): { dir: string; engines?: { node?: string }; private?: boolean } | undefined {
   let directory = dirname(fileURLToPath(import.meta.url));
   for (let depth = 0; depth < 6; depth++) {
     const file = join(directory, 'package.json');
     if (existsSync(file)) {
       try {
-        const manifest = JSON.parse(readFileSync(file, 'utf8')) as { name?: string; engines?: { node?: string } };
-        if (manifest.name === 'riffet') return manifest;
+        const manifest = JSON.parse(readFileSync(file, 'utf8')) as { name?: string; engines?: { node?: string }; private?: boolean };
+        if (manifest.name === 'riffet') return { dir: directory, engines: manifest.engines, private: manifest.private };
       } catch { /* keep looking */ }
     }
     const parent = dirname(directory);
@@ -50,21 +50,65 @@ function packageManifest(): { engines?: { node?: string } } | undefined {
   return undefined;
 }
 
+function globalManager(packageDir: string | undefined): 'npm' | 'pnpm' | 'bun' | 'yarn' {
+  if (!packageDir) return 'npm';
+  let real = packageDir;
+  try { real = realpathSync(packageDir); } catch { /* keep the declared directory */ }
+  const parts = real.split(sep);
+  if (parts.includes('pnpm') || parts.some(part => part.startsWith('.pnpm'))) return 'pnpm';
+  if (parts.includes('.bun')) return 'bun';
+  if (parts.includes('.yarn') || parts.includes('yarn')) return 'yarn';
+  return 'npm';
+}
+
 export function satisfiesMinimum(version: string, range: string): boolean | undefined {
   const minimum = /^\s*>=\s*(\d+\.\d+\.\d+)\s*$/.exec(range)?.[1];
   if (!minimum || !parseVersion(version)) return undefined;
   return versionAtLeast(version, minimum);
 }
 
+export function nodeUpgradeHint(minimum: string, executable = process.execPath, needsNpmReinstall = false): string {
+  const major = /^(\d+)/.exec(minimum)?.[1] ?? '24';
+  const reinstall = needsNpmReinstall ? ' && npm install -g riffet' : '';
+  let resolved = executable;
+  try { resolved = realpathSync(executable); } catch { /* keep the invoked path */ }
+  const locations = `${executable}\n${resolved}`;
+  const tail = ', or check `which -a node` if already installed';
+  if (/[\\/]\.nvm[\\/]/.test(locations)) return `Run \`nvm install ${major} && nvm alias default ${major}${reinstall}\`${tail}`;
+  if (/[\\/](?:\.fnm|fnm_multishells|fnm)[\\/]/.test(locations)) return `Run \`fnm install ${major} && fnm default ${major}${reinstall}\`${tail}`;
+  if (/[\\/]\.?mise[\\/]/.test(locations)) return `Run \`mise use -g node@${major}${reinstall}\`${tail}`;
+  if (/[\\/]\.?volta[\\/]/.test(locations)) return `Run \`volta install node@${major}${reinstall}\`${tail}`;
+  if (/[\\/]\.asdf[\\/]/.test(locations)) return `Run \`asdf install nodejs latest:${major} && asdf set -u nodejs latest:${major}${reinstall}\`${tail}`;
+  if (/[\\/]n[\\/]versions[\\/]node[\\/]/.test(locations)) return `Run \`n ${major}${reinstall}\`${tail}`;
+  if (/[\\/](?:Cellar|opt)[\\/]node@/.test(locations)) return `Run \`brew install node\`${tail}`;
+  if (/[\\/](?:opt[\\/]homebrew|linuxbrew|Cellar[\\/]node)[\\/]/.test(locations)) return `Run \`brew upgrade node\`${tail}`;
+  return `Install Node.js ${minimum} or newer (\`nvm install ${major}\` / \`brew install node\`), or check \`which -a node\``;
+}
+
+export function unsupportedNodeMessage(version = process.version, executable = process.execPath): { message: string; hint: string } | undefined {
+  const manifest = packageManifest();
+  const range = manifest?.engines?.node ?? '>=24.19.0';
+  if (satisfiesMinimum(version, range) !== false) return undefined;
+  const minimum = range.replace(/^>=\s*/, '').trim();
+  const needsNpmReinstall = Boolean(manifest && manifest.private !== true && globalManager(manifest.dir) === 'npm');
+  return {
+    message: `Riffet requires Node.js ${range.trim()}, but this is ${version} (${executable})`,
+    hint: nodeUpgradeHint(minimum, executable, needsNpmReinstall),
+  };
+}
+
 function nodeCheck(): DoctorCheck {
-  const range = packageManifest()?.engines?.node;
+  const manifest = packageManifest();
+  const range = manifest?.engines?.node;
   const label = 'Node.js';
   if (!range) return { id: 'node', label, status: 'warn', detail: `${process.version}; package.json engines.node was not found` };
   const result = satisfiesMinimum(process.version, range);
   if (result === undefined) return { id: 'node', label, status: 'warn', detail: `${process.version}; cannot evaluate engines range “${range}”` };
+  const minimum = range.replace(/^>=\s*/, '').trim();
+  const needsNpmReinstall = manifest.private !== true && globalManager(manifest.dir) === 'npm';
   return result
     ? { id: 'node', label, status: 'ok', detail: `${process.version} (requires ${range})` }
-    : { id: 'node', label, status: 'fail', detail: `${process.version} does not satisfy ${range}`, fix: `Install Node.js ${range.replace(/^>=\s*/, '')} or newer (nvm install 24 / brew install node).` };
+    : { id: 'node', label, status: 'fail', detail: `${process.version} does not satisfy ${range}`, fix: nodeUpgradeHint(minimum, process.execPath, needsNpmReinstall) };
 }
 
 /** What `--version` printed; a CLI that fails or hangs only leaves its version unknown. */

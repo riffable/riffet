@@ -15,8 +15,17 @@ import { stripVTControlCharacters, styleText } from 'node:util';
 type Stream = NodeJS.WriteStream;
 type Format = Parameters<typeof styleText>[0];
 
-/** Brand blue where the terminal renders 24-bit color; the nearest of the 16 colors elsewhere (Terminal.app). */
-const accentFormat = (): Format => (/^(?:truecolor|24bit)$/i.test(process.env.COLORTERM ?? '') ? '#5B8CFF' as Format : 'blueBright');
+const supportsHex = (() => {
+  try {
+    styleText('#5B8CFF' as Format, 'x', { validateStream: false });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/** Brand blue where the terminal renders 24-bit color and Node supports hex styles; the nearest of the 16 colors elsewhere (Terminal.app). */
+const accentFormat = (): Format => (supportsHex && /^(?:truecolor|24bit)$/i.test(process.env.COLORTERM ?? '') ? '#5B8CFF' as Format : 'blueBright');
 
 export interface Paint {
   accent(text: string): string;

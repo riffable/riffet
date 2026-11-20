@@ -10,6 +10,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Running `riffet` on an older Node.js version no longer fails with a long list of `styleText` color names in truecolor terminals; the CLI now checks `engines.node` up front with a version-manager-specific upgrade command, and falls back to 16-color output when hex styles are unsupported.
 - When no Agent has been chosen yet, the web new-session page now starts on an installed, available Agent instead of an uninstalled Cursor with the send button disabled; when the Mac guide finds only one Agent, it now also makes it the server's default.
 - `riffet update` on an npm install now checks both your configured registry and `registry.npmjs.org` (plus any `RIFFET_NPM_REGISTRIES`), and installs with `--registry` when a mirror has not synced the new version yet instead of failing with `ETARGET`.
 - After a gateway plugin such as AsterGate is turned off or uninstalled, providers that use it keep working with their own address and key instead of failing to load models; only its quota stops showing.

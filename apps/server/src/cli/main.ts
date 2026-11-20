@@ -1,5 +1,6 @@
 import { Command, CommanderError, Option } from 'commander';
 import { applyProcessEnvironment } from '../environment.js';
+import { unsupportedNodeMessage } from '../doctor.js';
 import { restoreBackup } from '../system.js';
 import { SERVER_VERSION } from '../version.js';
 import { packSource, type ArchiveFormat } from '../../../../packages/plugin-api/src/tooling.js';
@@ -301,6 +302,12 @@ export async function main(argv = process.argv): Promise<void> {
   if (argv.includes('--no-color')) { process.env.NO_COLOR = '1'; delete process.env.FORCE_COLOR; }
   // `riffet logs | head` closes the pipe early; that is the reader being done, not an error.
   for (const stream of [process.stdout, process.stderr]) stream.on('error', error => { if ((error as NodeJS.ErrnoException).code === 'EPIPE') process.exit(0); throw error; });
+  const unsupported = unsupportedNodeMessage();
+  if (unsupported) {
+    process.stderr.write(`✗ ${unsupported.message}\n  → ${unsupported.hint}\n`);
+    process.exitCode = 1;
+    return;
+  }
   try {
     await buildProgram(argv.slice(2)).parseAsync(argv);
   } catch (error) {
