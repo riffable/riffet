@@ -42,10 +42,10 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
     // get the curated subset.
     return nativeBackends.catalog.entry(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{allModels:request.query.allModels==='1'});
   });
-  app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string}}>('/api/backends/:id/usage',async(request)=>{
+  app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string;refresh?:string}}>('/api/backends/:id/usage',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const {project,session}=queryContext(request);
-    const usage=await nativeBackends.catalog.usage(request.params.id,project,session?.backendProfileId??request.query.profileId,session);
+    const usage=await nativeBackends.catalog.usage(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
     return usage??{models:{},fetchedAt:new Date().toISOString()};
   });
   app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string;refresh?:string}}>('/api/backends/:id/slash',async(request)=>{

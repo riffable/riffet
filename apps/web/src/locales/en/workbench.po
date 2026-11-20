@@ -20,6 +20,12 @@ msgstr "{0} unavailable"
 msgid "{0} 个文件"
 msgstr "{0, plural, one {# file} other {# files}}"
 
+#. placeholder {0}: formatNumber(item.profile.enabledModels.length)
+#. placeholder {0}: formatNumber(models.length)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "{0} 个模型"
+msgstr "{0, plural, one {# model} other {# models}}"
+
 #. placeholder {0}: paired.name
 #: src/app/onboarding/Onboarding.tsx
 msgid "{0} 已连接"
@@ -84,6 +90,11 @@ msgstr "Previous tab"
 #: src/app/use-session-actions.ts
 msgid "上一条消息尚未确认，请先检查状态"
 msgstr "The previous message is unconfirmed. Check the status first."
+
+#. placeholder {0}: formatTokens(model.contextWindow)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "上下文 {0}"
+msgstr "Context {0}"
 
 #: src/app/SessionInfo.tsx
 msgid "上下文用量"
@@ -289,9 +300,15 @@ msgid "先为这个任务选一个项目"
 msgstr "Choose a project for this task first"
 
 #: src/app/ImportSessionDialog.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Sidebar.tsx
 msgid "全部"
 msgstr "All"
+
+#. placeholder {0}: formatNumber(providers.length)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "全部 {0} 个"
+msgstr "All {0}"
 
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
@@ -309,6 +326,10 @@ msgstr "Mark all as seen"
 #: src/app/tabs/TabBar.tsx
 msgid "全部标签"
 msgstr "All tabs"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "全部模型"
+msgstr "All models"
 
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -454,6 +475,15 @@ msgstr "Delete this session?"
 msgid "刷新"
 msgstr "Refresh"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "刷新额度"
+msgstr "Refresh quota"
+
+#. placeholder {0}: formatNumber(quotaLeft)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "剩余 {0}%"
+msgstr "{0}% left"
+
 #: src/app/plugins/PluginPageView.tsx
 msgid "剩余 {left}%"
 msgstr "{left}% left"
@@ -569,6 +599,10 @@ msgstr "Enable the plugin to open its custom configuration"
 msgid "启用插件后可用"
 msgstr "Available once the plugin is on"
 
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可读取额度"
+msgstr "Turn the plugin on to read quota"
+
 #: src/app/plugins/PluginSources.tsx
 msgid "启用插件源"
 msgstr "Enable source"
@@ -675,6 +709,10 @@ msgstr "Copying the command stops this session's process in Riffet. You can't se
 msgid "复制地址"
 msgstr "Copy address"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "复制模型 ID"
+msgstr "Copy model ID"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "外部插件已暂停"
 msgstr "External plugins are paused"
@@ -769,6 +807,7 @@ msgstr "Switched to {0}"
 msgid "已取消"
 msgstr "Cancelled"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已启用"
 msgstr "Enabled"
@@ -808,6 +847,10 @@ msgstr "Favorited"
 #: src/main.tsx
 msgid "已更新，刷新后继续"
 msgstr "Updated; refresh to continue"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "已用尽"
+msgstr "Exhausted"
 
 #: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1017,9 +1060,26 @@ msgstr "Layout"
 msgid "排序"
 msgstr "Sort"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "排队中"
+msgstr "Queueing"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "推理 {effort}"
+msgstr "Reasoning {effort}"
+
 #: src/app/ProjectHome.tsx
 msgid "描述任务…"
 msgstr "Describe the task…"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgctxt "plugin-providers-section"
+msgid "提供商"
+msgstr "Providers"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "提供商没填地址和 Key 时使用"
+msgstr "Used when a provider leaves its own address and key blank"
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
@@ -1039,6 +1099,10 @@ msgstr "Plugin ID"
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr "This plugin is unavailable; the current content will be kept until you close it"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "插件已停用"
+msgstr "Plugin disabled"
 
 #: src/app/plugins/PluginsNav.tsx
 msgid "插件源"
@@ -1315,6 +1379,10 @@ msgstr "Could not load the agent list"
 msgid "无法加载工作台"
 msgstr "Couldn't load the workbench"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "无法加载提供商"
+msgstr "Could not load providers"
+
 #: src/app/state/catalogStore.ts
 msgid "无法加载模型列表"
 msgstr "Could not load the model list"
@@ -1403,6 +1471,10 @@ msgstr "Could not load plugins"
 #: src/app/plugins/PluginMarket.tsx
 msgid "无法读取插件目录"
 msgstr "Couldn’t load the plugin directory"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "无法读取模型目录"
+msgstr "Could not read model catalog"
 
 #: src/app/ImportSessionDialog.tsx
 msgid "无法读取终端会话"
@@ -1597,6 +1669,7 @@ msgstr "Title bar"
 msgid "检查状态"
 msgstr "Check status"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/SessionInfo.tsx
 msgid "模型"
 msgstr "Model"
@@ -1643,10 +1716,18 @@ msgstr "Syncing"
 msgid "此配置在当前客户端不可用"
 msgstr "This configuration is unavailable in this client"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有匹配的提供商"
+msgstr "No matching providers"
+
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有匹配的插件"
 msgstr "No matching plugins"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有匹配的模型"
+msgstr "No matching models"
 
 #: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
@@ -1658,6 +1739,10 @@ msgstr "No matches"
 #: src/app/ImportSessionDialog.tsx
 msgid "没有可导入的会话"
 msgstr "No conversations to import"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有可用模型"
+msgstr "No models available"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有可配置项"
@@ -1685,9 +1770,14 @@ msgid "深色"
 msgstr "Dark"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginSources.tsx
 msgid "添加"
 msgstr "Add"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "添加提供商"
+msgstr "Add provider"
 
 #: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginSources.tsx
@@ -1877,9 +1967,17 @@ msgstr "Awaiting confirmation"
 msgid "筛选"
 msgstr "Filter"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "筛选提供商"
+msgstr "Filter providers"
+
 #: src/plugins/LogRecords.tsx
 msgid "筛选日志"
 msgstr "Filter log"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "筛选模型"
+msgstr "Filter models"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"
@@ -1935,6 +2033,10 @@ msgstr "Continue"
 #: src/app/ProjectHome.tsx
 msgid "继续终端会话"
 msgstr "Continue terminal session"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "编辑"
+msgstr "Edit"
 
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -2046,6 +2148,14 @@ msgstr "Try again later"
 msgid "请重新选择文件"
 msgstr "Select the file again"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "读取中…"
+msgstr "Loading…"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "读取失败"
+msgstr "Couldn't load"
+
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "读取所在项目的会话内容，可由插件界面发出"
 msgstr "Read this project's sessions; the plugin's interface can send them out"
@@ -2124,6 +2234,7 @@ msgstr "Last 7 days"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "返回"
 msgstr "Back"
 
@@ -2135,6 +2246,10 @@ msgstr "No sessions yet"
 #: src/app/onboarding/Onboarding.tsx
 msgid "还没有可用的 Agent"
 msgstr "No Agent is available yet"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "还没有提供商使用 {pluginName}"
+msgstr "No providers use {pluginName} yet"
 
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
@@ -2248,6 +2363,7 @@ msgstr "Reopen closed tab"
 msgid "重新检测"
 msgstr "Check again"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "重新读取"
 msgstr "Reload"
@@ -2255,6 +2371,7 @@ msgstr "Reload"
 #: src/app/App.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr "Retry"
@@ -2308,6 +2425,10 @@ msgstr "Project actions"
 msgid "项目标签"
 msgstr "Project tags"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "额度"
+msgstr "Quota"
+
 #: src/plugins/TaskConfirmDialog.tsx
 msgid "首次运行这条命令"
 msgstr "First run of this command"
@@ -2315,6 +2436,10 @@ msgstr "First run of this command"
 #: src/app/Workbench.tsx
 msgid "黑马跑酷"
 msgstr "Dark Horse Run"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "默认"
+msgstr "Default"
 
 #: src/app/onboarding/Onboarding.tsx
 msgid "默认 Agent"
@@ -2327,3 +2452,7 @@ msgstr "Default model"
 #: src/app/onboarding/Onboarding.tsx
 msgid "默认用哪个 Agent"
 msgstr "Which Agent to use by default"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "默认连接"
+msgstr "Default connection"

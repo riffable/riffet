@@ -159,6 +159,14 @@ msgstr "{0}（提供商里已不可用）"
 msgid "{active} 项进行中"
 msgstr "{active} 项进行中"
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{age}读取"
+msgstr "{age}读取"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{clock} 重置"
+msgstr "{clock} 重置"
+
 #: src/app/settings/SupportSections.tsx
 msgid "{count} 条"
 msgstr "{count} 条"
@@ -166,6 +174,10 @@ msgstr "{count} 条"
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "{count} 次"
 msgstr "{count} 次"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{date} 重置"
+msgstr "{date} 重置"
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "{days} 天"
@@ -188,17 +200,21 @@ msgstr "{label}：{message}"
 msgid "{minutes} 分钟"
 msgstr "{minutes} 分钟"
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{name} · 每日"
+msgstr "{name} · 每日"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "{recognizer} · 不可用"
 msgstr "{recognizer} · 不可用"
 
-#: src/app/settings/ProviderUsage.tsx
-msgid "{reset} 重置"
-msgstr "{reset} 重置"
-
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{weekday} 重置"
+msgstr "{weekday} 重置"
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "**Web 优先能用最少的人覆盖最多的用户。** 一套代码同时服务桌面与手机浏览器，迭代不用等商店审核。"
@@ -2185,6 +2201,10 @@ msgstr "列表里的摘要先画出席位与题目，进度和发言是骨架。
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "刚刚读取"
+msgstr "刚刚读取"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "刚启动"
 msgstr "刚启动"
@@ -2289,6 +2309,13 @@ msgstr "前一个命令已占用"
 msgid "删除后可撤销"
 msgstr "删除后可撤销"
 
+#. placeholder {0}: formatNumber(status.quota.remaining)
+#. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
+#. placeholder {1}: formatNumber(status.quota.limit)
+#. placeholder {1}: formatQuotaAmount(status.dailyQuota.limit)
+#: src/app/settings/ProviderUsage.tsx
+msgid "剩余 {0} / {1}"
+msgstr "剩余 {0} / {1}"
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
@@ -2432,6 +2459,10 @@ msgstr "危险确认打开时焦点在取消上；输入一个值用 promptDialo
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "即将停止"
 msgstr "即将停止"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "即将重置"
+msgstr "即将重置"
 
 #: src/app/settings/ProfileSection.tsx
 msgid "历史头像"
@@ -4092,6 +4123,10 @@ msgstr "已有会话保持原配置。"
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "已注册"
 msgstr "已注册"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "已用尽"
+msgstr "已用尽"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "已登录"
@@ -6204,7 +6239,6 @@ msgstr "权限、文件选择与分享"
 msgid "未保存的文件"
 msgstr "未保存的文件"
 
-
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "权限图标"
@@ -6659,6 +6693,10 @@ msgstr "每日"
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "每晚，以及主对话压缩前"
 msgstr "每晚，以及主对话压缩前"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "每月"
+msgstr "每月"
 
 #: src/app/design/mac/TypeChapter.tsx
 msgid "每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。"
@@ -8095,7 +8133,6 @@ msgstr "自动审查"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "编辑"
 msgstr "编辑"
-
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"

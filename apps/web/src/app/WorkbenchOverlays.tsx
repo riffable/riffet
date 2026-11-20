@@ -54,6 +54,7 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
   const settingsOpen = useUi((state) => state.settingsOpen);
   const settingsMounted = useUi((state) => state.settingsMounted);
   const pendingSection = useUi((state) => state.pendingSettingsSection);
+  const pendingProviderTarget = useUi((state) => state.pendingProviderTarget);
   const projects = useLists((state) => state.projects);
   const sessions = useLists((state) => state.sessions);
   const projectId = useNav((state) => state.projectId);
@@ -123,8 +124,10 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
       {settingsMounted && SettingsDialog && <ErrorBoundary resetKey={String(settingsOpen)} frame={settingsFrame}><Suspense fallback={<SettingsLoading frame={settingsFrame} onShown={markSettingsEntered} />}><SettingsDialog
         open={settingsOpen}
         framed={settingsEntered}
-        onOpenChange={(open) => ui.set({ settingsOpen: open })}
+        onOpenChange={(open) => { ui.set({ settingsOpen: open }); if (!open) ui.clearProviderTarget(); }}
         {...(pendingSection ? { initialSection: pendingSection } : {})}
+        {...(pendingProviderTarget ? { providerTarget: pendingProviderTarget } : {})}
+        onProviderTargetHandled={(token) => ui.clearProviderTarget(token)}
         project={quickChat ? undefined : project}
         settings={settings}
         onRefreshBackends={onRefreshBackends}

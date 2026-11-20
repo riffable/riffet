@@ -1,7 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { MODEL_PICKER_BUDGET, type ModelStatus, type NativeBackendUsage } from '@contracts';
-import { cachedUsage, forgetUsage, rememberUsage } from '@/lib/catalog-cache';
+import type { ModelStatus, NativeBackendUsage } from '@contracts';
+import { invalidateModelUsage, readLiveUsage, usageRevision, writeLiveUsage } from '@/lib/catalog-cache';
+export { invalidateModelUsage };
 import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -9,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenu
 import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
 import { cn } from '@/lib/utils';
-import { createStore, useStore } from '@/lib/store';
+import { useStore } from '@/lib/store';
 import { accountFigures, loadHint, loadTone, statusQuotaTags } from '@/lib/usage';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import type { Choice } from './model';
@@ -138,21 +139,13 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
   );
 }
 
-/**
- * The last successful figures per usage scope, kept while the next read runs or fails, and across
- * reloads (`catalog-cache.ts`) so a picker opened after one shows them before its first read lands.
- */
-const lastUsage = new Map<string, NativeBackendUsage>();
-const usageRevision = createStore({ value: 0 });
-const storedUsageKey = (scope: string) => scope.slice(scope.indexOf('|') + 1);
-function previousUsage(scope: string): NativeBackendUsage | undefined {
-  return lastUsage.get(scope) ?? cachedUsage(storedUsageKey(scope));
-}
-/** Credentials are write-only, so a provider save explicitly expires client quota scopes. */
-export function invalidateModelUsage(): void {
-  lastUsage.clear();
-  forgetUsage();
-  usageRevision.set((current) => ({ value: current.value + 1 }));
+function modelUsageStatus(usage: NativeBackendUsage | undefined, modelId: string, activeProviderId?: string): ModelStatus | undefined {
+  if (!usage) return undefined;
+  const direct = usage.models[modelId];
+  if (direct) return direct;
+  const sep = modelId.indexOf('\u0000');
+  if (sep < 0) return undefined;
+  return activeProviderId && modelId.slice(0, sep) === activeProviderId ? usage.models[modelId.slice(sep + 1)] : undefined;
 }
 
 const loadToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-4' } as const;
@@ -378,10 +371,11 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const providersRef = useRef<HTMLDivElement>(null);
   const connectionRevision = useStore(usageRevision, (state) => state.value);
   const usageScope = `${connectionRevision}|${usageScopeKey ?? ''}|${activeProviderId ?? ''}`;
+  const usageCacheKey = usageScopeKey ?? '';
   const [usageRead, setUsageRead] = useState<{ scope: string; usage?: NativeBackendUsage; loading: boolean }>();
   // A scope read before keeps its figures while this open re-reads them, so the account row is
   // there from the first frame rather than pushing the search and the list down when it lands.
-  const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? previousUsage(usageScope) : undefined;
+  const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageCacheKey ? readLiveUsage(usageCacheKey) : undefined;
   const usageLoading = Boolean(loadUsage) && usageRead?.scope === usageScope && usageRead.loading;
   const usageFigures = usage?.account ? accountFigures(usage.account) : [];
   const hasUsageLoader = Boolean(loadUsage);
@@ -430,16 +424,13 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       pending = controller;
       setUsageRead(previous => ({
         scope: usageScope,
-        usage: previous?.scope === usageScope ? previous.usage : usageScopeKey ? previousUsage(usageScope) : undefined,
+        usage: previous?.scope === usageScope ? previous.usage : usageCacheKey ? readLiveUsage(usageCacheKey) : undefined,
         loading: true,
       }));
       void load(AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)])).then(next => {
         if (!active || controller.signal.aborted) return;
-        if (usageScopeKey) {
-          lastUsage.delete(usageScope);
-          lastUsage.set(usageScope, next);
-          if (lastUsage.size > MODEL_PICKER_BUDGET.storedScopes) lastUsage.delete(lastUsage.keys().next().value!);
-          rememberUsage(storedUsageKey(usageScope), next);
+        if (usageCacheKey) {
+          writeLiveUsage(usageCacheKey, next);
         }
         setUsageRead({ scope: usageScope, usage: next, loading: false });
       }, () => {
@@ -614,7 +605,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
                 className={cn('flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors disabled:opacity-50 md:h-8 md:min-h-0', index === active && 'bg-hover', model.id === value ? 'text-fg' : 'text-fg-2')}
               >
                 <span className="min-w-0 flex-1 truncate">{model.label}</span>
-                {previewIsActive && <ModelStatusTags status={usage?.models[model.id]} />}
+                {previewIsActive && <ModelStatusTags status={modelUsageStatus(usage, model.id, activeProviderId)} />}
                 {model.id === value && <IconCheck className="size-3.5 shrink-0 text-fg-2" />}
               </button>
             );

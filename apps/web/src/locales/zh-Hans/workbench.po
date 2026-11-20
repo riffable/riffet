@@ -20,6 +20,12 @@ msgstr "{0} 不可用"
 msgid "{0} 个文件"
 msgstr "{0} 个文件"
 
+#. placeholder {0}: formatNumber(item.profile.enabledModels.length)
+#. placeholder {0}: formatNumber(models.length)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "{0} 个模型"
+msgstr "{0} 个模型"
+
 #. placeholder {0}: paired.name
 #: src/app/onboarding/Onboarding.tsx
 msgid "{0} 已连接"
@@ -84,6 +90,11 @@ msgstr "上一个标签"
 #: src/app/use-session-actions.ts
 msgid "上一条消息尚未确认，请先检查状态"
 msgstr "上一条消息尚未确认，请先检查状态"
+
+#. placeholder {0}: formatTokens(model.contextWindow)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "上下文 {0}"
+msgstr "上下文 {0}"
 
 #: src/app/SessionInfo.tsx
 msgid "上下文用量"
@@ -289,9 +300,15 @@ msgid "先为这个任务选一个项目"
 msgstr "先为这个任务选一个项目"
 
 #: src/app/ImportSessionDialog.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Sidebar.tsx
 msgid "全部"
 msgstr "全部"
+
+#. placeholder {0}: formatNumber(providers.length)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "全部 {0} 个"
+msgstr "全部 {0} 个"
 
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
@@ -309,6 +326,10 @@ msgstr "全部标为已读"
 #: src/app/tabs/TabBar.tsx
 msgid "全部标签"
 msgstr "全部标签"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "全部模型"
+msgstr "全部模型"
 
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -454,6 +475,15 @@ msgstr "删除这个会话？"
 msgid "刷新"
 msgstr "刷新"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "刷新额度"
+msgstr "刷新额度"
+
+#. placeholder {0}: formatNumber(quotaLeft)
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "剩余 {0}%"
+msgstr "剩余 {0}%"
+
 #: src/app/plugins/PluginPageView.tsx
 msgid "剩余 {left}%"
 msgstr "剩余 {left}%"
@@ -569,6 +599,10 @@ msgstr "启用插件后可打开专用配置"
 msgid "启用插件后可用"
 msgstr "启用插件后可用"
 
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可读取额度"
+msgstr "启用插件后可读取额度"
+
 #: src/app/plugins/PluginSources.tsx
 msgid "启用插件源"
 msgstr "启用插件源"
@@ -675,6 +709,10 @@ msgstr "复制命令时会停止 Riffet 中这个会话的进程，终端运行�
 msgid "复制地址"
 msgstr "复制地址"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "复制模型 ID"
+msgstr "复制模型 ID"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "外部插件已暂停"
 msgstr "外部插件已暂停"
@@ -769,6 +807,7 @@ msgstr "已切换到 {0}"
 msgid "已取消"
 msgstr "已取消"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已启用"
 msgstr "已启用"
@@ -808,6 +847,10 @@ msgstr "已收藏"
 #: src/main.tsx
 msgid "已更新，刷新后继续"
 msgstr "已更新，刷新后继续"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "已用尽"
+msgstr "已用尽"
 
 #: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1017,9 +1060,26 @@ msgstr "排列方式"
 msgid "排序"
 msgstr "排序"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "排队中"
+msgstr "排队中"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "推理 {effort}"
+msgstr "推理 {effort}"
+
 #: src/app/ProjectHome.tsx
 msgid "描述任务…"
 msgstr "描述任务…"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgctxt "plugin-providers-section"
+msgid "提供商"
+msgstr "提供商"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "提供商没填地址和 Key 时使用"
+msgstr "提供商没填地址和 Key 时使用"
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
@@ -1039,6 +1099,10 @@ msgstr "插件 ID"
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr "插件已不可用，当前内容会保留到关闭"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "插件已停用"
+msgstr "插件已停用"
 
 #: src/app/plugins/PluginsNav.tsx
 msgid "插件源"
@@ -1315,6 +1379,10 @@ msgstr "无法加载 Agent 列表"
 msgid "无法加载工作台"
 msgstr "无法加载工作台"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "无法加载提供商"
+msgstr "无法加载提供商"
+
 #: src/app/state/catalogStore.ts
 msgid "无法加载模型列表"
 msgstr "无法加载模型列表"
@@ -1403,6 +1471,10 @@ msgstr "无法读取插件"
 #: src/app/plugins/PluginMarket.tsx
 msgid "无法读取插件目录"
 msgstr "无法读取插件目录"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "无法读取模型目录"
+msgstr "无法读取模型目录"
 
 #: src/app/ImportSessionDialog.tsx
 msgid "无法读取终端会话"
@@ -1597,6 +1669,7 @@ msgstr "标题栏"
 msgid "检查状态"
 msgstr "检查状态"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/SessionInfo.tsx
 msgid "模型"
 msgstr "模型"
@@ -1643,10 +1716,18 @@ msgstr "正在同步"
 msgid "此配置在当前客户端不可用"
 msgstr "此配置在当前客户端不可用"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有匹配的提供商"
+msgstr "没有匹配的提供商"
+
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有匹配的插件"
 msgstr "没有匹配的插件"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有匹配的模型"
+msgstr "没有匹配的模型"
 
 #: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
@@ -1658,6 +1739,10 @@ msgstr "没有匹配的结果"
 #: src/app/ImportSessionDialog.tsx
 msgid "没有可导入的会话"
 msgstr "没有可导入的会话"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "没有可用模型"
+msgstr "没有可用模型"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有可配置项"
@@ -1685,9 +1770,14 @@ msgid "深色"
 msgstr "深色"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginSources.tsx
 msgid "添加"
 msgstr "添加"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "添加提供商"
+msgstr "添加提供商"
 
 #: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginSources.tsx
@@ -1877,9 +1967,17 @@ msgstr "等待确认"
 msgid "筛选"
 msgstr "筛选"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "筛选提供商"
+msgstr "筛选提供商"
+
 #: src/plugins/LogRecords.tsx
 msgid "筛选日志"
 msgstr "筛选日志"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "筛选模型"
+msgstr "筛选模型"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"
@@ -1935,6 +2033,10 @@ msgstr "继续"
 #: src/app/ProjectHome.tsx
 msgid "继续终端会话"
 msgstr "继续终端会话"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "编辑"
+msgstr "编辑"
 
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -2046,6 +2148,14 @@ msgstr "请稍后重试"
 msgid "请重新选择文件"
 msgstr "请重新选择文件"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "读取中…"
+msgstr "读取中…"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "读取失败"
+msgstr "读取失败"
+
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "读取所在项目的会话内容，可由插件界面发出"
 msgstr "读取所在项目的会话内容，可由插件界面发出"
@@ -2124,6 +2234,7 @@ msgstr "近 7 天"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "返回"
 msgstr "返回"
 
@@ -2135,6 +2246,10 @@ msgstr "还没有会话"
 #: src/app/onboarding/Onboarding.tsx
 msgid "还没有可用的 Agent"
 msgstr "还没有可用的 Agent"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "还没有提供商使用 {pluginName}"
+msgstr "还没有提供商使用 {pluginName}"
 
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
@@ -2248,6 +2363,7 @@ msgstr "重新打开关闭的标签"
 msgid "重新检测"
 msgstr "重新检测"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "重新读取"
 msgstr "重新读取"
@@ -2255,6 +2371,7 @@ msgstr "重新读取"
 #: src/app/App.tsx
 #: src/app/plugins/PluginFlowDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr "重试"
@@ -2308,6 +2425,10 @@ msgstr "项目操作"
 msgid "项目标签"
 msgstr "项目标签"
 
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "额度"
+msgstr "额度"
+
 #: src/plugins/TaskConfirmDialog.tsx
 msgid "首次运行这条命令"
 msgstr "首次运行这条命令"
@@ -2315,6 +2436,10 @@ msgstr "首次运行这条命令"
 #: src/app/Workbench.tsx
 msgid "黑马跑酷"
 msgstr "黑马跑酷"
+
+#: src/app/plugins/PluginModelSourceProviders.tsx
+msgid "默认"
+msgstr "默认"
 
 #: src/app/onboarding/Onboarding.tsx
 msgid "默认 Agent"
@@ -2327,3 +2452,7 @@ msgstr "默认模型"
 #: src/app/onboarding/Onboarding.tsx
 msgid "默认用哪个 Agent"
 msgstr "默认用哪个 Agent"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "默认连接"
+msgstr "默认连接"

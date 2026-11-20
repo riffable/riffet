@@ -268,12 +268,12 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 
 ### 6.9 现状
 
-- 以下内容都还没有实现（2026-11-16 写入规范）：§6.2 的「状态」组；§6.3 的所有扩展点区块；§6.4 新增的 `link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及 `meter` 的 `time`；§6.5 的子页和筛选。
+- 以下内容都还没有实现（2026-11-16 写入规范）：§6.3 中除 `modelSources` 以外的扩展点区块（`agentBackends`、`taskProviders`、`sharePublisher`）；§6.4 新增的 `link`、`row` 附加项（含 `ref`）、区块附加项、`flow` 按钮，以及 `meter` 的 `time`；§6.5 的插件自定义子页。
+- Web 已实现 §6.2 状态行、§6.3.1 的 `modelSources` 提供商与额度区块（含展开额度条、模型子页、超过 5 行的全部提供商子页和筛选，以及直达「设置 › 模型提供商」编辑/添加），并与提供商编辑、模型菜单共用额度缓存；网关适配器的 `settings` 按 §6.8 呈现为带回退说明的「默认连接」组。Mac 与手机尚未跟进。
 - `meter` 与按客户端能力降级已实现（2026-11-17）：客户端在读取和修改页面时带 `?kinds=meter`（`PLUGIN_PAGE_KINDS_PARAM`），没带的客户端收到一行 `row`，数值是「n%」或带 `value`。Web（`app/plugins/PluginPageView.tsx`）画 `meter`；Mac（`Features/Plugins/PluginPageForm.swift`）和手机仍只画原有的六种条目。
-- 页签只在插件声明了 `page`、`settings` 或设置视图时出现。`status().message` 只显示在「管理 › 诊断」里。
 - 手机端客户端已有接口（`apps/mobile/client/src/commonMain/kotlin/riffet/shared/RiffetApiPlugins.kt`），但没有绘制，手机上看不到插件页。
 - 浏览器的插件页（`plugins/riffet/browser/page.ts`）用目录名代替项目名，「使用中」写在 `detail` 里，没有数据时用一行 `row` 占位。应分别改成 `ref: project`、`badges` 和区块的 `empty`。
-- `PluginStatus`（`packages/contracts/src/plugin-management.ts`）还没有 `time`。`NativeBackendUsage` 没有字段说明「读取成功但没有额度」的原因。`budgets.ts` 里还没有插件页的条目上限和扩展点区块的条数。
+- `PluginStatus`（`packages/contracts/src/plugin-management.ts`）还没有 `time`。`NativeBackendUsage` 没有字段说明「读取成功但没有额度」的原因。`PLUGIN_PAGE_BUDGET` 已在 `budgets.ts` 定义扩展点摘要行数与子页筛选阈值，插件自定义页的条目上限尚未加入。
 
 ## 7. 授权与流程
 

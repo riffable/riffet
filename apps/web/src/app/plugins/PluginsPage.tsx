@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
+import type { NativeBackendId, PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
 import { IconEllipsis, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { SearchField } from '@/components/ui/search-field';
-import { Badge, EmptyState, Field, Input, Kbd, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
+import { Badge, EmptyState, Field, Input, Kbd, Select, Spinner, StatusDot, Switch, UnderlineTabs } from '@/components/ui/controls';
 import { Tile, TileGrid } from '@/components/ui/tile';
 import { Tip } from '@/components/ui/tooltip';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
 import { syncAppearance } from '@/lib/appearance';
+import { invalidateModelUsage } from '@/lib/catalog-cache';
 import { confirmDialog, useDiscardGuard } from '@/lib/dialogs';
 import { HttpError } from '@/lib/errors';
 import { localizedText, loadPlugins, refreshPlugins, reloadPlugins, replacePlugin, replacePlugins, usePlugins, usePluginRecovery } from '@/lib/plugins';
@@ -32,6 +33,8 @@ import { AddPluginSourceDialog, EnablePluginSource, PluginSourceMenu } from './P
 import { CapabilityFacts, PLUGIN_GROUPS, PluginMark, installedGroup, useGroupTitles } from './PluginMark';
 import { ALL_SOURCES, PluginsAside, PluginsScopeMenu, sourceScope, type PluginScope } from './PluginsNav';
 import { PluginPageView } from './PluginPageView';
+import { PluginModelSourceProviders, hasFallbackConnectionSettings, pluginModelSources, type ModelSourceSubpage } from './PluginModelSourceProviders';
+import { SettingsGroup, SettingsRow } from '../settings/SettingsLayout';
 import { Markdown } from '../session/Markdown';
 
 /** `update`: a newer release of an installed package, installed in place without leaving the list. */
@@ -39,8 +42,9 @@ type InstallSource = { file: File } | { market: { source: string; id: string; ve
 const keyOf = (plugin: PluginDescriptor) => (plugin.source ?? 'builtin') + ':' + plugin.id + (plugin.source === 'development' && plugin.developmentPath ? ':' + plugin.developmentPath : '');
 const removable = (plugin: PluginDescriptor) => plugin.source === 'installed' ? Boolean(plugin.installed) : plugin.source === 'development' && Boolean(plugin.developmentPath);
 const deviceFlows = (plugin: PluginDescriptor) => [...(plugin.declared?.actions ?? []), ...plugin.actions].some(action => action.kind === 'device-flow');
-/** Whether the plugin has a page of its own: one it builds, its settings, a settings view for this client or a sign-in. */
-const hasPage = (plugin: PluginDescriptor) => Boolean(plugin.declared?.page || plugin.settings.length || plugin.declared?.views?.some(view => view.locations.includes('settings') && view.clients.includes('web')) || deviceFlows(plugin));
+const hasPluginStatus = (plugin: PluginDescriptor) => Boolean(plugin.status && (plugin.status.state !== 'ready' || plugin.status.message));
+/** Whether the plugin has a page of its own: status, extension-point sections, its page, settings, a settings view or a sign-in. */
+const hasPage = (plugin: PluginDescriptor) => Boolean(hasPluginStatus(plugin) || pluginModelSources(plugin).length || plugin.declared?.page || plugin.settings.length || plugin.declared?.views?.some(view => view.locations.includes('settings') && view.clients.includes('web')) || deviceFlows(plugin));
 /** The source an installed package came from, read from its install record (`market:<source>/<id>@<version>`; the older `market:<id>@<version>` is the built-in one). */
 function originOf(plugin: PluginDescriptor): string | undefined {
   const record = plugin.installed?.versions.find(version => version.selected)?.source;
@@ -49,7 +53,7 @@ function originOf(plugin: PluginDescriptor): string | undefined {
 }
 
 /** Workbench-owned management. Reading this page never activates or probes a plugin. */
-export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, sidebarCollapsed, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels }: {
+export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, sidebarCollapsed, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels, onOpenProviderSettings }: {
   selectedId: string;
   selectedViewId?: string;
   initialTab?: PluginDetailTab;
@@ -67,6 +71,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   rejectedKeybindings: ReadonlySet<string>;
   onOpenAppearance(): void;
   onOpenModels(): void;
+  onOpenProviderSettings(target: { kind: 'edit'; backendId: NativeBackendId; profileId: string } | { kind: 'add'; backendId?: NativeBackendId; modelSource: string }): void;
   onOpenFeature(view: ViewDeclaration): void;
 }) {
   const { t, i18n } = useLingui();
@@ -89,6 +94,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const [detailTab, setDetailTab] = useState<PluginDetailTab>('overview');
   const [readme, setReadme] = useState<{ key: string; text?: string }>();
   const [customView, setCustomView] = useState('');
+  const [modelSourceSubpage, setModelSourceSubpage] = useState<ModelSourceSubpage>();
   const [customDirty, setCustomDirty] = useState(false);
   const [customBusy, setCustomBusy] = useState(false);
   const [customRevision, setCustomRevision] = useState(0);
@@ -130,13 +136,16 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     if (!selectedId) setBaseline(undefined);
     else if (!dirty && !working && currentSelected) setBaseline(currentSelected);
   }, [currentSelected, selectedId, dirty, working]);
-  useEffect(() => { setDetailTab(selectedViewId ? 'page' : initialTab ?? 'overview'); setCustomView(selectedViewId ?? ''); }, [selectedId, selectedViewId, initialTab, openRevision]);
+  useEffect(() => { setDetailTab(selectedViewId ? 'page' : initialTab ?? 'overview'); setCustomView(selectedViewId ?? ''); setModelSourceSubpage(undefined); }, [selectedId, selectedViewId, initialTab, openRevision]);
   const settingsPages = useSettingsPages();
   const pages = settingsPages.filter(p => p.id.startsWith((selected?.id ?? '\u0000') + '/'));
   const settingsViews = selected?.declared?.views?.filter(view => view.locations.includes('settings') && view.clients.includes('web')) ?? [];
   const pageTitle = (p: PluginDescriptor) => localizedText(p.declared?.page?.title, [i18n.locale]) ?? t({ message: '设置', context: 'plugin-detail-tab' });
-  // The plugin's own page comes first; without one, its settings as a form.
-  const configurationOptions = [...(selected?.declared?.page ? [{ value: '', label: pageTitle(selected) }] : selected?.settings.length ? [{ value: '', label: t({ message: '通用', context: 'plugin-configuration' }) }] : []), ...settingsViews.map(view => ({ value: view.id, label: localizedText(view.title, [i18n.locale]) ?? view.id }))];
+  const selectedHasModelSources = Boolean(selected && pluginModelSources(selected).length > 0);
+  const selectedHasStatus = Boolean(selected && hasPluginStatus(selected));
+  const hasPrimaryPage = Boolean(selected && (selected.declared?.page || selected.settings.length || selectedHasModelSources || selectedHasStatus));
+  // The plugin's own page (and host-drawn sections) comes first; without one, its settings as a form.
+  const configurationOptions = [...(selected?.declared?.page ? [{ value: '', label: pageTitle(selected) }] : hasPrimaryPage ? [{ value: '', label: t({ message: '通用', context: 'plugin-configuration' }) }] : []), ...settingsViews.map(view => ({ value: view.id, label: localizedText(view.title, [i18n.locale]) ?? view.id }))];
   const configurationId = configurationOptions.some(option => option.value === customView) ? customView : configurationOptions[0]?.value;
   const livePage = pages.find(p => p.id === configurationId);
   const keepPage = Boolean(dirty || working) && editingPage.current?.owner === (selected && keyOf(selected)) && editingPage.current?.entry.id === configurationId;
@@ -160,14 +169,14 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     catch (e) { if (alive.current) { if (!(e instanceof HttpError)) setReachable(false); setError(errorMessage(e, t({ message: '操作失败' }))); } }
     finally { operation.current = false; if (alive.current) setBusy(false); }
   };
-  const select = async (p: PluginDescriptor, tab: PluginDetailTab = 'overview') => { if (await guard()) { if (!visible.includes(p)) { setQuery(''); setScope('installed'); } setDetailTab(tab); setCustomView(''); setDiagnostics([]); setVersions(false); setBaseline(p); onSelect(keyOf(p), tab); } };
+  const select = async (p: PluginDescriptor, tab: PluginDetailTab = 'overview') => { if (await guard()) { if (!visible.includes(p)) { setQuery(''); setScope('installed'); } setDetailTab(tab); setCustomView(''); setModelSourceSubpage(undefined); setDiagnostics([]); setVersions(false); setBaseline(p); onSelect(keyOf(p), tab); } };
   const navigateDetail = async (change: () => void) => {
     if (detailNavigation.current) return;
     detailNavigation.current = true;
     try { if (await guard()) change(); }
     finally { detailNavigation.current = false; }
   };
-  const closeSettings = () => close(() => { setDraft({}); setCustomDirty(false); setCustomView(''); setVersions(false); onSelect(''); });
+  const closeSettings = () => close(() => { setDraft({}); setCustomDirty(false); setCustomView(''); setModelSourceSubpage(undefined); setVersions(false); onSelect(''); });
   const update = (patch: PluginUpdate, target = selected) => target && list?.some(plugin => keyOf(plugin) === keyOf(target) && !plugin.rejected) && run(async () => { replacePlugin(await api.updatePlugin(target.id, patch)); });
   const install = async (source: InstallSource, capabilities?: string[], trusted = false) => {
     if (operation.current || customBusy) return;
@@ -233,6 +242,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const save = () => selected && baseline && !unavailable && run(async () => {
     const saved = await api.updatePlugin(selected.id, { settings: draft, ...(baseline.configRevision ? { configRevision: baseline.configRevision } : {}) });
     replacePlugin(saved); setBaseline(saved); setDraft({});
+    if (pluginModelSources(saved).length > 0) invalidateModelUsage();
   });
   const [logs, setLogs] = useState<PluginLogEntry[]>([]);
   useEffect(() => setLogs([]), [selected?.id]);
@@ -273,25 +283,107 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       {pluginActions.filter(action => action.kind !== 'device-flow').map(action => <Button key={action.id} size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
     </div>}
   </div>;
-  const configuration = selected && <div className="flex min-w-0 flex-col gap-5">
+  const deviceFlowActions = pluginActions.filter(action => action.kind === 'device-flow');
+  const statusTone = selected?.status?.state === 'unavailable' ? 'danger' : selected?.status?.state === 'attention' ? 'warning' : 'success';
+  const selectedModelSources = pluginModelSources(selected);
+  const showDisabledStatus = Boolean(selected && !selected.enabled && !missing && selectedHasModelSources);
+  const showStatusGroup = Boolean(selected && (selectedHasStatus || showDisabledStatus));
+  const statusAction = selected && selectedHasStatus && !showDisabledStatus && selected.status?.state !== 'ready' ? deviceFlowActions[0] : undefined;
+  const remainingFlowActions = configurationId === '' && statusAction ? deviceFlowActions.filter((action) => action.id !== statusAction.id) : deviceFlowActions;
+  const fallbackConnection = hasFallbackConnectionSettings(selected);
+  const settingsHasDraft = Object.keys(draft).length > 0;
+  const configuration = selected && <div className="flex min-w-0 flex-col gap-6">
     {/* The plugin decides how many pages it has: a heading switcher, not a segmented row (patterns.md §3). */}
-    {configurationOptions.length > 1 && <Select appearance="heading" label={t({ message: '配置', context: 'plugin-detail-tab' })} value={configurationId ?? ''} disabled={working} onChange={value => { if (value !== configurationId) void navigateDetail(() => setCustomView(value)); }} options={configurationOptions} />}
-      {configurationId === '' && selected.declared?.page && (!selected.enabled || missing
-        ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可用</Trans></p>{!missing && <Button size="sm" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>}</div>
-        : <PluginPageView key={selected.id} pluginId={selected.id} disabled={working || !reachable} onChanged={() => { void reloadPlugins().catch(() => undefined); }} />)}
-      {configurationId === '' && !selected.declared?.page && selected.settings.length > 0 && <form onSubmit={e => { e.preventDefault(); void save(); }} className="flex flex-col gap-4">
-        {selected.settings.map(field => <Field key={field.key} label={field.label}>
-          <div className="flex items-center gap-2"><Input type={field.kind === 'secret' ? 'password' : 'text'} autoComplete="off" disabled={working} readOnly={unavailable} value={draft[field.key] ?? (Object.hasOwn(draft, field.key) ? '' : baseline?.settings.find(f => f.key === field.key)?.value ?? '')} placeholder={field.kind === 'secret' && field.set ? t({ message: '已设置' }) : undefined} onChange={e => setDraft(value => ({ ...value, [field.key]: e.target.value }))} />{field.kind === 'secret' && field.set && <Button type="button" size="xs" variant="secondary" disabled={working || unavailable} onClick={() => setDraft(value => ({ ...value, [field.key]: null }))}><Trans>清除</Trans></Button>}</div>
-        </Field>)}
-        <div className="flex gap-2"><Button type="submit" size="sm" disabled={working || unavailable || !reachable || Object.keys(draft).length === 0}><Trans>保存</Trans></Button><Button type="button" size="sm" variant="secondary" disabled={working || Object.keys(draft).length === 0} onClick={() => { setDraft({}); setBaseline(selected); }}><Trans>取消</Trans></Button></div>
-      </form>}
+    {!modelSourceSubpage && configurationOptions.length > 1 && <Select appearance="heading" label={t({ message: '配置', context: 'plugin-detail-tab' })} value={configurationId ?? ''} disabled={working} onChange={value => { if (value !== configurationId) void navigateDetail(() => setCustomView(value)); }} options={configurationOptions} />}
+
+    {configurationId === '' && (
+      <>
+        {!modelSourceSubpage && showStatusGroup && (
+          <SettingsGroup>
+            <div className="flex items-center justify-between gap-4 py-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <StatusDot tone={selectedHasStatus ? statusTone : 'idle'} className="shrink-0" />
+                <span className="min-w-0 break-words text-sm text-fg">
+                  {selectedHasStatus
+                    ? (selected.status?.message ?? status(selected))
+                    : selectedModelSources.some((item) => item.usage)
+                      ? <Trans>启用插件后可读取额度</Trans>
+                      : <Trans>启用插件后可用</Trans>}
+                </span>
+              </div>
+              {showDisabledStatus ? (
+                <Button size="xs" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>
+              ) : statusAction ? (
+                <Button size="xs" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === statusAction.id)} onClick={() => setFlow({ pluginId: selected.id, action: statusAction })}>{statusAction.label}</Button>
+              ) : null}
+            </div>
+          </SettingsGroup>
+        )}
+
+        {selectedHasModelSources && (
+          <PluginModelSourceProviders
+            plugin={selected}
+            subpage={modelSourceSubpage}
+            disabled={working || missing}
+            onSubpageChange={setModelSourceSubpage}
+            onEditProvider={(backendId, profileId) => onOpenProviderSettings({ kind: 'edit', backendId, profileId })}
+            onAddProvider={(modelSource, backendId) => onOpenProviderSettings({ kind: 'add', modelSource, ...(backendId ? { backendId } : {}) })}
+          />
+        )}
+
+        {!modelSourceSubpage && selected.declared?.page && (!selected.enabled || missing
+          ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可用</Trans></p>{!missing && <Button size="sm" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>}</div>
+          : <PluginPageView key={selected.id} pluginId={selected.id} disabled={working || !reachable} onChanged={() => { void reloadPlugins().catch(() => undefined); }} />)}
+
+        {!modelSourceSubpage && !selected.declared?.page && selected.settings.length > 0 && (
+          <form onSubmit={e => { e.preventDefault(); void save(); }}>
+            <SettingsGroup
+              title={fallbackConnection ? t`默认连接` : (selectedHasModelSources || showStatusGroup) ? t({ message: '设置', context: 'plugin-detail-tab' }) : undefined}
+              note={fallbackConnection ? t`提供商没填地址和 Key 时使用` : undefined}
+            >
+              {selected.settings.map(field => {
+                const cleared = Object.hasOwn(draft, field.key) && draft[field.key] === null;
+                const value = draft[field.key] ?? (Object.hasOwn(draft, field.key) ? '' : baseline?.settings.find(f => f.key === field.key)?.value ?? '');
+                return (
+                  <SettingsRow key={field.key} title={field.label}>
+                    <div className="flex w-80 max-w-full items-center gap-2 max-md:w-full">
+                      <Input
+                        type={field.kind === 'secret' ? 'password' : 'text'}
+                        className={cn(field.key === 'baseUrl' || field.kind === 'secret' ? 'font-mono' : undefined)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-label={field.label}
+                        disabled={working}
+                        readOnly={unavailable}
+                        value={value}
+                        placeholder={field.kind === 'secret' && field.set && !cleared ? t({ message: '已设置' }) : undefined}
+                        onChange={e => setDraft(current => ({ ...current, [field.key]: e.target.value }))}
+                      />
+                      {field.kind === 'secret' && field.set && !cleared && (
+                        <Button type="button" size="xs" variant="secondary" disabled={working || unavailable} onClick={() => setDraft(current => ({ ...current, [field.key]: null }))}><Trans>清除</Trans></Button>
+                      )}
+                    </div>
+                  </SettingsRow>
+                );
+              })}
+              {settingsHasDraft && (
+                <div className="flex items-center justify-end gap-2 py-3">
+                  <Button type="button" size="sm" variant="ghost" disabled={working} onClick={() => { setDraft({}); setBaseline(selected); }}><Trans>取消</Trans></Button>
+                  <Button type="submit" size="sm" variant="primary" disabled={working || unavailable || !reachable}><Trans>保存</Trans></Button>
+                </div>
+              )}
+            </SettingsGroup>
+          </form>
+        )}
+      </>
+    )}
 
     {configurationId && (!selected.enabled && !keepPage
       ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可打开专用配置</Trans></p><Button size="sm" variant="secondary" disabled={working || dirty || missing || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button></div>
       : page ? <fieldset className="min-w-0" disabled={busy || configurationUnavailable}><PluginView key={customRevision} entry={page} projectId={projectId} sessionId={sessionId} settingsPage={pageService} /></fieldset>
       : <EmptyState title={t({ message: '此配置在当前客户端不可用' })} />)}
-    {pluginActions.filter(action => action.kind === 'device-flow').map(action => <Button key={action.id} className="self-start" size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
-    {configurationOptions.length === 0 && !pluginActions.some(action => action.kind === 'device-flow') && <EmptyState title={t({ message: '没有可配置项' })} />}
+    {!modelSourceSubpage && remainingFlowActions.map(action => <Button key={action.id} className="self-start" size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
+    {configurationOptions.length === 0 && !deviceFlowActions.length && <EmptyState title={t({ message: '没有可配置项' })} />}
   </div>;
   const managementContent = selected && <div className="flex min-w-0 flex-col gap-5">
     {selected.source === 'installed' || selected.source === 'development'
@@ -430,7 +522,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       <DialogBody key={shownTab} id="plugin-detail-panel" className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
         </DialogContent>
         <PluginVersionsDialog plugin={versions ? selected : undefined} onClose={() => setVersions(false)} onChanged={() => { void changed(); }} />
-        <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} />
+        <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} onDone={() => { invalidateModelUsage(); }} />
       </Dialog>
       <input ref={fileInput} className="sr-only" type="file" accept=".tgz,.tar.gz,.tar,.zip,application/gzip,application/x-tar,application/zip" tabIndex={-1} aria-hidden onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void install({ file }); }} />
       <AddPluginSourceDialog open={addingSource} knownIds={(sources ?? []).map(value => value.id)} onOpenChange={setAddingSource} onAdded={(next, added) => { applyMarket(next); if (added) chooseScope(sourceScope(added.id)); }} />

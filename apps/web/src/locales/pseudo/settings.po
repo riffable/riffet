@@ -159,12 +159,24 @@ msgstr ""
 msgid "{active} 项进行中"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{age}读取"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{clock} 重置"
+msgstr ""
+
 #: src/app/settings/SupportSections.tsx
 msgid "{count} 条"
 msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "{count} 次"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{date} 重置"
 msgstr ""
 
 #: src/app/settings/QuickChatSection.tsx
@@ -188,16 +200,20 @@ msgstr ""
 msgid "{minutes} 分钟"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{name} · 每日"
+msgstr ""
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "{recognizer} · 不可用"
 msgstr ""
 
-#: src/app/settings/ProviderUsage.tsx
-msgid "{reset} 重置"
-msgstr ""
-
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{weekday} 重置"
 msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
@@ -2185,6 +2201,10 @@ msgstr ""
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "刚刚读取"
+msgstr ""
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "刚启动"
 msgstr ""
@@ -2289,6 +2309,13 @@ msgstr ""
 msgid "删除后可撤销"
 msgstr ""
 
+#. placeholder {0}: formatNumber(status.quota.remaining)
+#. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
+#. placeholder {1}: formatNumber(status.quota.limit)
+#. placeholder {1}: formatQuotaAmount(status.dailyQuota.limit)
+#: src/app/settings/ProviderUsage.tsx
+msgid "剩余 {0} / {1}"
+msgstr ""
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
@@ -2431,6 +2458,10 @@ msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "即将停止"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "即将重置"
 msgstr ""
 
 #: src/app/settings/ProfileSection.tsx
@@ -4091,6 +4122,10 @@ msgstr ""
 
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "已注册"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "已用尽"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
@@ -6204,7 +6239,6 @@ msgstr ""
 msgid "未保存的文件"
 msgstr ""
 
-
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "权限图标"
@@ -6658,6 +6692,10 @@ msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "每晚，以及主对话压缩前"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "每月"
 msgstr ""
 
 #: src/app/design/mac/TypeChapter.tsx
@@ -8095,7 +8133,6 @@ msgstr ""
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "编辑"
 msgstr ""
-
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"

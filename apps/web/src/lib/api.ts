@@ -905,9 +905,12 @@ export const api = {
   /** Forgets the chat and its conversation bindings. */
   deleteChannelChat: (key: string) => request<{ ok: true }>(`/api/channels/chats/${encodeURIComponent(key)}`, { method: 'DELETE' }),
   /** Account quota and per-model load, read live; a session pins the profile and project it runs on. */
-  backendUsage: (backendId: NativeBackendId, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global' }, signal?: AbortSignal) => {
+  backendUsage: (backendId: NativeBackendId, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global'; refresh?: boolean }, signal?: AbortSignal) => {
     const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(scope)) if (value) query.set(key, value);
+    for (const [key, value] of Object.entries(scope)) {
+      if (key === 'refresh') { if (value === true) query.set('refresh', '1'); }
+      else if (typeof value === 'string' && value) query.set(key, value);
+    }
     return request<NativeBackendUsage>(`/api/backends/${encodeURIComponent(backendId)}/usage?${query}`, { signal });
   },
   /** Built-in commands plus the skills the backend discovers in the project, for the `/` menu. */

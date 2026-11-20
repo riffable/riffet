@@ -393,3 +393,11 @@ export const MESSAGE_SEARCH_BUDGET = {
    */
   scanRows: 500_000,
 } as const;
+
+/** Plugin detail page sections and subpages (docs/design/system/plugins.md §6.3, §6.5). */
+export const PLUGIN_PAGE_BUDGET = {
+  /** Extension-point rows shown inline before linking to a full-list subpage. */
+  summaryRows: 5,
+  /** Row count above which a subpage adds a local filter input. */
+  filterThreshold: 12,
+} as const;

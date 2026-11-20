@@ -159,6 +159,14 @@ msgstr "{0} (unavailable in the provider)"
 msgid "{active} 项进行中"
 msgstr "{active} active"
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{age}读取"
+msgstr "Checked {age}"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{clock} 重置"
+msgstr "Resets {clock}"
+
 #: src/app/settings/SupportSections.tsx
 msgid "{count} 条"
 msgstr "{count, plural, one {# record} other {# records}}"
@@ -166,6 +174,10 @@ msgstr "{count, plural, one {# record} other {# records}}"
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "{count} 次"
 msgstr "{count} runs"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{date} 重置"
+msgstr "Resets {date}"
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "{days} 天"
@@ -188,17 +200,21 @@ msgstr "{label}: {message}"
 msgid "{minutes} 分钟"
 msgstr "{minutes, plural, one {# minute} other {# minutes}}"
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "{name} · 每日"
+msgstr "{name} · Daily"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "{recognizer} · 不可用"
 msgstr "{recognizer} · Unavailable"
 
-#: src/app/settings/ProviderUsage.tsx
-msgid "{reset} 重置"
-msgstr "Resets at {reset}"
-
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}, last 30 minutes. Use the arrow keys to step through 10-second intervals."
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{weekday} 重置"
+msgstr "Resets {weekday}"
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "**Web 优先能用最少的人覆盖最多的用户。** 一套代码同时服务桌面与手机浏览器，迭代不用等商店审核。"
@@ -2185,6 +2201,10 @@ msgstr "The summary in the list draws the seats and the question first; progress
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr "List pages share SearchField; the query row in overlays is a combobox and is built separately."
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "刚刚读取"
+msgstr "Checked just now"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "刚启动"
 msgstr "Just started"
@@ -2289,6 +2309,13 @@ msgstr "Already taken by the previous command"
 msgid "删除后可撤销"
 msgstr "Undo after delete"
 
+#. placeholder {0}: formatNumber(status.quota.remaining)
+#. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
+#. placeholder {1}: formatNumber(status.quota.limit)
+#. placeholder {1}: formatQuotaAmount(status.dailyQuota.limit)
+#: src/app/settings/ProviderUsage.tsx
+msgid "剩余 {0} / {1}"
+msgstr "{0} / {1} left"
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
@@ -2432,6 +2459,10 @@ msgstr "When a dangerous confirmation opens, focus is on Cancel; use promptDialo
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "即将停止"
 msgstr "Stopping soon"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "即将重置"
+msgstr "Resets soon"
 
 #: src/app/settings/ProfileSection.tsx
 msgid "历史头像"
@@ -4092,6 +4123,10 @@ msgstr "Existing sessions keep their current setting."
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "已注册"
 msgstr "Registered"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "已用尽"
+msgstr "Exhausted"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "已登录"
@@ -6204,7 +6239,6 @@ msgstr "Permissions, file picking and sharing"
 msgid "未保存的文件"
 msgstr "Unsaved files"
 
-
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "权限图标"
@@ -6659,6 +6693,10 @@ msgstr "Daily"
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "每晚，以及主对话压缩前"
 msgstr "Nightly, and before the main conversation is compacted"
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "每月"
+msgstr "Monthly"
 
 #: src/app/design/mac/TypeChapter.tsx
 msgid "每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。"
@@ -8095,7 +8133,6 @@ msgstr "Auto review"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "编辑"
 msgstr "Edit"
-
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"

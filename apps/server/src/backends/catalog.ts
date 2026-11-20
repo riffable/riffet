@@ -494,9 +494,10 @@ export class BackendCatalog {
 
   /**
    * Account quota and per-model load for one backend profile, from its selected model source or
-   * its CLI. A named source never inherits the CLI login's quota. Reused for a short while.
+   * its CLI. A named source never inherits the CLI login's quota. Reused for a short while; profiles
+   * pointing to the same model source with the same address and key share one cached read.
    */
-  async usage(backendId: string, project: Project | undefined, profileId?: string, session?: Session): Promise<NativeBackendUsage | undefined> {
+  async usage(backendId: string, project: Project | undefined, profileId?: string, session?: Session, options: { refresh?: boolean } = {}): Promise<NativeBackendUsage | undefined> {
     if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
     const driver = this.registry.require(backendId);
     const profiles = this.profiles(driver);
@@ -508,10 +509,18 @@ export class BackendCatalog {
     // A saved source that nothing provides shows no quota rather than the CLI login's, even where launches fall back.
     const source = savedModelSourceOf(profile.config);
     if (source ? !modelSourceProvider(source) : !driver.usage) return undefined;
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
+    const key = source
+      ? createHash('sha256').update(JSON.stringify([
+        'source',
+        source,
+        typeof profile.config.apiEndpoint === 'string' ? profile.config.apiEndpoint.trim() : '',
+        typeof profile.config.apiKey === 'string' ? profile.config.apiKey.trim() : '',
+      ])).digest('hex')
+      : createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
     let read = this.usageReads.get(key);
-    if (read?.value && read.freshUntil > Date.now()) return read.value;
-    const stale = read?.value && read.freshUntil - USAGE_FRESH_MS + USAGE_STALE_MS > Date.now() ? read.value : undefined;
+    const refresh = options.refresh === true;
+    if (!refresh && read?.value && read.freshUntil > Date.now()) return read.value;
+    const stale = !refresh && read?.value && read.freshUntil - USAGE_FRESH_MS + USAGE_STALE_MS > Date.now() ? read.value : undefined;
     if (!read) {
       read = { freshUntil: 0 };
       this.usageReads.set(key, read);

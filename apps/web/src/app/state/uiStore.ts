@@ -72,6 +72,11 @@ function storedWidth(key: string, min: number, max: number, fallback: number) {
   return value ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
 }
 
+/** A specific provider action requested when opening 设置 › 模型提供商 (e.g. from a plugin's page). */
+export type ProviderSettingsTarget =
+  | { kind: 'edit'; backendId: NativeBackendId; profileId: string; token: number }
+  | { kind: 'add'; backendId?: NativeBackendId; modelSource: string; token: number };
+
 export interface UiState {
   sidebarCollapsed: boolean;
   mobileSidebar: boolean;
@@ -98,6 +103,8 @@ export interface UiState {
   settingsMounted: boolean;
   /** A settings section the palette asked for, until its nav button exists to be clicked. */
   pendingSettingsSection?: SettingsSection;
+  /** A provider to open or pre-select for creation when 设置 › 模型提供商 mounts. */
+  pendingProviderTarget?: ProviderSettingsTarget;
   paletteOpen: boolean;
   searchOpen: boolean;
   addProjectOpen: boolean;
@@ -141,6 +148,7 @@ export function createUiStore() {
     creatingWorktree: false,
   });
   let previewToken = 0;
+  let providerTargetToken = 0;
   let floatSaved = '';
   /**
    * The side panel belongs to a conversation: the view of each one that left it open, keyed by
@@ -209,7 +217,15 @@ export function createUiStore() {
     openImportSession(projectId?: string) { store.set({ importSession: projectId ? { projectId } : {}, paletteOpen: false, searchOpen: false, mobileSidebar: false }); },
     openPalette() { store.set({ paletteOpen: true, searchOpen: false, mobileSidebar: false }); },
     /** Opens a settings section, mounting the dialog on first use. */
-    openSettings(section?: SettingsSection) { store.set({ settingsMounted: true, settingsOpen: true, pendingSettingsSection: section }); },
+    openSettings(section?: SettingsSection) { store.set({ settingsMounted: true, settingsOpen: true, pendingSettingsSection: section, pendingProviderTarget: undefined }); },
+    /** Opens 设置 › 模型提供商 focused on editing an existing provider or adding one with a source pre-selected. */
+    openProviderSettings(target: { kind: 'edit'; backendId: NativeBackendId; profileId: string } | { kind: 'add'; backendId?: NativeBackendId; modelSource: string }) {
+      providerTargetToken += 1;
+      store.set({ settingsMounted: true, settingsOpen: true, pendingSettingsSection: 'providers', pendingProviderTarget: { ...target, token: providerTargetToken } });
+    },
+    clearProviderTarget(token?: number) {
+      store.set((current) => token === undefined || current.pendingProviderTarget?.token === token ? { pendingProviderTarget: undefined } : current);
+    },
   };
   return { ...store, ...actions };
 }

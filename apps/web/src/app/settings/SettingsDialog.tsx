@@ -12,6 +12,7 @@ import { cn, errorMessage } from '@/lib/utils';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { cancelSettingsTransition, runSettingsTransition, SETTINGS_LIST_LEVEL, viewTransitionsSupported } from '@/lib/view-transition';
 import { useStores } from '../state/stores';
+import type { ProviderSettingsTarget } from '../state/uiStore';
 import { SettingsGroup as Group, SettingsLinkRow } from './SettingsLayout';
 
 import { ProfileSection } from './ProfileSection';
@@ -56,9 +57,11 @@ interface Props {
    * still belongs to the dialog.
    */
   initialSection?: SettingsSection;
+  providerTarget?: ProviderSettingsTarget;
+  onProviderTargetHandled?: (token: number) => void;
 }
 
-export function SettingsDialog({ open, onOpenChange, project, settings, onRefreshBackends, onSettingsChanged, onLogout, onError, initialSection, framed }: Props) {
+export function SettingsDialog({ open, onOpenChange, project, settings, onRefreshBackends, onSettingsChanged, onLogout, onError, initialSection, providerTarget, onProviderTargetHandled, framed }: Props) {
   const { t } = useLingui();
   // The section labels resolve the active locale when they are read, so each render reads them anew.
   const sections = settingsSections;
@@ -232,7 +235,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'notifications' && <NotificationsSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
             {section === 'backends' && <Suspense fallback={sectionFallback}><AgentSettingsSection settings={settings} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} /></Suspense>}
             {section === 'providers' && <Suspense fallback={sectionFallback}><div className="flex flex-col gap-6">
-              <BackendProfilesSection settings={settings} project={project} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} />
+              <BackendProfilesSection settings={settings} project={project} initialTarget={providerTarget} onTargetHandled={onProviderTargetHandled} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} />
             </div></Suspense>}
             {section === 'auxiliary' && <Suspense fallback={sectionFallback}><AuxiliaryModelsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onOpenTitleRules={() => void selectSection('titles')} /></Suspense>}
             {section === 'quickchat' && <Suspense fallback={sectionFallback}><QuickChatSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}

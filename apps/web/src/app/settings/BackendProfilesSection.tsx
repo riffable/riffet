@@ -29,6 +29,7 @@ import { settingsPagesOf } from '@/plugins/catalog';
 import { useSettingsPages } from '@/plugins/registry';
 import { invalidateModelUsage, ModelPicker } from '../session/ModelPicker';
 import { useCatalog, useStores } from '../state/stores';
+import type { ProviderSettingsTarget } from '../state/uiStore';
 import { PluginFlowDialog } from '../plugins/PluginFlowDialog';
 import { ProviderModelList } from './ProviderModelList';
 import { SettingsGroup, SettingsLinkRow, SettingsRow } from './SettingsLayout';
@@ -169,9 +170,11 @@ function StatusLine({ status }: { status: Status }) {
   return <span role="status" className="inline-flex min-w-0 items-start gap-1.5 text-xs text-fg-2" title={text}><StatusDot tone={tone} className="mt-1 shrink-0" /><span className="min-w-0 break-words">{text}</span></span>;
 }
 
-export function BackendProfilesSection({ settings, project, onRefresh, onDirtyChange, onBusyChange, onOpenPage, onError }: {
+export function BackendProfilesSection({ settings, project, initialTarget, onTargetHandled, onRefresh, onDirtyChange, onBusyChange, onOpenPage, onError }: {
   settings: AppSettings;
   project?: ProjectRecord;
+  initialTarget?: ProviderSettingsTarget;
+  onTargetHandled?: (token: number) => void;
   onRefresh: () => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
@@ -191,10 +194,12 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
   const offered = useCatalog((state) => state.backends);
   const ids = useMemo(() => offered.filter((entry) => entry.backendId !== 'chat').map((entry) => entry.backendId), [offered]);
   const providerPanelId = useId();
-  const [backendId, setBackendId] = useState<NativeBackendId>(settings.defaultBackendId ?? ids[0] ?? LEGACY_DEFAULT_BACKEND_ID);
+  const [backendId, setBackendId] = useState<NativeBackendId>(() => initialTarget?.backendId && ids.includes(initialTarget.backendId) ? initialTarget.backendId : (settings.defaultBackendId ?? ids[0] ?? LEGACY_DEFAULT_BACKEND_ID));
   useEffect(() => { if (ids.length && !ids.includes(backendId)) setBackendId(ids[0]!); }, [ids]);
+  const handledTargetToken = useRef(0);
   const consumes = useCatalog((state) => state.backends.find((entry) => entry.backendId === backendId)?.capabilities.consumesProtocols);
   const [providers, setProviders] = useState<NativeBackendProfileSettings[]>([]);
+  const [loadedBackendId, setLoadedBackendId] = useState<NativeBackendId | undefined>(undefined);
   const [openId, setOpenId] = useState('');
   const [draft, setDraft] = useState<Draft>({});
   const [source, setSource] = useState<SourceChoice>('login');
@@ -242,6 +247,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
     const controller = new AbortController();
     setLoading(true);
     setLoadError('');
+    setLoadedBackendId(undefined);
     setProviders([]);
     setOpenId('');
     setAdding(undefined);
@@ -249,15 +255,49 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
     setClearKey(false);
     setSource('login');
     if (ownPages) {
+      setLoadedBackendId(backendId);
       setLoading(false);
       return () => controller.abort();
     }
     void api.backendProfiles(backendId, controller.signal).then((result) => {
-      if (!controller.signal.aborted) setProviders(result.profiles);
+      if (!controller.signal.aborted) {
+        setProviders(result.profiles);
+        setLoadedBackendId(backendId);
+      }
     }).catch((error) => { if (!controller.signal.aborted) setLoadError(errorMessage(error, t`无法加载模型提供商`)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [backendId, profilesRequest, ownPages]);
+
+  // Apply a deep-link target from a plugin page (edit a specific provider, or start adding with a source pre-selected).
+  useEffect(() => {
+    if (!initialTarget || initialTarget.token === handledTargetToken.current) return;
+    if (initialTarget.backendId && ids.includes(initialTarget.backendId) && backendId !== initialTarget.backendId) {
+      setBackendId(initialTarget.backendId);
+      return;
+    }
+    if (loading || ownPages || loadedBackendId !== backendId) return;
+    if (initialTarget.kind === 'add' && !plugins) return;
+    handledTargetToken.current = initialTarget.token;
+    onTargetHandled?.(initialTarget.token);
+    if (initialTarget.kind === 'edit') {
+      const profile = providers.find((item) => item.id === initialTarget.profileId);
+      if (!profile) return;
+      setOpenId(profile.id);
+      setDraft(editable(profile));
+      setSource(profile.modelSource ?? (profile.apiEndpoint ? 'custom' : 'login'));
+      setApiKey('');
+      setClearKey(false);
+      setAdding(undefined);
+    } else if (extras[backendId]?.endpoint !== false) {
+      const availableSources = modelSourcesFor(plugins!, backendId, consumes);
+      if (!availableSources.some((entry) => entry.source.id === initialTarget.modelSource)) return;
+      setOpenId('');
+      setApiKey('');
+      setClearKey(false);
+      setAdding({ name: '', source: initialTarget.modelSource, apiEndpoint: '', apiKey: '' });
+    }
+  }, [initialTarget, ids, backendId, loading, ownPages, loadedBackendId, providers, plugins, consumes, onTargetHandled]);
 
   // Only the open provider is checked. The catalog reflects saved settings and reloads after a
   // save, so the editor never needs a button the user has to remember to press.
@@ -536,7 +576,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
                       )}
 
                       {sourceEntry(source)?.source.usage && (draft.modelSource === baseline?.modelSource && draft.apiEndpoint === baseline?.apiEndpoint && !apiKey && !clearKey
-                        ? <ProviderUsage key={`${connectionRevision}:${JSON.stringify(provider)}`} backendId={backendId} profileId={provider.id} projectId={project?.id} />
+                        ? <ProviderUsage key={`${connectionRevision}:${JSON.stringify(provider)}`} backendId={backendId} profileId={provider.id} projectId={provider.modelSource ? undefined : project?.id} />
                         : <SettingsRow title={t`额度`}><span className="text-xs text-fg-3"><Trans>保存后读取额度</Trans></span></SettingsRow>)}
 
                       <div className="flex flex-col gap-2 py-3.5">
@@ -652,7 +692,7 @@ export function BackendProfilesSection({ settings, project, onRefresh, onDirtyCh
         action={login?.action}
         open={loginOpen}
         onOpenChange={setLoginOpen}
-        onDone={() => { toast.success(t`已登录`); setReload((value) => value + 1); void loadPlugins().catch(() => undefined); }}
+        onDone={() => { toast.success(t`已登录`); invalidateModelUsage(); setReload((value) => value + 1); void loadPlugins().catch(() => undefined); }}
       />
     </div>
   );

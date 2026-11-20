@@ -1,4 +1,5 @@
-import { MODEL_PICKER_BUDGET, type NativeBackendCatalogEntry, type NativeBackendUsage } from '@contracts';
+import { MODEL_PICKER_BUDGET, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendUsage } from '@contracts';
+import { createStore, useStore } from './store';
 
 /**
  * What the model picker last read, kept across reloads so it paints at once while a fresh read
@@ -56,3 +57,35 @@ export function rememberCatalog(key: string, entry: NativeBackendCatalogEntry, n
 export const cachedUsage = (key: string): NativeBackendUsage | undefined => usages.read(key);
 export const rememberUsage = (key: string, usage: NativeBackendUsage): void => usages.write(key, usage);
 export const forgetUsage = (): void => usages.clear();
+
+/** Shared in-memory quota readings and revision across the model picker, provider editor and plugin page. */
+// perf-rules: allow bounded to MODEL_PICKER_BUDGET.storedScopes in writeLiveUsage and cleared on invalidateModelUsage
+const liveUsages = new Map<string, NativeBackendUsage>();
+export const usageRevision = createStore({ value: 0 });
+
+export function useUsageRevision(): number {
+  return useStore(usageRevision, (state) => state.value);
+}
+
+/** Matches `ProjectHome` and `ModelPicker` usage scope keys so all three surfaces share one raw cache entry. */
+export function providerUsageScope(backendId: NativeBackendId, profileId: string, projectId?: string): string {
+  return `${backendId}|${projectId ?? 'global'}|${profileId}`;
+}
+
+export function readLiveUsage(scope: string): NativeBackendUsage | undefined {
+  return liveUsages.get(scope) ?? cachedUsage(scope);
+}
+
+export function writeLiveUsage(scope: string, usage: NativeBackendUsage): void {
+  liveUsages.delete(scope);
+  liveUsages.set(scope, usage);
+  if (liveUsages.size > MODEL_PICKER_BUDGET.storedScopes) liveUsages.delete(liveUsages.keys().next().value!);
+  rememberUsage(scope, usage);
+}
+
+/** Credentials are write-only, so saving a provider or plugin connection expires client quota caches. */
+export function invalidateModelUsage(): void {
+  liveUsages.clear();
+  forgetUsage();
+  usageRevision.set((current) => ({ value: current.value + 1 }));
+}

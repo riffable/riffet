@@ -242,11 +242,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
       };
     });
   }, [grouped, backend, backendId, settings.nativeBackendDefaults, settings.defaultModel, assistant]);
-  // The grouped list prefixes each id with its provider; usage is read for the active one only.
-  const loadModelUsage = useCallback((signal: AbortSignal) => api.backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal)
-    .then((usage) => grouped && activeProfileId
-      ? { ...usage, models: Object.fromEntries(Object.entries(usage.models).map(([id, status]) => [composeChoice(activeProfileId, id), status])) }
-      : usage), [backendId, project?.id, activeProfileId, grouped]);
+  // Usage is read for the active provider only, stored raw so ModelPicker, settings and plugin pages share one cache.
+  const loadModelUsage = useCallback((signal: AbortSignal) => api.backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal), [backendId, project?.id, activeProfileId]);
   const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) });
   const selected = backendSelection(backendId, activeCatalog, selection);
   const effectiveSelection = launchSelection(activeCatalog, selected);

@@ -217,8 +217,7 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
         {...(providers ? { providers, activeProviderId: profileId } : { providerLabel })}
         {...(model ? { value: grouped ? composeChoice(profileId!, model) : model, params } : {})}
         placeholder={t({ message: '选择模型', context: 'terminal-model-picker-label' })}
-        loadUsage={(signal) => api.backendUsage(backendId, { sessionId }, signal)
-          .then((usage) => grouped ? { ...usage, models: Object.fromEntries(Object.entries(usage.models).map(([id, status]) => [composeChoice(profileId!, id), status])) } : usage)}
+        loadUsage={(signal) => api.backendUsage(backendId, { sessionId }, signal)}
         refreshCatalog={refreshCatalog}
         usageScopeKey={JSON.stringify([backendId, sessionId, profileId ?? '', grouped])}
         loading={loading}
