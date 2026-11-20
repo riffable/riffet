@@ -1,7 +1,6 @@
 package riffet.ui.settings
 
 import riffet.ui.design.LocalInterfaceStyle
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import riffet.ui.design.AlertDialog
@@ -160,16 +159,11 @@ internal fun PairedServersSection(
         }
     }
     SettingsGroup("") {
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                .clickable(enabled = busy == null, role = Role.Button) { onPair(null) }
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(RiffetIcons.Plus, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(metrics.iconSize))
-            Spacer(Modifier.width(16.dp))
-            Text(stringResource(Res.string.settings_pair_new_server), style = typography.body, color = colors.fg)
-        }
+        riffet.ui.design.GroupRow(
+            title = stringResource(Res.string.settings_pair_new_server),
+            leading = { Icon(RiffetIcons.Plus, null, tint = colors.fg2, modifier = Modifier.size(metrics.iconSize)) },
+            enabled = busy == null, role = Role.Button, onClick = { onPair(null) },
+        )
     }
     SettingsFootnote(stringResource(Res.string.settings_paired_local_only))
     error?.takeIf { it.first == null }?.let { PageBanner(it.second, SettingsNoticeKind.ERROR) }

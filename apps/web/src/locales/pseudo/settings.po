@@ -1368,6 +1368,10 @@ msgstr ""
 msgid "会话视图、侧栏"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "会话行只有一行：行首是 Agent 的标志，行尾是状态或时间"
+msgstr ""
+
 #: src/app/settings/StorageSection.tsx
 msgid "会话记录"
 msgstr ""
@@ -5363,6 +5367,10 @@ msgstr ""
 msgid "数值"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "数值的基准，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
+msgstr ""
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "数值读自实际绘制的控件。图形可以小，点击区不缩。"
 msgstr ""
@@ -7707,6 +7715,10 @@ msgstr ""
 msgid "筛选的选项固定且少，用分段控件；更多条件收进图标按钮的弹出层。"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "筛选胶囊没选中时只是文字，选中的一个有底，选中底滑到新的位置"
+msgstr ""
+
 #: src/app/design/android/PhoneMiniature.tsx
 msgid "简体中文"
 msgstr ""
@@ -9289,6 +9301,10 @@ msgstr ""
 msgid "选中块在选项之间滑动。"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "选中是中性的浅底，主操作是墨色；强调色只留给焦点、选区和链接"
+msgstr ""
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "选中项在行尾打勾"
 msgstr ""
@@ -9874,6 +9890,10 @@ msgstr ""
 msgid "页面只经组件和模式使用样式；组件只引用颜色角色和档位。"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "页面比卡片暗一档，卡片、胶囊和面板都不描边；线只分开同一张卡片里的行"
+msgstr ""
+
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "页面的一级视图，2–5 个"
 msgstr ""
@@ -10181,5 +10201,5 @@ msgid "默认模型"
 msgstr ""
 
 #: src/app/design/android/notes.ts
-msgid "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
+msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr ""

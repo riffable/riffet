@@ -1,5 +1,8 @@
 package riffet.ui.session
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloatAsState
+import kotlinx.coroutines.delay
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.MaterialRole
 import riffet.ui.design.floatingShadow
@@ -72,6 +75,9 @@ import riffet_mobile.shared.generated.resources.session_turn_user
  * already stamped on each row (which comes from `core.timelineTurnKeys`), so this file and the
  * transcript can never disagree about where a turn starts.
  */
+
+/** How long the turn pill stays after the transcript stops moving. */
+private const val PILL_LINGER_MS = 1500L
 
 /** One tick: the transcript row index to jump to, and what the turn is. */
 internal data class TurnTick(val key: String, val index: Int, val label: String, val running: Boolean)
@@ -159,6 +165,8 @@ internal fun TurnNavigator(
     activeIndex: Int,
     onJump: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** The transcript is moving. The pill shows where you are while it does and leaves the text alone at rest. */
+    scrolling: Boolean = true,
 ) {
     if (ticks.size < 2) return
     val colors = LocalRiffetColors.current
@@ -169,19 +177,29 @@ internal fun TurnNavigator(
     LaunchedEffect(open) {
         if (open) menuScroll.scrollTo(with(density) { (MENU_ROW * (activeIndex - 2).coerceAtLeast(0)).roundToPx() })
     }
+    // Like a scroll indicator: there while the transcript moves or its list is open, gone a moment after.
+    var shown by remember { mutableStateOf(scrolling) }
+    LaunchedEffect(scrolling, open) {
+        if (scrolling || open) shown = true else {
+            delay(PILL_LINGER_MS)
+            shown = false
+        }
+    }
+    val presence = animateFloatAsState(if (shown) 1f else 0f, LocalRiffetMotion.current.effects(), label = "turn-pill")
     val pill = RoundedCornerShape(LocalInterfaceStyle.current.selectionRadius)
     // Tabular figures, so the counter does not shift sideways as the turn changes.
     val figures = remember(typography) { typography.label.copy(fontFeatureSettings = "tnum") }
     Box(modifier) {
         // The pill is only 28dp tall; the interactive size around it is the touch target.
-        Box(Modifier.padding(horizontal = 6.dp).minimumInteractiveComponentSize()) {
+        Box(Modifier.padding(horizontal = 6.dp).minimumInteractiveComponentSize()
+            .graphicsLayer { alpha = presence.value; translationY = (presence.value - 1f) * 6.dp.toPx() }) {
             Row(
                 modifier = Modifier
                     .height(28.dp)
                     .floatingShadow(pill)
                     .clip(pill)
                     .riffetMaterial(MaterialRole.CONTROL, pill, LocalRiffetSurfaces.current.floating)
-                    .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.session_turn_locator)) { open = true }
+                    .clickable(enabled = shown, role = Role.Button, onClickLabel = stringResource(Res.string.session_turn_locator)) { open = true }
                     .padding(start = 12.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

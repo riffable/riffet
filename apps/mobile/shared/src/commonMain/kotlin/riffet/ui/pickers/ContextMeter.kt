@@ -112,7 +112,7 @@ internal fun ContextSummaryRow(usage: NativeContext?, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(horizontal = SheetGutter)
             .clip(SheetRowShape)
-            .then(if (recipe.grouped) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
+            .then(if (sheetRowsFilled) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
             .pickerRowDivider()
             .clickable(role = Role.Button, onClick = onClick)
             .heightIn(min = maxOf(metrics.controlHeight, metrics.rowSubtitleHeight))
@@ -248,7 +248,7 @@ internal fun ContextBreakdownSheet(usage: NativeContext, onDismiss: () -> Unit, 
             parts.forEach { part ->
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .then(if (LocalInterfaceStyle.current.components.lists.grouped) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
+                        .then(if (sheetRowsFilled) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
                         .pickerRowDivider()
                         .heightIn(min = metrics.controlHeight)
                         .padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),

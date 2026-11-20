@@ -15,6 +15,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Audio and video in the Files view play at any size and can be seeked, on the web, Mac, and phones; they previously had to be under 32 MB and played only from the start.
 - Session title rules (Settings › Behavior › Session titles) decide how sessions are named by folder, Agent, origin, or tag. A template can use the original title, the project name, the date, and the time, and a rule can also cover titles you renamed. Rules change only what is shown; the CLI keeps its own session name. The web, Mac, and phones all show the ruled names.
 - The web app now opens with a full-window first-run guide: pick the default Agent (with install commands when none is available), choose the directory to start in, and scan to connect your phone; every step can be skipped. It appears once per browser, and not at all on a server that already has conversations.
+- On Android, the personal assistant page folds the bottom bar into a round button beside the message box instead of stacking the two, leaving two or three more lines for the conversation; tap the button to open the bar and switch pages.
+- Android has a new default interface style, Riffet: cards set apart by tone with no outlines, regular-weight rows, a one-line task list with the state at the end of each row, and selection that slides between tabs and filters. Devices that never picked a style switch to it; the five earlier styles stay under Settings › Interface style.
 - `riffet doctor` has a Storage section: the integrity of the three databases, blobs the log refers to that are missing, and records that belong to no conversation. A minute after start the server also checks the two databases that cannot be rebuilt in the background; damage is reported in the log with the restore command, and no file is touched.
 - `riffet logs --scope dispatch` shows each message's delivery steps and the phase its conversation is in, for finding out why a message was not sent or keeps running.
 - On the web, a model-source plugin's Settings tab now lists every Agent provider that uses it, with expandable account and per-model quota bars, a Models subpage, direct links to edit or add providers, and its own gateway fields grouped as Default connection; providers sharing the same gateway address and key also share one quota read.
@@ -36,6 +38,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - A task worktree whose directory was deleted by hand can be created again at the same path instead of failing as already registered.
 - With a very large message history, a two-character search across conversations reads at most the newest 500,000 messages instead of slowing the whole server as history grows.
 - Claude Code shell commands that only read, search, or list files show what they read, like Codex's: `Read MarkLayer.tsx, textQuote.ts` or `Search quoteOf in src` with the read or search icon, instead of the whole command line. Other commands still show their description or command, and the full command stays in the expanded row.
+- On Android, tapping a session's composer no longer stutters as the keyboard opens: the composer unfolds as part of the keyboard's own motion, and folds back with it when the keyboard is put away. A bottom sheet opened while the keyboard is up rises from the bottom edge instead of first appearing above the keyboard.
+- The Android Git panel shows only "Not a Git repository" for a project that is not one, without a read-failure error above it.
 
 ## 0.9.0 - 2026-11-19
 

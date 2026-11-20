@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
@@ -316,7 +317,8 @@ internal fun ChipRow(
             items.forEach { item ->
                 val on = item.key == selected
                 val tint by animateColorAsState(if (on) s.selectedContent else colors.fg2, motion.effects(), label = "chip")
-                val fill by animateColorAsState(if (on) Color.Transparent else s.press, motion.effects(), label = "chip-fill")
+                val bare = LocalInterfaceStyle.current.components.controls.bareChips
+                val fill by animateColorAsState(if (on || bare) s.press.copy(alpha = 0f) else s.press, motion.effects(), label = "chip-fill")
                 val source = remember { MutableInteractionSource() }
                 val focused by source.collectIsFocusedAsState()
                 Row(
@@ -590,6 +592,7 @@ private fun SharedAction(
     val dialogAction = LocalDialogAction.current
     val filledDialog = dialogAction && LocalInterfaceStyle.current.components.controls.filledDialogActions
     val filled = primary && !dialogAction
+    val confirm = filledDialog && LocalDialogConfirm.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val focused by source.collectIsFocusedAsState()
@@ -601,6 +604,7 @@ private fun SharedAction(
         filled && danger -> colors.dangerFg
         filled -> surfaces.primaryActionContent
         danger -> colors.danger
+        confirm -> surfaces.primaryActionContent
         else -> surfaces.secondaryActionContent
     }
     val background = when {
@@ -610,7 +614,13 @@ private fun SharedAction(
         danger -> colors.danger
         else -> surfaces.primaryAction
     }
-    val actionBackground = surfaces.secondaryAction
+    // Two fills of one weight left the choice to the label's weight alone: the confirming action is the primary
+    // fill, a destructive one its danger tint, and the way out stays quiet.
+    val actionBackground = when {
+        !confirm || !enabled -> surfaces.secondaryAction
+        danger -> colors.danger.copy(alpha = 0.12f)
+        else -> surfaces.primaryAction
+    }
     Box(
         modifier.then(if (dialogAction && !filledDialog) Modifier.fillMaxWidth() else Modifier)
             .minimumInteractiveComponentSize()

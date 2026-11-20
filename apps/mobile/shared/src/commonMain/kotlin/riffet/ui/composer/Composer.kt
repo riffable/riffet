@@ -4,6 +4,8 @@ import riffet.contracts.SessionGoal
 import riffet.ui.design.riffetMaterial
 import riffet.ui.design.materialContentBackground
 import riffet.ui.design.MaterialRole
+import riffet.ui.design.composerBottomGap
+import riffet.ui.app.besideTabDock
 import riffet.ui.design.RiffetMaterialContent
 
 import riffet.ui.design.cardEdge
@@ -364,7 +366,7 @@ fun Composer(
             // mid-sentence must not close the keyboard.
             .keepsFocusOnTap()
             .padding(start = metrics.pageInset, end = metrics.pageInset,
-                top = metrics.controlInset / 2, bottom = maxOf(12.dp, metrics.tabBarBottomInset)),
+                top = metrics.controlInset / 2, bottom = metrics.composerBottomGap),
         verticalArrangement = Arrangement.spacedBy(metrics.controlInset / 3),
     ) {
         // Dock order matches the web's `ComposerDock`: the goal, then the todos, then the queue. A
@@ -409,7 +411,8 @@ fun Composer(
         }
 
         // A terminal holding the conversation is its only writer: the bar takes the card's place.
-        if (session.terminalHold != null) TerminalHoldBar(store = store, sessionId = session.id) else ComposerCard(
+        if (session.terminalHold != null) TerminalHoldBar(store = store, sessionId = session.id, modifier = Modifier.besideTabDock()) else ComposerCard(
+            modifier = Modifier.besideTabDock(),
             text = text,
             onTextChange = { text = it },
             placeholder = stringResource(if (!connected) Res.string.composer_placeholder_offline else if (store.prefersSteerWhileRunning()) Res.string.composer_placeholder_steer else if (working) Res.string.composer_placeholder_queued else Res.string.composer_placeholder_online),
@@ -580,7 +583,9 @@ internal fun ComposerCard(
     val draftEmpty = hold?.emptyDraft ?: text.isEmpty()
     val windowHeight = LocalWindowInfo.current.containerSize.height.toFloat()
     val holdPresence = remember { MutableTransitionState(false) }
-    val compact = allowCompact && !focused && text.isEmpty() && attachments.isEmpty() && sessionReferences.isEmpty() && !uploading && !dictating && !voice
+    val foldable = allowCompact && text.isEmpty() && attachments.isEmpty() && sessionReferences.isEmpty() && !uploading && !dictating && !voice
+    val compact = foldable && !focused
+    val unfold = rememberDockUnfold(foldable, focused)
     // The tonal composer's size describes the whole capsule, including its action row.
     // Applying composerMinHeight to the text field alone made an empty hero unnecessarily tall.
     val tonalHero = hero && LocalInterfaceStyle.current.components.composer.tonal
@@ -695,10 +700,7 @@ internal fun ComposerCard(
             .then(if (hero) Modifier else Modifier.floatingShadow(shape, lifted = focused))
             .clip(shape)
             .then(if (hero) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card), shape)
-                else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating))
-            // A draft growing or shrinking by a line (dictated text landing, a sent message clearing it) eases the card's
-            // edge rather than jumping it; the surface and its shadow follow.
-            .animateContentSize(motion.spatial()),
+                else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating)),
     ) {
         // The overlay leaves as the finger lifts, in one motion, while the last sentence finishes in the bar; a failure brings it
         // back. Its popup leaves a zero-size node where it is called: here, inside the card, where nothing spaces it. Called next
@@ -707,7 +709,12 @@ internal fun ComposerCard(
             onRetry = { dictation?.retry() },
             onDiscard = { dictation?.cancel(); hold = null })
         RiffetMaterialContent {
-        Column(if (hero) Modifier else Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+        // A draft growing or shrinking by a line (dictated text landing, a sent message clearing it) eases the card's
+        // edge rather than jumping it; the surface and its shadow follow. Only the draft: the tools below keep the
+        // keyboard's pace (`rememberDockUnfold`), which a spring of the card's own would trail. The width is the
+        // card's, fixed, so the spring never runs across.
+        Column(Modifier.fillMaxWidth().then(if (hero) Modifier else Modifier.weight(1f, fill = false)).animateContentSize(motion.spatial())
+            .then(if (hero) Modifier else Modifier.verticalScroll(rememberScrollState()))) {
         if (sessionReferences.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = metrics.controlInset, vertical = metrics.controlInset / 3)) {
                 sessionReferences.forEach { reference ->
@@ -880,7 +887,7 @@ internal fun ComposerCard(
         }
 
         // The footer opens with the keyboard's own motion instead of appearing in the middle of it.
-        AnimatedVisibility(visible = !compact, enter = motion.expandIn(), exit = motion.collapseOut()) {
+        Box(Modifier.unfolded(unfold)) {
             // The first tool's glyph starts where the text does, and the send button ends as far from the edge.
             val footer = Modifier.fillMaxWidth().padding(start = (metrics.inputInset - (toolWidth - metrics.iconSize) / 2).coerceAtLeast(0.dp),
                 end = (metrics.inputInset - sendRing).coerceAtLeast(0.dp), bottom = (metrics.inputInset - sendRing).coerceAtLeast(0.dp), top = footerTop)

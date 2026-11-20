@@ -782,10 +782,13 @@ private fun HomeToolCard(icon: ImageVector, title: String, onClick: () -> Unit, 
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     val shape = RoundedCornerShape(metrics.controlRadius)
+    // Where tone separates surfaces, the card is the quiet fill a filter chip rests on, not one more outline.
+    val frame = if (style.components.surfaces.softLines) Modifier.background(LocalRiffetSurfaces.current.press)
+        else Modifier.border(metrics.hairlineWidth, colors.line, shape)
     Row(
         modifier = modifier
             .clip(shape)
-            .border(metrics.hairlineWidth, colors.line, shape)
+            .then(frame)
             .clickable(role = Role.Button, onClick = onClick)
             .heightIn(min = metrics.rowHeight)
             .padding(horizontal = metrics.rowPadding),

@@ -64,7 +64,7 @@ export interface ThemeDesign {
   tokens?: ThemeDesignTokens;
   styles?: Partial<Record<(typeof THEME_INTERFACE_STYLES)[number], ThemeDesignTokens>>;
 }
-export const THEME_INTERFACE_STYLES = ['material3', 'ios', 'expressive', 'miuix', 'fluent'] as const;
+export const THEME_INTERFACE_STYLES = ['riffet', 'material3', 'ios', 'expressive', 'miuix', 'fluent'] as const;
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

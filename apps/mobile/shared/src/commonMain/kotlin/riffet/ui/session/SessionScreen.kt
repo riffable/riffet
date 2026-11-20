@@ -818,6 +818,7 @@ fun SessionScreen(
                                     }
                                 },
                                 modifier = Modifier.align(Alignment.TopEnd).padding(top = chromePadding.calculateTopPadding() + 4.dp, end = 8.dp),
+                                scrolling = listState.isScrollInProgress,
                             )
                             val awayFromTail by remember(follow, listState, hasNewerHistory) {
                                 derivedStateOf { (!follow.following && listState.canScrollForward) || hasNewerHistory }
@@ -829,7 +830,7 @@ fun SessionScreen(
                                     store.jumpToLatest()
                                     follow.resume()
                                 },
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = chromePadding.calculateBottomPadding() + 4.dp),
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(chromePadding).padding(end = 8.dp, bottom = 4.dp),
                             )
                         }
                     }

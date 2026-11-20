@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
@@ -210,6 +211,9 @@ internal fun PickerSheetFrame(
     }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
+    // Read in the page's window: the panel's own has not heard of the keyboard yet.
+    val pageIme = WindowInsets.ime
+    val keyboardUp = remember { pageIme.getBottom(density) > 0 }
     // 0 is below the screen, 1 is in place; the scrim follows the same value.
     val shown = remember { Animatable(0f) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -327,7 +331,7 @@ internal fun PickerSheetFrame(
                         ),
                 )
                 // The content viewport excludes keyboard space; the window scrim stays full-height.
-                riffet.ui.app.AdaptiveModalViewport(Modifier.keyboardPadding(), fullWindowCoordinates = true, alignment = Alignment.BottomCenter) {
+                riffet.ui.app.AdaptiveModalViewport(Modifier.keyboardPadding(keyboardLeaving = keyboardUp), fullWindowCoordinates = true, alignment = Alignment.BottomCenter) {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val maxSheet = pickerSheetMaxHeight(maxHeight, recipe)
                     Column(
@@ -381,7 +385,7 @@ internal fun PickerSheetFrame(
                                 }
                             } else {
                                 RiffetMaterialContent {
-                                    Box(Modifier.fillMaxWidth().padding(top = metrics.controlInset / 2), contentAlignment = Alignment.Center) {
+                                    if (recipe.dragHandle) Box(Modifier.fillMaxWidth().padding(top = metrics.controlInset / 2), contentAlignment = Alignment.Center) {
                                         Box(Modifier.size(width = metrics.smallIconSize * 2, height = metrics.hairlineWidth * 8)
                                             .clip(CircleShape).background(surfaces.hairline))
                                     }
@@ -538,8 +542,11 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
         }
         return
     }
-    Column(Modifier.fillMaxWidth().pickerRowDivider(0.dp)) {
-        Row(Modifier.fillMaxWidth().heightIn(min = metrics.controlHeight), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().sheetLine(0.dp)) {
+        // Under a grabber the header is one control tall; alone at the panel's edge it is a bar, so the
+        // title has the same room above it as below.
+        Row(Modifier.fillMaxWidth().heightIn(min = if (style.components.sheets.dragHandle) metrics.controlHeight else maxOf(metrics.barHeight, metrics.controlHeight)),
+            verticalAlignment = Alignment.CenterVertically) {
             // A start-aligned title starts where the rows' text does, or after the back arrow; a
             // centred one keeps the slot so it sits between two equal ends.
             if (onBack != null || style.components.sheets.centeredTitle) Box(Modifier.size(metrics.controlHeight), contentAlignment = Alignment.Center) {
@@ -560,6 +567,17 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
             modifier = Modifier.fillMaxWidth().padding(start = if (onBack != null && !style.components.sheets.centeredTitle) metrics.controlHeight else SheetInset, end = metrics.groupInset, bottom = metrics.controlInset))
     }
 }
+
+/**
+ * Inside a panel that is itself the card (`sheets.flatRows`): its rows carry no fill and no lines.
+ * The same rows on a settings page sit in a card and keep both.
+ */
+internal val flatPanel: Boolean
+    @Composable get() = LocalInterfaceStyle.current.components.sheets.flatRows && LocalPickerHost.current != null
+
+/** A grouped style sets a sheet's rows on the card fill, unless the panel is itself the card. */
+internal val sheetRowsFilled: Boolean
+    @Composable get() = LocalInterfaceStyle.current.components.lists.grouped && !flatPanel
 
 /** Where a sheet's text starts; rows inset their highlight by [SheetGutter] and pad the rest. */
 internal val SheetInset
@@ -591,6 +609,14 @@ internal fun SectionLabel(text: String) {
 
 @Composable
 internal fun Modifier.pickerRowDivider(start: androidx.compose.ui.unit.Dp = SheetInset): Modifier {
+    // On a flat panel the rows are a menu's: set apart by their height, with no line left trailing the last one.
+    if (flatPanel) return this
+    return sheetLine(start)
+}
+
+/** The header's line, which every panel with lines keeps: the list scrolls away under it. */
+@Composable
+private fun Modifier.sheetLine(start: androidx.compose.ui.unit.Dp): Modifier {
     val metrics = LocalInterfaceStyle.current.metrics
     if (!LocalInterfaceStyle.current.components.lists.dividers) return this
     val color = LocalRiffetSurfaces.current.hairline
@@ -648,7 +674,7 @@ internal fun OptionRow(
         tone != null -> tone
         else -> colors.fg
     }
-    val rowTint = if (grouped) materialContentBackground(surfaces.card) else Color.Transparent
+    val rowTint = if (sheetRowsFilled) materialContentBackground(surfaces.card) else Color.Transparent
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -725,7 +751,7 @@ internal fun SegmentRow(
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     Column(modifier = Modifier.fillMaxWidth()
-        .then(if (LocalInterfaceStyle.current.components.lists.grouped) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
+        .then(if (sheetRowsFilled) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
         .pickerRowDivider().padding(horizontal = SheetInset, vertical = metrics.controlInset)) {
         Text(text = label, style = SheetRowText, color = if (enabled) colors.fg else LocalRiffetSurfaces.current.disabledContent)
         if (!hint.isNullOrBlank()) {
@@ -758,7 +784,7 @@ internal fun ToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (LocalInterfaceStyle.current.components.lists.grouped) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
+            .then(if (sheetRowsFilled) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
             .pickerRowDivider()
             .pickerFocus(source)
             .toggleable(value = on, enabled = enabled, role = Role.Switch,
@@ -800,7 +826,7 @@ internal fun PickerNavRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (LocalInterfaceStyle.current.components.lists.grouped) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
+            .then(if (sheetRowsFilled) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card)) else Modifier)
             .pickerRowDivider()
             .pickerFocus(source)
             .clickable(enabled = enabled, role = Role.Button,

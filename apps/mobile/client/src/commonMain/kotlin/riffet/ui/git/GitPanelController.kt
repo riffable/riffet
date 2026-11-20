@@ -229,7 +229,9 @@ class GitPanelController(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Throwable) {
-            _state.update { it.copy(status = null, error = gitError(failure, L10n.uiText("git.statusReadFailed"))) }
+            // Not a repository is an answer, and the panel's empty state gives it; only a read that failed is an error.
+            val notRepository = (failure as? RiffetHttpException)?.code == "NOT_A_GIT_REPOSITORY"
+            _state.update { it.copy(status = null, error = if (notRepository) it.error else gitError(failure, L10n.uiText("git.statusReadFailed"))) }
         } finally {
             _state.update { it.copy(statusLoaded = true) }
         }

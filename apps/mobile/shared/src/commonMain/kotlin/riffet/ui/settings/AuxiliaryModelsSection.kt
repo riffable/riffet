@@ -42,7 +42,7 @@ internal fun AuxiliaryModelsSection(controller: SettingsController, options: Lis
     val hasDefault = state.settings?.auxiliaryModels?.default != null
     val followDefault = stringResource(Res.string.settings_auxiliary_follow_default)
     val off = stringResource(Res.string.settings_auxiliary_off)
-    SettingsGroup(stringResource(Res.string.settings_auxiliary_models)) {
+    SettingsGroup("") {
         AuxiliaryModelRow(controller, "default", stringResource(Res.string.settings_auxiliary_default), off, options, error)
         AuxiliaryModelRow(controller, "title", stringResource(Res.string.settings_auxiliary_title), if (hasDefault) followDefault else stringResource(Res.string.settings_auxiliary_title_off), options, null)
         AuxiliaryModelRow(controller, "handoff", stringResource(Res.string.settings_auxiliary_handoff), if (hasDefault) followDefault else off, options, null)

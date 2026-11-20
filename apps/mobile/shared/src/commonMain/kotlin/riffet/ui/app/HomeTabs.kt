@@ -34,6 +34,18 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.State
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.offset
+import kotlin.math.roundToInt
+import riffet.ui.design.keyboardUnfoldSpan
+import riffet.ui.design.tabDockBottomPadding
+import riffet.ui.design.tabDockInset
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -122,10 +134,55 @@ internal class TabChrome {
     /** Bumped when the current tab is tapped again: its root list scrolls back to the top. */
     var reselected by mutableStateOf(0)
         internal set
+
+    /** How far the bar has opened over a docked composer: 0 folded beside it, 1 open. Read while drawing. */
+    var dockOpen: State<Float>? = null
+        internal set
 }
 
 internal val LocalTabChrome = staticCompositionLocalOf<TabChrome?> { null }
 internal val LocalTabContentBottomPadding = staticCompositionLocalOf { 0.dp }
+
+/** The room a tab's composer leaves at its start for the folded bar; zero where the bar is not docked beside it. */
+internal val LocalTabDockInset = compositionLocalOf { 0.dp }
+
+/**
+ * A tab whose page ends in a session composer: the bar folds to a disc and the resting composer
+ * takes the rest of its line, so the two no longer stack. The page keeps these values while it
+ * leaves, so nothing in it moves during the tab transition.
+ */
+@Composable
+internal fun TabComposerDock(enabled: Boolean, content: @Composable () -> Unit) {
+    val metrics = LocalInterfaceStyle.current.metrics
+    CompositionLocalProvider(
+        LocalTabContentBottomPadding provides if (enabled) metrics.tabDockBottomPadding else LocalTabContentBottomPadding.current,
+        LocalTabDockInset provides if (enabled) metrics.tabDockInset else 0.dp,
+        content = content,
+    )
+}
+
+/**
+ * The composer card beside the folded bar. The room is given up as the keyboard carries the card
+ * clear of the disc, so the card is full width while writing; it fades while the bar is open over it.
+ */
+@Composable
+internal fun Modifier.besideTabDock(): Modifier {
+    val inset = LocalTabDockInset.current
+    val chrome = LocalTabChrome.current
+    val ime = WindowInsets.ime
+    val bars = WindowInsets.navigationBars
+    val unfoldSpan = with(LocalDensity.current) { LocalInterfaceStyle.current.metrics.keyboardUnfoldSpan.toPx() }
+    return graphicsLayer { alpha = if (inset > 0.dp) 1f - (chrome?.dockOpen?.value ?: 0f) else 1f }
+        .layout { measurable, constraints ->
+            val full = inset.roundToPx()
+            // The card rises with the keyboard; it starts to widen once it is above the disc.
+            val rise = (ime.getBottom(this) - bars.getBottom(this)).coerceAtLeast(0)
+            val clear = (unfoldSpan / 2f).coerceAtLeast(1f)
+            val start = (full * (1f - ((rise - clear) / clear).coerceIn(0f, 1f))).roundToInt()
+            val placeable = measurable.measure(constraints.offset(horizontal = -start))
+            layout(placeable.width + start, placeable.height) { placeable.placeRelative(start, 0) }
+        }
+}
 
 /** 新会话 / 设置's back to 任务: the bar's own step, not a layer over the page, so the drawer still opens. */
 internal class TabBackTarget(private val onBack: () -> Unit) : PageBackTarget {
@@ -143,6 +200,8 @@ internal fun HomeShell(
     onTab: (HomeTab) -> Unit,
     waiting: Int,
     rail: Boolean,
+    /** The current tab's page ends in a docked composer ([TabComposerDock]): the bar folds beside it. */
+    dock: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
@@ -227,13 +286,33 @@ internal fun HomeShell(
     // first frame), while the bar itself slides down out of the way over it, and back up on return.
     val hidden = animateFloatAsState(if (barShown) 0f else 1f, motion.spatial(), label = "bar")
     val barComposed by remember { derivedStateOf { hidden.value < 1f } }
+    // Beside a docked composer the bar is a disc until it is tapped; any touch elsewhere folds it again.
+    var navOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(dock) { if (!dock) navOpen = false }
+    val folded = dock && !navOpen
+    val fold = animateFloatAsState(if (folded) 1f else 0f, motion.spatial(), label = "dock")
+    val opened = rememberUpdatedState(dock && navOpen)
+    chrome.dockOpen = animateFloatAsState(if (opened.value) 1f else 0f, motion.effects(), label = "dockOpen")
+    PageBackHandler(enabled = dock && navOpen) { navOpen = false }
     Layout(
         contents = listOf(
             {
                 Box(
                     Modifier
-                        .consumeWindowInsets(PaddingValues(bottom = if (barShown) barHeight else 0.dp))
-                        .keyboardPadding(),
+                        // A docked composer sits on the bar's line, so the keyboard lifts it from the first pixel.
+                        .consumeWindowInsets(PaddingValues(bottom = if (!barShown) 0.dp else if (dock) metrics.tabDockBottomPadding else barHeight))
+                        .keyboardPadding()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (opened.value) {
+                                        if (event.changes.any { it.changedToDown() }) navOpen = false
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                            }
+                        },
                 ) { tabContent() }
             },
             {
@@ -246,7 +325,10 @@ internal fun HomeShell(
                         },
                         selected = HomeTab.entries.indexOf(tab),
                         onSelect = { onTab(HomeTab.entries[it]) },
-                        onReselect = { chrome.reselected += 1 },
+                        onReselect = { if (dock) navOpen = false else chrome.reselected += 1 },
+                        folded = folded,
+                        fold = { fold.value },
+                        onUnfold = { navOpen = true },
                         // The page is padded off the gesture bar; the bar's colour runs under it anyway.
                         modifier = Modifier
                             .then(if (barShown) Modifier.snackbarBottomBar() else Modifier.leaving())

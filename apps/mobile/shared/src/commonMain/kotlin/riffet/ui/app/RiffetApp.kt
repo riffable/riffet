@@ -1120,7 +1120,8 @@ internal fun Workbench(
                 CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !covering)) {
                     Box(Modifier.fillMaxSize().then(if (covering) Modifier.clearAndSetSemantics { } else Modifier).coveredBy(sessionPage.takeIf { covering })) {
                         val tabs = rememberSaveableStateHolder()
-                        HomeShell(tab = navigation.tab, onTab = { navigation.tab = it }, waiting = waiting, rail = rail) {
+                        HomeShell(tab = navigation.tab, onTab = { navigation.tab = it }, waiting = waiting, rail = rail,
+                            dock = !rail && navigation.tab == HomeTab.ASSISTANT && assistantMain != null) {
                             // Use the device's page motion between destinations. The
                             // leaving tab stays composed during the transition but no longer owns back or input.
                             val tabInsets = systemBarsPadding(includeDisplayCutout = false)
@@ -1165,7 +1166,7 @@ internal fun Workbench(
                                                 HomeTab.ASSISTANT -> when {
                                                     // A conversation opened over the tabs owns the transcript, so this page waits behind it.
                                                     assistantMain != null -> if (session == null) key(assistantMain.id) {
-                                                        SessionScreen(
+                                                        TabComposerDock(enabled = !rail) { SessionScreen(
                                                             store = store,
                                                             session = assistantMain,
                                                             writeScope = scope,
@@ -1185,7 +1186,7 @@ internal fun Workbench(
                                                                 ?.let { TimelineFocusTarget(it.sequence, it.token) },
                                                             presenter = presenter,
                                                             marks = marks,
-                                                        )
+                                                        ) }
                                                     }
                                                     assistantProject != null -> AssistantHome(
                                                         store = store,

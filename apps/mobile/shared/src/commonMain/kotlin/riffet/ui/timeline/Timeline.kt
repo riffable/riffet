@@ -3,6 +3,7 @@ package riffet.ui.timeline
 import riffet.ui.design.riffetMaterialSource
 import riffet.ui.design.RiffetMaterialSourceContent
 import riffet.ui.app.LocalPageActive
+import riffet.ui.app.plus
 
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -416,7 +416,7 @@ internal fun Timeline(
         }
     }
 
-    val direction = LocalLayoutDirection.current
+    val gutter = TimelineRhythm.gutter
     val fadeMillis = motionDuration(reduced, motion.SHORT)
     val colors = LocalRiffetColors.current
     val fadeIn = LocalNativeFeatures.current.isOn(NativeFeature.FADE_IN)
@@ -426,14 +426,11 @@ internal fun Timeline(
         modifier = modifier.riffetMaterialSource(key = follow, enabled = LocalPageActive.current).nestedScroll(nestedDrag)
             .pointerInput(nestedDrag) { with(nestedDrag) { clearOnRelease() } }
             .onPlaced { listPlace[0] = it },
-        contentPadding = PaddingValues(
-            start = TimelineRhythm.gutter + contentPadding.calculateLeftPadding(direction),
-            end = TimelineRhythm.gutter + contentPadding.calculateRightPadding(direction),
-            top = metrics.controlInset + contentPadding.calculateTopPadding(),
-            // Every tail state clears the composer's edge by the same small amount. A larger
-            // completed-only inset left the last status row floating above the input.
-            bottom = metrics.controlInset / 2 + contentPadding.calculateBottomPadding(),
-        ),
+        // Every tail state clears the composer's edge by the same small amount. A larger
+        // completed-only inset left the last status row floating above the input.
+        contentPadding = remember(contentPadding, gutter, metrics) {
+            contentPadding.plus(start = gutter, end = gutter, top = metrics.controlInset, bottom = metrics.controlInset / 2)
+        },
     ) {
         items(
             items = layout.entries,

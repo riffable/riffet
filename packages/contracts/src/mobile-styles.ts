@@ -27,6 +27,16 @@ export const MOBILE_BASE_DIMENSIONS: Dimensions = {
 
 /** Each style's changes to the base; material3 has none. */
 export const MOBILE_STYLE_DIMENSIONS = {
+  // Riffet (docs/design/system/android.md §10): the web's four radius tiers scaled for touch, lighter
+  // icons beside regular-weight rows, and one wide soft shadow under the things that float.
+  riffet: {
+    iconSize: 22, smallIconSize: 16, buttonIconSize: 18, iconSlot: 28, sectionGap: 24, pageTitleGap: 8,
+    groupRadius: 16, menuRadius: 14, controlRadius: 12, rowRadius: 10, selectionRadius: 8, composerRadius: 24,
+    barHeight: 56, tabBarHeight: 56, tabBarInset: 16, tabBarBottomInset: 8, dialogInset: 20, menuGroupGap: 6,
+    segmentedHeight: 36, sendButtonSize: 36,
+    switchWidth: 46, switchHeight: 28, switchThumbSize: 24, sliderTrackHeight: 4, sliderThumbSize: 22,
+    floatingShadowRadius: 18, floatingShadowLiftedRadius: 28, floatingShadowOffset: 6, floatingShadowSpread: -6,
+  },
   ios: {
     iconSize: 22, sliderTrackHeight: 4,
     groupRadius: 12, menuRadius: 10, controlRadius: 10, rowRadius: 8, selectionRadius: 6, composerRadius: 14,
@@ -63,6 +73,17 @@ export const MOBILE_SHARED_MOTION = {
   pageEnter: 350, pageExit: 250, coveredPageShift: 0.25, coveredPageDim: 0.12, pressOpacity: 0.55, popScale: 0.94,
   sharedAxisFraction: 0.25, short: 180, medium: 280, exit: 250,
   settleStiffness: 450, spatialDamping: 0.86, spatialStiffness: 550,
+} as const satisfies Partial<Motion>;
+
+/**
+ * The riffet style's motion, as changes to `MOBILE_MOTION`: a spatial spring that lands with a slight
+ * overshoot (things that move have weight), quick colour and opacity changes, and a page that shifts
+ * a little under the one covering it.
+ */
+export const MOBILE_RIFFET_MOTION = {
+  pageEnter: 320, pageExit: 220, coveredPageShift: 0.12, coveredPageDim: 0.1, pressOpacity: 0.6, popScale: 0.92,
+  sharedAxisFraction: 0.12, floatingShadowOpacity: 0.1, short: 160, medium: 260, long: 360, exit: 200,
+  settleStiffness: 500, spatialDamping: 0.82, spatialStiffness: 520, effectsStiffness: 1400,
 } as const satisfies Partial<Motion>;
 
 /** The expressive style's bouncier spatial spring, as changes to `MOBILE_MOTION`. */

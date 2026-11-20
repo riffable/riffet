@@ -87,7 +87,8 @@ internal fun PaneHeader(
         Row(
             Modifier.weight(1f)
                 .then(if (onTitleClick != null) Modifier.clip(RoundedCornerShape(metrics.controlRadius)).clickable(role = Role.Button, onClick = onTitleClick) else Modifier)
-                .padding(top = if (contentTitle) firstLineInset else metrics.controlInset / 3, bottom = metrics.controlInset / 3),
+                // A content title and its status line stand off the first card by half a section: flush against it they read as its caption.
+                .padding(top = if (contentTitle) firstLineInset else metrics.controlInset / 3, bottom = if (contentTitle) metrics.sectionGap / 2 else metrics.controlInset / 3),
             verticalAlignment = if (contentTitle) Alignment.Top else Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.controlInset),
         ) {
@@ -171,7 +172,8 @@ internal fun PaneValueRow(label: String, value: String, mono: Boolean = false, o
         horizontalArrangement = Arrangement.spacedBy(metrics.rowPadding),
     ) {
         Text(label, style = type.body, color = colors.fg, maxLines = 1)
-        Text(value, style = if (mono) type.monoSmall else type.body, color = colors.fg3, maxLines = 1,
+        // The value's step, as on a settings row: smaller than the label as well as lighter.
+        Text(value, style = if (mono) type.monoSmall else type.bodySmall, color = colors.fg3, maxLines = 1,
             overflow = TextOverflow.StartEllipsis.takeIf { mono } ?: TextOverflow.Ellipsis,
             textAlign = TextAlign.End, modifier = Modifier.weight(1f))
     }

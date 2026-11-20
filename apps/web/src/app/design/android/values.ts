@@ -1,4 +1,4 @@
-import { MOBILE_BASE_DIMENSIONS, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS } from '@contracts';
+import { MOBILE_BASE_DIMENSIONS, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS } from '@contracts';
 
 /**
  * What the Android chapters draw from (docs/design/system/android.md). Sizes and motion are read
@@ -6,7 +6,7 @@ import { MOBILE_BASE_DIMENSIONS, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE
  * Kotlin. Recipes and type are Kotlin code (`ui/design/ThemePresets.kt`), so they are copied here:
  * a change to a preset is copied to this file.
  */
-export const ANDROID_STYLE_IDS = ['material3', 'expressive', 'miuix', 'fluent', 'ios'] as const;
+export const ANDROID_STYLE_IDS = ['riffet', 'material3', 'expressive', 'miuix', 'fluent', 'ios'] as const;
 export type AndroidStyleId = (typeof ANDROID_STYLE_IDS)[number];
 
 export type Dimensions = typeof MOBILE_BASE_DIMENSIONS;
@@ -64,6 +64,14 @@ const merge = <T extends object>(base: T, changes: Partial<T>): T => ({ ...base,
 const dimensions = (id: AndroidStyleId): Dimensions => merge(MOBILE_BASE_DIMENSIONS, id === 'material3' ? {} : MOBILE_STYLE_DIMENSIONS[id]);
 
 export const ANDROID_STYLES: readonly AndroidStyle[] = [
+  {
+    id: 'riffet', dimensions: dimensions('riffet'), motion: merge(MOBILE_MOTION, MOBILE_RIFFET_MOTION), easing: MOBILE_EASING.standard,
+    type: merge(MATERIAL_TYPE, { label: text(15, 20, 500), menu: text(15, 20), barTitle: text(20, 26, 500), largeTitle: text(28, 34, 500), dialogTitle: text(18, 26, 500) }),
+    recipes: merge(MATERIAL_RECIPES, {
+      buttons: 'shared', segments: 'sliding', secondaryButtons: 'plain', navigation: 'floating', indicator: 'capsule',
+      dividers: true, selectionAtEnd: true, accentSections: false, card: 'elevated', dialogs: 'shared', press: 'highlight',
+    }),
+  },
   {
     id: 'material3', dimensions: dimensions('material3'), motion: MOBILE_MOTION, easing: MOBILE_EASING.standard,
     type: MATERIAL_TYPE, recipes: MATERIAL_RECIPES,

@@ -97,6 +97,48 @@ private val IosPreset = ThemePreset(
         mapSharedAliases = true),
     motion = SharedMotionTokens, motionEasing = SharedMotionEasing, mutedNativeContainer = false,
 )
+// The app's own style: the shared components throughout, ink where the other styles use the accent,
+// raised cards on a slightly darker page, and rows in regular weight so a title or an unread row stands out.
+private val RiffetStyleTypography = MaterialStyleTypography.copy(
+    headlineLarge = MaterialStyleTypography.headlineLarge.copy(fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Medium),
+    headlineSmall = MaterialStyleTypography.headlineSmall.copy(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
+    titleLarge = MaterialStyleTypography.titleLarge.copy(fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
+    titleMedium = MaterialStyleTypography.titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Normal, letterSpacing = 0.sp),
+    titleSmall = MaterialStyleTypography.titleSmall.copy(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Normal, letterSpacing = 0.sp),
+    labelLarge = MaterialStyleTypography.labelLarge.copy(fontSize = 15.sp, lineHeight = 20.sp),
+)
+private val RiffetPreset = ThemePreset(
+    dimensions = RiffetDimensions,
+    variants = DesignVariants(SettingsIconPresentation.PLAIN, NavigationPresentation.FLOATING, HomeTabPresentation.UNDERLINE, SecondaryButtonPresentation.PLAIN),
+    components = ComponentRecipes(
+        controls = ControlRecipe(buttons = ComponentBackend.SHARED, switches = ComponentBackend.SHARED,
+            choices = ComponentBackend.SHARED, chips = ComponentBackend.SHARED,
+            segments = SegmentPresentation.SLIDING, segmentShadow = true, inline = InlinePresentation.TRANSPARENT, bareChips = true,
+            filledDialogActions = true),
+        inputs = InputRecipe(fields = ComponentBackend.SHARED, sliders = ComponentBackend.SHARED),
+        lists = ListRecipe(dividers = true, roundedSelection = true, movingRows = true, plainMenuRows = true,
+            trailingMenuIcons = true, outlinedMenu = true, grouped = true, accentSections = false,
+            sectionBackground = false, focusBorder = true, compactChevron = true,
+            valueBelowLabel = false, groupSeparatorLine = false, selectionAtEnd = true, plainObjectMarks = true),
+        navigation = NavigationRecipe(topBar = ComponentBackend.SHARED, largeTitle = ComponentBackend.SHARED,
+            capsulePanel = true, capsuleIndicator = true,
+            rail = ComponentBackend.SHARED, tabs = ComponentBackend.SHARED, badges = ComponentBackend.SHARED),
+        sheets = SheetRecipe(insetFloating = true, nativeDragHandle = false, dragHandle = false, flatRows = true),
+        dialogs = DialogRecipe(backend = ComponentBackend.SHARED),
+        composer = ComposerRecipe(tonal = false, settingsSurface = false),
+        // The page is a step darker than the palette's paper and cards are its raised tone: tone separates
+        // surfaces, so nothing is outlined and the only lines left are the soft ones between a card's rows.
+        surfaces = SurfaceRecipe(pageMix = 0.03f, card = CardPresentation.ELEVATED,
+            pressAlpha = 0.06f, transparentInput = false,
+            navigationAlpha = 0.92f, scrimAlpha = 0.28f, tonalSecondary = false, accentThumb = false,
+            softLines = true, neutralSelection = true, inkPrimary = true),
+        ripple = false,
+    ),
+    typography = typographyDefaults(RiffetStyleTypography, subhead = RiffetStyleTypography.titleSmall,
+        footnote = RiffetStyleTypography.titleSmall, buttonSize = 15.sp,
+        dialogTitle = RiffetStyleTypography.headlineSmall, menu = RiffetStyleTypography.bodyLarge.copy(fontSize = 15.sp, lineHeight = 20.sp)),
+    motion = RiffetMotionTokens, motionEasing = StandardMotionEasing, mutedNativeContainer = false,
+)
 private val ExpressivePreset = MaterialPreset.copy(
     dimensions = ExpressiveDimensions,
     variants = DesignVariants(SettingsIconPresentation.PLAIN, NavigationPresentation.FLOATING, HomeTabPresentation.SEGMENTED, SecondaryButtonPresentation.TONAL),
@@ -161,6 +203,7 @@ private val FluentPreset = MaterialPreset.copy(
 )
 
 internal fun themePreset(style: InterfaceStyle): ThemePreset = when (style) {
+    InterfaceStyle.RIFFET -> RiffetPreset
     InterfaceStyle.MATERIAL3 -> MaterialPreset
     InterfaceStyle.IOS -> IosPreset
     InterfaceStyle.EXPRESSIVE -> ExpressivePreset

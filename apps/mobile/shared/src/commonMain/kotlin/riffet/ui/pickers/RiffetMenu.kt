@@ -276,7 +276,7 @@ internal fun RiffetMenuItem(
                 interactionSource = source, indication = LocalIndication.current, onClick = onClick)
                 else Modifier.clickable(enabled = enabled, role = Role.Button,
                     interactionSource = source, indication = LocalIndication.current, onClick = onClick))
-            .then(if (recipe.dividers) Modifier.drawWithContent {
+            .then(if (recipe.dividers && !recipe.plainMenuRows) Modifier.drawWithContent {
                 drawContent()
                 drawLine(surface.hairline, Offset(metrics.rowPadding.toPx(), size.height), Offset(size.width, size.height), strokeWidth = metrics.hairlineWidth.toPx())
             } else Modifier)

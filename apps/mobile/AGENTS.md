@@ -25,6 +25,8 @@
 - 能同步得到的首帧状态就同步给出，不默认写 `remember { Loading }` 加 `LaunchedEffect`。
 - 会改变行高的派生（markdown 解析、异步元数据、测量）不放在行组合之后：在 presenter 的 `prepare` 钩子里于后台算好（见 `prepareTranscriptMarkdown`），做不到的先占住最终尺寸。在贴底的列表里，行的首帧高度与稳定后的高度不同，就是一次跳动。
 - 页面主体放在 `RiffetPageScaffold`（或 `PageBody`）里，转场结束后再组合并淡入；不要逐页手写 `LocalPageContentReady` 判断。
+- 骨架传给主体的内边距是同一个实例，数值在使用处读取：直接交给 `contentPadding` 或 `Modifier.padding`，要加边距用 `PaddingValues.plus(...)`。在组合阶段调 `calculateBottomPadding()` 再拼一份新的，输入框每变一次高度这段组合就重跑一次。
+- 跟着键盘动的尺寸在布局阶段读 `WindowInsets.ime`（见 `rememberDockUnfold`），不另起动画；聚焦时才出现的内容提前组合好，用 `Modifier.unfolded` 露出。
 
 ## 排查
 

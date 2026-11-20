@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -19,6 +23,9 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import riffet.ui.design.MaterialRole
 import riffet.ui.design.RiffetMaterialContent
 import riffet.ui.design.RiffetMaterialRecordedContent
@@ -29,6 +36,37 @@ import riffet.ui.design.riffetMaterialSource
 import riffet.ui.theme.appearancePageBackground
 
 internal val LocalPageChromeInsets = staticCompositionLocalOf { PaddingValues() }
+
+/**
+ * A page's chrome insets: one instance for the page's lifetime, whose values are state. They are
+ * written while the chrome is measured and read where they are used, so a reader in the layout phase
+ * (a list's content padding, `Modifier.padding`) is measured again when the composer grows or the
+ * keyboard moves it, and nothing recomposes. A fresh `PaddingValues` per height recomposed the whole
+ * body, every transcript row with it, on each frame of that motion.
+ */
+private class ChromeInsets : PaddingValues {
+    var value by mutableStateOf(PaddingValues())
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = value.calculateLeftPadding(layoutDirection)
+    override fun calculateTopPadding() = value.calculateTopPadding()
+    override fun calculateRightPadding(layoutDirection: LayoutDirection) = value.calculateRightPadding(layoutDirection)
+    override fun calculateBottomPadding() = value.calculateBottomPadding()
+}
+
+/**
+ * These insets and a fixed margin, added when the values are read. Summing them while composing
+ * would tie the caller's composition to every change of the insets.
+ */
+internal fun PaddingValues.plus(start: Dp = 0.dp, top: Dp = 0.dp, end: Dp = 0.dp, bottom: Dp = 0.dp): PaddingValues =
+    AddedPadding(this, start, top, end, bottom)
+
+private data class AddedPadding(val base: PaddingValues, val start: Dp, val top: Dp, val end: Dp, val bottom: Dp) : PaddingValues {
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection) =
+        base.calculateLeftPadding(layoutDirection) + if (layoutDirection == LayoutDirection.Ltr) start else end
+    override fun calculateTopPadding() = base.calculateTopPadding() + top
+    override fun calculateRightPadding(layoutDirection: LayoutDirection) =
+        base.calculateRightPadding(layoutDirection) + if (layoutDirection == LayoutDirection.Ltr) end else start
+    override fun calculateBottomPadding() = base.calculateBottomPadding() + bottom
+}
 
 /** Fixed chrome and its recorded body are siblings: chrome never records itself. */
 @Composable
@@ -56,6 +94,7 @@ internal fun RiffetPageScaffold(
         .padding(bottom = bars.calculateBottomPadding())
     val active = LocalPageActive.current
     val capture = rememberMaterialCapture()
+    val insets = remember { ChromeInsets() }
     val bodyModifier = Modifier.fillMaxSize()
         .then(if (extendSystemBars) Modifier.coverSystemBars() else Modifier)
         .riffetMaterialSource(zIndex = 1f, capture = capture, enabled = active)
@@ -75,7 +114,8 @@ internal fun RiffetPageScaffold(
                 else RiffetMaterialContent(content = bottomBar)
             } else Box(Modifier)
         }.single().measure(chromeConstraints)
-        val insets = PaddingValues(
+        // Before the body is measured: its layout reads the new values in this same pass.
+        insets.value = PaddingValues(
             start = bars.calculateLeftPadding(layoutDirection), end = bars.calculateRightPadding(layoutDirection),
             top = top.height.toDp() + bars.calculateTopPadding(),
             bottom = bottom.height.toDp() + bars.calculateBottomPadding(),

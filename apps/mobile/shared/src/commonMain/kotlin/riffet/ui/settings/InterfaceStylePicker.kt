@@ -33,12 +33,19 @@ import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.resolveDesign
 import riffet.ui.icons.Icon
 import riffet.ui.icons.RiffetIcons
+import riffet.ui.design.riffetSurfaces
+import riffet.ui.design.NavigationPresentation
+import riffet.ui.design.NavigationIndicator
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.dp
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet_mobile.shared.generated.resources.*
 
 @Composable
 internal fun interfaceStyleLabel(style: InterfaceStyle): String = stringResource(when (style) {
+    InterfaceStyle.RIFFET -> Res.string.settings_style_riffet
     InterfaceStyle.MATERIAL3 -> Res.string.settings_style_material
     InterfaceStyle.EXPRESSIVE -> Res.string.settings_style_expressive
     InterfaceStyle.MIUIX -> Res.string.settings_style_miuix
@@ -51,8 +58,8 @@ internal fun interfaceStyleLabel(style: InterfaceStyle): String = stringResource
 internal fun InterfaceStylePicker() {
     val display = DisplaySettings.shared
     val metrics = LocalInterfaceStyle.current.metrics
-    // A titled group without a card draws only its title; the grid follows it.
-    SettingsGroup(stringResource(Res.string.settings_interface_style), card = false) {}
+    // The page's title already names the grid; an untitled group keeps the page's top spacing.
+    SettingsGroup("", card = false) {}
     run {
         Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(metrics.sectionGap / 2)) {
             InterfaceStyle.entries.chunked(2).forEach { pair ->
@@ -106,42 +113,57 @@ private fun StyleCard(style: InterfaceStyle, selected: Boolean, onSelect: () -> 
     }
 }
 
-/** A page of the style: one list row, one button and the tab bar, with the style's own corner radii at half size. */
+/**
+ * A page of the style, drawn from its own recipes at half size: a card with a row, the primary
+ * action, and the tab bar (flat or floating, with the style's selection mark), on the style's page.
+ */
 @Composable
 private fun StylePreview(style: InterfaceStyle, shape: RoundedCornerShape, modifier: Modifier) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
-    val surfaces = LocalRiffetSurfaces.current
-    val target = remember(style) { resolveDesign(style, null, false).metrics }
+    val dark = LocalRiffetSurfaces.current.dark
+    val design = remember(style) { resolveDesign(style, null, false) }
+    val target = design.metrics
+    val recipe = design.preset.components
+    val look = remember(style, colors, dark) { riffetSurfaces(colors, dark, recipe.surfaces) }
     val scale = 0.5f
     val inset = metrics.controlInset * 2 / 3
     val line = metrics.hairlineWidth * 3
-    // A tinted page with a hairline, so the white row and tab bar read as cards on it.
-    Column(
-        modifier.clip(shape).background(colors.bgSubtle).border(metrics.hairlineWidth, colors.line, shape).padding(inset),
-        verticalArrangement = Arrangement.spacedBy(inset),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().height(metrics.controlHeight * 0.6f)
-                .clip(RoundedCornerShape(target.groupRadius * scale)).background(colors.bgElevated).padding(horizontal = inset),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(line)) {
-                Box(Modifier.fillMaxWidth(0.55f).height(line).clip(CircleShape).background(colors.fg2))
-                Box(Modifier.fillMaxWidth(0.35f).height(line).clip(CircleShape).background(colors.fg4))
+    val floating = design.variants.navigation == NavigationPresentation.FLOATING
+    val cardShape = RoundedCornerShape(target.groupRadius * scale)
+    Column(modifier.clip(shape).background(look.page).border(metrics.hairlineWidth, colors.line, shape)) {
+        Column(Modifier.weight(1f).padding(inset), verticalArrangement = Arrangement.spacedBy(inset)) {
+            Row(
+                Modifier.fillMaxWidth().height(metrics.controlHeight * 0.6f).clip(cardShape).background(look.card).padding(horizontal = inset),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(line)) {
+                    Box(Modifier.fillMaxWidth(0.55f).height(line).clip(CircleShape).background(colors.fg2))
+                    Box(Modifier.fillMaxWidth(0.35f).height(line).clip(CircleShape).background(colors.fg4))
+                }
+                Box(Modifier.size(line * 2).clip(CircleShape).background(colors.fg4))
             }
-            Box(Modifier.size(line * 2).clip(CircleShape).background(colors.fg4))
+            Box(Modifier.fillMaxWidth(0.45f).height(metrics.controlHeight * 0.4f).clip(RoundedCornerShape(target.controlRadius * scale)).background(look.primaryAction))
         }
-        Box(Modifier.fillMaxWidth(0.45f).height(metrics.controlHeight * 0.4f).clip(RoundedCornerShape(target.controlRadius * scale)).background(colors.accent))
-        Spacer(Modifier.weight(1f))
-        Row(
-            Modifier.fillMaxWidth().height(metrics.controlHeight * 0.55f)
-                .clip(RoundedCornerShape(target.composerRadius * scale)).background(colors.bgElevated),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(3) { index ->
-                Box(Modifier.size(line * 3).clip(RoundedCornerShape(target.selectionRadius * scale)).background(if (index == 0) colors.accent else colors.fg4))
+        val barShape = if (floating) CircleShape else RoundedCornerShape(0.dp)
+        Box(Modifier.fillMaxWidth().padding(horizontal = if (floating) inset * 2 else 0.dp).padding(bottom = if (floating) inset else 0.dp)) {
+            Row(
+                Modifier.fillMaxWidth().height(metrics.controlHeight * 0.5f).clip(barShape).background(look.card)
+                    .then(if (recipe.navigation.divider || !floating) Modifier.border(metrics.hairlineWidth, look.hairline, barShape) else Modifier),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(3) { index ->
+                    val on = index == 0
+                    val ink = if (!on) colors.fg4 else if (recipe.navigation.accentSelection) colors.accent else colors.fg
+                    val mark = recipe.navigation.indicator
+                    Box(Modifier.fillMaxHeight().width(line * 9), contentAlignment = Alignment.Center) {
+                        if (on && mark == NavigationIndicator.FILL) Box(Modifier.fillMaxHeight(0.72f).fillMaxWidth().clip(CircleShape).background(look.selected))
+                        if (on && mark == NavigationIndicator.TOP_LINE) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth(0.6f).height(line * 0.6f).background(ink))
+                        if (on && mark == NavigationIndicator.BOTTOM_DOT) Box(Modifier.align(Alignment.BottomCenter).padding(bottom = line * 0.6f).size(line).clip(CircleShape).background(ink))
+                        Box(Modifier.size(line * 2.6f).clip(RoundedCornerShape(target.selectionRadius * scale)).background(ink))
+                    }
+                }
             }
         }
     }

@@ -54,7 +54,7 @@
     <string name="settings_permission_icons_ring">圆环</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_session_spacing">消息间距</string>
-    <string name="settings_local_only_footnote">保存在本机，与服务器上的设置无关。</string>
+    <string name="settings_local_only_footnote">仅保存在这台设备</string>
     <string name="settings_text_size">文字大小</string>
     <string name="settings_color_mode">深浅模式</string>
 
@@ -88,7 +88,7 @@
     <string name="settings_motion">动效</string>
     <string name="settings_gestures">手势与触觉</string>
     <string name="settings_page_animation">页面动效</string>
-    <string name="settings_page_animation_desc">适用于所有页面和标签切换，立即生效并保存在本设备。</string>
+    <string name="settings_page_animation_desc">仅保存在这台设备</string>
     <string name="settings_page_animation_slide">滑动</string>
     <string name="settings_page_animation_fade">淡入淡出</string>
     <string name="settings_page_animation_scale">缩放</string>
@@ -107,7 +107,7 @@
     <string name="settings_reclaim_memory">CLI 内存上限</string>
     <string name="settings_reclaim_unlimited">不限</string>
     <string name="settings_reclaim_limit_gb">%1$d GB</string>
-    <string name="settings_local_effect_note">立即生效，仅保存在这台设备。</string>
+    <string name="settings_local_effect_note">仅保存在这台设备</string>
     <string name="settings_server_effect_note">保存在服务器，所有设备生效。</string>
 
     <!-- Files and editor -->
@@ -309,7 +309,7 @@
     <string name="pairing_discovering">正在查找局域网中的 Riffet…</string>
     <string name="pairing_discovered_servers">发现的服务器</string>
     <string name="settings_icon_pack">界面图标</string>
-    <string name="settings_icon_pack_footnote">切换会应用到整个界面并在本机保存。启用的图标扩展也会显示在这里。</string>
+    <string name="settings_icon_pack_footnote">仅保存在这台设备。启用的图标扩展也会列在这里。</string>
     <string name="settings_icon_pack_loading">正在加载图标…</string>
     <string name="settings_icon_pack_unavailable">所选图标包暂不可用，已使用默认图标。你的选择会保留。</string>
     <string name="settings_general">通用</string>
@@ -317,7 +317,7 @@
     <string name="settings_language_system">跟随系统</string>
     <string name="settings_language_chinese">简体中文</string>
     <string name="settings_language_english">English</string>
-    <string name="settings_language_footnote">界面和提示会使用所选语言，会话内容保留原文。此设置仅保存在本机。</string>
+    <string name="settings_language_footnote">会话内容保留原文。仅保存在这台设备。</string>
     <string name="settings_typography">排版</string>
     <string name="settings_group_behavior">行为</string>
     <string name="settings_group_models">模型</string>
@@ -338,6 +338,7 @@
     <string name="settings_auxiliary_cli_slow">CLI · 较慢</string>
     <string name="settings_icons">图标</string>
     <string name="settings_interface_style">界面风格</string>
+    <string name="settings_style_riffet">Riffet</string>
     <string name="settings_style_material">Material 3</string>
     <string name="settings_style_ios">iOS 风格</string>
     <string name="settings_style_expressive">Material 3 Expressive</string>

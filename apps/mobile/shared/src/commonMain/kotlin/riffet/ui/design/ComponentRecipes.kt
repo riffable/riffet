@@ -24,6 +24,8 @@ internal data class ControlRecipe(
     val inline: InlinePresentation = InlinePresentation.TONAL,
     val inlineControlRadius: Boolean = false,
     val filledDialogActions: Boolean = false,
+    /** A row of filter chips at rest is bare labels; only the chosen one is filled. Otherwise every chip is filled and the chosen one is darker. */
+    val bareChips: Boolean = false,
 )
 
 @Immutable
@@ -49,6 +51,16 @@ internal data class ListRecipe(
     val valueBelowLabel: Boolean = true,
     val groupSeparatorLine: Boolean = true,
     val selectionAtEnd: Boolean = false,
+    /**
+     * Object rows (a conversation) lead with the agent's bare mark and keep to one line: the state
+     * (running, waiting on you, unread) sits at the row's end in place of the time. Otherwise the mark
+     * sits on a tinted disc that carries the state, above a detail line.
+     */
+    val plainObjectMarks: Boolean = false,
+    /** Rows that change place (a folded group, a new filter) travel there on the spatial spring instead of jumping. */
+    val movingRows: Boolean = false,
+    /** Menu rows carry no line between them even where grouped rows do; a menu's groups are set apart by its separators. */
+    val plainMenuRows: Boolean = false,
 )
 
 @Immutable
@@ -80,6 +92,13 @@ internal data class SheetRecipe(
     val maxHeightFraction: Float = 0.7f,
     val parameterHeightFraction: Float = 0.4f,
     val nativeDragHandle: Boolean = true,
+    /**
+     * A grabber above the header. Without one the header is a bar of its own height and the title sits
+     * midway between the panel's edge and the list; the close button and a swipe down still dismiss.
+     */
+    val dragHandle: Boolean = true,
+    /** A grouped style's rows sit on the panel bare: the panel is the card, so a fill per row would band it. */
+    val flatRows: Boolean = false,
     val maxHeightDp: Int = 640,
 )
 
@@ -115,6 +134,12 @@ internal data class SurfaceRecipe(
     val scrimAlpha: Float = 0.32f,
     val tonalSecondary: Boolean = true,
     val accentThumb: Boolean = true,
+    /** The selected fill is a neutral step of ink over the card; the accent is left to focus, selection and links. */
+    val neutralSelection: Boolean = false,
+    /** Lines (the dividers in a card, a menu's rim) take the palette's soft line: tone separates surfaces, lines only rows. */
+    val softLines: Boolean = false,
+    /** The primary action is the palette's ink (`primary`), not its accent. */
+    val inkPrimary: Boolean = false,
 )
 
 /** Independent recipes let new presets reuse components without inheriting unrelated behavior. */

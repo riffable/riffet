@@ -69,7 +69,7 @@ internal fun applyWorkbenchAppearance(
 
     val savedTheme = ThemeId.stored(preferences.string(PreferenceKeys.THEME_ID))
     val savedMode = preferences.themeMode()
-    val savedStyle = InterfaceStyle.entries.firstOrNull { it.key == preferences.string(DisplaySettings.INTERFACE_STYLE_KEY) } ?: InterfaceStyle.MATERIAL3
+    val savedStyle = InterfaceStyle.entries.firstOrNull { it.key == preferences.string(DisplaySettings.INTERFACE_STYLE_KEY) } ?: InterfaceStyle.RIFFET
     if ((theme != null && (savedTheme != theme.id || resources?.effective?.palette != null))
         || (mode != null && savedMode != mode) || (style != null && savedStyle != style)
     ) return DeviceCallOutcome.failure(DeviceErrorCode.FAILED, "The Riffet appearance preferences could not be read back")
@@ -88,6 +88,7 @@ internal fun applyWorkbenchAppearance(
             for (entry in InterfaceStyle.entries) addJsonObject {
                 put("id", entry.key)
                 put("name", when (entry) {
+                    InterfaceStyle.RIFFET -> "Riffet"
                     InterfaceStyle.MATERIAL3 -> "Material 3"
                     InterfaceStyle.EXPRESSIVE -> "Material 3 Expressive"
                     InterfaceStyle.MIUIX -> "Miuix"

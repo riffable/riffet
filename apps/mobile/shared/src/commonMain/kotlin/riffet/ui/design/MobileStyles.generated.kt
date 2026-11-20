@@ -61,6 +61,37 @@ internal val BaseDesignDimensions = mapOf(
     "contentMaxWidth" to 840.0,
     "pageTitleGap" to 16.0,
 )
+internal val RiffetDimensions = mapOf(
+    "iconSize" to 22.0,
+    "smallIconSize" to 16.0,
+    "buttonIconSize" to 18.0,
+    "iconSlot" to 28.0,
+    "sectionGap" to 24.0,
+    "pageTitleGap" to 8.0,
+    "groupRadius" to 16.0,
+    "menuRadius" to 14.0,
+    "controlRadius" to 12.0,
+    "rowRadius" to 10.0,
+    "selectionRadius" to 8.0,
+    "composerRadius" to 24.0,
+    "barHeight" to 56.0,
+    "tabBarHeight" to 56.0,
+    "tabBarInset" to 16.0,
+    "tabBarBottomInset" to 8.0,
+    "dialogInset" to 20.0,
+    "menuGroupGap" to 6.0,
+    "segmentedHeight" to 36.0,
+    "sendButtonSize" to 36.0,
+    "switchWidth" to 46.0,
+    "switchHeight" to 28.0,
+    "switchThumbSize" to 24.0,
+    "sliderTrackHeight" to 4.0,
+    "sliderThumbSize" to 22.0,
+    "floatingShadowRadius" to 18.0,
+    "floatingShadowLiftedRadius" to 28.0,
+    "floatingShadowOffset" to 6.0,
+    "floatingShadowSpread" to -6.0,
+)
 internal val IosDimensions = mapOf(
     "iconSize" to 22.0,
     "sliderTrackHeight" to 4.0,
@@ -165,6 +196,24 @@ internal val SharedMotionTokens = DefaultMotionTokens + mapOf(
 internal val ExpressiveMotionTokens = DefaultMotionTokens + mapOf(
     "spatialDamping" to 0.7,
     "spatialStiffness" to 500.0,
+)
+internal val RiffetMotionTokens = DefaultMotionTokens + mapOf(
+    "pageEnter" to 320.0,
+    "pageExit" to 220.0,
+    "coveredPageShift" to 0.12,
+    "coveredPageDim" to 0.1,
+    "pressOpacity" to 0.6,
+    "popScale" to 0.92,
+    "sharedAxisFraction" to 0.12,
+    "floatingShadowOpacity" to 0.1,
+    "short" to 160.0,
+    "medium" to 260.0,
+    "long" to 360.0,
+    "exit" to 200.0,
+    "settleStiffness" to 500.0,
+    "spatialDamping" to 0.82,
+    "spatialStiffness" to 520.0,
+    "effectsStiffness" to 1400.0,
 )
 internal val StandardMotionEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 internal val SharedMotionEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)

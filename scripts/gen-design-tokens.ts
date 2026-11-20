@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DESKTOP_TEXT, MAC_MOTION, MOTION_DURATION, MOTION_EASING, SPACE } from '../packages/contracts/src/design-tokens.js';
-import { IOS_NATIVE_OVERRIDES, MOBILE_BASE_DIMENSIONS, MOBILE_CODE_TEXT, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS, type MobileTextStyle } from '../packages/contracts/src/mobile-styles.js';
+import { IOS_NATIVE_OVERRIDES, MOBILE_BASE_DIMENSIONS, MOBILE_CODE_TEXT, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS, type MobileTextStyle } from '../packages/contracts/src/mobile-styles.js';
 import { THEME_DIMENSION_BOUNDS, THEME_MOTION_BOUNDS } from '../packages/contracts/src/theme-design.js';
 
 /**
@@ -85,6 +85,7 @@ const outputs: Record<string, (text: string, file: string) => string> = {
     ...kList('DefaultMotionTokens', kmap(MOBILE_MOTION)),
     ...kList('SharedMotionTokens', kmap(MOBILE_SHARED_MOTION), 'DefaultMotionTokens + '),
     ...kList('ExpressiveMotionTokens', kmap(MOBILE_EXPRESSIVE_MOTION), 'DefaultMotionTokens + '),
+    ...kList('RiffetMotionTokens', kmap(MOBILE_RIFFET_MOTION), 'DefaultMotionTokens + '),
     ...Object.entries(MOBILE_EASING).map(([name, points]) => `internal val ${name[0]!.toUpperCase()}${name.slice(1)}MotionEasing = CubicBezierEasing(${points.map(kf).join(', ')})`),
     // Before IosStyleTypography: reading MaterialStyleTypography starts ThemePresets.kt's initialiser,
     // which reaches back for these through RiffetDefaultTypography.

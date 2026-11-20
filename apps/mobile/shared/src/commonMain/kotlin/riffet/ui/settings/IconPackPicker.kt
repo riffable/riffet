@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import riffet.ui.design.GroupRow
+import riffet.ui.design.GroupRows
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +25,7 @@ internal fun IconPackPicker(state: IconPackState) {
     LaunchedEffect(state) { state.refresh() }
     val colors = LocalRiffetColors.current
     SettingsGroup(title = stringResource(Res.string.settings_icon_pack)) {
-        Column(Modifier.selectableGroup()) {
+        GroupRows(Modifier.selectableGroup()) {
             state.choices.forEach { choice ->
                 val selected = choice.id == state.selected
                 val title = choice.title[Locale.current.toLanguageTag()] ?: choice.title[Locale.current.language]
@@ -56,7 +57,7 @@ internal fun IconPackPicker(state: IconPackState) {
         SettingsGroup("") { SettingsActionRow(stringResource(Res.string.settings_retry), onClick = state::refresh) }
     }
     SettingsGroup(title = stringResource(Res.string.settings_permission_icons)) {
-        Column(Modifier.selectableGroup()) {
+        GroupRows(Modifier.selectableGroup()) {
             PermissionIconStyle.entries.forEach { style ->
                 val selected = style == state.permissionStyle
                 val title = when (style) {

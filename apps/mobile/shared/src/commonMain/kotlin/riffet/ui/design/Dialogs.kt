@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,9 @@ import riffet.ui.app.adaptiveDialogProperties
 import riffet_mobile.shared.generated.resources.*
 
 internal val LocalDialogAction = staticCompositionLocalOf { false }
+
+/** The dialog's confirming action: where actions are filled, it takes the primary fill and the other stays quiet. */
+internal val LocalDialogConfirm = compositionLocalOf { false }
 
 /**
  * A confirmation (mobile.md §2.6): the [title] names the action and its object («卸载「x」？»),
@@ -148,7 +152,7 @@ internal fun RiffetDialogContent(
                             horizontalArrangement = Arrangement.spacedBy(metrics.controlInset, Alignment.End)) {
                             CompositionLocalProvider(LocalDialogAction provides true) {
                                 dismissButton?.invoke()
-                                CompositionLocalProvider(LocalTextStyle provides type.button.copy(fontWeight = FontWeight.SemiBold)) { confirmButton() }
+                                CompositionLocalProvider(LocalTextStyle provides type.button.copy(fontWeight = FontWeight.SemiBold), LocalDialogConfirm provides true) { confirmButton() }
                             }
                         }
                     }

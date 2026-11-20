@@ -114,6 +114,9 @@ import riffet.ui.design.AgentAvatar
 import riffet.ui.design.AvatarStatus
 import riffet.ui.design.ChipItem
 import riffet.ui.design.ChipRow
+import androidx.compose.ui.text.AnnotatedString
+import riffet.ui.design.RiffetProgressIndicator
+import riffet.ui.icons.AgentMark
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.pickers.RiffetDropdownMenu
@@ -165,7 +168,8 @@ private class Held<T>(var value: T)
 @Composable
 private fun LazyItemScope.listItemMotion(): Modifier {
     val motion = LocalRiffetMotion.current
-    return Modifier.animateItem(fadeInSpec = motion.effects(), placementSpec = null, fadeOutSpec = null)
+    val moving = LocalInterfaceStyle.current.components.lists.movingRows
+    return Modifier.animateItem(fadeInSpec = motion.effects(), placementSpec = if (moving) motion.spatial() else null, fadeOutSpec = null)
 }
 
 /*
@@ -758,7 +762,8 @@ private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
         style = LocalRiffetTypography.current.footnote,
         color = LocalRiffetColors.current.fg3,
         maxLines = 1,
-        modifier = modifier.fillMaxWidth().padding(start = metrics.pageInset + metrics.controlInset / 3,
+        fontWeight = if (LocalInterfaceStyle.current.components.lists.plainObjectMarks) FontWeight.Medium else null,
+        modifier = modifier.fillMaxWidth().padding(start = if (LocalInterfaceStyle.current.components.lists.plainObjectMarks) metrics.pageInset else metrics.pageInset + metrics.controlInset / 3,
             end = metrics.pageInset + metrics.controlInset / 3,
             top = (metrics.sectionGap - metrics.controlInset / 6).coerceAtLeast(0.dp), bottom = metrics.controlInset / 2),
     )
@@ -779,22 +784,32 @@ private fun ProjectHeader(
     val typography = LocalRiffetTypography.current
     val title = project.name
     val chevron by animateFloatAsState(if (open) 90f else 0f, motion.spatial(), label = "project-chevron")
+    // The plain list reads as a column of titles: the fold mark follows the name, and only + keeps the end edge.
+    val plain = LocalInterfaceStyle.current.components.lists.plainObjectMarks
+    val foldLabel = if (open) stringResource(Res.string.session_collapse_named, title) else stringResource(Res.string.session_expand_named, title)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onToggle)
-            .padding(start = designMetrics.pageInset + designMetrics.controlInset / 3,
-                end = designMetrics.controlInset, top = designMetrics.controlInset),
+            // Plain: the name starts on the marks' edge and + ends on the times' edge.
+            .padding(start = if (plain) designMetrics.pageInset else designMetrics.pageInset + designMetrics.controlInset / 3,
+                end = if (plain) (designMetrics.pageInset - (designMetrics.controlHeight - designMetrics.smallIconSize) / 2).coerceAtLeast(0.dp) else designMetrics.controlInset,
+                top = if (plain) designMetrics.sectionGap / 2 else designMetrics.controlInset),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = typography.footnote,
-            color = colors.fg3,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title,
+                style = typography.footnote,
+                fontWeight = if (plain) FontWeight.Medium else null,
+                color = colors.fg3,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = !plain),
+            )
+            if (plain) Icon(RiffetIcons.ChevronRight, contentDescription = foldLabel, tint = colors.fg4,
+                modifier = Modifier.padding(start = designMetrics.controlInset / 3).size(designMetrics.smallIconSize * 0.875f).graphicsLayer { rotationZ = chevron })
+        }
         if (project.archivedAt != null) {
             Text(text = stringResource(Res.string.session_archived), style = typography.caption, color = colors.fg3, modifier = Modifier.padding(horizontal = 8.dp))
         }
@@ -804,10 +819,10 @@ private fun ProjectHeader(
         ) {
             Icon(RiffetIcons.Plus, contentDescription = stringResource(Res.string.session_new_session_in, title), tint = colors.fg3, modifier = Modifier.size(designMetrics.smallIconSize))
         }
-        Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+        if (!plain) Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = RiffetIcons.ChevronRight,
-                contentDescription = if (open) stringResource(Res.string.session_collapse_named, title) else stringResource(Res.string.session_expand_named, title),
+                contentDescription = foldLabel,
                 tint = colors.fg3,
                 modifier = Modifier.size(designMetrics.smallIconSize).graphicsLayer { rotationZ = chevron },
             )
@@ -889,6 +904,16 @@ internal fun SessionRow(
         }
         val failure = session.error?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
         val backend = backendName(session.backendId)
+        // The plain row is one line: the mark says who, the row's end says how it stands. A second
+        // line appears only for what the row cannot otherwise say: the project in a flat list, a failure.
+        val plain = LocalInterfaceStyle.current.components.lists.plainObjectMarks
+        val plainDetail = when {
+            failedUnseen && failure != null -> failure
+            showProject && projectName != null -> projectName
+            else -> null
+        }
+        val running = session.state == SessionState.RUNNING || session.state == SessionState.STARTING || session.state == SessionState.CANCELLING
+        val unseen = !selected && isDoneUnseen(session)
         // A failure says what failed; otherwise the project, or under its own heading the agent.
         val detail = when {
             failedUnseen && failure != null -> failure
@@ -923,12 +948,14 @@ internal fun SessionRow(
                         menuOpen = true
                     },
                 )
-                .heightIn(min = RowHeight)
-                .padding(horizontal = metrics.controlInset * 2 / 3, vertical = metrics.rowPadding * 5 / 8),
+                .heightIn(min = if (plain) metrics.controlHeight + metrics.controlInset * 2 / 3 else RowHeight)
+                .padding(horizontal = metrics.controlInset * 2 / 3, vertical = if (plain) metrics.rowPadding / 4 else metrics.rowPadding * 5 / 8),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.controlInset),
         ) {
-            AgentAvatar(
+            if (plain) Box(Modifier.size(metrics.iconSize), contentAlignment = Alignment.Center) {
+                AgentMark(backendId.name.lowercase(), size = metrics.iconSize - metrics.hairlineWidth * 2, tint = avatarTint(backendId, colors))
+            } else AgentAvatar(
                 backendId = backendId.name.lowercase(),
                 tint = avatarTint(backendId, colors),
                 status = avatarStatus(session.state, failedUnseen),
@@ -941,6 +968,7 @@ internal fun SessionRow(
                     Text(
                         text = session.shownTitle,
                         style = typography.headline,
+                        fontWeight = if (plain && unseen) FontWeight.Medium else null,
                         color = if (selected) LocalRiffetSurfaces.current.selectedContent else if (archived) colors.fg2 else colors.fg,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -949,18 +977,27 @@ internal fun SessionRow(
                     if (marked) {
                         Icon(RiffetIcons.Bookmark, contentDescription = null, tint = colors.accent, modifier = Modifier.size(14.dp).alignBy { it.measuredHeight })
                     }
-                    if (!selected && isDoneUnseen(session)) {
-                        val unread = stringResource(Res.string.session_filter_unread)
-                        Box(Modifier.align(Alignment.CenterVertically).size(6.dp).background(colors.fg, CircleShape).semantics { contentDescription = unread })
-                    }
-                    if (time != null) {
-                        Text(text = time, style = timeStyle, color = colors.fg3, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    if (plain && running) {
+                        RiffetProgressIndicator(
+                            modifier = Modifier.align(Alignment.CenterVertically).size(metrics.smallIconSize * 0.875f).semantics { contentDescription = word.orEmpty() },
+                            color = colors.fg3, strokeWidth = metrics.hairlineWidth * 1.5f,
+                        )
+                    } else if (plain && word != null) {
+                        Text(text = word, style = timeStyle, fontWeight = FontWeight.Medium, color = wordColor, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    } else {
+                        if (unseen) {
+                            val unread = stringResource(Res.string.session_filter_unread)
+                            Box(Modifier.align(Alignment.CenterVertically).size(6.dp).background(colors.fg, CircleShape).semantics { contentDescription = unread })
+                        }
+                        if (time != null) {
+                            Text(text = time, style = timeStyle, color = colors.fg3, maxLines = 1, modifier = Modifier.alignByBaseline())
+                        }
                     }
                 }
-                Text(
-                    text = subtitle,
+                if (!plain || plainDetail != null) Text(
+                    text = if (plain) AnnotatedString(plainDetail.orEmpty()) else subtitle,
                     style = typography.subhead,
-                    color = colors.fg3,
+                    color = if (plain && failedUnseen) colors.danger else colors.fg3,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),

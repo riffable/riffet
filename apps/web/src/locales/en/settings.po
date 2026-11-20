@@ -1368,6 +1368,10 @@ msgstr "Session views"
 msgid "会话视图、侧栏"
 msgstr "Conversation view, sidebar"
 
+#: src/app/design/android/notes.ts
+msgid "会话行只有一行：行首是 Agent 的标志，行尾是状态或时间"
+msgstr "A session row is one line: the Agent's mark leads, the state or the time ends it"
+
 #: src/app/settings/StorageSection.tsx
 msgid "会话记录"
 msgstr "Transcript"
@@ -5363,6 +5367,10 @@ msgstr "Change the source: index.css or packages/contracts"
 msgid "数值"
 msgstr "Values"
 
+#: src/app/design/android/notes.ts
+msgid "数值的基准，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
+msgstr "The baseline for values; other styles change only the fields that differ. Material's control structure, ripple, and dialog layout."
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "数值读自实际绘制的控件。图形可以小，点击区不缩。"
 msgstr "Values are read from the control as actually drawn. The graphic can be small; the hit area does not shrink."
@@ -7707,6 +7715,10 @@ msgstr "Filter models"
 msgid "筛选的选项固定且少，用分段控件；更多条件收进图标按钮的弹出层。"
 msgstr "Filter options are fixed and few, so use a segmented control; put further criteria in the popover of an icon button."
 
+#: src/app/design/android/notes.ts
+msgid "筛选胶囊没选中时只是文字，选中的一个有底，选中底滑到新的位置"
+msgstr "Filter chips are bare labels until chosen; the chosen one is filled, and the fill slides to its new place"
+
 #: src/app/design/android/PhoneMiniature.tsx
 msgid "简体中文"
 msgstr "Simplified Chinese"
@@ -9289,6 +9301,10 @@ msgstr "Selected"
 msgid "选中块在选项之间滑动。"
 msgstr "The selection slides between options."
 
+#: src/app/design/android/notes.ts
+msgid "选中是中性的浅底，主操作是墨色；强调色只留给焦点、选区和链接"
+msgstr "Selection is a neutral fill and the primary action is ink; the accent is left to focus, text selection, and links"
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "选中项在行尾打勾"
 msgstr "Chosen option checked at the row's end"
@@ -9874,6 +9890,10 @@ msgstr "A page has one scroll container, with the header fixed above it."
 msgid "页面只经组件和模式使用样式；组件只引用颜色角色和档位。"
 msgstr "Pages reach styles only through components and patterns; components refer only to colour roles and tiers."
 
+#: src/app/design/android/notes.ts
+msgid "页面比卡片暗一档，卡片、胶囊和面板都不描边；线只分开同一张卡片里的行"
+msgstr "The page sits a step darker than its cards; cards, chips, and sheets have no outline, and lines only separate the rows inside one card"
+
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "页面的一级视图，2–5 个"
 msgstr "A page's top-level views, 2–5"
@@ -10181,5 +10201,5 @@ msgid "默认模型"
 msgstr "Default model"
 
 #: src/app/design/android/notes.ts
-msgid "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
-msgstr "The default style; the others change only the fields that differ from it. Material's control structure, ripple and dialog layout."
+msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
+msgstr "The default style. Ink in place of the accent, layers told apart by tone instead of lines, regular-weight rows, with weight kept for titles and unread items."

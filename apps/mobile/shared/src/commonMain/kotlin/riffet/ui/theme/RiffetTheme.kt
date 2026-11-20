@@ -168,7 +168,7 @@ val LocalRiffetThemeEntry: ProvidableCompositionLocal<ThemeEntry> =
 fun RiffetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     entry: ThemeEntry = builtinThemeEntries.first(),
-    interfaceStyle: InterfaceStyle = InterfaceStyle.MATERIAL3,
+    interfaceStyle: InterfaceStyle = InterfaceStyle.RIFFET,
     amoled: Boolean = false,
     surfaceMaterial: SurfaceMaterial = SurfaceMaterial.FROSTED,
     materialStrength: Float = 0.5f,

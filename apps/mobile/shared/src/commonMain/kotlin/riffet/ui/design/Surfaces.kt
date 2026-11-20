@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.DpOffset
@@ -64,7 +65,9 @@ internal fun riffetSurfaces(colors: RiffetColors, dark: Boolean, recipe: Surface
     })
     // Menus, dialogs and the composer sit on the card tone: an accent cast read as a blue wash.
     val floating = color("floating", card)
-    val selected = color("selected", lerp(card, colors.accent, if (dark) 0.22f else recipe.selectionLightMix))
+    // The neutral fill has to read on the page and on a card alike, so it is a step of ink, not the palette's faint hover tone.
+    val selected = color("selected", if (recipe.neutralSelection) lerp(card, colors.fg, if (dark) 0.16f else 0.09f)
+        else lerp(card, colors.accent, if (dark) 0.22f else recipe.selectionLightMix))
     return RiffetSurfaces(
         page = page,
         groupedPage = color("groupedPage", page),
@@ -75,15 +78,20 @@ internal fun riffetSurfaces(colors: RiffetColors, dark: Boolean, recipe: Surface
         selectedContent = color("selectedContent", colors.fg),
         disabledContent = color("disabledContent", colors.fg.copy(alpha = 0.38f)),
         focus = color("focus", colors.accent),
-        hairline = color("hairline", colors.line),
+        hairline = color("hairline", if (recipe.softLines) colors.lineSoft.compositeOver(card) else colors.line),
         shadow = color("shadow", if (dark) Color.Black else colors.fg),
         dark = dark,
-        input = color("input", if (recipe.transparentInput) Color.Transparent else colors.bgMuted.copy(alpha = if (dark) 0.8f else 0.5f)),
+        // Neutral fills are a step of ink over whatever they sit on: the palette's muted tone is the card's own in a dark
+        // theme, where a field or a quiet button drawn in it has no edge at all.
+        input = color("input", if (recipe.transparentInput) Color.Transparent
+            else if (recipe.neutralSelection) colors.fg.copy(alpha = if (dark) 0.1f else 0.05f)
+            else colors.bgMuted.copy(alpha = if (dark) 0.8f else 0.5f)),
         navigation = color("navigation", floating.copy(alpha = recipe.navigationAlpha)),
         scrim = color("scrim", Color.Black.copy(alpha = recipe.scrimAlpha)),
-        primaryAction = color("primaryAction", colors.accent),
-        primaryActionContent = color("primaryActionContent", colors.accentFg),
-        secondaryAction = color("secondaryAction", if (recipe.tonalSecondary) selected else colors.bgMuted),
+        primaryAction = color("primaryAction", if (recipe.inkPrimary) colors.primary else colors.accent),
+        primaryActionContent = color("primaryActionContent", if (recipe.inkPrimary) colors.primaryFg else colors.accentFg),
+        secondaryAction = color("secondaryAction", if (recipe.tonalSecondary) selected
+            else if (recipe.neutralSelection) colors.fg.copy(alpha = if (dark) 0.12f else 0.07f) else colors.bgMuted),
         secondaryActionContent = color("secondaryActionContent", colors.fg),
         switchThumb = color("switchThumb", if (recipe.accentThumb) colors.accentFg else Color.White),
     )

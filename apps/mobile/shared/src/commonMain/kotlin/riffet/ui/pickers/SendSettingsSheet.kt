@@ -88,7 +88,7 @@ internal fun SendSettingsPage(
                         .fillMaxWidth()
                         .padding(horizontal = SheetGutter)
                         .clip(SheetRowShape)
-                        .then(if (recipe.grouped) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
+                        .then(if (sheetRowsFilled) Modifier.background(LocalRiffetSurfaces.current.card) else Modifier)
                         .pickerRowDivider()
                         .clickable(role = Role.Button, enabled = row.enabled, onClick = row.onClick)
                         .heightIn(min = maxOf(metrics.controlHeight, if (recipe.valueBelowLabel) metrics.rowSubtitleHeight else metrics.rowHeight))
@@ -123,7 +123,8 @@ internal fun SendSettingsPage(
                             text = row.value,
                             modifier = Modifier.weight(1f),
                             style = typography.bodySmall,
-                            color = if (row.enabled) colors.fg2 else colors.fg4,
+                            // The value's ink, as on a settings row: a step below the label in size and two in ink.
+                            color = if (row.enabled) colors.fg3 else colors.fg4,
                             textAlign = TextAlign.End,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,

@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import riffet.ui.design.groupDividerInset
 import riffet.ui.design.AlertDialog
 import riffet.ui.design.GroupRow
+import riffet.ui.design.GroupRows
 import riffet.ui.design.SelectionMark
 import riffet.ui.icons.Icon
 import riffet.ui.design.RiffetIconButton
@@ -392,8 +393,8 @@ private fun appIconLabel(value: AppIcon): String = stringResource(
 @Composable
 internal fun LanguageSection() {
     val current = AppLanguages.current
-    SettingsGroup(stringResource(Res.string.settings_language)) {
-        Column(Modifier.fillMaxWidth().selectableGroup()) {
+    SettingsGroup("") {
+        GroupRows(Modifier.fillMaxWidth().selectableGroup()) {
             AppLanguage.entries.forEach { language ->
                 val label = appLanguageLabel(language)
                 val selected = language == current
@@ -420,7 +421,7 @@ internal fun TypographySection() {
             Text(stringResource(Res.string.settings_preview_body), style = LocalRiffetTypography.current.body, color = LocalRiffetColors.current.fg2)
         }
     }
-    SettingsGroup(title = stringResource(Res.string.settings_typography)) {
+    SettingsGroup("") {
         TextSizeRow(display.textSize, display::changeTextSize)
         ChoiceRow(
             title = stringResource(Res.string.settings_session_spacing),
@@ -441,7 +442,7 @@ private fun TextSizeRow(value: TextSize, onChange: (TextSize) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().settingsSearchAnchor(stringResource(Res.string.settings_text_size)).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp)) {
         Row {
             Text(stringResource(Res.string.settings_text_size), style = typography.body, color = colors.fg, modifier = Modifier.weight(1f))
-            Text(textSizeLabel(value), style = typography.label, color = colors.fg2)
+            Text(textSizeLabel(value), style = typography.bodySmall, color = colors.fg3)
         }
         RiffetSlider(
             value = sizes.indexOf(value).toFloat(),
@@ -521,7 +522,7 @@ private fun FeatureSwitch(feature: NativeFeature, title: String, description: St
 @Composable
 internal fun NotificationsSection() {
     val access = rememberNotificationAccess()
-    SettingsGroup(stringResource(Res.string.settings_notifications)) {
+    SettingsGroup("") {
         FeatureSwitch(NativeFeature.ALERTS, stringResource(Res.string.settings_session_alerts), stringResource(Res.string.settings_session_alerts_desc))
         if (access != NotificationAccess.ALLOWED) SettingsActionRow(
             stringResource(Res.string.setp_notification_allow),
@@ -607,7 +608,7 @@ private fun ApprovalVerificationGroup() {
 private fun InteractionSection(controller: SettingsController) {
     val state by controller.state.collectAsState()
     val settings = state.settings ?: return
-    SettingsGroup(stringResource(Res.string.settings_input)) {
+    SettingsGroup("") {
         ChoiceRow(
             title = stringResource(Res.string.settings_task_output_to),
             options = listOf("queue" to stringResource(Res.string.settings_queue), "steer" to stringResource(Res.string.settings_steer)),
@@ -624,7 +625,7 @@ internal fun LaunchTabSection() {
     val display = DisplaySettings.shared
     val title = stringResource(Res.string.settings_launch_tab)
     SettingsGroup("") {
-        Column(Modifier.fillMaxWidth().selectableGroup().settingsSearchAnchor(title)) {
+        GroupRows(Modifier.fillMaxWidth().selectableGroup().settingsSearchAnchor(title)) {
             riffet.ui.app.HomeTab.entries.forEach { tab ->
                 val selected = tab.key == riffet.ui.app.homeTabKey(display.launchTab)
                 GroupRow(
@@ -643,7 +644,7 @@ internal fun MotionSection() {
     val display = DisplaySettings.shared
     val title = stringResource(Res.string.settings_page_animation)
     SettingsGroup(title) {
-        Column(Modifier.fillMaxWidth().selectableGroup().settingsSearchAnchor(title)) {
+        GroupRows(Modifier.fillMaxWidth().selectableGroup().settingsSearchAnchor(title)) {
             PageAnimation.entries.forEach { animation ->
                 val selected = animation == display.pageAnimation
                 GroupRow(
@@ -663,7 +664,7 @@ internal fun MotionSection() {
 
 @Composable
 internal fun GesturesSection() {
-    SettingsGroup(stringResource(Res.string.settings_gestures)) {
+    SettingsGroup("") {
         FeatureSwitch(NativeFeature.SWIPE_BACK, stringResource(Res.string.settings_swipe_back))
         FeatureSwitch(NativeFeature.PREDICTIVE_BACK, stringResource(Res.string.settings_predictive_back))
         FeatureSwitch(NativeFeature.HAPTICS, stringResource(Res.string.settings_haptics))

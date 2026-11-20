@@ -301,8 +301,12 @@ private fun MarkdownDocument(
         return
     }
     val typography = remember(colors, prose, style) { markdownTypography(colors, prose, style) }
-    val markdownColors = remember(colors, color) { markdownColors(colors, color) }
-    val quoteColors = remember(colors) { markdownColors(colors, colors.fg2) }
+    // The quiet chip is the palette's `bgSubtle` on the palette's own page; a style that darkens the
+    // page would lose it there, so it becomes a step of ink over whatever the page is.
+    val chip = if (riffet.ui.design.LocalInterfaceStyle.current.components.surfaces.pageMix == 0f) colors.bgSubtle
+        else riffet.ui.design.LocalRiffetSurfaces.current.press
+    val markdownColors = remember(colors, color, chip) { markdownColors(colors, color, chip) }
+    val quoteColors = remember(colors, chip) { markdownColors(colors, colors.fg2, chip) }
     // The library's annotator is kept for everything but `**strong**` (Medium, since CJK at 600
     // reads as a smudge), safe `<br>` line-break tags, and inline code file mentions. Re-entering
     // the annotation for strong spans needs the settings the library builds inside `Markdown`, so
@@ -461,14 +465,14 @@ private fun parseMarkdown(content: String, parser: MarkdownParser): State = Stat
  * The palette half of the theme. Code, inline-code, link and table text take their colour from the
  * matching `MarkdownTypography` style below, not from here.
  */
-private fun markdownColors(colors: RiffetColors, text: Color): MarkdownColors = DefaultMarkdownColors(
+private fun markdownColors(colors: RiffetColors, text: Color, chip: Color): MarkdownColors = DefaultMarkdownColors(
     text = text,
-    codeBackground = colors.bgSubtle,
+    codeBackground = chip,
     // The web's `.md :not(pre) > code` and the Mac scale: the quiet chip, so a path-dense
     // paragraph does not read as a row of buttons.
-    inlineCodeBackground = colors.bgSubtle,
+    inlineCodeBackground = chip,
     dividerColor = colors.line,
-    tableBackground = colors.bgSubtle,
+    tableBackground = chip,
 )
 
 /** One heading step, in Medium: size carries the rank, and CJK at 600 is too heavy. */

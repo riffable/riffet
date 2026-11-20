@@ -16,6 +16,7 @@ import org.jetbrains.compose.resources.stringResource
 import riffet.shared.DisplaySettings
 import riffet.shared.SurfaceMaterial
 import riffet.ui.design.GroupRow
+import riffet.ui.design.GroupRows
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.SelectionMark
 import riffet.ui.design.RiffetSlider
@@ -39,7 +40,7 @@ internal fun SurfaceMaterialPicker() {
     val type = LocalRiffetTypography.current
     val colors = LocalRiffetColors.current
     SettingsGroup(stringResource(Res.string.settings_surface_material)) {
-        Column(Modifier.selectableGroup()) {
+        GroupRows(Modifier.selectableGroup()) {
             SurfaceMaterial.entries.forEach { material ->
                 val selected = material == display.surfaceMaterial
                 GroupRow(
@@ -55,7 +56,7 @@ internal fun SurfaceMaterialPicker() {
             Column(Modifier.fillMaxWidth().padding(horizontal = metrics.rowPadding, vertical = metrics.controlInset / 2)) {
                 Row {
                     Text(strengthLabel, style = type.body, color = colors.fg, modifier = Modifier.weight(1f))
-                    Text((display.materialStrength * 100).roundToInt().toString() + "%", style = type.label, color = colors.fg2)
+                    Text((display.materialStrength * 100).roundToInt().toString() + "%", style = type.bodySmall, color = colors.fg3)
                 }
                 RiffetSlider(value = display.materialStrength, onValueChange = display::changeMaterialStrength,
                     modifier = Modifier.semantics { contentDescription = controlLabel })

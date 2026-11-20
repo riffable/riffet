@@ -82,20 +82,25 @@ internal fun GroupFootnote(text: String, modifier: Modifier = Modifier) {
  */
 @Composable
 internal fun Group(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    GroupRows(modifier.fillMaxWidth().padding(horizontal = GroupInset).cardEdge(GroupShape).clip(GroupShape)
+        .background(materialContentBackground(surfaces.card)), content)
+}
+
+/**
+ * A [Group]'s rows and the hairlines between them, without the card. A set of rows that has to be one
+ * node inside the card (a radio group's `selectableGroup`) is laid out with this, so its rows keep
+ * the lines a plain column would drop.
+ */
+@Composable
+internal fun GroupRows(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val metrics = LocalInterfaceStyle.current.metrics
-    val s = surfaces
-    val hairline = s.hairline
+    val hairline = surfaces.hairline
     val drawDividers = LocalInterfaceStyle.current.components.lists.dividers
     // Row tops and their hairline insets, recorded during layout and drawn right after it.
     val dividers = remember { DividerPlan() }
     Layout(
         content = content,
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = GroupInset)
-            .cardEdge(GroupShape)
-            .clip(GroupShape)
-            .background(materialContentBackground(s.card))
             .drawWithContent {
                 drawContent()
                 for (i in 0 until if (drawDividers) dividers.count else 0) {
@@ -227,7 +232,8 @@ internal fun GroupRow(
             Text(title, style = type.body, color = if (enabled) titleColor ?: colors.fg else surfaces.disabledContent, maxLines = titleLines, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, style = type.bodySmall, color = colors.fg3, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = metrics.hairlineWidth * 2))
         }
-        if (value != null) Text(value, style = type.body, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = metrics.menuMaxWidth * 0.4f))
+        // A step below the title in size as well as ink: at the title's own size the two read as one line of text.
+        if (value != null) Text(value, style = type.bodySmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = metrics.menuMaxWidth * 0.4f))
         trailing?.invoke()
         if (chevron) Icon(RiffetIcons.ChevronRight, contentDescription = null, tint = colors.fg4, modifier = Modifier.size(metrics.smallIconSize))
     }

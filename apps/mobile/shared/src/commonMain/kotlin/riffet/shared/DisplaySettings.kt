@@ -25,6 +25,8 @@ enum class Spacing(internal val key: String, val scale: Float) {
 
 /** Stable renderer identifiers. Unknown/newer values fall back without destroying the saved id. */
 enum class InterfaceStyle(val key: String) {
+    /** The app's own style and the default (docs/design/system/android.md §10). */
+    RIFFET("riffet"),
     MATERIAL3("material3"),
     EXPRESSIVE("expressive"),
     MIUIX("miuix"),
@@ -106,7 +108,7 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         codeTheme = id
     }
     var interfaceStyle: InterfaceStyle by mutableStateOf(
-        InterfaceStyle.entries.firstOrNull { it.key == preferences?.string(INTERFACE_STYLE_KEY) } ?: InterfaceStyle.MATERIAL3,
+        InterfaceStyle.entries.firstOrNull { it.key == preferences?.string(INTERFACE_STYLE_KEY) } ?: InterfaceStyle.RIFFET,
     )
         private set
 

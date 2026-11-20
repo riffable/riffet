@@ -54,7 +54,7 @@
     <string name="settings_permission_icons_ring">Ring</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_session_spacing">Message spacing</string>
-    <string name="settings_local_only_footnote">Stored on this device, independent of the settings on the server.</string>
+    <string name="settings_local_only_footnote">Stored only on this device</string>
     <string name="settings_text_size">Text size</string>
     <string name="settings_color_mode">Color mode</string>
 
@@ -88,7 +88,7 @@
     <string name="settings_motion">Motion</string>
     <string name="settings_gestures">Gestures and haptics</string>
     <string name="settings_page_animation">Page animation</string>
-    <string name="settings_page_animation_desc">Applies to all pages and tab switches immediately and is saved on this device.</string>
+    <string name="settings_page_animation_desc">Stored only on this device</string>
     <string name="settings_page_animation_slide">Slide</string>
     <string name="settings_page_animation_fade">Fade</string>
     <string name="settings_page_animation_scale">Scale</string>
@@ -107,7 +107,7 @@
     <string name="settings_reclaim_memory">CLI memory limit</string>
     <string name="settings_reclaim_unlimited">Unlimited</string>
     <string name="settings_reclaim_limit_gb">%1$d GB</string>
-    <string name="settings_local_effect_note">Takes effect immediately; stored only on this device.</string>
+    <string name="settings_local_effect_note">Stored only on this device</string>
     <string name="settings_server_effect_note">Stored on the server and applied to all devices.</string>
 
     <!-- Files and editor -->
@@ -309,7 +309,7 @@
     <string name="pairing_discovering">Looking for Riffet on your local network…</string>
     <string name="pairing_discovered_servers">Servers found</string>
     <string name="settings_icon_pack">Interface icons</string>
-    <string name="settings_icon_pack_footnote">Applies throughout the interface and is saved on this device. Enabled icon extensions also appear here.</string>
+    <string name="settings_icon_pack_footnote">Stored only on this device. Enabled icon extensions are listed here too.</string>
     <string name="settings_icon_pack_loading">Loading icons…</string>
     <string name="settings_icon_pack_unavailable">The selected icon pack is unavailable. Using default icons and keeping your selection.</string>
     <string name="settings_general">General</string>
@@ -317,7 +317,7 @@
     <string name="settings_language_system">Follow system</string>
     <string name="settings_language_chinese">简体中文</string>
     <string name="settings_language_english">English</string>
-    <string name="settings_language_footnote">The interface and prompts use your selected language. Conversation content keeps its original language. This setting is saved on this device.</string>
+    <string name="settings_language_footnote">Conversations keep their original language. Stored only on this device.</string>
     <string name="settings_typography">Typography</string>
     <string name="settings_group_behavior">Behavior</string>
     <string name="settings_group_models">Models</string>
@@ -338,6 +338,7 @@
     <string name="settings_auxiliary_cli_slow">CLI · slower</string>
     <string name="settings_icons">Icons</string>
     <string name="settings_interface_style">Interface style</string>
+    <string name="settings_style_riffet">Riffet</string>
     <string name="settings_style_material">Material 3</string>
     <string name="settings_style_ios">iOS style</string>
     <string name="settings_style_expressive">Material 3 Expressive</string>
@@ -345,7 +346,7 @@
     <string name="settings_style_fluent">Fluent</string>
     <string name="settings_amoled">AMOLED black</string>
     <string name="settings_amoled_desc">Only in dark mode</string>
-    <string name="settings_style_footnote">Saved on this device</string>
+    <string name="settings_style_footnote">Stored only on this device</string>
     <string name="settings_surface_material">Surface material</string>
     <string name="settings_material_solid">Solid</string>
     <string name="settings_material_frosted">Frosted</string>
