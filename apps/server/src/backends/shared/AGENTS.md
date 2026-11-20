@@ -14,6 +14,7 @@ verify:
 - `wait-for.ts#waitFor`：等另一个进程做完某件事的统一原语，约定见 docs/DELIVERY.md。
 - `codex-app-server.ts#CodexAppServer`：App Server 进程、socket 与 JSON-RPC。
 - `workspace-observer.ts#WorkspaceObserver`：shell 命令改了哪些文件。
+- `command-actions.ts#commandActions`：只读的 shell 命令读了、搜了什么，形状同 Codex 的 `commandActions`；词法在 `shell-words.ts#shellSegments`，与 `readsOnly` 共用。
 - `model-source.ts#prepareSource`：把已存的模型源名称加上配置覆盖解析成启动所需的事实。
 - `hook-server.ts`、`turn-tracker.ts`、`deferred-steer.ts` 只是对 `packages/plugin-api/src/kit/` 的再导出，改行为到那里改。
 
@@ -25,6 +26,7 @@ verify:
 - `app-server-daemons.ts` 只认本工作台自己起的 App Server（`cw-cx-*` 临时目录里的 Unix socket，或凭据目录里有 token 文件的回环监听），用户自己运行的永远不匹配。
 - 判断两个进程是否同一个，不能只比 pid：用 `process-identity.ts#sameStart` 比启动时间；`ps` 不可用时返回 `undefined`，调用方按「进程仍在」处理。
 - `cli-trust.ts#ensureClaudeWorkspaceTrust` 写的是 CLI 自己的配置，键用内核解析过的 cwd（`canonicalCwd`）；`RIFFET_CLI_TRUST=0` 关闭。hook 信任始终由 CLI 自己决定。
+- `command-actions.ts#commandActions` 要么整条命令都认得，要么返回 undefined：有一段不是读取、搜索或列目录（写文件、未知程序、替换、heredoc），整条按原样显示，不把写操作标成「读取」。
 - `installed-env.ts` 拒绝能改变 shell 启动方式的环境变量（`SHELLOPTS`、`BASHOPTS`、`PS4`），它们会在命令之前执行代码。
 - `terminal-dialogs.ts` 只在没有协议层交互时补位，且只在有浏览器订阅时轮询；协议交互优先。
 

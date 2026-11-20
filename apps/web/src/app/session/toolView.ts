@@ -75,7 +75,10 @@ export function toolView(event: WorkbenchEvent, root?: string): ToolView {
 
 export const activeToolStates = new Set(['pending', 'in_progress', 'running', 'queued']);
 
-/** Action wording for a tool run. Only provider-supplied categories are used, never guessed from shell text. */
+/**
+ * Action wording for a tool run, from the categories the server reported: the provider's own, or the
+ * conservative parse of a read-only command (`apps/server/src/backends/shared/command-actions.ts`).
+ */
 export function toolRunSummary(items: Extract<TimelineItem, { kind: 'tool' }>[]): { label: string; kind: string } {
   const labels = {
     read: msg`读取文件`, search: msg`搜索内容`, execute: msg({ message: '运行命令', context: 'tool-action' }),

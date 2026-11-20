@@ -31,6 +31,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - A queued message no longer waits indefinitely when the previous turn has ended but the idle status never arrived; it goes out within half a second.
 - A task worktree whose directory was deleted by hand can be created again at the same path instead of failing as already registered.
 - With a very large message history, a two-character search across conversations reads at most the newest 500,000 messages instead of slowing the whole server as history grows.
+- Claude Code shell commands that only read, search, or list files show what they read, like Codex's: `Read MarkLayer.tsx, textQuote.ts` or `Search quoteOf in src` with the read or search icon, instead of the whole command line. Other commands still show their description or command, and the full command stays in the expanded row.
 
 ## 0.9.0 - 2026-11-19
 

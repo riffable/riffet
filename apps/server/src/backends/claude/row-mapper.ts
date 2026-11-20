@@ -1,5 +1,7 @@
 import { isAbsolute } from 'node:path';
 import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
+import { describeCommandActions } from '../../../../../packages/timeline/src/toolTitle.js';
+import { commandActions } from '../shared/command-actions.js';
 import { isImagePath, toolImageContent } from '../shared/tool-images.js';
 import { ClaudeActivities, commandNameOf, localCommandOutput, noticeRowKind, shellInputOf, shellOutputOf, taskNotification, type ClaudeActivityHooks } from './activity.js';
 import { clip, record, string, INTERRUPTED_MARKER, claudeApiFailure, readableThinking, isNarration, type ClaudeRow, isTranscriptOnly, promptIdOf, hiddenTurnPrompt, subagentWake, rowText, stripPastedContent, commandPrompt } from './rows.js';
@@ -88,7 +90,17 @@ export interface ClaudeTranscriptHooks {
 export function describeTool(name: string, input: Record<string, unknown>, unbounded = false): Record<string, unknown> {
   const path = string(input.file_path) ?? string(input.path) ?? string(input.target_file);
   const subagent = name === 'Task' || name === 'Agent';
-  const title = name === 'Bash' ? string(input.description) ?? string(input.command) ?? 'Run command'
+  /**
+   * `Bash` sends only a command string, where Codex reports what its commands do (`commandActions`).
+   * A command that only reads and searches gets the same actions, so it renders as Codex's do:
+   * `Read a.ts, b.ts` with the read icon, not the command line. Anything else keeps its description.
+   */
+  const actions = name === 'Bash' && string(input.command) ? commandActions(string(input.command)!) : undefined;
+  const described = actions && describeCommandActions(actions);
+  const pattern = string(input.pattern);
+  const title = described?.title ? described.title
+    : name === 'Bash' ? string(input.description) ?? string(input.command) ?? 'Run command'
+    : (name === 'Grep' || name === 'Glob') && pattern ? `Search ${pattern}${path ? ` in ${path}` : ''}`
     : name === 'Monitor' ? string(input.description) ?? string(input.command) ?? 'Monitor'
     : name === 'Read' ? `Read ${path?.split(/[\\/]/).at(-1) ?? 'file'}`
       : ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) ? `${name} ${path?.split(/[\\/]/).at(-1) ?? 'file'}`
@@ -96,7 +108,8 @@ export function describeTool(name: string, input: Record<string, unknown>, unbou
           : name === 'ExitPlanMode' ? 'Review plan'
             : subagent ? string(input.description) ?? 'Subagent'
               : name === 'SendMessage' ? string(input.summary)?.trim() || name : name;
-  const kind = name === 'Bash' || name === 'Monitor' ? 'execute'
+  const kind = described && described.kind !== 'execute' ? described.kind
+    : name === 'Bash' || name === 'Monitor' ? 'execute'
     : name === 'Read' ? 'read'
       : ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) ? 'edit'
         : name === 'AskUserQuestion' ? 'question'
@@ -116,10 +129,11 @@ export function describeTool(name: string, input: Record<string, unknown>, unbou
   const oldText = string(input.old_string) ?? string(input.old_str);
   const newText = string(input.new_string) ?? string(input.new_str) ?? string(input.content);
   const edited = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) && (oldText !== undefined || newText !== undefined);
+  const actionPaths = [...new Set((actions ?? []).flatMap(action => action.path && !/[*?[$~]/.test(action.path) ? [action.path] : []))];
   return {
     kind, title,
-    ...(path ? { locations: [{ path }] } : {}),
-    rawInput: input,
+    ...(path ? { locations: [{ path }] } : actionPaths.length ? { locations: actionPaths.map(item => ({ path: item })) } : {}),
+    rawInput: described ? { ...input, commandActions: actions } : input,
     ...(edited ? { content: [{ type: 'diff', path, oldText: clip(oldText ?? '', unbounded ? Infinity : EDIT_LIMIT), newText: clip(newText ?? '', unbounded ? Infinity : EDIT_LIMIT) }] } : {}),
     // The plan is prose the model wrote for the reader to approve, so it rides the call as Markdown
     // rather than as a `plan` event: that channel carries todo entries, and a client reading it for

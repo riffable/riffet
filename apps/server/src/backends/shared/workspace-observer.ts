@@ -3,6 +3,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, fstatSync, mkdirSy
 import { lstat, readdir, readFile, rm } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { exec, ExecError } from '../../exec.js';
+import { shellSegments } from './shell-words.js';
 import { splitUnifiedDiff, type DiffHunk } from './unified-diff.js';
 
 /*
@@ -143,45 +144,8 @@ function readerArgsWrite(program: string, args: string[]): boolean {
  * program) is taken to write, so the command stays observed.
  */
 export function readsOnly(command: string): boolean {
-  const segments: string[][] = [[]];
-  let word: string | undefined;
-  let quote = '';
-  const finish = () => { if (word !== undefined) segments.at(-1)!.push(word); word = undefined; };
-  for (let index = 0; index < command.length; index += 1) {
-    const char = command[index]!;
-    const next = command[index + 1];
-    if (quote === "'") { if (char === "'") quote = ''; else word += char; continue; }
-    if (char === '`' || (char === '$' && next === '(')) return false;
-    if (char === '\\') { word = (word ?? '') + (next ?? ''); index += 1; continue; }
-    if (quote === '"') { if (char === '"') quote = ''; else word += char; continue; }
-    if (char === "'" || char === '"') { quote = char; word ??= ''; continue; }
-    if (char === ' ' || char === '\t') { finish(); continue; }
-    if (char === '\n' || char === ';' || char === '|' || (char === '&' && next === '&')) {
-      finish();
-      if ((char === '|' || char === '&') && (next === '|' || next === '&')) index += 1;
-      segments.push([]);
-      continue;
-    }
-    if (char === '(' || char === ')') return false;
-    if (char === '>' || char === '<' || char === '&') {
-      // A file descriptor written before the operator (`2>`) belongs to it.
-      if (word !== undefined && /^\d+$/.test(word)) word = undefined;
-      finish();
-      let operator = char;
-      while (operator.length < 3 && index + 1 < command.length && '<>&|'.includes(command[index + 1]!)) operator += command[++index];
-      if (operator === '&' || operator.startsWith('<<') || /[<>]\($/.test(operator + (command[index + 1] ?? ''))) return false;
-      while (command[index + 1] === ' ') index += 1;
-      let target = '';
-      while (index + 1 < command.length && !' \t\n;|&<>()'.includes(command[index + 1]!)) target += command[++index];
-      const writes = operator !== '<';
-      if (operator.endsWith('&') && writes ? !/^(\d+|-)$/.test(target) : writes && target !== '/dev/null') return false;
-      continue;
-    }
-    word = (word ?? '') + char;
-  }
-  if (quote) return false;
-  finish();
-  const commands = segments.filter(segment => segment.length);
+  const commands = shellSegments(command)?.map(segment => segment.words);
+  if (!commands) return false;
   return commands.length > 0 && commands.every(segment => {
     const start = segment.findIndex(item => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(item));
     const words = start < 0 ? [] : segment.slice(start);

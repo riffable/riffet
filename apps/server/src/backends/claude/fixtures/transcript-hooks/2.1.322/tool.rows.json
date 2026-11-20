@@ -58,11 +58,17 @@
           "toolCallId": "call_00_x0cj7mum3dp3cscn1483y3xj",
           "toolName": "Bash",
           "status": "in_progress",
-          "kind": "execute",
-          "title": "List files in current directory",
+          "kind": "search",
+          "title": "List files",
           "rawInput": {
             "command": "ls",
-            "description": "List files in current directory"
+            "description": "List files in current directory",
+            "commandActions": [
+              {
+                "type": "listFiles",
+                "command": "ls"
+              }
+            ]
           },
           "command": "ls"
         }
