@@ -13360,6 +13360,46 @@
         }
       }
     },
+    "用磁盘上的版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Version on Disk"
+          }
+        }
+      }
+    },
+    "覆盖保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Over It"
+          }
+        }
+      }
+    },
+    "放弃未保存的修改？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard unsaved changes?"
+          }
+        }
+      }
+    },
+    "文件已在磁盘上改动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file changed on disk"
+          }
+        }
+      }
+    },
     "放弃更改": {
       "localizations": {
         "en": {

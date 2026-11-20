@@ -315,4 +315,9 @@
     <string name="composer_continue_unknown">上一条消息是否已执行仍无法确认</string>
     <string name="composer_placeholder_steer">补充当前任务…</string>
     <string name="composer_placeholder_queued">输入下一条消息…</string>
+    <string name="files_edit">编辑</string>
+    <string name="files_error_save">无法保存文件</string>
+    <string name="files_changed_title">文件已在别处改动</string>
+    <string name="files_overwrite">覆盖保存</string>
+    <string name="files_drop_mine">放弃我的修改</string>
 </resources>

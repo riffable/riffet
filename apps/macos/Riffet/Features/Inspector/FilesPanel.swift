@@ -29,6 +29,9 @@ struct FilesPanel: View {
     /// A symbol's usages (or its several declarations) over the open file.
     @State private var usages: CodeUsages?
     @State private var usagesTask: Task<Void, Never>?
+    /// The open file has edits the server does not have; leaving it asks first.
+    @State private var unsaved = false
+    @State private var pendingLeave: (() -> Void)?
 
     enum SearchMode: String { case name, content }
 
@@ -37,16 +40,17 @@ struct FilesPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             if preview != nil, !recent.files.isEmpty {
-                RecentFilesStrip(files: recent.files.map(\.path), active: preview?.path, open: { open($0) }, close: closeTab)
+                RecentFilesStrip(files: recent.files.map(\.path), active: preview?.path, open: { file in leaving { open(file) } }, close: { file in leaving { closeTab(file) } })
             }
             ZStack {
                 // The list stays under an open file, so going back keeps its folder and scroll position.
                 listPage.keptAlive(hidden: preview != nil)
                 if let preview {
                     FilePreviewPage(
-                        workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, openFolder: browse,
-                        onShown: shown, onJump: { open($0, line: $1) }, onUsages: findUsages, onChoices: showChoices
-                    ) { self.preview = nil }
+                        workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, unsaved: $unsaved,
+                        openFolder: { folder in leaving { browse(folder) } },
+                        onShown: shown, onJump: { file, line in leaving { open(file, line: line) } }, onUsages: findUsages, onChoices: showChoices
+                    ) { leaving { self.preview = nil } }
                         .id("\(project.id)|\(preview.path)")
                         .keptAlive(hidden: usages != nil)
                 }
@@ -72,13 +76,24 @@ struct FilesPanel: View {
         .onChange(of: path) { _, _ in Task { await load() } }
         // Back on this tab, the folder is read again behind what it showed.
         .onChange(of: panelVisible) { _, visible in if visible { Task { await load() } } }
+        .discardConfirmation(isPresented: Binding(get: { pendingLeave != nil }, set: { if !$0 { pendingLeave = nil } })) {
+            let action = pendingLeave
+            pendingLeave = nil
+            unsaved = false
+            action?()
+        }
         .onAppear { consume(workbench.previewTarget) }
         .onChange(of: workbench.previewTarget) { _, target in consume(target) }
     }
 
     private func consume(_ target: PreviewTarget?) {
         guard let target else { return }
-        open(target.path, line: target.line)
+        leaving { open(target.path, line: target.line) }
+    }
+
+    /// Runs [action] now, or after the edits of the open file are given up.
+    private func leaving(_ action: @escaping () -> Void) {
+        if unsaved { pendingLeave = action } else { action() }
     }
 
     private func open(_ file: String, line: Int? = nil) {
@@ -574,6 +589,8 @@ struct FilePreviewPage: View {
     let project: Project
     let path: String
     var target: (Int, Int)?
+    /// The page has edits the server does not have.
+    @Binding var unsaved: Bool
     var openFolder: ((String) -> Void)?
     /// A text or image file was read: it joins the recent files.
     var onShown: ((String) -> Void)?
@@ -592,8 +609,22 @@ struct FilePreviewPage: View {
     @State private var reload = 0
     /// The page an HTML site preview shows after a link was followed; nil while it shows the opened file.
     @State private var sitePage: String?
+    @State private var editing = false
+    @State private var draft = ""
+    @State private var saving = false
+    /// The file changed on disk under the edits: the preview now holds the disk version, the draft is still the user's.
+    @State private var conflict = false
+    @State private var confirmEndEditing = false
 
-    private var canRender: Bool { preview?.render != nil || isHTML }
+    /// Documents the system previews natively; the server's pages cover the rest.
+    private var systemPreviewed: Bool { ["pdf", "document", "presentation", "spreadsheet"].contains(preview?.render?.kind ?? "") }
+    private var canRender: Bool { (preview?.render != nil && !systemPreviewed) || isHTML }
+    private var showsSource: Bool {
+        guard let preview else { return false }
+        return preview.image == nil && !preview.binary && !systemPreviewed && !(canRender && htmlRendered)
+    }
+    private var canEdit: Bool { workbench.supportsFileWrite && preview?.editable == true && showsSource }
+    private var isDirty: Bool { editing && draft != preview?.content }
 
     /// The files opened most recently.
     nonisolated(unsafe) private static let recent: NSCache<NSString, FilePreview> = {
@@ -632,10 +663,21 @@ struct FilePreviewPage: View {
     var body: some View {
         VStack(spacing: 0) {
             DetailHeader(title: (effectivePath as NSString).lastPathComponent, subtitle: (effectivePath as NSString).deletingLastPathComponent, back: back) {
-                if canRender, preview?.binary == false {
+                if canRender, preview?.binary == false, !editing {
                     Button { htmlRendered.toggle() } label: { Image(icon: htmlRendered ? "chevron.left.forwardslash.chevron.right" : "eye").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
                         .help(htmlRendered ? "显示源码" : "渲染预览")
+                }
+                if editing, isDirty {
+                    Button("保存") { Task { await save() } }
+                        .buttonStyle(ChipButtonStyle())
+                        .keyboardShortcut("s")
+                        .disabled(saving)
+                }
+                if canEdit || editing {
+                    Button { toggleEditing() } label: { Image(icon: "pencil").font(RiffetFont.caption) }
+                        .buttonStyle(IconButtonStyle(active: editing))
+                        .help("编辑")
                 }
                 Button { workbench.addReference(path: effectivePath) } label: { Image(icon: "plus").font(.riffet(size: S(12))) }
                     .buttonStyle(IconButtonStyle())
@@ -655,6 +697,16 @@ struct FilePreviewPage: View {
             }
             PanelRule()
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            if conflict {
+                HStack(spacing: Space.sm) {
+                    Text("文件已在磁盘上改动").font(RiffetFont.caption).foregroundStyle(palette.warning)
+                    Spacer(minLength: Space.sm)
+                    Button("用磁盘上的版本") { useDisk() }.buttonStyle(ChipButtonStyle()).disabled(saving)
+                    Button("覆盖保存") { Task { await save() } }.buttonStyle(ChipButtonStyle()).disabled(saving)
+                }
+                .padding(.horizontal, Space.md)
+                .padding(.vertical, Space.xs)
+            }
             if let notice {
                 Text(notice).font(.riffet(size: S(12))).foregroundStyle(palette.danger).padding(6)
             }
@@ -670,7 +722,9 @@ struct FilePreviewPage: View {
         }
         .onChange(of: target?.1) { _, _ in if target != nil { htmlRendered = false } }
         .onChange(of: path) { _, _ in sitePage = nil }
-        .onDisappear { navigation?.cancel() }
+        .onChange(of: isDirty) { _, value in unsaved = value }
+        .discardConfirmation(isPresented: $confirmEndEditing) { endEditing() }
+        .onDisappear { navigation?.cancel(); unsaved = false }
         .task(id: "\(path)|\(reload)") {
             htmlRendered = target == nil
             // A file opened lately shows at once and is read again behind it; 刷新 always waits for the read.
@@ -680,9 +734,10 @@ struct FilePreviewPage: View {
                 let next = try await workbench.host.api?.preview(projectId: project.id, path: path)
                 if let next {
                     Self.recent.setObject(next, forKey: key)
-                    if preview?.hash != next.hash || preview?.path != next.path || preview?.truncated != next.truncated { preview = next }
+                    // While editing, the preview stays the version the edits started from: it names the save's expected hash.
+                    if !editing, preview?.hash_ != next.hash_ || preview?.path != next.path || preview?.truncated != next.truncated { preview = next }
                     if !next.binary || next.image != nil { onShown?(next.path) }
-                } else if preview != nil {
+                } else if preview != nil, !editing {
                     preview = nil
                 }
                 error = nil
@@ -714,18 +769,76 @@ struct FilePreviewPage: View {
                       let url = FilePreviewTheme(palette: palette, dark: colorScheme == .dark).url(raw) {
                 RenderedFilePreview(url: url, rawURL: raw, name: (preview.path as NSString).lastPathComponent)
                     .id("\(preview.path)|\(preview.hash)")
-            } else if preview.binary, let url = ProjectDownloads.rawURL(projectId: project.id, path: preview.path) {
+            } else if systemPreviewed || preview.binary, let url = ProjectDownloads.rawURL(projectId: project.id, path: preview.path) {
                 SystemFilePreview(url: url, name: (preview.path as NSString).lastPathComponent)
             } else {
                 CodeTextView(
-                    text: preview.content, language: CodeHighlighter.language(forPath: preview.path), palette: palette,
+                    text: editing ? draft : preview.content, language: CodeHighlighter.language(forPath: preview.path), palette: palette,
                     fontSize: S(12), target: target.map { (line: $0.0, token: $0.1) },
                     onLine: { line, _ in workbench.addReference(path: preview.path, line: line) },
-                    onSymbol: { navigate($0, $1, in: preview.path) }
+                    onSymbol: { navigate($0, $1, in: preview.path) },
+                    editable: editing, onChange: { draft = $0 }
                 )
             }
         } else {
             ProgressView()
+        }
+    }
+
+    private func toggleEditing() {
+        if !editing {
+            guard let preview else { return }
+            draft = preview.content
+            notice = nil
+            editing = true
+        } else if isDirty {
+            confirmEndEditing = true
+        } else {
+            endEditing()
+        }
+    }
+
+    private func endEditing() {
+        editing = false
+        conflict = false
+        draft = ""
+        notice = nil
+    }
+
+    private func useDisk() {
+        guard let preview else { return }
+        draft = preview.content
+        conflict = false
+        notice = nil
+    }
+
+    private func save() async {
+        guard let api = workbench.host.api, let current = preview, editing, !saving else { return }
+        saving = true
+        defer { saving = false }
+        notice = nil
+        let text = draft
+        let key = "\(project.id)\u{1}\(path)" as NSString
+        do {
+            _ = try await api.saveFile(projectId: project.id, path: current.path, content: text, expectedHash: current.hash_)
+            let saved = try await api.preview(projectId: project.id, path: current.path)
+            Self.recent.setObject(saved, forKey: key)
+            preview = saved
+            if saved.content != draft { draft = saved.content }
+            conflict = false
+        } catch {
+            if error.riffetCode == "FILE_CHANGED" {
+                do {
+                    let disk = try await api.preview(projectId: project.id, path: current.path)
+                    Self.recent.setObject(disk, forKey: key)
+                    preview = disk
+                    conflict = disk.content != draft
+                } catch {
+                    notice = error.riffetMessage
+                }
+            } else {
+                notice = error.riffetMessage
+            }
         }
     }
 
@@ -893,6 +1006,15 @@ struct SandboxedPage: NSViewRepresentable {
                 return components.url
             }
             return withoutFragment(lhs) == withoutFragment(rhs)
+        }
+    }
+}
+
+extension View {
+    /// Asks before edits that were not saved are given up; [discard] runs on the destructive choice.
+    func discardConfirmation(isPresented: Binding<Bool>, discard: @escaping () -> Void) -> some View {
+        confirmationDialog("放弃未保存的修改？", isPresented: isPresented, titleVisibility: .visible) {
+            Button("放弃修改", role: .destructive, action: discard)
         }
     }
 }

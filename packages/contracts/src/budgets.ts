@@ -53,6 +53,8 @@ export const FILE_BUDGET = {
   officeConvertMs: 60_000,
   /** Converted PDFs kept in memory, all together. */
   officePdfCacheBytes: 64 * MIB,
+  /** Most pixels one PDF page a client draws natively may hold (about 12 MB as ARGB); a larger page is drawn smaller. */
+  pdfPageMaxPixels: 3_000_000,
 } as const;
 
 /** Parsed and laid-out text kept for reuse: markdown, highlighted code, measured rows; all such caches together. */

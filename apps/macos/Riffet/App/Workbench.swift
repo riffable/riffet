@@ -227,6 +227,8 @@ final class Workbench {
     var creatingHomeSession = false
     var homeCreationError: String?
     private(set) var supportsProjectlessTasks = false
+    /// The server saves project text files (`PUT /api/projects/:id/file`).
+    private(set) var supportsFileWrite = false
     private var serverFeaturesLoaded = false
     private var homeTaskSelectionKey: String { "riffet.home-target|\(baseURL.absoluteString)" }
     private var homeTaskSelection: String?
@@ -1456,6 +1458,7 @@ final class Workbench {
         defer { backendsReading = false }
         if let health = try? await api.health() {
             supportsProjectlessTasks = health.protocol?.features.contains("projectless-tasks") == true
+            supportsFileWrite = health.protocol?.features.contains("file-write-v1") == true
             serverFeaturesLoaded = true
         }
         // Written only when they changed: settings re-read them often, and every page follows them.

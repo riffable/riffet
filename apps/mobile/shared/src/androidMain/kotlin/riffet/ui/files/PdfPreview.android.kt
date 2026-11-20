@@ -1,0 +1,203 @@
+package riffet.ui.files
+
+import android.graphics.Bitmap
+import android.graphics.Color as AndroidColor
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import riffet.contracts.FILE_BUDGET_PDF_PAGE_MAX_PIXELS
+import riffet.shared.DownloadWriter
+import riffet.shared.RiffetApi
+import riffet.shared.downloadFile
+import riffet.ui.timeline.Spinner
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
+
+internal actual val nativePdfSupported: Boolean = true
+
+
+/** Pages are drawn this much wider than the screen so a pinch zoom stays legible. */
+private const val RENDER_SCALE = 1.5f
+private const val MAX_ZOOM = 3f
+private const val STALE_AFTER_MS = 60L * 60 * 1000
+
+/** The PDF as [PdfRenderer] reads it; its one open page at a time makes every call take [lock]. */
+private class PdfPages(private val file: File, private val renderer: PdfRenderer, val sizes: List<Pair<Int, Int>>) {
+    private val lock = Any()
+    private var closed = false
+
+    /** Draws [index] into [bitmap]; false when the document has been closed meanwhile. */
+    fun render(index: Int, bitmap: Bitmap): Boolean = synchronized(lock) {
+        if (closed) return false
+        bitmap.eraseColor(AndroidColor.WHITE)
+        renderer.openPage(index).use { it.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY) }
+        true
+    }
+
+    fun close() = synchronized(lock) {
+        if (closed) return@synchronized
+        closed = true
+        runCatching { renderer.close() }
+        file.delete()
+    }
+
+    companion object {
+        fun open(file: File): PdfPages {
+            val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            val renderer = try { PdfRenderer(descriptor) } catch (failure: Throwable) { descriptor.close(); throw failure }
+            val sizes = (0 until renderer.pageCount).map { renderer.openPage(it).use { page -> page.width to page.height } }
+            return PdfPages(file, renderer, sizes)
+        }
+    }
+}
+
+@Composable
+internal actual fun PlatformPdfPreview(api: RiffetApi, projectId: String, path: String, version: String, modifier: Modifier, onUnavailable: () -> Unit) {
+    val directory = File(LocalContext.current.cacheDir, "pdf-preview")
+    var pages by remember(api, projectId, path, version) { mutableStateOf<PdfPages?>(null) }
+    val unavailable by rememberUpdatedState(onUnavailable)
+    // The private copy goes with the page: closing the document deletes its file.
+    val current = pages
+    DisposableEffect(current) { onDispose { current?.close() } }
+    LaunchedEffect(api, projectId, path, version) {
+        val file = withContext(Dispatchers.IO) {
+            directory.mkdirs()
+            val now = System.currentTimeMillis()
+            directory.listFiles()?.forEach { if (now - it.lastModified() > STALE_AFTER_MS) it.delete() }
+            File(directory, "${UUID.randomUUID()}.pdf")
+        }
+        var opened: PdfPages? = null
+        try {
+            var out: FileOutputStream? = null
+            try {
+                api.downloadFile(projectId, path) { _, _ ->
+                    val stream = withContext(Dispatchers.IO) { FileOutputStream(file) }
+                    out = stream
+                    DownloadWriter { bytes, offset, length -> withContext(Dispatchers.IO) { stream.write(bytes, offset, length) } }
+                }
+            } finally { withContext(NonCancellable) { out?.close() } }
+            opened = withContext(Dispatchers.IO) { PdfPages.open(file) }
+            pages = opened
+        } catch (cancellation: CancellationException) {
+            if (opened == null) file.delete()
+            throw cancellation
+        } catch (_: Throwable) {
+            file.delete()
+            unavailable()
+        }
+    }
+    val document = current
+    if (document == null) {
+        Box(modifier, contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
+        return
+    }
+    PdfPageList(document, modifier)
+}
+
+@Composable
+private fun PdfPageList(document: PdfPages, modifier: Modifier) {
+    var zoom by remember(document) { mutableFloatStateOf(1f) }
+    BoxWithConstraints(modifier.fillMaxSize().pdfPinch { factor -> zoom = (zoom * factor).coerceIn(1f, MAX_ZOOM) }) {
+        val density = LocalDensity.current
+        val viewWidth = maxWidth
+        val renderWidth = with(density) { (viewWidth.toPx() * RENDER_SCALE).toInt() }
+        // Zooming widens the pages inside a horizontal scroll; the bitmaps keep their size.
+        Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+            LazyColumn(Modifier.width(viewWidth * zoom).fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(document.sizes.size, key = { it }) { index ->
+                    val (width, height) = document.sizes[index]
+                    PdfPage(document, index, renderWidth, width, height)
+                }
+            }
+        }
+    }
+}
+
+/** A two-finger pinch is taken before the list sees it; one finger scrolls as usual. */
+private fun Modifier.pdfPinch(onZoom: (Float) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        do {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.changes.count { it.pressed } >= 2) {
+                val factor = event.calculateZoom()
+                if (factor != 1f) onZoom(factor)
+                event.changes.forEach { it.consume() }
+            }
+        } while (event.changes.any { it.pressed })
+    }
+}
+
+/** Holds a page's bitmap so it is recycled once, and only after its render has finished. */
+private class PageBitmap {
+    var bitmap: Bitmap? = null
+    var released = false
+
+    fun release() {
+        released = true
+        bitmap?.recycle()
+        bitmap = null
+    }
+}
+
+/** One page, drawn while it is on screen and recycled when it leaves. */
+@Composable
+private fun PdfPage(document: PdfPages, index: Int, renderWidth: Int, pageWidth: Int, pageHeight: Int) {
+    val held = remember(document, index, renderWidth) { PageBitmap() }
+    var image by remember(held) { mutableStateOf<ImageBitmap?>(null) }
+    DisposableEffect(held) { onDispose { image = null; held.release() } }
+    LaunchedEffect(held) {
+        // A very large page is drawn smaller rather than at the full width.
+        val scale = minOf(1.0, Math.sqrt(FILE_BUDGET_PDF_PAGE_MAX_PIXELS.toDouble() / (renderWidth.toDouble() * renderWidth * pageHeight / pageWidth)))
+        val width = (renderWidth * scale).toInt().coerceAtLeast(1)
+        val height = (width.toLong() * pageHeight / pageWidth).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        var drawn = false
+        try { drawn = withContext(Dispatchers.Default) { document.render(index, bitmap) } }
+        finally {
+            if (drawn && !held.released) { held.bitmap = bitmap; image = bitmap.asImageBitmap() }
+            else bitmap.recycle()
+        }
+    }
+    Box(Modifier.fillMaxWidth().aspectRatio(pageWidth.toFloat() / pageHeight)) {
+        image?.let { Image(it, contentDescription = null, contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxSize()) }
+    }
+}

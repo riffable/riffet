@@ -11,3 +11,8 @@ internal actual fun PlatformHtmlPreview(html: String, interactive: Boolean, modi
 
 @Composable
 internal actual fun PlatformSitePreview(url: String?, modifier: Modifier, onPage: (url: String, status: Int) -> Unit, onError: (String) -> Unit) = Unit
+
+internal actual val nativePdfSupported: Boolean = false
+
+@Composable
+internal actual fun PlatformPdfPreview(api: riffet.shared.RiffetApi, projectId: String, path: String, version: String, modifier: Modifier, onUnavailable: () -> Unit) = Unit

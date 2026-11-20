@@ -24,6 +24,11 @@ struct ProjectFilePage: View {
     /// The page a followed link has shown inside an HTML site; title, copy and download follow it.
     @State private var sitePage: String?
     @State private var siteReload = 0
+    @State private var editing = false
+    @State private var writable = false
+    /// A PDF or Office document downloaded for Quick Look; the folder goes with the page.
+    @State private var nativeCopy: ProjectTempCopy?
+    private static let nativeKinds: Set<String> = ["pdf", "document", "presentation", "spreadsheet"]
     private var isSiteFile: Bool { !isMarkdown && ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased()) }
     private var shownPath: String { (isSiteFile && renderHTML ? sitePage : nil) ?? effectivePath }
     private var effectivePath: String { preview?.path ?? path }
@@ -43,7 +48,9 @@ struct ProjectFilePage: View {
                     .padding(RiffetMetrics.pageInset)
                     .frame(maxHeight: .infinity, alignment: .top)
             } else if let preview {
-                if isSiteFile, renderHTML, !preview.binary {
+                if let nativeCopy {
+                    FilePreview(url: nativeCopy.url, title: (path as NSString).lastPathComponent).ignoresSafeArea(edges: .bottom)
+                } else if isSiteFile, renderHTML, !preview.binary {
                     ProjectHTMLSite(workbench: workbench, projectID: project.id, entry: effectivePath, reload: siteReload,
                                     onPage: { sitePage = $0 }, failed: { error = $0 })
                 } else if !isMarkdown, preview.render != nil, renderHTML, let url = previewURL {
@@ -74,6 +81,9 @@ struct ProjectFilePage: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if exporting { ProgressView() }
+                if writable, showsEditableSource {
+                    Button(String(localized: "编辑", bundle: .riffet)) { editing = true }
+                }
                 Menu {
                     Button("下载并分享", systemImage: "square.and.arrow.up") { Task { await download() } }
                     Button("系统预览", systemImage: "eye") { Task { await download(preview: true) } }
@@ -88,6 +98,18 @@ struct ProjectFilePage: View {
             }
         }
         .task(id: "\(project.id)|\(path)") { await load() }
+        .task(id: project.id) {
+            guard let api = workbench.api else { return }
+            writable = (try? await api.health())?.protocol?.features.contains("file-write-v1") == true
+        }
+        .sheet(isPresented: $editing) {
+            if let preview {
+                ProjectFileEditor(path: effectivePath, original: preview.content, save: saveEdit) { reload in
+                    editing = false
+                    if reload { Task { await load() } }
+                }
+            }
+        }
         .onChange(of: actionError) {
             guard let message = actionError else { return }
             actionError = nil
@@ -97,9 +119,26 @@ struct ProjectFilePage: View {
         .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (shownPath as NSString).lastPathComponent) }
     }
 
+    /// The plain source of an editable text file is what the page shows.
+    private var showsEditableSource: Bool {
+        guard let preview, preview.editable, !preview.binary, preview.image == nil, error == nil, nativeCopy == nil, !renderHTML else { return false }
+        return !(isMarkdown && readingMarkdown)
+    }
+
+    private func saveEdit(_ content: String, overwrite: Bool) async -> ProjectFileSaveOutcome {
+        guard let api = workbench.api, let preview else { return .failed(InspectorFailure.disconnected.errorDescription ?? "") }
+        do {
+            let hash = overwrite ? try await api.preview(projectId: project.id, path: effectivePath).hash_ : preview.hash_
+            _ = try await api.saveFile(projectId: project.id, path: effectivePath, content: content, expectedHash: hash)
+            return .saved
+        } catch {
+            return error.riffetCode == "FILE_CHANGED" ? .changed : .failed(error.riffetMessage)
+        }
+    }
+
     /// What can be shown as a rendered page: Markdown and HTML, never an image or a binary.
     private var previewable: Bool {
-        guard let preview, !preview.binary, preview.image == nil, error == nil else { return false }
+        guard let preview, !preview.binary, preview.image == nil, error == nil, nativeCopy == nil else { return false }
         if isMarkdown { return true }
         return preview.render != nil || ["html", "htm"].contains((effectivePath as NSString).pathExtension.lowercased())
     }
@@ -182,6 +221,7 @@ struct ProjectFilePage: View {
         preview = nil
         html = nil
         sitePage = nil
+        nativeCopy = nil
         renderHTML = false
         pages = []; shown = 1
         readingMarkdown = targetLine == nil
@@ -192,7 +232,14 @@ struct ProjectFilePage: View {
             preview = result
             let site = !isMarkdown && ["html", "htm"].contains((result.path as NSString).pathExtension.lowercased()) && !result.binary
             renderHTML = !isMarkdown && (result.render != nil || site) && targetLine == nil
-            if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: result.path, image: true) {
+            if let kind = result.render?.kind, Self.nativeKinds.contains(kind), targetLine == nil,
+               let url = workbench.resources.fileURL(projectID: project.id, path: result.path),
+               let file = try? await workbench.resources.file(for: url, name: (result.path as NSString).lastPathComponent) {
+                let copy = ProjectTempCopy(url: file)
+                guard !Task.isCancelled else { return }
+                renderHTML = false
+                nativeCopy = copy
+            } else if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: result.path, image: true) {
                 let data = try await workbench.resources.data(for: url)
                 guard !Task.isCancelled else { return }
                 let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data) }.value
@@ -241,6 +288,13 @@ struct ProjectFilePage: View {
             renderHTML = true
         } catch { actionError = error.riffetMessage }
     }
+}
+
+/// A downloaded file in its own temporary folder, removed when the page lets go of it.
+private final class ProjectTempCopy {
+    let url: URL
+    init(url: URL) { self.url = url }
+    deinit { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 }
 
 /// Chunking runs off the main actor. Even a file consisting of one enormous line has a

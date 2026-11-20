@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "编辑" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit" } }
+      }
+    },
+    "文件已在别处改动" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The file changed elsewhere" } }
+      }
+    },
+    "覆盖保存" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Over It" } }
+      }
+    },
+    "放弃我的修改" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Discard My Changes" } }
+      }
+    },
     "扫码配对" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Scan to pair" } }

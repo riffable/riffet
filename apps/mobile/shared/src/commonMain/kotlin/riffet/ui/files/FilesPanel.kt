@@ -135,6 +135,7 @@ private enum class SearchMode(val id: String) {
 private sealed interface FilesPage {
     data class Directory(val path: String) : FilesPage
     data class Preview(val path: String, val line: Int?, val visualization: Boolean = false) : FilesPage
+    data class Edit(val preview: FilePreview) : FilesPage
 }
 
 @Composable
@@ -162,6 +163,9 @@ fun FilesPanel(
     val close: () -> Unit = { focus.clearFocus(); onBack() }
     // One list for every page of the stack, so a star set two folders down shows on the way back.
     val favorites = rememberFolderFavorites(api, projectId)
+    val writes = remember(api) { FileWriteSupport(api) }
+    // The file as last saved or reloaded by an editing page, for the preview beneath it.
+    var edited by remember { mutableStateOf<FilePreview?>(null) }
     riffet.ui.app.PageHost(pages, modifier) { page, back ->
         val goBack = if (!pages.canPop) close else back
         when (page) {
@@ -171,7 +175,8 @@ fun FilesPanel(
                 },
                 onFile = { path, line -> pages.push(FilesPage.Preview(path, line)) },
             )
-            is FilesPage.Preview -> FilePreviewPage(api, projectId, page, back, close)
+            is FilesPage.Preview -> FilePreviewPage(api, projectId, page, back, close, writes, edited) { pages.push(FilesPage.Edit(it)) }
+            is FilesPage.Edit -> FileEditPage(api, projectId, page.preview, back) { edited = it }
         }
     }
 }
@@ -341,18 +346,23 @@ private fun DirectoryPage(
 }
 
 @Composable
-private fun BannerBox(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) {
+internal fun BannerBox(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) {
     Box(Modifier.fillMaxWidth().padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = 4.dp)) {
         riffet.ui.design.Notice(message, kind, action = action, onAction = onAction)
     }
 }
 
 @Composable
-private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.Preview, onBack: () -> Unit, onClose: () -> Unit) {
+private fun FilePreviewPage(
+    api: RiffetApi, projectId: String, page: FilesPage.Preview, onBack: () -> Unit, onClose: () -> Unit,
+    writes: FileWriteSupport, edited: FilePreview?, onEdit: (FilePreview) -> Unit,
+) {
     var preview by remember { mutableStateOf(FileCache.preview(projectId, page.path)) }
     var loading by remember { mutableStateOf(preview == null) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableStateOf(0) }
+    LaunchedEffect(edited) { if (edited != null && edited.path == page.path) preview = edited }
+    LaunchedEffect(preview?.editable) { if (preview?.editable == true) writes.ensure() }
     LaunchedEffect(refresh) {
         loading = preview == null
         error = null
@@ -377,11 +387,14 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
     // Downloading reads the file as it is, so it does not wait on, or depend on, a preview that may fail.
     val download = if (downloadsSupported) ({ DownloadCenter.shared.start(api, projectId, path) }) else null
     val textPreview = value != null && !(html && renderHtml) && value.image == null && !value.binary
+    val writeSupported = writes.supported
+    val canEdit = value != null && value.editable && writeSupported && textPreview
     val footer: (@Composable () -> Unit)? = if (value != null && textPreview) ({ TextPreviewFooter(value) }) else null
     // The name is what the reader looks for; the directory is the line under it.
     val shownPath = tildePath(path)
     FilePageChrome(shownPath.substringAfterLast('/'), onBack, onClose,
         subtitle = shownPath.substringBeforeLast('/', "").takeIf { it.isNotEmpty() }, actions = {
+        if (canEdit && value != null) PageBarAction(icon = RiffetIcons.Pencil, description = stringResource(Res.string.files_edit), onClick = { onEdit(value) })
         if (download != null) PageBarAction(icon = RiffetIcons.Download, description = stringResource(Res.string.files_download_file), onClick = download)
     }, header = {
         error?.let { message -> BannerBox(message, SettingsNoticeKind.ERROR, stringResource(Res.string.files_retry)) { refresh++ } }
@@ -401,6 +414,24 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
                 PreviewBody(value, api, projectId, page.line, page.visualization, download, html && renderHtml, insets) { sitePage = it }
             else if (loading) Box(Modifier.fillMaxSize().padding(insets), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
         }
+    }
+}
+
+/**
+ * Whether the server saves files (`file-write-v1`), asked of the bootstrap the first time a file
+ * that could be edited is opened; a failed read counts as no.
+ */
+internal class FileWriteSupport(private val api: RiffetApi) {
+    var supported by mutableStateOf(false)
+        private set
+    private var asked = false
+
+    suspend fun ensure() {
+        if (asked) return
+        asked = true
+        try { supported = api.bootstrap().protocol?.features?.contains("file-write-v1") == true }
+        catch (cancellation: CancellationException) { asked = false; throw cancellation }
+        catch (_: Throwable) { supported = false }
     }
 }
 
@@ -644,6 +675,8 @@ private fun PreviewBody(
     preview: FilePreview, api: RiffetApi, projectId: String, requestedLine: Int?, visualization: Boolean,
     onDownload: (() -> Unit)?, renderHtml: Boolean, insets: PaddingValues, onSitePage: (String) -> Unit,
 ) {
+    // A PDF the platform cannot draw falls back to the server-rendered page.
+    var pdfFailed by remember(preview.path) { mutableStateOf(false) }
     // Scrollable code owns content padding so its lines pass beneath both fixed bars.
     // Static image/binary/native HTML viewers retain a safe content rectangle.
     if (!renderHtml && preview.image == null && !preview.binary) TextPreview(preview, requestedLine, insets)
@@ -651,6 +684,8 @@ private fun PreviewBody(
         when {
             renderHtml && preview.render == null && !visualization ->
                 HtmlSitePreview(api, projectId, preview.path, preview.hash, onSitePage, Modifier.fillMaxSize())
+            renderHtml && preview.render?.kind == "pdf" && nativePdfSupported && !pdfFailed ->
+                PlatformPdfPreview(api, projectId, preview.path, preview.hash, Modifier.fillMaxSize()) { pdfFailed = true }
             renderHtml -> HtmlFilePreview(api, projectId, preview.path, visualization, Modifier.fillMaxSize(), generated = preview.render != null)
             preview.image != null -> ImagePreview(preview, projectId)
             else -> BinaryMessage(preview, onDownload)

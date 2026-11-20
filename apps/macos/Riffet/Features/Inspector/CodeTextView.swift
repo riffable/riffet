@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// A read-only source file in an `NSTextView`: line numbers in a gutter that cite a line when
+/// A source file in an `NSTextView`, read-only until `editable`: line numbers in a gutter that cite a line when
 /// clicked, the web's syntax colors, and a jump to a line that flashes it. AppKit lays out only
 /// what is on screen, so a large file scrolls as smoothly as a small one.
 struct CodeTextView: NSViewRepresentable {
@@ -14,6 +14,9 @@ struct CodeTextView: NSViewRepresentable {
     var onLine: ((Int, String) -> Void)?
     /// ⌘-click on an identifier (definition) or its context menu (definition, usages); nil turns it off.
     var onSymbol: ((CodeSymbol, CodeSymbolIntent) -> Void)?
+    /// Typing changes the file; the owner keeps the edited text and passes it back as `text`.
+    var editable = false
+    var onChange: ((String) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -38,6 +41,14 @@ struct CodeTextView: NSViewRepresentable {
         scroll.documentView = textView
         textView.isEditable = false
         textView.isSelectable = true
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.isAutomaticLinkDetectionEnabled = false
+        textView.delegate = context.coordinator
         textView.isRichText = true
         textView.drawsBackground = false
         textView.textContainerInset = NSSize(width: 6, height: 8)
@@ -64,6 +75,8 @@ struct CodeTextView: NSViewRepresentable {
         guard let textView = coordinator.textView, let ruler = coordinator.ruler else { return }
         ruler.palette = palette
         ruler.onLine = onLine
+        textView.isEditable = editable
+        coordinator.onChange = onChange
         if let symbolView = textView as? SymbolTextView {
             symbolView.onSymbol = onSymbol
             symbolView.linkColor = palette.nsColor(\.accent)
@@ -74,9 +87,24 @@ struct CodeTextView: NSViewRepresentable {
         let codeRevision = ThemeStore.shared.codeThemeRevision
         let commentItalic = (scroll.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? codeTheme.dark : codeTheme.light).commentItalic
         let key = "\(language ?? "")|\(fontSize)|\(palette.values.id)|\(palette.revision)|\(codeTheme.id)|\(codeRevision)|\(commentItalic)|\(AppearanceFonts.current.key)|\(styleFonts)"
+        let codeLanguage = language, codePalette = palette, codeSize = fontSize
+        coordinator.typing = Self.baseAttributes(palette: codePalette, fontSize: codeSize, styleFonts: styleFonts)
+        textView.typingAttributes = coordinator.typing
+        // Edits are colored again a moment after typing stops, over the same string so the caret and undo stay.
+        coordinator.restyle = { [weak textView] text in
+            guard let textView, let language = codeLanguage, text.utf16.count <= CodeHighlighter.maxLength,
+                  let runs = await CodeHighlighter.shared.runs(text, language: language), !Task.isCancelled, textView.string == text else { return }
+            let colored = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: runs, palette: codePalette, codeTheme: codeTheme, codeRevision: codeRevision, commentItalic: commentItalic, fontSize: codeSize, styleFonts: styleFonts, starts: []) }.value
+            guard !Task.isCancelled, textView.string == text, let storage = textView.textStorage, storage.length == colored.text.length else { return }
+            storage.beginEditing()
+            colored.text.enumerateAttributes(in: NSRange(location: 0, length: colored.text.length)) { attributes, range, _ in storage.setAttributes(attributes, range: range) }
+            storage.endEditing()
+        }
         if coordinator.applied != key || coordinator.appliedText != text {
             coordinator.applied = key
             coordinator.appliedText = text
+            coordinator.debounce?.cancel()
+            textView.undoManager?.removeAllActions()
             // Colours, paragraph style and line starts are built off the main thread; a file of
             // thousands of lines took the main thread for a noticeable moment.
             textView.textStorage?.setAttributedString(NSAttributedString())
@@ -108,11 +136,9 @@ struct CodeTextView: NSViewRepresentable {
 
     /// The styled text and where each line starts, built on any thread.
     nonisolated static func prepare(_ text: String, runs: [CodeHighlighter.Run]?, palette: Palette, codeTheme: RiffetCodeThemeValues = RiffetCodeThemeCatalog.all[0], codeRevision: String = "builtin", commentItalic: Bool = true, fontSize: CGFloat, styleFonts: StyleSpec.Fonts, starts known: [Int]? = nil) -> (text: NSAttributedString, starts: [Int]) {
-        let font = RiffetFace.nsFont(size: fontSize, mono: true, plugin: AppearanceFonts.current, style: styleFonts) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let base = baseAttributes(palette: palette, fontSize: fontSize, styleFonts: styleFonts)
+        let font = base[.font] as! NSFont
         let italic = font.riffetItalic
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineHeightMultiple = 1.25
-        let base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: palette.nsColor(\.fg), .paragraphStyle: paragraph]
         let value: NSMutableAttributedString
         if let runs {
             value = NSMutableAttributedString()
@@ -146,6 +172,17 @@ struct CodeTextView: NSViewRepresentable {
             value = NSMutableAttributedString(string: text, attributes: base)
         }
         if let known { return (value, known) }
+        return (value, lineStarts(text))
+    }
+
+    nonisolated static func baseAttributes(palette: Palette, fontSize: CGFloat, styleFonts: StyleSpec.Fonts) -> [NSAttributedString.Key: Any] {
+        let font = RiffetFace.nsFont(size: fontSize, mono: true, plugin: AppearanceFonts.current, style: styleFonts) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineHeightMultiple = 1.25
+        return [.font: font, .foregroundColor: palette.nsColor(\.fg), .paragraphStyle: paragraph]
+    }
+
+    nonisolated static func lineStarts(_ text: String) -> [Int] {
         let string = text as NSString
         var starts = [0]
         starts.reserveCapacity(string.length / 40 + 1)
@@ -157,10 +194,10 @@ struct CodeTextView: NSViewRepresentable {
             starts.append(range.location + 1)
             index = range.location + 1
         }
-        return (value, starts)
+        return starts
     }
 
-    final class Coordinator {
+    final class Coordinator: NSObject, NSTextViewDelegate {
         weak var textView: NSTextView?
         weak var ruler: LineNumberRuler?
         var applied = ""
@@ -169,6 +206,27 @@ struct CodeTextView: NSViewRepresentable {
         /// A jump asked for before the text arrived.
         var pendingTarget: Int?
         var build: Task<Void, Never>?
+        var onChange: ((String) -> Void)?
+        var restyle: ((String) async -> Void)?
+        var typing: [NSAttributedString.Key: Any] = [:]
+        var debounce: Task<Void, Never>?
+
+        @MainActor
+        func textDidChange(_ notification: Notification) {
+            guard let textView, textView.isEditable else { return }
+            let text = textView.string
+            appliedText = text
+            build?.cancel()
+            ruler?.reset(text: text, starts: CodeTextView.lineStarts(text))
+            textView.typingAttributes = typing
+            onChange?(text)
+            debounce?.cancel()
+            debounce = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled, let self else { return }
+                await self.restyle?(text)
+            }
+        }
 
         @MainActor
         func jump(to line: Int, palette: Palette) {

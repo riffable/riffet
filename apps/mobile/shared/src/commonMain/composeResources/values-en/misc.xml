@@ -315,4 +315,9 @@
     <string name="composer_continue_unknown">It is still unclear whether the previous message was executed</string>
     <string name="composer_placeholder_steer">Add to the current task…</string>
     <string name="composer_placeholder_queued">Write the next message…</string>
+    <string name="files_edit">Edit</string>
+    <string name="files_error_save">Could not save the file</string>
+    <string name="files_changed_title">The file changed elsewhere</string>
+    <string name="files_overwrite">Save over it</string>
+    <string name="files_drop_mine">Discard my changes</string>
 </resources>
