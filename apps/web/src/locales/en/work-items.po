@@ -14,7 +14,7 @@ msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
 #. placeholder {0}: sessions.length
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "{0} 个会话"
 msgstr "{0} conversations"
 
@@ -60,7 +60,7 @@ msgstr "The agent reports on each item when it delivers; you accept"
 msgid "GitHub 发版"
 msgstr "GitHub release"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "上次会话失败"
 msgstr "Last session failed"
 
@@ -90,6 +90,14 @@ msgstr "Delivery"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "任务 #{0} 状态变化"
 msgstr "Task #{0} status changes"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "任务总数"
+msgstr "Total tasks"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "任务概览"
+msgstr "Task overview"
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "任务看板"
@@ -130,6 +138,10 @@ msgstr "About you"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关注点"
 msgstr "What to watch for"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "关联会话"
+msgstr "Linked conversations"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关闭"
@@ -226,6 +238,7 @@ msgstr "Delegations"
 msgid "子任务"
 msgstr "Subtasks"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "完成"
@@ -336,6 +349,7 @@ msgstr "Me"
 msgid "或者写下回答…"
 msgstr "Or write an answer…"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "打开会话"
@@ -381,6 +395,7 @@ msgstr "Search tasks"
 msgid "搜索任务、#编号…"
 msgstr "Search tasks, #number…"
 
+#: src/app/work-items/WorkItemOverview.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr "Inbox"
@@ -389,7 +404,7 @@ msgstr "Inbox"
 msgid "收起"
 msgstr "Collapse"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/parts.tsx
 msgid "改动 {count} 个文件"
 msgstr "{count} files changed"
 
@@ -400,6 +415,11 @@ msgstr "Files changed"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "文件"
 msgstr "Files"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgctxt "work-item-overview-series"
+msgid "新建"
+msgstr "Created"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -451,6 +471,7 @@ msgstr "Could not read memory"
 msgid "无法返工"
 msgstr "Couldn't send it back"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "无需关注"
@@ -486,7 +507,7 @@ msgstr "New results"
 msgid "未达成"
 msgstr "Not met"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/parts.tsx
 msgid "标准 {met}/{total}"
 msgstr "{met}/{total} criteria"
 
@@ -660,11 +681,12 @@ msgstr "Follow-up: {0}"
 msgid "跟进返工：{0}"
 msgstr "Follow-up rework: {0}"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "转入观测"
 msgstr "Watch"
 
 #: src/app/work-items/parts.tsx
+#: src/app/work-items/WorkItemOverview.tsx
 msgid "运行中"
 msgstr "Running"
 
@@ -675,6 +697,10 @@ msgstr "Running · In review"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "运行过的命令"
 msgstr "Commands run"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "近 {dayCount} 天"
+msgstr "Last {dayCount} days"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "返工"

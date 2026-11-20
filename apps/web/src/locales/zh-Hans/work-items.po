@@ -14,7 +14,7 @@ msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
 #. placeholder {0}: sessions.length
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "{0} 个会话"
 msgstr "{0} 个会话"
 
@@ -60,7 +60,7 @@ msgstr "Agent 交付时逐条说明，由你验收"
 msgid "GitHub 发版"
 msgstr "GitHub 发版"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "上次会话失败"
 msgstr "上次会话失败"
 
@@ -90,6 +90,14 @@ msgstr "交付"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "任务 #{0} 状态变化"
 msgstr "任务 #{0} 状态变化"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "任务总数"
+msgstr "任务总数"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "任务概览"
+msgstr "任务概览"
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "任务看板"
@@ -130,6 +138,10 @@ msgstr "关于你"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关注点"
 msgstr "关注点"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "关联会话"
+msgstr "关联会话"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关闭"
@@ -226,6 +238,7 @@ msgstr "委托"
 msgid "子任务"
 msgstr "子任务"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "完成"
@@ -336,6 +349,7 @@ msgstr "我"
 msgid "或者写下回答…"
 msgstr "或者写下回答…"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "打开会话"
@@ -381,6 +395,7 @@ msgstr "搜索任务"
 msgid "搜索任务、#编号…"
 msgstr "搜索任务、#编号…"
 
+#: src/app/work-items/WorkItemOverview.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr "收件箱"
@@ -389,7 +404,7 @@ msgstr "收件箱"
 msgid "收起"
 msgstr "收起"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/parts.tsx
 msgid "改动 {count} 个文件"
 msgstr "改动 {count} 个文件"
 
@@ -400,6 +415,11 @@ msgstr "改动的文件"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "文件"
 msgstr "文件"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgctxt "work-item-overview-series"
+msgid "新建"
+msgstr "新建"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -451,6 +471,7 @@ msgstr "无法读取记忆"
 msgid "无法返工"
 msgstr "无法返工"
 
+#: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "无需关注"
@@ -486,7 +507,7 @@ msgstr "有新结果"
 msgid "未达成"
 msgstr "未达成"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/parts.tsx
 msgid "标准 {met}/{total}"
 msgstr "标准 {met}/{total}"
 
@@ -660,11 +681,12 @@ msgstr "跟进：{0}"
 msgid "跟进返工：{0}"
 msgstr "跟进返工：{0}"
 
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/WorkItemCard.tsx
 msgid "转入观测"
 msgstr "转入观测"
 
 #: src/app/work-items/parts.tsx
+#: src/app/work-items/WorkItemOverview.tsx
 msgid "运行中"
 msgstr "运行中"
 
@@ -675,6 +697,10 @@ msgstr "运行中 · 待验收"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "运行过的命令"
 msgstr "运行过的命令"
+
+#: src/app/work-items/WorkItemOverview.tsx
+msgid "近 {dayCount} 天"
+msgstr "近 {dayCount} 天"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "返工"

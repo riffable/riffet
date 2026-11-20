@@ -5410,6 +5410,10 @@ msgstr "The whole card opens the details; the footer controls sit above it. Two 
 msgid "整理发布说明"
 msgstr "Draft the release notes"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "整理变更记录"
+msgstr "Organize the changelog"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -6455,6 +6459,10 @@ msgstr "Style source"
 msgid "样张文字"
 msgstr "Sample text"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "核对导出结果"
+msgstr "Check the export results"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr "Invalid format"
@@ -6492,6 +6500,10 @@ msgstr "Checked {checkedAt}"
 #: src/app/design/mac/notes.ts
 msgid "检查器页签"
 msgstr "Inspector tab"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "检查文件预览在窄窗口里的布局"
+msgstr "Check file previews in a narrow window"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查更新"
@@ -7334,6 +7346,14 @@ msgstr "Ellipsis"
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "看板"
 msgstr "Board"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板任务卡"
+msgstr "Task cards"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板概览"
+msgstr "Board overview"
 
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx

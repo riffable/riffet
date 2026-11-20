@@ -7,6 +7,8 @@ import { sessionActivityAt } from '@/lib/session-order';
  */
 export type WorkItemLive = 'waiting' | 'failed' | 'running' | 'unseen';
 
+export const WORK_ITEM_DRAG_TYPE = 'application/x-riffet-work-item';
+
 /** The board's columns, left to right; `watching` is its own strip and `cancelled` merges into the final column. */
 export const BOARD_STATUSES = ['todo', 'doing', 'review', 'done'] as const satisfies readonly WorkItemStatus[];
 /** The list view's groups: what needs the reader first. */
@@ -87,6 +89,37 @@ export function viewWorkItems(items: readonly WorkItem[], sessions: readonly Ses
       inInbox: !closed && (live === 'waiting' || live === 'failed' || item.status === 'review' || Boolean(item.stuck) || watchDue),
     };
   });
+}
+
+function localMidnight(value: string): number {
+  return new Date(value).setHours(0, 0, 0, 0);
+}
+
+export function summarizeWorkItems(entries: readonly WorkItemView[], today: number) {
+  const statuses: Record<WorkItemStatus, number> = { todo: 0, doing: 0, watching: 0, review: 0, done: 0, cancelled: 0 };
+  const date = new Date(today);
+  const days = Array.from({ length: 14 }, (_, index) => ({
+    date: new Date(date.getFullYear(), date.getMonth(), date.getDate() - 13 + index).getTime(),
+    created: 0,
+    done: 0,
+  }));
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  let inbox = 0;
+  let running = 0;
+  let conversations = 0;
+  for (const entry of entries) {
+    const { item } = entry;
+    statuses[item.status] += 1;
+    if (entry.inInbox) inbox += 1;
+    if (entry.live === 'running') running += 1;
+    conversations += entry.sessions.length;
+    const created = byDate.get(localMidnight(item.createdAt));
+    if (created) created.created += 1;
+    // The list records a task's latest status. Reopened tasks count in the trend once completed again.
+    const done = item.status === 'done' ? byDate.get(localMidnight(item.statusAt)) : undefined;
+    if (done) done.done += 1;
+  }
+  return { total: entries.length, statuses, inbox, running, conversations, days };
 }
 
 export function countWorkItemInbox(summaries: readonly WorkItemSummary[], sessions: readonly Session[]): number {

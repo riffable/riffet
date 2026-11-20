@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeBackendCatalogEntry, Session, WorkItem, WorkItemAssignee, WorkItemStatus } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
-import { Badge, EmptyState, Segmented, Select, Spinner } from '@/components/ui/controls';
+import { Badge, EmptyState, Segmented, Select } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { RowActions, rowConceal } from '@/components/ui/list-row';
+import { listRowClass, RowActions, rowConceal } from '@/components/ui/list-row';
 import { SearchField } from '@/components/ui/search-field';
 import { Tip } from '@/components/ui/tooltip';
 import { IconCheck, IconChevronDown, IconChevronRight, IconEye, IconInbox, IconList, IconListFilter, IconMessageSquareText, IconPlay, IconPlus, IconSlash, IconSquareKanban } from '@/components/icons';
@@ -15,9 +15,11 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { cn, readStored, writeStored } from '@/lib/utils';
 import { PageScaffold } from '../PageScaffold';
 import { useStores, useWorkItems } from '../state/stores';
-import { BOARD_STATUSES, byAttention, byInbox, bySettled, DONE_SHOWN_MS, LIST_STATUSES, viewWorkItems, type WorkItemView } from './model';
-import { AssigneeMark, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useStatusLabel, WorkItemNumber } from './parts';
+import { BOARD_STATUSES, WORK_ITEM_DRAG_TYPE, byAttention, byInbox, bySettled, DONE_SHOWN_MS, LIST_STATUSES, summarizeWorkItems, viewWorkItems, type WorkItemView } from './model';
+import { activateWorkItem, AssigneeMark, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useStatusLabel, useSubmissionClue, WorkItemNumber } from './parts';
 import { NewWorkItemDialog, type NewWorkItemDraft } from './NewWorkItemDialog';
+import { WorkItemCard } from './WorkItemCard';
+import { WorkItemOverview } from './WorkItemOverview';
 import { WorkItemPanel } from './WorkItemPanel';
 
 type View = 'board' | 'list';
@@ -105,6 +107,8 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
 
   const inbox = useMemo(() => shown.filter((entry) => entry.inInbox).sort(byInbox), [shown]);
   const watching = useMemo(() => shown.filter((entry) => entry.item.status === 'watching').sort(byAttention), [shown]);
+  const today = new Date().setHours(0, 0, 0, 0);
+  const overview = useMemo(() => summarizeWorkItems(shown, today), [shown, today]);
   const selected = views.find((entry) => entry.item.id === selectedId);
   const family = useMemo(() => familyOf(views), [views]);
 
@@ -189,11 +193,11 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
           />
           {view === 'board' && watching.length === 0 && draggingId ? (
             <div
-              onDragOver={(event) => { if (!event.dataTransfer.types.includes(DRAG_TYPE)) return; event.preventDefault(); setDropTarget('watching'); }}
+              onDragOver={(event) => { if (!event.dataTransfer.types.includes(WORK_ITEM_DRAG_TYPE)) return; event.preventDefault(); setDropTarget('watching'); }}
               onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(undefined); }}
               onDrop={(event) => {
                 setDropTarget(undefined);
-                const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(DRAG_TYPE));
+                const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(WORK_ITEM_DRAG_TYPE));
                 if (entry) { event.preventDefault(); move(entry, 'watching'); }
               }}
               className={cn(
@@ -250,6 +254,8 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
           />}
         </div>
 
+        {items !== undefined && <WorkItemOverview data={overview} />}
+
         {inbox.length > 0 && (
           <section className="mb-5">
             <CollapsibleHeader open={inboxOpen} onToggle={toggleInbox}>
@@ -279,11 +285,11 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
           <section
             aria-label={statusLabel('watching')}
             className={cn('mb-5 rounded-xl transition-colors duration-[var(--duration-fast)]', dropTarget === 'watching' && 'bg-hover')}
-            onDragOver={(event) => { if (!event.dataTransfer.types.includes(DRAG_TYPE)) return; event.preventDefault(); setDropTarget('watching'); }}
+            onDragOver={(event) => { if (!event.dataTransfer.types.includes(WORK_ITEM_DRAG_TYPE)) return; event.preventDefault(); setDropTarget('watching'); }}
             onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(undefined); }}
             onDrop={(event) => {
               setDropTarget(undefined);
-              const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(DRAG_TYPE));
+              const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(WORK_ITEM_DRAG_TYPE));
               if (entry) { event.preventDefault(); move(entry, 'watching'); }
             }}
           >
@@ -313,7 +319,7 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
 
         {view === 'board' ? (
           <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <div className="grid min-w-[912px] grid-cols-4 items-start gap-3">
+            <div className="grid min-w-[912px] grid-cols-4 items-start gap-4">
               {BOARD_STATUSES.map((status) => {
                 const isDoneColumn = status === 'done';
                 const now = Date.now();
@@ -329,8 +335,8 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
                   <WorkItemCard
                     key={entry.item.id}
                     entry={entry}
-                    family={family}
-                    showSettledIcon={isDoneColumn}
+                    progress={family.children.get(entry.item.id)}
+                    parentNumber={entry.item.parentId ? family.numbers.get(entry.item.parentId) : undefined}
                     projectName={activeProjectId === ALL ? projectName(entry.item.projectId) : undefined}
                     selected={entry.item.id === selectedId}
                     onDragStart={() => setDraggingId(entry.item.id)}
@@ -346,22 +352,22 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
                   <section
                     key={status}
                     aria-label={statusLabel(status)}
-                    className={cn('flex min-w-0 flex-col rounded-xl transition-colors duration-[var(--duration-fast)]', dropTarget === status && 'bg-hover')}
-                    onDragOver={(event) => { if (!event.dataTransfer.types.includes(DRAG_TYPE)) return; event.preventDefault(); setDropTarget(status); }}
+                    className={cn('flex min-w-0 flex-col rounded-xl transition-colors duration-[var(--duration-fast)]', dropTarget === status && 'bg-muted ring-1 ring-inset ring-line-strong')}
+                    onDragOver={(event) => { if (!event.dataTransfer.types.includes(WORK_ITEM_DRAG_TYPE)) return; event.preventDefault(); setDropTarget(status); }}
                     onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(undefined); }}
                     onDrop={(event) => {
                       setDropTarget(undefined);
-                      const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(DRAG_TYPE));
+                      const entry = views.find(({ item }) => item.id === event.dataTransfer.getData(WORK_ITEM_DRAG_TYPE));
                       if (entry) { event.preventDefault(); move(entry, status); }
                     }}
                   >
-                    <div className="flex h-8 items-center gap-2 pl-1.5 pr-1">
+                    <div className="flex h-9 items-center gap-2 px-2">
                       <StatusIcon status={status} />
                       <span className="text-sm font-medium text-fg">{statusLabel(status)}</span>
                       <span className="text-xs tabular-nums text-fg-4">{allColumn.length}</span>
                       {status === 'todo' && <Tip label={t`新建任务`}><Button size="icon-xs" variant="quiet" className="ml-auto" aria-label={t`新建任务`} onClick={() => setDraft(newDraft())}><IconPlus /></Button></Tip>}
                     </div>
-                    <div className="flex min-h-24 flex-col gap-2 pb-4 pt-1">
+                    <div className="flex min-h-24 flex-col gap-2 pt-1">
                       {splitDoing ? <>
                         {activeDoing.map(renderCard)}
                         <div className="mt-1 flex items-center gap-2 px-1 text-2xs text-fg-4">
@@ -440,8 +446,6 @@ function CollapsibleHeader({ open, onToggle, children }: { open: boolean; onTogg
   );
 }
 
-const DRAG_TYPE = 'application/x-riffet-work-item';
-
 /** Subtask progress per parent, and each item's number, for the cards. */
 interface Family { children: Map<string, { done: number; total: number }>; numbers: Map<string, number> }
 function familyOf(views: readonly WorkItemView[]): Family {
@@ -458,109 +462,22 @@ function familyOf(views: readonly WorkItemView[]): Family {
   return { children, numbers };
 }
 
-/** Enter and Space open a row that is a `div` (it holds its own buttons). */
-const activate = (open: () => void) => (event: KeyboardEvent<HTMLElement>) => {
-  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-  event.preventDefault();
-  open();
-};
+const attentionRowClass = 'min-h-9 cursor-default select-none text-fg max-md:flex-wrap max-md:gap-y-0 max-md:py-1';
 
-function submissionClue(item: WorkItem, filesLabel: (count: number) => string, criteriaLabel: (met: number, total: number) => string): string | undefined {
-  const submission = item.submission;
-  if (!submission) return undefined;
-  const parts: string[] = [];
-  if (submission.criteria.length) {
-    const met = submission.criteria.filter((entry) => entry.met === true).length;
-    parts.push(criteriaLabel(met, submission.criteria.length));
-  }
-  if (submission.evidence.files.length) parts.push(filesLabel(submission.evidence.files.length));
-  if (parts.length) return parts.join(' · ');
-  const summaryLine = submission.summary.split('\n').map((line) => line.trim()).find(Boolean);
-  return summaryLine;
-}
-
-function WorkItemCard({
-  entry, projectName, family, showSettledIcon, selected, onDragStart, onDragEnd, onOpen, onOpenSession, onWatch, onDone, onDismiss,
-}: {
-  entry: WorkItemView;
-  projectName: string | undefined;
-  family: Family;
-  showSettledIcon: boolean;
-  selected: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onOpen: () => void;
-  onOpenSession: (sessionId: string) => void;
-  onWatch: () => void;
-  onDone: () => void;
-  onDismiss: () => void;
+function AttentionRowEnd({ reason, tone, assignee, time, children }: {
+  reason: string;
+  tone: string;
+  assignee: WorkItemAssignee;
+  time: string;
+  children: ReactNode;
 }) {
-  const { t } = useLingui();
-  const { item, sessions, title, live, latestFailed } = entry;
-  const [dragging, setDragging] = useState(false);
-  const children = family.children.get(item.id);
-  const parent = item.parentId ? family.numbers.get(item.parentId) : undefined;
-  const closed = item.status === 'done' || item.status === 'cancelled';
-  const latestSession = entry.liveSession ?? sessions[0];
-  const reviewHint = item.status === 'review'
-    ? submissionClue(item, (count) => t`改动 ${count} 个文件`, (met, total) => t`标准 ${met}/${total}`)
-    : undefined;
-
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      draggable
-      aria-pressed={selected}
-      data-work-item=""
-      onClick={onOpen}
-      onKeyDown={activate(onOpen)}
-      onDragStart={(event: DragEvent) => { event.dataTransfer.setData(DRAG_TYPE, item.id); event.dataTransfer.effectAllowed = 'move'; setDragging(true); onDragStart(); }}
-      onDragEnd={() => { setDragging(false); onDragEnd(); }}
-      className={cn(
-        'group/row cursor-default select-none rounded-xl bg-bg px-3 py-2.5 text-left shadow-[inset_0_0_0_1px_var(--line)] outline-none transition-[box-shadow,background-color,opacity] duration-[var(--duration-fast)] hover:shadow-[inset_0_0_0_1px_var(--line-strong)] focus-visible:ring-2 focus-visible:ring-focus',
-        selected && 'bg-active shadow-[inset_0_0_0_1px_var(--line-strong)]',
-        dragging && 'opacity-40',
-      )}
-    >
-      <div className="flex h-4 min-w-0 items-center gap-1.5">
-        {showSettledIcon && <StatusIcon status={item.status} className="size-3.5" />}
-        <WorkItemNumber number={item.number} />
-        {projectName && <span className="min-w-0 truncate text-2xs text-fg-4">{projectName}</span>}
-        {parent !== undefined && <span className="shrink-0 text-2xs tabular-nums text-fg-4">· #{parent}</span>}
-        <LiveMark live={live} className="ml-auto" />
-      </div>
-      <p className={cn('mb-2 mt-1.5 line-clamp-2 text-sm', closed ? 'text-fg-2' : 'text-fg')}>{title}</p>
-      {item.labels.length > 0 && <div className="-mt-0.5 mb-2 flex flex-wrap gap-1">{item.labels.map((label) => <Badge key={label}>{label}</Badge>)}</div>}
-      {reviewHint && <p className="-mt-0.5 mb-2 truncate text-2xs text-fg-3">{reviewHint}</p>}
-      {!live && latestFailed && !closed && <p className="-mt-0.5 mb-2 truncate text-2xs text-fg-4"><Trans>上次会话失败</Trans></p>}
-      <div className="flex h-5 items-center gap-2 text-2xs text-fg-3">
-        <AssigneeMark assignee={item.assignee} />
-        {sessions.length > 1 && <span>{t`${sessions.length} 个会话`}</span>}
-        {children && <span className="tabular-nums">{children.done}/{children.total}</span>}
-        <span className="ml-auto grid shrink-0 items-center justify-items-end">
-          <span className={cn('col-start-1 row-start-1 tabular-nums text-fg-4', rowConceal)}>{relativeTime(closed ? item.statusAt : item.updatedAt)}</span>
-          <RowActions className="col-start-1 row-start-1 gap-0.5" onClick={(event) => event.stopPropagation()}>
-            {latestSession && (
-              <Tip label={t`打开会话`}>
-                <Button size="icon-xs" variant="quiet" aria-label={t`打开会话`} onClick={() => onOpenSession(latestSession.id)}><IconMessageSquareText /></Button>
-              </Tip>
-            )}
-            {!closed && <>
-              {item.status !== 'watching' && (
-                <Tip label={t`转入观测`}>
-                  <Button size="icon-xs" variant="quiet" aria-label={t`转入观测`} onClick={onWatch}><IconEye /></Button>
-                </Tip>
-              )}
-              <Tip label={t`完成`}>
-                <Button size="icon-xs" variant="quiet" aria-label={t`完成`} onClick={onDone}><IconCheck /></Button>
-              </Tip>
-              <Tip label={t`无需关注`}>
-                <Button size="icon-xs" variant="quiet" aria-label={t`无需关注`} onClick={onDismiss}><IconSlash /></Button>
-              </Tip>
-            </>}
-          </RowActions>
-        </span>
+    <div className="grid w-64 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 max-lg:w-52 max-md:w-full max-md:pl-6">
+      <span className={cn('min-w-0 truncate text-xs', tone)}>{reason}</span>
+      <AssigneeMark assignee={assignee} />
+      <div className="grid w-20 items-center justify-items-end no-hover:w-35">
+        <span className={cn('col-start-1 row-start-1 whitespace-nowrap text-right text-2xs tabular-nums text-fg-4 no-hover:sr-only', rowConceal)}>{relativeTime(time)}</span>
+        <RowActions className="col-start-1 row-start-1 gap-1" onClick={(event) => event.stopPropagation()}>{children}</RowActions>
       </div>
     </div>
   );
@@ -583,9 +500,7 @@ function InboxRow({
   const { item, title, live, liveSession, watchDue, sessions } = entry;
   const stuck = live !== 'waiting' ? item.stuck : undefined;
   const targetSession = liveSession ?? sessions[0];
-  const reviewClue = item.status === 'review'
-    ? submissionClue(item, (count) => t`改动 ${count} 个文件`, (met, total) => t`标准 ${met}/${total}`)
-    : undefined;
+  const reviewClue = useSubmissionClue(item);
 
   const reason = stuck ? stuck.note.split('\n')[0]
     : live === 'failed' ? liveSession?.error?.split('\n')[0] || t`失败`
@@ -605,8 +520,8 @@ function InboxRow({
       aria-pressed={selected}
       data-work-item=""
       onClick={onOpen}
-      onKeyDown={activate(onOpen)}
-      className={cn('group/row flex min-h-9 w-full min-w-0 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-sm text-fg outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11', selected && 'bg-active')}
+      onKeyDown={activateWorkItem(onOpen)}
+      className={cn(listRowClass, attentionRowClass, selected && 'bg-active')}
     >
       <span className="grid size-4 shrink-0 place-items-center">
         {live && live !== 'running'
@@ -616,29 +531,21 @@ function InboxRow({
       <WorkItemNumber number={item.number} className="w-9" />
       {projectName && <span className="hidden max-w-24 shrink-0 truncate text-xs text-fg-4 sm:inline">{projectName}</span>}
       <span className="min-w-0 flex-1 truncate">{title}</span>
-      <span className={cn('inline-flex min-w-0 max-w-[38%] shrink items-center gap-1.5 text-xs', tone)}>
-        {item.status === 'review' && live === 'running' && <Spinner className="size-3 shrink-0 text-accent" />}
-        <span className="truncate">{reason}</span>
-      </span>
-      <AssigneeMark assignee={item.assignee} />
-      <span className="grid shrink-0 items-center justify-items-end">
-        <span className={cn('col-start-1 row-start-1 min-w-12 text-right text-2xs tabular-nums text-fg-4', rowConceal)}>{relativeTime(item.updatedAt)}</span>
-        <RowActions className="col-start-1 row-start-1 gap-1" onClick={(event) => event.stopPropagation()}>
-          {targetSession && (
-            <Tip label={t`打开会话`}>
-              <Button size="icon-xs" variant="quiet" aria-label={t`打开会话`} onClick={() => onOpenSession(targetSession.id)}><IconMessageSquareText /></Button>
-            </Tip>
-          )}
-          {showPrimaryAction && (
-            item.status === 'review'
-              ? <Button size="xs" variant="secondary" onClick={onDone}><Trans>完成</Trans></Button>
-              : <Button size="xs" variant="secondary" onClick={onResume}><Trans>恢复进行中</Trans></Button>
-          )}
-          <Tip label={t`无需关注`}>
-            <Button size="icon-xs" variant="quiet" aria-label={t`无需关注`} onClick={onDismiss}><IconSlash /></Button>
+      <AttentionRowEnd assignee={item.assignee} time={item.updatedAt} tone={tone} reason={reason}>
+        {targetSession && (
+          <Tip label={t`打开会话`}>
+            <Button size="icon-xs" variant="quiet" aria-label={t`打开会话`} onClick={() => onOpenSession(targetSession.id)}><IconMessageSquareText /></Button>
           </Tip>
-        </RowActions>
-      </span>
+        )}
+        {showPrimaryAction && (
+          item.status === 'review'
+            ? <Tip label={t`完成`}><Button size="icon-xs" variant="secondary" aria-label={t`完成`} onClick={onDone}><IconCheck /></Button></Tip>
+            : <Tip label={t`恢复进行中`}><Button size="icon-xs" variant="secondary" aria-label={t`恢复进行中`} onClick={onResume}><IconPlay /></Button></Tip>
+        )}
+        <Tip label={t`无需关注`}>
+          <Button size="icon-xs" variant="quiet" aria-label={t`无需关注`} onClick={onDismiss}><IconSlash /></Button>
+        </Tip>
+      </AttentionRowEnd>
     </div>
   );
 }
@@ -673,35 +580,30 @@ function WatchingRow({
       aria-pressed={selected}
       data-work-item=""
       onClick={onOpen}
-      onKeyDown={activate(onOpen)}
-      onDragStart={(event: DragEvent) => { event.dataTransfer.setData(DRAG_TYPE, item.id); event.dataTransfer.effectAllowed = 'move'; setDragging(true); onDragStart(); }}
+      onKeyDown={activateWorkItem(onOpen)}
+      onDragStart={(event: DragEvent) => { event.dataTransfer.setData(WORK_ITEM_DRAG_TYPE, item.id); event.dataTransfer.effectAllowed = 'move'; setDragging(true); onDragStart(); }}
       onDragEnd={() => { setDragging(false); onDragEnd(); }}
       className={cn(
-        'group/row flex min-h-9 w-full min-w-0 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-sm text-fg outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11',
+        listRowClass, attentionRowClass,
         selected && 'bg-active',
         dragging && 'opacity-40',
       )}
     >
-      <StatusIcon status="watching" running={live === 'running'} />
+      <span className="grid size-4 shrink-0 place-items-center"><StatusIcon status="watching" running={live === 'running'} /></span>
       <WorkItemNumber number={item.number} className="w-9" />
       {projectName && <span className="hidden max-w-24 shrink-0 truncate text-xs text-fg-4 sm:inline">{projectName}</span>}
       <span className="min-w-0 flex-1 truncate">{title}</span>
-      <span className={cn('min-w-0 max-w-[36%] shrink truncate text-xs', watchDue ? 'text-warning' : 'text-fg-3')}>{meta}</span>
-      <AssigneeMark assignee={item.assignee} />
-      <span className="grid shrink-0 items-center justify-items-end">
-        <span className={cn('col-start-1 row-start-1 min-w-12 text-right text-2xs tabular-nums text-fg-4', rowConceal)}>{relativeTime(item.statusAt)}</span>
-        <RowActions className="col-start-1 row-start-1 gap-0.5" onClick={(event) => event.stopPropagation()}>
-          <Tip label={t`恢复进行中`}>
-            <Button size="icon-xs" variant="quiet" aria-label={t`恢复进行中`} onClick={onResume}><IconPlay /></Button>
-          </Tip>
-          <Tip label={t`完成`}>
-            <Button size="icon-xs" variant="quiet" aria-label={t`完成`} onClick={onDone}><IconCheck /></Button>
-          </Tip>
-          <Tip label={t`无需关注`}>
-            <Button size="icon-xs" variant="quiet" aria-label={t`无需关注`} onClick={onDismiss}><IconSlash /></Button>
-          </Tip>
-        </RowActions>
-      </span>
+      <AttentionRowEnd assignee={item.assignee} time={item.statusAt} tone={watchDue ? 'text-warning' : 'text-fg-3'} reason={meta}>
+        <Tip label={t`恢复进行中`}>
+          <Button size="icon-xs" variant="quiet" aria-label={t`恢复进行中`} onClick={onResume}><IconPlay /></Button>
+        </Tip>
+        <Tip label={t`完成`}>
+          <Button size="icon-xs" variant="quiet" aria-label={t`完成`} onClick={onDone}><IconCheck /></Button>
+        </Tip>
+        <Tip label={t`无需关注`}>
+          <Button size="icon-xs" variant="quiet" aria-label={t`无需关注`} onClick={onDismiss}><IconSlash /></Button>
+        </Tip>
+      </AttentionRowEnd>
     </div>
   );
 }
@@ -716,7 +618,7 @@ function ListRow({ entry, projectName, selected, onOpen }: { entry: WorkItemView
       aria-pressed={selected}
       data-work-item=""
       onClick={onOpen}
-      onKeyDown={activate(onOpen)}
+      onKeyDown={activateWorkItem(onOpen)}
       className={cn('flex min-h-9 w-full min-w-0 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-sm outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11', selected && 'bg-active')}
     >
       <StatusIcon status={item.status} running={live === 'running'} />

@@ -5410,6 +5410,10 @@ msgstr "整张卡片打开详情；页脚的控件在它上面。两行说明，
 msgid "整理发布说明"
 msgstr "整理发布说明"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "整理变更记录"
+msgstr "整理变更记录"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -6455,6 +6459,10 @@ msgstr "样式来源"
 msgid "样张文字"
 msgstr "样张文字"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "核对导出结果"
+msgstr "核对导出结果"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr "格式不正确"
@@ -6492,6 +6500,10 @@ msgstr "检查于{checkedAt}"
 #: src/app/design/mac/notes.ts
 msgid "检查器页签"
 msgstr "检查器页签"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "检查文件预览在窄窗口里的布局"
+msgstr "检查文件预览在窄窗口里的布局"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查更新"
@@ -7334,6 +7346,14 @@ msgstr "省略"
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "看板"
 msgstr "看板"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板任务卡"
+msgstr "看板任务卡"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板概览"
+msgstr "看板概览"
 
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx

@@ -5410,6 +5410,10 @@ msgstr ""
 msgid "整理发布说明"
 msgstr ""
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "整理变更记录"
+msgstr ""
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -6455,6 +6459,10 @@ msgstr ""
 msgid "样张文字"
 msgstr ""
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "核对导出结果"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr ""
@@ -6491,6 +6499,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "检查器页签"
+msgstr ""
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "检查文件预览在窄窗口里的布局"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
@@ -7333,6 +7345,14 @@ msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "看板"
+msgstr ""
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板任务卡"
+msgstr ""
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "看板概览"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx

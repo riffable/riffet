@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { WorkItemAssignee, WorkItemStatus } from '@contracts';
+import type { WorkItem, WorkItemAssignee, WorkItemStatus } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { Spinner, StatusDot } from '@/components/ui/controls';
@@ -25,7 +25,7 @@ export function useStatusLabel(): (status: WorkItemStatus) => string {
  * A ring that fills as the work advances, each status in its own colour: blue while an agent works,
  * neutral ink while watching, amber while the owner is to review, green once done, grey slash once dismissed.
  */
-const STATUS_TONE: Record<WorkItemStatus, string> = {
+export const STATUS_TONE: Record<WorkItemStatus, string> = {
   todo: 'var(--fg-4)',
   doing: 'var(--accent)',
   watching: 'var(--fg-3)',
@@ -117,4 +117,28 @@ export function SectionHeading({ icon, children, count, className }: { icon?: Re
       {icon}{children}{count !== undefined && <span className="font-normal tabular-nums text-fg-4">{count}</span>}
     </h2>
   );
+}
+
+/** Enter and Space open a row that is a `div` (it holds its own buttons). */
+export const activateWorkItem = (open: () => void) => (event: KeyboardEvent<HTMLElement>) => {
+  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+  event.preventDefault();
+  open();
+};
+
+export function useSubmissionClue(item: WorkItem): string | undefined {
+  const { t } = useLingui();
+  const submission = item.submission;
+  if (item.status !== 'review' || !submission) return undefined;
+  const parts: string[] = [];
+  const total = submission.criteria.length;
+  const count = submission.evidence.files.length;
+  if (total) {
+    const met = submission.criteria.filter((entry) => entry.met === true).length;
+    parts.push(t`标准 ${met}/${total}`);
+  }
+  if (count) parts.push(t`改动 ${count} 个文件`);
+  if (parts.length) return parts.join(' · ');
+  const summaryLine = submission.summary.split('\n').map((line) => line.trim()).find(Boolean);
+  return summaryLine;
 }

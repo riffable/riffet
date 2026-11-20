@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
+import type { NativeBackendCatalogEntry, NativeBackendId, WorkItem } from '@contracts';
 import { Segmented } from '@/components/ui/controls';
 import { IconPanelLeft, IconPlus, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,10 @@ import { cn } from '@/lib/utils';
 import { COLUMN_GUTTER_TOTAL } from '../../session/ContentWidthHandle';
 import { PANEL_DEFAULT, panelDockMinWidth, SIDEBAR_DEFAULT } from '../../state/uiStore';
 import { AgentChoicePage, AgentMissingPage, OnboardingFrame, PhonePage, ProjectPage, WelcomePage } from '../../onboarding/Onboarding';
+import { WorkItemCard } from '../../work-items/WorkItemCard';
+import { WorkItemOverview } from '../../work-items/WorkItemOverview';
+import { viewWorkItems } from '../../work-items/model';
+import { StatusIcon, useStatusLabel } from '../../work-items/parts';
 import { Bar, Mark, Sketch, SketchHeader } from './parts';
 import { Chapter, Frame, Plate, Scrubber } from '../specimen';
 
@@ -264,6 +268,57 @@ function FirstRun() {
   );
 }
 
+const overviewSpecimen = {
+  total: 140,
+  statuses: { todo: 4, doing: 30, watching: 6, review: 10, done: 82, cancelled: 8 },
+  inbox: 13,
+  running: 5,
+  conversations: 158,
+  days: [3, 1, 6, 4, 2, 4, 7, 6, 4, 10, 8, 3, 7, 5].map((created, index) => ({
+    date: new Date(2026, 10, 7 + index).getTime(),
+    created,
+    done: [0, 2, 4, 2, 2, 3, 4, 7, 5, 8, 5, 6, 8, 3][index]!,
+  })),
+};
+
+function TaskCards() {
+  const { t } = useLingui();
+  const statusLabel = useStatusLabel();
+  const [selected, setSelected] = useState<string | undefined>('125');
+  const statuses = ['doing', 'review', 'done'] as const;
+  const titles = [t`检查文件预览在窄窗口里的布局`, t`核对导出结果`, t`整理变更记录`];
+  const now = new Date().toISOString();
+  const items: WorkItem[] = statuses.map((status, index) => ({
+    id: String(124 + index), number: 124 + index, title: titles[index]!, status,
+    assignee: { kind: 'agent', backendId: index === 1 ? 'claude' : 'codex' },
+    labels: [], source: 'board', createdAt: now, updatedAt: now, statusAt: now,
+  }));
+  const none = () => undefined;
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {viewWorkItems(items, []).map((entry) => (
+        <section key={entry.item.id} className="flex min-w-0 flex-col gap-1">
+          <div className="flex h-9 items-center gap-2 px-2 text-sm font-medium text-fg">
+            <StatusIcon status={entry.item.status} />{statusLabel(entry.item.status)}
+          </div>
+          <WorkItemCard
+            entry={entry}
+            projectName="Riffet"
+            selected={selected === entry.item.id}
+            onOpen={() => setSelected((current) => current === entry.item.id ? undefined : entry.item.id)}
+            onDragStart={none}
+            onDragEnd={none}
+            onOpenSession={none}
+            onWatch={none}
+            onDone={none}
+            onDismiss={none}
+          />
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export function PagesChapter() {
   const { t } = useLingui();
   return (
@@ -285,6 +340,12 @@ export function PagesChapter() {
       </Plate>
       <Plate number={6} title={t`首次引导`} note={t`铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。`}>
         <FirstRun />
+      </Plate>
+      <Plate number={7} title={t`看板概览`}>
+        <WorkItemOverview data={overviewSpecimen} />
+      </Plate>
+      <Plate number={8} title={t`看板任务卡`}>
+        <TaskCards />
       </Plate>
     </Chapter>
   );

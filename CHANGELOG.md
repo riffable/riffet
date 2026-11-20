@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The web task board shows a 14-day chart of new and completed tasks, all six task statuses, inbox and running counts, and linked conversations for the current filters. Cards sit directly under their column headings, and status details, assignees, and timestamps line up across the inbox and watching sections.
 - Text files can be edited on the Mac, iPhone, and Android too: the pencil in the Mac file preview edits in place and ⌘S saves; on phones, Edit opens an editing page. A file an Agent changed meanwhile is never overwritten without asking. On the Mac and iPhone, PDF, Word, PowerPoint, and spreadsheet files open in Quick Look; Android draws PDFs natively.
 - Plugins can show project files they understand: a plugin that declares a viewer for some file extensions appears in the Files view’s ⋯ menu for those files, beside View as hex. Viewing the end of an empty file no longer fails.
 - In the Files view, any file can be viewed as hex, a text file from its end with Follow for logs (text over 32 MB opens this way), and selected text in a rendered preview (Markdown, documents, PDF) can be quoted into the conversation. With LibreOffice on the server, Word and PowerPoint files, including .doc and .ppt, are shown with their original layout; `riffet doctor` says whether it was found.
