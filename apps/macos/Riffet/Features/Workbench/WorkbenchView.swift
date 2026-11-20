@@ -701,6 +701,13 @@ private struct PageChrome<Actions: View>: ViewModifier {
     let search: PageSearch?
     let actions: Actions
 
+    private var showsWebButton: Bool { page.webPage != nil && WebHandoff.isAvailable(workbench) }
+
+    @ViewBuilder
+    private var webButton: some View {
+        if let web = page.webPage { WebHandoffButton(page: web, workbench: workbench) }
+    }
+
     @ViewBuilder
     func body(content: Content) -> some View {
         if DisplayPreferences.shared.style.backend == .native {
@@ -708,7 +715,12 @@ private struct PageChrome<Actions: View>: ViewModifier {
             // in its own place rather than one capsule beside the title.
             let bar = content.toolbar {
                 PageTitleToolbar(page: page)
-                if hasActions, !(actions is EmptyView) { ToolbarItemGroup(placement: .primaryAction) { actions } }
+                if (hasActions && !(actions is EmptyView)) || showsWebButton {
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        webButton
+                        if hasActions { actions }
+                    }
+                }
             }
             if let search {
                 bar.searchable(text: search.text, placement: .toolbar, prompt: Text(search.prompt))
@@ -719,6 +731,7 @@ private struct PageChrome<Actions: View>: ViewModifier {
             content.safeAreaInset(edge: .top, spacing: 0) {
                 CustomPageBar(workbench: workbench, title: page.title) {
                     if let search { PageSearchField(search: search) }
+                    webButton
                     actions
                 }
             }

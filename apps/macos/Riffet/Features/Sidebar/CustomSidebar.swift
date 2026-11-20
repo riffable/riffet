@@ -119,6 +119,13 @@ struct CustomSidebar: View {
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
             }
+            ForEach(workbench.webSidebarDestinations.pinned, id: \.self) { page in
+                CustomNavRow(symbol: page.symbol, title: page.title, mark: AnyView(
+                    Image(icon: "arrow.up.right.square").font(.riffet(size: S(style.text.label))).foregroundStyle(palette.fg4)
+                ), style: style) {
+                    WebHandoff.open(page.webPage, in: workbench)
+                }
+            }
             CustomNavRow(symbol: "ellipsis", title: String(localized: "更多"), selected: destinations.more.contains(where: shows), anchor: moreAnchor, style: style) {
                 workbench.popUpSidebarMore(moreAnchor, openSettings: openSettings)
             }

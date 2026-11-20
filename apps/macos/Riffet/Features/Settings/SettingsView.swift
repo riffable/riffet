@@ -41,6 +41,9 @@ struct SettingsView: View {
                         ForEach(entry.sections) { section in
                             row(section)
                         }
+                        ForEach(webRows(in: entry.group)) { web in
+                            webRow(web)
+                        }
                     } header: {
                         if let title = entry.group.title { Text(title) }
                     }
@@ -63,6 +66,11 @@ struct SettingsView: View {
                 AnyView(detail(section).environment(model).environment(\.palette, palette).environment(\.settingsPaneScope, section.scope))
             }
             .navigationTitle(selection.wrappedValue.title)
+            .toolbar {
+                if let web = selection.wrappedValue.webSection, let workbench = model.workbench {
+                    ToolbarItem(placement: .primaryAction) { WebHandoffButton(page: .settings(section: web), workbench: workbench) }
+                }
+            }
         }
         .navigationSplitViewStyle(.balanced)
         // Section changes keep the split columns in place. The first presentation also needs the
@@ -94,6 +102,13 @@ struct SettingsView: View {
     }
 
     private func row(_ section: SettingsSection) -> some View {
+        rowLabel(symbol: section.symbol, title: section.title)
+            .tag(section)
+            .help(section.summary)
+            .listRowBackground(selection.wrappedValue == section ? SidebarSelectionBackground() : nil)
+    }
+
+    private func rowLabel(symbol: String, title: String) -> some View {
         // A lined form's sidebar is outline too: the icon alone, in the text's colour.
         let lined = DisplayPreferences.shared.style.form == .lined
         return HStack(spacing: Space.sm) {
@@ -101,17 +116,38 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                     .fill(lined ? .clear : palette.bgMuted)
                     .frame(width: 22, height: 22)
-                Image(icon: section.symbol)
+                Image(icon: symbol)
                     .font(.riffet(size: S(lined ? 14 : 11), weight: lined ? .regular : .medium))
                     .foregroundStyle(lined ? palette.fg2 : palette.accent)
             }
             .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(lined ? .clear : palette.lineSoft))
-            Text(section.title)
+            Text(title)
                 .lineLimit(1)
         }
-        .tag(section)
-        .help(section.summary)
-        .listRowBackground(selection.wrappedValue == section ? SidebarSelectionBackground() : nil)
+    }
+
+    /// The Web-only sections of [group] that match the search, while a server is connected.
+    private func webRows(in group: SettingsGroup) -> [WebSettingsRow] {
+        guard let workbench = model.workbench, WebHandoff.isAvailable(workbench) else { return [] }
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return WebSettingsRow.all.filter { $0.group == group && (needle.isEmpty || $0.title.lowercased().contains(needle)) }
+    }
+
+    /// A section only the Web has: the row opens it there instead of selecting a pane.
+    private func webRow(_ web: WebSettingsRow) -> some View {
+        Button {
+            if let workbench = model.workbench { WebHandoff.open(.settings(section: web.section), in: workbench) }
+        } label: {
+            HStack(spacing: Space.sm) {
+                rowLabel(symbol: web.symbol, title: web.title)
+                Spacer(minLength: 0)
+                Image(icon: "arrow.up.right.square")
+                    .font(RiffetFont.caption)
+                    .foregroundStyle(palette.fg4)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

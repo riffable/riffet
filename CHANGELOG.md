@@ -6,6 +6,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- On the Mac, Stats, Extensions, Plugins, Automations, Marks, Activity, and the settings sections stored on the server have an Open in Web toolbar button that lands on the same page on the web, already signed in. Collaboration, the task board, title rules, and voice input now have entries on the Mac that open the web (sidebar, settings, or command palette). The web is the reference for these management pages from now on; the ones the Mac already has stay as they are.
+- Web settings sections have addresses: `/settings/<section>` opens that section directly.
 - Exported pictures of a selection or a highlight keep the answer’s formatting: headings, lists, code, tables, and bold text. Under Display, the conversation title, Agent, model, project, and date can each be turned on or off; the model is the one that wrote that answer.
 - The web task board shows a 14-day chart of new and completed tasks, all six task statuses, inbox and running counts, and linked conversations for the current filters. Cards sit directly under their column headings, and status details, assignees, and timestamps line up across the inbox and watching sections.
 - Text files can be edited on the Mac, iPhone, and Android too: the pencil in the Mac file preview edits in place and ⌘S saves; on phones, Edit opens an editing page. A file an Agent changed meanwhile is never overwritten without asking. On the Mac and iPhone, PDF, Word, PowerPoint, and spreadsheet files open in Quick Look; Android draws PDFs natively.

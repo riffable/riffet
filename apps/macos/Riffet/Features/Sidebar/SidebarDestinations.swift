@@ -34,7 +34,27 @@ extension WorkbenchPage {
     }
 }
 
+/// A sidebar destination the Mac has no page for: its row opens the Web. Its id is the one
+/// `AppSettings.sidebarPinned` stores, so a row the reader pinned in the Web stays a row here.
+/// 任务看板 is not here: the Web hides it for a server without work items, which the Mac does not
+/// read, so it is offered in the command palette only.
+enum WebSidebarPage: String, CaseIterable {
+    case council
+
+    var title: String { String(localized: "模型协作") }
+    var symbol: String { "bubble.left.and.bubble.right" }
+    var webPage: WebPage { .council }
+}
+
 extension Workbench {
+    /// The Web-only destinations, pinned as rows or under 更多 as the saved list says; none while no server is connected.
+    var webSidebarDestinations: (pinned: [WebSidebarPage], more: [WebSidebarPage]) {
+        guard WebHandoff.isAvailable(self) else { return ([], []) }
+        let saved = settings?.sidebarPinned ?? ["assistant", "tasks", "automations"]
+        let pinned = saved.compactMap { id in WebSidebarPage(rawValue: id) }
+        return (pinned, WebSidebarPage.allCases.filter { !pinned.contains($0) })
+    }
+
     /// [page]'s sidebar row is the open one: for the assistant, its conversation counts as the page.
     func shows(_ page: WorkbenchPage) -> Bool { page == .assistant ? onAssistantPage : self.page == page }
 
@@ -50,6 +70,15 @@ extension Workbench {
         for page in sidebarDestinations.more {
             let item = MenuAction.item(page.title, symbol: page.symbol) { chosen = { self.show(page) } }
             item.state = self.shows(page) ? .on : .off
+            menu.addItem(item)
+        }
+        for page in webSidebarDestinations.more {
+            let item = MenuAction.item(page.title, symbol: page.symbol) { chosen = { WebHandoff.open(page.webPage, in: self) } }
+            let title = NSMutableAttributedString(string: page.title + " ")
+            let mark = NSTextAttachment()
+            mark.image = NSImage.icon("arrow.up.right.square")
+            title.append(NSAttributedString(attachment: mark))
+            item.attributedTitle = title
             menu.addItem(item)
         }
         if menu.numberOfItems > 0 { menu.addItem(.separator()) }

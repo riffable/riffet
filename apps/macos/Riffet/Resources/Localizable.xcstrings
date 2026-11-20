@@ -24542,3 +24542,43 @@
   },
   "version": "1.0"
 }
+    },
+    "在 Web 中打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Web"
+          }
+        }
+      }
+    },
+    "模型协作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collaboration"
+          }
+        }
+      }
+    },
+    "标题规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title rules"
+          }
+        }
+      }
+    },
+    "语音输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice input"
+          }
+        }
+      }

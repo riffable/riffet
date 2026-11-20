@@ -18,6 +18,8 @@ export type AddressPage = (typeof PAGES)[number];
  * - `/p/<projectId>`: a project's new-conversation page.
  * - `/tasks` (任务), `/automations` (自动化), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
  * - `/design/<chapter>?platform=macos`: a chapter of the design system; no chapter is its overview.
+ * - `/settings/<sectionId>`: opens the settings dialog at that section on load. A dialog is not a page, so
+ *   the address is not mirrored while it is open: the first mirror replaces it with the page underneath.
  *
  * Plugin ids always contain a dot, and the server answers a path with an extension as a file, so
  * the id is a query parameter rather than a path segment.
@@ -35,6 +37,8 @@ export interface PageAddress {
   stats: StatsUiState;
 }
 
+  /** Set for `/settings`; `section` is the raw id after it, unchecked. */
+  settings?: { section?: string };
 export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>): PageAddress {
   const [head, id, ...rest] = location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   const search = new URLSearchParams(location.search);
@@ -46,6 +50,7 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
   } else if (head === 'p' && id) address.projectId = id;
   else if ((PAGES as readonly string[]).includes(head ?? '')) {
     address.page = head as AddressPage;
+  else if (head === 'settings') address.settings = id ? { section: id } : {};
     const pluginId = head === 'plugins' ? search.get('id') : undefined;
     if (pluginId) address.pluginId = pluginId;
     const platform = head === 'design' ? search.get('platform') : undefined;

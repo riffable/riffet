@@ -9,6 +9,8 @@ struct PaletteCommand: Identifiable {
     /// The menu shortcut, a settings page's summary, or the folder for a project's new conversation.
     let detail: String
     let symbol: String
+    /// The command opens the Web rather than something in this window.
+    var external = false
     let run: () -> Void
 
     /// The query (without the `>`) matches the title or the detail.
@@ -56,6 +58,19 @@ struct PaletteCommand: Identifiable {
                 UserDefaults.standard.set(section.rawValue, forKey: PreferenceKey.settingsSection)
                 openSettings()
             })
+        }
+        if WebHandoff.isAvailable(workbench) {
+            result.append(PaletteCommand(id: "web:tasks", title: String(localized: "任务看板"), detail: "", symbol: "checklist", external: true) {
+                WebHandoff.open(.tasks, in: workbench)
+            })
+            result.append(PaletteCommand(id: "web:council", title: String(localized: "模型协作"), detail: "", symbol: WebSidebarPage.council.symbol, external: true) {
+                WebHandoff.open(.council, in: workbench)
+            })
+            for row in WebSettingsRow.all {
+                result.append(PaletteCommand(id: "web:settings:\(row.section)", title: String(localized: "设置：\(row.title)"), detail: "", symbol: row.symbol, external: true) {
+                    WebHandoff.open(.settings(section: row.section), in: workbench)
+                })
+            }
         }
         for project in workbench.projects {
             result.append(PaletteCommand(id: "project:\(project.id)", title: String(localized: "在 \(project.name) 中新建会话"), detail: project.cwd, symbol: "folder") {

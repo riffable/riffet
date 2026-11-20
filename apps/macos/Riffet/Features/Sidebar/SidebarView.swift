@@ -76,6 +76,13 @@ struct SidebarView: View {
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
             }
+            ForEach(workbench.webSidebarDestinations.pinned, id: \.self) { page in
+                SidebarFixedRow(action: { WebHandoff.open(page.webPage, in: workbench) }) {
+                    navigationLabel(page.title, symbol: page.symbol)
+                    Spacer(minLength: 0)
+                    Image(icon: "arrow.up.right.square").font(RiffetFont.caption).foregroundStyle(palette.fg4)
+                }
+            }
             let moreOpen = destinations.more.contains(where: shows)
             SidebarFixedRow(selected: moreOpen, action: { workbench.popUpSidebarMore(moreAnchor, openSettings: openSettings) }) {
                 navigationLabel(String(localized: "更多"), symbol: "ellipsis", selected: moreOpen)

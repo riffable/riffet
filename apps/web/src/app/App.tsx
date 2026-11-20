@@ -158,6 +158,8 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [tokenRequired, setTokenRequired] = useState(true);
   const pairingAttempt = useRef<{ code: string; login: Promise<AuthStatus> } | null>(null);
+  /** `#handoff=<code>`: redeemed only if this browser is not signed in yet; one status check, kept across StrictMode's replay. */
+  const handoffAttempt = useRef<{ code: string; status: Promise<AuthStatus> } | null>(null);
 
   useEffect(() => {
     let rechecking = false;
@@ -190,17 +192,21 @@ export function App() {
     const token = query.get('token');
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const pairingCode = pairingAttempt.current?.code ?? fragment.get('pair');
+    const handoffCode = handoffAttempt.current?.code ?? fragment.get('handoff');
     // The code is a one-use credential. Remove it before any request or overlay navigation begins.
     const cleanQuery = new URLSearchParams(query);
     cleanQuery.delete('token');
     const cleanFragment = new URLSearchParams(fragment);
     cleanFragment.delete('pair');
-    if (token || pairingCode) {
+    cleanFragment.delete('handoff');
+    if (token || pairingCode || handoffCode) {
       const search = cleanQuery.toString();
       const hash = cleanFragment.toString();
       window.history.replaceState(window.history.state, '', `${window.location.pathname}${search ? `?${search}` : ''}${hash ? `#${hash}` : ''}`);
     }
     startOverlayNavigation();
+    /** Set once a code is being redeemed, so a failure of the redemption is reported like a failed pairing. */
+    let redeeming = Boolean(token || pairingCode);
     void (async () => {
       try {
         if (pairingCode) {
@@ -214,6 +220,21 @@ export function App() {
           if (active) { setTokenRequired(status.tokenRequired); setState('authenticated'); }
           return;
         }
+        if (handoffCode && !pairingCode && !token) {
+          handoffAttempt.current ??= { code: handoffCode, status: api.authStatus() };
+          const status = await handoffAttempt.current.status;
+          if (!status.authenticated) {
+            forgetLocalData();
+            redeeming = true;
+            // Not signed in: the code is a pairing code, redeemed once even when the effect replays.
+            pairingAttempt.current ??= { code: handoffCode, login: api.login({ code: handoffCode, name: browserDeviceName() }) };
+            const paired = await pairingAttempt.current.login;
+            if (active) { setTokenRequired(paired.tokenRequired); setState('authenticated'); }
+            return;
+          }
+          if (active) { setTokenRequired(status.tokenRequired); setState('authenticated'); }
+          return;
+        }
         if (token) { const status = await api.login(token); if (active) { setTokenRequired(status.tokenRequired); setState('authenticated'); } return; }
         const status = await api.authStatus();
         // Transcripts left behind by an expired or revoked sign-in must not outlive it on this device.
@@ -224,9 +245,9 @@ export function App() {
         if (!active) return;
         // A server that is down or restarting says nothing about the sign-in: with a local copy of the
         // lists the workbench opens on it, offline, and a real 401 later still lands here.
-        if (!token && !pairingCode && isUnreachable(reason)) { setState(loadCachedLists() ? 'authenticated' : 'unreachable'); return; }
+        if (!redeeming && isUnreachable(reason)) { setState(loadCachedLists() ? 'authenticated' : 'unreachable'); return; }
         setState('anonymous');
-        if (token || pairingCode || !(reason instanceof HttpError && reason.status === 401)) setError(signInError(reason, msg`无法登录`));
+        if (redeeming || !(reason instanceof HttpError && reason.status === 401)) setError(signInError(reason, msg`无法登录`));
       }
     })();
     return () => { active = false; };

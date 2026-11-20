@@ -246,6 +246,9 @@ struct SearchDialog: View {
                         }
                         Spacer(minLength: 0)
                         Text(item.project).font(.riffet(size: S(12))).foregroundStyle(item.command == nil ? palette.fg3 : palette.fg4).lineLimit(1)
+                        if item.command?.external == true {
+                            Image(icon: "arrow.up.right.square").font(RiffetFont.caption).foregroundStyle(palette.fg4)
+                        }
                     }
                     if let hit = item.hit {
                         Text(highlighted(hit))

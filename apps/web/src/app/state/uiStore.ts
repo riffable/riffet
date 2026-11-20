@@ -3,7 +3,8 @@ import { sameContextReference, type PromptContextReference } from '@/lib/api';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { readStored, writeStored } from '@/lib/utils';
 import type { PreviewTarget } from '../panels/sidebarViews';
-import type { SettingsSection } from '../settings/settingsSections';
+import { settingsSections, type SettingsSection } from '../settings/settingsSections';
+import { readPageAddress } from './page-url';
 import { createStore, resolve } from '@/lib/store';
 import { STORAGE_KEYS } from './navStore';
 
@@ -122,6 +123,14 @@ export interface UiState {
 type Toggle = boolean | ((value: boolean) => boolean);
 const phone = () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 
+/** The settings dialog a `/settings/<sectionId>` address asks for; an unknown section opens the default one. */
+function openedSettings(): Pick<UiState, 'settingsOpen' | 'settingsMounted' | 'pendingSettingsSection'> {
+  const request = readPageAddress(window.location).settings;
+  if (!request) return { settingsOpen: false, settingsMounted: false };
+  const section = settingsSections.find((item) => item.id === request.section)?.id;
+  return { settingsOpen: true, settingsMounted: true, ...(section ? { pendingSettingsSection: section } : {}) };
+}
+
 /** Panels, overlays and the transient state of in-flight actions. */
 export function createUiStore() {
   const store = createStore<UiState>({
@@ -137,8 +146,7 @@ export function createUiStore() {
     sidebarWidth: storedWidth(STORAGE_KEYS.sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT),
     panelWidth: storedWidth(STORAGE_KEYS.panelWidth, PANEL_MIN, PANEL_MAX, PANEL_DEFAULT),
     selectedTerminalId: '',
-    settingsOpen: false,
-    settingsMounted: false,
+    ...openedSettings(),
     paletteOpen: false,
     searchOpen: false,
     addProjectOpen: false,
