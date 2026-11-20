@@ -476,6 +476,18 @@ describe('timeline projection contract', () => {
     expect(wrong.find(item => (item.event as Partial<NativeWorkbenchEvent>).nativeId === 'queue-receipt')).not.toHaveProperty('run');
   });
 
+  it('files a message queued behind a turn after that turn\'s answer once it is sent, before the store echoes it', () => {
+    const events = [
+      ev(1, 'user_message_chunk', text('first'), { runId: 'turn:1', nativeId: '1:0' }),
+      ev(3, 'agent_message_chunk', text('answer'), { runId: 'turn:1', nativeId: '2:0' }),
+    ];
+    const queued = nativeRun('queued', 'running', 'second', 2, {
+      nativeMessageId: 'request:turn-2', nativeTurnId: 'turn-2', delivery: 'observed', timings: { dispatchAt: ms(4) },
+    });
+    const items = buildTimeline(projectEvents(events), [queued]);
+    expect(items.map(item => item.kind === 'user' || item.kind === 'assistant' ? item.text : item.kind)).toEqual(['first', 'answer', 'second']);
+  });
+
   it('replaces an exact queue receipt with its later human record while keeping native sources and the input key', () => {
     const run = nativeRun('queued-input', 'running', 'follow-up', 1, {
       nativeMessageId: 'queue-receipt', nativeTurnId: 'turn-next', delivery: 'observed',

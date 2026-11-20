@@ -529,7 +529,9 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     // already written later rows for the turn it waits behind. A run the CLI has received — and a
     // finished run the store never echoed, such as a slash command (`/summarize`) the CLI answers
     // only in its own pane — happened at its own time, so it is filed there instead of jumping after
-    // every later answer, and right before its own output when that can be found.
+    // every later answer, and right before its own output when that can be found. Its time is when
+    // it was sent, not when it was typed: a message queued behind a turn would otherwise be filed
+    // above that turn's whole answer until the store echoes it.
     const native = run.native;
     const received = Boolean(native && native.delivery !== 'queued' && native.delivery !== 'preparing'
       && (native.nativeMessageId || native.delivery === 'observed'));
@@ -540,7 +542,7 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     if (receipt) items.splice(items.indexOf(receipt), 0, resolved);
     else if (compaction) items.splice(items.indexOf(compaction), 0, resolved);
     else if (pending && native?.intent !== 'steer') items.push(resolved);
-    else items.splice(chronologicalIndex(items, Date.parse(run.createdAt)), 0, resolved);
+    else items.splice(chronologicalIndex(items, native?.timings?.dispatchAt ?? Date.parse(run.createdAt)), 0, resolved);
   }
   return items;
 }
