@@ -12,7 +12,14 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 ## 入口
 
 - `index.ts#ClaudeBackendAdapter`：驱动接口的实现，预热池、hook 桥的启动与重试。
-- `runtime.ts#ClaudeSessionRuntime`：每个会话一个，管理发送、打断、排队、预热接管与终端重启。
+- `runtime.ts#ClaudeSessionRuntime`：每个会话一个，状态枢纽。持有状态与发布的状态，执行转移的副作用，组装下面七组；适配器与测试只经它访问各组。
+- `interactions.ts#ClaudeInteractions`：审批与提问的待答请求、应答与确认。
+- `sends.ts#ClaudeSends`：发送、回执、CLI 自己的队列、转录行的认领。
+- `stops.ts#ClaudeStops`：停止当前回合、后台任务与单个活动。
+- `binding.ts#ClaudeTerminalBinding`：启动、接管已有终端、观察退出、为配置变更重启。
+- `transcript-reads.ts#ClaudeTranscriptReads`：转录读取（同一时刻只有一次）与随之而来的标题、活动。
+- `screen-watch.ts#ClaudeScreenWatch`：轮询节奏、CLI 自己画的对话框、拿空闲屏幕核对记录。
+- `hook-routes.ts#ClaudeHookRoutes`：hook 按事件名分发，每个事件一个方法。
 - `session-state.ts#reduce`：会话状态的事件归约，输入是转写行与 hook，不含屏幕。
 - `transcript-source.ts#ClaudeTranscriptSource`：转写 JSONL 进入 journal 的唯一路径，子 agent 各占一条车道。
 - `hook-bridge.ts#ClaudeHookBridge`：本服务所有 CLI 共用的一个回环端点，按 `session_id` 路由。
@@ -25,10 +32,13 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。
 - 自动压缩的 PreCompact hook 可能先于该 prompt 的转写行到达，要按 hook 的 `prompt_id` 压住，等 prompt 行读到后并入同一回合，否则会写成上一回合的尾巴并开出第二个压缩。
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
-- 停止当前回合时，`runtime.ts#stopMainTurn` 先撤下发布的回合，此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并检查结果。
+- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并检查结果。
 - 30 秒内连续退出两次，下一次启动去掉 `--resume` 新开会话（`launch-guard.ts#QUICK_EXIT_LIMIT`）；计数存在会话上，重启服务不清零。
 - 发布新的会话 id（`setNativeSessionId`）会同步重绑服务端已有的监听，所以 `index.ts#ClaudeBackendAdapter` 先登记本次启动的运行时再发布 id，否则监听会另起一个 CLI；启动失败且终端没换时撤回这个 id，重试才不会去 `--resume` 一个从未写下的对话。
-- 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`runtime.ts#ClaudeSessionRuntime`，修复 1a06647）。
+- 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`binding.ts#refreshTerminalStatus` 用启动计数 `launches` 丢弃启动之前开始的检查，修复 1a06647）。
+- 只有 `runtime.ts#ClaudeSessionRuntime` 给 `state` 赋值，`setStatus` 与 `dispatchSignal` 只在它上面定义；各组拿到的是取值函数和回调（各自的 `…Deps` 接口），不拿运行时本身。一组要改另一组的数据时调对方的方法，不就地改字段。
+- 对所有 hook 都成立的步骤在 `hook-routes.ts#handleHook` 里按固定顺序先做，`matchesTurn` 在分发前取值：工具 hook 自己可能开出它所属的回合（`noteToolHook`），分发后再取，开出回合的那个 hook 就会被算作属于已发布的回合，引导会在它身上被取走。
+- `index.test.ts` 与 `recording.ts` 经适配器的 `runtimes` 直接调用运行时上的 `refreshTranscript`、`refreshScreenState`、`convergeBackground`、`refreshTerminalStatus`，读 `screenDialogTask`、`pendingSend`、`state`，写 `started`，并替换实例上的 `screenConvergenceSupported`。这些成员在运行时上是转发，不能删；`screenConvergenceSupported` 必须留在运行时实例上并经回调传给 `screen-watch.ts#ClaudeScreenWatch`，搬进别的组后测试的替换不再生效。
 - 预热键由 `warm.ts#sessionClaudeWarmKey` 从 `apps/server/src/backends/shared/launch-input.ts#SessionLaunchInput` 派生；键与启动不一致时静默冷启动。
 - 屏幕读取的版面约定属于 CLI，随时可能变；读不出时一律退化为不画草稿，不能影响转写读取。
 
@@ -47,7 +57,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 
 - 回合一直忙、模型或服务商切换被拒：看 `session-state.ts` 的 `cliQueue` 是否残留，`riffet logs --scope claude` 中有 `cli queue converged from screen` 或 `background converged from screen` 说明靠屏幕才收敛。
 - 流式草稿与最终答案不一致或出现两份：日志 `live draft differs from its transcript text` 是版面漂移信号，按 `live/screen.ts` 顶部的步骤补录新版本屏幕。
-- 发送长期显示等待确认：`riffet logs --scope claude` 中的 `paste not shown within the window` 与 `first prompt after dispatch does not read as the message sent`，对应 `composer.ts`、`runtime.ts` 的粘贴回执等待。
+- 发送长期显示等待确认：`riffet logs --scope claude` 中的 `paste not shown within the window` 与 `first prompt after dispatch does not read as the message sent`，对应 `composer.ts`、`sends.ts#awaitReceipt` 的粘贴回执等待。
 - hook 全部没有反应：`riffet logs --scope claude` 中的 `hook descriptor could not be written` 或 `hook bridge could not start`。
 - 服务重启后引导一直补充不进当前回合、每次都变成下一条消息：引导只看 `runtime.ts#steerTarget`，没有 `started`（本服务没启动这个 CLI）时要求这一回合的工具 hook 已到达本服务（`outputPromptId`）；状态里有 `activeTurn` 而这里不认，就会在 `enqueue` 抛 `STEER_TARGET_CHANGED` 并由 `requeueSteer` 转成排队消息。
 - 屏幕解析在新版 CLI 上失效：`npx vitest run apps/server/src/backends/claude/screen-fixtures.test.ts`，再用 `scripts/probe-claude-e2e.ts --capture` 录制现场。

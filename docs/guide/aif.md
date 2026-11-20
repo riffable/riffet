@@ -269,10 +269,10 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 
 | 优先级 | 模块 | 现状 | 改造方式 |
 |---|---|---|---|
-| P0 | Codex 后端 | `runtime.ts` 3934 行、`index.ts` 1515 行，90 天 64 次 fix，没有录制数据 | 作为整套机制的首个完整落地：先补录制场景、用回放测试锁定行为，再按职责拆分；预热键改为派生 |
+| 已完成 | Codex 后端 | `runtime.ts` 已按职责拆到 776 行，app-server 与 rollout 有录制 | 首个完整落地：先补录制场景、用回放测试锁定行为，再按职责拆分 |
 | P0 | Web 会话链 | `NativeSession.tsx`、`TranscriptView.tsx`、`Timeline.tsx`、`Composer.tsx` 合计约 5900 行，90 天 159 次 fix | 用 `replay-transcript` 的录制流锁定行为；数据流理顺为「同步流 → 存储 → 派生行 → 视图」，滚动与折叠作为派生状态，视图不反向写入 |
-| P1 | Claude 后端 | `runtime.ts` 2756 行、`history.ts` 1916 行；屏幕已有录制，会话记录文件和 hook 没有 | 补齐场景矩阵后拆分 |
-| P1 | 后端公共层 | `backends/service.ts` 1431 行、`native/dispatch.ts` 1628 行 | 在 P0 之后处理，P0 会暴露这里的接口边界 |
+| P1 | Claude 后端 | `runtime.ts` 已按 [Claude 驱动拆分方案](claude-runtime-split.md) 拆到 665 行；`history.ts` 1916 行、`transcript-source.ts` 1252 行仍超限；屏幕、会话记录文件和 hook 都有录制（hook 只有一个 CLI 版本） | `history.ts` 与 `transcript-source.ts` 单独评估 |
+| P1 | 后端公共层 | `backends/service.ts` 1449 行；`native/dispatch.ts` 已拆为协调器（375 行）与 `session-actor.ts`（1514 行） | 在 P0 之后处理，P0 会暴露这里的接口边界 |
 | P2 | Mac 转录与工作台、移动端首页 | `TranscriptController.swift` 2034 行、`WorkbenchView.swift` 1871 行、`ProjectHome.kt` 1761 行 | 随 Kotlin 与 Swift 接入模块检查时处理 |
 
 每个模块的拆分方案在动手前单独评审，本文不限定拆分后的形态。
@@ -300,6 +300,7 @@ CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits 
 - 录制当天就发现一个缺陷：带 `turnId` 的停止全部被拒（87483f3）。回放按客户端的方式停止并检查结果，回归会直接出现在 `interrupt` 场景里。
 - Claude 的恢复、压缩、StopFailure、`/clear` 场景已录制（ec38f73）。
 - Codex runtime 拆分五步完成（[进展](codex-runtime-split.md#8-进展)）：`runtime.ts` 3934 → 776 行，拆为 10 个各自持有状态的类；每一步 421 个测试与 24 个回放不改断言通过。
+- Claude runtime 拆分六步完成（[进展](claude-runtime-split.md#7-进展)）：`runtime.ts` 2756 → 665 行，拆出 7 个各自持有状态的类；每一步 325 个测试（含录制回放）不改断言通过。
 - 未完成：Codex `index.ts`（1470 行）与 `transcript-source.ts`（1068 行）仍超限；拆分后 30 天的返工率对比；Claude `/clear` 后首条发送得不到确认的疑似问题，待另一会话提交 `index.ts` 的改动后复查。
 
 阶段 0 顺延的两项：rollout 文件里有完整的系统指令和用户自己的全局指令，入库前要按解析器实际读取的记录类型做白名单，不能只做文本替换；hook 通道由 `observation.ts` 在启动 CLI 时挂载，录制需要同时运行它的 hook 服务。两项都放到阶段 1。

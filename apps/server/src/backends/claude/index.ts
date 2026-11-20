@@ -29,10 +29,11 @@ import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability, readClaudeOwnerGateway, STANDING_ISOLATION } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
-import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, rewriteKey, ClaudeSessionRuntime } from './runtime.js';
+import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, ClaudeSessionRuntime } from './runtime.js';
+import { rewriteKey } from './sends.js';
 import { workspaceObserver, type WorkspaceObserver } from '../shared/workspace-observer.js';
 export { CLAUDE_CLI_VERSIONS } from './launch.js';
-export { CLAUDE_CONFIG_SETTLE_MS } from './runtime.js';
+export { CLAUDE_CONFIG_SETTLE_MS } from './binding.js';
 
 const PROFILE_ID = 'local';
 
