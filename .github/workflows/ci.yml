@@ -56,8 +56,9 @@ jobs:
         env:
           RANGE: ${{ steps.range.outputs.range }}
         run: node scripts/release.mjs changelog "$RANGE"
-      # Only warns, like the changelog: fix commits say what was missing (`Missed:`), and fixes to how
-      # an agent CLI is read carry a recording (docs/guide/aif.md §5.4, §5.6).
+      # Fix commits say what was missing (`Missed:`): one authored since MISSED_REQUIRED_FROM (scripts/aif.ts) fails
+      # without it, an older one warns. Fixes to how an agent CLI is read carry a recording, which only
+      # warns (docs/guide/aif.md §5.4, §5.6).
       - uses: pnpm/action-setup@v4
         if: steps.range.outputs.range != ''
         with:

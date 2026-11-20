@@ -247,7 +247,12 @@ Missed: context | co-change | external | invariant | cross-platform | logic
 | `cross-platform` | 某一端漏改或行为不一致 | 补共享测试数据，或把逻辑下沉 |
 | `logic` | 普通的实现错误，机制无关 | 无 |
 
-CI 对缺少尾注或取值不对的 fix 提交给出警告（`pnpm aif commits <base>..<head>`，在 `.github/workflows/ci.yml` 的新提交检查里运行）。演进回路按模块汇总归因分布：某一类持续偏高，就说明对应的机制环节需要加强。这是本机制判断自身是否有效的主要依据。
+缺少尾注或取值不对的 fix 提交在两处被拒：
+
+- 提交时：`pnpm aif hooks` 写入 `.git/hooks/commit-msg`，每个克隆运行一次。设置了 `core.hooksPath` 的机器（例如公司统一的钩子目录）上，git 只运行那个目录里的钩子，仓库的钩子要由它转调才生效；安装命令会让实际生效的钩子判一条没有尾注的 fix 消息，据此报告是否生效。
+- CI：`pnpm aif commits <base>..<head>`（`.github/workflows/ci.yml` 的新提交检查）对作者日期在 `MISSED_REQUIRED_FROM`（`scripts/aif.ts`，2026-11-21）当天及之后的提交报错，更早的只给警告，因为已经推送的提交改不了消息。
+
+演进回路按模块汇总归因分布：某一类持续偏高，就说明对应的机制环节需要加强。这是本机制判断自身是否有效的主要依据。
 
 ### 5.7 规则的生命周期
 

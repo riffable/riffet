@@ -6,7 +6,8 @@
  *   pnpm aif context [path...]          rules, co-change hits, recordings and verify commands for the scope
  *   pnpm verify [path...] [--dry-run]   run the module, global and related checks for the scope
  *   pnpm check:modules [--update]       validate declarations, anchors and the file size ratchet
- *   pnpm aif commits <base>..<head>     CI: warn on fix commits without `Missed:` or without recordings
+ *   pnpm aif commits <base>..<head>     CI: fix commits without `Missed:` fail (warn before MISSED_REQUIRED_FROM); warn without recordings
+ *   pnpm aif hooks                      install the commit-msg hook that refuses a fix commit without `Missed:`
  *   pnpm aif coupling [--days 90]       file pairs in different modules that change together without importing each other
  *   pnpm aif sizes [--days 90]          fix share by file size per language, the hotspots, and the size exemptions
  *
@@ -22,7 +23,8 @@
  * limit and the reason, which `sizes` prints for review.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, normalize, posix, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -34,6 +36,8 @@ const BODY_LIMIT = 80;
 const CONTEXT_TOKENS = 2000;
 const SECTIONS = ['职责', '入口', '不变量', '外部行为', '排障'];
 const MISSED = ['context', 'co-change', 'external', 'invariant', 'cross-platform', 'logic'];
+/** Fix commits authored from this day on must carry `Missed:`; CI only warns about older ones, which cannot be reworded once pushed. */
+const MISSED_REQUIRED_FROM = '2026-11-21';
 const SOURCE = /\.(ts|tsx|mts|mjs|swift|kt)$/;
 const TEST = /(\.test\.|\.spec\.|\/test\/|Test\.kt$|Tests?\.swift$|\/fixtures\/)/;
 /** Trees where every source file must belong to a module (docs/guide/aif.md §5.1); more join as they are declared. */
@@ -417,20 +421,34 @@ function check(args: string[]) {
   console.log(`modules OK (${modules.length} module(s), ${sizes.size} source file(s) under the size ratchet).`);
 }
 
+/** The `Missed:` trailer of a fix commit's message and what is wrong with it; nothing for any other commit. */
+function missedOf(message: string): { missed?: string; problem?: string } | undefined {
+  const [subject = '', ...body] = message.split('\n');
+  if (!/^fix(\(|:|!)/.test(subject)) return undefined;
+  const missed = body.map((line) => /^Missed:\s*(.+?)\s*$/i.exec(line)?.[1]).find(Boolean);
+  if (!missed) return { problem: `no \`Missed:\` trailer (${MISSED.join(' | ')}); see docs/guide/aif.md §5.6.` };
+  if (!missed.split(/[,\s]+/).every((value) => MISSED.includes(value))) return { missed, problem: `\`Missed: ${missed}\` is not one of ${MISSED.join(', ')}.` };
+  return { missed };
+}
+
 function commits(range: string) {
   if (!range) fail(['usage: pnpm aif commits <base>..<head>']);
   const { modules } = loadModules();
-  const warn = (message: string) => console.log(process.env.GITHUB_ACTIONS ? `::warning title=AIF::${message}` : `warning: ${message}`);
+  const say = (level: 'warning' | 'error', message: string) => console.log(process.env.GITHUB_ACTIONS ? `::${level} title=AIF::${message}` : `${level}: ${message}`);
+  const warn = (message: string) => say('warning', message);
   const shas = git('log', '--no-merges', '--format=%H', range).split('\n').filter(Boolean);
-  let fixes = 0;
+  let fixes = 0, refused = 0;
   for (const sha of shas) {
-    const [subject, ...body] = git('log', '-1', '--format=%B', sha).split('\n');
-    if (!/^fix(\(|:|!)/.test(subject)) continue;
+    const message = git('log', '-1', '--format=%B', sha);
+    const [subject] = message.split('\n');
+    const fix = missedOf(message);
+    if (!fix) continue;
     fixes++;
     const short = `${sha.slice(0, 9)} ${subject}`;
-    const missed = body.map((line) => /^Missed:\s*(.+?)\s*$/i.exec(line)?.[1]).find(Boolean);
-    if (!missed) warn(`${short}: no \`Missed:\` trailer (${MISSED.join(' | ')}); see docs/guide/aif.md §5.6.`);
-    else if (!missed.split(/[,\s]+/).every((value) => MISSED.includes(value))) warn(`${short}: \`Missed: ${missed}\` is not one of ${MISSED.join(', ')}.`);
+    const missed = fix.missed;
+    // The author date survives a rebase, so a commit made before the rule is not held to it afterwards.
+    const required = git('log', '-1', '--format=%aI', sha).slice(0, 10) >= MISSED_REQUIRED_FROM;
+    if (fix.problem) { say(required ? 'error' : 'warning', `${short}: ${fix.problem}`); if (required) refused++; }
     const changed = git('show', '--name-only', '--format=', sha).split('\n').filter(Boolean);
     for (const module of modules.filter((m) => m.recordings)) {
       const recordings = `${module.dir}/${module.recordings}/`;
@@ -441,6 +459,46 @@ function commits(range: string) {
     }
   }
   console.log(`${shas.length} commit(s) in ${range}, ${fixes} fix(es) checked.`);
+  if (refused) process.exit(1);
+}
+
+/** The commit-msg hook: refuses a fix commit whose message has no valid `Missed:` trailer. */
+function commitMsg(file: string) {
+  if (!file) fail(['usage: pnpm aif commit-msg <message file>']);
+  // Git strips comment lines and everything under the scissors line after this hook has run.
+  const text = readFileSync(file, 'utf8').split(/^# -+ >8 -+$/m)[0]!;
+  const fix = missedOf(text.split('\n').filter((line) => !line.startsWith('#')).join('\n').trimStart());
+  if (fix?.problem) fail([`commit refused: ${fix.problem}`]);
+}
+
+const HOOK = `#!/bin/sh
+# Installed by \`pnpm aif hooks\` (docs/guide/aif.md §5.6): a fix commit says what was missing.
+[ -x node_modules/.bin/tsx ] || exit 0
+exec node_modules/.bin/tsx scripts/aif.ts commit-msg "$1"
+`;
+
+/**
+ * Writes `.git/hooks/commit-msg`, then asks the hook git would really run to judge a fix commit with no trailer:
+ * with `core.hooksPath` set (a company-wide hook directory), ours runs only if the hook there calls it.
+ */
+function installHooks() {
+  const hooks = resolve(root, git('rev-parse', '--git-common-dir').trim(), 'hooks');
+  const target = join(hooks, 'commit-msg');
+  if (existsSync(target) && readFileSync(target, 'utf8') !== HOOK && !readFileSync(target, 'utf8').includes('pnpm aif hooks')) {
+    fail([`${relative(root, target)} already exists and is not ours; call \`node_modules/.bin/tsx scripts/aif.ts commit-msg "$1"\` from it.`]);
+  }
+  mkdirSync(hooks, { recursive: true });
+  writeFileSync(target, HOOK);
+  chmodSync(target, 0o755);
+  let effective = hooks;
+  try { effective = resolve(root, git('config', '--type=path', '--get', 'core.hooksPath').trim()); } catch { /* unset: git runs .git/hooks */ }
+  const probe = join(mkdtempSync(join(tmpdir(), 'aif-hook-')), 'message');
+  writeFileSync(probe, 'fix: probe\n');
+  const run = existsSync(join(effective, 'commit-msg')) ? spawnSync(join(effective, 'commit-msg'), [probe], { cwd: root, encoding: 'utf8' }) : undefined;
+  rmSync(dirname(probe), { recursive: true, force: true });
+  console.log(`installed ${relative(root, target)}`);
+  if (run && run.status !== 0 && /Missed/.test(`${run.stdout}${run.stderr}`)) console.log('in effect: a fix commit without `Missed:` is refused.');
+  else fail([`not in effect: core.hooksPath is ${effective}, and its commit-msg hook does not call .git/hooks/commit-msg. Call it from there, or unset core.hooksPath for this repository.`]);
 }
 
 /** The relative imports of a source file, resolved to repo paths (extension-less and `.js` specifiers included). */
@@ -555,9 +613,11 @@ if (command === 'modules') {
 else if (command === 'verify') verify(rest);
 else if (command === 'check') check(rest);
 else if (command === 'commits') commits(rest[0]);
+else if (command === 'commit-msg') commitMsg(rest[0]);
+else if (command === 'hooks') installHooks();
 else if (command === 'coupling') coupling(rest);
 else if (command === 'sizes') sizes(rest);
 else {
-  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head> | coupling [--days N] | sizes [--days N]');
+  console.error('usage: tsx scripts/aif.ts modules | context [path...] | verify [path...] [--dry-run] | check [--update [--add <path>]] | commits <base>..<head> | hooks | coupling [--days N] | sizes [--days N]');
   process.exit(2);
 }
