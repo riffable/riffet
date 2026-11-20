@@ -91,7 +91,7 @@ internal class AndroidDeviceExecutor(private val rawContext: Context, private va
     private fun invalid(message: String) = DeviceCallOutcome.failure(DeviceErrorCode.FAILED, message)
     private fun timeLeft(call: DeviceCall): Long? = runCatching { Instant.parse(call.deadline).toEpochMilli() - System.currentTimeMillis() }.getOrNull()
     private fun sessionTitle(call: DeviceCall): String? =
-        RiffetHost.store.value?.list?.value?.sessions?.firstOrNull { it.id == call.sessionId }?.title
+        RiffetHost.store.value?.list?.value?.sessions?.firstOrNull { it.id == call.sessionId }?.shownTitle
 
     private fun notify(call: DeviceCall): DeviceCallOutcome {
         val body = call.string("body") ?: return invalid("body is required")

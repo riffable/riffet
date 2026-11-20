@@ -997,6 +997,10 @@ msgstr "Filter by tag"
 msgid "按标签页顺序"
 msgstr "Tab order"
 
+#: src/app/use-session-actions.ts
+msgid "按标题规则显示为「{shown}」"
+msgstr "Shown as “{shown}” by a title rule"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "按需加载"
 msgstr "Loads on demand"

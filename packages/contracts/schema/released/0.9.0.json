@@ -1064,6 +1064,9 @@
             ],
             "open": true
           },
+          "displayTitle": {
+            "type": "string"
+          },
           "backendId": {
             "type": "string",
             "enum": [
@@ -1526,6 +1529,9 @@
                     "user"
                   ],
                   "open": true
+                },
+                "displayTitle": {
+                  "type": "string"
                 },
                 "backendId": {
                   "type": "string",
@@ -3045,6 +3051,9 @@
                       "user"
                     ],
                     "open": true
+                  },
+                  "displayTitle": {
+                    "type": "string"
                   },
                   "backendId": {
                     "type": "string",
@@ -10927,6 +10936,9 @@
                       "user"
                     ],
                     "open": true
+                  },
+                  "displayTitle": {
+                    "type": "string"
                   },
                   "backendId": {
                     "type": "string",

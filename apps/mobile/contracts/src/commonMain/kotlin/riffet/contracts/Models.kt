@@ -216,6 +216,11 @@ data class Session(
      * `user` (what the reader typed). Missing on rows written before the server named conversations.
      */
     val titleSource: String? = null,
+    /**
+     * What readers see when a session title rule changes the name; missing when [title] is shown as is.
+     * Show [shownTitle]; rename starts from and writes [title].
+     */
+    val displayTitle: String? = null,
     val tags: List<String>,
     val state: SessionState,
     /** Native provider routing. Missing backendId means the legacy default Cursor profile. */
@@ -275,6 +280,9 @@ data class Session(
 ) {
     /** The Agent's wire id, built-in or a plugin's. */
     val agent: String? get() = agentId ?: backendId?.let(AgentIds::wire)
+
+    /** The name to show for this conversation; [title] stays the base for renaming. */
+    val shownTitle: String get() = displayTitle ?: title
 }
 
 /**

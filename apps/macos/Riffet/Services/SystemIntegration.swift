@@ -233,14 +233,14 @@ enum SpotlightIndex {
         var items: [CSSearchableItem] = []
         var current: [String: String] = [:]
         for session in sessions where session.archivedAt == nil {
-            let signature = "\(session.title)|\(session.updatedAt)|\(names[session.projectId] ?? "")|\(session.tags.joined(separator: ","))"
+            let signature = "\(session.shownTitle)|\(session.updatedAt)|\(names[session.projectId] ?? "")|\(session.tags.joined(separator: ","))"
             current[session.id] = signature
             guard indexed[session.id] != signature else { continue }
             let attributes = CSSearchableItemAttributeSet(contentType: .text)
-            attributes.title = session.title.ifEmpty(String(localized: "Riffet 会话"))
+            attributes.title = session.shownTitle.ifEmpty(String(localized: "Riffet 会话"))
             let project = names[session.projectId]
             attributes.contentDescription = ["Riffet", project, session.model].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-            attributes.textContent = ([session.title] + [project].compactMap { $0 } + session.tags).filter { !$0.isEmpty }.joined(separator: "\n")
+            attributes.textContent = ([session.shownTitle] + [project].compactMap { $0 } + session.tags).filter { !$0.isEmpty }.joined(separator: "\n")
             attributes.keywords = session.tags + [project].compactMap { $0 }
             attributes.lastUsedDate = ServerTime.date(session.lastActivityAt ?? session.createdAt)
             items.append(CSSearchableItem(uniqueIdentifier: session.id, domainIdentifier: domain, attributeSet: attributes))
@@ -321,7 +321,7 @@ struct SessionQuery: EntityStringQuery {
         func activity(_ session: Session) -> Date { ServerTime.date(session.lastActivityAt ?? session.createdAt) ?? .distantPast }
         let open = workbench.list.sessions.filter { $0.archivedAt == nil }
         return open.sorted { activity($0) > activity($1) }
-            .map { SessionEntity(id: $0.id, title: $0.title.ifEmpty(String(localized: "新会话")), project: workbench.project($0.projectId)?.name ?? "") }
+            .map { SessionEntity(id: $0.id, title: $0.shownTitle.ifEmpty(String(localized: "新会话")), project: workbench.project($0.projectId)?.name ?? "") }
     }
 
     func entities(for identifiers: [String]) async throws -> [SessionEntity] {
@@ -357,7 +357,7 @@ struct NewSessionIntent: AppIntent {
             projectId: target.id, prompt: prompt, attachments: [], agent: agent,
             profileId: defaults?.profileId, model: defaults?.model, mode: defaults?.mode, approval: defaults?.approval
         )
-        return .result(dialog: "已在 \(target.name) 中开始「\(session.title.ifEmpty(prompt))」")
+        return .result(dialog: "已在 \(target.name) 中开始「\(session.shownTitle.ifEmpty(prompt))」")
     }
 }
 
@@ -384,7 +384,7 @@ struct RunningSessionsIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<[String]> & ProvidesDialog {
         let sessions = try await IntentContext.workbench().activeSessions
-        let titles = sessions.map { String(localized: "\($0.title.ifEmpty(String(localized: "新会话")))（\($0.state == .waiting ? String(localized: "等待确认") : String(localized: "运行中"))）") }
+        let titles = sessions.map { String(localized: "\($0.shownTitle.ifEmpty(String(localized: "新会话")))（\($0.state == .waiting ? String(localized: "等待确认") : String(localized: "运行中"))）") }
         return .result(value: titles, dialog: titles.isEmpty ? "没有运行中的会话" : "\(titles.count) 个会话：\(titles.joined(separator: String(localized: "、")))")
     }
 }

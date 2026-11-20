@@ -216,7 +216,7 @@ export class ServiceMonitor {
     if (daemons.length) {
       const owners = new Map<string, Pick<ServiceProcess, 'sessionId' | 'sessionTitle' | 'backendId'>>();
       for (const session of this.deps.store.listSessions()) {
-        if (session.nativeRuntime?.address) owners.set(session.nativeRuntime.address, { sessionId: session.id, sessionTitle: session.title, ...(session.backendId ? { backendId: session.backendId } : {}) });
+        if (session.nativeRuntime?.address) owners.set(session.nativeRuntime.address, { sessionId: session.id, sessionTitle: session.displayTitle ?? session.title, ...(session.backendId ? { backendId: session.backendId } : {}) });
       }
       // Another workbench instance's daemons are its own business.
       const ownTag = appServerOwner();
@@ -237,7 +237,7 @@ export class ServiceMonitor {
     if (!sessionId) return { terminalId };
     try {
       const session = this.deps.store.getSession(sessionId);
-      return { terminalId, sessionId, sessionTitle: session.title, ...(session.backendId ? { backendId: session.backendId } : {}) };
+      return { terminalId, sessionId, sessionTitle: session.displayTitle ?? session.title, ...(session.backendId ? { backendId: session.backendId } : {}) };
     } catch { return { terminalId, sessionId }; }
   }
 }

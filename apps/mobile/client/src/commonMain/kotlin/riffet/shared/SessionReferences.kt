@@ -19,7 +19,7 @@ fun List<PromptContextReference>.sessionReferences(): List<SessionReferenceInput
     }.takeIf { it.isNotEmpty() }
 
 fun sessionReference(session: Session): PromptContextReference =
-    PromptContextReference(kind = "session", sessionId = session.id, title = session.title)
+    PromptContextReference(kind = "session", sessionId = session.id, title = session.shownTitle)
 
 /** Localize only Riffet's excerpt wrapper; saved messages and the captured blob stay untouched. */
 fun sessionReferenceExcerpt(excerpt: String): String {
@@ -56,10 +56,10 @@ private fun referenceAgentName(session: Session): String = when (session.backend
 fun rankedSessionReferences(sessions: List<Session>, projects: List<Project>, query: String, currentSessionId: String?, projectId: String?): List<Session> {
     val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
     val names = projects.associate { it.id to it.name }
-    fun label(session: Session) = "${session.title} ${names[session.projectId].orEmpty()} ${session.agentId ?: referenceAgentName(session)}".lowercase()
+    fun label(session: Session) = "${session.shownTitle} ${names[session.projectId].orEmpty()} ${session.agentId ?: referenceAgentName(session)}".lowercase()
     return sessions.asSequence().filter { it.id != currentSessionId }
         .filter { session -> words.all { label(session).contains(it) } }
-        .sortedWith(compareBy<Session> { if (words.isNotEmpty() && it.title.lowercase().contains(query.trim().lowercase())) 0 else 1 }
+        .sortedWith(compareBy<Session> { if (words.isNotEmpty() && it.shownTitle.lowercase().contains(query.trim().lowercase())) 0 else 1 }
             .thenBy { if (it.archivedAt == null) 0 else 1 }
             .thenBy { if (it.projectId == projectId) 0 else 1 }
             .thenByDescending { it.lastActivityAt ?: it.createdAt })

@@ -1,6 +1,7 @@
 import type { NativeBackendId } from './agent-ids.js';
 import type { AssistantJob } from './session.js';
 import type { WorkItemStatus } from './work-items.js';
+import type { TitleRule } from './title-rules.js';
 
 /** What a message's `{name}` placeholders are filled with. */
 export type TextParams = Record<string, string | number>;
@@ -88,6 +89,8 @@ export interface AppSettings {
   sidebarPinned?: string[];
   /** 语音输入 (docs/VOICE.md §6), on every device. Unset, or no `recognizer`, means off. */
   voiceInput?: VoiceInputSettings;
+  /** 会话标题规则 (docs/SESSION-TITLES.md), in order; the first that matches a conversation names it. */
+  titleRules?: TitleRule[];
 }
 /**
  * How dictation is transcribed: `recognizer` is `REMOTE_SPEECH_RECOGNIZER` for the service in `remote`, or the id of a

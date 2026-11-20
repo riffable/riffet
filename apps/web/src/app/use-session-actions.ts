@@ -8,6 +8,7 @@ import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { toast } from '@/lib/toast';
 import { errorMessage, isRecord, newId } from '@/lib/utils';
 import { sortSessionsByActivity } from '@/lib/session-order';
+import { baseTitle, titleShownByRule } from '@/lib/shown-title';
 import { acknowledgeRecoveredCreationDraft, type ComposerProps } from './session/Composer';
 import { requestSessionDeletion } from './SessionDeletion';
 import type { SessionAction } from './Sidebar';
@@ -405,8 +406,9 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       if (action === 'pin') {
         upsertSession(await api.updateSession(target.id, { pinned: !target.pinnedAt }));
       } else if (action === 'rename') {
-        const title = await promptDialog({ title: t`重命名会话`, initial: target.title, confirmLabel: t`保存`, multiline: true });
-        if (!title?.trim() || title.trim() === target.title) return;
+        const shown = target.title, current = baseTitle(target);
+        const title = await promptDialog({ title: t`重命名会话`, ...(titleShownByRule(target) ? { description: t`按标题规则显示为「${shown}」` } : {}), initial: current, confirmLabel: t`保存`, multiline: true });
+        if (!title?.trim() || title.trim() === current) return;
         upsertSession(await api.updateSession(target.id, { title: title.trim() }));
       } else if (action === 'tags') {
         const value = await promptDialog({ title: t`会话标签`, description: t`多个标签用逗号分隔`, initial: (target.tags ?? []).join(', '), confirmLabel: t`保存` });

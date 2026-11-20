@@ -176,7 +176,7 @@ export class NativeDispatcher {
     for (const session of candidates) {
       const backendId = backendIdOf(session);
       const runs = runsBySession.get(session.id) ?? [];
-      const blocker = (reason: RestartBlocker['reason']) => blockers.push({ sessionId: session.id, title: session.title, backendId, reason });
+      const blocker = (reason: RestartBlocker['reason']) => blockers.push({ sessionId: session.id, title: session.displayTitle ?? session.title, backendId, reason });
       // An in-flight write blocks whether or not the session was archived meanwhile.
       if (runs.some(run => ['preparing', 'dispatching', 'input_sent'].includes(run.native?.delivery ?? ''))) { blocker('delivery'); continue; }
       if (session.archivedAt) continue;

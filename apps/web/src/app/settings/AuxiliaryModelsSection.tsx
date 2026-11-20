@@ -13,7 +13,7 @@ import { useCatalog } from '../state/stores';
 import { AuxiliaryInspectDialog } from './AuxiliaryInspectDialog';
 import { AuxiliaryPreviewDialog, type PreviewPurpose } from './AuxiliaryPreviewDialog';
 import { ModelProbeDialog } from './ModelProbeDialog';
-import { SettingsGroup, SettingsRow } from './SettingsLayout';
+import { SettingsGroup, SettingsLinkRow, SettingsRow } from './SettingsLayout';
 
 const AUXILIARY_BACKENDS = new Set<NativeBackendId>(['claude', 'dsh', 'codex']);
 
@@ -21,6 +21,8 @@ type SaveProps = {
   settings: AppSettings;
   onSaved: (settings: AppSettings, patch: Partial<AppSettings>) => void;
   onError: (message: string) => void;
+  /** Opens 行为 › 会话标题, where rules change how the titles this model writes are shown. */
+  onOpenTitleRules?: () => void;
 };
 
 /**
@@ -28,7 +30,7 @@ type SaveProps = {
  * jobs enabled plugins declare (`modelUses`, docs/PLUGIN_ARCHITECTURE.md「模型用途」). Reuses the composer's grouped
  * Agent -> Provider -> Model picker over the backends and providers eligible for auxiliary calls.
  */
-export function AuxiliaryModelsSection({ settings, onSaved, onError }: SaveProps) {
+export function AuxiliaryModelsSection({ settings, onSaved, onError, onOpenTitleRules }: SaveProps) {
   const { t, i18n } = useLingui();
   const plugins = usePlugins();
   const catalogBackends = useCatalog((state) => state.backends);
@@ -174,6 +176,7 @@ export function AuxiliaryModelsSection({ settings, onSaved, onError }: SaveProps
           onSave={(ref) => save({ auxiliaryModels: { title: ref } })}
           onPreview={() => tryIt('title')}
         />
+        {onOpenTitleRules && <SettingsLinkRow title={t`标题规则`} value={settings.titleRules?.length ? t`${settings.titleRules.length} 条` : t`未设置`} onClick={onOpenTitleRules} />}
         <AuxiliaryModelRow
           {...shared}
           title={t`交接摘要`}

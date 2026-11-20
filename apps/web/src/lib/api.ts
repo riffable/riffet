@@ -1,5 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
+import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
   AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemSummary, SessionWorkItemRequest,
@@ -766,7 +767,7 @@ export const api = {
   /** The checkpoints taken before each turn of this conversation, newest first. */
   sessionCheckpoints: (sessionId: string) => request<Checkpoint[]>(`/api/sessions/${encodeURIComponent(sessionId)}/checkpoints`),
   forkSession: (sessionId: string, body: LaunchIds & { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string }) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/fork`, json('POST', body)),
-  discussions: (sessionId: string, signal?: AbortSignal) => request<Session[]>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, { signal }),
+  discussions: async (sessionId: string, signal?: AbortSignal) => (await request<Session[]>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, { signal })).map(withShownTitle),
   discussionModels: (sessionId: string, signal?: AbortSignal) => request<{ model: string; models: import('@contracts').ModelInfo[]; providerName: string }>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions/models`, { signal }),
   createDiscussion: (sessionId: string, body: DiscussionCreateRequest) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, json('POST', body)),
   handoffSession: (sessionId: string, body: LaunchIds & { target: LaunchTarget; note?: string; text?: string }) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/handoff`, json('POST', body)),

@@ -204,7 +204,7 @@ export async function captureShareSnapshot(deps: CaptureDependencies, sessionId:
   }
   const modelInfo = modelFacts(session, transcript, events, runs);
   return {
-    format: 'riffet-share-v1', title: session.title, capturedAt, backendId: session.backendId, ...(scope ? { scope } : {}),
+    format: 'riffet-share-v1', title: session.displayTitle ?? session.title, capturedAt, backendId: session.backendId, ...(scope ? { scope } : {}),
     ...(session.nativeSessionId ? { nativeChatId: session.nativeSessionId } : {}),
     ...(Object.keys(modelInfo).length ? { modelInfo } : {}),
     events: events.map(event => {

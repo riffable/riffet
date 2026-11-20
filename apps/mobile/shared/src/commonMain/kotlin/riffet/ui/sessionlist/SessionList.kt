@@ -417,7 +417,7 @@ fun SessionList(
             items(messageHits, key = { hit -> "hit:${hit.sessionId}:${hit.sequence}" }, contentType = { ITEM_HIT }) { hit ->
                 MessageHitRow(
                     hit = hit,
-                    title = sessionsById[hit.sessionId]?.title,
+                    title = sessionsById[hit.sessionId]?.shownTitle,
                     now = now,
                     modifier = listItemMotion(),
                     onOpen = { onOpenHit(hit) },
@@ -939,7 +939,7 @@ internal fun SessionRow(
             Column(modifier = Modifier.weight(1f)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = session.title,
+                        text = session.shownTitle,
                         style = typography.headline,
                         color = if (selected) LocalRiffetSurfaces.current.selectedContent else if (archived) colors.fg2 else colors.fg,
                         maxLines = 1,
@@ -980,7 +980,7 @@ internal fun SessionRow(
             // where, and when it last moved.
             Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)) {
                 Text(
-                    text = session.title,
+                    text = session.shownTitle,
                     style = typography.body.copy(lineHeight = 22.sp),
                     fontWeight = FontWeight.Medium,
                     color = colors.fg,

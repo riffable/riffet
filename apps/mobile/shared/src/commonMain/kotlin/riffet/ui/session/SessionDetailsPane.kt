@@ -151,9 +151,9 @@ internal fun SessionDetailsPane(
             title = when (shownAll) {
                 WorkKind.SUBAGENTS -> stringResource(Res.string.details_subagents)
                 WorkKind.TASKS -> stringResource(Res.string.details_tasks)
-                null -> if (assistant != null) stringResource(Res.string.assistant_title) else current.title
+                null -> if (assistant != null) stringResource(Res.string.assistant_title) else current.shownTitle
             },
-            subtitle = if (shownAll != null) current.title else subtitle,
+            subtitle = if (shownAll != null) current.shownTitle else subtitle,
             onClose = onClose,
             onBack = if (shownAll != null) ({ showAll = null }) else null,
             contentTitle = shownAll == null,

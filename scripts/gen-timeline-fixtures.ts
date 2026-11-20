@@ -87,7 +87,7 @@ type Min<T> = T extends unknown ? { [K in keyof T as {} extends Pick<T, K> ? nev
  * every object, an unknown row kind and frame type, and enum values this build does not know.
  */
 const sessionMax = {
-  id: 'session-1', projectId: 'project-1', kind: 'native', title: '重构解析器', tags: ['parser'], state: 'running', titleSource: 'generated',
+  id: 'session-1', projectId: 'project-1', kind: 'native', title: '重构解析器', displayTitle: '2026-01-01 重构解析器', tags: ['parser'], state: 'running', titleSource: 'generated',
   backendId: 'codex', backendProfileId: 'codex-default', nativeSessionId: 'chat-1', previousNativeSessionIds: ['chat-0'], quickExitCount: 1,
   nativeRuntime: { address: '127.0.0.1:4500', fingerprint: 'fp-runtime', attachment: { hook: 'acme.route', id: 'route-1' } }, cursorSessionId: 'chat-1', terminalId: 'term-1',
   resumePicker: false, model: 'gpt-5', mode: 'default', approval: 'on-request', archivedAt: at(9), error: 'exit 1', configRevision: 3, configPending: true,

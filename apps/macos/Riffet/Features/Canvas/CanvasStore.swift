@@ -209,7 +209,7 @@ final class CanvasStore {
         if family.isEmpty, let own = workbench.selected, own.id == sessionId { family = [own] }
         var hasher = Hasher()
         for s in family {
-            hasher.combine(s.id); hasher.combine(s.title); hasher.combine(s.state.name); hasher.combine(s.updatedAt)
+            hasher.combine(s.id); hasher.combine(s.shownTitle); hasher.combine(s.state.name); hasher.combine(s.updatedAt)
             hasher.combine(s.archivedAt); hasher.combine(s.model); hasher.combine(s.agent); hasher.combine(s.origin?.sessionId); hasher.combine(s.origin?.kind)
         }
         let key = hasher.finalize()
@@ -271,7 +271,7 @@ final class CanvasStore {
 
     private static func input(_ s: Session) -> CanvasSessionInput {
         CanvasSessionInput(
-            id: s.id, projectId: s.projectId, kind: "native", title: s.title, state: s.state.name.lowercased(), createdAt: s.createdAt,
+            id: s.id, projectId: s.projectId, kind: "native", title: s.shownTitle, state: s.state.name.lowercased(), createdAt: s.createdAt,
             backendId: s.agent, model: s.model,
             origin: s.origin.map { CanvasSessionInput.Origin(kind: $0.kind, sessionId: $0.sessionId, runId: $0.runId) },
             archivedAt: s.archivedAt

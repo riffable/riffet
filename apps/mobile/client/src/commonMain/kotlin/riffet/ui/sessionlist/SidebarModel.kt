@@ -153,7 +153,7 @@ fun timeBuckets(
             val project = visible[session.projectId] ?: return@filter false
             if (!showArchived && session.archivedAt != null) return@filter false
             needle.isEmpty() ||
-                "${session.title} ${session.tags.joinToString(" ")} ${project.name}".lowercase().contains(needle)
+                "${session.shownTitle} ${session.tags.joinToString(" ")} ${project.name}".lowercase().contains(needle)
         }
         .sortedWith(sessionOrder)
 
@@ -266,7 +266,7 @@ private fun instant(value: String?): Long = instantMillis(value) ?: 0L
 
 private fun matchesSession(session: Session, needle: String): Boolean =
     needle.isEmpty() ||
-        "${session.title} ${session.tags.joinToString(" ")}".lowercase().contains(needle)
+        "${session.shownTitle} ${session.tags.joinToString(" ")}".lowercase().contains(needle)
 
 private fun matchesProject(project: Project, needle: String): Boolean =
     needle.isEmpty() || "${project.name} ${project.cwd}".lowercase().contains(needle)

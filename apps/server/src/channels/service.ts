@@ -642,7 +642,7 @@ export class ChannelService {
       try {
         const session = this.deps.store.getSession(sessionId);
         const phase = this.deps.nativeBackends.status(sessionId).phase;
-        lines.push(`会话：${session.title}`, `状态：${phase === 'busy' ? '进行中' : phase === 'attention' ? '等待回答' : '空闲'}`, `模型：${[session.backendId, session.model].filter(Boolean).join(' · ') || '默认'}`);
+        lines.push(`会话：${session.displayTitle ?? session.title}`, `状态：${phase === 'busy' ? '进行中' : phase === 'attention' ? '等待回答' : '空闲'}`, `模型：${[session.backendId, session.model].filter(Boolean).join(' · ') || '默认'}`);
       } catch { lines.push('会话：已不存在'); }
     } else lines.push('会话：新消息会开新会话');
     if (chat.chatType === 'group') lines.push(chat.flat ? '整群共用一个会话' : '按话题分会话');

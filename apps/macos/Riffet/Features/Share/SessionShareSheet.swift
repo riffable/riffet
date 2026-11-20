@@ -125,7 +125,7 @@ struct SessionShareSheet: View {
                     .disabled(controlsDisabled || !validSelection || !model.canPreview)
                 if isPDF {
                     Button("打印 / 保存为 PDF…") {
-                        printer.printDocument(title: session.title) {
+                        printer.printDocument(title: session.shownTitle) {
                             model.previewReady = false
                             model.previewFailed = true
                         }
@@ -361,7 +361,7 @@ struct SessionShareSheet: View {
             } else {
                 VStack(spacing: Space.md) {
                     Image(icon: "doc.text").font(.riffet(size: 32)).foregroundStyle(palette.fg3)
-                    Text(session.title).font(RiffetFont.label).foregroundStyle(palette.fg2).lineLimit(2)
+                    Text(session.shownTitle).font(RiffetFont.label).foregroundStyle(palette.fg2).lineLimit(2)
                 }
                 .padding(Space.xl)
             }

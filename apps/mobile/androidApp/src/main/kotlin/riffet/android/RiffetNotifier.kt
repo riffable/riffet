@@ -123,7 +123,7 @@ class RiffetNotifier(private val rawContext: Context) {
 
     private fun interactionNotification(project: String?, session: Session, interaction: NativeInteraction?, origin: String): Notification.Builder {
         val body = listOfNotNull(interaction?.title, interaction?.message).joinToString("\n").ifBlank { context.getString(riffet.shared.R.string.host_notification_waiting_body) }
-        val builder = base(project, session, CHANNEL_ATTENTION, context.getString(riffet.shared.R.string.host_notification_attention_title, session.title), body, origin)
+        val builder = base(project, session, CHANNEL_ATTENTION, context.getString(riffet.shared.R.string.host_notification_attention_title, session.shownTitle), body, origin)
             .setCategory(Notification.CATEGORY_REMINDER)
             // The dialog text is often the command being approved; the lock screen shows only this.
             .setVisibility(Notification.VISIBILITY_PRIVATE)
@@ -164,7 +164,7 @@ class RiffetNotifier(private val rawContext: Context) {
         val project = store.list.value.projects.firstOrNull { it.id == session.projectId }?.name
         post(tag(origin, session.id), ALERT_ID) {
             val outcome = context.getString(outcomeId)
-            base(project, session, CHANNEL_TURNS, session.title, detail?.takeIf { it.isNotBlank() }?.let { "$outcome · $it" } ?: outcome, origin)
+            base(project, session, CHANNEL_TURNS, session.shownTitle, detail?.takeIf { it.isNotBlank() }?.let { "$outcome · $it" } ?: outcome, origin)
                 .setCategory(Notification.CATEGORY_MESSAGE)
                 .addAction(replyAction(session.id, origin))
         }

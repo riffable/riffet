@@ -70,6 +70,11 @@ msgstr "{0} CLI 自带登录"
 msgid "{0} 上下文长度"
 msgstr "{0} 上下文长度"
 
+#. placeholder {0}: counts.get(rule.id) ?? 0
+#: src/app/settings/TitleRulesSection.tsx
+msgid "{0} 个会话"
+msgstr "{0} 个会话"
+
 #. placeholder {0}: GLYPHS.length
 #: src/app/design/foundations/IconChapter.tsx
 msgid "{0} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。"
@@ -114,6 +119,11 @@ msgstr "{0} 后停止"
 #: src/app/settings/ProviderUsage.tsx
 msgid "{0} 小时"
 msgstr "{0} 小时"
+
+#. placeholder {0}: settings.titleRules.length
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "{0} 条"
+msgstr "{0} 条"
 
 #. placeholder {0}: ANDROID_STYLES.length
 #: src/app/design/android/StylesChapter.tsx
@@ -734,6 +744,10 @@ msgstr "上次释放未完成（{0}）：{1}"
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "上游服务暂时不可用，请稍后重试"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "上移"
+msgstr "上移"
+
 #: src/app/design/DesignPage.tsx
 msgid "下一章"
 msgstr "下一章"
@@ -765,6 +779,10 @@ msgstr "下方的点"
 #: src/app/settings/StorageSection.tsx
 msgid "下次启动时释放"
 msgstr "下次启动时释放"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "下移"
+msgstr "下移"
 
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -1084,6 +1102,11 @@ msgstr "五种风格只在 themePreset() 里按名字分派一次；组件读 Lo
 #: src/app/design/catalog.tsx
 msgid "五种风格的数值、配方与缩样"
 msgstr "五种风格的数值、配方与缩样"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "session-origin"
+msgid "交接"
+msgstr "交接"
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -1458,6 +1481,10 @@ msgstr "侧栏行高"
 msgid "侧栏默认宽"
 msgstr "侧栏默认宽"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "侧边聊天"
+msgstr "侧边聊天"
+
 #: src/app/design/catalog.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "侧边面板"
@@ -1718,6 +1745,10 @@ msgstr "全部后端"
 #: src/app/settings/PreferencesSections.tsx
 msgid "全部放行"
 msgstr "全部放行"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "全部标题"
+msgstr "全部标题"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "全部模型"
@@ -2014,6 +2045,10 @@ msgstr "分层、平台与风格"
 msgid "分层、生成与检查"
 msgstr "分层、生成与检查"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "分支"
+msgstr "分支"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "分歧在于离线是常态还是例外。"
 msgstr "分歧在于离线是常态还是例外。"
@@ -2212,6 +2247,10 @@ msgstr "删除会话"
 msgid "删除后无法恢复"
 msgstr "删除后无法恢复"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "删除规则"
+msgstr "删除规则"
+
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -2300,6 +2339,11 @@ msgstr "动词开头，写出会发生的事。"
 #: src/app/settings/SupportSections.tsx
 msgid "包含运行环境与设置，API Key 不包含在内。"
 msgstr "包含运行环境与设置，API Key 不包含在内。"
+
+#. placeholder {0}: preview.count
+#: src/app/settings/TitleRulesSection.tsx
+msgid "匹配 {0} 个会话"
+msgstr "匹配 {0} 个会话"
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "半选"
@@ -2426,6 +2470,10 @@ msgstr "原地：等待它的那个控件"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "原文换行，不截断"
 msgstr "原文换行，不截断"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "原标题"
+msgstr "原标题"
 
 #: src/app/design/mac/notes.ts
 msgctxt "interface-style"
@@ -2578,6 +2626,11 @@ msgctxt "settings-cancel-action"
 msgid "取消"
 msgstr "取消"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "tasks-cancel-action"
+msgid "取消"
+msgstr "取消"
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "取消单独放在操作面板下方"
 msgstr "取消单独放在操作面板下方"
@@ -2614,6 +2667,10 @@ msgstr "只呈现信息、不接受操作的元素。颜色只在表示状态时
 #: src/app/design/mac/notes.ts
 msgid "只换等宽字体"
 msgstr "只换等宽字体"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "只改变显示的名称，CLI 里的会话名不变；保存在这台服务器"
+msgstr "只改变显示的名称，CLI 里的会话名不变；保存在这台服务器"
 
 #: src/app/design/android/notes.ts
 msgid "只有主操作填充强调色，次要与危险操作是透明的着色文字"
@@ -2849,6 +2906,10 @@ msgstr "后台运行中"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "否"
 msgstr "否"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "含手动命名"
+msgstr "含手动命名"
 
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "含标签、禁用项、子菜单、勾选项和危险项。"
@@ -3284,6 +3345,10 @@ msgstr "复述界面"
 msgid "外观"
 msgstr "外观"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "多个标签用逗号分隔"
+msgstr "多个标签用逗号分隔"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "多视角"
 msgstr "多视角"
@@ -3674,6 +3739,10 @@ msgstr "尚未检测"
 msgid "尚未检测到运行环境。"
 msgstr "尚未检测到运行环境。"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "尝试"
+msgstr "尝试"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/IconChapter.tsx
@@ -3908,6 +3977,10 @@ msgstr "已切换到 Codex"
 #: src/app/settings/StorageSection.tsx
 msgid "已删除的项目"
 msgstr "已删除的项目"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "已删除规则"
+msgstr "已删除规则"
 
 #. placeholder {0}: process.name
 #. placeholder {1}: process.pid
@@ -4581,6 +4654,10 @@ msgstr "截断"
 msgid "所属对象"
 msgstr "所属对象"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "所有会话"
+msgstr "所有会话"
+
 #: src/app/design/foundations/StatesChapter.tsx
 msgid "所有可交互的组件从同一套状态里取；组件只列自己有的。"
 msgstr "所有可交互的组件从同一套状态里取；组件只列自己有的。"
@@ -4604,6 +4681,10 @@ msgstr "手写的字号、圆角、层级、色值与无说明的循环动画"
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "手动填写"
 msgstr "手动填写"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "手动新建"
+msgstr "手动新建"
 
 #: src/app/settings/ProviderModelList.tsx
 msgid "手动添加模型 ID"
@@ -5452,6 +5533,10 @@ msgstr "新建会话"
 msgid "新建会话时"
 msgstr "新建会话时"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "新建标题规则"
+msgstr "新建标题规则"
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "新建终端"
 msgstr "新建终端"
@@ -5527,6 +5612,10 @@ msgstr "无法保存推送密钥"
 msgid "无法保存文件访问设置"
 msgstr "无法保存文件访问设置"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法保存标题规则"
+msgstr "无法保存标题规则"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存消息输入设置"
 msgstr "无法保存消息输入设置"
@@ -5572,6 +5661,10 @@ msgstr "无法删除主题"
 msgid "无法删除提供商"
 msgstr "无法删除提供商"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法删除标题规则"
+msgstr "无法删除标题规则"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "无法加载启动设置"
 msgstr "无法加载启动设置"
@@ -5603,6 +5696,10 @@ msgstr "无法开启插件"
 #: src/app/settings/StorageSection.tsx
 msgid "无法开始统计"
 msgstr "无法开始统计"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法恢复标题规则"
+msgstr "无法恢复标题规则"
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法整理存储空间"
@@ -5762,6 +5859,10 @@ msgstr "无项目会话的目录"
 msgid "日志与诊断"
 msgstr "日志与诊断"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "日期"
+msgstr "日期"
+
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "时长"
@@ -5813,6 +5914,10 @@ msgstr "是"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "显示"
 msgstr "显示"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "显示为"
+msgstr "显示为"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "显示全部"
@@ -6185,6 +6290,11 @@ msgstr "标注"
 msgid "标点与间隔号"
 msgstr "标点与间隔号"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "session-tags"
+msgid "标签"
+msgstr "标签"
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "标签、元信息、按钮文字"
 msgstr "标签、元信息、按钮文字"
@@ -6270,6 +6380,10 @@ msgstr "标题栏与页签"
 #: src/app/settings/ViewsSection.tsx
 msgid "标题栏图标"
 msgstr "标题栏图标"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "标题规则"
+msgstr "标题规则"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "标题说明现在是什么；失败的空状态附一个下一步。"
@@ -6824,6 +6938,10 @@ msgstr "添加侧栏色"
 msgid "添加强调色"
 msgstr "添加强调色"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "添加规则"
+msgstr "添加规则"
+
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "添加设备"
 msgstr "添加设备"
@@ -6835,6 +6953,10 @@ msgstr "添加这个项目？"
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "添加项目"
 msgstr "添加项目"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "添加项目目录"
+msgstr "添加项目目录"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/ChannelsSection.tsx
@@ -7125,6 +7247,10 @@ msgstr "登录"
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "盖在内容之上的表面。菜单与弹出层锚定在触发点，弹窗居中，手机上菜单与小弹窗改从底部升起。"
 msgstr "盖在内容之上的表面。菜单与弹出层锚定在触发点，弹窗居中，手机上菜单与小弹窗改从底部升起。"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "目录"
+msgstr "目录"
 
 #: src/app/design/DesignPage.tsx
 #: src/app/design/overview/Contents.tsx
@@ -7846,6 +7972,10 @@ msgstr "编辑器"
 msgid "编辑器命令"
 msgstr "编辑器命令"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "编辑标题规则"
+msgstr "编辑标题规则"
+
 #: src/app/design/overview/Opening.tsx
 msgid "缩放与时长放大 {SLOW} 倍"
 msgstr "缩放与时长放大 {SLOW} 倍"
@@ -7970,6 +8100,10 @@ msgstr "编辑"
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "自动归档"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "自动标题"
+msgstr "自动标题"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "编辑中，有未保存的修改"
@@ -8918,6 +9052,10 @@ msgstr "还没有收藏"
 msgid "还没有机器人"
 msgstr "还没有机器人"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "还没有标题规则"
+msgstr "还没有标题规则"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "还没有模型。拉取或在下方手动添加。"
 msgstr "还没有模型。拉取或在下方手动添加。"
@@ -9074,6 +9212,10 @@ msgstr "退出登录"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "适用"
 msgstr "适用"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "适用于"
+msgstr "适用于"
 
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx

@@ -309,7 +309,7 @@ struct SessionRowMenu {
     // picker's own summary — the catalog name plus its translated parameter tags — never the spec.
     let model = session.model.map { modelSelectionSummary(catalog: models, selection: $0) } ?? ""
     return SessionHoverInfo(
-        title: session.title.isEmpty ? String(localized: "新会话") : session.title,
+        title: session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle,
         state: session.state,
         project: project,
         backend: session.agentID,
@@ -364,7 +364,7 @@ struct SessionRow: View, Equatable {
     var body: some View {
         HStack(spacing: Space.sm) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
+                Text(session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle)
                     .font(.riffet(size: S(13), weight: unread ? .semibold : selected ? .medium : .regular))
                     .lineLimit(1)
                     .foregroundStyle(session.archivedAt != nil ? palette.fg3 : selected || unread ? palette.fg : palette.fg2)

@@ -153,7 +153,7 @@ internal object RiffetDevice {
                 shown.addLast(notice.id)
                 if (shown.size > 50) shown.removeFirst()
                 if (!viewing(notice.sessionId)) {
-                    val title = store.list.value.sessions.firstOrNull { it.id == notice.sessionId }?.title
+                    val title = store.list.value.sessions.firstOrNull { it.id == notice.sessionId }?.shownTitle
                     RiffetHost.notifier.agentMessage("notice-${notice.id}", notice.sessionId, notice.title, notice.body, title, origin)
                 }
             }

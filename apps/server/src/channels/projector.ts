@@ -214,7 +214,7 @@ export function projectTurn(input: ProjectInput): TurnView {
     ...(edits ? { changes: { added, removed } } : {}),
   };
   return {
-    sessionId: session.id, runId: run.id, title: session.title, status, source: input.source,
+    sessionId: session.id, runId: run.id, title: session.displayTitle ?? session.title, status, source: input.source,
     ...(input.source === 'other-client' ? { prompt: clip(run.prompt, PROMPT_LIMIT) } : {}),
     steps, answer, ...(error ? { error } : {}),
     card: input.card, footer,

@@ -26,7 +26,7 @@ internal object RiffetShortcuts {
         // ISO-8601 UTC from one server, so the strings sort as the instants do.
         .sortedByDescending { it.lastActivityAt ?: it.createdAt }
         .take(LIMIT)
-        .map { Entry(it.id, it.title.ifBlank { "Riffet" }) }
+        .map { Entry(it.id, it.shownTitle.ifBlank { "Riffet" }) }
 
     /** False when the launcher's rate limit refused the update; the caller tries again later. */
     fun publish(context: Context, entries: List<Entry>, origin: String): Boolean {

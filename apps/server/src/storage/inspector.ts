@@ -448,7 +448,7 @@ export class StorageInspector {
       projects: [...usage.values()].filter((item) => total(item) > 0).sort((a, b) => total(b) - total(a)).slice(0, TOP_PROJECTS),
       sessions: named.sort((a, b) => b.bytes - a.bytes).slice(0, TOP_SESSIONS).map(({ session, bytes }) => ({
         sessionId: session.id,
-        title: session.title,
+        title: session.displayTitle ?? session.title,
         projectId: session.projectId,
         ...(projects.get(session.projectId)?.name ? { projectName: projects.get(session.projectId)!.name } : {}),
         bytes,

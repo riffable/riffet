@@ -67,6 +67,11 @@ export interface Session {
   state: SessionState;
   /** Provenance of `title`; missing on rows written before the workbench named conversations itself. */
   titleSource?: SessionTitleSource;
+  /**
+   * What the conversation is shown as when a 会话标题规则 changes `title` (docs/SESSION-TITLES.md);
+   * the server derives it and ignores it in a write. Missing means `title` is shown as it is.
+   */
+  displayTitle?: string;
   /** Native provider routing. Missing backendId and backendProfileId mean the legacy default Cursor profile. */
   backendId?: NativeBackendId; backendProfileId?: string;
   /** Provider-owned resumable session reference. Cursor sessions mirror this into cursorSessionId for old clients. */

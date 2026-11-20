@@ -877,7 +877,7 @@ struct SessionTitleView: View {
                         .padding(.horizontal, Space.xs + Space.xxs)
                 } else {
                     Button { draft = session.title; renaming = true } label: {
-                        Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
+                        Text(session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle)
                             .font(.riffet(size: S(13), weight: .medium))
                             .foregroundStyle(palette.fg)
                             .lineLimit(1)

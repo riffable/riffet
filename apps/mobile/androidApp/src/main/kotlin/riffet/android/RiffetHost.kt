@@ -350,15 +350,15 @@ object RiffetHost {
         return when {
             waiting.isNotEmpty() -> {
                 val first = waiting.first()
-                LiveStatus(first.title, hostText(riffet.shared.R.string.host_live_waiting) + others(active.size - 1), null, running = false, sessionId = first.id)
+                LiveStatus(first.shownTitle, hostText(riffet.shared.R.string.host_live_waiting) + others(active.size - 1), null, running = false, sessionId = first.id)
             }
             running.isNotEmpty() -> {
                 val primary = running.firstOrNull { it.id == selected?.id } ?: running.first()
                 val doing = (if (primary.id == selected?.id) step else null) ?: hostText(riffet.shared.R.string.host_live_running)
-                LiveStatus(primary.title, doing + others(active.size - 1), activeSince[primary.id], running = true, sessionId = primary.id)
+                LiveStatus(primary.shownTitle, doing + others(active.size - 1), activeSince[primary.id], running = true, sessionId = primary.id)
             }
             else -> LiveStatus(
-                title = selected?.title ?: "Riffet",
+                title = selected?.shownTitle ?: "Riffet",
                 text = when (connection) {
                     RiffetConnectionState.Reconnecting -> hostText(riffet.shared.R.string.host_live_reconnecting)
                     is RiffetConnectionState.Failed -> hostText(riffet.shared.R.string.host_live_disconnected)

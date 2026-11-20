@@ -536,7 +536,7 @@ final class Workbench {
 
     /// Everything the conversation's views show of a session; timestamps alone do not count.
     private static func sameForDisplay(_ a: Session, _ b: Session) -> Bool {
-        a.id == b.id && a.title == b.title && a.state == b.state && a.tags == b.tags && a.archivedAt == b.archivedAt
+        a.id == b.id && a.title == b.title && a.displayTitle == b.displayTitle && a.state == b.state && a.tags == b.tags && a.archivedAt == b.archivedAt
             && a.pinnedAt == b.pinnedAt && a.agent == b.agent && a.backendProfileId == b.backendProfileId
             && a.nativeSessionId == b.nativeSessionId && a.terminalId == b.terminalId
             && a.model == b.model && a.mode == b.mode && a.approval == b.approval && a.error == b.error

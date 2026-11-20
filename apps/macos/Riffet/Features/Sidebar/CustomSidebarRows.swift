@@ -199,7 +199,7 @@ struct CustomSessionRow: View, Equatable {
         Button(action: open) {
             HStack(spacing: Space.sm) {
                 if indented { Color.clear.frame(width: iconColumn, height: 0) }
-                Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
+                Text(session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle)
                     .font(.riffet(size: S(style.text.sidebar)))
                     .lineLimit(1)
                     .foregroundStyle(session.archivedAt != nil ? palette.fg3 : selected ? palette.fg : palette.fg2)

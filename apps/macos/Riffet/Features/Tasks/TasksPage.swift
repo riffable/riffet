@@ -201,7 +201,7 @@ struct TasksPage: View {
 
     private func detail(_ automation: Automation, kind: AutomationRow.Kind) -> String {
         if let followUp = automation.followUp {
-            if let title = workbench.list.sessions.first(where: { $0.id == followUp.sessionId })?.title, !title.isEmpty { return title }
+            if let title = workbench.list.sessions.first(where: { $0.id == followUp.sessionId })?.shownTitle, !title.isEmpty { return title }
             return followUp.by == "agent" ? String(localized: "Agent 唤醒") : String(localized: "稍后发送")
         }
         let agent = agentLabel(automation)

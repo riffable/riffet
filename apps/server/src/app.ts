@@ -123,7 +123,7 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, STORAGE_BUDGET, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -172,6 +172,11 @@ export async function createApp(options: AppOptions = {}) {
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
   const store=new Store(join(stateDir,'workbench.db')); store.recoverInterruptedRuns();
+  // 会话标题规则 (docs/SESSION-TITLES.md): read on every session write, so kept as of the last save rather than read from disk.
+  const titleRuleConfig=(value:import('../../../packages/contracts/src/index.js').AppSettings)=>({rules:value.titleRules,timeZone:value.assistant?.timeZone});
+  let titleRules=titleRuleConfig(settings.getSettings());
+  store.configureTitleRules(()=>titleRules);
+  store.refreshDisplayTitles();
   // Checkpoints of all three write-ahead logs run on one worker thread, not inside whichever commit crosses the limit.
   const stopWalCheckpoints=startWalCheckpoints(
     store.layout
@@ -303,7 +308,15 @@ export async function createApp(options: AppOptions = {}) {
   const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn,log:entry=>console.log(`[dispatch] ${JSON.stringify(entry)}`)});
   // A provider that keeps names of its own (Codex) is told whenever the workbench or the reader names a conversation.
   const renameNative=(session:import('../../../packages/contracts/src/index.js').Session)=>{void nativeBackends.rename(session).catch(()=>undefined);};
-  const titles=new TitleService({store,titleModel:()=>resolveAuxiliaryModel(settings.getSettings(),'title'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative,record:recordAuxiliaryCall});
+  const titles=new TitleService({store,titleModel:()=>resolveAuxiliaryModel(settings.getSettings(),'title'),replacedByRule:session=>{const rule=store.titleRuleFor(session);return Boolean(rule&&!titleTemplateKeepsTitle(rule.template));},gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative,record:recordAuxiliaryCall});
+  settings.onSaved(saved=>{
+    const next=titleRuleConfig(saved);
+    if(JSON.stringify(next)===JSON.stringify(titleRules))return;
+    titleRules=next;
+    store.refreshDisplayTitles();
+    // A rule that replaced titles outright may be gone: those conversations can have a model's title again.
+    void titles.backfill().catch(()=>undefined);
+  });
   /**
    * A plan is mirrored to Markdown beside Claude Code's own plans, so it can be read and grepped
    * without the workbench running. The transcript stays the authority; this copy is a cache that

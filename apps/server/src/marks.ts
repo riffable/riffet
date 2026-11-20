@@ -340,7 +340,7 @@ export class MarkStore {
       const mark: Mark = {
         id, sessionId, projectId: session.projectId, ...(session.backendId ? { backendId: session.backendId } : {}),
         kind, anchor, ...(quote ? { quote } : {}), ...(saved ? { asset: saved.asset } : {}),
-        snapshot: { text: snapshotText, sessionTitle: session.title, at: snapshotAt },
+        snapshot: { text: snapshotText, sessionTitle: session.displayTitle ?? session.title, at: snapshotAt },
         ...(noteText !== undefined ? { note: noteText } : {}), ...(markColor ? { color: markColor } : {}),
         state: 'ok', createdAt: stamp, updatedAt: stamp,
       };

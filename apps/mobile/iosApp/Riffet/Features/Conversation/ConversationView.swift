@@ -646,10 +646,10 @@ struct ConversationView: View {
                 // A generated sentence, not a page name: list-title size, so it reads as content and truncates later.
                 // The line under it is the phone's connection to the server; a healthy one says nothing.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.title, status: resumingHere ? nil : connectionCaption(at: context.date))
+                    RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle, status: resumingHere ? nil : connectionCaption(at: context.date))
                         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
                 }
-            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.title)", bundle: .riffet))
+            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle)", bundle: .riffet))
                 .accessibilityValue(connectionStatus?.badge?.text ?? (needsResume ? String(localized: "此会话当前未运行", bundle: .riffet) : ""))
                 .accessibilityIdentifier("conversationInformation")
         }

@@ -127,7 +127,7 @@ final class Workbench {
                 }
                 Task {
                     do { try await RiffetNotifications.shared.postSessionUpdate(sessionID: alert.session.id,
-                        title: alert.session.title, body: body, eventID: alert.session.updatedAt, namespace: baseURL.absoluteString) }
+                        title: alert.session.shownTitle, body: body, eventID: alert.session.updatedAt, namespace: baseURL.absoluteString) }
                     catch { self.notificationError = String(localized: "通知发送失败：\(error.localizedDescription)", bundle: .riffet) }
                 }
             }

@@ -93,7 +93,7 @@ struct ConversationDetails: View {
             .accessibilityIdentifier("conversationInformationList")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : current.title, status: stateLine) }
+                ToolbarItem(placement: .principal) { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : current.shownTitle, status: stateLine) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel(String(localized: "关闭", bundle: .riffet))
                 }

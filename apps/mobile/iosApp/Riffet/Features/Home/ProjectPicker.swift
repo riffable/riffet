@@ -397,7 +397,7 @@ struct CachedSearchView: View {
                     ConversationView(workbench: workbench, sessionID: hit.sessionId, focusSequence: hit.sequence)
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(workbench.list.sessions.first { $0.id == hit.sessionId }?.title ?? String(localized: "会话", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                        Text(workbench.list.sessions.first { $0.id == hit.sessionId }?.shownTitle ?? String(localized: "会话", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
                         Text(hit.snippet).lineLimit(1).riffetFont(.caption).foregroundStyle(palette.fg3)
                     }
                 }

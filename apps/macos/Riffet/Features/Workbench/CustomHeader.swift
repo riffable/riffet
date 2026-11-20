@@ -99,7 +99,7 @@ struct CustomHeader<Status: View>: View {
             if let agent = session.agent, !workbench.isAssistantMain(session) {
                 AgentIcon(id: agent, size: S(style.text.body), color: agentMarkColor(agent, palette) ?? palette.fg3)
             }
-            Text(workbench.isAssistantMain(session) ? String(localized: "个人助理") : session.title.isEmpty ? String(localized: "新会话") : session.title)
+            Text(workbench.isAssistantMain(session) ? String(localized: "个人助理") : session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle)
                 .font(.riffet(size: S(style.text.body), weight: .medium))
                 .foregroundStyle(palette.fg)
                 .lineLimit(1)
@@ -346,7 +346,7 @@ private struct SessionTabsBar: View {
                     .accessibilityLabel("新会话 (⌘N)")
                 if overflow {
                     ChoiceMenu(options: all.map { item in
-                        ChoiceOption(title: item.session.title.isEmpty ? String(localized: "新会话") : item.session.title, selected: item.id == current) {
+                        ChoiceOption(title: item.session.shownTitle.isEmpty ? String(localized: "新会话") : item.session.shownTitle, selected: item.id == current) {
                             model.activate(item.id)
                         }
                     }) {
@@ -414,7 +414,7 @@ private struct SessionTab: View, Equatable {
             && lhs.active == rhs.active && lhs.style == rhs.style
     }
 
-    private var title: String { session.title.isEmpty ? String(localized: "新会话") : session.title }
+    private var title: String { session.shownTitle.isEmpty ? String(localized: "新会话") : session.shownTitle }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)

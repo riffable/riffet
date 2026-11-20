@@ -44,7 +44,7 @@ private struct RunningProgress: View {
     let session: Session
 
     var body: some View {
-        let title = session.title.ifEmpty(String(localized: "新会话"))
+        let title = session.shownTitle.ifEmpty(String(localized: "新会话"))
         let shown = title.count > 16 ? String(title.prefix(16)) + "…" : title
         if let since = ServerTime.date(session.activeSince) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -196,7 +196,7 @@ struct MenuBarPanel: View {
             HStack(spacing: Space.sm) {
                 Spinner(size: .mini).frame(width: 14)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(session.title.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(1)
+                    Text(session.shownTitle.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(1)
                     if let project = workbench.project(session.projectId) {
                         Text(project.name).font(.riffet(size: S(11))).foregroundStyle(palette.fg3).lineLimit(1)
                     }
@@ -285,14 +285,14 @@ struct WaitingRow: View {
         Group {
             if let interaction {
                 InteractionCardView(workbench: workbench, interaction: interaction, sessionID: session.id, summaryOnly: true,
-                                    onOpenDetails: { showDetails(interaction) }, summaryContext: (session.title, open))
+                                    onOpenDetails: { showDetails(interaction) }, summaryContext: (session.shownTitle, open))
                     .padding(.bottom, Space.xs)
             } else {
                 Button(action: open) {
                     HStack(spacing: Space.sm) {
                         Circle().fill(palette.warning).frame(width: 6, height: 6).frame(width: 14)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(session.title.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(1)
+                            Text(session.shownTitle.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(1)
                             Text("等待你确认").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

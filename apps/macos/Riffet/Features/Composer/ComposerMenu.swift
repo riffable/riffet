@@ -114,7 +114,7 @@ struct ComposerMenuView: View {
             if !sessions.isEmpty {
                 section(String(localized: "会话"), first: files.isEmpty)
                 ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
-                    row(files.count + index, symbol: "text.bubble", title: session.title,
+                    row(files.count + index, symbol: "text.bubble", title: session.shownTitle,
                         detail: [projects.first(where: { $0.id == session.projectId })?.name, session.agent].compactMap { $0 }.joined(separator: " · "))
                 }
             }

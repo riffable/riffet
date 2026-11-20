@@ -28,7 +28,7 @@ final class WorkbenchPluginServices: PluginBridgeServices {
     func session(_ id: String) -> PluginBridgeSession? {
         guard let session = workbench.list.sessions.first(where: { $0.id == id }) else { return nil }
         return PluginBridgeSession(
-            id: session.id, projectId: session.projectId, title: session.title, state: session.state.name.lowercased(),
+            id: session.id, projectId: session.projectId, title: session.shownTitle, state: session.state.name.lowercased(),
             backendId: session.agent, model: session.model, mode: session.mode, tags: session.tags,
             archivedAt: session.archivedAt, lastActivityAt: session.lastActivityAt, createdAt: session.createdAt, updatedAt: session.updatedAt
         )

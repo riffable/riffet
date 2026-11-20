@@ -508,7 +508,7 @@ fun SessionScreen(
     val snackbar = LocalRiffetSnackbar.current
     if (profileRestartTarget != null) {
         ConfirmDialog(
-            title = stringResource(Res.string.confirm_restart_session_title, current.title),
+            title = stringResource(Res.string.confirm_restart_session_title, current.shownTitle),
             message = stringResource(Res.string.session_profile_restart_effect),
             confirmLabel = stringResource(Res.string.session_profile_restart),
             danger = true,
@@ -1171,7 +1171,7 @@ private fun SessionTopBar(
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
-                text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.title,
+                text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.shownTitle,
                 // A title someone else wrote, often long: a row title's size, not a page heading's.
                 style = LocalRiffetTypography.current.headline,
                 color = colors.fg,

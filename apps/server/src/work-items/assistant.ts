@@ -239,7 +239,7 @@ export class AssistantBoard {
     }
     const waiting = this.waitingOn(session);
     return {
-      id: session.id, title: session.title, project: this.projectName(session.projectId) ?? session.projectId, agent: session.backendId,
+      id: session.id, title: session.displayTitle ?? session.title, project: this.projectName(session.projectId) ?? session.projectId, agent: session.backendId,
       ...(session.model ? { model: session.model } : {}), state: this.stateOf(session),
       ...(waiting ? { waiting } : {}),
       ...(task !== undefined ? { task } : {}), lastActivityAt: session.lastActivityAt ?? session.createdAt,
@@ -290,7 +290,7 @@ export class AssistantBoard {
         if (items.length > limit + 1) items.pop();
       }
     };
-    const sessionView = (session: Session) => ({ id: session.id, title: clip(session.title), project: this.projectName(session.projectId) ?? session.projectId });
+    const sessionView = (session: Session) => ({ id: session.id, title: clip(session.displayTitle ?? session.title), project: this.projectName(session.projectId) ?? session.projectId });
     for (const item of this.deps.workItems.attentionCandidates()) {
       if (item.status === 'done' || item.status === 'cancelled' || (item.projectId && hidden.has(item.projectId))) continue;
       const task = taskRef(item);

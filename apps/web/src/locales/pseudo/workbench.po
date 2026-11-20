@@ -997,6 +997,10 @@ msgstr ""
 msgid "按标签页顺序"
 msgstr ""
 
+#: src/app/use-session-actions.ts
+msgid "按标题规则显示为「{shown}」"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "按需加载"
 msgstr ""

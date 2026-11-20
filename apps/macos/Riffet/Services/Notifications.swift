@@ -95,7 +95,7 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
     private func post(_ alert: SessionAlert, workbench: Workbench) async {
         let session = alert.session
         let content = UNMutableNotificationContent()
-        content.title = session.title.isEmpty ? "Riffet" : session.title
+        content.title = session.shownTitle.isEmpty ? "Riffet" : session.shownTitle
         content.threadIdentifier = session.projectId
         content.userInfo = ["sessionId": session.id]
         if let project = workbench.project(session.projectId) { content.subtitle = project.name }

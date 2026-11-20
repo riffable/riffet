@@ -64,7 +64,7 @@ struct TranscriptView: View {
             },
             exportImage: { [workbench, session] source in
                 var source = source
-                source.sessionTitle = session.title
+                source.sessionTitle = session.shownTitle
                 source.agent = session.agent.map(backendLabel)
                 source.project = workbench.project(session.projectId)?.name
                 ShareImage.present(source)

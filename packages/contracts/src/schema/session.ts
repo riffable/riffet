@@ -71,6 +71,8 @@ export const SessionSchema = z.object({
   state: SessionStateSchema,
   /** Missing on rows written before the workbench named conversations itself. */
   titleSource: SessionTitleSourceSchema.optional(),
+  /** Set when a 会话标题规则 changes how `title` is shown; missing means `title` is shown as it is. */
+  displayTitle: z.string().optional(),
   /** Missing `backendId`/`backendProfileId` mean the legacy default Cursor profile. */
   backendId: NativeBackendIdSchema.optional(),
   backendProfileId: z.string().optional(),

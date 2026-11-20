@@ -34,6 +34,7 @@ const AuxiliaryModelsSection = lazy(() => import('./AuxiliaryModelsSection').the
 const WorkItemSettingsSection = lazy(() => import('./WorkItemSettingsSection').then((module) => ({ default: module.WorkItemSettingsSection })));
 const AssistantSettingsSection = lazy(() => import('./AssistantSettingsSection').then((module) => ({ default: module.AssistantSettingsSection })));
 const QuickChatSection = lazy(() => import('./QuickChatSection').then((module) => ({ default: module.QuickChatSection })));
+const TitleRulesSection = lazy(() => import('./TitleRulesSection').then((module) => ({ default: module.TitleRulesSection })));
 const ServiceStatusSection = lazy(() => import('./ServiceStatusSection').then((module) => ({ default: module.ServiceStatusSection })));
 const StorageSection = lazy(() => import('./StorageSection').then((module) => ({ default: module.StorageSection })));
 const sectionFallback = <div className="flex justify-center py-10"><Spinner /></div>;
@@ -233,7 +234,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'providers' && <Suspense fallback={sectionFallback}><div className="flex flex-col gap-6">
               <BackendProfilesSection settings={settings} project={project} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} />
             </div></Suspense>}
-            {section === 'auxiliary' && <Suspense fallback={sectionFallback}><AuxiliaryModelsSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
+            {section === 'auxiliary' && <Suspense fallback={sectionFallback}><AuxiliaryModelsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onOpenTitleRules={() => void selectSection('titles')} /></Suspense>}
             {section === 'quickchat' && <Suspense fallback={sectionFallback}><QuickChatSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
             {section === 'assistant' && <Suspense fallback={sectionFallback}><AssistantSettingsSection /></Suspense>}
             {section === 'workitems' && <Suspense fallback={sectionFallback}><WorkItemSettingsSection /></Suspense>}
@@ -241,6 +242,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
               <InteractionSection settings={settings} onSaved={onSettingsChanged} onError={onError} />
               <VoiceInputSection settings={settings} onSaved={onSettingsChanged} onError={onError} onOpenPlugin={(id) => void openPluginDetails(id)} />
             </div>}
+            {section === 'titles' && <Suspense fallback={sectionFallback}><TitleRulesSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
             {section === 'files' && <FilesSettingsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onDirtyChange={setFilesDirty} onBusyChange={setSectionBusy} />}
             {section === 'connection' && <ConnectionSection onLogout={onLogout} onOpenShares={() => void selectSection('shares')} />}
             {section === 'shares' && <SharesSection />}

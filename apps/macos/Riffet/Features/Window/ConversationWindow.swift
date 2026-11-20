@@ -47,7 +47,7 @@ struct ConversationWindow: View {
     private var key: Key { Key(main: ready.map(ObjectIdentifier.init), sessionId: sessionId) }
 
     private var title: String {
-        guard let title = current?.workbench.selected?.title, !title.isEmpty else { return String(localized: "会话") }
+        guard let title = current?.workbench.selected?.shownTitle, !title.isEmpty else { return String(localized: "会话") }
         return title
     }
 

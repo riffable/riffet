@@ -472,7 +472,7 @@ export class OrchestrationService {
     const group = this.attemptGroup(id);
     const attempts = await Promise.all(group.attempts.map(async (attempt): Promise<AttemptComparison> => {
       const row: AttemptComparison = { ...attempt };
-      try { const session = store.getSession(attempt.sessionId); row.state = session.state; row.title = session.title; } catch { /* a deleted conversation still shows its branch */ }
+      try { const session = store.getSession(attempt.sessionId); row.state = session.state; row.title = session.displayTitle ?? session.title; } catch { /* a deleted conversation still shows its branch */ }
       try { row.comparison = await git.compare(store.getProject(attempt.projectId), group.base); }
       catch (error) { row.error = error instanceof Error ? error.message : String(error); }
       return row;

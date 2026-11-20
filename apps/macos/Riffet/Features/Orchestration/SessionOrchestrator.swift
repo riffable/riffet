@@ -132,7 +132,7 @@ final class SessionOrchestrator {
             guard workbench.selected?.id == session.id else { return }
             let first = runs.first { $0.native?.intent != "steer" && !$0.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             let target = LaunchChoice(agent: session.agent, profileId: session.backendProfileId, model: session.model, mode: session.mode, approval: session.approval)
-            let draft = AutomationDraft(name: session.title, prompt: first?.prompt ?? "", target: target, projectId: session.projectId)
+            let draft = AutomationDraft(name: session.shownTitle, prompt: first?.prompt ?? "", target: target, projectId: session.projectId)
             sheet = .template(TemplatePrefill(draft: draft, notice: failed ? String(localized: "没能读取首条提问，可手动填写") : nil))
         }
     }
@@ -147,7 +147,7 @@ final class SessionOrchestrator {
                 let panel = NSSavePanel()
                 panel.canCreateDirectories = true
                 panel.isExtensionHidden = false
-                panel.nameFieldStringValue = Self.exportName(session.title)
+                panel.nameFieldStringValue = Self.exportName(session.shownTitle)
                 panel.allowedContentTypes = [.json]
                 guard panel.runModal() == .OK, let destination = panel.url else { return }
                 try await Task.detached { try Data(text.utf8).write(to: destination, options: .atomic) }.value

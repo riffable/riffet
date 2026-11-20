@@ -19,6 +19,8 @@ export interface TitleServiceOptions {
   /** The configured title model, read on every use so a settings change applies at once. */
   titleModel(): AuxiliaryModelRef | undefined;
   gatewayProfiles: GatewayProfiles;
+  /** Whether a 会话标题规则 shows something else in place of the title, so writing one is a call nobody sees. */
+  replacedByRule?(session: Session): boolean;
   /** Called after the workbench names a conversation, so a provider that keeps names can follow. */
   onTitled?(session: Session): void;
   delayMs?: number;
@@ -102,7 +104,7 @@ export class TitleService {
       // A conversation still waiting on its first answer belongs to `onRun`, which will see it.
       if (!runs.some(run => run.state === 'completed')) continue;
       const firstPrompt = store.firstUserMessage(session.id);
-      if (typeof firstPrompt !== 'string' || !replaceable(session, firstPrompt)) continue;
+      if (typeof firstPrompt !== 'string' || !replaceable(session, firstPrompt) || this.options.replacedByRule?.(session)) continue;
       this.attempted.add(session.id);
       if (await this.name(session.id, firstPrompt).catch(() => { this.attempted.delete(session.id); return undefined; })) named++;
     }
@@ -133,7 +135,7 @@ export class TitleService {
     const runs = store.listRuns(session.id);
     if (run.state === 'completed' && !runs.some(item => item.state === 'completed')) return;
     const firstPrompt = store.firstUserMessage(session.id) ?? (!session.resumePicker ? runs[0]?.prompt : undefined);
-    if (typeof firstPrompt !== 'string' || !firstPrompt.trim() || !replaceable(session, firstPrompt)) return;
+    if (typeof firstPrompt !== 'string' || !firstPrompt.trim() || !replaceable(session, firstPrompt) || this.options.replacedByRule?.(session)) return;
     this.attempted.add(session.id);
     const delayMs = this.options.delayMs ?? DEFAULT_DELAY_MS;
     if (delayMs <= 0) {

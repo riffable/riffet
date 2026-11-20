@@ -86,7 +86,7 @@ async function dynamicValues(path: string[], stateDir: string): Promise<string[]
     const sessions = await api.call<Session[]>('GET', '/api/sessions', undefined, 2000);
     return sessions.filter(session => session.kind === 'native' && !session.archivedAt)
       .sort((a, b) => Date.parse(b.lastActivityAt ?? b.updatedAt) - Date.parse(a.lastActivityAt ?? a.updatedAt))
-      .slice(0, 50).map(session => describe(session.id.slice(0, 8), session.title));
+      .slice(0, 50).map(session => describe(session.id.slice(0, 8), session.displayTitle ?? session.title));
   }
   if (/^plugin (?:uninstall|reload|diagnostics|logs|select|delete-data|update|unlink)$/.test(leaf)) {
     return new PackageStore(stateDir).records().map(record => describe(record.id, record.selected));

@@ -6,6 +6,7 @@ import { loadCachedLists, refreshCachedLists, saveCachedLists } from '@/lib/list
 import { reconcileById, sameRecord } from '@/lib/reconcile';
 import { confirmSessionGone, isSessionDeleted } from '@/lib/session-deletion';
 import { reconnectDelay } from '@/lib/utils';
+import { withShownTitle } from '@/lib/shown-title';
 import type { SettingsStore } from './settingsStore';
 import { createStore } from '@/lib/store';
 
@@ -197,7 +198,7 @@ export function createListsStore(deps: ListsDeps) {
           sessionDelete: data.protocol?.features.includes('session-delete-v1') ?? false,
           projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
           fileWrites: data.protocol?.features.includes('file-write-v1') ?? false,
-          sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id))),
+          sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle)),
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
           ...(data.owner ? { owner: data.owner } : {}),
@@ -270,9 +271,10 @@ export function createListsStore(deps: ListsDeps) {
       const workItemSummaries = deps.workItems?.summaries();
       if (loaded) refreshCachedLists({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
     },
-    upsertSession(updated: Session) {
+    upsertSession(incoming: Session) {
       // A late write for a deleted conversation (a stream frame, a slow response) must not bring it back.
-      if (isSessionDeleted(updated.id)) return;
+      if (isSessionDeleted(incoming.id)) return;
+      const updated = withShownTitle(incoming);
       mutate((current) => {
         const previous = current.sessions.find((item) => item.id === updated.id);
         if (previous && sameRecord(previous, updated)) return current;
@@ -387,7 +389,7 @@ export function createListsStore(deps: ListsDeps) {
           try {
             // Clicking brings the window back and opens that conversation; `tag` replaces the previous
             // notification for the same one instead of stacking another.
-            const notification = new Notification('Riffet', { body: i18n._(msg`「${item.title}」${body}`), tag: item.id });
+            const notification = new Notification('Riffet', { body: i18n._(msg`「${item.displayTitle ?? item.title}」${body}`), tag: item.id });
             notification.onclick = () => { window.focus(); deps.handlers.selectSession(item); };
           } catch { /* ignore */ }
         }
@@ -421,7 +423,7 @@ export function createListsStore(deps: ListsDeps) {
               if (startedAt !== revision) { if (!fullRetried) { fullRetried = true; sessionsAgain = true; } return; }
               fullRetried = false;
               etags.sessions = answer.etag;
-              const sessions = reconcileById(current.sessions, incoming.filter((item) => !isSessionDeleted(item.id)));
+              const sessions = reconcileById(current.sessions, incoming.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle));
               noticeBackground(incoming, true);
               confirmMissing(current.sessions, incoming);
               if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
@@ -430,7 +432,7 @@ export function createListsStore(deps: ListsDeps) {
             etags.sessions = answer.etag;
             noticeBackground(incoming, false, removed);
             confirmGone(removed, incoming);
-            const sessions = mergeDelta(current.sessions, incoming, removed);
+            const sessions = mergeDelta(current.sessions, incoming.map(withShownTitle), removed);
             if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
           })
           .catch(onReadError)

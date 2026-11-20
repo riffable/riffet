@@ -72,7 +72,7 @@ enum WidgetSnapshotWriter {
             .sorted { (ServerTime.date($0.activeSince) ?? .distantFuture) > (ServerTime.date($1.activeSince) ?? .distantFuture) }
         func row(_ session: Session, _ state: String) -> WidgetSnapshot.Row {
             WidgetSnapshot.Row(
-                id: session.id, title: session.title.ifEmpty(String(localized: "新会话")), project: workbench.project(session.projectId)?.name ?? "",
+                id: session.id, title: session.shownTitle.ifEmpty(String(localized: "新会话")), project: workbench.project(session.projectId)?.name ?? "",
                 state: state, since: state == "running" ? ServerTime.date(session.activeSince) : nil
             )
         }

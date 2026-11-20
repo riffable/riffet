@@ -141,7 +141,7 @@ struct ComposerMenuDock: View {
                 .foregroundStyle(palette.fg)
         case let .session(selected):
             VStack(alignment: .leading, spacing: 2) {
-                Label { Text(selected.title).riffetFont(.label, weight: .regular).lineLimit(1) } icon: { Image(systemName: "text.bubble") }.foregroundStyle(palette.fg)
+                Label { Text(selected.shownTitle).riffetFont(.label, weight: .regular).lineLimit(1) } icon: { Image(systemName: "text.bubble") }.foregroundStyle(palette.fg)
                 Text([workbench.list.projects.first(where: { $0.id == selected.projectId })?.name, selected.agent].compactMap { $0 }.joined(separator: " · "))
                     .riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
             }
@@ -226,7 +226,7 @@ struct ConversationSessionReferencePicker: View {
             List(candidates, id: \.id) { session in
                 Button { picked(session) } label: {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(session.title).foregroundStyle(palette.fg)
+                        Text(session.shownTitle).foregroundStyle(palette.fg)
                         Text([workbench.list.projects.first(where: { $0.id == session.projectId })?.name, session.agent]
                             .compactMap { $0 }.joined(separator: " · "))
                             .riffetFont(.caption).foregroundStyle(palette.fg3)

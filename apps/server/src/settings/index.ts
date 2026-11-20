@@ -8,6 +8,7 @@ import { isNativeBackendId } from '../backends/registry.js';
 import { AUXILIARY_MODEL_BACKENDS } from '../auxiliary/gateway.js';
 import { CursorSettingsCompat, type StoredCursorCli } from './cursor-compat.js';
 import { atomicWritePrivateFile, readPrivateSettingsFile, validateApiKey } from './private-file.js';
+import { validateTitleRules } from './title-rules.js';
 
 const MAX_NATIVE_PROFILE_BYTES = 512 * 1024;
 
@@ -334,7 +335,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -443,6 +444,10 @@ export class SettingsService {
       const voiceInput = validateVoiceInput(values.voiceInput);
       if (Object.keys(voiceInput).length) result.voiceInput = voiceInput;
     }
+    if (values.titleRules !== undefined && values.titleRules !== null) {
+      const rules = validateTitleRules(values.titleRules);
+      if (rules.length) result.titleRules = rules;
+    }
     if (values.cursorCli !== undefined) result.cursorCli = this.cursor.validate(values.cursorCli);
     return result;
   }
@@ -502,8 +507,14 @@ export class SettingsService {
     const next=this.validateSettings({...generalCurrent,...input});
     this.cursor.mirrorDefaults(input,next);
     this.persistSettings(!nextStoredCli&&legacyCli?{...next,cursorCli:legacyCli}:next,nextStoredCli);
-    return this.getSettings();
+    const saved=this.getSettings();
+    for(const listener of this.savedListeners){try{listener(saved);}catch{/* a follower must not fail the save */}}
+    return saved;
   }
+
+  private readonly savedListeners=new Set<(settings:AppSettings)=>void>();
+  /** Called after every save, with what readers now see. */
+  onSaved(listener:(settings:AppSettings)=>void):()=>void{this.savedListeners.add(listener);return()=>{this.savedListeners.delete(listener);};}
 }
 
 export type { AppSettings, CapabilityReport, CommandResult, ConfigFile } from '../../../../packages/contracts/src/index.js';

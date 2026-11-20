@@ -22,7 +22,7 @@ struct SessionGlance: Equatable {
 
     @MainActor init?(of id: String, in list: SessionListState) {
         guard let session = list.sessions.first(where: { $0.id == id }) else { return nil }
-        title = session.title
+        title = session.shownTitle
         agent = session.agent.map(backendLabel)
     }
 }

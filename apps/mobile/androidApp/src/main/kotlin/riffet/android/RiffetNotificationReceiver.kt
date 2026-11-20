@@ -32,7 +32,7 @@ class RiffetNotificationReceiver : BroadcastReceiver() {
         val notifier = RiffetHost.notifier
         RiffetHost.launch {
             var store: SessionStore? = null
-            fun title() = store?.list?.value?.sessions?.firstOrNull { it.id == sessionId }?.title
+            fun title() = store?.list?.value?.sessions?.firstOrNull { it.id == sessionId }?.shownTitle
             fun problem(resource: Int) {
                 val message = { AppLanguages.localize(context).getString(resource) }
                 notifier.problem(sessionId, title(), message(), origin, localizeText = message)

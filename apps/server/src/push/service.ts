@@ -337,7 +337,7 @@ export class PushService {
       const payload: Record<string, unknown> = {
         aps: {
           alert: {
-            title: session.title || 'Riffet',
+            title: session.displayTitle || session.title || 'Riffet',
             ...(subtitle ? { subtitle } : {}),
             // Without text of its own, the app words the kind (`push.waiting`, `push.finished`, …).
             ...(options.body ? { body: options.body } : { 'loc-key': `push.${kind}` }),

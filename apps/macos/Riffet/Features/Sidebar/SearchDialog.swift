@@ -50,21 +50,21 @@ struct SearchDialog: View {
             return workbench.sidebar.messageHits.map { hit in
                 let session = byId[hit.sessionId]
                 return Result(id: hit.id, sessionId: hit.sessionId,
-                              title: (session?.title ?? hit.title ?? "").ifEmpty(String(localized: "新会话")),
+                              title: (session?.shownTitle ?? hit.title ?? "").ifEmpty(String(localized: "新会话")),
                               project: names[hit.sessionId] ?? "", archived: session?.archivedAt != nil, hit: hit)
             }
         }
         let query = TitleSearchQuery(needle)
         let matches = sessions.compactMap { session -> (session: Session, score: Int)? in
             guard !needle.isEmpty || session.archivedAt == nil,
-                  let score = query.score(session.title) else { return nil }
+                  let score = query.score(session.shownTitle) else { return nil }
             return (session, score)
         }.sorted {
             if $0.score != $1.score { return $0.score < $1.score }
             return ($0.session.lastActivityAt ?? $0.session.createdAt) > ($1.session.lastActivityAt ?? $1.session.createdAt)
         }.map(\.session)
         let titles = matches.prefix(needle.isEmpty ? 12 : matches.count).map { session in
-            Result(id: session.id, sessionId: session.id, title: session.title.ifEmpty(String(localized: "新会话")),
+            Result(id: session.id, sessionId: session.id, title: session.shownTitle.ifEmpty(String(localized: "新会话")),
                    project: names[session.id] ?? "", archived: session.archivedAt != nil, hit: nil)
         }
         guard !needle.isEmpty else { return titles }
@@ -158,7 +158,7 @@ struct SearchDialog: View {
 
     private var scopeTitle: String {
         guard let id = workbench.sidebar.searchSessionId else { return String(localized: "全部会话") }
-        return workbench.list.sessions.first { $0.id == id }?.title.ifEmpty(String(localized: "新会话")) ?? String(localized: "会话")
+        return workbench.list.sessions.first { $0.id == id }?.shownTitle.ifEmpty(String(localized: "新会话")) ?? String(localized: "会话")
     }
 
     private var scopeOptions: [ChoiceOption] {
@@ -168,14 +168,14 @@ struct SearchDialog: View {
             focused = true
         }]
         if let session = workbench.selected, !workbench.showingHome {
-            options.append(ChoiceOption(title: String(localized: "当前会话 · \(session.title.ifEmpty(String(localized: "新会话")))"), selected: scope == session.id) {
+            options.append(ChoiceOption(title: String(localized: "当前会话 · \(session.shownTitle.ifEmpty(String(localized: "新会话")))"), selected: scope == session.id) {
                 workbench.sidebar.searchSessionId = session.id
                 focused = true
             })
         }
         let sessions = workbench.list.sessions.sorted { ($0.lastActivityAt ?? $0.createdAt) > ($1.lastActivityAt ?? $1.createdAt) }
         for session in sessions where session.id != workbench.selected?.id || workbench.showingHome {
-            options.append(ChoiceOption(title: session.title.ifEmpty(String(localized: "新会话")), selected: scope == session.id) {
+            options.append(ChoiceOption(title: session.shownTitle.ifEmpty(String(localized: "新会话")), selected: scope == session.id) {
                 workbench.sidebar.searchSessionId = session.id
                 focused = true
             })

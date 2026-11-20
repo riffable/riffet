@@ -38,13 +38,13 @@ function stateMark(session: Session, p: Paint = out): string {
 }
 
 const agentOf = (session: Session) => session.backendId ?? 'cursor';
-const titleOf = (session: Session) => session.title.trim() || 'Untitled';
+const titleOf = (session: Session) => (session.displayTitle ?? session.title).trim() || 'Untitled';
 
 function match(sessions: Session[], target: string): Session[] {
   const exact = sessions.filter(session => session.id === target || session.nativeSessionId === target);
   if (exact.length) return exact;
   const lower = target.toLowerCase();
-  return sessions.filter(session => session.title.toLowerCase().includes(lower) || session.id.startsWith(target) || session.nativeSessionId?.startsWith(target));
+  return sessions.filter(session => session.title.toLowerCase().includes(lower) || Boolean(session.displayTitle?.toLowerCase().includes(lower)) || session.id.startsWith(target) || session.nativeSessionId?.startsWith(target));
 }
 
 /** `riffet ls`. */
@@ -83,7 +83,7 @@ async function pick(listing: Listing, initial?: string): Promise<Session> {
   const stateWord = (session: Session) => ({ running: 'running', starting: 'running', cancelling: 'running', waiting: 'waiting for you', failed: 'failed', interrupted: 'interrupted' } as Partial<Record<Session['state'], string>>)[session.state];
   const label = (session: Session) => truncate(titleOf(session), 60);
   const hintOf = (session: Session) => [stateWord(session), listing.scoped ? undefined : listing.projects.get(session.projectId)?.name, agentOf(session), ago(session.lastActivityAt ?? session.updatedAt)].filter(Boolean).join(' · ');
-  const haystack = new Map(listing.sessions.map(session => [session.id, `${session.title} ${listing.projects.get(session.projectId)?.name ?? ''} ${agentOf(session)} ${session.id}`.toLowerCase()]));
+  const haystack = new Map(listing.sessions.map(session => [session.id, `${session.displayTitle ?? ''} ${session.title} ${listing.projects.get(session.projectId)?.name ?? ''} ${agentOf(session)} ${session.id}`.toLowerCase()]));
   const chosen = await autocomplete({
     message: listing.scoped ? 'Continue which conversation in this project?' : 'Continue which conversation?',
     options: listing.sessions.slice(0, 200).map(session => ({ value: session.id, label: label(session), hint: hintOf(session) })),

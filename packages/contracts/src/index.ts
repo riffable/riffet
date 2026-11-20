@@ -37,6 +37,7 @@ export type * from './git.js';
 export type * from './orchestration.js';
 export * from './backends.js';
 export * from './settings.js';
+export * from './title-rules.js';
 export type * from './stats.js';
 export type * from './folder-favorites.js';
 export type * from './service-monitor.js';

@@ -147,7 +147,7 @@ struct RiffetRootView: View {
     }
     private var deletionTitle: String {
         guard let session = workbench?.deletion?.session else { return "" }
-        let name = session.title.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.title
+        let name = session.shownTitle.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.shownTitle
         return String(localized: "删除会话「\(name)」？", bundle: .riffet)
     }
     /// What the server says the deletion removes, in one sentence.
@@ -606,7 +606,7 @@ struct SessionHomeView: View {
         return meta.isEmpty ? word : word + Text(" · " + meta)
     }
     private func row(_ session: Session) -> some View {
-        let name = session.title.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.title
+        let name = session.shownTitle.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.shownTitle
         let time = timeText(session)
         return Button { onOpen(.session(session.id, session.state == .waiting)) } label: {
             HStack(spacing: 12) {

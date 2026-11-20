@@ -2,7 +2,7 @@ import { DatabaseSync, backup, type StatementSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite } from '../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite, type TitleRule, type TitleRuleContext, matchTitleRule, renderDisplayTitle } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
 import { sessionReferenceInputs } from './context-references/input.js';
 import { isNativeBackendId } from './backends/registry.js';
@@ -683,7 +683,52 @@ export class Store {
     });
   }
   listProjects(): Project[] { return this.all<Project>('projects'); }
-  updateProject(id: string, patch: Partial<Project>): Project { const current = this.getProject(id), item = {...current, ...patch, id, updatedAt: now()}; this.replace('projects', id, item); this.projectsChanged(current.system === item.system ? undefined : id); return item; }
+  updateProject(id: string, patch: Partial<Project>): Project {
+    return this.transaction(() => {
+      const current = this.getProject(id), item = {...current, ...patch, id, updatedAt: now()};
+      this.replace('projects', id, item); this.projectsChanged(current.system === item.system ? undefined : id);
+      // A rule reads the project's directory and name, a worktree's included.
+      if (current.name !== item.name || current.cwd !== item.cwd || current.system !== item.system) this.refreshDisplayTitles();
+      return item;
+    });
+  }
+  /**
+   * 会话标题规则 (docs/SESSION-TITLES.md), read on every session write. `displayTitle` is derived: whatever a
+   * writer passes for it is dropped and recomputed here, so no caller can store a stale one.
+   */
+  private titleRules: () => { rules?: readonly TitleRule[]; timeZone?: string } = () => ({});
+  configureTitleRules(read: () => { rules?: readonly TitleRule[]; timeZone?: string }): void { this.titleRules = read; }
+  private withDisplayTitle<T extends Session>(session: T): T {
+    const { displayTitle: _derived, ...rest } = session;
+    const { rules } = this.titleRules();
+    if (!rules?.length) return rest as T;
+    const displayTitle = renderDisplayTitle(rules, session, this.titleRuleContext(session));
+    return (displayTitle ? { ...rest, displayTitle } : rest) as T;
+  }
+  /** The 会话标题规则 that names [session] now, if any. */
+  titleRuleFor(session: Session): TitleRule | undefined {
+    const { rules } = this.titleRules();
+    return rules?.length ? matchTitleRule(rules, session, this.titleRuleContext(session)) : undefined;
+  }
+  /** The project a rule reads, the one a worktree came from, and the zone dates are told in. */
+  private titleRuleContext(session: Pick<Session, 'projectId'>): TitleRuleContext {
+    const project = this.get<Project>('projects', session.projectId);
+    const originProject = project?.worktree ? this.get<Project>('projects', project.worktree.originProjectId) : undefined;
+    const { timeZone } = this.titleRules();
+    return { ...(project ? { project } : {}), ...(originProject ? { originProject } : {}), ...(timeZone ? { timeZone } : {}) };
+  }
+  /** Applies the current rules to every conversation that shows differently under them; resolves to how many changed. */
+  refreshDisplayTitles(): number {
+    return this.transaction(() => {
+      let changed = 0;
+      for (const session of this.allSessions()) {
+        if (this.withDisplayTitle(session).displayTitle === session.displayTitle) continue;
+        this.updateSession(session.id, {});
+        changed++;
+      }
+      return changed;
+    });
+  }
   /** The project's worktree origins, nearest first. Throws on a missing origin or a loop. */
   originChain(projectId: string): string[] {
     const chain: string[] = [];
@@ -742,8 +787,9 @@ export class Store {
       const stamp = now();
       const item = normalizeSessionIdentity({...input, id: randomUUID(), title: input.title || 'New conversation', ...clientTitleSource(input.title), tags: input.tags ?? [], state: 'idle', mode: input.mode ?? 'agent', lastActivityAt: input.lastActivityAt ?? stamp, seenActivityAt: input.lastActivityAt ?? stamp, createdAt: stamp, updatedAt: stamp});
       this.assertNativeIdentityAvailable(item);
-      this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(item.id, item.projectId, JSON.stringify(item)); this.sessionsChanged([item.id]);
-      return item;
+      const shown = this.withDisplayTitle(item);
+      this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(shown.id, shown.projectId, JSON.stringify(shown)); this.sessionsChanged([shown.id]);
+      return shown;
     });
   }
   getSession(id: string): IdentifiedSession {
@@ -893,7 +939,7 @@ export class Store {
       const current = this.getSession(id);
       const merged: Session = {...current, ...patch, id, updatedAt: now()};
       applyNativeSessionIdPatch(merged, patch, () => new AppError('INVALID_NATIVE_SESSION_ID', 'Cursor session id fields must agree'));
-      const item = normalizeSessionIdentity(merged);
+      const item = this.withDisplayTitle(normalizeSessionIdentity(merged));
       // Pollers re-write the same state every tick; bumping `updatedAt` for that would push a fresh
       // `session` frame to every open stream several times a second.
       if ([...new Set([...Object.keys(item), ...Object.keys(current)])].every(key => key === 'updatedAt' || JSON.stringify((current as unknown as Record<string, unknown>)[key]) === JSON.stringify((item as unknown as Record<string, unknown>)[key]))) return current;
@@ -1098,6 +1144,7 @@ export class Store {
           updatedAt: stamp,
         };
         this.assertNativeIdentityAvailable(session);
+        session = this.withDisplayTitle(session);
         this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(session.id, session.projectId, JSON.stringify(session));
         this.sessionsChanged([session.id]);
       }
@@ -1381,7 +1428,7 @@ export class Store {
 
   private hitFromSession(session: IdentifiedSession, messageId: string, kind: MessageSearchHit['kind'], text: string, at: string): MessageSearchHit {
     return {
-      sessionId: session.id, projectId: session.projectId, sessionTitle: session.title,
+      sessionId: session.id, projectId: session.projectId, sessionTitle: session.displayTitle ?? session.title,
       archived: Boolean(session.archivedAt), backendId: session.backendId,
       messageId, kind, text, at,
     };

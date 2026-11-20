@@ -153,7 +153,7 @@ internal fun SessionDeletionDialog(deletion: SessionDeletion) {
     val effects = target.preview.effects
     AlertDialog(
         onDismissRequest = deletion::dismiss,
-        title = { Text(stringResource(Res.string.confirm_delete_session_title, target.session.title)) },
+        title = { Text(stringResource(Res.string.confirm_delete_session_title, target.session.shownTitle)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(Res.string.session_delete_body))

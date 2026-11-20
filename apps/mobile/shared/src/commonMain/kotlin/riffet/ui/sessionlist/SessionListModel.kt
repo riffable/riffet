@@ -79,7 +79,7 @@ fun sessionListContent(
     val chats = if (chatProject == null || !withChats) emptyList()
     else sessions.filter { session ->
         session.projectId == chatProject.id && (session.archivedAt != null) == archived &&
-            (needle.isEmpty() || "${session.title} ${session.tags.joinToString(" ")}".lowercase().contains(needle))
+            (needle.isEmpty() || "${session.shownTitle} ${session.tags.joinToString(" ")}".lowercase().contains(needle))
     }.sortedWith(::compareSessions)
     if (filter == SessionFilter.QUICK_CHAT) {
         val (waiting, pinned) = lifted(chats)

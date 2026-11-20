@@ -70,6 +70,11 @@ msgstr "{0} CLI login"
 msgid "{0} 上下文长度"
 msgstr "{0} context length"
 
+#. placeholder {0}: counts.get(rule.id) ?? 0
+#: src/app/settings/TitleRulesSection.tsx
+msgid "{0} 个会话"
+msgstr "{0} conversations"
+
 #. placeholder {0}: GLYPHS.length
 #: src/app/design/foundations/IconChapter.tsx
 msgid "{0} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。"
@@ -114,6 +119,11 @@ msgstr "Stops in {0}"
 #: src/app/settings/ProviderUsage.tsx
 msgid "{0} 小时"
 msgstr "{0, plural, one {# hour} other {# hours}}"
+
+#. placeholder {0}: settings.titleRules.length
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "{0} 条"
+msgstr "{0}"
 
 #. placeholder {0}: ANDROID_STYLES.length
 #: src/app/design/android/StylesChapter.tsx
@@ -734,6 +744,10 @@ msgstr "The last attempt to free up space did not finish ({0}): {1}"
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "The upstream service is temporarily unavailable, try again later"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "上移"
+msgstr "Move up"
+
 #: src/app/design/DesignPage.tsx
 msgid "下一章"
 msgstr "Next chapter"
@@ -765,6 +779,10 @@ msgstr "Dot below"
 #: src/app/settings/StorageSection.tsx
 msgid "下次启动时释放"
 msgstr "Free up at next start"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "下移"
+msgstr "Move down"
 
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -1084,6 +1102,11 @@ msgstr "The five styles are dispatched by name once, in themePreset(); component
 #: src/app/design/catalog.tsx
 msgid "五种风格的数值、配方与缩样"
 msgstr "Values, recipes and miniatures of the five styles"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "session-origin"
+msgid "交接"
+msgstr "Handoff"
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -1458,6 +1481,10 @@ msgstr "Sidebar row height"
 msgid "侧栏默认宽"
 msgstr "Default sidebar width"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "侧边聊天"
+msgstr "Side chat"
+
 #: src/app/design/catalog.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "侧边面板"
@@ -1718,6 +1745,10 @@ msgstr "All backends"
 #: src/app/settings/PreferencesSections.tsx
 msgid "全部放行"
 msgstr "Run everything"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "全部标题"
+msgstr "All titles"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "全部模型"
@@ -2014,6 +2045,10 @@ msgstr "Layers, platforms and styles"
 msgid "分层、生成与检查"
 msgstr "Layers, generation and checks"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "分支"
+msgstr "Branch"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "分歧在于离线是常态还是例外。"
 msgstr "They differ on whether offline is the norm or the exception."
@@ -2212,6 +2247,10 @@ msgstr "Delete session"
 msgid "删除后无法恢复"
 msgstr "This cannot be undone"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "删除规则"
+msgstr "Delete rule"
+
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -2300,6 +2339,11 @@ msgstr "Start with a verb and say what will happen."
 #: src/app/settings/SupportSections.tsx
 msgid "包含运行环境与设置，API Key 不包含在内。"
 msgstr "Includes the runtime environment and settings; API keys are not included."
+
+#. placeholder {0}: preview.count
+#: src/app/settings/TitleRulesSection.tsx
+msgid "匹配 {0} 个会话"
+msgstr "Matches {0} sessions"
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "半选"
@@ -2426,6 +2470,10 @@ msgstr "In place: the control that is waiting"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "原文换行，不截断"
 msgstr "Wrap the original text, do not truncate"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "原标题"
+msgstr "Title"
 
 #: src/app/design/mac/notes.ts
 msgctxt "interface-style"
@@ -2578,6 +2626,11 @@ msgctxt "settings-cancel-action"
 msgid "取消"
 msgstr "Cancel"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "tasks-cancel-action"
+msgid "取消"
+msgstr "Cancel"
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "取消单独放在操作面板下方"
 msgstr "Cancel set apart below the action sheet"
@@ -2614,6 +2667,10 @@ msgstr "Elements that only present information and accept no action. Color is us
 #: src/app/design/mac/notes.ts
 msgid "只换等宽字体"
 msgstr "Only the monospace font changes"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "只改变显示的名称，CLI 里的会话名不变；保存在这台服务器"
+msgstr "Only changes how names are shown; the CLI keeps its own name. Saved on this server"
 
 #: src/app/design/android/notes.ts
 msgid "只有主操作填充强调色，次要与危险操作是透明的着色文字"
@@ -2849,6 +2906,10 @@ msgstr "Running in background"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "否"
 msgstr "No"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "含手动命名"
+msgstr "includes renamed"
 
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "含标签、禁用项、子菜单、勾选项和危险项。"
@@ -3284,6 +3345,10 @@ msgstr "Repeating the interface"
 msgid "外观"
 msgstr "Appearance"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "多个标签用逗号分隔"
+msgstr "Separate multiple tags with commas"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "多视角"
 msgstr "Perspectives"
@@ -3674,6 +3739,10 @@ msgstr "Not checked yet"
 msgid "尚未检测到运行环境。"
 msgstr "No runtime environment detected yet."
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "尝试"
+msgstr "Attempts"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/IconChapter.tsx
@@ -3908,6 +3977,10 @@ msgstr "Switched to Codex"
 #: src/app/settings/StorageSection.tsx
 msgid "已删除的项目"
 msgstr "Deleted projects"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "已删除规则"
+msgstr "Rule deleted"
 
 #. placeholder {0}: process.name
 #. placeholder {1}: process.pid
@@ -4581,6 +4654,10 @@ msgstr "Truncation"
 msgid "所属对象"
 msgstr "Owning object"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "所有会话"
+msgstr "All sessions"
+
 #: src/app/design/foundations/StatesChapter.tsx
 msgid "所有可交互的组件从同一套状态里取；组件只列自己有的。"
 msgstr "All interactive components draw from the same set of states; a component lists only the ones it has."
@@ -4604,6 +4681,10 @@ msgstr "Hand-written sizes, radii, layers, colours, and loops without a stated r
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "手动填写"
 msgstr "Enter manually"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "手动新建"
+msgstr "Started by you"
 
 #: src/app/settings/ProviderModelList.tsx
 msgid "手动添加模型 ID"
@@ -5452,6 +5533,10 @@ msgstr "New session"
 msgid "新建会话时"
 msgstr "When creating a session"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "新建标题规则"
+msgstr "New title rule"
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "新建终端"
 msgstr "New terminal"
@@ -5527,6 +5612,10 @@ msgstr "Couldn't save the push key"
 msgid "无法保存文件访问设置"
 msgstr "Couldn't save the file access setting"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法保存标题规则"
+msgstr "Couldn't save the title rules"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存消息输入设置"
 msgstr "Couldn't save the message input setting"
@@ -5572,6 +5661,10 @@ msgstr "Couldn't delete the theme"
 msgid "无法删除提供商"
 msgstr "Couldn't delete the provider"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法删除标题规则"
+msgstr "Couldn't delete the rule"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "无法加载启动设置"
 msgstr "Could not load launch settings"
@@ -5603,6 +5696,10 @@ msgstr "Couldn't turn on the plugin"
 #: src/app/settings/StorageSection.tsx
 msgid "无法开始统计"
 msgstr "Could not start the scan"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "无法恢复标题规则"
+msgstr "Couldn't restore the rule"
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法整理存储空间"
@@ -5762,6 +5859,10 @@ msgstr "Directory for conversations without a project"
 msgid "日志与诊断"
 msgstr "Logs and diagnostics"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "日期"
+msgstr "Date"
+
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "时长"
@@ -5813,6 +5914,10 @@ msgstr "Yes"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "显示"
 msgstr "Display"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "显示为"
+msgstr "Show as"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "显示全部"
@@ -6185,6 +6290,11 @@ msgstr "Dimensions"
 msgid "标点与间隔号"
 msgstr "Punctuation and middle dot"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "session-tags"
+msgid "标签"
+msgstr "Tags"
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "标签、元信息、按钮文字"
 msgstr "Labels, metadata, button text"
@@ -6270,6 +6380,10 @@ msgstr "Title bar and tabs"
 #: src/app/settings/ViewsSection.tsx
 msgid "标题栏图标"
 msgstr "Header icons"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "标题规则"
+msgstr "Title rules"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "标题说明现在是什么；失败的空状态附一个下一步。"
@@ -6824,6 +6938,10 @@ msgstr "Add sidebar colour"
 msgid "添加强调色"
 msgstr "Add accent"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "添加规则"
+msgstr "Add rule"
+
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "添加设备"
 msgstr "Add device"
@@ -6835,6 +6953,10 @@ msgstr "Add this project?"
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "添加项目"
 msgstr "Add project"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "添加项目目录"
+msgstr "Add a project folder"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/ChannelsSection.tsx
@@ -7125,6 +7247,10 @@ msgstr "Sign in"
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "盖在内容之上的表面。菜单与弹出层锚定在触发点，弹窗居中，手机上菜单与小弹窗改从底部升起。"
 msgstr "A surface above the content. Menus and popovers anchor to the trigger and dialogs are centered; on phones, menus and small dialogs rise from the bottom instead."
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "目录"
+msgstr "Folder"
 
 #: src/app/design/DesignPage.tsx
 #: src/app/design/overview/Contents.tsx
@@ -7846,6 +7972,10 @@ msgstr "Editor"
 msgid "编辑器命令"
 msgstr "Editor command"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "编辑标题规则"
+msgstr "Edit title rule"
+
 #: src/app/design/overview/Opening.tsx
 msgid "缩放与时长放大 {SLOW} 倍"
 msgstr "Scale and duration enlarged {SLOW}×"
@@ -7970,6 +8100,10 @@ msgstr "Edit"
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "Auto-archive"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "自动标题"
+msgstr "Automatic"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "编辑中，有未保存的修改"
@@ -8918,6 +9052,10 @@ msgstr "No favorites yet"
 msgid "还没有机器人"
 msgstr "No bots yet"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "还没有标题规则"
+msgstr "No title rules yet"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "还没有模型。拉取或在下方手动添加。"
 msgstr "No models yet. Fetch them or add one manually below."
@@ -9073,6 +9211,10 @@ msgstr "Sign out"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "适用"
+msgstr "Applies to"
+
+#: src/app/settings/TitleRulesSection.tsx
+msgid "适用于"
 msgstr "Applies to"
 
 #: src/app/design/components/NavigationChapter.tsx
