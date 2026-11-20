@@ -45,19 +45,19 @@ const EFFORT_LABELS: Record<string, string> = {
 // fast only. The `context` dimension is a parameterized bracket argument (see `cursor-agent
 // --help`: `claude-opus-4-8[context=1m,effort=high,fast=false]`) and the TUI footer shows one of
 // `300K` / `1M` / `MAX`. Expose the three documented settings as a dedicated select so users can
-// still pick a context window after the ACP catalog was removed; an unknown family simply does
-// not render it. The CLI rejects an unsupported combination at launch, which our normal error
-// path surfaces.
+// still pick a context window after the ACP catalog was removed; `--list-models` omits
+// `parameterDefinitions`, so we cannot filter by server metadata ahead of time. The CLI rejects
+// an unsupported combination at launch, which our normal error path surfaces.
 const CONTEXT_VALUES = ['300k', '1m', 'max'] as const;
 const CONTEXT_LABELS: Record<(typeof CONTEXT_VALUES)[number], string> = { '300k': '300K', '1m': '1M', max: 'MAX' };
+const OPAQUE_CONTEXT_FAMILIES = new Set(['auto', 'default', 'premium', 'cheetah']);
+
 function familySupportsContext(id: string): boolean {
   const normalized = id.toLowerCase();
-  // Anthropic (claude-*, opus/sonnet/haiku shorthands) and OpenAI long-context GPT-5 variants
-  // accept `[context=…]`. The CLI's auto-router entries (`auto-smart`, `auto-fast`) and legacy
-  // `cheetah` family do not. Err toward offering the control for named families and hiding it
-  // only for the routers the CLI treats as opaque.
-  if (normalized.startsWith('auto-') || normalized === 'cheetah') return false;
-  return /^(?:claude|opus|sonnet|haiku|gpt-5)/.test(normalized);
+  // Err toward offering `[context=…]` for named model families (Claude, GPT, Gemini, Composer,
+  // Grok, future or custom models) and hiding it only for opaque routers/aliases that the CLI
+  // treats as fixed (`default`, `auto`, `auto-*`, `premium`, `cheetah`).
+  return Boolean(normalized) && !normalized.startsWith('auto-') && !OPAQUE_CONTEXT_FAMILIES.has(normalized);
 }
 function contextOption(): ModelConfigOption {
   return {

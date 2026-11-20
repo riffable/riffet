@@ -92,7 +92,7 @@ export function catalogSelection(catalog: ModelInfo[], model: string, overrides:
   // - the selection has to be the family's parameterized form the CLI documents
   // (`claude-opus-4-8[context=1m,effort=high,fast=false]`). Returning the flat id there would drop
   // the choice silently: the switch would look on and the CLI would never hear about it.
-  if (nativeVariant && !Object.keys(overrides).some((id) => !NATIVE_VARIANT_PARAMS.has(id))) return nativeVariant;
+  if (nativeVariant && !Object.keys(overrides).some((id) => id in params && !NATIVE_VARIANT_PARAMS.has(id))) return nativeVariant;
   return serializeSelection(canonical, params);
 }
 

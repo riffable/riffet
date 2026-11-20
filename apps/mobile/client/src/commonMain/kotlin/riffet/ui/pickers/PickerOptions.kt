@@ -463,7 +463,7 @@ fun catalogSelection(
         }
     }
     val variant = selectNativeVariant(info, params, preferredParam)
-    if (variant != null && overrides.keys.none { it !in NATIVE_VARIANT_PARAMS }) return variant
+    if (variant != null && overrides.keys.none { it in params && it !in NATIVE_VARIANT_PARAMS }) return variant
     return serializeSelection(if (variant != null) info.value else model, params)
 }
 

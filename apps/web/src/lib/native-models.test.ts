@@ -63,6 +63,14 @@ describe('Variant-grouped selection restoration and submission', () => {
     expect(catalogSelection(actualCatalog, parsed.model, {
       context: '300k', effort: 'high', fast: 'true',
     })).toBe('claude-opus-5-5[context=300k,effort=high,fast=true]');
+
+    const noContextCatalog: ModelInfo[] = [{
+      ...actualShapeOpus,
+      configOptions: actualShapeOpus.configOptions.filter((option) => option.id !== 'context'),
+    }];
+    expect(catalogSelection(noContextCatalog, parsed.model, {
+      context: '1m', effort: 'high', fast: 'true',
+    })).toBe('claude-opus-5-5-high-fast');
   });
 });
 
