@@ -50,6 +50,10 @@ msgstr "Expires {0}"
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, one {Also deletes # side chat.} other {Also deletes # side chats.}}"
 
+#: src/app/useServerLabel.tsx
+msgid "{name} · 离线"
+msgstr "{name} · Offline"
+
 #: src/app/SessionDeletion.tsx
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
 msgstr "{schedules, plural, one {# scheduled task keeps running.} other {# scheduled tasks keep running.}}"
@@ -1698,6 +1702,11 @@ msgstr "Updates"
 #: src/app/plugins/PluginMark.tsx
 msgid "服务与分享"
 msgstr "Services and sharing"
+
+#: src/app/AddProjectDialog.tsx
+#: src/app/DirectoryPicker.tsx
+msgid "服务器"
+msgstr "Server"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"

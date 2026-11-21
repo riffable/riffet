@@ -19,12 +19,10 @@ import { readStored, writeStored } from './utils';
 export interface CachedLists { bootstrap: Bootstrap; savedAt: number }
 
 const KEY = 'riffet.lists';
+/** A linked server's lists are kept under `riffet.lists.<serverId>` (docs/SERVER-LINKS.md §5). */
+const LINKED_PREFIX = `${KEY}.`;
 /** Sessions beyond the pinned and running ones that the copy keeps. */
 const KEPT_SESSIONS = 300;
-/** The copy was found or written, so `refreshCachedLists` may update it; sign-out clears it. */
-let held = false;
-let lastText = '';
-let pending: { cancel: () => void } | undefined;
 
 /**
  * Rebuilds the cached lists, or nothing when the stored value is not a list cache. A value written
@@ -35,7 +33,7 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw) as { bootstrap?: Partial<Bootstrap>; savedAt?: unknown };
-    const { projects, sessions, terminals, settings, protocol, owner, workItemSummaries } = parsed?.bootstrap ?? {};
+    const { projects, sessions, terminals, settings, protocol, owner, workItemSummaries, serverId, servers } = parsed?.bootstrap ?? {};
     if (!Array.isArray(projects) || !Array.isArray(sessions) || !Array.isArray(terminals)) return undefined;
     if (!settings || typeof settings !== 'object') return undefined;
     const validSummaries = Array.isArray(workItemSummaries)
@@ -48,6 +46,9 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
         ...(owner && typeof owner === 'object' && typeof owner.revision === 'number' ? { owner } : {}),
         ...(protocol && Array.isArray(protocol.features) ? { protocol } : {}),
         ...(validSummaries ? { workItemSummaries: validSummaries } : {}),
+        // The linked servers, so their cached lists are painted before the bootstrap answers.
+        ...(typeof serverId === 'string' ? { serverId } : {}),
+        ...(Array.isArray(servers) ? { servers: servers.filter((item) => Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string') } : {}),
       },
       savedAt: typeof parsed?.savedAt === 'number' && Number.isFinite(parsed.savedAt) ? parsed.savedAt : 0,
     };
@@ -58,14 +59,6 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
 export function serializeCachedLists(bootstrap: Bootstrap, savedAt: number): string {
   const { csrfToken: _csrfToken, ...rest } = bootstrap;
   return JSON.stringify({ bootstrap: rest, savedAt });
-}
-
-export function loadCachedLists(): CachedLists | undefined {
-  const raw = readStored(KEY);
-  const lists = parseCachedLists(raw);
-  held = Boolean(lists);
-  lastText = lists ? withoutSavedAt(raw) : '';
-  return lists;
 }
 
 /** The part of the lists the copy keeps: all projects, the pinned and running sessions, the newest others, their terminals, and open or session-linked work item summaries. */
@@ -94,46 +87,99 @@ export function boundedLists(bootstrap: Bootstrap): Bootstrap {
 
 const withoutSavedAt = (text: string): string => text.slice(0, text.lastIndexOf(',"savedAt"'));
 
-function write(bootstrap: Bootstrap): void {
-  const text = serializeCachedLists(boundedLists(bootstrap), Date.now());
-  // `savedAt` differs every time; only the lists decide whether there is anything new to store.
-  const body = withoutSavedAt(text);
-  if (body === lastText) return;
-  lastText = body;
-  writeStored(KEY, text);
-  held = true;
+export interface ListCache {
+  load(): CachedLists | undefined;
+  save(bootstrap: Bootstrap): void;
+  /**
+   * Brings an existing copy up to date. Only a bootstrap creates one, so a refresh scheduled before a
+   * sign-out cleared the copy cannot write the lists back.
+   */
+  refresh(bootstrap: Bootstrap): void;
+  clear(): void;
+  /** Stops writing for good: the store holding it is gone. A write already scheduled is dropped. */
+  retire(): void;
 }
 
-/** Writes the copy when the page is idle (at the latest after a second); a newer call replaces one still waiting. */
-function schedule(bootstrap: Bootstrap): void {
-  pending?.cancel();
-  const run = () => { pending = undefined; write(bootstrap); };
-  if (typeof window.requestIdleCallback === 'function') {
-    const id = window.requestIdleCallback(run, { timeout: 1_000 });
-    pending = { cancel: () => window.cancelIdleCallback(id) };
-  } else {
-    const id = window.setTimeout(run, 50);
-    pending = { cancel: () => window.clearTimeout(id) };
-  }
+/** Counts sign-outs; a linked server's handle made before one writes nothing after it. */
+let signOuts = 0;
+
+function createListCache(key: string, linked = false): ListCache {
+  /** The copy was found or written, so `refresh` may update it; sign-out clears it. */
+  let held = false;
+  let lastText = '';
+  let pending: { cancel: () => void } | undefined;
+  let retired = false;
+  const born = signOuts;
+  /** The servers named by the last bootstrap; a refresh carries only lists, and must not drop them. */
+  let links: Pick<Bootstrap, 'serverId' | 'servers'> = {};
+  const linksOf = (bootstrap: Bootstrap): Pick<Bootstrap, 'serverId' | 'servers'> => ({
+    ...(bootstrap.serverId ? { serverId: bootstrap.serverId } : {}),
+    ...(bootstrap.servers ? { servers: bootstrap.servers } : {}),
+  });
+  const write = (bootstrap: Bootstrap): void => {
+    if (retired || (linked && born !== signOuts)) return;
+    const text = serializeCachedLists(boundedLists(bootstrap), Date.now());
+    // `savedAt` differs every time; only the lists decide whether there is anything new to store.
+    const body = withoutSavedAt(text);
+    if (body === lastText) return;
+    lastText = body;
+    writeStored(key, text);
+    held = true;
+  };
+  /** Writes the copy when the page is idle (at the latest after a second); a newer call replaces one still waiting. */
+  const schedule = (bootstrap: Bootstrap): void => {
+    pending?.cancel();
+    const run = () => { pending = undefined; write(bootstrap); };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 1_000 });
+      pending = { cancel: () => window.cancelIdleCallback(id) };
+    } else {
+      const id = window.setTimeout(run, 50);
+      pending = { cancel: () => window.clearTimeout(id) };
+    }
+  };
+  return {
+    load() {
+      const raw = readStored(key);
+      const lists = parseCachedLists(raw);
+      held = Boolean(lists);
+      lastText = lists ? withoutSavedAt(raw) : '';
+      links = lists ? linksOf(lists.bootstrap) : {};
+      return lists;
+    },
+    save(bootstrap) { if (retired) return; held = true; links = linksOf(bootstrap); schedule(bootstrap); },
+    refresh(bootstrap) { if (held && !retired) schedule({ ...links, ...bootstrap }); },
+    clear() {
+      pending?.cancel();
+      pending = undefined;
+      held = false;
+      lastText = '';
+      writeStored(key, undefined);
+    },
+    retire() {
+      retired = true;
+      pending?.cancel();
+      pending = undefined;
+    },
+  };
 }
 
-export function saveCachedLists(bootstrap: Bootstrap): void {
-  held = true;
-  schedule(bootstrap);
+/** The entry server's own lists. */
+export const entryListCache = createListCache(KEY);
+/** A linked server's lists: a new handle on its kept copy, held by that server's lists store for as long as it lives. */
+export function linkedListCache(serverId: string): ListCache {
+  return createListCache(LINKED_PREFIX + serverId, true);
 }
 
-/**
- * Brings an existing copy up to date. Only a bootstrap creates one, so a refresh scheduled before a
- * sign-out cleared the copy cannot write the lists back.
- */
-export function refreshCachedLists(bootstrap: Bootstrap): void {
-  if (held) schedule(bootstrap);
-}
+export const loadCachedLists = (): CachedLists | undefined => entryListCache.load();
+export const saveCachedLists = (bootstrap: Bootstrap): void => entryListCache.save(bootstrap);
+export const refreshCachedLists = (bootstrap: Bootstrap): void => entryListCache.refresh(bootstrap);
 
+/** Sign-out: every server's copy goes, including those of servers this page has not opened yet. */
 export function clearCachedLists(): void {
-  pending?.cancel();
-  pending = undefined;
-  held = false;
-  lastText = '';
-  writeStored(KEY, undefined);
+  signOuts += 1;
+  entryListCache.clear();
+  try {
+    for (const key of Object.keys(window.localStorage)) if (key.startsWith(LINKED_PREFIX)) window.localStorage.removeItem(key);
+  } catch { /* storage unavailable */ }
 }

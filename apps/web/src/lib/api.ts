@@ -9,7 +9,7 @@ import type {
   ApiError,
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
-  LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest,
+  LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest, ServerInfo,
   CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
@@ -132,6 +132,7 @@ import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARAN
 import { pageTerminalAppearance } from './terminal-theme';
 import { HttpError } from './errors';
 import { newId } from './utils';
+import { currentServer, locate, serverOfObject, serverPath, withServer } from './server-routing';
 import { readNativeOutbox, removeNativeOutbox, writeNativeOutbox } from './native-outbox-storage';
 
 /**
@@ -143,9 +144,9 @@ const PAGE_KINDS = `${PLUGIN_PAGE_KINDS_PARAM}=meter`;
 
 export const CLIENT_FEATURES = 'quick-chat,pi-agent,antigravity-agent,projectless-tasks,plugin-agents,session-references-v1';
 
-/** Native browser loads cannot send the feature header used by JSON requests. */
+/** Native browser loads cannot send the feature header used by JSON requests. Also addresses the path to its server. */
 export function withClientFeatures(path: string): string {
-  const [url, hash] = path.split('#', 2);
+  const [url, hash] = serverPath(path).split('#', 2);
   const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}features=${encodeURIComponent(CLIENT_FEATURES)}${hash ? `#${hash}` : ''}`;
 }
@@ -179,6 +180,9 @@ export interface Bootstrap {
   owner?: OwnerInfo;
   csrfToken: string;
   protocol?: { version: number; features: string[] };
+  /** This server's id and the servers linked with it (`server-links-v1`); absent from a linked server's answer. */
+  serverId?: string;
+  servers?: ServerInfo[];
 }
 
 /** One conversation search result. `snippet` is a window of the matched text, not the whole message. */
@@ -471,6 +475,8 @@ async function responsePayload(response: Response): Promise<unknown> {
 
 /** Shared authentication and errors for JSON requests and streamed responses. */
 export async function requestResponse(path: string, init: RequestInit = {}): Promise<Response> {
+  // Before anything is awaited, so a request inside `withServer` is addressed to that server.
+  path = serverPath(path);
   const headers = new Headers(init.headers);
   // The web has the quick-chat and pi surfaces, so every read asks the server to include them.
   headers.set(CLIENT_FEATURES_HEADER, CLIENT_FEATURES);
@@ -624,8 +630,11 @@ export const api = {
   pairingCode: () => request<{ code: string; expiresAt: number; qr: string; baseUrl: string; localOnly: boolean }>('/api/pairing/code', json('POST', {})),
   logout: () => { sessionReferencesSupported = undefined; return request<void>('/api/auth/logout', json('POST')); },
   bootstrap: async () => {
+    const linked = currentServer();
     // Longer than a poll: it carries every list in full.
     const data = await request<Bootstrap>('/api/bootstrap', { signal: timeout(30_000) });
+    // A linked server's answer carries no sign-in of this browser's, and its features are its own.
+    if (linked) return data;
     setCsrfToken(data.csrfToken);
     sessionReferencesSupported = data.protocol?.features.includes('session-references-v1') ?? false;
     return data;
@@ -646,8 +655,8 @@ export const api = {
   updateFolderFavorite: (id: string, body: { label?: string | null; used?: true }) => request<FolderFavorite>(`/api/folder-favorites/${encodeURIComponent(id)}`, json('PATCH', body)),
   reorderFolderFavorites: (ids: string[], projectId?: string) => request<FolderFavoritesResponse>('/api/folder-favorites/order', json('PUT', { ids, ...(projectId ? { projectId } : {}) })),
   deleteFolderFavorite: (id: string) => request<{ ok: true }>(`/api/folder-favorites/${encodeURIComponent(id)}`, json('DELETE')),
-  createSession: (body: { projectId: string; kind: 'native'; backendId?: NativeBackendId; backendProfileId?: string; nativeSessionId?: string; title?: string; model?: string; mode?: string; approval?: string; resumePicker?: boolean }) => request<Session>('/api/sessions', json('POST', body)),
-  createNativeSession: ({ draftCleared: _draftCleared, rejected: _rejected, invalidReason, ...body }: NativeSessionCreateInput, workbenchConnectionId?: string) => invalidReason ? Promise.reject(new Error(invalidReason)) : requireReferenceProtocol(body.initialMessage).then(() => request<NativeSessionCreateResult>('/api/sessions', workbenchPost({ ...body, kind: 'native' }, workbenchConnectionId))),
+  createSession: (body: { projectId: string; kind: 'native'; backendId?: NativeBackendId; backendProfileId?: string; nativeSessionId?: string; title?: string; model?: string; mode?: string; approval?: string; resumePicker?: boolean }) => request<Session>(serverPath('/api/sessions', serverOfObject(body.projectId)), json('POST', body)),
+  createNativeSession: ({ draftCleared: _draftCleared, rejected: _rejected, invalidReason, ...body }: NativeSessionCreateInput, workbenchConnectionId?: string) => invalidReason ? Promise.reject(new Error(invalidReason)) : requireReferenceProtocol(body.initialMessage).then(() => request<NativeSessionCreateResult>(serverPath('/api/sessions', serverOfObject(body.projectId)), workbenchPost({ ...body, kind: 'native' }, workbenchConnectionId))),
   sessionDeletion: (id: string) => request<SessionDeletionPreview>(`/api/sessions/${encodeURIComponent(id)}/deletion`),
   deleteSession: (id: string, sessionIds: string[]) => request<SessionDeletionReceipt>(`/api/sessions/${encodeURIComponent(id)}`, json('DELETE', { sessionIds })),
   updateSession: (id: string, body: { title?: string; tags?: string[]; archived?: boolean; pinned?: boolean; toolGroups?: ToolGroupId[]; extensionsOff?: string[] }) => request<Session>(`/api/sessions/${encodeURIComponent(id)}`, json('PATCH', body)),
@@ -684,9 +693,9 @@ export const api = {
   /** Confirms a live CLI interrupt and accepts this follow-up before releasing the dispatch queue. */
   nativeInterruptAndSend: (id: string, body: NativeMessageInput) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/interrupt-and-send`, json('POST', body))),
   sendQueuedNativeRunNow: (id: string, runId: string, stop: NativeStopRequest) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/send-now`, json('POST', { stop })),
-  nativePrewarm: (body: { projectId: string; backendId?: NativeBackendId; backendProfileId?: string; model?: string; mode?: string; approval?: string; claimId?: string }) => request<{ state: string; reason?: string; claimId?: string }>('/api/native/prewarm', json('POST', body)),
+  nativePrewarm: (body: { projectId: string; backendId?: NativeBackendId; backendProfileId?: string; model?: string; mode?: string; approval?: string; claimId?: string }) => request<{ state: string; reason?: string; claimId?: string }>(serverPath('/api/native/prewarm', serverOfObject(body.projectId)), json('POST', body)).then((answer) => { if (answer.claimId) locate([answer.claimId], serverOfObject(body.projectId)); return answer; }),
   // `keepalive` lets it leave with a closing page.
-  nativePrewarmRelease: (body: { backendId?: NativeBackendId; claimId: string }) => request<void>('/api/native/prewarm/release', { ...json('POST', body), keepalive: true }),
+  nativePrewarmRelease: (body: { backendId?: NativeBackendId; claimId: string }) => request<void>(serverPath('/api/native/prewarm/release', serverOfObject(body.claimId)), { ...json('POST', body), keepalive: true }),
   cancelNativeRun: (id: string, runId: string) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/cancel`, json('POST')),
   checkNativeRun: (id: string, runId: string) => request<NativeRunRecovery>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/check`, json('POST')),
   resolveNativeRun: (id: string, runId: string, queuedRunIds: string[]) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/resolve`, json('POST', { outcome: 'continue', queuedRunIds })),
@@ -716,7 +725,7 @@ export const api = {
   events: (id: string, after = 0) => request<WorkbenchEvent[]>(`/api/sessions/${encodeURIComponent(id)}/events?after=${after}`),
   runs: (id: string, commandId?: string) => request<Run[]>(`/api/sessions/${encodeURIComponent(id)}/runs${commandId ? `?commandId=${encodeURIComponent(commandId)}` : ''}`),
   exportSession: (id: string) => request<unknown>(`/api/sessions/${encodeURIComponent(id)}/export`),
-  createTerminal: (body: { projectId: string; sessionId?: string; kind?: 'shell' | 'login'; title?: string; args?: string[] }) => request<TerminalInfo>('/api/terminals', json('POST', body)),
+  createTerminal: (body: { projectId: string; sessionId?: string; kind?: 'shell' | 'login'; title?: string; args?: string[] }) => request<TerminalInfo>(serverPath('/api/terminals', serverOfObject(body.projectId)), json('POST', body)),
   terminals: () => request<TerminalInfo[]>('/api/terminals'),
   terminalsIfChanged: (etag?: string) => requestList<TerminalInfo[]>('/api/terminals', etag, timeout()),
   getTerminal: (id: string) => request<TerminalInfo>(`/api/terminals/${encodeURIComponent(id)}`),
@@ -746,9 +755,14 @@ export const api = {
   openInEditor: (projectId: string, path: string, line?: number) => request<void>(`/api/projects/${encodeURIComponent(projectId)}/open`, json('POST', { path, ...(line === undefined ? {} : { line }) })),
   revealInFinder: (projectId: string, path: string) => request<{ opened: true }>(`/api/projects/${encodeURIComponent(projectId)}/reveal`, json('POST', { path })),
   finderSupport: (projectId: string) => request<{ supported: boolean }>(`/api/projects/${encodeURIComponent(projectId)}/reveal`),
-  upload: (projectId: string, body: { name: string; mimeType: string; dataBase64: string; width?: number; height?: number }, signal?: AbortSignal) => request<Attachment>(projectId ? `/api/projects/${encodeURIComponent(projectId)}/attachments` : '/api/attachments', { ...json('POST', body), ...(signal ? { signal } : {}) }),
-  attachmentMetadata: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}/metadata`),
-  attachment: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}`),
+  upload: (projectId: string, body: { name: string; mimeType: string; dataBase64: string; width?: number; height?: number }, signal?: AbortSignal) => {
+    // An attachment lives where it was uploaded; later reads of it go there too.
+    const server = currentServer() ?? serverOfObject(projectId);
+    return request<Attachment>(projectId ? `/api/projects/${encodeURIComponent(projectId)}/attachments` : '/api/attachments', { ...json('POST', body), ...(signal ? { signal } : {}) })
+      .then((attachment) => { locate([attachment.id], server); return attachment; });
+  },
+  attachmentMetadata: (id: string, ownerId?: string) => located(id, ownerId, request<Attachment>(`${attachmentPath(id, ownerId)}/metadata`)),
+  attachment: (id: string, ownerId?: string) => located(id, ownerId, request<Attachment>(attachmentPath(id, ownerId))),
   /** `fresh` reads again even when the server is following the project and knows of no change. */
   gitStatus: (projectId: string, fresh = false) => request<GitStatus>(`/api/projects/${encodeURIComponent(projectId)}/git/status${fresh ? '?fresh=true' : ''}`),
   /** `base` compares the working tree with `checkpoint:<id>` or a commit instead of what is staged. */
@@ -905,6 +919,8 @@ export const api = {
   /** The device must pair again to come back. */
   revokeDevice: (id: string) => request<void>(`/api/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Servers linked with this one (docs/SERVER-LINKS.md). */
+  /** This server first, then the servers linked with it (`server-links-v1`). */
+  servers: (signal?: AbortSignal) => request<{ servers: ServerInfo[] }>('/api/servers', { signal: signal ?? timeout() }),
   links: (signal?: AbortSignal) => request<{ links: LinkInfo[] }>('/api/links', { signal }),
   createLinkInvite: (input: LinkInviteRequest) => request<LinkInviteResult>('/api/links/invites', json('POST', input)),
   joinLink: (input: LinkJoinRequest) => request<{ link: LinkInfo }>('/api/links/join', json('POST', input)),
@@ -1145,8 +1161,38 @@ export function councilStreamUrl(id: string): string {
   return withClientFeatures(`/api/council/${encodeURIComponent(id)}/stream`);
 }
 
-export function listsStreamUrl(): string {
-  return withClientFeatures('/api/lists/stream');
+/** The lists stream of `serverId`, or of the entry server. */
+export function listsStreamUrl(serverId?: string): string {
+  return withClientFeatures(serverPath('/api/lists/stream', serverId));
+}
+
+/**
+ * An attachment's address. Attachment ids are not in the lists, so one this browser did not upload is found through
+ * the conversation or project it belongs to (`ownerId`).
+ */
+export function attachmentPath(id: string, ownerId?: string): string {
+  return serverPath(`/api/attachments/${encodeURIComponent(id)}`, serverOfObject(id) ?? serverOfObject(ownerId));
+}
+
+/** Remembers where an attachment found through its owner lives, for the image loads that follow without one. */
+function located<T>(id: string, ownerId: string | undefined, read: Promise<T>): Promise<T> {
+  const server = serverOfObject(id) ?? serverOfObject(ownerId);
+  return server ? read.then((value) => { locate([id], server); return value; }) : read;
+}
+
+/**
+ * `api` with every call sent to `serverId` (docs/guide/multi-server.md §3.2); the entry server's own when absent.
+ * For requests that name no object, such as a server's lists or a new conversation there; a request about a known
+ * conversation, project or terminal finds its server by itself.
+ */
+export function apiFor(serverId: string | undefined): typeof api {
+  if (!serverId) return api;
+  return new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === 'function' ? (...args: unknown[]) => withServer(serverId, () => (value as (...rest: unknown[]) => unknown).apply(target, args)) : value;
+    },
+  });
 }
 
 /** The project's Git status as a stream: one `status` event now and one each time it changes. */
@@ -1155,7 +1201,7 @@ export function gitStatusStreamUrl(projectId: string): string {
 }
 
 export function terminalSocketUrl(id: string): string {
-  const url = new URL(`/api/terminals/${encodeURIComponent(id)}/ws`, window.location.href);
+  const url = new URL(serverPath(`/api/terminals/${encodeURIComponent(id)}/ws`), window.location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('features', CLIENT_FEATURES);
   url.searchParams.set('protocol', String(TERMINAL_PROTOCOL));

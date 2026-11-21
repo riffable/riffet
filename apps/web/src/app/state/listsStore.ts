@@ -1,8 +1,8 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { SYNC_BUDGET, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
-import { api, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
-import { loadCachedLists, refreshCachedLists, saveCachedLists } from '@/lib/list-cache';
+import { apiFor, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
+import { entryListCache, type ListCache } from '@/lib/list-cache';
 import { reconcileById, sameRecord } from '@/lib/reconcile';
 import { confirmSessionGone, isSessionDeleted } from '@/lib/session-deletion';
 import { reconnectDelay } from '@/lib/utils';
@@ -62,6 +62,13 @@ export interface ListsDeps {
     absorb: (summaries: WorkItemSummary[] | undefined, revision: number | undefined, requestedTicket: number) => void;
     summaries: () => WorkItemSummary[] | undefined;
   };
+  /**
+   * A linked server whose lists this store holds (docs/SERVER-LINKS.md §5), read through the entry server. Its
+   * settings, owner and the entry's own events (plugins, devices, 收藏, tasks) are not this store's to take.
+   */
+  server?: string;
+  /** Where the lists are kept between visits; the entry server's copy by default. */
+  cache?: ListCache;
 }
 
 /**
@@ -69,11 +76,14 @@ export interface ListsDeps {
  * keeps the session and terminal lists current.
  */
 export function createListsStore(deps: ListsDeps) {
+  const api = apiFor(deps.server);
+  const linked = Boolean(deps.server);
+  const listCache = deps.cache ?? entryListCache;
   /**
    * The lists the last visit ended with. Read once during creation, so a reload paints the
    * workbench instead of a spinner and keeps painting it if the server cannot be reached.
    */
-  const cached = loadCachedLists();
+  const cached = listCache.load();
   const store = createStore<ListsState>({
     loaded: Boolean(cached),
     projectlessTasks: cached?.bootstrap.protocol?.features.includes('projectless-tasks') ?? false,
@@ -122,6 +132,9 @@ export function createListsStore(deps: ListsDeps) {
   /** Told when IM channel accounts, bindings or chats changed, and after a reconnect. */
   const channelListeners = new Set<() => void>();
   const announceChannels = () => { for (const listener of [...channelListeners]) listener(); };
+  /** Told when a linked server was added or removed, or came up or went down (`server-links-v1`), and after a reconnect. */
+  const serverListeners = new Set<() => void>();
+  const announceServers = () => { for (const listener of [...serverListeners]) listener(); };
 
   const mutate = (update: (current: ListsState) => Partial<ListsState>) => {
     revision += 1;
@@ -183,9 +196,10 @@ export function createListsStore(deps: ListsDeps) {
         negotiatedProtocol = data.protocol;
         revision += 1;
         terminalsGeneration += 1;
-        const next = { ...data, settings: deps.settings.absorb(data.settings, requestedRevision) };
-        deps.workItems?.absorb(data.workItemSummaries, data.revisions?.workItems, requestedWorkItemsTicket);
-        saveCachedLists(next);
+        // A linked server's settings, owner and work items are its own; only its lists are taken.
+        const next = linked ? { ...data, settings: {}, owner: undefined, workItemSummaries: undefined } : { ...data, settings: deps.settings.absorb(data.settings, requestedRevision) };
+        if (!linked) deps.workItems?.absorb(data.workItemSummaries, data.revisions?.workItems, requestedWorkItemsTicket);
+        listCache.save(next);
         // The reads that follow start where these lists stand; an older server names no revisions, so they start over.
         etags.sessions = data.revisions ? `W/"${data.revisions.sessions}"` : undefined;
         etags.terminals = data.revisions ? `W/"${data.revisions.terminals}"` : undefined;
@@ -205,7 +219,7 @@ export function createListsStore(deps: ListsDeps) {
           sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle)),
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
-          ...(data.owner ? { owner: data.owner } : {}),
+          ...(data.owner && !linked ? { owner: data.owner } : {}),
           status: 'fresh',
           savedAt: Date.now(),
           bootError: '',
@@ -245,6 +259,11 @@ export function createListsStore(deps: ListsDeps) {
       channelListeners.add(listener);
       return () => { channelListeners.delete(listener); };
     },
+    /** Calls [listener] when the linked servers may read differently (`GET /api/servers`). */
+    onServers(listener: () => void): () => void {
+      serverListeners.add(listener);
+      return () => { serverListeners.delete(listener); };
+    },
     /** Adopts the owner a write answered with, unless a newer one has already arrived over the stream. */
     setOwner(owner: OwnerInfo) {
       store.set((current) => current.owner && current.owner.revision > owner.revision ? current : { owner });
@@ -257,11 +276,11 @@ export function createListsStore(deps: ListsDeps) {
       const { projects, sessions, terminals, owner, loaded } = store.get();
       if (!loaded) return;
       const workItemSummaries = deps.workItems?.summaries();
-      refreshCachedLists({
+      listCache.refresh({
         projects, sessions, terminals,
         ...(workItemSummaries !== undefined ? { workItemSummaries } : {}),
         ...(owner ? { owner } : {}),
-        settings: deps.settings.current(),
+        settings: linked ? {} : deps.settings.current(),
         csrfToken: '',
         protocol: negotiatedProtocol,
       });
@@ -273,7 +292,7 @@ export function createListsStore(deps: ListsDeps) {
       mutate((current) => current.sessions.some((item) => gone.has(item.id)) ? { sessions: current.sessions.filter((item) => !gone.has(item.id)) } : current);
       const { projects, sessions, terminals, owner, loaded } = store.get();
       const workItemSummaries = deps.workItems?.summaries();
-      if (loaded) refreshCachedLists({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+      if (loaded) listCache.refresh({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
     },
     upsertSession(incoming: Session) {
       // A late write for a deleted conversation (a stream frame, a slow response) must not bring it back.
@@ -329,7 +348,7 @@ export function createListsStore(deps: ListsDeps) {
         saveTimer = window.setTimeout(() => {
           const { projects, sessions, terminals, owner } = store.get();
           const workItemSummaries = deps.workItems?.summaries();
-          refreshCachedLists({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+          listCache.refresh({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
         }, SAVE_DEBOUNCE_MS);
       };
       let wantedProjectsVersion: number | undefined, requestedProjectsVersion: number | undefined;
@@ -518,7 +537,7 @@ export function createListsStore(deps: ListsDeps) {
         }).catch(() => {});
       };
       const reconnected = () => {
-        refreshOwner(); announceTask(undefined); announcePlugins(); announceDevices(); announceChannels();
+        if (!linked) { refreshOwner(); announceTask(undefined); announcePlugins(); announceDevices(); announceChannels(); announceServers(); }
         // A `list-delta` server opens the stream with a `changed` naming every list's revision; an older one is read again.
         if (hasDelta()) return;
         announce({}); refreshProjects(true); poll();
@@ -543,8 +562,9 @@ export function createListsStore(deps: ListsDeps) {
         } else if (!hasDelta()) refreshProjects(true);
         opened = true;
       };
-      const events: Record<string, (event: Event) => void> = {
-        changed, task, owner, integrations: announcePlugins, devices: announceDevices, channels: announceChannels,
+      // A linked server's stream says only that its lists moved; everything else on it belongs to that server's own workbench.
+      const events: Record<string, (event: Event) => void> = linked ? { changed } : {
+        changed, task, owner, integrations: announcePlugins, devices: announceDevices, channels: announceChannels, servers: announceServers,
       };
       const retry = () => {
         pushed = false;
@@ -559,7 +579,7 @@ export function createListsStore(deps: ListsDeps) {
         // WebSockets leave the browser's limited HTTP/1.1 connections for sync and commands.
         usingSse = false;
         if (supportsWebSocket() && Date.now() >= nextSocketAttempt) {
-          const url = new URL(listsStreamUrl(), window.location.href);
+          const url = new URL(listsStreamUrl(deps.server), window.location.href);
           url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
           try {
             const socket = new WebSocket(url);
@@ -595,7 +615,7 @@ export function createListsStore(deps: ListsDeps) {
           } catch { nextSocketAttempt = Date.now() + PUSHED_POLL_MS; }
         }
         usingSse = true;
-        const source = new EventSource(listsStreamUrl());
+        const source = new EventSource(listsStreamUrl(deps.server));
         closeStream = () => { source.onerror = null; source.close(); };
         source.onopen = streamOpened;
         source.onerror = () => {

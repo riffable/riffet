@@ -52,6 +52,7 @@ const GLOBAL_CHECKS: { when: RegExp; run: string }[] = [
   { when: /\.(ts|tsx|mts)$/, run: 'pnpm typecheck' },
   { when: /^apps\/server\/src\//, run: 'pnpm check:layers' },
   { when: /^apps\/(web|macos|mobile)\//, run: 'pnpm check:design' },
+  { when: /^apps\/web\/src\//, run: 'pnpm check:servers' },
   { when: /^apps\/(web|macos|mobile|server)\//, run: 'pnpm check:perf' },
   { when: /^apps\/web\//, run: 'pnpm check:motion' },
   { when: /^apps\/web\/src\/.*\.tsx$/, run: 'pnpm check:a11y' },

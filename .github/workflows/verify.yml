@@ -93,6 +93,8 @@ jobs:
         run: pnpm check:a11y
       - name: Resource rules
         run: pnpm check:perf
+      - name: Web requests go through the server-aware request layer
+        run: pnpm check:servers
       - name: Tests
         run: pnpm test
       - name: Production build

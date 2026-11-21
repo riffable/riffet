@@ -1227,7 +1227,8 @@
                   "channel",
                   "assistant",
                   "council",
-                  "call"
+                  "call",
+                  "link"
                 ],
                 "open": true
               },
@@ -1241,6 +1242,9 @@
                 "type": "string"
               },
               "automationId": {
+                "type": "string"
+              },
+              "serverId": {
                 "type": "string"
               },
               "templateId": {
@@ -1694,7 +1698,8 @@
                         "channel",
                         "assistant",
                         "council",
-                        "call"
+                        "call",
+                        "link"
                       ],
                       "open": true
                     },
@@ -1708,6 +1713,9 @@
                       "type": "string"
                     },
                     "automationId": {
+                      "type": "string"
+                    },
+                    "serverId": {
                       "type": "string"
                     },
                     "templateId": {
@@ -3299,7 +3307,8 @@
                           "channel",
                           "assistant",
                           "council",
-                          "call"
+                          "call",
+                          "link"
                         ],
                         "open": true
                       },
@@ -3313,6 +3322,9 @@
                         "type": "string"
                       },
                       "automationId": {
+                        "type": "string"
+                      },
+                      "serverId": {
                         "type": "string"
                       },
                       "templateId": {
@@ -11431,7 +11443,8 @@
                           "channel",
                           "assistant",
                           "council",
-                          "call"
+                          "call",
+                          "link"
                         ],
                         "open": true
                       },
@@ -11445,6 +11458,9 @@
                         "type": "string"
                       },
                       "automationId": {
+                        "type": "string"
+                      },
+                      "serverId": {
                         "type": "string"
                       },
                       "templateId": {

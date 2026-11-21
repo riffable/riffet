@@ -1658,6 +1658,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1768,6 +1769,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1878,6 +1880,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1988,6 +1991,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2098,6 +2102,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2208,6 +2213,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2318,6 +2324,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2428,6 +2435,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2538,6 +2546,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2648,6 +2657,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2758,6 +2768,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2868,6 +2879,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2978,6 +2990,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3088,6 +3101,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3198,6 +3212,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3308,6 +3323,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3418,6 +3434,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3528,6 +3545,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3638,6 +3656,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3748,6 +3767,7 @@
       "runId": "text",
       "groupId": "text",
       "automationId": "text",
+      "serverId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3862,6 +3882,7 @@
           "runId": "text",
           "groupId": "text",
           "automationId": "text",
+          "serverId": "text",
           "templateId": "text",
           "scheduleId": "text",
           "channel": {
@@ -4806,6 +4827,7 @@
         "runId": "text",
         "groupId": "text",
         "automationId": "text",
+        "serverId": "text",
         "templateId": "text",
         "scheduleId": "text",
         "channel": {
@@ -6130,6 +6152,7 @@
         "runId": "text",
         "groupId": "text",
         "automationId": "text",
+        "serverId": "text",
         "templateId": "text",
         "scheduleId": "text",
         "channel": {

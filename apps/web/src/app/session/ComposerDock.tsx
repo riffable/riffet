@@ -7,6 +7,7 @@ import { IconArrowUp, IconCornerUpRight, IconChevronDown, IconCircle, IconCircle
 import { Tip } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { attachmentPath } from '@/lib/api';
 import { formatTokens } from '@/lib/stats-format';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { Collapse } from '@/components/ui/collapse';
@@ -211,7 +212,7 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
           {showLead && <IconMessagesSquare className="size-3.5 shrink-0 text-fg-4" />}
           {attachments.length > 0 && <span className="flex min-w-0 max-w-[35%] items-center gap-1 overflow-hidden md:max-w-none md:gap-2">
             {attachments.map((id) => (
-              <img key={id} src={`/api/attachments/${encodeURIComponent(id)}`} alt="" className="size-6 min-w-0 rounded-sm border border-line object-cover" />
+              <img key={id} src={attachmentPath(id, run.sessionId)} alt="" className="size-6 min-w-0 rounded-sm border border-line object-cover" />
             ))}
           </span>}
           <span className="min-w-0 flex-1 text-sm text-fg-2 max-md:line-clamp-2 max-md:break-words md:truncate">{run.prompt}</span>

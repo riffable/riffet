@@ -499,6 +499,13 @@ export const LINK_BUDGET = {
   nameChars: 64,
   /** 设置 › 互联 rereads the links this often while it is open, to show a tunnel coming up or dropping. */
   settingsPollMs: 5_000,
+  /**
+   * On opening the workbench, how long the lists wait for a linked server of which nothing is kept yet, so a link to
+   * one of its conversations can open; a slower server's lists arrive later.
+   */
+  firstListWaitMs: 3_000,
+  /** A search across linked servers stops waiting for one that has not answered by then; the others' results stand. */
+  searchWaitMs: 8_000,
 } as const;
 
 /** The session trace view (docs/TRACE.md): journal rows read as an index, and one row's whole payload on demand. */

@@ -764,7 +764,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       : [];
     if (restored.length) updateReferences([...current, ...restored]);
     if (!stored.attachments.length) return;
-    void Promise.all(stored.attachments.map((item) => api.attachmentMetadata(item.id).then(
+    void Promise.all(stored.attachments.map((item) => api.attachmentMetadata(item.id, stored.projectId ?? projectId).then(
       (fresh) => [item.id, fresh] as const,
       // Only "not found" means unusable; a server that is merely unreachable keeps the draft as it is.
       (error: unknown) => [item.id, error instanceof HttpError && error.status === 404 ? null : item] as const,
@@ -1241,7 +1241,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       if (activeUploadKeysRef.current.has(key)) return;
       activeUploadKeysRef.current.add(key);
       try {
-        const attachment = await api.attachmentMetadata(upload.attachmentId);
+        const attachment = await api.attachmentMetadata(upload.attachmentId, projectId);
         if (generation !== draftGenerationRef.current || !pendingUploadsRef.current.some(item => item.key === key)) return;
         updateAttachments(current => current.some(item => item.id === attachment.id) ? current : [...current, attachment]);
         updatePendingUploads(current => current.filter(item => item.key !== key));

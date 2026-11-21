@@ -36,7 +36,7 @@ export function useWorkbenchBootstrap({ loaded, project, session, backends, home
     catalog.initHome(next.settings);
     // A reconnect: whatever the first reads could not fetch while the server was away.
     catalog.refreshMissing();
-    // Checks the selection against the server's lists. A linked conversation carries its own project,
+    // Checks the selection against the lists of every server shown (`serverLists.ts`). A linked conversation carries its own project,
     // so the conversation alone is enough; a link that names nothing live (gone, archived) is ignored and the
     // stored selection gets its usual chance. A selection the reader made is kept while it is live.
     nav.set((now) => {

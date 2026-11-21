@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { api, type Bootstrap, type ProjectRecord } from '@/lib/api';
+import { api, apiFor, type Bootstrap, type ProjectRecord } from '@/lib/api';
+import { serverOfObject } from '@/lib/server-routing';
 import { promptDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
 import { hostInfo } from '@/lib/platform';
@@ -44,9 +45,14 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
     } catch (error) { toast.error(errorMessage(error, t({ message: '操作失败', context: 'workbench-action-failed' }))); }
   };
 
-  const addProject = async (input: { cwd: string; name?: string }) => {
+  /**
+   * A project made on a linked server goes into its list at once: reloading waits only for the entry's lists, so
+   * the linked server's would land later and the project would be selected before any list held it.
+   */
+  const addProject = async (input: { cwd: string; name?: string }, server?: string) => {
     try {
-      const created = await api.createProject(input);
+      const created = await apiFor(server).createProject(input);
+      if (server) lists.upsertProject(created, server);
       await loadBootstrap();
       if (!(await nav.navigate(() => {
         clearContext(ui);
@@ -76,14 +82,15 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
    * start anywhere on the machine. The server canonicalizes the path and returns the existing
    * project when the directory is already registered, which keeps this idempotent.
    */
-  const startSessionInDirectory = useCallback(async (path: string) => {
+  const startSessionInDirectory = useCallback(async (path: string, server?: string) => {
     try {
-      let target = await api.createProject({ cwd: path });
-      if (target.archivedAt) target = await api.updateProject(target.id, { archived: false });
+      let target = await apiFor(server).createProject({ cwd: path });
+      if (target.archivedAt) target = await apiFor(server).updateProject(target.id, { archived: false });
+      if (server) lists.upsertProject(target, server);
       await loadBootstrap();
       await landOn(target)();
     } catch (error) { toast.error(errorMessage(error, t`无法使用该目录开始会话`)); }
-  }, [loadBootstrap, landOn, t]);
+  }, [lists, loadBootstrap, landOn, t]);
 
   /** Names a new checkout before creating it; leaving the name empty asks the server to generate it. */
   const startIsolatedDirectory = useCallback(async () => {
@@ -96,21 +103,23 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
       const name = value.trim();
       ui.set({ creatingWorktree: true });
       const target = await api.createWorktreeProject(originProjectId, name ? { name } : {});
+      lists.upsertProject(target, serverOfObject(originProjectId));
       await loadBootstrap();
       await landOn(target, t`已切换到 ${target.worktree?.branch ?? target.name}`)();
     } catch (error) { toast.error(errorMessage(error, t({ message: '无法创建 Worktree', context: 'workbench-worktree-create-failed' }))); }
     finally { worktreePending.current = false; ui.set({ creatingWorktree: false }); }
-  }, [project, ui, loadBootstrap, landOn, t]);
+  }, [project, lists, ui, loadBootstrap, landOn, t]);
 
   /** Adopts a worktree that already exists, so a conversation can run in it. */
   const openWorktreeProject = useCallback(async (path: string) => {
     if (!project) return;
     try {
       const target = await api.createWorktreeProject(project.id, { path });
+      lists.upsertProject(target, serverOfObject(project.id));
       await loadBootstrap();
       await landOn(target, t`已切换到 ${target.worktree?.branch ?? target.name}`)();
     } catch (error) { toast.error(errorMessage(error, t`无法打开该 Worktree`)); }
-  }, [project, loadBootstrap, landOn, t]);
+  }, [project, lists, loadBootstrap, landOn, t]);
 
   /** A removed worktree archives its project, so the origin is where the work now lives. */
   const onWorktreeMerged = useCallback(({ originProjectId, removedWorktree }: { originProjectId: string; removedWorktree: boolean }) => {
@@ -129,7 +138,8 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
    */
   const chooseSessionDirectory = useCallback(async () => {
     ui.setMobileSidebar(false);
-    if (!hostInfo().local) { ui.set({ sessionDirectoryOpen: true }); return; }
+    // The chooser can only open on the entry server's screen; a project on a linked server browses in the app.
+    if (!hostInfo().local || serverOfObject(project?.id)) { ui.set({ sessionDirectoryOpen: true }); return; }
     try {
       const picked = await api.pickDirectory({ prompt: t`选择新会话的目录` });
       if (picked.cancelled) return;
@@ -141,7 +151,7 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
       console.warn('native directory picker unavailable; falling back to the in-app browser', error);
     }
     ui.set({ sessionDirectoryOpen: true });
-  }, [ui, startSessionInDirectory, t]);
+  }, [project?.id, ui, startSessionInDirectory, t]);
 
   const openInEditor = useCallback((path: string, line?: number) => {
     if (!project?.id) return;

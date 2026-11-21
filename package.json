@@ -35,6 +35,7 @@
     "check:docs": "node scripts/check-doc-paths.mjs",
     "check:design": "node scripts/check-design-rules.mjs",
     "check:a11y": "node scripts/check-a11y.mjs",
+    "check:servers": "node scripts/check-servers.mjs",
     "check:perf": "node scripts/check-perf-rules.mjs",
     "trace:android": "node scripts/android-frame-trace.mjs",
     "perf:android": "node scripts/android-perf.mjs",

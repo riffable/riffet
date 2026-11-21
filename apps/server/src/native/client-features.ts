@@ -214,6 +214,12 @@ export function registerSessionVisibilityHook(app: FastifyInstance, getSession: 
   });
 }
 
+/**
+ * A request for a linked server (`routes/links.ts`) names that server's projects and conversations, which this one
+ * does not have; the linked server applies these checks itself when the request arrives there.
+ */
+const LINKED_SERVER_ROUTE = '/api/servers/:serverId/';
+
 /** Apply the same project capability to direct URLs, input references and session-owned terminals. */
 export function registerProjectVisibilityHook(app: FastifyInstance, store: Pick<Store, 'getProject' | 'getSession' | 'getTerminal'>): void {
   const checkProject = (headers: IncomingHttpHeaders, id: unknown): Project | undefined => {
@@ -227,7 +233,7 @@ export function registerProjectVisibilityHook(app: FastifyInstance, store: Pick<
   };
   app.addHook('onRequest', async request => {
     const route = request.routeOptions?.url;
-    if (!route?.startsWith('/api/')) return;
+    if (!route?.startsWith('/api/') || route.startsWith(LINKED_SERVER_ROUTE)) return;
     // File links, previews, WebSockets and EventSource cannot all set custom headers.
     const query = request.query as { features?: unknown; projectId?: unknown; sessionId?: unknown };
     if (request.method === 'GET' && request.headers[CLIENT_FEATURES_HEADER] === undefined
@@ -255,7 +261,7 @@ export function registerProjectVisibilityHook(app: FastifyInstance, store: Pick<
   });
   app.addHook('preValidation', async request => {
     const route = request.routeOptions?.url;
-    if (!route?.startsWith('/api/')) return;
+    if (!route?.startsWith('/api/') || route.startsWith(LINKED_SERVER_ROUTE)) return;
     const body = request.body as { projectId?: unknown; sessionId?: unknown; isolate?: unknown } | undefined;
     if (!body || typeof body !== 'object') return;
     checkProject(request.headers, body.projectId);

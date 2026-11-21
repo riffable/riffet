@@ -23,10 +23,13 @@
  *   `terminals` (docs/LIST-SYNC.md).
  * - `list-stream-ws`: `GET /api/lists/stream` also accepts a WebSocket upgrade, carrying each lists
  *   event as a JSON text message with `event` and `data` fields.
+ * - `server-links-v1`: the server links with others (docs/SERVER-LINKS.md). `GET /api/servers` lists them,
+ *   `/api/servers/<serverId>/<path>` reaches a linked server's `/api/<path>`, `GET /api/bootstrap` carries `serverId`
+ *   and `servers`, and the lists stream sends `servers` when one is added, removed, or comes up or down.
  */
-export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta' | 'list-stream-ws' | 'file-write-v1';
+export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta' | 'list-stream-ws' | 'file-write-v1' | 'server-links-v1';
 export interface ProtocolInfo { version: number; features: ProtocolFeature[]; }
-export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta', 'list-stream-ws', 'file-write-v1'] };
+export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta', 'list-stream-ws', 'file-write-v1', 'server-links-v1'] };
 /** Request header naming the features a client understands, comma-separated. */
 export const CLIENT_FEATURES_HEADER = 'x-riffet-features';
 // Shared HTTP contract. JSON request/response fields are kept stable across workers.

@@ -232,6 +232,44 @@ export interface PluginDeclarations {
   modelUses?: ModelUseDeclaration[];
 }
 
+/**
+ * Where an extension comes from once servers are linked (docs/guide/multi-server.md §3.5). `object`: it belongs to
+ * a conversation, project, task or file and is provided by the server that object lives on, its views and data
+ * reached through the link. `global`: only the entry server's own is used, and it never appears on another
+ * server's objects. Plugin manifests carry no scope; a new kind of declaration or view location is placed here,
+ * and the `Record` types make leaving one out a compile error.
+ */
+export type LinkScope = 'object' | 'global';
+
+export const DECLARATION_SCOPES: Readonly<Record<keyof PluginDeclarations, LinkScope>> = {
+  modelSources: 'object',
+  sharePublisher: 'object',
+  speechRecognizer: 'global',
+  actions: 'global',
+  // Each view by its location: VIEW_LOCATION_SCOPES.
+  views: 'object',
+  commands: 'global',
+  agentBackends: 'object',
+  tasks: 'object',
+  appearance: 'global',
+  avatarStyles: 'global',
+  agentTools: 'object',
+  channels: 'object',
+  imChannels: 'global',
+  page: 'global',
+  modelUses: 'object',
+};
+
+export const VIEW_LOCATION_SCOPES: Readonly<Record<ViewLocation, LinkScope>> = {
+  'session-view': 'object',
+  panel: 'object',
+  file: 'object',
+  sidebar: 'global',
+  main: 'global',
+  navigation: 'global',
+  settings: 'global',
+};
+
 /** What a use of a model falls back to while the user has chosen none for it: `default` uses the fast auxiliary default, `chat` uses Quick chat's default model. */
 export const MODEL_USE_FALLBACKS = ['default', 'chat'] as const;
 export type ModelUseFallback = typeof MODEL_USE_FALLBACKS[number];

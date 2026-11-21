@@ -3,12 +3,13 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconFolder, IconFolderOpen, IconHome, IconRefreshCw, IconStar, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Spinner } from '@/components/ui/controls';
+import { Select, Spinner } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tip } from '@/components/ui/tooltip';
-import { api, type BrowseResult } from '@/lib/api';
+import { apiFor, type BrowseResult } from '@/lib/api';
 import { cn, errorMessage } from '@/lib/utils';
 import { FavoriteMenu, FavoriteStar, favoriteName, useFolderFavorites } from './FolderFavorites';
+import { useServerChoices } from './useServerLabel';
 
 /** Reads better than an absolute path when the folder lives under the host's home. */
 export function displayPath(path: string, home: string): string {
@@ -22,20 +23,33 @@ export function displayPath(path: string, home: string): string {
  * In-app directory browser. It is the fallback for hosts whose native folder chooser cannot be
  * driven (or where it fails), and the fallback is why it lives apart from any one caller: both
  * "add project" and "start a session in another directory" need the same browser.
+ *
+ * It browses the entry server's disk, or `server`'s when a linked one is named. With `chooseServer` and linked
+ * servers it also offers which server to browse; the pick reports it. Folder favorites are the entry server's
+ * own, so they are not offered on another server's disk.
  */
-export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onError }: {
+export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onError, server: fixedServer, chooseServer }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialPath?: string;
-  onPick: (path: string) => void;
+  onPick: (path: string, server: string | undefined) => void;
   onError: (message: string) => void;
+  server?: string;
+  chooseServer?: boolean;
 }) {
+  const choices = useServerChoices();
+  // With `chooseServer`, `server` is where browsing starts; another choice starts at that server's home.
+  const [chosen, setChosen] = useState(fixedServer ?? '');
+  useEffect(() => { if (open) setChosen(fixedServer ?? ''); }, [open, fixedServer]);
+  const server = (chooseServer ? chosen : fixedServer) || undefined;
+  const startPath = server === (fixedServer || undefined) ? initialPath : undefined;
   const [result, setResult] = useState<BrowseResult>();
   const [loading, setLoading] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const { t } = useLingui();
   const listRef = useRef<HTMLDivElement>(null);
-  const favorites = useFolderFavorites(undefined, open);
+  const favorites = useFolderFavorites(undefined, open && !server);
+  const ownDisk = !server;
   // Callers pass an inline handler; reading it through a ref keeps `load` (and the effect that
   // opens on `initialPath`) from re-running, which used to throw the reader back to the start.
   const onErrorRef = useRef(onError);
@@ -47,7 +61,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
     const id = ++request.current;
     setLoading(true);
     try {
-      const next = await api.browse(target);
+      const next = await apiFor(server).browse(target);
       if (id !== request.current) return;
       setResult(next);
       listRef.current?.scrollTo({ top: 0 });
@@ -56,9 +70,9 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
     } finally {
       if (id === request.current) setLoading(false);
     }
-  }, []);
+  }, [server]);
 
-  useEffect(() => { if (open) void load(initialPath); }, [open, initialPath, load]);
+  useEffect(() => { if (open) void load(startPath); }, [open, startPath, load]);
 
   const shortcuts: Array<{ label: string; path: string; icon: typeof IconHome }> = result
     ? [
@@ -106,8 +120,13 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent mobileFullscreen className="flex max-h-[min(78dvh,600px)] w-[min(720px,94vw)] flex-col overflow-hidden p-0 sm:max-w-none">
         <DialogHeader className="edge-b px-5 py-3 pr-14">
-          <DialogTitle className="text-base"><Trans>选择目录</Trans></DialogTitle>
-          <DialogDescription className="text-xs"><Trans>目录位于运行 Riffet 服务器的电脑上。</Trans></DialogDescription>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <DialogTitle className="text-base"><Trans>选择目录</Trans></DialogTitle>
+              <DialogDescription className="text-xs"><Trans>目录位于运行 Riffet 服务器的电脑上。</Trans></DialogDescription>
+            </div>
+            {chooseServer && choices.length > 0 && <Select label={t`服务器`} value={chosen} options={choices} onChange={setChosen} className="w-40 shrink-0" />}
+          </div>
         </DialogHeader>
         <div className="flex min-h-0 flex-1 max-md:flex-col">
           <aside className="flex w-40 shrink-0 flex-col gap-0.5 bg-subtle/40 p-2 md:edge-r max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:edge-b">
@@ -117,8 +136,8 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
                 <span className="min-w-0 truncate">{item.label}</span>
               </button>
             ))}
-            {favorites.favorites.length > 0 && <div className="mt-2 px-2 pb-1 text-2xs font-medium text-fg-3 max-md:hidden"><Trans>收藏</Trans></div>}
-            {favorites.favorites.map((favorite) => (
+            {ownDisk && favorites.favorites.length > 0 && <div className="mt-2 px-2 pb-1 text-2xs font-medium text-fg-3 max-md:hidden"><Trans>收藏</Trans></div>}
+            {ownDisk && favorites.favorites.map((favorite) => (
               <div key={favorite.id} className="group/fav flex h-8 shrink-0 items-center gap-0.5 rounded-md pr-0.5 hover:bg-hover max-md:h-11 max-md:max-w-52">
                 <button type="button" disabled={!favorite.exists} title={favorite.path} onClick={() => void load(favorite.path)} className="flex h-full min-w-0 flex-1 items-center gap-2 px-2 text-left text-sm text-fg-2 hover:text-fg disabled:text-fg-4 max-md:px-3">
                   <FavoriteStar className={cn(!favorite.exists && 'text-fg-4')} />
@@ -141,7 +160,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
                   </span>
                 ))}
               </div>
-              {result && (
+              {result && ownDisk && (
                 <Tip label={result.favoriteId ? t`取消收藏此目录` : t`收藏此目录`}>
                   <Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={result.favoriteId ? t`取消收藏此目录` : t`收藏此目录`} aria-pressed={Boolean(result.favoriteId)} onClick={() => void toggleFavorite(result.path, result.favoriteId)}>
                     {result.favoriteId ? <FavoriteStar /> : <IconStar />}
@@ -167,7 +186,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
                     <IconFolder className="size-3.5 shrink-0 text-fg-3" />
                     <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                   </button>
-                  <button
+                  {ownDisk && <button
                     type="button"
                     aria-label={entry.favoriteId ? t`取消收藏 ${entry.name}` : t`收藏 ${entry.name}`}
                     aria-pressed={Boolean(entry.favoriteId)}
@@ -176,7 +195,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
                     className={cn(favoriteAction, 'group-hover/entry:opacity-100', entry.favoriteId && 'opacity-100')}
                   >
                     {entry.favoriteId ? <FavoriteStar /> : <IconStar className="size-3.5" />}
-                  </button>
+                  </button>}
                 </div>
               ))}
               {!loading && !entries.length && <div className="px-3 py-6 text-center text-xs text-fg-3"><Trans>空目录</Trans></div>}
@@ -191,7 +210,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
           <span className="mr-auto min-w-0 truncate font-mono text-xs text-fg-3 max-md:mr-0 max-md:w-full" title={result?.path}>{result ? displayPath(result.path, result.home) : ''}</span>
           <div className="flex items-center gap-2 max-md:w-full">
             <Button variant="ghost" className="max-md:h-11 max-md:flex-1" onClick={() => onOpenChange(false)}><Trans context="workbench-cancel-action">取消</Trans></Button>
-            <Button variant="primary" className="max-md:h-11 max-md:flex-1" disabled={!result} onClick={() => { if (result) { onPick(result.path); onOpenChange(false); } }}><Trans>使用此目录</Trans></Button>
+            <Button variant="primary" className="max-md:h-11 max-md:flex-1" disabled={!result} onClick={() => { if (result) { onPick(result.path, server); onOpenChange(false); } }}><Trans>使用此目录</Trans></Button>
           </div>
         </DialogFooter>
       </DialogContent>

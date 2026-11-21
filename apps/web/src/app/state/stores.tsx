@@ -7,7 +7,7 @@ import { onSessionsDeleted } from '@/lib/session-deletion';
 import { writeStored } from '@/lib/utils';
 import { replacePageUrl } from '@/lib/overlay-navigation';
 import { createCatalogStore, type CatalogState } from './catalogStore';
-import { createListsStore, type ListsState } from './listsStore';
+import { createServerLists, type ServerListsState } from './serverLists';
 import { createMarksStore, type MarksState } from './marksStore';
 import { createWorkItemsStore, type WorkItemsState, type WorkItemsStore } from './workItemsStore';
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
@@ -44,7 +44,7 @@ export function createWorkbenchStores() {
   const nav = createNavStore(cached);
   const ui = createUiStore();
   let workItemsRef: WorkItemsStore | undefined;
-  const lists = createListsStore({
+  const lists = createServerLists({
     settings,
     selectedSessionId: () => nav.get().sessionId,
     handlers,
@@ -75,7 +75,7 @@ export function useStores(): WorkbenchStores {
   return stores;
 }
 
-export const useLists = <S,>(selector: (state: ListsState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().lists, selector, isEqual);
+export const useLists = <S,>(selector: (state: ServerListsState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().lists, selector, isEqual);
 export const useNav = <S,>(selector: (state: NavState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().nav, selector, isEqual);
 export const useUi = <S,>(selector: (state: UiState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().ui, selector, isEqual);
 export const useMarks = <S,>(selector: (state: MarksState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().marks, selector, isEqual);

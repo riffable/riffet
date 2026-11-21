@@ -1,7 +1,8 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type { Session } from '@contracts';
-import { api } from '@/lib/api';
+import { api, apiFor } from '@/lib/api';
+import { serverOfObject } from '@/lib/server-routing';
 import { comparePinnedSessions, isActiveSession, sortSessionsByActivity } from '@/lib/session-order';
 import { createStore } from '@/lib/store';
 import { toast } from '@/lib/toast';
@@ -441,12 +442,16 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       let next = 0;
       const order = pinned.map((session) => open.has(session.id) ? ids[next++]! : session.id);
       if (next !== ids.length) return;
+      // Each server keeps the order of its own pinned conversations (docs/SERVER-LINKS.md §5).
+      const parts = new Map<string | undefined, string[]>();
+      for (const id of order) { const server = serverOfObject(id); parts.set(server, [...(parts.get(server) ?? []), id]); }
+      const rankOf = new Map([...parts.values()].flatMap((part) => part.map((id, rank) => [id, rank] as const)));
       const before = new Map(pinned.map((session) => [session.id, session]));
-      const changed = order.flatMap((id, rank) => { const session = before.get(id)!; return session.pinRank === rank ? [] : [{ ...session, pinRank: rank }]; });
+      const changed = order.flatMap((id) => { const session = before.get(id)!; const rank = rankOf.get(id)!; return session.pinRank === rank ? [] : [{ ...session, pinRank: rank }]; });
       if (!changed.length) return;
       for (const session of changed) lists.upsertSession(session);
-      api.setPinOrder(order)
-        .then((updated) => { for (const session of updated) lists.upsertSession(session); })
+      Promise.all([...parts].map(([server, part]) => apiFor(server).setPinOrder(part)))
+        .then((answers) => { for (const session of answers.flat()) lists.upsertSession(session); })
         .catch((error) => {
           // Only the rank goes back: the rest of a session may have moved on while the request ran.
           for (const { id } of changed) {

@@ -13,7 +13,8 @@ import { AgentLogo } from '@/components/AgentLogo';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { Tip } from '@/components/ui/tooltip';
-import { api, type ProjectRecord } from '@/lib/api';
+import { api, apiFor, type ProjectRecord } from '@/lib/api';
+import { ServerTag, useServerLabel } from './useServerLabel';
 import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
 import { cn, isJustNow, readStored, relativeTime, writeStored } from '@/lib/utils';
@@ -214,6 +215,9 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   // Without the item (deleted) the title stands alone; before summaries arrive from a legacy server, reserve the icon slot so the title does not jump.
   const summariesLoaded = useWorkItems((state) => state.summaries !== undefined);
   const taskStatus = useWorkItems((state) => session.workItemId ? state.summaries?.find((entry) => entry.id === session.workItemId)?.status : undefined);
+  // Where the conversation is, when rows of every project and server share one list.
+  const server = useServerLabel(session.id);
+  const place = projectName ? [server, projectName].filter(Boolean).join(' · ') : undefined;
   return (
     <ListRow
       title={`${label} · ${session.title}`}
@@ -232,7 +236,7 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       <span role="img" aria-label={label} className="inline-flex shrink-0 items-center text-fg-4 can-hover:hidden can-hover:group-hover/row:inline-flex can-hover:group-focus-within/row:inline-flex">
         <AgentLogo backend={backend} size={11} style={agentMarkStyle(backend)} />
       </span>
-      {projectName && <span className="max-w-[40%] shrink-0 truncate text-2xs text-fg-4 can-hover:hidden can-hover:group-hover/row:block can-hover:group-focus-within/row:block">{projectName}</span>}
+      {place && <span className="max-w-[40%] shrink-0 truncate text-2xs text-fg-4 can-hover:hidden can-hover:group-hover/row:block can-hover:group-focus-within/row:block">{place}</span>}
       </>}
       actions={<>
       {/* The time and the ⋯ button share one grid cell so the trigger keeps a stable box while
@@ -480,6 +484,7 @@ export function Sidebar(props: Props) {
               <IconChevronRight className={cn('absolute size-3.5 opacity-0 transition-transform group-hover/project:opacity-100', open && 'rotate-90')} />
             </button>
             <span className={cn('min-w-0 flex-1 truncate', mobile && 'font-medium')}>{project.name}</span>
+            <ServerTag objectId={project.id} className="max-w-[40%] shrink-0 truncate font-normal text-fg-4" />
             <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/project:opacity-100 has-[[data-state=open]]:opacity-100 focus-within:opacity-100 no-hover:opacity-100">
               {!project.system && <RowMenu label={t`项目操作`}>
                 <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
@@ -496,6 +501,7 @@ export function Sidebar(props: Props) {
   };
 
   const owner = useLists((state) => state.owner);
+  const linkedStatus = useLists((state) => state.linkedStatus);
   const sidebarPinned = useSettings((settings) => settings.sidebarPinned);
   const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
     ...(props.onOpenAssistant ? { assistant: {
@@ -612,7 +618,7 @@ export function Sidebar(props: Props) {
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)}><Trans>显示已归档</Trans></DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={unreadOnly} onCheckedChange={(value) => setUnreadOnly(value === true)}><Trans>只看未读</Trans></DropdownMenuCheckboxItem>
-                <DropdownMenuItem onSelect={() => void api.markAllSessionsSeen().catch((error) => toast.error(errorMessage(error)))}><Trans>全部标为已读</Trans></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void Promise.all(['', ...Object.keys(linkedStatus).filter((id) => linkedStatus[id] !== 'offline')].map((server) => apiFor(server || undefined).markAllSessionsSeen())).catch((error) => toast.error(errorMessage(error)))}><Trans>全部标为已读</Trans></DropdownMenuItem>
                 {tags.length > 0 && <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel><Trans>按标签筛选</Trans></DropdownMenuLabel>

@@ -29,6 +29,7 @@ import type { DeviceChannel } from '../riffet-mcp/devices.js';
 import type { DeviceAdb } from '../riffet-mcp/adb.js';
 import type { WorkItemService } from '../work-items/index.js';
 import type { ChannelService } from '../channels/service.js';
+import type { LinkService } from '../links/service.js';
 import type { CouncilService } from '../council/service.js';
 import type { AuxiliaryCallRecorder } from '../auxiliary/telemetry.js';
 
@@ -44,6 +45,8 @@ export interface RouteDeps {
   restartAssistant?: () => void;
   /** IM channels: accounts, bound users and chats (docs/design/channels.md). */
   channels: ChannelService;
+  /** Links to other servers (docs/SERVER-LINKS.md); made after the routes' dependencies. */
+  links?: () => LinkService | undefined;
   /** The submitting workbench may bind a new foreground turn before dispatch. */
   bindWorkbench?(request: import('fastify').FastifyRequest, session: Session, run: Run): void;
   stateDir: string;

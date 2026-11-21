@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { Attachment, AttemptGroup, MarkLocation, NativeBackendId, Session, TerminalInfo, ToolGroupId } from '@contracts';
-import { api, HttpError, messageContext, restoreNewSessionContext, listNativeCreateRequests, removeNativeCreateRequest, saveNativeCreateRequest, type MessageSearchHit, type NativeSessionCreateInput, type NativeSessionCreateResult, type ProjectRecord, type PromptContextReference, type Bootstrap } from '@/lib/api';
+import { api, apiFor, HttpError, messageContext, restoreNewSessionContext, listNativeCreateRequests, removeNativeCreateRequest, saveNativeCreateRequest, type MessageSearchHit, type NativeSessionCreateInput, type NativeSessionCreateResult, type ProjectRecord, type PromptContextReference, type Bootstrap } from '@/lib/api';
 import { isShellTerminal } from '@/lib/backends';
+import { serverOfObject } from '@/lib/server-routing';
 import { promptDialog } from '@/lib/dialogs';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { toast } from '@/lib/toast';
@@ -97,7 +98,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         for (const body of listNativeCreateRequests()) {
           if (body.invalidReason) continue;
           try {
-            const found = (await api.sessions()).find(item => item.id === body.clientSessionId);
+            const found = (await apiFor(serverOfObject(body.projectId)).sessions()).find(item => item.id === body.clientSessionId);
             if (!found) continue;
             const run = (await api.runs(found.id, body.initialMessage.commandId)).find(item => item.sessionId === found.id && item.commandId === body.initialMessage.commandId);
             if (!run) continue;
@@ -368,7 +369,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       let result: NativeSessionCreateResult | undefined;
       if (retry) result = await api.createNativeSession(body, await assistantCreationConnection(body));
       else {
-        const found = (await api.sessions()).find(item => item.id === body.clientSessionId);
+        const found = (await apiFor(serverOfObject(body.projectId)).sessions()).find(item => item.id === body.clientSessionId);
         const run = found ? (await api.runs(found.id, body.initialMessage.commandId)).find(item => item.sessionId === found.id && item.commandId === body.initialMessage.commandId) : undefined;
         if (found && run) result = { session: found, run };
       }

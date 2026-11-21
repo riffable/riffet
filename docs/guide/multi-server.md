@@ -64,27 +64,28 @@
 
 - 客户端的 HTTP 请求和 WebSocket 都经同一个按服务器选目标的请求层：本机走 `/api/…`，对端走 `/api/servers/<serverId>/…`，不在业务代码里拼路径。
 - `pnpm check:servers` 拦下请求层之外直接写的 `fetch('/api…`、`` `/api/…` ``、`new WebSocket(`。现有的写法记在基线里，只许减少。Kotlin 客户端同理。
-- 拿到一个 A 类对象，就拿到了它的 `serverId`。对它的后续请求用这个 `serverId`，不假定它在本机。
+- 拿到一个 A 类对象，就知道它在哪台。Web 的请求层按路径或 `sessionId`、`projectId` 参数里的对象 id 自动选服务器（`lib/server-routing.ts`）；不带对象的请求用 `apiFor(serverId)` 或 `serverPath(path, serverId)` 指定，不假定在本机。
+- 新建对象没有可依据的 id：新建会话、终端按请求体里的 `projectId` 选服务器，新建项目由调用方给出服务器。新建的对象在列表读到它之前，用列表的 `upsert*(…, serverId)` 先放进那台的列表。
 
 ### 3.3 A 类对象的标识
 
 - id 用 UUID 这类全局唯一的值，不用服务器内递增的数。
 - 给人看的编号可能只在一台服务器内唯一。例如任务的 `number` 是服务器内递增的，`#128` 在两台上都可能出现。合并显示时，编号要和服务器名一起出现，或者只在单台的上下文里单独出现。
-- 经合并列表下发的 A 类对象带 `serverId`。A 类对象在 `packages/contracts` 里登记成一份清单，类型层面检查它们都带 `serverId`，做法同 `schema/parity.ts`。
+- 线上的 A 类对象不带 `serverId`：客户端从哪台读到它，就记它在哪台（SERVER-LINKS §5）。所以不另设契约里的 A 类清单；新的 A 类对象要做的是让它的 id 出现在请求路径或 `sessionId`、`projectId` 参数里，或在 `server-routing.ts` 的 `OBJECT_PATH` 里加上它的路径。
 
 ### 3.4 合并与搜索
 
-- 合并只在入口做。每台服务器的修订号单独记，不合成一个数。
-- 跨服务器的查询（搜索、⌘K、助理的查询类工具）由入口并发发给各台，各台按自己的索引和可见范围回答，结果带 `serverId`。
+- 合并在客户端做（SERVER-LINKS §5）。每台服务器的修订号单独记，不合成一个数。
+- 跨服务器的查询（搜索、⌘K、助理的查询类工具）并发发给各台，各台按自己的索引和可见范围回答；客户端按发往哪台记录结果在哪台。
 - 没按时返回或离线的服务器不阻塞其他结果，结果里写明不含它。等待时长和条数上限进 `packages/contracts/src/budgets.ts`。
 
 ### 3.5 插件扩展点声明作用范围
 
-- 作用范围由核心按扩展点和视图位置登记（`packages/contracts/src/plugins.ts`，与 `VIEW_LOCATIONS` 放在一起），插件的 manifest 不加字段，已发布的插件不用改。
+- 作用范围由核心按扩展点和视图位置登记（`packages/contracts/src/plugins.ts` 的 `DECLARATION_SCOPES` 和 `VIEW_LOCATION_SCOPES`），插件的 manifest 不加字段，已发布的插件不用改。
 - `object`：依附在会话、项目、任务等对象上，由对象所在的服务器提供，视图包和数据经链接取来。例子：Agent 后端、`session-view`、`file` 位置的视图（文件查看器，由文件所在的服务器提供）、`taskProviders`、`runtimeControl`。
 - `global`：只用入口本机的，并且不能出现在对端的对象上。例子：`sidebar` 视图、插件页、设置页里的操作、`avatarStyles`、`imChannels`。
 - `global` 还包括：`assistantEvents`、`assistantPack`（每台服务器的助理只在本机，事件只送本机的委托，包只装进本机助理，§3.6）；视图桥的 `navigation.openExternal`（只打开入口所在客户端的浏览器，不依附对象，转发时不需要服务器）。
-- 新扩展点或新视图位置要先在这张表里归入其中一种，不能两者都是。
+- 新扩展点或新视图位置要先在这张表里归入其中一种，不能两者都是；两张表的类型覆盖全部键，漏登记编译不过。
 - 插件视图运行在不透明源的 iframe 里（`sandbox="allow-scripts"`），对端的视图包可以在入口渲染；宿主桥接调用（`sessions.*`、`navigation.*`、`commands.execute`）按视图所属对象的服务器转发，权限检查带上服务器。
 
 ### 3.6 个人助理与 Riffet MCP
@@ -136,11 +137,10 @@
 
 ## 6. 现状
 
-链接尚未实现。下面是已知不符合本规范的现有代码，迁移了哪条就删哪条，新留下的不一致也记进来。
+下面是已知不符合本规范的现有代码，迁移了哪条就删哪条，新留下的不一致也记进来。
 
-- **Web**：`lib/api.ts` 的约 270 个接口函数不分服务器；请求层之外直接写了约 40 处 `/api/` 路径（主要在 `lib/tasks.ts`、`plugins/isolated/services.ts`、`plugins/host.ts`、`lib/shares.ts`、`sync/protocol.ts`、`app/state/workItemsStore.ts`），另有 4 处 `new WebSocket(`：`app/terminal/TerminalView.tsx`、`app/state/listsStore.ts`、`lib/workbench-appearance.ts`、`lib/dictation/stream.ts`。
+- **Web**：请求层之外直接写的 `/api/` 路径和 `new WebSocket(` 记在 `scripts/servers-baseline.json`，只许减少。其中不带对象 id 的（`lib/shares.ts`、`plugins/isolated/services.ts` 等）经链接时仍发往入口。
+- **Web 合并**：任务看板（`app/state/workItemsStore.ts`）只读入口的任务；对端会话上的插件视图仍取自入口的插件（`object` 类扩展跟着对象走还没接）。
 - **Kotlin 客户端**：`RiffetApi` 一个实例只连一台；`SessionStore`、`ListsFeed` 与各缓存按裸 id 存放。
-- **服务端**：没有路由策略表。
-- **契约**：列表里的对象都不带 `serverId`；任务的 `number` 是服务器内递增的；Project、Terminal、WorkItem、Automation、Mark 没有 zod schema，列表流的 `changed` 事件和 bootstrap 没有命名类型。
-- **插件**：核心没有登记扩展点和视图位置的作用范围。
+- **契约**：任务的 `number` 是服务器内递增的；Project、Terminal、WorkItem、Automation、Mark 没有 zod schema，列表流的 `changed` 事件和 bootstrap 没有命名类型。
 - **助理**：`defineRead` 没有声明 `servers`。

@@ -9,6 +9,7 @@ import { isQuickChatProject, regularProjects } from '@/lib/project-family';
 import { AddProjectDialog } from './AddProjectDialog';
 import { CommandPalette, type PaletteAction, type PaletteScope } from './CommandPalette';
 import { DirectoryPicker } from './DirectoryPicker';
+import { serverOfObject } from '@/lib/server-routing';
 import { ImportSessionDialog } from './ImportSessionDialog';
 import { SessionDeletionDialog } from './SessionDeletion';
 import { whenIdle } from './session/useEarlierHistory';
@@ -34,9 +35,9 @@ function SettingsLoading({ frame, onShown }: { frame: (children: ReactNode) => R
  * reads its own open state, so opening one re-renders this and nothing else.
  */
 export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDirectory, onRefreshBackends, onLogout, onSelectSession, onSelectProject, onOpenMessage, onImported, onError }: {
-  addProject: (input: { cwd: string; name?: string }) => Promise<boolean>;
+  addProject: (input: { cwd: string; name?: string }, server?: string) => Promise<boolean>;
   paletteActions: () => PaletteAction[];
-  startSessionInDirectory: (path: string) => Promise<void>;
+  startSessionInDirectory: (path: string, server?: string) => Promise<void>;
   onRefreshBackends: () => Promise<void>;
   onLogout?: (() => void) | undefined;
   onSelectSession: (session: Session) => void;
@@ -118,7 +119,9 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
         open={directoryOpen}
         onOpenChange={(open) => ui.set({ sessionDirectoryOpen: open })}
         initialPath={quickChat ? undefined : project?.cwd}
-        onPick={(path) => void startSessionInDirectory(path)}
+        server={quickChat ? undefined : serverOfObject(project?.id)}
+        chooseServer
+        onPick={(path, server) => void startSessionInDirectory(path, server)}
         onError={onError}
       />
       {settingsMounted && SettingsDialog && <ErrorBoundary resetKey={String(settingsOpen)} frame={settingsFrame}><Suspense fallback={<SettingsLoading frame={settingsFrame} onShown={markSettingsEntered} />}><SettingsDialog

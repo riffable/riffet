@@ -74,6 +74,19 @@ describe('server links', () => {
     expect(fromB).toEqual([expect.objectContaining({ serverId: a.serverId, inbound: true, outbound: false, dialer: false })]);
   });
 
+  it('names the linked servers in its own bootstrap, not in one read through the link', async () => {
+    const own = await a.call<{ serverId?: string; servers?: Array<{ id: string }> }>('GET', '/api/bootstrap');
+    expect(own.body.serverId).toBe(a.serverId);
+    expect(own.body.servers?.map(server => server.id)).toEqual([a.serverId, b.serverId]);
+    const peer = await a.call<{ serverId?: string; servers?: unknown; projects: unknown[] }>('GET', `/api/servers/${b.serverId}/bootstrap`);
+    expect(peer.status).toBe(200);
+    expect(peer.body).not.toHaveProperty('servers');
+    expect(peer.body).not.toHaveProperty('serverId');
+    // Only the link sets `x-riffet-link`; a client's own copy is dropped.
+    const forged = await fetch(`${a.base}/api/bootstrap`, { headers: { cookie: a.cookie, 'x-riffet-link': b.serverId } });
+    expect(((await forged.json()) as { servers?: unknown[] }).servers).toHaveLength(2);
+  });
+
   it('forwards requests to the peer and records its writes there', async () => {
     const projects = await a.call<unknown[]>('GET', `/api/servers/${b.serverId}/projects`);
     expect(projects.status).toBe(200);
@@ -81,6 +94,8 @@ describe('server links', () => {
     expect(created.status).toBeLessThan(300);
     const onB = await b.call<Array<{ id: string }>>('GET', '/api/projects');
     expect(onB.body.some(project => project.id === created.body.id)).toBe(true);
+    // An id of the peer's in the query is the peer's to check, not the entry's.
+    expect((await a.call('GET', `/api/servers/${b.serverId}/folder-favorites?projectId=${created.body.id}`)).status).toBe(200);
     await until(async () => ((await b.call<{ entries: Array<{ method: string; path: string }> }>('GET', `/api/links/${a.serverId}/audit`)).body.entries ?? []).some(entry => entry.method === 'POST' && entry.path === '/api/projects'));
   });
 

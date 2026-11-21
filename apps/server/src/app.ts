@@ -370,6 +370,7 @@ export async function createApp(options: AppOptions = {}) {
       if (request.headers.upgrade) linksRef.record(linkedFrom,{at:new Date().toISOString(),method:request.method,path:(request.raw.url??'').split('?')[0]!.slice(0,300),status:101,...linkOrigin(request.headers)});
       return;
     }
+    delete request.headers['x-riffet-link'];
     auth.checkOrigin(request);
     reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer');
     if (isApiRequest(request)) {
@@ -530,7 +531,7 @@ export async function createApp(options: AppOptions = {}) {
       },
     },
   });
-  const deps:RouteDeps={bindWorkbench:(request,session,run)=>{
+  const deps:RouteDeps={links:()=>linksRef,bindWorkbench:(request,session,run)=>{
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);

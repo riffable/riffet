@@ -1,0 +1,34 @@
+{
+  "apiPath": {
+    "apps/web/src/app/marks/MarkDetailDialog.tsx": 2,
+    "apps/web/src/app/marks/MarksPage.tsx": 1,
+    "apps/web/src/app/panels/FilesPanel.tsx": 1,
+    "apps/web/src/app/session/imageSource.ts": 2,
+    "apps/web/src/app/session/Markdown.tsx": 1,
+    "apps/web/src/app/session/VisualizationPreview.tsx": 1,
+    "apps/web/src/app/settings/AvatarStylePicker.tsx": 1,
+    "apps/web/src/lib/browser-diagnostics.ts": 1,
+    "apps/web/src/lib/client-metrics.ts": 1,
+    "apps/web/src/lib/files.ts": 2,
+    "apps/web/src/lib/plugins.ts": 2,
+    "apps/web/src/lib/service-worker-strategy.ts": 2,
+    "apps/web/src/lib/shares.ts": 4,
+    "apps/web/src/lib/tasks.ts": 8,
+    "apps/web/src/lib/workbench-appearance.ts": 1,
+    "apps/web/src/plugins/access.ts": 1,
+    "apps/web/src/plugins/host.ts": 5,
+    "apps/web/src/plugins/isolated/entry.ts": 1,
+    "apps/web/src/plugins/isolated/services.ts": 6,
+    "apps/web/src/sync/protocol.ts": 2
+  },
+  "socket": {
+    "apps/web/src/app/council/useCouncilDiscussion.ts": 1,
+    "apps/web/src/app/state/gitStatusStore.ts": 1,
+    "apps/web/src/app/state/listsStore.ts": 2,
+    "apps/web/src/app/stats/use-stats-data.ts": 1,
+    "apps/web/src/app/terminal/TerminalView.tsx": 1,
+    "apps/web/src/lib/dictation/stream.ts": 1,
+    "apps/web/src/lib/workbench-appearance.ts": 1,
+    "apps/web/src/sync/browser.ts": 1
+  }
+}

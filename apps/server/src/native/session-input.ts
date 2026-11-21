@@ -83,5 +83,13 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
     resumePicker:Boolean(body.resumePicker),
     ...(toolGroups.length&&!quickChat?{toolGroups}:{}),
     ...(extensionsOff.length?{extensionsOff}:{}),
+    // Opened from a linked server's workbench (docs/SERVER-LINKS.md §4): the lists mark it.
+    ...(linkedFrom(headers)?{origin:{kind:'link' as const,serverId:linkedFrom(headers)!}}:{}),
   };
+}
+
+/** The linked server a request came through; the server sets this header itself (`app.ts`), so it cannot be forged. */
+function linkedFrom(headers: IncomingHttpHeaders | undefined): string | undefined {
+  const value=headers?.['x-riffet-link'];
+  return typeof value==='string'&&value?value:undefined;
 }

@@ -7,7 +7,8 @@ import { startDownload } from '@/lib/files';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { mayPreviewFile, usePreviewTheme } from '@/lib/content-preview';
-import { api } from '@/lib/api';
+import { api, attachmentPath } from '@/lib/api';
+import { MessageCommandsContext } from './messageCommands';
 import { boundedCache } from '@/lib/bounded-cache';
 import { cn, formatBytes, pixelEdge } from '@/lib/utils';
 import { ImageViewer, loadedImageSize, rememberImageSize } from './ImageViewer';
@@ -91,6 +92,8 @@ export function messageImageVariant(attachments: readonly UserAttachment[], froz
 function MessageAttachment({ attachment, variant }: { attachment: UserAttachment; variant: 'single' | 'tile' }) {
   const { t } = useLingui();
   const printing = useContext(PrintRenderingContext);
+  // The conversation the attachment was sent in, which finds the server it is on (docs/guide/multi-server.md §3.2).
+  const ownerId = useContext(MessageCommandsContext)?.sessionId;
   const previewTheme = usePreviewTheme();
   const resources = useTranscriptResources();
   const imageSource = useImageSource();
@@ -120,7 +123,7 @@ function MessageAttachment({ attachment, variant }: { attachment: UserAttachment
     // image decodes instead of resizing afterwards. Older id-only receipts need it regardless.
     if (attachment.mimeType && attachment.width && attachment.height) return;
     let active = true;
-    void api.attachmentMetadata(attachment.id).then((value) => {
+    void api.attachmentMetadata(attachment.id, ownerId).then((value) => {
       const declared = declaredSize(value);
       const next: UserAttachment = { id: value.id, name: value.name, mimeType: value.mimeType, size: value.size, ...(declared ?? {}) };
       metadataCache.set(attachment.id!, next);
@@ -133,13 +136,13 @@ function MessageAttachment({ attachment, variant }: { attachment: UserAttachment
       if (active && !attachment.mimeType) setUnavailable(true);
     });
     return () => { active = false; };
-  }, [attachment.id, attachment.name, attachment.mimeType, attachment.width, attachment.height, attachment.path, attachment.type, retry, resources, frozen]);
+  }, [attachment.id, attachment.name, attachment.mimeType, attachment.width, attachment.height, attachment.path, attachment.type, retry, resources, frozen, ownerId]);
 
   const name = metadata.name === metadata.id ? t`附件` : metadata.name;
   const isImage = metadata.mimeType ? metadata.mimeType.startsWith('image/') : metadata.type === 'image';
   // Uploaded images keep their stable id; a native CLI image path is read through the project route.
   const source = metadata.id
-    ? resources ? frozen?.url : `/api/attachments/${encodeURIComponent(metadata.id)}`
+    ? resources ? frozen?.url : attachmentPath(metadata.id, ownerId)
     : isImage && metadata.path ? imageSource(metadata.path) : undefined;
   if (unavailable && resources) return <span className={attachmentChip}><IconPaperclip className="size-3 shrink-0" /><span><Trans>{name} · 附件不可用</Trans></span></span>;
   if (unavailable) return <button type="button" className={`${attachmentChip} hover:bg-hover`} title={t`重新读取附件`} aria-label={t`重新读取附件`} onClick={() => setRetry(value => value + 1)}><IconPaperclip className="size-3 shrink-0" /><span><Trans>附件不可用</Trans></span></button>;

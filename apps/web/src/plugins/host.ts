@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, StatusDot, Switch } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
-import { api, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
+import { api, attachmentPath, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
 import { copyWithToast } from '@/lib/files';
 import { toast } from '@/lib/toast';
@@ -103,7 +103,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       turnSummaries: summariesChosen,
       // Image loads cannot send the features header, so it travels in the URL.
       mediaUrl: (id, path) => withClientFeatures(`/api/sessions/${encodeURIComponent(id)}/media?path=${encodeURIComponent(path)}`),
-      attachmentUrl: (id) => `/api/attachments/${encodeURIComponent(id)}`,
+      attachmentUrl: (id) => attachmentPath(id, sessionId),
     },
     navigation: {
       openTurn: (target: Session, turn) => {

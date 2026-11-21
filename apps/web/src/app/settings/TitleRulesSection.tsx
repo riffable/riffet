@@ -138,7 +138,7 @@ function useOriginLabels(): Record<TitleRuleOrigin, string> {
   const { t } = useLingui();
   return {
     manual: t`手动新建`, automation: t`自动化`, template: t`自动化`, schedule: t`自动化`, channel: t`机器人`, assistant: t`个人助理`,
-    fork: t`分支`, handoff: t({ message: '交接', context: 'session-origin' }), attempt: t`尝试`, discussion: t`侧边聊天`, call: t({ message: '调用', context: 'session-origin' }),
+    fork: t`分支`, handoff: t({ message: '交接', context: 'session-origin' }), attempt: t`尝试`, discussion: t`侧边聊天`, call: t({ message: '调用', context: 'session-origin' }), link: t`互联的服务器`,
   };
 }
 

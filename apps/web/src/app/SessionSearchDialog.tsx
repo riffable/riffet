@@ -11,8 +11,11 @@ import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { createTitleMatcher } from '@/lib/title-search';
 import { useMessageSearch } from '@/lib/use-message-search';
 import { useListWindow } from '@/lib/use-list-window';
+import { serverOfObject } from '@/lib/server-routing';
 import { cn, relativeTime } from '@/lib/utils';
 import { isComposingKey } from './session/composerKeyboard';
+import { useLists } from './state/stores';
+import { ServerTag } from './useServerLabel';
 
 export interface SessionSearchProps {
   sessions: Session[];
@@ -84,7 +87,11 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
       return score === undefined ? [] : [{ session, score }];
     }).sort((left, right) => left.score - right.score).map(({ session }) => session);
   }, [ordered, needle]);
-  const search = useMessageSearch(open && mode === 'content' ? needle : '', scope || undefined);
+  const linkedStatus = useLists((state) => state.linkedStatus);
+  const linked = useMemo(() => Object.keys(linkedStatus).filter((id) => linkedStatus[id] !== 'offline'), [linkedStatus]);
+  const found = useMessageSearch(open && mode === 'content' ? needle : '', scope || undefined, linked);
+  // A linked server's own system conversations (its assistant, quick chats) are not in this workbench's lists.
+  const search = useMemo(() => linked.length ? { ...found, hits: found.hits.filter((hit) => !serverOfObject(hit.projectId) || projectMap.has(hit.projectId)) } : found, [found, linked.length, projectMap]);
   const lastMessages = useRef(search);
   useLayoutEffect(() => { if (open) lastMessages.current = search; }, [open, search]);
   // Stop the search immediately, but leave its last result visible for the dialog's exit.
@@ -151,6 +158,7 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
         </div>
         {snippet && <p className="mt-1 line-clamp-2 break-words text-sm leading-6 text-fg-2">{highlight(snippet, needle)}</p>}
         <div className="mt-1 flex items-center gap-2 text-xs text-fg-4">
+          <ServerTag objectId={projectId} className="max-w-[40%] shrink-0 truncate" />
           <span className="truncate">{projectMap.get(projectId)?.name}</span>
           {archived && <span className="shrink-0"><Trans>已归档</Trans></span>}
         </div>

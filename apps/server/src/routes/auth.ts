@@ -7,6 +7,7 @@ import { AppError } from '../errors.js';
 import { requireDeviceName } from '../auth.js';
 import { createPairingCode, redeemPairingCode } from '../pairing.js';
 import { PROTOCOL_INFO, summarizeWorkItem } from '../../../../packages/contracts/src/index.js';
+import type { ServerInfo } from '../../../../packages/contracts/src/index.js';
 import { withoutQuickChats } from '../chat/quick-chat.js';
 import { projectVisibleToClient, visibleProjectsForClient, visibleProjectItemsForClient, visibleSessionsForClient } from '../native/client-features.js';
 import type { RouteDeps } from './deps.js';
@@ -108,7 +109,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const projects=store.listProjects();
     const projectsById=new Map(projects.map(project=>[project.id,project]));
     const workItemSummaries=deps.workItems.list().filter(item=>{const project=item.projectId?projectsById.get(item.projectId):undefined;return !project||projectVisibleToClient(request.headers,project);}).map(summarizeWorkItem);
-    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(projects,request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),workItemSummaries,revisions:{sessions:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,workItems:store.workItemsRevision},settings:await effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
+    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(projects,request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),workItemSummaries,...linkedServers(request,deps),revisions:{sessions:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,workItems:store.workItemsRevision},settings:await effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
   });
 }
 /**
@@ -122,6 +123,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
  * allowed. A forged header could at worst make a QR advertise a scheme this server does not serve,
  * which fails to connect rather than exposing anything.
  */
+/**
+ * This server's id and the servers linked with it, so a workbench paints every server's lists from its first frame
+ * (docs/SERVER-LINKS.md §4). A request that came through a link is never told this server's links.
+ */
+function linkedServers(request: FastifyRequest, deps: RouteDeps): { serverId?: string; servers?: ServerInfo[] } {
+  const links = deps.links?.();
+  if (!links || request.headers['x-riffet-link']) return {};
+  const servers = links.servers();
+  return { serverId: servers[0]!.id, servers };
+}
+
 function pairingScheme(request: FastifyRequest): 'http' | 'https' {
   if (request.protocol==='https') return 'https';
   const forwarded=String(request.headers['x-forwarded-proto']??'').split(',')[0]?.trim().toLowerCase();

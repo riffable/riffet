@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { Attachment } from '@contracts';
 import { IconFileText, IconImage, IconPaperclip, IconTextQuote, IconX } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
-import { isAgentReference, isSessionReference, type PromptContextReference } from '@/lib/api';
+import { attachmentPath, isAgentReference, isSessionReference, type PromptContextReference } from '@/lib/api';
 import { AgentLogo } from '@/components/AgentLogo';
 import { basename } from '@/lib/utils';
 import { COMPOSER_IMAGE_TILE, focusIndexAfterRemoval, formatBytes, isImageAttachment, type PendingUpload } from './composerAttachmentIntake';
@@ -60,7 +60,7 @@ function ImageTile({ attachment, disabled, onRemove, onError }: {
   const { t } = useLingui();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const source = `/api/attachments/${encodeURIComponent(attachment.id)}`;
+  const source = attachmentPath(attachment.id);
   return (
     <span className="relative shrink-0">
       {failed ? (

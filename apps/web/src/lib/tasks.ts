@@ -2,24 +2,31 @@ import { useEffect, useMemo } from 'react';
 import type { Task, TaskActionsResponse, TaskConfirmation, TaskCreate, TaskLogChunk, TasksResponse } from '@contracts';
 import { request } from '@/lib/api';
 import { HttpError } from '@/lib/errors';
+import { locate, serverOfObject, serverPath } from '@/lib/server-routing';
 import { usePlugins } from '@/lib/plugins';
 import { createStore, useStore } from '@/lib/store';
 
 /** Project tasks (docs/TASKS.md). A task is the server's, so nothing here ties one to the view that asked for it. */
 const enc = encodeURIComponent;
 
+/** A task lives on its project's server (docs/guide/multi-server.md §3.2); later reads of it by id go there too. */
+const located = (tasks: Task[]): Task[] => {
+  for (const task of tasks) locate([task.id], serverOfObject(task.projectId));
+  return tasks;
+};
+
 export const tasksApi = {
   list: async (projectId: string, limit: number, signal?: AbortSignal): Promise<Task[]> =>
-    (await request<TasksResponse>(`/api/tasks?projectId=${enc(projectId)}&limit=${limit}`, { ...(signal ? { signal } : {}) })).tasks,
+    located((await request<TasksResponse>(`/api/tasks?projectId=${enc(projectId)}&limit=${limit}`, { ...(signal ? { signal } : {}) })).tasks),
   /** One plugin's recent tasks across projects, newest first. */
   listByPlugin: async (pluginId: string, limit: number, signal?: AbortSignal): Promise<Task[]> =>
     (await request<TasksResponse>(`/api/tasks?pluginId=${enc(pluginId)}&limit=${limit}`, { ...(signal ? { signal } : {}) })).tasks,
-  get: (id: string, signal?: AbortSignal) => request<Task>(`/api/tasks/${enc(id)}`, { ...(signal ? { signal } : {}) }),
-  start: (body: TaskCreate) => request<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  cancel: (id: string) => request<Task>(`/api/tasks/${enc(id)}/cancel`, { method: 'POST' }),
+  get: (id: string, signal?: AbortSignal) => request<Task>(serverPath(`/api/tasks/${enc(id)}`, serverOfObject(id)), { ...(signal ? { signal } : {}) }),
+  start: (body: TaskCreate) => request<Task>(serverPath('/api/tasks', serverOfObject(body.projectId)), { method: 'POST', body: JSON.stringify(body) }).then((task) => located([task])[0]!),
+  cancel: (id: string) => request<Task>(serverPath(`/api/tasks/${enc(id)}/cancel`, serverOfObject(id)), { method: 'POST' }),
   log: (id: string, from: number, limit: number, signal?: AbortSignal) =>
-    request<TaskLogChunk>(`/api/tasks/${enc(id)}/log?from=${from}&limit=${limit}`, { ...(signal ? { signal } : {}) }),
-  artifactUrl: (id: string, artifactId: string) => `/api/tasks/${enc(id)}/artifacts/${enc(artifactId)}`,
+    request<TaskLogChunk>(serverPath(`/api/tasks/${enc(id)}/log?from=${from}&limit=${limit}`, serverOfObject(id)), { ...(signal ? { signal } : {}) }),
+  artifactUrl: (id: string, artifactId: string) => serverPath(`/api/tasks/${enc(id)}/artifacts/${enc(artifactId)}`, serverOfObject(id)),
 };
 
 /** The actions each project's task providers offer now, and the project types they imply; one read per project at a time. */

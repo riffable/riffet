@@ -1150,6 +1150,10 @@ msgstr ""
 msgid "互联"
 msgstr ""
 
+#: src/app/settings/TitleRulesSection.tsx
+msgid "互联的服务器"
+msgstr ""
+
 #: src/app/design/android/PlatformChapter.tsx
 msgid "五种风格只在 themePreset() 里按名字分派一次；组件读 LocalInterfaceStyle 的字段。"
 msgstr ""

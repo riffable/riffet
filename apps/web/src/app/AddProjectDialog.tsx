@@ -2,29 +2,34 @@ import { useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconFolderOpen, IconPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Field, Input } from '@/components/ui/controls';
+import { Field, Input, Select } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { errorMessage, tildePath } from '@/lib/utils';
 import { hostInfo } from '@/lib/platform';
 import { DirectoryPicker } from './DirectoryPicker';
 import { byRecentUse, FavoriteStar, favoriteName, useFolderFavorites } from './FolderFavorites';
+import { useServerChoices } from './useServerLabel';
 
-export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { open: boolean; onOpenChange: (open: boolean) => void; onSubmit: (input: { cwd: string; name?: string }) => Promise<boolean>; onError?: (message: string) => void }) {
+export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { open: boolean; onOpenChange: (open: boolean) => void; onSubmit: (input: { cwd: string; name?: string }, server?: string) => Promise<boolean>; onError?: (message: string) => void }) {
   const { t } = useLingui();
   const [cwd, setCwd] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [picking, setPicking] = useState(false);
-  const quickPicks = byRecentUse(useFolderFavorites(undefined, open).favorites.filter((favorite) => favorite.exists));
+  const choices = useServerChoices();
+  /** `''` is this server; a linked server's directories are its own, so its path, favorites and chooser differ. */
+  const [server, setServer] = useState('');
+  const favorites = byRecentUse(useFolderFavorites(undefined, open).favorites.filter((favorite) => favorite.exists));
+  const quickPicks = server ? [] : favorites;
 
   /** A favorite is added in one click; the server stamps it as used when the project opens. */
   const submit = async (target = cwd.trim()) => {
     if (!target || busy) return;
     setBusy(true);
     try {
-      if (await onSubmit({ cwd: target, ...(name.trim() ? { name: name.trim() } : {}) })) { setCwd(''); setName(''); }
+      if (await onSubmit({ cwd: target, ...(name.trim() ? { name: name.trim() } : {}) }, server || undefined)) { setCwd(''); setName(''); }
     } finally { setBusy(false); }
   };
 
@@ -36,7 +41,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
    */
   const browseNative = async () => {
     if (picking) return;
-    if (!hostInfo().local) { setPickerOpen(true); return; }
+    if (server || !hostInfo().local) { setPickerOpen(true); return; }
     setPicking(true);
     try {
       const result = await api.pickDirectory({ prompt: t`选择项目目录`, ...(cwd.trim() ? { defaultPath: cwd.trim() } : {}) });
@@ -59,6 +64,11 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
               <DialogTitle><Trans>添加项目</Trans></DialogTitle>
             </DialogHeader>
             <DialogBody className="flex flex-col gap-4 pt-1">
+              {choices.length > 0 && (
+                <Field label={t`服务器`}>
+                  <Select label={t`服务器`} value={server} options={choices} onChange={(next) => { if (next !== server) { setServer(next); setCwd(''); } }} />
+                </Field>
+              )}
               <Field label={t`目录路径`}>
                 <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
                   <Input className="font-mono" value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="/Users/you/code/project" />
@@ -94,6 +104,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         initialPath={cwd.trim() || undefined}
+        server={server || undefined}
         onPick={(path) => setCwd(path)}
         onError={(message) => onError?.(message) ?? console.error(message)}
       />

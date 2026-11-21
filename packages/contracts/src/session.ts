@@ -220,13 +220,16 @@ export interface ExternalSessionDirectory {
 /**
  * Why a conversation exists. `sessionId`/`runId` name the conversation (and turn) it continues;
  * `groupId` and `automationId` name what launched it. A `call` is another conversation's Agent
- * calling this one (docs/AGENT-CALLS.md): `sessionId`/`runId` name the caller and its turn.
+ * calling this one (docs/AGENT-CALLS.md): `sessionId`/`runId` name the caller and its turn. A `link` is a
+ * conversation opened from a linked server's workbench (docs/SERVER-LINKS.md §4); `serverId` names that server.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council' | 'call';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council' | 'call' | 'link';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
   sessionId?: string; runId?: string; groupId?: string; automationId?: string;
+  /** The linked server a `link` conversation was opened from. */
+  serverId?: string;
   /** Set on conversations opened before templates and schedules became automations (0.7). */
   templateId?: string; scheduleId?: string;
   /** A discussion keeps its source separately from its own visible messages. */
