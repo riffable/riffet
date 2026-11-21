@@ -64,15 +64,16 @@ struct ConversationDock: View {
     }
 }
 
-/// One docked card: a one-line header that is also its collapse control, and a body while it is open.
+/// One docked card: a one-line header that is also its collapse control, and a body while it is open. The header
+/// is told whether the card is open, so a preview of the body shows only while the body does not.
 private struct DockCard<Header: View, Content: View>: View {
     @State private var expanded: Bool
     let label: String
-    @ViewBuilder let header: () -> Header
+    @ViewBuilder let header: (_ expanded: Bool) -> Header
     @ViewBuilder let content: () -> Content
     @Environment(\.palette) private var palette
 
-    init(expanded: Bool = false, label: String, @ViewBuilder header: @escaping () -> Header, @ViewBuilder content: @escaping () -> Content) {
+    init(expanded: Bool = false, label: String, @ViewBuilder header: @escaping (_ expanded: Bool) -> Header, @ViewBuilder content: @escaping () -> Content) {
         _expanded = State(initialValue: expanded)
         self.label = label
         self.header = header
@@ -83,7 +84,7 @@ private struct DockCard<Header: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             Button { expanded.toggle() } label: {
                 HStack(spacing: 8) {
-                    header().lineLimit(1)
+                    header(expanded).lineLimit(1)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.down").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg4)
                         .rotationEffect(.degrees(expanded ? 180 : 0))
@@ -97,6 +98,35 @@ private struct DockCard<Header: View, Content: View>: View {
         }
         .padding(.horizontal, RiffetMetrics.groupInset)
         .dockSurface()
+    }
+}
+
+/// A docked card's body: as tall as its rows up to `maxHeight`, scrolling past it. A `ScrollView` under
+/// `.frame(maxHeight:)` takes all of `maxHeight` however few rows it holds, and so does the frame itself.
+private struct DockScroll<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        HeightCap(maxHeight: maxHeight) {
+            ViewThatFits(in: .vertical) {
+                content()
+                ScrollView { content() }.scrollIndicators(.hidden)
+            }
+        }
+    }
+}
+
+/// Offers its one subview at most `maxHeight` and takes the height the subview chose, not the height offered.
+private struct HeightCap: Layout {
+    let maxHeight: CGFloat
+    private func capped(_ proposal: ProposedViewSize) -> ProposedViewSize {
+        ProposedViewSize(width: proposal.width, height: min(proposal.height ?? maxHeight, maxHeight))
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.first?.sizeThatFits(capped(proposal)) ?? .zero
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: capped(ProposedViewSize(bounds.size)))
     }
 }
 
@@ -123,9 +153,9 @@ private struct GoalDockCard: View {
     let goal: SessionGoal
     @Environment(\.palette) private var palette
     var body: some View {
-        DockCard(label: String(localized: "目标", bundle: .riffet)) {
+        DockCard(label: String(localized: "目标", bundle: .riffet)) { expanded in
             Label("目标 · \(goalStatusLabel(goal: goal))", systemImage: "target").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
-            Text(goal.objective).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+            if !expanded { Text(goal.objective).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
         } content: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(goal.objective)
@@ -140,11 +170,10 @@ private struct TodosDockCard: View {
     let entries: [TodoEntry]
     @Environment(\.palette) private var palette
     var body: some View {
-        DockCard(label: String(localized: "待办", bundle: .riffet)) {
+        DockCard(label: String(localized: "待办", bundle: .riffet)) { _ in
             Label(todoProgress(entries: entries), systemImage: "checklist").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
         } content: {
-            ScrollView { ConversationTodoList(entries: entries).frame(maxWidth: .infinity, alignment: .leading) }
-                .frame(maxHeight: RiffetMetrics.rowMinHeight * 2).scrollIndicators(.hidden)
+            DockScroll(maxHeight: RiffetMetrics.rowMinHeight * 2) { ConversationTodoList(entries: entries).frame(maxWidth: .infinity, alignment: .leading) }
         }
     }
 }
@@ -203,14 +232,16 @@ private struct QueueDockCard: View {
     }
 
     var body: some View {
-        DockCard(expanded: true, label: String(localized: "等待发送", bundle: .riffet)) {
+        DockCard(expanded: true, label: String(localized: "等待发送", bundle: .riffet)) { expanded in
             Label("等待发送", systemImage: "clock").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
-            if let first = workbench.queued.first {
+            if expanded {
+                if workbench.queued.count > 1 { Text(workbench.queued.count, format: .number).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
+            } else if let first = workbench.queued.first {
                 Text(first.prompt).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
             }
         } content: {
             // Three rows show; more scroll inside the card, so the dock never grows past the transcript.
-            ScrollView {
+            DockScroll(maxHeight: RiffetMetrics.rowMinHeight * 3) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(workbench.queued, id: \.id) { run in queuedRun(run) }
                     if (workbench.control?.held ?? workbench.status?.queue?.held)?.reason == .unconfirmed {
@@ -218,8 +249,6 @@ private struct QueueDockCard: View {
                     }
                 }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .frame(maxHeight: RiffetMetrics.rowMinHeight * 3)
         }
     }
 
