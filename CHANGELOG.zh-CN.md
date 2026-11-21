@@ -42,6 +42,7 @@
 - Cursor 的所有具名模型族（如 Gemini、Composer、Grok 等）现在都在模型选择面板中展示 300K / 1M / MAX 上下文窗口选项，不再因前缀白名单遗漏而隐藏。
 - 在旧版 Node.js 上运行 `riffet` 时，不再在支持 TrueColor 的终端里因 `styleText` 报出一长串颜色名错误而中止；CLI 现会在入口前置校验 Node.js 版本并按当前安装方式给出升级命令，同时在不支持十六进制颜色的环境下自动回退到 16 色输出。
 - Web 第一次打开且没有选过 Agent 时，新会话页从已安装可用的 Agent 开始，不再停在没装的 Cursor 上、发送按钮不可用；Mac 引导里只找到一个 Agent 时，也会把它设为服务器的默认 Agent。
+- 源码安装版的 `riffet update` 不再因为某个无关进程（比如切到了别的目录的 shell）的命令行里出现 `apps/server/src/cli.ts`，而报「Could not tell which source CLI process … uses」拒绝更新。
 - npm 安装版的 `riffet update` 现在会同时检查当前配置的 npm 源与 `registry.npmjs.org`（支持通过 `RIFFET_NPM_REGISTRIES` 补充候选源）；当镜像源尚未同步新版本时会自动附带 `--registry` 从已发布的源安装，不再报 `ETARGET` 失败。
 - 停用或卸载 AsterGate 等网关插件后，用它的提供商改用自己填的地址和 Key 继续工作，不再无法加载模型；只是不再显示它提供的额度。
 - Web 端选中的语音识别插件被停用或卸载后，输入框不再显示麦克风；设置 › 语音输入里把这个识别方式标为不可用。

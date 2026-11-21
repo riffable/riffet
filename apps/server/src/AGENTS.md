@@ -28,6 +28,7 @@ verify:
 ## 排障
 
 - 新会话没有用上预热的进程：服务日志里出现 `prewarm: a new session did not match the warm one`（`packages/plugin-api/src/kit/warm-pool.ts`），日志里带着持有的键和想要的键，对比二者即可知道哪个字段不同。
+- `riffet update` 报 `Could not tell which source CLI process <pid> uses`：`cli/source-update.ts#assertSourceProcessesStopped` 读不到该进程的 cwd，没法判断它命令行里的相对路径 `dist/cli.js` 或 `apps/server/src/cli.ts` 是不是本仓库的入口。看 `ps -p <pid> -o command=` 和 `lsof -a -p <pid> -d cwd`；相对路径从 cwd 解析后不存在的进程不算。
 - 环境与依赖问题：`riffet doctor --json` 逐项列出 Node、tmux、各 CLI、端口和数据目录。
 - 数据库疑似损坏：服务启动一分钟后在 worker 里对 `workbench.db`、`journal.db` 各跑一次只读 `quick_check`（`storage/integrity.ts`），失败只写一条 `[riffet] <库>.db failed its integrity check` 错误日志，不删不改；`riffet doctor` 的 Storage 一节另做跨库一致性（缺失的大块数据、孤儿块、没有会话的日志、derived 超前于日志）。恢复用 `riffet restore --backup <dir> --state-dir <空目录>`。
 - 跨会话搜索两个字符的词（如「部署」）漏掉很久以前的消息：不足 3 个字符或含通配符的查询用不上 trigram 索引，按 `message_index_at` 索引从新到旧读，最多读 `MESSAGE_SEARCH_BUDGET.scanRows` 条（`store.ts#searchIndexedMessages`），索引超过这个行数时更早的消息搜不到，接口不告诉调用方结果被截断；按会话搜索不受限。

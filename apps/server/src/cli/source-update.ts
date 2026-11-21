@@ -119,7 +119,11 @@ async function assertSourceProcessesStopped(root: string, allowedPid?: number): 
             cwd = files.stdout.split('\n').find(value => value.startsWith('n'))?.slice(1);
           }
           if (!cwd) throw new Error('missing cwd');
-          usesSource = entries.includes(realpathSync(resolve(cwd, relative)));
+          // A path that does not exist from the process's cwd is not this checkout's entry.
+          let target: string | undefined;
+          try { target = realpathSync(resolve(cwd, relative)); }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+          usesSource = target !== undefined && entries.includes(target);
         } catch { throw new Error(`Could not tell which source CLI process ${pid} uses; stop the related Riffet instances first.`); }
       }
     }
