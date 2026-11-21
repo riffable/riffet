@@ -83,6 +83,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - A task worktree whose directory was deleted by hand can be created again at the same path instead of failing as already registered.
 - With a very large message history, a two-character search across conversations reads at most the newest 500,000 messages instead of slowing the whole server as history grows.
 - Claude Code shell commands that only read, search, or list files show what they read, like Codex's: `Read MarkLayer.tsx, textQuote.ts` or `Search quoteOf in src` with the read or search icon, instead of the whole command line. Other commands still show their description or command, and the full command stays in the expanded row.
+- Two different short messages, such as "继续" and "好的", are no longer treated as the same one when a sent message is matched against what the Agent recorded, so a short message is no longer marked as received because of an earlier one.
 - On Android, tapping a session's composer no longer stutters as the keyboard opens: the composer unfolds as part of the keyboard's own motion, and folds back with it when the keyboard is put away. A bottom sheet opened while the keyboard is up rises from the bottom edge instead of first appearing above the keyboard.
 - The Android Git panel shows only "Not a Git repository" for a project that is not one, without a read-failure error above it.
 - Sending a message no longer flashes (briefly disappearing and fading back in) when a fast Agent accepts or finishes it before the timeline row arrives.

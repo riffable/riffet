@@ -34,6 +34,7 @@ verify:
 ## 外部行为
 
 - 输入：各驱动的 `AgentBackend` 回传的事件与状态（`dispatch.ts#DispatchObservation`），以及终端画面。画面录制在 `apps/server/src/backends/claude/fixtures/screens/`，CLI 升级后的重录见 docs/guide/aif.md §5.4；dispatch 本身没有独立录制，用 `dispatch.test.ts` 的场景，以及 `dispatch.property.test.ts`：模拟的 CLI 加随机交错（命令、CLI 事件、迟到或缺失的状态推送、异步步骤的完成与失败、时钟、重启），检查至多一次写入、回合隔离、停止后必结算、静止后无残留。改调度逻辑后用 `RIFFET_PROPERTY_RUNS=5000 RIFFET_PROPERTY_SEED=<n>` 多跑几个种子。
+- 无命令 ID 的 CLI 回执用 `packages/contracts/src/prompt-match.ts#samePromptText` 匹配发出的提示词。规整空白后，只有 `U+FFFD` 所在位置允许字符差异，且模糊匹配至少需要一个相同的非空白字符。服务端和时间线共用此规则。
 - 客户端能力来自请求头 `CLIENT_FEATURES_HEADER`；EventSource 与 WebSocket 不能带头，只有 GET 流接受 `?features=`（`client-features.ts#registerSessionVisibilityHook`）。
 - 内存与压力读取 `ps`、`sysctl kern.memorystatus_vm_pressure_level`、`/proc/pressure/memory`（`agent-processes.ts#memoryPressure`），读不到按 `normal`。
 

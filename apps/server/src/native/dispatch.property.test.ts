@@ -238,8 +238,8 @@ class World {
     return new NativeDispatcher(this.store, this.cli as never, runtime as never, workspace as never);
   }
 
-  /** Texts far enough apart that the tolerant receipt comparison (`samePromptText`) cannot take one for another. */
-  private input() { return { text: `message ${this.sent} ${String.fromCharCode(97 + this.sent % 26).repeat(12)}`, attachmentIds: [], context: [] }; }
+  /** Deliberately one character apart: a receipt must still be bound to its own message (`samePromptText`). */
+  private input() { return { text: `message ${this.sent}`, attachmentIds: [], context: [] }; }
   private runs(): Run[] { return this.store.listRuns(this.session.id).filter(run => run.native); }
   private unfinished(): Run[] { return this.store.listUnfinishedNativeRuns(this.session.id); }
   private queued(): Run[] { return this.unfinished().filter(run => run.native!.delivery === 'queued'); }
