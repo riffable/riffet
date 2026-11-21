@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { WORK_ITEM_LIMITS, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type NativeBackendCatalogEntry, type WorkItem, type WorkItemCommand, type WorkItemEvent, type WorkItemQuestion, type WorkItemStatus, type WorkItemSubmission, type WorkItemWatch } from '@contracts';
+import { WORK_ITEM_LIMITS, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type NativeBackendCatalogEntry, type WorkItem, type WorkItemCommand, type WorkItemEvent, type WorkItemQuestion, type WorkItemStatus, type WorkItemSubmission, type WorkItemVerification, type WorkItemWatch } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
 import { AgentLogo } from '@/components/AgentLogo';
 import { Button } from '@/components/ui/button';
-import { Badge, Input, Select } from '@/components/ui/controls';
+import { Badge, Input, Select, Spinner } from '@/components/ui/controls';
+import { Collapse } from '@/components/ui/collapse';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { SearchField } from '@/components/ui/search-field';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
-import { IconArrowUp, IconCalendarClock, IconCheck, IconChevronDown, IconEllipsis, IconEye, IconListTodo, IconMinus, IconPlay, IconPlus, IconRotateCcw, IconSlash, IconTrash2, IconX } from '@/components/icons';
+import { IconArrowUp, IconCalendarClock, IconCheck, IconChevronDown, IconChevronRight, IconEllipsis, IconEye, IconListTodo, IconMinus, IconPlay, IconPlus, IconRotateCcw, IconSlash, IconTrash2, IconX } from '@/components/icons';
 import { api } from '@/lib/api';
-import { agentMarkStyle, sessionBackend } from '@/lib/backends';
+import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { confirmDialog, promptDialog } from '@/lib/dialogs';
 import { formatDateTime, relativeTime } from '@/lib/i18n/format';
 import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
@@ -21,7 +24,7 @@ import { Markdown } from '../session/Markdown';
 import { isComposingKey } from '../session/composerKeyboard';
 import { liveOf, type WorkItemView } from './model';
 import { assigneeChoices, assigneeValue } from './NewWorkItemDialog';
-import { AssigneeMark, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useLiveLabel, useStatusLabel, WorkItemNumber } from './parts';
+import { AssigneeMark, currentVerification, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useLiveLabel, useStatusLabel, useVerificationLabel, WorkItemNumber } from './parts';
 
 /**
  * One item, in a panel floating over the board (surfaces §3.1, 悬浮): inset 16, `shadow-peek`, so the
@@ -50,6 +53,8 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
   const children = views.filter((entry) => entry.item.parentId === item.id);
   const parent = item.parentId ? views.find((entry) => entry.item.id === item.parentId) : undefined;
   const project = item.projectId ? projects.find((entry) => entry.id === item.projectId) : undefined;
+  const blockedIds = item.blockedBy ?? [];
+  const blockers = blockedIds.flatMap((id) => views.find((entry) => entry.item.id === id) ?? []);
   const panel = useRef<HTMLElement>(null);
   useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
   // A press anywhere else on the page closes it. A card's press is left to the card, which opens
@@ -151,6 +156,22 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
               ))}
               <Tip label={t`添加标签`}><Button size="icon-xs" variant="quiet" aria-label={t`添加标签`} onClick={() => void addLabel()}><IconPlus /></Button></Tip>
             </dd>
+            <dt className="self-start pt-1 text-fg-3"><Trans>前置任务</Trans></dt>
+            <dd className="flex min-h-7 min-w-0 flex-col items-start gap-0.5">
+              {blockers.map((entry) => (
+                <div key={entry.item.id} className="group/blocker flex max-w-full min-w-0 items-center">
+                  <button type="button" onClick={() => onOpenItem(entry.item.id)} className="-ml-2 flex h-7 min-w-0 items-center gap-1.5 rounded-lg px-2 text-sm outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus">
+                    <StatusIcon status={entry.item.status} />
+                    <WorkItemNumber number={entry.item.number} />
+                    <span className={cn('min-w-0 truncate', entry.item.status === 'done' || entry.item.status === 'cancelled' ? 'text-fg-2' : 'text-fg')}>{entry.title}</span>
+                  </button>
+                  <Tip label={t`移除前置任务`}><Button size="icon-xs" variant="quiet" aria-label={t`移除前置任务 #${entry.item.number}`} onClick={() => update({ blockedBy: blockedIds.filter((id) => id !== entry.item.id).length ? blockedIds.filter((id) => id !== entry.item.id) : null })}><IconX /></Button></Tip>
+                </div>
+              ))}
+              {blockedIds.length < WORK_ITEM_LIMITS.blockedBy && (
+                <BlockerPicker candidates={views.filter((entry) => entry.item.id !== item.id && !blockedIds.includes(entry.item.id) && entry.item.status !== 'cancelled')} onPick={(id) => update({ blockedBy: [...blockedIds, id] })} />
+              )}
+            </dd>
           </dl>
 
           {!live && latestFailed && !closed && sessions[0] && (
@@ -179,6 +200,8 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
 
           <Criteria key={`criteria:${item.id}:${(item.criteria ?? []).join('\n')}`} criteria={item.criteria ?? []} submission={item.status === 'review' || item.status === 'done' ? item.submission : undefined} onSave={(next) => update({ criteria: next })} />
 
+          {view.waitingOn.length > 0 && <p className="mb-3 text-xs text-fg-3">{t`等 ${view.waitingOn.map((entry) => `#${entry.number}`).join('、')} 完成后开始`}</p>}
+
           <Actions
             item={item}
             hasSessions={sessions.length > 0}
@@ -192,6 +215,8 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
           />
 
           {item.submission && <Delivery submission={item.submission} />}
+
+          {(() => { const verification = currentVerification(item); return verification && <Verification verification={verification} onOpenSession={onOpenSession} />; })()}
 
           {sessions.length > 0 && (
             <section className="mb-5">
@@ -710,6 +735,7 @@ function Activity({ item, views }: { item: WorkItem; views: WorkItemView[] }) {
       case 'submit': return t`交付`;
       case 'rework': return <span className="whitespace-pre-wrap break-words select-text">{event.by === 'assistant' ? t`跟进返工：${event.text}` : t`返工：${event.text}`}</span>;
       case 'nudge': return <span className="whitespace-pre-wrap break-words select-text">{t`跟进：${event.text}`}</span>;
+      case 'verify': return <VerifyLine verification={event.verification} />;
       case 'stuck': return <span className="whitespace-pre-wrap break-words select-text">{t`推不动：${event.note}`}</span>;
     }
   };
@@ -740,4 +766,70 @@ function Activity({ item, views }: { item: WorkItem; views: WorkItemView[] }) {
       </div>
     </section>
   );
+}
+
+/** Another task to wait for: a search over the board's tasks, shown as many as fit a menu. */
+function BlockerPicker({ candidates, onPick }: { candidates: WorkItemView[]; onPick: (id: string) => void }) {
+  const { t } = useLingui();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase().replace(/^#/, '');
+  const shown = candidates.filter((entry) => !needle || entry.title.toLowerCase().includes(needle) || String(entry.item.number) === needle).slice(0, 30);
+  return (
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery(''); }}>
+      <Tip label={t`添加前置任务`}><PopoverTrigger asChild><Button size="icon-xs" variant="quiet" aria-label={t`添加前置任务`}><IconPlus /></Button></PopoverTrigger></Tip>
+      <PopoverContent align="start" className="w-72 p-1.5">
+        <SearchField aria-label={t`搜索任务`} placeholder={t`搜索任务`} value={query} onChange={setQuery} className="mb-1" />
+        <div className="max-h-64 overflow-y-auto">
+          {shown.map((entry) => (
+            <button key={entry.item.id} type="button" onClick={() => { onPick(entry.item.id); setOpen(false); }} className="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left text-sm outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11">
+              <StatusIcon status={entry.item.status} />
+              <WorkItemNumber number={entry.item.number} />
+              <span className="min-w-0 flex-1 truncate">{entry.title}</span>
+            </button>
+          ))}
+          {shown.length === 0 && <p className="px-2 py-2 text-xs text-fg-4"><Trans>没有可选的任务</Trans></p>}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** 核验: the independent read-only check of the latest submission, its answer folded when long. */
+function Verification({ verification, onOpenSession }: { verification: WorkItemVerification; onOpenSession: (sessionId: string) => void }) {
+  const { t } = useLingui();
+  const label = useVerificationLabel()(verification);
+  const backendLabel = useBackendLabel();
+  const running = verification.state === 'running';
+  // The first line is the verdict the heading already shows.
+  const text = verification.text?.trim().replace(/^(?:\*\*)?(?:结论|Verdict)[:：][^\n]*\n?/i, '').trim();
+  const long = (text?.length ?? 0) > 600;
+  const [open, setOpen] = useState(() => !long);
+  return (
+    <section className="mb-5">
+      <SectionHeading count={relativeTime(verification.endedAt ?? verification.at)}><Trans>核验</Trans></SectionHeading>
+      <div className="flex min-h-8 items-center gap-2 px-1 text-sm">
+        {running ? <Spinner className="size-3.5 text-fg-3" /> : <AgentLogo backend={verification.backendId} size={14} style={agentMarkStyle(verification.backendId)} />}
+        <span className={cn('shrink-0 font-medium', label.against ? 'text-danger' : 'text-fg')}>{label.label}</span>
+        <span className="min-w-0 flex-1 truncate text-xs text-fg-3">{backendLabel(verification.backendId)}{verification.model ? ` · ${verification.model}` : ''}</span>
+        {verification.sessionId && <Button size="xs" variant="ghost" onClick={() => onOpenSession(verification.sessionId!)}><Trans>打开会话</Trans></Button>}
+      </div>
+      {text && (
+        <>
+          <Collapse open={open}><Markdown className="min-w-0 px-1 pt-1 text-sm text-fg select-text" text={text} /></Collapse>
+          {long && (
+            <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="mt-1 flex h-6 items-center gap-1 px-1 text-xs text-fg-3 hover:text-fg">
+              <IconChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />{open ? t`收起` : t`展开`}
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function VerifyLine({ verification }: { verification: WorkItemVerification }) {
+  const label = useVerificationLabel()(verification);
+  const backendLabel = useBackendLabel();
+  return <>{label.label} · {backendLabel(verification.backendId)}</>;
 }

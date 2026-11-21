@@ -1,4 +1,4 @@
-import { isDoneUnseen, isRunningSession, needsYou, type Session, type WorkItem, type WorkItemQuestion, type WorkItemStatus, type WorkItemSummary } from '@contracts';
+import { isDoneUnseen, isRunningSession, needsYou, openPrerequisites, type Session, type WorkItem, type WorkItemQuestion, type WorkItemStatus, type WorkItemSummary } from '@contracts';
 import { sessionActivityAt } from '@/lib/session-order';
 
 /**
@@ -32,6 +32,8 @@ export interface WorkItemView {
   /** The oldest question its conversations asked that nobody has answered. */
   question: WorkItemQuestion | undefined;
   inInbox: boolean;
+  /** Prerequisites not done yet, while the task waits to start (`startQueued`, docs/TASK-BOARD.md §4.4). */
+  waitingOn: WorkItem[];
 }
 
 export function isWatchDue(until: string | undefined, now = Date.now()): boolean {
@@ -64,6 +66,7 @@ export function viewWorkItems(items: readonly WorkItem[], sessions: readonly Ses
     if (list) list.push(session); else byItem.set(session.workItemId, [session]);
   }
   const now = Date.now();
+  const itemsById = new Map(items.map((item) => [item.id, item]));
   return items.map((item) => {
     const own = (byItem.get(item.id) ?? []).sort((a, b) => sessionActivityAt(b).localeCompare(sessionActivityAt(a)));
     // A closed item shows no live mark: what its conversations still do is not this item's news.
@@ -85,6 +88,7 @@ export function viewWorkItems(items: readonly WorkItem[], sessions: readonly Ses
       watchDue,
       liveSession: session,
       question,
+      waitingOn: item.startQueued && item.status === 'doing' && own.length === 0 ? openPrerequisites(item, itemsById) : [],
       // 推不动: the 助理's supervision could not move it on (docs/TASK-BOARD.md §7).
       inInbox: !closed && (live === 'waiting' || live === 'failed' || item.status === 'review' || Boolean(item.stuck) || watchDue),
     };

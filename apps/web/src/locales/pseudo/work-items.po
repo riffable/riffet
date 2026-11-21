@@ -188,6 +188,10 @@ msgstr ""
 msgid "到期提醒"
 msgstr ""
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "前置任务"
+msgstr ""
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -265,6 +269,10 @@ msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "定时检查"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "展开"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
@@ -387,6 +395,7 @@ msgstr ""
 msgid "提问：{0}"
 msgstr ""
 
+#: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "搜索任务"
 msgstr ""
@@ -400,6 +409,7 @@ msgstr ""
 msgid "收件箱"
 msgstr ""
 
+#: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收起"
 msgstr ""
@@ -437,6 +447,10 @@ msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法删除"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "无法判断"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -521,11 +535,39 @@ msgid "标题"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "核验"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "核验不通过"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "核验中"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "核验失败"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "核验通过"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "没有可选的任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "活动"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "添加"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加前置任务"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -570,7 +612,32 @@ msgid "移除"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "移除前置任务"
+msgstr ""
+
+#. placeholder {0}: entry.item.number
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "移除前置任务 #{0}"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "移除标签 {label}"
+msgstr ""
+
+#. placeholder {0}: view.waitingOn.map((entry) => `#${entry.number}`).join('、')
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "等 {0} 完成后开始"
+msgstr ""
+
+#. placeholder {0}: firstOpen.number
+#: src/app/work-items/WorkItemCard.tsx
+msgid "等 #{0}"
+msgstr ""
+
+#. placeholder {0}: firstOpen.number
+#. placeholder {1}: otherOpen.length
+#: src/app/work-items/WorkItemCard.tsx
+msgid "等 #{0} +{1}"
 msgstr ""
 
 #: src/app/work-items/WorkItemsPage.tsx

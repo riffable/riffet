@@ -439,6 +439,8 @@ export class AssistantBoard {
       agent: item.assignee.kind === 'agent' ? item.assignee.backendId : 'owner',
       ...(item.status === 'watching' && item.watch ? { watch: item.watch } : {}),
       ...(item.questions?.length ? { waitingOnOwner: item.questions.map(question => question.text) } : {}),
+      ...(item.blockedBy?.length ? { after: item.blockedBy.flatMap(id => { try { return [this.deps.workItems.get(id).number]; } catch { return []; } }) } : {}),
+      ...(item.verification ? { check: { state: item.verification.state, ...(item.verification.verdict ? { verdict: item.verification.verdict } : {}) } } : {}),
       updatedAt: item.updatedAt,
     };
   }
@@ -491,7 +493,10 @@ export class AssistantBoard {
         const saved = this.deps.workItemChoice ? await this.deps.workItemChoice(named) : undefined;
         const agent = named ?? saved?.backendId ?? await this.deps.defaultBackend();
         const use = saved && saved.backendId === agent ? saved : undefined;
+        if (args.after !== undefined && !Array.isArray(args.after)) throw invalid('after must be a list of task numbers');
+        const after = (args.after as unknown[] | undefined)?.map(entry => this.task(entry).id);
         const item = this.deps.workItems.create({
+          ...(after?.length ? { blockedBy: after } : {}),
           title: args.title as string,
           ...(optionalText(args, 'description') ? { description: optionalText(args, 'description')! } : {}),
           ...(args.criteria !== undefined ? { criteria: args.criteria as string[] } : {}),
@@ -499,12 +504,12 @@ export class AssistantBoard {
         }, { source: 'assistant' });
         if (args.start !== true || this.deps.dispatch?.() === 'all') return { created: this.summary(item), next: args.start === true ? 'The owner starts every task you plan; it waits in this conversation as a card.' : 'It waits in this conversation for the owner to start it.' };
         const started = await this.deps.workItems.start(item.id);
-        return { created: this.summary(started.item), started: true };
+        return { created: this.summary(started.item), ...(started.sessionId ? { started: true } : { queued: 'It starts once the tasks in after are done.' }) };
       }
       case 'task_start': {
         this.assertMayStart();
         const started = await this.deps.workItems.start(this.task(args.task).id);
-        return { started: this.summary(started.item) };
+        return started.sessionId ? { started: this.summary(started.item) } : { queued: this.summary(started.item), note: 'It starts once the tasks in after are done.' };
       }
       case 'task_comment': {
         const item = this.task(args.task);

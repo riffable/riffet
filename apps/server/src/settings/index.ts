@@ -591,7 +591,7 @@ function validateAssistant(raw: unknown): AssistantSettings {
 function validateWorkItems(raw: unknown): WorkItemSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'workItems must be an object');
   const values = raw as Record<string, unknown>;
-  if (Object.keys(values).some(key => !['composerSessions', 'backendId', 'profileId', 'model'].includes(key))) throw new AppError('INVALID_SETTINGS', 'workItems contains an unknown field');
+  if (Object.keys(values).some(key => !['composerSessions', 'backendId', 'profileId', 'model', 'verifier'].includes(key))) throw new AppError('INVALID_SETTINGS', 'workItems contains an unknown field');
   const result: WorkItemSettings = {};
   if (values.composerSessions !== undefined) {
     if (typeof values.composerSessions !== 'boolean') throw new AppError('INVALID_SETTINGS', 'workItems.composerSessions is invalid');
@@ -606,6 +606,19 @@ function validateWorkItems(raw: unknown): WorkItemSettings {
     if (value === undefined) continue;
     if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `workItems.${key} is invalid`);
     result[key] = value;
+  }
+  if (values.verifier !== undefined) {
+    const verifier = values.verifier as Record<string, unknown> | null;
+    if (!verifier || typeof verifier !== 'object' || Array.isArray(verifier) || Object.keys(verifier).some(key => !['backendId', 'profileId', 'model'].includes(key))) throw new AppError('INVALID_SETTINGS', 'workItems.verifier is invalid');
+    if (typeof verifier.backendId !== 'string' || !isNativeBackendId(verifier.backendId) || verifier.backendId === 'chat') throw new AppError('INVALID_SETTINGS', 'workItems.verifier.backendId is invalid');
+    const choice: NonNullable<WorkItemSettings['verifier']> = { backendId: verifier.backendId as NativeBackendId };
+    for (const key of ['profileId', 'model'] as const) {
+      const value = verifier[key];
+      if (value === undefined) continue;
+      if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `workItems.verifier.${key} is invalid`);
+      choice[key] = value;
+    }
+    result.verifier = choice;
   }
   return result;
 }

@@ -323,4 +323,52 @@ describe('work items', () => {
     // Closed tasks cannot be started.
     expect((await call('POST', `/api/work-items/${id}/start`)).statusCode).toBe(409);
   });
+
+  it('starts a task once when its last prerequisite is done, and sends it to the inbox when one is dropped', async () => {
+    const { store, call, project, workItems } = await boot();
+    const agent = { kind: 'agent', backendId: 'cursor' };
+    const make = async (id: string, title: string, extra: object = {}) => (await call('POST', '/api/work-items', { id, title, assignee: agent, projectId: project.id, ...extra })).json() as WorkItem;
+    const api = await make('w-api', 'Define the API');
+    const ui = await make('w-ui', 'Build the screen', { blockedBy: [api.id] });
+    // Waiting on each other, or on itself, is refused.
+    expect((await call('PATCH', `/api/work-items/${api.id}`, { blockedBy: [ui.id] })).statusCode).toBe(400);
+    expect((await call('PATCH', `/api/work-items/${ui.id}`, { blockedBy: [ui.id] })).statusCode).toBe(400);
+    const opened = () => store.listSessions().filter(session => session.workItemId === ui.id);
+
+    // 开始 while the API is open: in progress with no conversation.
+    const queued = (await call('POST', `/api/work-items/${ui.id}/start`)).json() as { item: WorkItem; sessionId?: string };
+    expect(queued.sessionId).toBeUndefined();
+    expect(queued.item.status).toBe('doing');
+    expect(opened()).toHaveLength(0);
+
+    // The API delivered and is done: the screen starts once, its brief carrying what the API delivered.
+    expect((await call('POST', '/api/sessions', { kind: 'native', projectId: project.id, backendId: 'cursor', clientSessionId: 's-api', workItemId: api.id, initialMessage: { commandId: 'c-api', text: 'Define the API' } })).statusCode).toBe(202);
+    workItems.submit('s-api', { summary: 'Added GET /api/screen' });
+    expect((await call('PATCH', `/api/work-items/${api.id}`, { status: 'done' })).statusCode).toBe(200);
+    await vi.waitFor(() => expect(opened()).toHaveLength(1));
+    expect(store.listRuns(opened()[0]!.id)[0]!.prompt).toContain('Added GET /api/screen');
+    // Reopened and done again, it starts nothing new.
+    await call('PATCH', `/api/work-items/${api.id}`, { status: 'doing' });
+    await call('PATCH', `/api/work-items/${api.id}`, { status: 'done' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(opened()).toHaveLength(1);
+
+    // Moved to 进行中 by hand rather than started: it does not start by itself.
+    const docs = await make('w-docs', 'Write the docs', { blockedBy: [ui.id] });
+    await call('PATCH', `/api/work-items/${docs.id}`, { status: 'doing' });
+    await call('PATCH', `/api/work-items/${ui.id}`, { status: 'done' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(store.listSessions().filter(session => session.workItemId === docs.id)).toHaveLength(0);
+
+    // A prerequisite closed as 无需关注: the waiting task does not start and asks the owner.
+    const spec = await make('w-spec', 'Write the spec');
+    const impl = await make('w-impl', 'Implement the spec', { blockedBy: [spec.id] });
+    await call('POST', `/api/work-items/${impl.id}/start`);
+    await call('PATCH', `/api/work-items/${spec.id}`, { status: 'cancelled' });
+    await vi.waitFor(() => expect(workItems.get(impl.id).stuck?.note).toContain(`#${spec.number}`));
+    expect(store.listSessions().filter(session => session.workItemId === impl.id)).toHaveLength(0);
+    // The owner drops the prerequisite: it starts.
+    expect((await call('PATCH', `/api/work-items/${impl.id}`, { blockedBy: null })).statusCode).toBe(200);
+    await vi.waitFor(() => expect(store.listSessions().filter(session => session.workItemId === impl.id)).toHaveLength(1));
+  });
 });

@@ -1,6 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { WorkItem, WorkItemAssignee, WorkItemStatus } from '@contracts';
+import type { WorkItem, WorkItemAssignee, WorkItemStatus, WorkItemVerification } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { Spinner, StatusDot } from '@/components/ui/controls';
@@ -141,4 +141,20 @@ export function useSubmissionClue(item: WorkItem): string | undefined {
   if (parts.length) return parts.join(' · ');
   const summaryLine = submission.summary.split('\n').map((line) => line.trim()).find(Boolean);
   return summaryLine;
+}
+
+/** The check of the latest submission, when there is one: an older submission's is not about what is being reviewed. */
+export const currentVerification = (item: WorkItem): WorkItemVerification | undefined =>
+  item.verification && item.submission && item.verification.submittedAt === item.submission.at ? item.verification : undefined;
+
+/** 核验's outcome in a word, with whether it argues against the delivery. */
+export function useVerificationLabel(): (verification: WorkItemVerification) => { label: string; against: boolean } {
+  const { t } = useLingui();
+  return (verification) => {
+    if (verification.state === 'running') return { label: t`核验中`, against: false };
+    if (verification.state === 'failed') return { label: t`核验失败`, against: false };
+    if (verification.verdict === 'pass') return { label: t`核验通过`, against: false };
+    if (verification.verdict === 'fail') return { label: t`核验不通过`, against: true };
+    return { label: t`无法判断`, against: false };
+  };
 }

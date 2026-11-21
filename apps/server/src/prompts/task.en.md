@@ -5,6 +5,10 @@
 <!-- criteria -->
 ## Acceptance criteria
 {{list}}
+<!-- prerequisites -->
+## Prerequisites
+This task comes after the tasks below, which are done. Here is what they delivered and the files they changed; the repository is the source of truth.
+{{text}}
 <!-- previous -->
 ## Progress so far
 What this task delivered before; the files in the repository are the source of truth.

@@ -870,6 +870,10 @@ msgstr "Not a valid color role"
 msgid "不显示窗口"
 msgstr "No window shown"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "不核验"
+msgstr "No verification"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "不能为空"
 msgstr "Can't be empty"
@@ -6616,6 +6620,10 @@ msgstr "Sample text"
 msgid "核对导出结果"
 msgstr "Check the export results"
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "核验"
+msgstr "Verification"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr "Invalid format"
@@ -6874,6 +6882,10 @@ msgstr "Each cell is set in that style's font and size; rows whose value is the 
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
 msgstr "Each cell is set in that style's size; rows where the styles agree are set back."
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "每次交付多跑一次只读会话"
+msgstr "Runs one extra read-only conversation per delivery"
 
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx

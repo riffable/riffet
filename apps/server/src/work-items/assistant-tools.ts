@@ -30,10 +30,11 @@ const BOARD_TOOLS: readonly BoardDefinition[] = [
       criteria: { type: 'array', items: { type: 'string' }, description: 'Acceptance criteria, one checkable statement each, at most 10.' },
       project: { type: 'string', description: 'The project id or name, from list_projects.' },
       agent: { type: 'string', description: 'Only when the owner named one: claude, codex, cursor and so on. Otherwise the owner\'s default.' },
+      after: { type: 'array', items: { type: 'string' }, description: 'Task numbers that must be done first, when this one builds on their result. Started, it waits and begins once they are all done.' },
       start: { type: 'boolean', description: 'Start an agent on it now. Only for work that changes nothing.' },
     }, ['title', 'project', 'start']),
   },
-  { name: 'task_start', description: 'Start an agent on a planned task, when the owner says so in this conversation.', inputSchema: object({ task: TASK_REF }, ['task']) },
+  { name: 'task_start', description: 'Start an agent on a planned task, when the owner says so in this conversation. A task with open tasks in after waits and begins once they are done.', inputSchema: object({ task: TASK_REF }, ['task']) },
   { name: 'task_comment', description: "Add a comment to a task: a decision or context for it. Its next conversation reads it in the task's brief.", inputSchema: object({ task: TASK_REF, text: { type: 'string', description: 'At most 10000 characters.' } }, ['task', 'text']) },
 ];
 /** What the 助理 sees of Riffet beyond the board: read-only. */

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   WORK_ITEM_LIMITS, WORK_ITEM_STATUSES,
   type NativeBackendId, type WorkItem, type WorkItemAssignee, type WorkItemCreate, type WorkItemEvent, type WorkItemPatch, type WorkItemQuestion,
-  type WorkItemStatus, type WorkItemSubmission, type WorkItemWatch,
+  type WorkItemStatus, type WorkItemSubmission, type WorkItemVerification, type WorkItemWatch,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { taskPart, type BriefLanguage } from '../prompts/index.js';
@@ -126,6 +126,7 @@ export interface SessionTaskSource {
 export class WorkItemService {
   private readonly items: WorkItemStore;
   private readonly statusListeners = new Set<(workItemId: string) => void>();
+  private readonly submitListeners = new Set<(workItemId: string) => void>();
 
   private readonly attention: AttentionLog;
   readonly close: () => void;
@@ -133,7 +134,9 @@ export class WorkItemService {
   constructor(private readonly store: Store, private readonly messenger?: () => WorkItemMessenger) {
     this.items = new WorkItemStore(store.db);
     this.attention = new AttentionLog(store);
-    this.close = this.attention.start();
+    const stopAttention = this.attention.start();
+    const offRelease = this.onStatusChange(id => { void this.releaseDependents(id); });
+    this.close = () => { offRelease(); stopAttention(); };
   }
 
   /** The north star over [from, to) in `timeZone` (docs/TASK-BOARD.md §1). */
@@ -162,6 +165,12 @@ export class WorkItemService {
   onStatusChange(listener: (workItemId: string) => void): () => void {
     this.statusListeners.add(listener);
     return () => { this.statusListeners.delete(listener); };
+  }
+
+  /** A conversation submitted work on the item (`task_submit`), after the write commits. */
+  onSubmit(listener: (workItemId: string) => void): () => void {
+    this.submitListeners.add(listener);
+    return () => { this.submitListeners.delete(listener); };
   }
 
   private notifyStatusChange(workItemId: string): void {
@@ -198,6 +207,38 @@ export class WorkItemService {
     return parentId;
   }
 
+  /**
+   * `blockedBy`: existing items other than `id`, each once, and no chain of them leading back to `id`
+   * (docs/TASK-BOARD.md §4.4).
+   */
+  private requireBlockers(value: unknown, id: string): string[] {
+    if (!Array.isArray(value)) throw invalid('blockedBy must be a list');
+    if (value.length > WORK_ITEM_LIMITS.blockedBy) throw invalid(`A task waits on at most ${WORK_ITEM_LIMITS.blockedBy} others`);
+    const result: string[] = [];
+    for (const entry of value) {
+      if (typeof entry !== 'string' || !entry) throw invalid('blockedBy must list task ids');
+      if (entry === id) throw invalid('A task cannot wait on itself');
+      if (!this.items.get(entry)) throw new AppError('INVALID_WORK_ITEM', 'A task it waits on does not exist', 400);
+      if (!result.includes(entry)) result.push(entry);
+    }
+    // A cycle through `id`: walk what the new prerequisites wait on.
+    const seen = new Set<string>();
+    const stack = [...result];
+    while (stack.length) {
+      const next = stack.pop()!;
+      if (next === id) throw invalid('These tasks would wait on each other');
+      if (seen.has(next)) continue;
+      seen.add(next);
+      stack.push(...this.items.get(next)?.blockedBy ?? []);
+    }
+    return result;
+  }
+
+  /** The prerequisites of [item] not done yet. */
+  private openPrerequisites(item: WorkItem): WorkItem[] {
+    return (item.blockedBy ?? []).flatMap(id => { const other = this.items.get(id); return other && other.status !== 'done' ? [other] : []; });
+  }
+
   create(input: WorkItemCreate, extra: { source?: WorkItem['source']; titleSessionId?: string; originSessionId?: string } = {}): WorkItem {
     if (!input || typeof input !== 'object') throw invalid('A task is required');
     const id = clientId(input.id) ?? randomUUID();
@@ -219,6 +260,7 @@ export class WorkItemService {
         assignee: input.assignee === undefined ? { kind: 'owner' } : assignee(input.assignee),
         ...(input.projectId !== undefined ? { projectId: this.requireProject(input.projectId) } : {}),
         ...(input.parentId !== undefined ? { parentId: this.requireParent(input.parentId, id) } : {}),
+        ...(() => { const blockedBy = input.blockedBy === undefined ? [] : this.requireBlockers(input.blockedBy, id); return blockedBy.length ? { blockedBy } : {}; })(),
         labels: input.labels === undefined ? [] : labels(input.labels),
         ...(watch ? { watch } : {}),
         ...(extra.titleSessionId ? { titleSessionId: extra.titleSessionId } : {}),
@@ -242,6 +284,12 @@ export class WorkItemService {
       if (patch.assignee !== undefined) next.assignee = assignee(patch.assignee);
       if (patch.projectId !== undefined) { if (patch.projectId === null) delete next.projectId; else next.projectId = this.requireProject(patch.projectId); }
       if (patch.parentId !== undefined) { if (patch.parentId === null) delete next.parentId; else next.parentId = this.requireParent(patch.parentId, id); }
+      if (patch.blockedBy !== undefined) {
+        const blockedBy = patch.blockedBy === null ? [] : this.requireBlockers(patch.blockedBy, id);
+        if (blockedBy.length) next.blockedBy = blockedBy; else delete next.blockedBy;
+      }
+      // A waiting item edited (fewer prerequisites, or 推不动 cleared below) is looked at again.
+      if (current.startQueued) this.store.afterTransaction(committed => { if (committed) void this.startIfReady(id); });
       if (patch.labels !== undefined) next.labels = labels(patch.labels);
       const stamp = now();
       if (patch.status !== undefined && status(patch.status) !== current.status) this.changeStatus(next, patch.status, stamp);
@@ -264,6 +312,7 @@ export class WorkItemService {
     item.status = to;
     item.statusAt = stamp;
     if (to !== 'watching') delete item.watch;
+    if (to !== 'doing') delete item.startQueued;
     // Done, closed or intentionally parked in watching means its conversations are no longer waiting on the owner.
     if (to === 'done' || to === 'cancelled' || to === 'watching') this.attention.settle(this.sessionsOf(item.id), Date.parse(stamp));
   }
@@ -273,6 +322,16 @@ export class WorkItemService {
       this.get(id);
       const stamp = now();
       for (const child of this.items.children(id)) { const { parentId: _parent, ...rest } = child; this.items.update({ ...rest, updatedAt: stamp }); }
+      // Items waiting on it lose the prerequisite; one that waited and now has none left starts.
+      const freed: string[] = [];
+      for (const other of this.items.all()) {
+        if (!other.blockedBy?.includes(id)) continue;
+        if (this.waiting(other)) freed.push(other.id);
+        const { blockedBy: _blockedBy, ...rest } = other;
+        const blockedBy = other.blockedBy.filter(entry => entry !== id);
+        this.items.update({ ...rest, ...(blockedBy.length ? { blockedBy } : {}), updatedAt: stamp });
+      }
+      if (freed.length) this.store.afterTransaction(committed => { if (committed) for (const other of freed) void this.startIfReady(other); });
       for (const row of this.store.db.prepare("SELECT id FROM sessions WHERE json_extract(json,'$.workItemId')=?").all(id) as { id: string }[]) {
         this.store.updateSession(row.id, { workItemId: undefined });
       }
@@ -302,7 +361,7 @@ export class WorkItemService {
    * agent with the owner's defaults, opened with the brief. An item that already has a conversation
    * is refused; another one is the owner's call (再开一个会话).
    */
-  async start(id: string): Promise<{ item: WorkItem; sessionId: string }> {
+  async start(id: string): Promise<{ item: WorkItem; sessionId?: string }> {
     const item = this.get(id);
     if (item.assignee.kind !== 'agent') throw new AppError('WORK_ITEM_NO_AGENT', 'This task is assigned to the owner', 409);
     if (!item.projectId) throw new AppError('WORK_ITEM_NO_PROJECT', 'Choose a project for this task first', 409);
@@ -310,11 +369,73 @@ export class WorkItemService {
     if (item.status === 'cancelled') throw new AppError('WORK_ITEM_CANCELLED', 'This task is closed', 409);
     if (this.starting.has(id) || this.sessionsOf(id).length) throw new AppError('WORK_ITEM_STARTED', 'This task already has a conversation', 409);
     if (!this.messenger) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
+    // Waits for its prerequisites (§4.4): 进行中 with no conversation, opened when the last one is done.
+    if (this.openPrerequisites(item).length) return { item: this.queue(id) };
+    return this.open(item);
+  }
+
+  /** 开始 on an item whose prerequisites are still open: it moves to `doing` and waits, marked as asked to start. */
+  private queue(id: string): WorkItem {
+    const queued = this.write(() => {
+      const current = this.get(id);
+      const next: WorkItem = { ...current, startQueued: current.startQueued ?? now(), updatedAt: now() };
+      delete next.stuck;
+      if (current.status !== 'doing') this.changeStatus(next, 'doing', next.updatedAt);
+      this.items.update(next);
+      return next;
+    });
+    // A prerequisite already closed as 无需关注 would hold it forever: that is the owner's call now.
+    this.holdIfDropped(queued);
+    return this.get(id);
+  }
+
+  private async open(item: WorkItem): Promise<{ item: WorkItem; sessionId: string }> {
+    const id = item.id;
+    if (item.assignee.kind !== 'agent' || !item.projectId || !this.messenger) throw new AppError('WORK_ITEM_STARTED', 'This task cannot start', 409);
     this.starting.add(id);
     try {
       const sessionId = await this.messenger().open({ projectId: item.projectId, backendId: item.assignee.backendId, ...(item.assignee.profileId ? { backendProfileId: item.assignee.profileId } : {}), ...(item.assignee.model ? { model: item.assignee.model } : {}), title: item.title }, this.brief(id), session => { this.attachSession(session, id); });
       return { item: this.get(id), sessionId };
     } finally { this.starting.delete(id); }
+  }
+
+  /** Whether [item] waits to start (§4.4): asked to start while a prerequisite was open, still in progress with no conversation. */
+  private waiting(item: WorkItem): boolean {
+    return Boolean(item.startQueued) && item.status === 'doing' && item.assignee.kind === 'agent' && !this.starting.has(item.id) && !this.sessionsOf(item.id).length;
+  }
+
+  /** A waiting item with a prerequisite closed as 无需关注 goes to the inbox once. */
+  private holdIfDropped(item: WorkItem): boolean {
+    const dropped = this.openPrerequisites(item).find(other => other.status === 'cancelled');
+    if (!dropped) return false;
+    if (!item.stuck) this.markStuck(item.id, `前置任务 #${dropped.number} 已标为无需关注，这个任务没有开始。`);
+    return true;
+  }
+
+  /**
+   * [id] changed status. Done: each item waiting on it whose prerequisites are now all done starts. Closed as 无需关注:
+   * each item waiting on it goes to the inbox as 推不动, since whether to go on without it is the owner's call.
+   */
+  private async releaseDependents(id: string): Promise<void> {
+    const prerequisite = this.items.get(id);
+    if (!prerequisite || (prerequisite.status !== 'done' && prerequisite.status !== 'cancelled')) return;
+    for (const item of this.items.all()) {
+      if (!item.blockedBy?.includes(id) || !this.waiting(item)) continue;
+      await this.startIfReady(item.id);
+    }
+  }
+
+  /** Opens the first conversation of a waiting item whose prerequisites are all done; a failure goes to the inbox. */
+  private async startIfReady(id: string): Promise<void> {
+    const item = this.items.get(id);
+    if (!item || !this.waiting(item) || this.holdIfDropped(item) || this.openPrerequisites(item).length) return;
+    try { await this.open(item); }
+    catch (error) { this.markStuck(id, `前置任务都已完成，但没能开始：${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  /** After a start of the server: items whose last prerequisite was done while it was stopping or stopped. */
+  resumeWaiting(): void {
+    for (const item of this.items.all()) if (!item.stuck && this.waiting(item)) void this.startIfReady(item.id);
   }
 
   /** Points a conversation at an item (or, with `undefined`, away from it). A `todo` item that gains one moves to `doing`. */
@@ -329,6 +450,7 @@ export class WorkItemService {
       if (!target) return undefined;
       this.record(target.id, { kind: 'session', sessionId });
       const next: WorkItem = { ...target, updatedAt: now() };
+      delete next.startQueued;
       if (target.status === 'todo' || target.status === 'watching') this.changeStatus(next, 'doing', next.updatedAt);
       this.items.update(next);
       return next;
@@ -393,6 +515,12 @@ export class WorkItemService {
       };
       const next: WorkItem = { ...item, submission, updatedAt: stamp };
       this.record(item.id, { kind: 'submit', submission });
+      if (this.submitListeners.size) {
+        this.store.afterTransaction(committed => {
+          if (!committed) return;
+          for (const listener of this.submitListeners) { try { listener(item.id); } catch { /* the submission is already committed */ } }
+        });
+      }
       if (item.status === 'todo' || item.status === 'doing' || item.status === 'watching') this.changeStatus(next, 'review', stamp);
       this.items.update(next);
       return next;
@@ -540,6 +668,31 @@ export class WorkItemService {
     messenger.send(sessionId, message, commandId);
   }
 
+  // ---- 核验 (docs/TASK-BOARD.md §6.1) -----------------------------------------------------------
+
+  /** A check of the latest submission began; a later one replaces an earlier. */
+  beginVerification(id: string, verification: WorkItemVerification): void {
+    this.write(() => {
+      const current = this.items.get(id);
+      if (!current) return;
+      this.items.update({ ...current, verification, updatedAt: now() });
+    });
+  }
+
+  /** The check in [sessionId] ended. One already replaced by a newer check is dropped. */
+  finishVerification(id: string, sessionId: string, result: Pick<WorkItemVerification, 'state' | 'verdict' | 'text'>): WorkItem | undefined {
+    return this.write(() => {
+      const current = this.items.get(id);
+      if (!current?.verification || current.verification.sessionId !== sessionId || current.verification.state !== 'running') return undefined;
+      const stamp = now();
+      const verification: WorkItemVerification = { ...current.verification, state: result.state, ...(result.verdict ? { verdict: result.verdict } : {}), ...(result.text ? { text: result.text.slice(0, WORK_ITEM_LIMITS.summary) } : {}), endedAt: stamp };
+      this.record(id, { kind: 'verify', verification });
+      const next = { ...current, verification, updatedAt: stamp };
+      this.items.update(next);
+      return next;
+    });
+  }
+
   /**
    * The first message of a conversation that starts this item: what it is, what done means, what
    * earlier conversations delivered and were told, and how to report.
@@ -551,6 +704,15 @@ export class WorkItemService {
     const parts = [taskPart(language, 'head', { number: item.number, title: item.title })];
     if (item.description?.trim()) parts.push(taskPart(language, 'description', { text: item.description.trim() }));
     if (item.criteria?.length) parts.push(taskPart(language, 'criteria', { list: item.criteria.map((line, index) => `${index + 1}. ${line}`).join('\n') }));
+    const prerequisites = (item.blockedBy ?? []).flatMap(other => { const found = this.items.get(other); return found ? [found] : []; });
+    if (prerequisites.length) {
+      parts.push(taskPart(language, 'prerequisites', { text: prerequisites.map(other => {
+        const done = other.submission;
+        const files = done?.evidence.files.length ? `\n${done.evidence.files.slice(0, 30).map(file => `  - ${file}`).join('\n')}` : '';
+        const summary = done ? `\n  ${(done.summary.length > 1500 ? `${done.summary.slice(0, 1500)}…` : done.summary).replace(/\n/g, '\n  ')}` : '';
+        return `- #${other.number} ${other.title}${summary}${files}`;
+      }).join('\n') }));
+    }
     const submissions = events.flatMap(event => event.kind === 'submit' ? [event.submission] : []);
     if (submissions.length) {
       parts.push(taskPart(language, 'previous', { text: submissions.slice(-3).map(entry => {

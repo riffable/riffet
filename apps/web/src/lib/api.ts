@@ -3,7 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemSummary, SessionWorkItemRequest,
+  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -1082,7 +1082,7 @@ export const api = {
     request<{ item: WorkItem; delegation: AssistantDelegation }>(`/api/work-items/${encodeURIComponent(id)}/watch-delegation`, json('POST', body)),
   /** `null` restores Riffet's own text. */
   saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
-  startWorkItem: (id: string) => request<{ item: WorkItem; sessionId: string }>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),
+  startWorkItem: (id: string) => request<WorkItemStartResult>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),
   answerWorkItem: (id: string, questionId: string, body: WorkItemAnswer) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/questions/${encodeURIComponent(questionId)}/answer`, json('POST', body)),
   reworkWorkItem: (id: string, body: WorkItemRework) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/rework`, json('POST', body)),
   commentWorkItem: (id: string, body: { id: string; text: string }) => request<WorkItemEvent>(`/api/work-items/${encodeURIComponent(id)}/comments`, json('POST', body)),

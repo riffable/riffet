@@ -116,6 +116,10 @@
 
 Mac：W 类，原生实现未做（§9）。
 
+## 8.1 服务端发起的咨询
+
+任务的核验（[TASK-BOARD.md](TASK-BOARD.md) §6.1）用 `AgentCallService.consultFor`：服务端以交付的会话的名义开一次 `consult`，不经 @ 或「调用其他 Agent」的授权（Agent 是读者在设置里选的）。它和其他调用一样列在那个会话的「调用」里；调用记录以方式 `check` 存下、开出时就标为已送达：回答不交还给调用方，调用方自己的 `agent_list`、`agent_wait`、`agent_stop`、续聊也看不到、碰不到它，由 `answerOf` 读取后记到任务上。
+
 ## 9. 现状
 
 - Mac、iPhone、Android 把 `agent_call` 画成普通工具行，没有调用行、「由〈调用方〉调用」与会话信息里的「调用」；被调用的会话在列表里平铺；输入框没有 `@Agent`，「技能与工具」没有「调用其他 Agent」。

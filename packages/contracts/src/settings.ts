@@ -149,6 +149,8 @@ export interface WorkItemSettings {
   /** A conversation started from the composer opens a task too. Unset means off. */
   composerSessions?: boolean;
   backendId?: NativeBackendId; profileId?: string; model?: string;
+  /** 核验 (docs/TASK-BOARD.md §6.1): the Agent that checks each submission read-only. Unset means no check. */
+  verifier?: { backendId: NativeBackendId; profileId?: string; model?: string };
 }
 /** Each field given replaces its own; `null` clears it. */
 export type WorkItemSettingsUpdate = { [K in keyof WorkItemSettings]?: WorkItemSettings[K] | null };

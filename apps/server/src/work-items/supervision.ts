@@ -33,6 +33,8 @@ export interface SupervisionDeps {
   enqueue(key: string, brief: Record<string, string | number>, workItemId: string): void;
   /** A supervision run for this task is waiting or going. */
   pending(workItemId: string): boolean;
+  /** Its latest submission is being checked by the 核验 Agent (docs/TASK-BOARD.md §6.1); the check's end looks again. */
+  verifying?(workItemId: string): boolean;
   agentLabel(backendId: string | undefined): string;
 }
 
@@ -92,6 +94,9 @@ export class Supervision {
     try { return Boolean(this.deps.store.getProject(session.projectId).system); } catch { return true; }
   }
 
+  /** A check of the task's submission ended: look at it once things settle, as after a stop. */
+  checked(id: string): void { if (this.deps.enabled()) this.schedule(id, 1_000); }
+
   private cancel(id: string): void { const timer = this.timers.get(id); if (timer) clearTimeout(timer); this.timers.delete(id); }
 
   private schedule(id: string, delay: number): void {
@@ -114,6 +119,7 @@ export class Supervision {
     try { item = this.deps.workItems.get(id); } catch { return; }
     // Closed, parked in watching, already waiting on the owner (a question, 推不动), or already being looked at.
     if (item.status === 'done' || item.status === 'cancelled' || item.status === 'watching' || item.questions?.length || item.stuck || this.deps.pending(id)) return;
+    if (item.status === 'review' && this.deps.verifying?.(id)) return;
     const sessionId = this.deps.workItems.latestSession(id);
     if (!sessionId) return;
     const session = this.deps.store.getSession(sessionId);
@@ -132,7 +138,8 @@ export class Supervision {
       title: item.title,
       status: { todo: '待办', doing: '进行中', watching: '观测中', review: '待验收', done: '完成', cancelled: '无需关注' }[item.status],
       criteria: item.criteria?.length ? item.criteria.map((line, index) => `${index + 1}. ${line}`).join('\n') : '（没有写验收标准）',
-      submission: submission ? `${submission.at.slice(0, 16).replace('T', ' ')}：${clip(submission.summary, 2_000)}（逐条说明和证据用 task_get 看）` : '（还没有交付）',
+      // The check rides in `submission`: a brief queued before checks existed has no other variable for it.
+      submission: submission ? `${submission.at.slice(0, 16).replace('T', ' ')}：${clip(submission.summary, 2_000)}（逐条说明和证据用 task_get 看）\n\n核验（另一个 Agent 读过仓库后的结论）：${verificationNote(item)}` : '（还没有交付）',
       sessionId: session.id,
       agent: this.deps.agentLabel(session.backendId),
       state: { idle: '停下', failed: '出错', interrupted: '被中断' }[session.state as 'idle' | 'failed' | 'interrupted'] ?? session.state,
@@ -143,3 +150,11 @@ export class Supervision {
 }
 
 function clip(text: string, limit: number): string { return text.length > limit ? `${text.slice(0, limit)} […]` : text; }
+
+function verificationNote(item: WorkItem): string {
+  const check = item.verification;
+  if (!check || check.submittedAt !== item.submission?.at) return '（没有核验）';
+  if (check.state === 'failed') return '（核验没有完成）';
+  if (check.state === 'running') return '（核验还在进行）';
+  return `${{ pass: '通过', fail: '不通过', unclear: '无法判断' }[check.verdict ?? 'unclear']}。\n${clip(check.text ?? '', 3_000)}`;
+}

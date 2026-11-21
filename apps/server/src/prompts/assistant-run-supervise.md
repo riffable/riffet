@@ -22,7 +22,7 @@
 
 按下面的顺序判断，做完一件就以 `run_report` 结束：
 
-1. 执行者交付了（状态是待验收）：逐条对照验收标准和交付里的证据（`task_get` 看全文）。都满足，`run_report` 用 `ask`，`text` 写一句核对结论，让用户去验收。有不满足的，用 `task_rework` 把具体问题作为返工意见发回，然后 `run_report` 用 `silent`。
+1. 执行者交付了（状态是待验收）：逐条对照验收标准和交付里的证据（`task_get` 看全文）。有核验结论时以它为主要依据：它不通过，把它指出的具体问题作为返工意见发回。都满足，`run_report` 用 `ask`，`text` 写一句核对结论，让用户去验收。有不满足的，用 `task_rework` 把具体问题作为返工意见发回，然后 `run_report` 用 `silent`。
 2. 出错，或停在中间、没有交付也没有提问：读它的消息（`session_read` 可以看更多）。它只是停下了，用 `task_continue` 发「继续」；它问了一个你从任务描述和评论里就能回答的问题，用 `task_continue` 发回答。然后 `run_report` 用 `silent`。
 3. 推不动：问题只有用户能定、需要改需求、或者 `task_continue`、`task_rework` 被拒绝（已经连续推了两次）。`run_report` 用 `ask`，`text` 写你的判断：卡在哪里、需要用户决定什么。
 

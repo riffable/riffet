@@ -870,6 +870,10 @@ msgstr ""
 msgid "不显示窗口"
 msgstr ""
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "不核验"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "不能为空"
 msgstr ""
@@ -6616,6 +6620,10 @@ msgstr ""
 msgid "核对导出结果"
 msgstr ""
 
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "核验"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr ""
@@ -6873,6 +6881,10 @@ msgstr ""
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
+msgstr ""
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "每次交付多跑一次只读会话"
 msgstr ""
 
 #: src/app/design/foundations/IconChapter.tsx

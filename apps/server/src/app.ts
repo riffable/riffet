@@ -69,7 +69,7 @@ import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
-import { AssistantBoard, Supervision, WorkItemService, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
+import { AssistantBoard, Supervision, Verification, WorkItemService, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AssistantRuns } from './assistant/runs.js';
@@ -693,7 +693,15 @@ export async function createApp(options: AppOptions = {}) {
         if(path)await utimes(path,at,at);
       }
     }});
+  // 核验 (docs/TASK-BOARD.md §6.1): a submission is checked read-only by the Agent set for it; 跟进 waits for the check.
+  const verification=new Verification({store,workItems,
+    verifier:()=>settings.getSettings().workItems?.verifier,
+    consult:(caller,target,prompt,text)=>agentCalls.consultFor(caller,target,prompt,text),
+    answer:(sessionId,runId)=>agentCalls.answerOf(sessionId,runId),
+    checked:workItemId=>supervision?.checked(workItemId),
+    log:(message,fields)=>console.warn(`[riffet] ${message}`,fields)});
   supervision=new Supervision({store,workItems,enabled:()=>settings.getSettings().assistant?.supervision??SETTING_DEFAULTS.assistant.supervision,
+    verifying:workItemId=>verification.verifying(workItemId),
     enqueue:(key,brief,workItemId)=>{queue('supervise',key,brief,workItemId);},pending:workItemId=>runs.pending('supervise',workItemId),
     agentLabel:backendId=>(backendId&&isNativeBackendId(backendId)?backendRegistry.get(backendId)?.label:undefined)??backendId??'Agent'});
   assistantWork={
@@ -708,7 +716,11 @@ export async function createApp(options: AppOptions = {}) {
     supervised:sessionId=>{const run=runs.bySession(sessionId);return run?.job==='supervise'&&run.subject?{workItemId:run.subject,runId:run.id}:undefined;},
     delegations:{list:()=>delegations.list(),create:input=>delegations.create(input),update:(id,input)=>delegations.update(id,input),end:(id,by)=>delegations.end(id,by)},
   };
-  const stopAssistantWork=[runs.watch(),delegations.start(),consolidation.start(),supervision.start()];
+  const stopAssistantWork=[runs.watch(),delegations.start(),consolidation.start(),supervision.start(),verification.start()];
+  // Tasks whose last prerequisite was done while the server was stopping (docs/TASK-BOARD.md §4.4).
+  const resumeWaiting=setTimeout(()=>{try{workItems.resumeWaiting();}catch(error){console.warn('[riffet] waiting tasks were not started',error instanceof Error?error.message:error);}},15_000);
+  resumeWaiting.unref?.();
+  stopAssistantWork.push(()=>clearTimeout(resumeWaiting));
   workItems.retitleBriefConversations();
   workItems.dropComposerItems();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),

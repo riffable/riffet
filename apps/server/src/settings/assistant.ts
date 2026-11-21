@@ -19,7 +19,7 @@ function settingSummary(id: keyof AppSettings, saved: AppSettings): Record<strin
     case 'cursorCli': return { credentialConfigured: saved.cursorCli?.hasApiKey === true };
     case 'voiceInput': return { recognizer: saved.voiceInput?.recognizer ?? null, credentialConfigured: saved.voiceInput?.remote?.hasApiKey === true };
     case 'assistant': return { backendId: saved.assistant?.backendId ?? null, model: saved.assistant?.model ?? null, timeZone: saved.assistant?.timeZone ?? null };
-    case 'workItems': return { backendId: saved.workItems?.backendId ?? null, model: saved.workItems?.model ?? null, composerSessions: saved.workItems?.composerSessions === true };
+    case 'workItems': return { backendId: saved.workItems?.backendId ?? null, model: saved.workItems?.model ?? null, composerSessions: saved.workItems?.composerSessions === true, verifier: saved.workItems?.verifier?.backendId ?? null };
     case 'defaultBackendId': case 'defaultModel': case 'defaultMode': case 'idleReclaimMinutes': case 'maxAgentMemoryMb':
       return { configuredValue: saved[id] ?? null };
     case 'notifications': return { enabled: saved.notifications === true };

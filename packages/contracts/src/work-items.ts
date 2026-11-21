@@ -44,6 +44,16 @@ export interface WorkItem {
   projectId?: string;
   /** One level only: a parent's parent is rejected. */
   parentId?: string;
+  /**
+   * Tasks that must be `done` before this one starts (docs/TASK-BOARD.md §4.4), by id. 开始 on an item with any
+   * of them still open moves it to `doing` without a conversation; the server opens one when the last is done.
+   */
+  blockedBy?: string[];
+  /**
+   * When 开始 was asked while a prerequisite was open: the task waits, and the server opens its first conversation once
+   * they are all done. Cleared when a conversation joins it or it leaves `doing`.
+   */
+  startQueued?: string;
   labels: string[];
   /**
    * The conversation whose title this one follows: set when the item was created with that
@@ -68,6 +78,8 @@ export interface WorkItem {
   stuck?: { note: string; at: string };
   /** Observation metadata when `status` is `watching`. */
   watch?: WorkItemWatch;
+  /** The latest check of a submission by another Agent (docs/TASK-BOARD.md §6.1). */
+  verification?: WorkItemVerification;
   /** When `status` last changed. */
   statusAt: string;
   createdAt: string;
@@ -117,6 +129,26 @@ export interface WorkItemSubmission {
   evidence: WorkItemEvidence;
 }
 
+/**
+ * A read-only check of a submission by the Agent set as 核验 (`AppSettings.workItems.verifier`): a call made on
+ * behalf of the submitting conversation (docs/AGENT-CALLS.md), whose answer goes on the task and never back to it.
+ */
+export interface WorkItemVerification {
+  /** The called conversation, listed under the submitting one; absent when it could not be opened (`failed`, `text` says why). */
+  sessionId?: string;
+  /** The submission it checks (`WorkItemSubmission.at`). */
+  submittedAt: string;
+  backendId: NativeBackendId;
+  model?: string;
+  state: 'running' | 'done' | 'failed';
+  /** From the first line of its answer; `unclear` when it did not say. */
+  verdict?: 'pass' | 'fail' | 'unclear';
+  /** Its answer, clipped to `WORK_ITEM_LIMITS.summary`. */
+  text?: string;
+  at: string;
+  endedAt?: string;
+}
+
 export interface WorkItemCreate {
   /** A client-made id; a retried create with the same id returns the first result. */
   id?: string;
@@ -127,6 +159,7 @@ export interface WorkItemCreate {
   assignee?: WorkItemAssignee;
   projectId?: string;
   parentId?: string;
+  blockedBy?: string[];
   labels?: string[];
   watch?: WorkItemWatch;
 }
@@ -140,6 +173,7 @@ export interface WorkItemPatch {
   assignee?: WorkItemAssignee;
   projectId?: string | null;
   parentId?: string | null;
+  blockedBy?: string[] | null;
   labels?: string[];
   watch?: WorkItemWatch | null;
 }
@@ -160,7 +194,9 @@ export type WorkItemEvent = { id: string; workItemId: string; at: string } & (
   /** The 助理's supervision moved a stopped conversation on: 「继续」, or an answer to its question. */
   | { kind: 'nudge'; sessionId: string; text: string }
   /** The 助理's supervision could not move it on; the note is its judgment, shown in the inbox. */
-  | { kind: 'stuck'; note: string });
+  | { kind: 'stuck'; note: string }
+  /** The 核验 Agent finished checking a submission. */
+  | { kind: 'verify'; verification: WorkItemVerification });
 
 /** `POST /api/work-items/:id/questions/:questionId/answer`. `commandId` makes a retry send the answer once. */
 export interface WorkItemAnswer { text: string; commandId: string }
@@ -180,6 +216,14 @@ export interface NorthStarReport { since?: string; days: NorthStarDay[] }
 
 /** `GET /api/work-items/:id/brief`: the first message of a conversation that starts this item. */
 export interface WorkItemBrief { text: string }
+
+/** `POST /api/work-items/:id/start`. No `sessionId`: a prerequisite is still open, and it starts when they are all done. */
+export interface WorkItemStartResult { item: WorkItem; sessionId?: string }
+
+/** The prerequisites of [item] that are not done yet, in its order; one missing from [items] counts as done. */
+export function openPrerequisites(item: Pick<WorkItem, 'blockedBy'>, items: ReadonlyMap<string, WorkItem>): WorkItem[] {
+  return (item.blockedBy ?? []).flatMap(id => { const other = items.get(id); return other && other.status !== 'done' ? [other] : []; });
+}
 
 /** Lightweight shell projection of a work item, carried by `/api/bootstrap` and local cache. */
 export interface WorkItemSummary {
@@ -210,5 +254,5 @@ export interface SessionWorkItemRequest { workItemId: string | 'new' | null }
 
 export const WORK_ITEM_LIMITS = {
   title: 200, description: 20_000, labels: 10, label: 32, comment: 20_000,
-  criteria: 10, criterion: 500, summary: 20_000, note: 2_000, watchNote: 500, question: 4_000, options: 6, option: 200,
+  criteria: 10, criterion: 500, blockedBy: 10, summary: 20_000, note: 2_000, watchNote: 500, question: 4_000, options: 6, option: 200,
 } as const;

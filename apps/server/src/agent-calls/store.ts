@@ -14,6 +14,8 @@ export interface CallTurnRow {
   /** Handed back (as a tool result or a message) or given up on; nothing more is sent. */
   deliveredAt?: string;
   createdAt: string;
+  /** Opened by the server on the caller's behalf (a task's 核验): listed for the owner, out of the caller's reach. Stored as mode `check`. */
+  byServer?: boolean;
 }
 
 interface Raw {
@@ -24,7 +26,7 @@ interface Raw {
 const row = (raw: Raw): CallTurnRow => ({
   runId: raw.run_id, callId: raw.call_id, callerSessionId: raw.caller_session_id,
   ...(raw.caller_run_id ? { callerRunId: raw.caller_run_id } : {}),
-  prompt: raw.prompt, mode: raw.mode === 'work' ? 'work' : 'consult', background: raw.background === 1,
+  prompt: raw.prompt, mode: raw.mode === 'work' ? 'work' : 'consult', background: raw.background === 1, ...(raw.mode === 'check' ? { byServer: true } : {}),
   ...(raw.delivered_at ? { deliveredAt: raw.delivered_at } : {}), createdAt: raw.created_at,
 });
 
@@ -40,8 +42,9 @@ export class AgentCallStore {
   }
 
   insert(turn: Omit<CallTurnRow, 'background' | 'deliveredAt'>): void {
+    const mode = turn.byServer ? 'check' : turn.mode;
     this.sql(`INSERT OR IGNORE INTO agent_call_turns(run_id, call_id, caller_session_id, caller_run_id, prompt, mode, background, delivered_at, created_at)
-      VALUES(?,?,?,?,?,?,0,NULL,?)`).run(turn.runId, turn.callId, turn.callerSessionId, turn.callerRunId ?? null, turn.prompt, turn.mode, turn.createdAt);
+      VALUES(?,?,?,?,?,?,0,NULL,?)`).run(turn.runId, turn.callId, turn.callerSessionId, turn.callerRunId ?? null, turn.prompt, mode, turn.createdAt);
   }
 
   get(runId: string): CallTurnRow | undefined {

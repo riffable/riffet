@@ -113,6 +113,20 @@ describe('AgentCallService', () => {
     expect(h.messages.filter(item => item.sessionId === caller.id)).toHaveLength(1);
   });
 
+  it('opens a check on behalf of a conversation that is listed under it and never handed back to it', async () => {
+    const h = open = harness();
+    const caller = h.caller();
+    const { sessionId, runId } = await h.service.consultFor(caller.id, { backendId: 'codex' }, 'Check task #1', 'Check the work');
+    expect(h.store.getSession(sessionId)).toMatchObject({ origin: { kind: 'call', sessionId: caller.id }, approval: 'read-only' });
+    expect(h.service.list(caller.id).map(call => call.id)).toEqual([sessionId]);
+    // Out of the caller's own reach.
+    await expect(h.service.agentWait(caller, { call: sessionId, wait: 0 })).rejects.toMatchObject({ code: 'CALL_NOT_FOUND' });
+    h.finish({ id: runId }, '结论：通过');
+    await h.settle();
+    expect(await h.service.answerOf(sessionId, runId)).toBe('结论：通过');
+    expect(h.messages).toHaveLength(0);
+  });
+
   it('sends nothing for an answer the caller took with agent_wait', async () => {
     const h = open = harness();
     const caller = h.caller([{ backendId: 'codex' }]);

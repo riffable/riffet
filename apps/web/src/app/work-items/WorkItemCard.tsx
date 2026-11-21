@@ -8,7 +8,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { relativeTime } from '@/lib/i18n/format';
 import { cn } from '@/lib/utils';
 import { WORK_ITEM_DRAG_TYPE, type WorkItemView } from './model';
-import { activateWorkItem, AssigneeMark, LiveMark, StatusIcon, useSubmissionClue, WorkItemNumber } from './parts';
+import { activateWorkItem, AssigneeMark, currentVerification, LiveMark, StatusIcon, useSubmissionClue, useVerificationLabel, WorkItemNumber } from './parts';
 
 export function WorkItemCard({
   entry, projectName, progress, parentNumber, selected, onDragStart, onDragEnd, onOpen, onOpenSession, onWatch, onDone, onDismiss,
@@ -32,6 +32,10 @@ export function WorkItemCard({
   const closed = item.status === 'done' || item.status === 'cancelled';
   const latestSession = entry.liveSession ?? sessions[0];
   const reviewHint = useSubmissionClue(item);
+  const verification = item.status === 'review' ? currentVerification(item) : undefined;
+  const verificationLabel = useVerificationLabel();
+  const verified = verification ? verificationLabel(verification) : undefined;
+  const [firstOpen, ...otherOpen] = entry.waitingOn;
   const showActions = Boolean(latestSession || !closed);
 
   return (
@@ -60,10 +64,17 @@ export function WorkItemCard({
       </div>
       <p className={cn('mb-2 mt-1.5 line-clamp-2 text-sm leading-snug', closed ? 'text-fg-2' : 'font-medium text-fg')}>{title}</p>
       {item.labels.length > 0 && <div className="-mt-0.5 mb-2 flex flex-wrap gap-1">{item.labels.map((label) => <Badge key={label}>{label}</Badge>)}</div>}
-      {reviewHint && <p className="-mt-0.5 mb-2 truncate text-2xs text-fg-3">{reviewHint}</p>}
+      {(reviewHint || verified) && (
+        <p className="-mt-0.5 mb-2 truncate text-2xs text-fg-3">
+          {reviewHint}
+          {reviewHint && verified && ' · '}
+          {verified && <span className={verified.against ? 'text-danger' : undefined}>{verified.label}</span>}
+        </p>
+      )}
       {!live && latestFailed && !closed && <p className="-mt-0.5 mb-2 truncate text-2xs text-fg-4"><Trans>上次会话失败</Trans></p>}
       <div className="flex min-h-6 items-center gap-x-2 gap-y-1 text-2xs text-fg-3 no-hover:flex-wrap">
         <AssigneeMark assignee={item.assignee} />
+        {firstOpen && <span className="tabular-nums">{otherOpen.length ? t`等 #${firstOpen.number} +${otherOpen.length}` : t`等 #${firstOpen.number}`}</span>}
         {sessions.length > 1 && <span>{t`${sessions.length} 个会话`}</span>}
         {progress && <span className="tabular-nums">{progress.done}/{progress.total}</span>}
         <span className={cn('ml-auto grid shrink-0 items-center justify-items-end', showActions && 'no-hover:basis-full')}>

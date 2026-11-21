@@ -234,8 +234,9 @@ export class AgentCallService {
     };
   }
 
+  /** What the caller's tools see: not the calls the server made on its behalf. */
   private callsOf(caller: Session) {
-    return this.list(caller.id).map(call => ({ call: call.id, agent: agentValue(call.backendId, call.backendProfileId), title: call.title, mode: call.mode, state: call.state, turns: call.turns.length, ...(call.model ? { model: call.model } : {}), ...(call.takenOver ? { takenOver: true } : {}) }));
+    return this.list(caller.id).filter(call => !this.byServer(call.id)).map(call => ({ call: call.id, agent: agentValue(call.backendId, call.backendProfileId), title: call.title, mode: call.mode, state: call.state, turns: call.turns.length, ...(call.model ? { model: call.model } : {}), ...(call.takenOver ? { takenOver: true } : {}) }));
   }
 
   private async describe(caller: Session, value: string): Promise<Record<string, unknown>> {
@@ -405,7 +406,7 @@ export class AgentCallService {
     ]);
     const { model, note } = this.selection(args, entry, catalog, pin);
     const limited = usage?.account?.limitReached ? `${entry.label} on ${profile.name} has reached its account's usage limit; the turn may fail. agent_list names other providers.` : undefined;
-    const running = this.calls.callIds(caller.id).filter(id => this.active(id)).length;
+    const running = this.calls.callIds(caller.id).filter(id => !this.byServer(id) && this.active(id)).length;
     if (running >= AGENT_CALL_BUDGET.activePerCaller) throw new AppError('CALL_LIMIT', `At most ${AGENT_CALL_BUDGET.activePerCaller} calls of one conversation run at once; wait for one or stop it`, 429);
     let approval: string | undefined;
     let project = this.deps.store.getProject(caller.projectId);
@@ -451,11 +452,42 @@ export class AgentCallService {
     return `[Riffet 调用] 另一个 Agent（会话「${title.replace(/[\r\n]/g, ' ')}」）通过 Riffet 把下面的请求交给你。你最后的回答会原样交还给它，用户也看得到这段对话。${how}\n\n${prompt}`;
   }
 
+  /**
+   * A read-only consultation the server opens on a conversation's behalf, such as a task's 核验 (docs/TASK-BOARD.md §6.1).
+   * It is listed among that conversation's calls like any other, but its answer is never handed back to it: the turn is
+   * marked delivered as it is recorded. The owner's mentions and 调用其他 Agent do not apply; the server chose the Agent.
+   */
+  async consultFor(callerSessionId: string, target: { backendId: NativeBackendId; profileId?: string; model?: string }, prompt: string, text: string): Promise<{ sessionId: string; runId: string }> {
+    const caller = this.deps.store.getSession(callerSessionId);
+    const entry = (await this.deps.agents()).find(item => item.backendId === target.backendId);
+    if (!entry) throw new AppError('AGENT_UNAVAILABLE', `${target.backendId} is not available`, 409);
+    const profile = entry.profiles.find(item => item.id === target.profileId) ?? entry.profiles.find(item => item.isDefault) ?? entry.profiles[0];
+    if (!profile) throw new AppError('AGENT_UNAVAILABLE', `${entry.label} has no provider`, 409);
+    const approval = (await this.deps.capabilities(entry.backendId, profile.id).catch(() => undefined))?.consultPermission;
+    if (!approval) throw new AppError('CONSULT_UNAVAILABLE', `${entry.label} cannot be consulted read-only`, 409);
+    const model = profile.id === target.profileId || !target.profileId ? target.model : undefined;
+    const sessionId = randomUUID(), commandId = randomUUID();
+    const session = await this.deps.orchestration.start({
+      projectId: caller.projectId, title: firstLine(prompt, 80) || entry.label, backendId: entry.backendId, backendProfileId: profile.id,
+      ...(model ? { model } : {}), approval,
+    }, text, { kind: 'call', sessionId: caller.id }, { sessionId, commandId });
+    const run = this.deps.store.listRuns(session.id)[0];
+    if (!run) throw new AppError('CALL_FAILED', 'The called conversation did not take its first message', 500);
+    this.calls.insert({ runId: run.id, callId: session.id, callerSessionId: caller.id, prompt, mode: 'consult', createdAt: run.createdAt, byServer: true });
+    this.calls.deliver(run.id, run.createdAt);
+    return { sessionId: session.id, runId: run.id };
+  }
+
+  private byServer(callId: string): boolean { return Boolean(this.calls.turns(callId)[0]?.byServer); }
+
+  /** The answer of a turn of a called conversation, once it has ended. */
+  answerOf(sessionId: string, runId: string): Promise<string> { return this.answer(sessionId, runId); }
+
   /** A called conversation of this caller. */
   private owned(caller: Session, callId: string): Session {
     let session: Session;
     try { session = this.deps.store.getSession(callId); } catch { throw new AppError('CALL_NOT_FOUND', `No call ${callId}`, 404); }
-    if (session.origin?.kind !== 'call' || session.origin.sessionId !== caller.id) throw new AppError('CALL_NOT_FOUND', `No call ${callId} from this conversation`, 404);
+    if (session.origin?.kind !== 'call' || session.origin.sessionId !== caller.id || this.byServer(session.id)) throw new AppError('CALL_NOT_FOUND', `No call ${callId} from this conversation`, 404);
     if (session.archivedAt) throw new AppError('CALL_NOT_FOUND', 'That call\'s conversation is archived', 404);
     return session;
   }

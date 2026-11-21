@@ -86,7 +86,7 @@ export function Workbench({ onLogout }: { onLogout?: () => void }) {
 
 function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const { t } = useLingui();
-  const { lists, nav, ui, tabs, catalog, settings: settingsStore, handlers } = useStores();
+  const { lists, nav, ui, tabs, catalog, settings: settingsStore, handlers, workItems } = useStores();
   const loaded = useLists((state) => state.loaded);
   const projectlessTasks = useLists((state) => state.projectlessTasks);
   const sessionReferences = useLists(state => state.sessionReferences);
@@ -312,6 +312,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
   const startWorkItem = async (item: WorkItem): Promise<boolean> => {
     if (item.assignee.kind !== 'agent') return false;
+    // With prerequisites the server decides: it opens the first conversation now, or queues the task until they are done.
+    if (item.blockedBy?.length && !sessions.some((entry) => entry.workItemId === item.id)) {
+      try { workItems.accept((await api.startWorkItem(item.id)).item); return true; }
+      catch (error) { toast.error(errorMessage(error, t`无法开始这个任务`)); return false; }
+    }
     const target = item.projectId ? regular.find((entry) => entry.id === item.projectId && !entry.archivedAt) : undefined;
     if (item.projectId && !target) { toast.error(t`这个任务的项目已移除或归档`); return false; }
     if (!target && !projectlessTasks) { toast.error(t`先为这个任务选一个项目`); return false; }

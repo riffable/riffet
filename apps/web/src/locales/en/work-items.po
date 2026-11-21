@@ -188,6 +188,10 @@ msgstr "Until {0}"
 msgid "到期提醒"
 msgstr "Remind"
 
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "前置任务"
+msgstr "Blocked by"
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -266,6 +270,10 @@ msgstr "Schedule {0}"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "定时检查"
 msgstr "Schedule"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "展开"
+msgstr "Expand"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "已修改"
@@ -387,6 +395,7 @@ msgstr "Question"
 msgid "提问：{0}"
 msgstr "Asked: {0}"
 
+#: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "搜索任务"
 msgstr "Search tasks"
@@ -400,6 +409,7 @@ msgstr "Search tasks, #number…"
 msgid "收件箱"
 msgstr "Inbox"
 
+#: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收起"
 msgstr "Collapse"
@@ -438,6 +448,10 @@ msgstr "Couldn't save"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法删除"
 msgstr "Couldn't delete"
+
+#: src/app/work-items/parts.tsx
+msgid "无法判断"
+msgstr "Inconclusive"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发表评论"
@@ -521,12 +535,40 @@ msgid "标题"
 msgstr "Title"
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "核验"
+msgstr "Verification"
+
+#: src/app/work-items/parts.tsx
+msgid "核验不通过"
+msgstr "Verification failed"
+
+#: src/app/work-items/parts.tsx
+msgid "核验中"
+msgstr "Verifying"
+
+#: src/app/work-items/parts.tsx
+msgid "核验失败"
+msgstr "Verification error"
+
+#: src/app/work-items/parts.tsx
+msgid "核验通过"
+msgstr "Verified"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "没有可选的任务"
+msgstr "No tasks to choose"
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "活动"
 msgstr "Activity"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "添加"
 msgstr "Add"
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加前置任务"
+msgstr "Add prerequisite"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "添加描述…"
@@ -570,8 +612,33 @@ msgid "移除"
 msgstr "Remove"
 
 #: src/app/work-items/WorkItemPanel.tsx
+msgid "移除前置任务"
+msgstr "Remove prerequisite"
+
+#. placeholder {0}: entry.item.number
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "移除前置任务 #{0}"
+msgstr "Remove prerequisite #{0}"
+
+#: src/app/work-items/WorkItemPanel.tsx
 msgid "移除标签 {label}"
 msgstr "Remove label {label}"
+
+#. placeholder {0}: view.waitingOn.map((entry) => `#${entry.number}`).join('、')
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "等 {0} 完成后开始"
+msgstr "Starts after {0}"
+
+#. placeholder {0}: firstOpen.number
+#: src/app/work-items/WorkItemCard.tsx
+msgid "等 #{0}"
+msgstr "Waiting on #{0}"
+
+#. placeholder {0}: firstOpen.number
+#. placeholder {1}: otherOpen.length
+#: src/app/work-items/WorkItemCard.tsx
+msgid "等 #{0} +{1}"
+msgstr "Waiting on #{0} +{1}"
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "筛选"

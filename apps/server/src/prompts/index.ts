@@ -30,6 +30,8 @@ export const assistantInstructions = () => render('assistant');
 export const assistantSystemPrompt = () => render('assistant-system');
 export const historyCompactionPrompt = () => render('history-compaction');
 /** The first message of one of the 助理's background runs (docs/ASSISTANT.md §7); every value is filled by the server. */
+/** The first message of a task's 核验 (docs/TASK-BOARD.md §6.1). */
+export const taskVerifyBrief = (vars: Record<string, string | number>) => render('task-verify', vars);
 export const assistantRunBrief = (job: 'supervise' | 'consolidate' | 'delegation', vars: Record<string, string | number>) => render(`assistant-run-${job}`, vars);
 /** A file of one of Riffet's capability packs for the 助理 (`pack.<id>.<part>.md`). */
 export const assistantPackFile = (name: Extract<PromptName, `pack.${string}`>) => render(name);
@@ -83,7 +85,7 @@ export function briefPart(language: BriefLanguage, part: BriefPart, vars?: Recor
   return section(`brief.${language}`, part, vars);
 }
 
-export type TaskPart = 'head' | 'description' | 'criteria' | 'previous' | 'answered' | 'comments' | 'tools' | 'answer' | 'rework';
+export type TaskPart = 'head' | 'description' | 'criteria' | 'prerequisites' | 'previous' | 'answered' | 'comments' | 'tools' | 'answer' | 'rework';
 /** One fragment of what a task sends its conversations (docs/TASK-BOARD.md §6), in `language`. */
 export function taskPart(language: BriefLanguage, part: TaskPart, vars?: Record<string, string | number>): string {
   return section(`task.${language}`, part, vars);
