@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.PathFillType
@@ -47,13 +48,7 @@ internal fun IconPackDocument.vectors(id: String): Map<String, ImageVector> {
 }
 
 @Composable
-fun Icon(
-    imageVector: ImageVector,
-    contentDescription: String?,
-    modifier: Modifier = Modifier,
-    tint: Color = LocalContentColor.current,
-    strokeWidth: Dp? = null,
-) {
+private fun rememberIconPainter(imageVector: ImageVector, strokeWidth: Dp?): Pair<Painter, Boolean> {
     val key = when {
         imageVector.name.startsWith("Lucide") -> imageVector.name.removePrefix("Lucide")
         imageVector.name == "RiffetMenu" -> "Menu"
@@ -70,9 +65,35 @@ fun Icon(
     // One call site: switching packs swaps the painter, not the node. A VectorPainter can only be
     // made by this composable, so it always runs; while [fixed] draws, it holds an empty vector.
     val vectorPainter = rememberVectorPainter(if (fixed != null || brandPainter != null) BlankVector else pack ?: imageVector)
-    androidx.compose.material3.Icon(brandPainter ?: fixed ?: vectorPainter, contentDescription, modifier,
-        if (brandPainter != null) Color.Unspecified else tint)
+    return (brandPainter ?: fixed ?: vectorPainter) to (brandPainter != null)
 }
+
+@Composable
+fun Icon(
+    imageVector: ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current,
+    strokeWidth: Dp? = null,
+) {
+    val (painter, isBrand) = rememberIconPainter(imageVector, strokeWidth)
+    androidx.compose.material3.Icon(painter, contentDescription, modifier, if (isBrand) Color.Unspecified else tint)
+}
+
+/** Deferred-tint overload so colour animations invalidate draw only without recomposing callers. */
+@Composable
+fun Icon(
+    imageVector: ImageVector,
+    tint: ColorProducer,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    strokeWidth: Dp? = null,
+) {
+    val (painter, isBrand) = rememberIconPainter(imageVector, strokeWidth)
+    androidx.compose.material3.Icon(painter, if (isBrand) UnspecifiedColorProducer else tint, contentDescription, modifier)
+}
+
+private val UnspecifiedColorProducer = ColorProducer { Color.Unspecified }
 
 private val BlankVector = ImageVector.Builder("Blank", 24.dp, 24.dp, 24f, 24f).build()
 

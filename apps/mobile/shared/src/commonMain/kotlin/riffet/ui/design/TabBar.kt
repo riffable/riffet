@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -128,27 +129,20 @@ internal fun RiffetTabBar(
         else -> s.selected.copy(alpha = 0.72f)
     }
     // Folded, the disc itself says where you are; the face would only repeat its outline.
-    val face by animateColorAsState(if (folded) faceBase.copy(alpha = 0f) else faceBase, motion.effects(), label = "tabFace")
+    val face = animateColorAsState(if (folded) faceBase.copy(alpha = 0f) else faceBase, motion.effects(), label = "tabFace")
     // What the folded disc hides: the other destinations' counts.
     val elsewhere = items.sumOf { it.badge } - (items.getOrNull(selected)?.badge ?: 0)
-    val contactShadowAlpha = (motion.floatingShadowOpacity * if (s.dark) 1.8f else 0.6f).coerceIn(0f, 0.24f)
-    val liftShadowAlpha = (motion.floatingShadowOpacity * if (s.dark) 3.0f else 1.5f).coerceIn(0f, 0.36f)
+    val shadowAlpha = (motion.floatingShadowOpacity * if (s.dark) 3.2f else 1.7f).coerceIn(0f, 0.36f)
     Layout(
         content = {
             Box(Modifier
-                // A tight contact shadow plus a fuller lift shadow keeps the light capsule distinct from a pale page.
+                // One tighter, less-inset drop shadow keeps the light capsule distinct without a second blur pass while folding.
                 .dropShadow(panelShape, Shadow(
-                    radius = 3.dp,
+                    radius = (metrics.floatingShadowRadius * 0.78f).coerceAtLeast(10.dp),
                     color = s.shadow,
-                    offset = DpOffset(0.dp, 1.dp),
-                    alpha = contactShadowAlpha,
-                ))
-                .dropShadow(panelShape, Shadow(
-                    radius = metrics.floatingShadowRadius,
-                    color = s.shadow,
-                    spread = metrics.floatingShadowSpread / 2,
-                    offset = DpOffset(0.dp, metrics.floatingShadowOffset),
-                    alpha = liftShadowAlpha,
+                    spread = metrics.floatingShadowSpread / 3,
+                    offset = DpOffset(0.dp, (metrics.floatingShadowOffset * 0.67f).coerceAtLeast(2.dp)),
+                    alpha = shadowAlpha,
                 ))
                 .clip(panelShape)
                 .riffetMaterial(MaterialRole.NAVIGATION, panelShape, if (recipe.cardSurface) s.card else s.navigation)
@@ -163,7 +157,7 @@ internal fun RiffetTabBar(
                     val shift = (centre - size.width / 2f) * fold()
                     val start = slot * pill()
                     val x = (if (layoutDirection == LayoutDirection.Rtl) full - start - slot else start) - shift
-                    drawRoundRect(face, topLeft = Offset(x + inset, inset), size = Size(slot - inset * 2, size.height - inset * 2),
+                    drawRoundRect(face.value, topLeft = Offset(x + inset, inset), size = Size(slot - inset * 2, size.height - inset * 2),
                         cornerRadius = CornerRadius(size.height / 2f))
                 }) {
                 // The row keeps the whole bar's width while the panel narrows around it, and slides
@@ -185,7 +179,7 @@ internal fun RiffetTabBar(
                             val faceShape = RoundedCornerShape(50)
                             // The chosen icon settles to full size on the same spring the face arrives on.
                             val settle = animateFloatAsState(if (on) 1.04f else 0.96f, motion.spatial(), label = "tabSettle")
-                            val tint by animateColorAsState(
+                            val tint = animateColorAsState(
                                 when {
                                     on && folded -> s.selectedContent
                                     on && recipe.accentSelection -> s.focus
@@ -208,10 +202,10 @@ internal fun RiffetTabBar(
                                     .indication(source, androidx.compose.foundation.LocalIndication.current), contentAlignment = Alignment.Center) {
                                     BadgedBox(badge = { if (item.badge > 0) Badge { Text(if (item.badge > 99) "99+" else item.badge.toString()) } }) {
                                         Icon(
-                                            if (on) item.selectedIcon else item.icon,
-                                            item.label,
-                                            Modifier.size(metrics.iconSize).graphicsLayer { scaleX = settle.value; scaleY = settle.value },
-                                            tint,
+                                            imageVector = if (on) item.selectedIcon else item.icon,
+                                            tint = { tint.value },
+                                            contentDescription = item.label,
+                                            modifier = Modifier.size(metrics.iconSize).graphicsLayer { scaleX = settle.value; scaleY = settle.value },
                                             strokeWidth = if (on) 1.9.dp else 1.5.dp,
                                         )
                                     }
@@ -228,24 +222,25 @@ internal fun RiffetTabBar(
             }
         },
         modifier = modifier.fillMaxWidth()
-            .drawBehind {
-                if (hasWallpaper || refractive) return@drawBehind
-                val scrimAlpha = (1f - fold()).coerceIn(0f, 1f)
-                if (scrimAlpha <= 0.01f) return@drawBehind
+            .drawWithCache {
                 val top = -18.dp.toPx()
                 val bottom = size.height + gesture
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to s.page.copy(alpha = 0f),
-                        0.42f to s.page.copy(alpha = 0.68f * scrimAlpha),
-                        0.78f to s.page.copy(alpha = 0.92f * scrimAlpha),
-                        1f to s.page.copy(alpha = 0.96f * scrimAlpha),
-                        startY = top,
-                        endY = bottom,
-                    ),
-                    topLeft = Offset(0f, top),
-                    size = Size(size.width, bottom - top),
+                val scrimBrush = Brush.verticalGradient(
+                    0f to s.page.copy(alpha = 0f),
+                    0.42f to s.page.copy(alpha = 0.68f),
+                    0.78f to s.page.copy(alpha = 0.92f),
+                    1f to s.page.copy(alpha = 0.96f),
+                    startY = top,
+                    endY = bottom,
                 )
+                val rectTopLeft = Offset(0f, top)
+                val rectSize = Size(size.width, bottom - top)
+                onDrawBehind {
+                    if (hasWallpaper || refractive) return@onDrawBehind
+                    val scrimAlpha = (1f - fold()).coerceIn(0f, 1f)
+                    if (scrimAlpha <= 0.01f) return@onDrawBehind
+                    drawRect(brush = scrimBrush, topLeft = rectTopLeft, size = rectSize, alpha = scrimAlpha)
+                }
             }
             .padding(bottom = metrics.tabBarGap),
     ) { measurables, constraints ->
