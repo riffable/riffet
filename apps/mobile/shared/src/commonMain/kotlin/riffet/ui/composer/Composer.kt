@@ -202,6 +202,8 @@ class ComposerSettings(
 /** A message to quote into the draft; [token] lets the same text be quoted twice. */
 data class ComposerQuote(val text: String, val token: Long)
 
+private val mentionPattern = Regex("(?:^|\\s)@([^\\s@]*)$")
+
 @Composable
 fun Composer(
     store: SessionStore,
@@ -653,10 +655,13 @@ internal fun ComposerCard(
     var referenceHighlight by remember { mutableStateOf(0) }
     var dismissedMention by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val mention = if (onReferenceSession != null && focused && value.selection.collapsed && dismissedMention != (value.text to value.selection.start))
-        Regex("(?:^|\\s)@([^\\s@]*)$").find(value.text.take(value.selection.start)) else null
+        mentionPattern.find(value.text.take(value.selection.start)) else null
     val mentionQuery = mention?.groupValues?.get(1)
     val mentionStart = mentionQuery?.let { value.selection.start - it.length - 1 }
-    val referenceItems = rankedSessionReferences(sessionCandidates, sessionProjects, mentionQuery.orEmpty(), referenceSessionId, referenceProjectId)
+    // Ranks every session: only while an @ mention is open, and once per query, not per keystroke.
+    val referenceItems = remember(sessionCandidates, sessionProjects, mentionQuery, referenceSessionId, referenceProjectId) {
+        if (mentionQuery == null) emptyList() else rankedSessionReferences(sessionCandidates, sessionProjects, mentionQuery, referenceSessionId, referenceProjectId)
+    }
 
     LaunchedEffect(text) {
         if (scrollState.maxValue > 0) scrollState.scrollTo(scrollState.maxValue)

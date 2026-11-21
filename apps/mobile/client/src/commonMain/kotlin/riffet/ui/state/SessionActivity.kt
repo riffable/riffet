@@ -96,13 +96,18 @@ fun currentStep(timeline: List<TimelineItem>): String? {
     return null
 }
 
+private val summaryFences = Regex("```[\\s\\S]*?(```|$)")
+private val summaryLinks = Regex("!?\\[([^\\]]*)]\\([^)]*\\)")
+private val summaryMarks = Regex("[`*_#>|~]+")
+private val summarySpaces = Regex("\\s+")
+
 /** Markdown reduced to a single readable line: no fences, emphasis, links or line breaks. */
 fun plainSummary(markdown: String, limit: Int = 280): String {
     val text = markdown
-        .replace(Regex("```[\\s\\S]*?(```|$)"), " ")
-        .replace(Regex("!?\\[([^\\]]*)]\\([^)]*\\)"), "$1")
-        .replace(Regex("[`*_#>|~]+"), "")
-        .replace(Regex("\\s+"), " ")
+        .replace(summaryFences, " ")
+        .replace(summaryLinks, "$1")
+        .replace(summaryMarks, "")
+        .replace(summarySpaces, " ")
         .trim()
     return if (text.length > limit) text.take(limit - 1).trimEnd() + "…" else text
 }

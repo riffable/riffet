@@ -68,16 +68,30 @@ actual object AppLanguages {
     fun refresh(context: Context) {
         selection = selected(context)
         val locales = effectiveLocales(context)
+        effective = locales
+        localized = null
         // Compose, client L10n, core UiText and formatters must agree, including in background starts.
         LocaleList.setDefault(locales)
         riffet.i18n.L10n.refreshLocale()
         mutableChanges.value = locales.toLanguageTags()
     }
 
+    /**
+     * The locales [refresh] last resolved, and the context last localized for them. Every string a
+     * host component reads goes through [localize]; resolving the locales costs two binder calls
+     * and a new configuration context, which composition paid on every pass.
+     */
+    @Volatile private var effective: LocaleList? = null
+    @Volatile private var localized: Pair<Context, Context>? = null
+
     fun localize(context: Context): Context {
-        val locales = effectiveLocales(context)
+        val locales = effective ?: effectiveLocales(context).also { effective = it }
         if (context.resources.configuration.locales == locales) return context
-        return context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocales(locales) })
+        localized?.let { (base, made) -> if (base === context && made.resources.configuration.locales == locales) return made }
+        val made = context.createConfigurationContext(Configuration(context.resources.configuration).apply { setLocales(locales) })
+        // Only the application context is kept: holding an Activity or Service here would leak it.
+        if (context === context.applicationContext) localized = context to made
+        return made
     }
 
     private fun selected(context: Context): AppLanguage {

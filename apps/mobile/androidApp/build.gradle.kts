@@ -84,6 +84,17 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (releaseSigned) signingConfig = signingConfigs.getByName("release")
         }
+        // Release code (R8, not debuggable) under its own package, signed with the shared debug key and
+        // profileable from the shell (src/benchmark/AndroidManifest.xml): frame times and simpleperf
+        // samples taken on it match what users run. A debug build runs interpreted and is several
+        // times slower (docs/guide/android-performance.md §3.1).
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".benchmark"
+            proguardFile("benchmark-rules.pro")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     compileOptions {

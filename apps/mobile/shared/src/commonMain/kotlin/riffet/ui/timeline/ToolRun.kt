@@ -63,7 +63,13 @@ internal fun ToolRun(
     val environment = rememberResourceEnvironment()
     val stale = !turnActive
     val tools = remember(items) { items.filterIsInstance<TimelineItem.Tool>() }
-    val presentations = remember(tools, root, stale, environment) { tools.map { toolPresentation(it, root, stale) } }
+    // The run's item list is new on every lane update while a turn streams; a tool whose row did not
+    // change keeps its presentation, which for an edit includes a line diff of the whole file.
+    val memo = remember(root, stale, environment) { HashMap<String, Pair<TimelineItem.Tool, ToolPresentation>>() }
+    val presentations = remember(tools, memo) {
+        tools.map { tool -> memo[tool.key]?.takeIf { it.first === tool }?.second ?: toolPresentation(tool, root, stale).also { memo[tool.key] = tool to it } }
+            .also { memo.keys.retainAll(tools.mapTo(HashSet()) { it.key }) }
+    }
     val kinds = remember(tools) { toolRunKinds(tools) }
     var choice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(reveal) { if (reveal) choice = true }

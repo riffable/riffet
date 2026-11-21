@@ -22,6 +22,8 @@ const staticLocals = new Set([
   'LocalTabChrome', 'LocalTabContentBottomPadding', 'LocalTabMenu', 'LocalTerminalOpen', 'LocalVisualHostResumed',
   'LocalRiffetMotion', 'LocalRiffetSnackbar', 'LocalRiffetSurfaces', 'LocalRiffetWindowInfo', 'LocalRiffetColors',
   'LocalRiffetCodeColors', 'LocalRiffetTypography', 'LocalRiffetDarkTheme', 'LocalRiffetThemeEntry',
+  // Holders whose instance is fixed per list or per session; readers observe the State inside.
+  'LocalListSettled', 'LocalTruncatedRows',
 ]);
 
 const rules = [

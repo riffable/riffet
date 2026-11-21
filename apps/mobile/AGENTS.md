@@ -13,6 +13,10 @@
 
 - 主线程的栈要省着用：SwiftUI 在主线程上解析整棵视图类型、计算 body，iOS 27 上用完就闪退。设计层的修饰符返回具体类型，不返回 `some View`；页面里的大块内容放在 `riffetTypeBoundary()` 后面（`RiffetList`、`RiffetForm` 已自带）；视图里不存几 KB 的值类型；`viewWillAppear` 和 SwiftUI 更新里不调会当场布局的 UIKit 方法。改完跑 `scripts/stack-report.py`，做法见 [iOS](../../docs/design/system/ios.md) §2.0。
 
+## 流畅度
+
+帧预算、主线程上能做什么、怎么测和每次要跑的场景在 [Android 流畅度规范](../../docs/guide/android-performance.md)。量帧和采样只用 benchmark 构建（`./gradlew :androidApp:assembleBenchmark`），debug 构建解释执行，数字不能用。
+
 ## Compose 约定
 
 以下每条都对应过一次真机上的卡顿或闪烁；`pnpm check:compose` 会拦下其中能从文本识别的写法。
@@ -27,6 +31,9 @@
 - 页面主体放在 `RiffetPageScaffold`（或 `PageBody`）里，转场结束后再组合并淡入；不要逐页手写 `LocalPageContentReady` 判断。
 - 骨架传给主体的内边距是同一个实例，数值在使用处读取：直接交给 `contentPadding` 或 `Modifier.padding`，要加边距用 `PaddingValues.plus(...)`。在组合阶段调 `calculateBottomPadding()` 再拼一份新的，输入框每变一次高度这段组合就重跑一次。
 - 跟着键盘动的尺寸在布局阶段读 `WindowInsets.ime`（见 `rememberDockUnfold`），不另起动画；聚焦时才出现的内容提前组合好，用 `Modifier.unfolded` 露出。
+- 随内容变大的工作（解析、diff、高亮、转义、解码）不在组合里做；行数可能过百的内容用 `LazyColumn` 并给有界高度，按最宽行对齐时量最长的几行定宽，不用 `IntrinsicSize.Max`。
+- 列表里的 WebView 等重量级视图等列表停下（`LocalListSettled`）再创建，先占住尺寸。
+- 按一份会整体换新的列表做 `remember` 键去算每一行，流式更新时每帧全部重算：按行键和对象身份记忆。
 
 ## 排查
 

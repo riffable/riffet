@@ -1,5 +1,7 @@
 package riffet.ui.state
 
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -1362,8 +1364,17 @@ private fun localRowIndex(run: Run, page: List<TimelineItem>, window: RowWindow,
 }
 
 /** [row] with the full content of its blob: the whole row when the blob is one, else its full text. */
-private fun expandedRow(row: TimelineRow, blob: String): TimelineRow? {
-    val whole = runCatching { RiffetJson.instance.decodeFromString(TimelineRow.serializer(), blob) }.getOrNull()
+internal fun expandedRow(row: TimelineRow, blob: String): TimelineRow? {
+    // A whole row's blob is the server's row content, which carries no `seq` or `rev`: those
+    // belong to the lane, so the held row lends them. Without them no tool row could be expanded.
+    val whole = runCatching {
+        val content = RiffetJson.instance.parseToJsonElement(blob) as JsonObject
+        val placed = JsonObject(content + listOfNotNull(
+            ("seq" to JsonPrimitive(row.seq)).takeIf { "seq" !in content },
+            ("rev" to JsonPrimitive(row.rev)).takeIf { "rev" !in content },
+        ))
+        RiffetJson.instance.decodeFromJsonElement(TimelineRow.serializer(), placed)
+    }.getOrNull()
     if (whole != null && whole.key == row.key && whole.body !is TimelineRow.Body.Unknown) return whole.copy(seq = row.seq, truncated = null)
     val body = when (val held = row.body) {
         is TimelineRow.Body.User -> held.copy(text = blob)

@@ -25,7 +25,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import riffet.ui.focus.SelectableText
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import riffet.core.LineDiff
+import riffet.theme.RiffetCodeColors
+import riffet.theme.RiffetColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +69,28 @@ import riffet_mobile.shared.generated.resources.*
 private val LINE_NUMBER_WIDTH = 32.dp
 private val MARKER_WIDTH = 14.dp
 
+/** Edits up to this many characters are diffed in the composing frame. */
+private const val SYNC_DIFF_CHARS = 8_000
+
+/** Diffs up to this many lines compose every line; longer ones only the lines in view. */
+private const val DIFF_EAGER_LINES = 120
+
+/** Lines measured, longest first, for a long diff's width: tabs and wide characters can make a shorter line wider. */
+private const val DIFF_WIDEST_MEASURED = 8
+
+/** One diff line's height in `codeBlock`, for the placeholder a large diff shows while it is worked out. */
+private val DIFF_LINE_HEIGHT = 20.dp
+
+private class PreparedDiff(val diff: LineDiff?, val highlighted: List<AnnotatedString>?) {
+    companion object {
+        fun of(before: String, after: String, lineOffset: Long, trailingLines: Long, language: String?, colors: RiffetColors, codeColors: RiffetCodeColors): PreparedDiff {
+            val diff = lineDiff(before, after, 3, lineOffset, trailingLines)
+            val highlighted = if (diff != null && isHighlightable(language)) diff.lines.map { highlightCode(it.text, language, colors, codeColors) } else null
+            return PreparedDiff(diff, highlighted)
+        }
+    }
+}
+
 @Composable
 internal fun DiffBlock(
     path: String?,
@@ -68,9 +103,20 @@ internal fun DiffBlock(
     val designMetrics = LocalInterfaceStyle.current.metrics
     val colors = TimelineTheme.colors
     val environment = rememberResourceEnvironment()
-    val diff = remember(before, after, lineOffset, trailingLines, environment) {
-        lineDiff(before, after, 3, lineOffset, trailingLines)
+    val language = path?.let(::languageForPath)
+    val codeColors = TimelineTheme.codeColors
+    // The LCS is up to a million cells and every line is highlighted: a small edit is drawn in the
+    // first frame, a large one is worked out off the main thread behind a block of its final height.
+    val small = before.length + after.length <= SYNC_DIFF_CHARS
+    val inFrame = remember(before, after, lineOffset, trailingLines, environment, language, colors, codeColors) {
+        if (small) PreparedDiff.of(before, after, lineOffset, trailingLines, language, colors, codeColors) else null
     }
+    var worked by remember(before, after, lineOffset, trailingLines, environment, language, colors, codeColors) { mutableStateOf<PreparedDiff?>(null) }
+    LaunchedEffect(before, after, lineOffset, trailingLines, environment, language, colors, codeColors) {
+        if (!small) worked = withContext(Dispatchers.Default) { PreparedDiff.of(before, after, lineOffset, trailingLines, language, colors, codeColors) }  // compose-pitfalls: allow a large edit, opened by the reader, shows a block of its height while it is worked out
+    }
+    val prepared = inFrame ?: worked
+    val diff = prepared?.diff
     val shape = RoundedCornerShape(LocalInterfaceStyle.current.controlRadius)
     Column(
         Modifier
@@ -122,7 +168,11 @@ internal fun DiffBlock(
             }
         }
         Box(Modifier.fillMaxWidth().height(designMetrics.hairlineWidth).background(colors.line))
-        if (diff == null) {
+        val ready = prepared
+        if (ready == null) {
+            val lines = before.count { it == '\n' } + after.count { it == '\n' } + 2
+            Box(Modifier.fillMaxWidth().height(minOf(320.dp, DIFF_LINE_HEIGHT * lines + 8.dp)))
+        } else if (diff == null) {
             CodeBlock(
                 text = after,
                 language = path?.let(::languageForPath),
@@ -136,31 +186,53 @@ internal fun DiffBlock(
             // column alignment that makes it readable. Every row is as wide as the widest (the
             // web's `min-w-max`), so the add/delete backgrounds run edge to edge. The height is
             // capped like the web's `max-h-80`, with its own bounded scroll.
-            val language = path?.let(::languageForPath)
-            val codeColors = TimelineTheme.codeColors
-            val highlighted = remember(diff, language, colors, codeColors) {
-                if (isHighlightable(language)) diff.lines.map { highlightCode(it.text, language, colors, codeColors) } else null
-            }
+            val highlighted = ready.highlighted
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val viewport = maxWidth
-                Box(
-                    Modifier
-                        .heightIn(max = 320.dp)
-                        .verticalScroll(rememberScrollState())
-                        .horizontalScroll(rememberScrollState()),
-                ) {
-                    // The diff lines are one container rather than one per line, so a hunk can be
-                    // selected and copied whole. It sits inside the block's scroll boxes and inside
-                    // the tool row, so nothing here touches `LazyColumn` composition. The Column
-                    // goes *inside* it: SelectionContainer stacks its children like a Box.
-                    SelectableText {
-                        Column(
-                            Modifier
-                                .widthIn(min = viewport)
-                                .width(IntrinsicSize.Max)
-                                .padding(vertical = 4.dp),
-                        ) {
-                            diff.lines.forEachIndexed { index, line -> DiffLineRow(line, highlighted?.get(index)) }
+                if (diff.lines.size <= DIFF_EAGER_LINES) {
+                    Box(
+                        Modifier
+                            .heightIn(max = 320.dp)
+                            .verticalScroll(rememberScrollState())
+                            .horizontalScroll(rememberScrollState()),
+                    ) {
+                        // The diff lines are one container rather than one per line, so a hunk can be
+                        // selected and copied whole. It sits inside the block's scroll boxes and inside
+                        // the tool row, so nothing here touches `LazyColumn` composition. The Column
+                        // goes *inside* it: SelectionContainer stacks its children like a Box.
+                        SelectableText {
+                            Column(
+                                Modifier
+                                    .widthIn(min = viewport)
+                                    .width(IntrinsicSize.Max)
+                                    .padding(vertical = 4.dp),
+                            ) {
+                                diff.lines.forEachIndexed { index, line -> DiffLineRow(line, highlighted?.get(index)) }
+                            }
+                        }
+                    }
+                } else {
+                    // A long diff composes only the lines in its box. Composed and measured at once,
+                    // with the intrinsic pass that sizes every row to the widest, a 1,000-line edit
+                    // held the main thread for most of a second. The width comes from measuring the
+                    // longest lines instead, so the rows need no intrinsic pass and do not shift.
+                    val style = TimelineTheme.type.codeBlock
+                    val measurer = rememberTextMeasurer(cacheSize = 0)
+                    val density = LocalDensity.current
+                    val textWidth = remember(diff, highlighted, style, density) {
+                        diff.lines.indices.filter { diff.lines[it].type != DiffLineType.GAP }
+                            .sortedByDescending { diff.lines[it].text.length }.take(DIFF_WIDEST_MEASURED)
+                            .maxOfOrNull { index -> measurer.measure(highlighted?.get(index) ?: AnnotatedString(diff.lines[index].text), style, softWrap = false, maxLines = 1, density = density).size.width } ?: 0
+                    }
+                    val rowWidth = LINE_NUMBER_WIDTH * 2 + MARKER_WIDTH + 20.dp + with(density) { textWidth.toDp() }
+                    Box(Modifier.heightIn(max = 320.dp).horizontalScroll(rememberScrollState())) {
+                        SelectableText {
+                            LazyColumn(
+                                modifier = Modifier.width(maxOf(rowWidth, viewport)).heightIn(max = 320.dp),
+                                contentPadding = PaddingValues(vertical = 4.dp),
+                            ) {
+                                items(diff.lines.size, contentType = { diff.lines[it].type }) { index -> DiffLineRow(diff.lines[index], highlighted?.get(index)) }
+                            }
                         }
                     }
                 }

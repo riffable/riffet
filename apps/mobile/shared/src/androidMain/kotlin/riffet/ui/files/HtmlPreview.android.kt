@@ -26,8 +26,7 @@ private val previewHosts = setOf("cdnjs.cloudflare.com", "cdn.jsdelivr.net", "es
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-internal actual fun PlatformHtmlPreview(html: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean) {
-    val document = remember(html, interactive, generated) { htmlPreviewDocument(html, interactive, generated) }
+internal actual fun PlatformHtmlPreview(document: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean) {
     val reportError by rememberUpdatedState(onError)
     val generatedPage by rememberUpdatedState(generated)
     RiffetMaterialPlatformView { AndroidView(

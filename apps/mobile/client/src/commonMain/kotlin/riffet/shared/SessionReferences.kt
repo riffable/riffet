@@ -54,17 +54,22 @@ private fun referenceAgentName(session: Session): String = when (session.backend
 }
 
 fun rankedSessionReferences(sessions: List<Session>, projects: List<Project>, query: String, currentSessionId: String?, projectId: String?): List<Session> {
-    val words = query.trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }
+    val phrase = query.trim().lowercase()
+    val words = phrase.split(whitespace).filter { it.isNotEmpty() }
     val names = projects.associate { it.id to it.name }
     fun label(session: Session) = "${session.shownTitle} ${names[session.projectId].orEmpty()} ${session.agentId ?: referenceAgentName(session)}".lowercase()
+    // Each session's keys once, not once per comparison: the list can hold thousands.
     return sessions.asSequence().filter { it.id != currentSessionId }
-        .filter { session -> words.all { label(session).contains(it) } }
-        .sortedWith(compareBy<Session> { if (words.isNotEmpty() && it.shownTitle.lowercase().contains(query.trim().lowercase())) 0 else 1 }
-            .thenBy { if (it.archivedAt == null) 0 else 1 }
-            .thenBy { if (it.projectId == projectId) 0 else 1 }
-            .thenByDescending { it.lastActivityAt ?: it.createdAt })
-        .take(10).toList()
+        .filter { session -> words.isEmpty() || label(session).let { label -> words.all { label.contains(it) } } }
+        .map { session -> session to (if (words.isNotEmpty() && session.shownTitle.lowercase().contains(phrase)) 0 else 1) }
+        .sortedWith(compareBy<Pair<Session, Int>> { it.second }
+            .thenBy { if (it.first.archivedAt == null) 0 else 1 }
+            .thenBy { if (it.first.projectId == projectId) 0 else 1 }
+            .thenByDescending { it.first.lastActivityAt ?: it.first.createdAt })
+        .take(10).map { it.first }.toList()
 }
+
+private val whitespace = Regex("\\s+")
 
 /** Human-readable original messages from a saved reference blob, without exposing its transport JSON. */
 fun sessionReferenceOriginal(raw: String): String {

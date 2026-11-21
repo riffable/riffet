@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -254,7 +255,9 @@ object RiffetHost {
             combine(
                 activeSessions(store),
                 store.selected,
-                combine(store.timeline, AppLanguages.changes) { timeline, language -> language to currentStep(timeline) }.distinctUntilChanged(),
+                // Every streamed frame emits a timeline; the step is read off the main thread.
+                combine(store.timeline, AppLanguages.changes) { timeline, language -> language to currentStep(timeline) }
+                    .distinctUntilChanged().flowOn(Dispatchers.Default),
                 store.connection,
             ) { active, selected, step, connection -> describe(active, selected, step.second, connection) }
                 .distinctUntilChanged()

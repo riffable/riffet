@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 internal actual val htmlPreviewSupported: Boolean = false
 
 @Composable
-internal actual fun PlatformHtmlPreview(html: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean) = Unit
+internal actual fun PlatformHtmlPreview(document: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean) = Unit
 
 @Composable
 internal actual fun PlatformSitePreview(url: String?, modifier: Modifier, onPage: (url: String, status: Int) -> Unit, onError: (String) -> Unit) = Unit

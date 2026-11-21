@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import riffet.ui.icons.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -176,6 +178,15 @@ internal fun JobRow(job: NativeJob, onOpenFile: (String, Int?) -> Unit) {
  */
 internal val LocalSubagentOpen = staticCompositionLocalOf<((toolCallId: String, name: String) -> Unit)?> { null }
 
+/**
+ * Rows the server sent cut to its sync budget (`truncated`), by key, and how to fetch one whole. A
+ * cut Edit keeps only the start of its old text and none of the new, so it would read as a deletion;
+ * opening the row fetches the full one, as the web's 加载全部 does.
+ */
+internal class TruncatedRows(val keys: State<Map<String, Long>>, val expand: suspend (key: String) -> Boolean)
+
+internal val LocalTruncatedRows = staticCompositionLocalOf<TruncatedRows?> { null }
+
 @Composable
 private fun RegularToolRow(
     item: TimelineItem.Tool,
@@ -193,6 +204,10 @@ private fun RegularToolRow(
     val activity = currentToolActivity(item)
     val actions = LocalActivityActions.current
     var open by rememberSaveable { mutableStateOf(false) }
+    val truncated = LocalTruncatedRows.current
+    LaunchedEffect(open, item.key, truncated) {
+        if (open && truncated != null && item.key in truncated.keys.value) truncated.expand(item.key)
+    }
     // The clock only reads in the open detail; the folded row shows no time.
     val visibility = riffet.ui.theme.rememberVisualWorkVisibility()
     val now = rememberTickingNow(active = activity?.status?.active == true && open, visible = visibility.visible)

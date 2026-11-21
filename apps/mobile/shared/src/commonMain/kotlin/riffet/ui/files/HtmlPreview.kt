@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.*
@@ -39,16 +41,17 @@ internal fun HtmlFilePreview(api: RiffetApi, projectId: String, path: String, in
     val designMetrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val scheme = if (colors.bg.luminance() < 0.5f) "dark" else "light"
-    var html by remember(api, projectId, path, colors, generated) { mutableStateOf<String?>(null) }
-    var failure by remember(api, projectId, path, colors, generated) { mutableStateOf<String?>(null) }
+    var html by remember(api, projectId, path, colors, interactive, generated) { mutableStateOf<String?>(null) }
+    var failure by remember(api, projectId, path, colors, interactive, generated) { mutableStateOf<String?>(null) }
     var retry by remember { mutableStateOf(0) }
-    LaunchedEffect(api, projectId, path, colors, generated, retry) {
+    LaunchedEffect(api, projectId, path, colors, interactive, generated, retry) {
         html = null
         failure = null
         try {
-            html = if (generated) api.renderedPreview(projectId, path, scheme, previewColorHex(colors.fg),
+            val source = if (generated) api.renderedPreview(projectId, path, scheme, previewColorHex(colors.fg),
                 previewColorHex(colors.bg), previewColorHex(colors.line), previewColorHex(colors.accent))
             else api.visualization(projectId, path, scheme)
+            html = withContext(Dispatchers.Default) { htmlPreviewDocument(source, interactive || generated, generated) }
         }
         catch (cancellation: CancellationException) { throw cancellation }
         catch (error: Throwable) { failure = error.message ?: getString(Res.string.files_html_read_failed) }
@@ -166,19 +169,48 @@ internal expect val htmlPreviewSupported: Boolean
 @Composable
 internal expect fun PlatformSitePreview(url: String?, modifier: Modifier, onPage: (url: String, status: Int) -> Unit, onError: (String) -> Unit)
 
+/** Shows [document], built by [htmlPreviewDocument] or [htmlPreviewFrame] off the main thread. */
 @Composable
-internal expect fun PlatformHtmlPreview(html: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean = false)
+internal expect fun PlatformHtmlPreview(document: String, interactive: Boolean, modifier: Modifier, onError: (String) -> Unit, generated: Boolean = false)
 
 private const val previewResources = "data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com"
 
 /** Same opaque-frame contract as the Web and native iPhone preview, without an application origin. */
-internal fun htmlPreviewDocument(source: String, interactive: Boolean, generated: Boolean = false): String {
+internal fun htmlPreviewDocument(source: String, interactive: Boolean, generated: Boolean = false): String =
+    htmlPreviewFrame(htmlAttribute(source), interactive, generated)
+
+/**
+ * [htmlPreviewDocument] for a body already passed through [htmlAttribute]. Escaping is per
+ * character, so a large body many previews share (a diagram renderer) is escaped once and reused.
+ * Megabytes of string work: call it off the main thread.
+ */
+internal fun htmlPreviewFrame(escapedBody: String, interactive: Boolean, generated: Boolean = false): String {
     val resources = if (generated) "data: blob:" else previewResources
     val scripts = if (!interactive) "'none'" else if (generated) "'unsafe-inline' 'wasm-unsafe-eval' blob:" else "'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' $resources"
     val policy = "default-src 'none'; script-src $scripts; style-src 'unsafe-inline' $resources; img-src $resources; font-src $resources; media-src $resources; worker-src ${if (interactive) "blob:" else "'none'"}; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
-    val child = "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"${htmlAttribute("$policy; frame-src 'none'")}\"><meta name=\"referrer\" content=\"no-referrer\"></head><body>$source</body></html>"
-    return "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"${htmlAttribute("$policy; frame-src 'self'")}\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><style>html,body,iframe{margin:0;padding:0;border:0;width:100%;height:100%;background:transparent}iframe{display:block}</style></head><body><iframe sandbox=\"${if (interactive) "allow-scripts" else ""}\" referrerpolicy=\"no-referrer\" srcdoc=\"${htmlAttribute(child)}\"></iframe></body></html>"
+    val childHead = "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"${htmlAttribute("$policy; frame-src 'none'")}\"><meta name=\"referrer\" content=\"no-referrer\"></head><body>"
+    val head = "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"${htmlAttribute("$policy; frame-src 'self'")}\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><style>html,body,iframe{margin:0;padding:0;border:0;width:100%;height:100%;background:transparent}iframe{display:block}</style></head><body><iframe sandbox=\"${if (interactive) "allow-scripts" else ""}\" referrerpolicy=\"no-referrer\" srcdoc=\""
+    return buildString(escapedBody.length + 2048) {
+        append(head)
+        append(htmlAttribute(childHead))
+        append(escapedBody)
+        append(htmlAttribute("</body></html>"))
+        append("\"></iframe></body></html>")
+    }
 }
 
-private fun htmlAttribute(value: String): String =
-    value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+/** One pass over [value]; most of a renderer bundle needs no escaping and is copied as is. */
+internal fun htmlAttribute(value: String): String {
+    val first = value.indexOfFirst { it == '&' || it == '"' || it == '<' || it == '>' }
+    if (first < 0) return value
+    val out = StringBuilder(value.length + value.length / 8)
+    out.appendRange(value, 0, first)
+    for (index in first until value.length) when (val char = value[index]) {
+        '&' -> out.append("&amp;")
+        '"' -> out.append("&quot;")
+        '<' -> out.append("&lt;")
+        '>' -> out.append("&gt;")
+        else -> out.append(char)
+    }
+    return out.toString()
+}

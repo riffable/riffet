@@ -649,9 +649,12 @@ fun SessionScreen(
             }
         }
     }
+    val truncatedKeys = store.truncatedRows.collectAsState()
+    val truncatedRows = remember(store, truncatedKeys) { riffet.ui.timeline.TruncatedRows(truncatedKeys, store::expandRow) }
     CompositionLocalProvider(
         LocalFileAccess provides fileAccess,
         LocalSubagentOpen provides openSubagentPage,
+        riffet.ui.timeline.LocalTruncatedRows provides truncatedRows,
         LocalQuote provides quoteMessage,
         LocalSessionReferenceStore provides store,
         LocalSessionReferenceOpen provides onOpenSession?.let { open -> { id: String ->

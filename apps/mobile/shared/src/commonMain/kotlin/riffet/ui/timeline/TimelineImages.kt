@@ -1,6 +1,12 @@
 package riffet.ui.timeline
 
 import riffet.ui.design.LocalInterfaceStyle
+import kotlinx.coroutines.Dispatchers
+import coil3.network.CacheStrategy
+import coil3.network.NetworkRequest
+import coil3.network.NetworkResponse
+import coil3.request.Options
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -233,7 +239,8 @@ internal suspend fun fetchServerPreview(path: String, parameters: List<Pair<Stri
     val response = imageHttpClient.get("${base.trimEnd('/')}$path${if (query.isEmpty()) "" else "?$query"}")
     check(response.status.isSuccess()) { getString(Res.string.timeline_preview_status_failed, response.status.value) }
     check(response.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim() == "text/html") { getString(Res.string.timeline_preview_not_html) }
-    return response.bodyAsText()
+    // Renderer pages are megabytes; decoding them on the caller's (main) dispatcher cost whole frames.
+    return withContext(Dispatchers.Default) { response.bodyAsText() }  // compose-pitfalls: allow decoding a megabyte page; callers hold a fixed-size box
 }
 
 /**
@@ -270,9 +277,9 @@ private val imageHttpClient: HttpClient by lazy {
 internal fun rememberRiffetImageLoader(): ImageLoader {
     setSingletonImageLoaderFactory { context ->
         ImageLoader.Builder(context)
-            // The eager `HttpClient` overload: the no-arg and lambda overloads are ambiguous with
-            // each other because the factory's defaults make both applicable to a bare lambda.
-            .components { add(KtorNetworkFetcherFactory(imageHttpClient)) }
+            // Named arguments pick the overload that takes a cache strategy; the bare-lambda
+            // overloads are ambiguous with each other.
+            .components { add(KtorNetworkFetcherFactory(httpClient = { imageHttpClient }, cacheStrategy = { SuccessOnlyCacheStrategy })) }
             // Decoded bitmaps, capped at the phone budget instead of Coil's share of the heap.
             .memoryCache { MemoryCache.Builder().maxSizeBytes(IMAGE_CACHE_PHONE_DECODED_BYTES).build() }
             .build()
@@ -282,6 +289,21 @@ internal fun rememberRiffetImageLoader(): ImageLoader {
             }
     }
     return SingletonImageLoader.get(LocalPlatformContext.current)
+}
+
+/**
+ * Coil's default strategy keeps any response on disk and replays it, a 404 included: an image an
+ * agent mentioned before writing it, or one asked for while the server was restarting, then failed
+ * on every later attempt (tap to retry too) until the cache was cleared. Only successes are kept.
+ */
+@OptIn(ExperimentalCoilApi::class)
+private object SuccessOnlyCacheStrategy : CacheStrategy {
+    override suspend fun read(cacheResponse: NetworkResponse, networkRequest: NetworkRequest, options: Options): CacheStrategy.ReadResult =
+        if (cacheResponse.code in 200..299) CacheStrategy.DEFAULT.read(cacheResponse, networkRequest, options) else CacheStrategy.ReadResult(networkRequest)
+
+    override suspend fun write(cacheResponse: NetworkResponse?, networkRequest: NetworkRequest, networkResponse: NetworkResponse, options: Options): CacheStrategy.WriteResult =
+        if (networkResponse.code in 200..299 || networkResponse.code == 304) CacheStrategy.DEFAULT.write(cacheResponse, networkRequest, networkResponse, options)
+        else CacheStrategy.WriteResult.DISABLED
 }
 
 private val MARKDOWN_IMAGE_WIDTH = 240.dp

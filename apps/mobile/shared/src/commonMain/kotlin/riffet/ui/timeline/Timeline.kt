@@ -420,7 +420,9 @@ internal fun Timeline(
     val fadeMillis = motionDuration(reduced, motion.SHORT)
     val colors = LocalRiffetColors.current
     val fadeIn = LocalNativeFeatures.current.isOn(NativeFeature.FADE_IN)
+    val settled = remember(state) { derivedStateOf { !state.isScrollInProgress } }
     RiffetMaterialSourceContent {
+    CompositionLocalProvider(LocalListSettled provides settled) {
     LazyColumn(
         state = state,
         modifier = modifier.riffetMaterialSource(key = follow, enabled = riffet.ui.app.pageShowsGlass).nestedScroll(nestedDrag)
@@ -474,6 +476,7 @@ internal fun Timeline(
                 Box(Modifier.fillMaxWidth().padding(top = 12.dp)) { footer() }
             }
         }
+    }
     }
     }
 }
