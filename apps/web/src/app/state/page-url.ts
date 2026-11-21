@@ -35,10 +35,10 @@ export interface PageAddress {
   /** The design page's chapter; absent is the overview. */
   designChapter?: string;
   stats: StatsUiState;
-}
-
   /** Set for `/settings`; `section` is the raw id after it, unchecked. */
   settings?: { section?: string };
+}
+
 export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>): PageAddress {
   const [head, id, ...rest] = location.pathname.split('/').filter(Boolean).map(decodeURIComponent);
   const search = new URLSearchParams(location.search);
@@ -48,9 +48,9 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
     const markId = search.get('mark');
     if (markId) address.markId = markId;
   } else if (head === 'p' && id) address.projectId = id;
+  else if (head === 'settings') address.settings = id ? { section: id } : {};
   else if ((PAGES as readonly string[]).includes(head ?? '')) {
     address.page = head as AddressPage;
-  else if (head === 'settings') address.settings = id ? { section: id } : {};
     const pluginId = head === 'plugins' ? search.get('id') : undefined;
     if (pluginId) address.pluginId = pluginId;
     const platform = head === 'design' ? search.get('platform') : undefined;
