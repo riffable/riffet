@@ -428,4 +428,54 @@ describe('session journal', () => {
       expect(trimmedText).toContain('archived tool output trimmed');
     } finally { db.close(); }
   });
+
+  it('respects beforeAt when cold trimming tool blobs on an active conversation', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const huge = `HEAD-MARK\n${'line of build log\n'.repeat(6_000)}TAIL-MARK`;
+      const makePayload = (id: string, at: string) => ({
+        kind: 'tool_call_update', nativeId: id, turnId: id, at,
+        payload: { type: 'tool_call_update', nativeId: id, data: { toolCallId: id, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: huge } }] } },
+      });
+      journal.append('main-1', [
+        makePayload('old-tc', '2026-10-01T00:00:00.000Z'),
+        makePayload('new-tc', '2026-11-20T00:00:00.000Z'),
+      ]);
+      expect(journal.trimArchivedToolBlobs(['main-1'], { beforeAt: '2026-11-01T00:00:00.000Z' })).toBe(1);
+      const oldPayload = journal.entity('main-1', 'old-tc')!.payload as { data: { content: Array<{ content: { text: string } }> } };
+      const newPayload = journal.entity('main-1', 'new-tc')!.payload as { data: { content: Array<{ content: { text: string } }> } };
+      expect(oldPayload.data.content[0]!.content.text).toContain('archived tool output trimmed');
+      expect(newPayload.data.content[0]!.content.text).not.toContain('archived tool output trimmed');
+    } finally { db.close(); }
+  });
+
+  it('advances past oversized non-trimmable tool blobs when scanning batches', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const largeDiff = 'diff-line\n'.repeat(8_000);
+      const hugeStdout = `HEAD-MARK\n${'line of build log\n'.repeat(6_000)}TAIL-MARK`;
+      const inputs = [
+        ...Array.from({ length: 45 }, (_, index) => ({
+          kind: 'tool_call_update' as const,
+          nativeId: `diff-${index}`,
+          turnId: `t-${index}`,
+          at: '2026-10-01T00:00:00.000Z',
+          payload: { type: 'tool_call_update', nativeId: `diff-${index}`, data: { toolCallId: `diff-${index}`, status: 'completed', content: [{ type: 'diff', path: 'a.ts', oldText: largeDiff, newText: largeDiff }] } },
+        })),
+        {
+          kind: 'tool_call_update' as const,
+          nativeId: 'stdout-after-diffs',
+          turnId: 't-tail',
+          at: '2026-10-01T00:00:00.000Z',
+          payload: { type: 'tool_call_update', nativeId: 'stdout-after-diffs', data: { toolCallId: 'stdout-after-diffs', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: hugeStdout } }] } },
+        },
+      ];
+      journal.append('main-cursor', inputs);
+      expect(journal.trimArchivedToolBlobs(['main-cursor'], { limit: 10 })).toBe(1);
+      const trimmed = journal.entity('main-cursor', 'stdout-after-diffs')!.payload as { data: { content: Array<{ content: { text: string } }> } };
+      expect(trimmed.data.content[0]!.content.text).toContain('archived tool output trimmed');
+    } finally { db.close(); }
+  });
 });

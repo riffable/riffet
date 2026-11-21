@@ -683,6 +683,8 @@ export async function createApp(options: AppOptions = {}) {
         const archivedIds=store.archivedSessionsBefore(archivedBefore);
         if(archivedIds.length)store.journal.trimArchivedToolBlobs(archivedIds);
       }
+      const assistantCold=store.assistantMainForTrimming();
+      if(assistantCold)store.journal.trimArchivedToolBlobs([assistantCold.sessionId],{beforeAt:assistantCold.beforeAt});
       store.journal.maintainAll();
       store.reclaimSpace();
     }catch(error){app.log.warn({err:error},'journal maintenance failed');}

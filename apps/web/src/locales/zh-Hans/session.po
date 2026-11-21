@@ -1274,6 +1274,10 @@ msgstr "收藏的目录"
 msgid "收起"
 msgstr "收起"
 
+#: src/app/session/Timeline.tsx
+msgid "收起更早话题"
+msgstr "收起更早话题"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "放大"
 msgstr "放大"
@@ -1329,6 +1333,11 @@ msgstr "新建 Worktree"
 #: src/app/session/Timeline.tsx
 msgid "新文件"
 msgstr "新文件"
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/TranscriptView.tsx
+msgid "新话题"
+msgstr "新话题"
 
 #: src/app/session/Attempts.tsx
 msgid "无改动"
@@ -1473,6 +1482,10 @@ msgstr "无法重试"
 #: src/app/session/TranscriptView.tsx
 msgid "显示全部"
 msgstr "显示全部"
+
+#: src/app/session/Timeline.tsx
+msgid "显示更早话题"
+msgstr "显示更早话题"
 
 #: src/app/session/Markdown.tsx
 msgid "显示源码"

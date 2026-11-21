@@ -1274,6 +1274,10 @@ msgstr "Favorite folders"
 msgid "收起"
 msgstr "Collapse"
 
+#: src/app/session/Timeline.tsx
+msgid "收起更早话题"
+msgstr "Collapse earlier topics"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "放大"
 msgstr "Zoom in"
@@ -1329,6 +1333,11 @@ msgstr "New Worktree"
 #: src/app/session/Timeline.tsx
 msgid "新文件"
 msgstr "New file"
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/TranscriptView.tsx
+msgid "新话题"
+msgstr "New topic"
 
 #: src/app/session/Attempts.tsx
 msgid "无改动"
@@ -1473,6 +1482,10 @@ msgstr "Couldn't retry the attempt"
 #: src/app/session/TranscriptView.tsx
 msgid "显示全部"
 msgstr "Show all"
+
+#: src/app/session/Timeline.tsx
+msgid "显示更早话题"
+msgstr "Show earlier topics"
 
 #: src/app/session/Markdown.tsx
 msgid "显示源码"

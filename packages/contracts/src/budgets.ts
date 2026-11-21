@@ -193,6 +193,8 @@ export const STORAGE_BUDGET = {
   archivedTrimDays: 30,
   /** Unarchived inactive conversations older than this (days) also become eligible for cold tool text output trimming. */
   inactiveTrimDays: 90,
+  /** Active personal-assistant main conversation turns older than this (days), and past consolidation when enabled, are eligible for cold tool output trimming. */
+  assistantTrimDays: 14,
   /** Bytes kept at the head and tail (combined) when trimming an oversized archived/inactive tool output blob. */
   archivedTrimKeepBytes: 32 * KIB,
 } as const;

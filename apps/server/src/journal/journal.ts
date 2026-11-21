@@ -890,40 +890,59 @@ export class Journal {
   }
 
   /**
-   * Cold trimming for long-archived conversations (tiered retention): keeps all human/assistant text,
-   * thoughts, file paths and diffs intact, while head+tail truncating oversized raw terminal/tool outputs.
+   * Cold trimming for archived, inactive, or aged assistant conversations (tiered retention): keeps
+   * all human/assistant text, thoughts, file paths and diffs intact, while head+tail truncating
+   * oversized raw terminal/tool outputs (optionally restricted to events strictly before `beforeAt`).
    */
-  trimArchivedToolBlobs(sessionIds: readonly string[], options: { keepBytes?: number; limit?: number } = {}): number {
+  trimArchivedToolBlobs(sessionIds: readonly string[], options: { keepBytes?: number; limit?: number; beforeAt?: string } = {}): number {
     const keepBytes = options.keepBytes ?? STORAGE_BUDGET.archivedTrimKeepBytes;
     const minBytes = keepBytes * 2;
     const limit = options.limit ?? 40;
+    const beforeAt = options.beforeAt;
     if (!sessionIds.length || keepBytes <= 0) return 0;
     const find = this.sql(`SELECT e.session_id, e.seq, e.blob_ref, b.size FROM journal_events e
       JOIN blobs b ON b.hash = e.blob_ref
       WHERE (e.session_id=? OR (e.session_id>=? AND e.session_id<?))
+        AND (e.session_id>? OR (e.session_id=? AND e.seq>?))
         AND e.kind IN ('tool_call','tool_call_update') AND e.blob_ref IS NOT NULL AND b.size > ?
+        ${beforeAt ? 'AND e.at < ?' : ''}
+      ORDER BY e.session_id ASC, e.seq ASC
       LIMIT ?`);
     const update = this.sql('UPDATE journal_events SET blob_ref=? WHERE session_id=? AND seq=? AND blob_ref=?');
+    const batchSize = Math.max(limit, 40);
     let trimmed = 0;
     for (const sessionId of sessionIds) {
-      if (trimmed >= limit) break;
-      const candidates = find.all(sessionId, `${sessionId}#`, `${sessionId}$`, minBytes, limit - trimmed) as Array<{ session_id: string; seq: number; blob_ref: string; size: number }>;
-      for (const candidate of candidates) {
-        const raw = this.getBlob(candidate.blob_ref);
-        if (!raw) continue;
-        let parsed: unknown;
-        try { parsed = JSON.parse(raw.toString('utf8')); } catch { continue; }
-        const shrunk = trimToolPayloadOutputs(parsed, keepBytes);
-        if (!shrunk) continue;
-        const nextBytes = Buffer.from(JSON.stringify(shrunk));
-        if (nextBytes.length >= candidate.size) continue;
-        const prepared = prepareBlob(nextBytes, { mimeType: 'application/json', blobsDir: this.blobsDir });
-        this.tx(() => {
-          this.storePreparedBlob(prepared);
-          update.run(prepared.hash, candidate.session_id, candidate.seq, candidate.blob_ref);
-        });
-        trimmed += 1;
+      let cursorSession = '';
+      let cursorSeq = 0;
+      while (trimmed < limit) {
+        const args = beforeAt
+          ? [sessionId, `${sessionId}#`, `${sessionId}$`, cursorSession, cursorSession, cursorSeq, minBytes, beforeAt, batchSize]
+          : [sessionId, `${sessionId}#`, `${sessionId}$`, cursorSession, cursorSession, cursorSeq, minBytes, batchSize];
+        const candidates = find.all(...args) as Array<{ session_id: string; seq: number; blob_ref: string; size: number }>;
+        if (!candidates.length) break;
+        const tail = candidates[candidates.length - 1]!;
+        cursorSession = tail.session_id;
+        cursorSeq = tail.seq;
+        for (const candidate of candidates) {
+          if (trimmed >= limit) break;
+          const raw = this.getBlob(candidate.blob_ref);
+          if (!raw) continue;
+          let parsed: unknown;
+          try { parsed = JSON.parse(raw.toString('utf8')); } catch { continue; }
+          const shrunk = trimToolPayloadOutputs(parsed, keepBytes);
+          if (!shrunk) continue;
+          const nextBytes = Buffer.from(JSON.stringify(shrunk));
+          if (nextBytes.length >= candidate.size) continue;
+          const prepared = prepareBlob(nextBytes, { mimeType: 'application/json', blobsDir: this.blobsDir });
+          this.tx(() => {
+            this.storePreparedBlob(prepared);
+            update.run(prepared.hash, candidate.session_id, candidate.seq, candidate.blob_ref);
+          });
+          trimmed += 1;
+        }
+        if (candidates.length < batchSize) break;
       }
+      if (trimmed >= limit) break;
     }
     return trimmed;
   }

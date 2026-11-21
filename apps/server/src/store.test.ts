@@ -555,4 +555,26 @@ describe('native backend session identity', () => {
       expect(store.getEvents(session.id).filter(event => event.type === 'session')).toHaveLength(3);
     } finally { store.close(); }
   });
+
+  it('selects idle personal-assistant main conversation for cold trimming bounded by consolidation cursor', () => {
+    const store = new Store(':memory:');
+    try {
+      const assistant = store.createProject('/tmp/assistant-trim', '个人助理');
+      store.updateProject(assistant.id, { system: 'assistant' });
+      const main = store.createSession({ projectId: assistant.id, kind: 'native', state: 'idle' });
+      store.updateProject(assistant.id, { mainSessionId: main.id });
+      const now = Date.parse('2026-11-21T00:00:00.000Z');
+      expect(store.assistantMainForTrimming(now)).toEqual({
+        sessionId: main.id,
+        beforeAt: '2026-11-07T00:00:00.000Z',
+      });
+      store.setSetting('assistant-consolidated-through', '2026-11-01T04:00:00.000Z');
+      expect(store.assistantMainForTrimming(now)).toEqual({
+        sessionId: main.id,
+        beforeAt: '2026-11-01T04:00:00.000Z',
+      });
+      store.updateSession(main.id, { state: 'running' });
+      expect(store.assistantMainForTrimming(now)).toBeUndefined();
+    } finally { store.close(); }
+  });
 });

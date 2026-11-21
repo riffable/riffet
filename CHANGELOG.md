@@ -56,6 +56,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On Android, tapping a session's composer no longer stutters as the keyboard opens: the composer unfolds as part of the keyboard's own motion, and folds back with it when the keyboard is put away. A bottom sheet opened while the keyboard is up rises from the bottom edge instead of first appearing above the keyboard.
 - The Android Git panel shows only "Not a Git repository" for a project that is not one, without a read-failure error above it.
 - Sending a message no longer flashes (briefly disappearing and fading back in) when a fast Agent accepts or finishes it before the timeline row arrives.
+- In the Personal Assistant conversation on the web, `/new` now appears as a "New topic" divider and collapses earlier topics by default (expandable anytime, and auto-expanded when searching or jumping from the outline), while background maintenance trims oversized old tool outputs past 14 days without affecting search or memory consolidation.
 
 ## 0.9.0 - 2026-11-19
 

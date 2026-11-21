@@ -13,7 +13,7 @@ import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecover
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
-import { AnswerActions, AssistantMessage, ImageBlock, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
+import { AnswerActions, AssistantMessage, ImageBlock, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
@@ -44,6 +44,13 @@ import { useViewPrefs, type ProcessFoldTiming } from './viewPrefs';
 import { animationsOf } from '@/lib/motion';
 
 const time = (value: string) => { const at = new Date(value).getTime(); return Number.isFinite(at) ? at : undefined; };
+
+/** Settled `/new` topic boundary in the personal assistant's main conversation. */
+function isSettledNewTopic(item: TimelineItem): boolean {
+  if (item.kind !== 'user' || item.text.trim() !== '/new' || item.attachments.length || item.references?.length) return false;
+  if (!item.run) return true;
+  return item.run.state === 'completed' && !item.run.error;
+}
 
 /**
  * A new row fades in where it lands. No slide: following the end, a row rising into place while the
@@ -394,6 +401,11 @@ interface RowContext {
   onExpandRow?: (key: string) => Promise<boolean>;
   completedProcessesOpen?: boolean;
   foldTiming: ProcessFoldTiming;
+  newTopicDivider?: boolean;
+  latestTopicKey?: string;
+  canCollapseEarlier?: boolean;
+  earlierTopicsCollapsed?: boolean;
+  onToggleEarlierTopics?: () => void;
 }
 
 /** Under a row the server sent cut to a preview: fetches the rest when asked. */
@@ -529,7 +541,20 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlight
   }
   const { item, settled } = row;
   let content: ReactNode = null;
-  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
+  if (item.kind === 'user') {
+    if (context.newTopicDivider && isSettledNewTopic(item)) {
+      content = (
+        <TopicDivider
+          time={timelineItemTime(item) || undefined}
+          collapsible={Boolean(context.canCollapseEarlier && item.key === context.latestTopicKey)}
+          collapsed={Boolean(context.earlierTopicsCollapsed)}
+          onToggle={context.onToggleEarlierTopics}
+        />
+      );
+    } else {
+      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
+    }
+  }
   else if (item.kind === 'assistant') {
     const models = resources?.modelInfo
       ? item.event.sourceEvents
@@ -598,6 +623,8 @@ interface Props {
   hasMoreHistory?: boolean;
   /** Keep finished process disclosures open in focused subagent transcripts. */
   completedProcessesOpen?: boolean;
+  /** Renders settled `/new` commands as topic dividers and collapses earlier topics by default. */
+  newTopicDivider?: boolean;
   historyContextIncomplete?: boolean;
   historyStale?: boolean;
   loadingEarlier?: boolean;
@@ -646,7 +673,7 @@ interface Props {
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, turnStatusByTurn, focus, outlineTarget, progress: suppliedProgress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, newTopicDivider = false, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, turnStatusByTurn, focus, outlineTarget, progress: suppliedProgress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -791,7 +818,48 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     if (!sync) { setWindowTick((value) => value + 1); return; }
     flushSync(() => setWindowTick((value) => value + 1));
   };
-  const turns = useMemo<Turn[]>(() => suppliedTurns ?? timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: item.text.trim() || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : [])), [suppliedTurns, timeline, timelineVersion]);
+  const settledNewTopicKeys = useMemo(() => {
+    if (!newTopicDivider) return undefined;
+    const keys = new Set<string>();
+    for (const item of timeline) {
+      if (isSettledNewTopic(item)) keys.add(item.key);
+    }
+    return keys;
+  }, [newTopicDivider, timeline, timelineVersion]);
+  const turns = useMemo<Turn[]>(() => {
+    if (suppliedTurns) {
+      if (!newTopicDivider) return suppliedTurns;
+      let changed = false;
+      const mapped = suppliedTurns.map((turn) => {
+        const settled = settledNewTopicKeys?.has(turn.key) || (turn.key.startsWith('outline-turn:') && turn.text.trim() === '/new');
+        if (!settled) return turn;
+        changed = true;
+        return { ...turn, text: t`新话题` };
+      });
+      return changed ? mapped : suppliedTurns;
+    }
+    return timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: newTopicDivider && isSettledNewTopic(item) ? t`新话题` : item.text.trim() || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : []));
+  }, [suppliedTurns, timeline, timelineVersion, newTopicDivider, settledNewTopicKeys, t]);
+  const latestTopicIndex = useMemo(() => {
+    if (!newTopicDivider || hasMoreLater) return -1;
+    for (let index = timeline.length - 1; index >= 0; index -= 1) {
+      if (isSettledNewTopic(timeline[index]!)) return index;
+    }
+    return -1;
+  }, [newTopicDivider, hasMoreLater, timeline, timelineVersion]);
+  const latestTopicKey = latestTopicIndex >= 0 ? timeline[latestTopicIndex]!.key : undefined;
+  const [expandedTopicKey, setExpandedTopicKey] = useState<string | undefined>(undefined);
+  useEffect(() => { setExpandedTopicKey(undefined); }, [sessionId, resetVersion]);
+  const canCollapseEarlier = Boolean(latestTopicKey && (latestTopicIndex > 0 || hasMoreHistory));
+  const earlierTopicsOpen = Boolean(latestTopicKey && expandedTopicKey === latestTopicKey);
+  const earlierTopicsCollapsed = canCollapseEarlier && !earlierTopicsOpen;
+  const displayTimeline = useMemo(() => (
+    earlierTopicsCollapsed && latestTopicIndex > 0 ? timeline.slice(latestTopicIndex) : timeline
+  ), [earlierTopicsCollapsed, latestTopicIndex, timeline, timelineVersion]);
+  const toggleEarlierTopics = useCallback(() => {
+    if (!latestTopicKey) return;
+    setExpandedTopicKey((current) => (current === latestTopicKey ? undefined : latestTopicKey));
+  }, [latestTopicKey]);
   const sessionMarks = useContext(SessionMarksContext);
   // Held while it names the same prompts, so the memoized rail keeps its props. A streamed frame
   // cannot move a mark to another turn; the marks and the turn list moving (a window loaded) can.
@@ -1029,9 +1097,13 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     if (focusHandled.current === focus) return;
     if (focusRequest.current.version !== scroll.navigationVersion.current) { focusHandled.current = focus; setReveal(undefined); return; }
     const key = rowKeyForMessage(timeline, focus);
+    if (key && earlierTopicsCollapsed && !rowKeyForMessage(displayTimeline, focus)) {
+      setExpandedTopicKey(latestTopicKey);
+      return;
+    }
     if (key && landOn(key, (found) => focus.quote ? quoteRange(found, focus.quote) : undefined)) { focusHandled.current = focus; setReveal(undefined); }
     focusRequest.current.version = scroll.navigationVersion.current;
-  }, [focus, loaded, scrollScope, timeline, timelineVersion, loadingEarlier, windowTick, reveal, landingTick, scroll]);
+  }, [focus, loaded, scrollScope, timeline, displayTimeline, timelineVersion, earlierTopicsCollapsed, latestTopicKey, loadingEarlier, windowTick, reveal, landingTick, scroll]);
 
   /** The occurrence 会话内查找 moved to; landed the same way as a focus, and once. */
   const [findTarget, setFindTarget] = useState<{ key: string; needle: string; nth: number }>();
@@ -1079,8 +1151,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     onReaderEnd(atEnd);
   };
   useEffect(() => { readerEnd.current = undefined; }, [scrollScope]);
-  const seek = useRef({ timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd });
-  seek.current = { timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd };
+  const seek = useRef({ timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd, earlierTopicsCollapsed, latestTopicKey });
+  seek.current = { timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd, earlierTopicsCollapsed, latestTopicKey };
   const historyReady = loaded && historyLoad.state === 'ready' && !historyStale;
   useEffect(() => {
     if (!focus || !historyReady || focusHandled.current === focus) return;
@@ -1092,6 +1164,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       while (currentRequest()) {
         const current = seek.current;
         if (rowKeyForMessage(current.timeline, focus)) return;
+        if (current.earlierTopicsCollapsed && current.latestTopicKey) setExpandedTopicKey(current.latestTopicKey);
         if (!current.hasMoreHistory || !current.onLoadEarlier || pages >= SEEK_PAGES) {
           toast.info(pages >= SEEK_PAGES ? t`向前翻了 ${SEEK_PAGES} 页仍未找到这条消息` : t`没有在会话中找到这条消息，它可能已被删除或改写`);
           return;
@@ -1121,7 +1194,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
 
   const earlier = useEarlierHistory({
     scrollRef, probeRef: earlierProbe, scope: `${sessionId}:${resetVersion}`,
-    enabled: loaded && Boolean(hasMoreHistory && onLoadEarlier), paused: Boolean(loadingEarlier || historyStale),
+    enabled: loaded && !earlierTopicsCollapsed && Boolean(hasMoreHistory && onLoadEarlier), paused: Boolean(loadingEarlier || historyStale),
     version: timelineVersion, load: onLoadEarlier,
   });
   const laterProbe = useRef<HTMLDivElement>(null);
@@ -1149,6 +1222,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     scroll.followEnd();
   };
   const onJump = scroll.release;
+  const pendingNavigate = useRef<{ key: string; offset: number; heading?: string } | undefined>(undefined);
+  useEffect(() => { pendingNavigate.current = undefined; }, [scrollScope]);
   const navigateToRow = useCallback((key: string, offset: number) => {
     const scroller = scrollRef.current;
     if (!scroller) return;
@@ -1157,10 +1232,16 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       return top === undefined ? undefined : top - offset;
     };
     const target = resolve();
-    if (target === undefined) return;
+    if (target === undefined) {
+      if (earlierTopicsCollapsed && latestTopicKey) {
+        pendingNavigate.current = { key, offset };
+        setExpandedTopicKey(latestTopicKey);
+      }
+      return;
+    }
     const far = !findRow(scroller, key) || Math.abs(target - scroller.scrollTop) > scroller.clientHeight * 3;
     scroll.navigate(resolve, { behavior: far ? 'auto' : scrollBehavior() });
-  }, [rowTop, scroll]);
+  }, [rowTop, scroll, earlierTopicsCollapsed, latestTopicKey]);
   const navigateToChapter = useCallback((key: string, heading: string) => {
     const scroller = scrollRef.current;
     if (!scroller) return;
@@ -1178,8 +1259,20 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       const top = rowTop(key);
       return top === undefined ? undefined : top - 24;
     };
+    if (!mounted && rowTop(key) === undefined && earlierTopicsCollapsed && latestTopicKey) {
+      pendingNavigate.current = { key, offset: 24, heading };
+      setExpandedTopicKey(latestTopicKey);
+      return;
+    }
     scroll.navigate(resolve, { behavior: mounted ? scrollBehavior() : 'auto' });
-  }, [rowTop, scroll]);
+  }, [rowTop, scroll, earlierTopicsCollapsed, latestTopicKey]);
+  useLayoutEffect(() => {
+    if (earlierTopicsCollapsed || !pendingNavigate.current) return;
+    const pending = pendingNavigate.current;
+    pendingNavigate.current = undefined;
+    if (pending.heading !== undefined) navigateToChapter(pending.key, pending.heading);
+    else navigateToRow(pending.key, pending.offset);
+  }, [earlierTopicsCollapsed, timelineVersion, navigateToRow, navigateToChapter]);
   useImperativeHandle(scrollHandleRef, () => ({
     scrollByReader: scroll.scrollByReader,
     followSent: () => scroll.followSent(latestTurn.current === undefined ? undefined : rowTop(latestTurn.current)),
@@ -1189,10 +1282,15 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     },
   }), [scroll, rowTop, timeline, navigateToRow]);
   const loadTurn = useCallback(async (key: string) => {
+    if (earlierTopicsCollapsed && latestTopicKey) {
+      setExpandedTopicKey(latestTopicKey);
+      if (timeline.some((item) => item.key === key)) return key;
+    }
+    if (!onLoadTurn) return false;
     const request = scroll.beginRequest();
-    try { return await onLoadTurn?.(key, request.signal) ?? false; }
+    try { return await onLoadTurn(key, request.signal); }
     finally { request.finish(); }
-  }, [onLoadTurn, scroll]);
+  }, [onLoadTurn, scroll, earlierTopicsCollapsed, latestTopicKey, timeline]);
 
   const jumpToConfirmation = () => {
     const scroller = scrollRef.current;
@@ -1249,10 +1347,10 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     // Later tool output can regroup a reply into a process row. Defer that reparenting too,
     // otherwise it unmounts the selected Markdown even when its own text rendering is held.
     if (heldSelection.current && plannedTurns.current) return plannedTurns.current;
-    const next = transcriptTurns(timeline, running, metricsByRun, plannedTurns.current, activeTurnId, turnStatusByTurn);
+    const next = transcriptTurns(displayTimeline, running, metricsByRun, plannedTurns.current, activeTurnId, turnStatusByTurn);
     plannedTurns.current = next;
     return next;
-  }, [timeline, timelineVersion, running, metricsByRun, activeTurnId, turnStatusByTurn, selectionRevision]);
+  }, [displayTimeline, timelineVersion, earlierTopicsCollapsed, running, metricsByRun, activeTurnId, turnStatusByTurn, selectionRevision]);
   // Flat, not one parent per turn: older history or a settled slash command can move a turn's
   // boundary, and a row re-parented that way would remount and drop its expanded state.
   // Each row also gets a deterministic turn-scoped slot (`turnId:kind:ordinal`) so reading anchors
@@ -1350,6 +1448,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const foldTiming = useViewPrefs((state) => state.processFoldTiming);
   const rowContext = useMemo<RowContext>(() => ({
     sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming,
+    newTopicDivider, latestTopicKey, canCollapseEarlier, earlierTopicsCollapsed, onToggleEarlierTopics: toggleEarlierTopics,
     measure: rowObserver.measure,
     ...(onOpenPath ? { onOpenPath: stable.openPath } : {}),
     ...(onOpenInEditor ? { onOpenInEditor: stable.openInEditor } : {}),
@@ -1362,7 +1461,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     ...(onRestoreNativeRun ? { onRestoreNativeRun: stable.restore } : {}),
     ...(onTurnAction ? { onTurnAction: stable.turnAction } : {}),
     ...(onExpandRow ? { onExpandRow: stable.expand } : {}),
-  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
+  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming, newTopicDivider, latestTopicKey, canCollapseEarlier, earlierTopicsCollapsed, toggleEarlierTopics, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);
@@ -1470,7 +1569,15 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const showHit = (hit: FindHit, lower: string, nth: number) => {
     findPage.current?.abort();
     findPage.current = undefined;
-    if (hit.row !== undefined || !onLoadPlace) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
+    if (hit.row !== undefined) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
+    if (earlierTopicsCollapsed && latestTopicKey) {
+      setExpandedTopicKey(latestTopicKey);
+      if (timeline.some((item) => item.key === hit.key) || !onLoadPlace) {
+        setFindTarget({ key: hit.key, needle: lower, nth });
+        return;
+      }
+    }
+    if (!onLoadPlace) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
     const request = scroll.beginRequest();
     findPage.current = new AbortController();
     const page = findPage.current;
@@ -1561,11 +1668,11 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           <FeedbackNotice scope={sessionId} tone="warning" className="mb-5" message={historyLoad.state === 'error' && (historyLoad.message || t`无法同步最新会话记录。`)}
             action={() => <Button size="xs" variant="secondary" onClick={() => onRetryHistory?.()}><IconRefreshCw /><Trans>重试同步</Trans></Button>}
             recovered={historyLoad.state === 'ready'} renderMessage={message => <FailureDetails text={t`无法同步最新会话记录。`} detail={message.text} />} />
-          {loaded && !hasMoreHistory && lead}
-          {loaded && !timeline.length && empty}
+          {loaded && !earlierTopicsCollapsed && !hasMoreHistory && lead}
+          {loaded && !displayTimeline.length && empty}
           <FeedbackNotice scope={sessionId} message={loaded && historyContextIncomplete && t`这段历史的前置上下文不完整，部分工具结果可能需要加载更早记录后才能完整显示。`} tone="neutral" className="mb-4" noticeClassName="rounded-lg px-3 py-2 text-xs text-fg-3" icon={null} />
           {/* Older history loads ahead of the reader; a page on its way shows here, and a retry once loading keeps failing. */}
-          {loaded && hasMoreHistory && <PageProbe probeRef={earlierProbe} failed={earlier.failed} loading={loadingEarlier} onRetry={earlier.retry} className="mb-5" />}
+          {loaded && !earlierTopicsCollapsed && hasMoreHistory && <PageProbe probeRef={earlierProbe} failed={earlier.failed} loading={loadingEarlier} onRetry={earlier.retry} className="mb-5" />}
           {/* A streamed frame hands unchanged rows back as the same objects, so their memo still holds.
               A long list mounts only a window of them, with empty spacers standing in for the height of
               the rest; the spacers keep their keys, so the rows never remount when the mode changes. */}
@@ -1636,8 +1743,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           <Spinner className="size-3.5" /><Trans>正在定位…</Trans>
         </div>
       )}
-      {!embedded && !outlineTarget && <TurnRail turns={turns} turnsVersion={turnsVersion} marked={markedKeys} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn ? loadTurn : undefined} />}
-      {!embedded && outlineTarget && createPortal(<TurnOutline turns={turns} turnsVersion={turnsVersion} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn ? loadTurn : undefined} />, outlineTarget)}
+      {!embedded && !outlineTarget && <TurnRail turns={turns} turnsVersion={turnsVersion} marked={markedKeys} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn || earlierTopicsCollapsed ? loadTurn : undefined} />}
+      {!embedded && outlineTarget && createPortal(<TurnOutline turns={turns} turnsVersion={turnsVersion} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn || earlierTopicsCollapsed ? loadTurn : undefined} />, outlineTarget)}
       {confirmationOffscreen && (
         <button
           type="button"

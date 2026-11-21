@@ -192,7 +192,7 @@ export class StorageInspector {
   constructor(private readonly options: {
     stateDir: string;
     store: Pick<Store, 'listSessions' | 'listProjects' | 'archivedSessionsBefore' | 'journal' | 'reclaimSpace'>
-      & Partial<Pick<Store, 'pruneAllSnapshots' | 'coldSessionsForTrimming' | 'maintainDerivedSearch'>>;
+      & Partial<Pick<Store, 'pruneAllSnapshots' | 'coldSessionsForTrimming' | 'assistantMainForTrimming' | 'maintainDerivedSearch'>>;
     sweepColdTimeline?: () => Promise<number>;
   }) {
     this.finished = readSaved(join(options.stateDir, SAVED));
@@ -244,6 +244,11 @@ export class StorageInspector {
           : []);
       if (trimIds.length) {
         store.journal.trimArchivedToolBlobs(trimIds, { limit: 40 });
+        await new Promise<void>(resolve => setImmediate(resolve));
+      }
+      const assistantCold = store.assistantMainForTrimming?.();
+      if (assistantCold) {
+        store.journal.trimArchivedToolBlobs([assistantCold.sessionId], { limit: 40, beforeAt: assistantCold.beforeAt });
         await new Promise<void>(resolve => setImmediate(resolve));
       }
       store.journal.maintainAll({ minAgeMs: 0, maxUpdates: 5_000 });

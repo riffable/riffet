@@ -904,6 +904,25 @@ export class Store {
     }
     return ids;
   }
+  /**
+   * The active personal-assistant main conversation and an age cutoff (`beforeAt`) for trimming old
+   * oversized tool outputs without touching recent turns or messages awaiting memory consolidation.
+   */
+  assistantMainForTrimming(nowMs = Date.now()): { sessionId: string; beforeAt: string } | undefined {
+    if (STORAGE_BUDGET.assistantTrimDays <= 0) return undefined;
+    const project = this.listProjects().find(item => item.system === 'assistant' && typeof item.mainSessionId === 'string');
+    const mainId = project?.mainSessionId;
+    if (!mainId) return undefined;
+    const session = this.get<Session>('sessions', mainId);
+    if (!session || typeof session.archivedAt === 'string' || ACTIVE_SESSION_STATES.has(session.state)) return undefined;
+    let beforeAt = new Date(nowMs - STORAGE_BUDGET.assistantTrimDays * 86_400_000).toISOString();
+    const settings = this.getSettings();
+    if (settings.assistant?.consolidation !== false) {
+      const consolidatedThrough = this.getSetting<string | undefined>('assistant-consolidated-through', undefined);
+      if (consolidatedThrough && consolidatedThrough < beforeAt) beforeAt = consolidatedThrough;
+    }
+    return { sessionId: mainId, beforeAt };
+  }
   /** Called once the conversation is deleted: its open streams end, and their clients learn it on reconnecting. */
   onSessionDeleted(id: string, listener: () => void): () => void {
     let group = this.deletionListeners.get(id);
@@ -1635,6 +1654,10 @@ export class Store {
       try {
         const coldIds = this.coldSessionsForTrimming();
         if (coldIds.length) trimmedBlobs = this.journal.trimArchivedToolBlobs(coldIds, { limit: 20 });
+        const assistant = this.assistantMainForTrimming();
+        if (assistant && trimmedBlobs < 20) {
+          trimmedBlobs += this.journal.trimArchivedToolBlobs([assistant.sessionId], { limit: 20 - trimmedBlobs, beforeAt: assistant.beforeAt });
+        }
       } catch { /* best-effort cold trimming */ }
       if (trimmedBlobs > 0 && !isBusy()) {
         try { this.journal.sweepBlobs(); } catch { /* best-effort immediate sweep of newly unreferenced blobs */ }

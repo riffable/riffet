@@ -137,6 +137,31 @@ function MessageQuotes({ quotes }: { quotes: string[] }) {
   );
 }
 
+export const TopicDivider = memo(function TopicDivider({ time, collapsible, collapsed, onToggle }: {
+  time?: string;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
+  const { t } = useLingui();
+  return (
+    <div className="flex items-center gap-3 py-1 select-none" role="separator" aria-label={t`新话题`}>
+      <span aria-hidden className="h-px flex-1 bg-line" />
+      <div className="flex shrink-0 items-center gap-2 text-2xs text-fg-3">
+        <span><Trans>新话题</Trans></span>
+        {time && <time dateTime={time} className="tabular-nums text-fg-4">{formatDateTime(time)}</time>}
+        {collapsible && onToggle && (
+          <Button size="xs" variant="quiet" aria-expanded={!collapsed} className="max-md:min-h-11 no-hover:min-h-11 text-2xs text-fg-3 hover:text-fg-2" onClick={onToggle}>
+            <IconChevronRight className={cn('size-3 transition-transform duration-[var(--duration-fast)] motion-reduce:transition-none', !collapsed && 'rotate-90')} />
+            {collapsed ? <Trans>显示更早话题</Trans> : <Trans>收起更早话题</Trans>}
+          </Button>
+        )}
+      </div>
+      <span aria-hidden className="h-px flex-1 bg-line" />
+    </div>
+  );
+});
+
 export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;

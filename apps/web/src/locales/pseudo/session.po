@@ -1274,6 +1274,10 @@ msgstr ""
 msgid "收起"
 msgstr ""
 
+#: src/app/session/Timeline.tsx
+msgid "收起更早话题"
+msgstr ""
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "放大"
 msgstr ""
@@ -1328,6 +1332,11 @@ msgstr ""
 
 #: src/app/session/Timeline.tsx
 msgid "新文件"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/TranscriptView.tsx
+msgid "新话题"
 msgstr ""
 
 #: src/app/session/Attempts.tsx
@@ -1472,6 +1481,10 @@ msgstr ""
 
 #: src/app/session/TranscriptView.tsx
 msgid "显示全部"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
+msgid "显示更早话题"
 msgstr ""
 
 #: src/app/session/Markdown.tsx
