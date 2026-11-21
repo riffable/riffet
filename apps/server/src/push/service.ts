@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { CLIENT_FEATURES_HEADER, type DevicePlatform, type DevicePushRegistration, type DevicePushRoute, type NativeInteraction, type Session, type SessionState } from '../../../../packages/contracts/src/index.js';
 import { isDoneUnseen, isRunningSession, needsYou } from '../../../../packages/contracts/src/session-attention.js';
 import type { Auth } from '../auth.js';
@@ -327,6 +328,29 @@ export class PushService {
     if (this.closed || !session || !this.deps.apns.configured()) return true;
     const outcome = await this.alert(session, 'notice', { body: plainSummary(body), timeSensitive: true, expiration: this.dayAhead(), info: { notice: key } });
     return outcome.delivered || !outcome.attempted;
+  }
+
+  /**
+   * A plugin asked the owner to approve something (docs/TASK-BOARD.md §7): an alert for the new inbox item, to the devices
+   * that are not in the foreground. It belongs to no conversation, so there is no thread or session to open. Deciding stays
+   * in the app; nothing is withdrawn from the lock screen when it is decided elsewhere.
+   */
+  async approval(approval: { pluginId: string; id: string; pluginName: string; title: string; body: string; expiresAt?: string }): Promise<boolean> {
+    if (this.closed || !this.deps.apns.configured()) return true;
+    const expiresAt = approval.expiresAt ? Math.floor(Date.parse(approval.expiresAt) / 1000) : undefined;
+    const expiration = expiresAt && Number.isFinite(expiresAt) ? Math.min(expiresAt, this.dayAhead()) : this.dayAhead();
+    const key = `${approval.pluginId}/${approval.id}`;
+    const results = await Promise.all(this.background().map(device => this.deliver(device, 'token', {
+      topic: device.push.topic, pushType: 'alert', priority: 10, collapseId: createHash('sha1').update(key).digest('hex').slice(0, 32), expiration,
+      payload: {
+        aps: {
+          alert: { title: approval.title, subtitle: approval.pluginName, ...(approval.body ? { body: plainSummary(approval.body) } : {}) },
+          sound: 'default', 'thread-id': 'riffet.approvals', 'interruption-level': 'time-sensitive',
+        },
+        server: this.deps.serverId, kind: 'approval', approval: key,
+      },
+    })));
+    return results.length === 0 || results.some(Boolean);
   }
 
   private dayAhead(): number { return Math.floor(Date.now() / 1000) + 24 * 60 * 60; }

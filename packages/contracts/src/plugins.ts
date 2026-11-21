@@ -55,7 +55,10 @@ export interface ViewDeclaration {
   /** `<pluginId>/<name>`; what layouts and preferences persist. */
   id: string;
   title: LocalizedText;
-  /** `svg` is a path inside the package; `sfSymbol` is for the Mac. */
+  /**
+   * `svg` is a path inside the package to a 24×24 outline in the style of Lucide, served at `VIEW_ICON_ROUTE(id)`; the
+   * web client keeps only its shapes and draws them with the app's stroke and the text colour. `sfSymbol` is for the Mac.
+   */
   icon?: { svg?: string; sfSymbol?: string };
   locations: ViewLocation[];
   defaultLocation?: ViewLocation;
@@ -205,6 +208,64 @@ export interface AgentBackendDeclaration {
 
 /** Where a client reads the declared `icon.svg` of an Agent, whether or not its plugin is on. */
 export const AGENT_ICON_ROUTE = (agentId: string): string => `/api/agent-icons/${encodeURIComponent(agentId)}`;
+/** Where the web client reads the outline a view declares as `icon.svg`. */
+export const VIEW_ICON_ROUTE = (viewId: string): string => `/api/view-icons/${encodeURIComponent(viewId)}`;
+
+/** How an approval's button looks: `danger` uses the destructive button style, `primary` the accent one. */
+export type PluginApprovalTone = 'primary' | 'danger' | 'neutral';
+
+export interface PluginApprovalAction {
+  /** Plugin-defined, at most `PLUGIN_APPROVAL_BUDGET.idChars` characters; handed back to `approvals.decide`. */
+  id: string;
+  label: string;
+  tone?: PluginApprovalTone;
+}
+
+/** What `host.approvals.request` takes: a pending write of a plugin that the owner confirms from the inbox (docs/TASK-BOARD.md §7). */
+export interface PluginApprovalRequest {
+  /** Scoped to the plugin; requesting an id that is already open changes nothing. */
+  id: string;
+  title: string;
+  /** Short Markdown. */
+  body: string;
+  /** One to `PLUGIN_APPROVAL_BUDGET.actions` buttons. */
+  actions: PluginApprovalAction[];
+  /** ISO timestamp; after it the approval drops out of the inbox undecided. */
+  expiresAt?: string;
+  /** The conversation the request belongs to, for a link back. */
+  sessionId?: string;
+}
+
+/** An open approval as the inbox lists it (`GET /api/plugin-approvals`). */
+export interface PluginApproval extends PluginApprovalRequest {
+  pluginId: string;
+  pluginName: string;
+  /** ISO timestamp the plugin first asked. */
+  createdAt: string;
+}
+
+export interface PluginApprovalList { approvals: PluginApproval[] }
+
+/** `POST /api/plugin-approvals/:pluginId/:id/decide`. */
+export interface PluginApprovalDecision { actionId: string }
+
+/** The decided approval is gone; `message` is what the plugin says about the result. */
+export interface PluginApprovalResult { message?: LocalizedText }
+
+/** A topic a plugin may emit with `host.assistant.emit` (docs/ASSISTANT.md §7.3); the 助理 finds it through `workbench.assistant_events` and subscribes a delegation to it. */
+export interface AssistantEventDeclaration {
+  /** `<pluginId>/<name>`. */
+  id: string;
+  title: LocalizedText;
+  /** What the event means and what its payload holds, for the model that reads it. */
+  description: LocalizedText;
+}
+
+/** A capability pack the plugin ships (docs/ASSISTANT.md §8.2): a Claude Code plugin folder inside the package. */
+export interface AssistantPackDeclaration {
+  /** The folder's path inside the package, under `assets/`; it holds `.claude-plugin/plugin.json`. */
+  path: string;
+}
 
 export interface PluginDeclarations {
   /** Discovery metadata remains visible while the provider is disabled; it grants no capability. */
@@ -215,6 +276,10 @@ export interface PluginDeclarations {
   actions?: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   views?: ViewDeclaration[];
   commands?: CommandDeclaration[];
+  /** Topics the plugin emits to the 助理's delegations. In-process packages only (`host.assistant`). */
+  assistantEvents?: AssistantEventDeclaration[];
+  /** A capability pack installed into the 助理 while the plugin is enabled. */
+  assistantPack?: AssistantPackDeclaration;
   agentBackends?: AgentBackendDeclaration[];
   tasks?: TaskProviderDeclaration[];
   appearance?: AppearanceDeclarations;
@@ -249,6 +314,8 @@ export const DECLARATION_SCOPES: Readonly<Record<keyof PluginDeclarations, LinkS
   // Each view by its location: VIEW_LOCATION_SCOPES.
   views: 'object',
   commands: 'global',
+  assistantEvents: 'global',
+  assistantPack: 'global',
   agentBackends: 'object',
   tasks: 'object',
   appearance: 'global',
@@ -302,6 +369,8 @@ export const PLUGIN_CHANNEL_ROUTE = (pluginId: string, name: string): string => 
 
 export interface PluginRequirement { id: string; optional?: boolean }
 
+/** A capability pack's name, which is its folder in the 助理's `packs/` (docs/ASSISTANT.md §8.2). */
+export const ASSISTANT_PACK_NAME = /^[a-z][a-z0-9-]{0,39}$/;
 /** `<vendor>.<name>`, lowercase: the plugin id, also its key in `plugins.json`. */
 export const PLUGIN_ID = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*$/;
 const CONTRIBUTION_NAME = /^[a-z0-9][a-z0-9.-]{0,63}$/;

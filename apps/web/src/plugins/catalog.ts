@@ -15,7 +15,7 @@ import { localizedText } from '@/lib/plugins';
 /** Ids a stored value may still carry from before views had stable ids. Applied wherever one is read. */
 const LEGACY_VIEW_IDS: Readonly<Record<string, string>> = { git: 'changes', canvas: 'riffet.canvas/canvas' };
 
-export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.files.read', 'bridge.notify.info', 'bridge.notify.error']);
+export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.navigation.openExternal', 'bridge.files.read', 'bridge.notify.info', 'bridge.notify.error']);
 
 export const migrateViewId = (id: string): string => LEGACY_VIEW_IDS[id] ?? id;
 
@@ -36,6 +36,8 @@ export interface IsolatedSource {
   capabilities: readonly string[];
   /** The commands the package declares. */
   commands: readonly string[];
+  /** The view lists `bridge.navigation.openExternal` in its `requires`: it may ask for an address to be opened in the browser. */
+  externalLinks?: boolean;
 }
 
 export type ViewRender =
@@ -55,6 +57,8 @@ export interface ViewEntry {
   location: ViewLocation;
   title: string;
   icon: PluginIconName;
+  /** The view declares an outline at `icon.svg`, drawn by `viewIcon` in place of `icon` once it loads. */
+  iconSvg?: boolean;
   instances: ViewInstancing;
   when?: Condition;
   /** For a view located at `file`: the extensions it shows. */
@@ -139,7 +143,7 @@ export function buildCatalog({ descriptors, plugins, pending, icons, renderers, 
         render = { kind: 'declarative', declaration: view, component };
       } else if (isolated) {
         // Whatever is not built in runs isolated, development packages included; the in-app SDK is for bundled code.
-        render = { kind: 'isolated', source: isolated };
+        render = { kind: 'isolated', source: view.requires?.includes('bridge.navigation.openExternal') ? { ...isolated, externalLinks: true } : isolated };
       } else if (descriptor.source === 'development' || descriptor.source === 'installed') {
         continue;
       } else {
@@ -156,6 +160,8 @@ export function buildCatalog({ descriptors, plugins, pending, icons, renderers, 
           ...(render ? { render } : {}),
           title: localizedText(view.title, [locale]) ?? view.id,
           icon: plugins.get(descriptor.id)?.icons?.[view.id] ?? icons?.[view.id] ?? 'square-terminal',
+          // A bundled entry that names its icon keeps it; otherwise the declared outline is drawn.
+          ...(view.icon?.svg && !plugins.get(descriptor.id)?.icons?.[view.id] && !icons?.[view.id] ? { iconSvg: true } : {}),
           ...(view.when ? { when: view.when } : {}),
           ...(location === 'file' ? { extensions: view.files!.extensions } : {}),
         });

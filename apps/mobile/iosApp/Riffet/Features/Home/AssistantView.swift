@@ -364,6 +364,7 @@ struct AssistantDelegationsView: View {
         return switch trigger.kind {
         case "schedule": String(localized: "定时 \(trigger.cron ?? "")", bundle: .riffet)
         case "github-release": String(localized: "\(trigger.repo ?? "") 发版", bundle: .riffet)
+        case "plugin-event": trigger.topic ?? ""
         default: String(localized: "\(trigger.url ?? "") 有变化", bundle: .riffet)
         }
     }

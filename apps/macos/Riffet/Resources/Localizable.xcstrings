@@ -221,6 +221,16 @@
         }
       }
     },
+    "随插件启停": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follows its plugin"
+          }
+        }
+      }
+    },
     "定时 %@": {
       "localizations": {
         "en": {

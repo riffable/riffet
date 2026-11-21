@@ -23,6 +23,8 @@ enum PluginBridgeLimits {
     static let perSecond = 30.0
     /// Characters of a notification or a path.
     static let text = 500
+    /// Characters of an address `navigation.openExternal` opens.
+    static let url = 2000
     static let rows = 200
     /// The most a timeline page may weigh, as the server counts it.
     static let pageBytes = 128 * 1024
@@ -66,6 +68,7 @@ enum PluginBridgeMethod: String, CaseIterable {
     case sessionsTimeline = "sessions.timeline"
     case openSession = "navigation.openSession"
     case openPath = "navigation.openPath"
+    case openExternal = "navigation.openExternal"
     case notifyInfo = "notify.info"
     case notifyError = "notify.error"
     case executeCommand = "commands.execute"
@@ -144,6 +147,8 @@ struct PluginBridgeGrant {
     var packageId: String
     var capabilities: Set<String>
     var commands: Set<String>
+    /// The view lists `bridge.navigation.openExternal` in its `requires`.
+    var externalLinks = false
 }
 
 /// The app's side of the bridge. The bridge has already settled who may ask and for which project;
@@ -170,6 +175,8 @@ protocol PluginBridgeServices: AnyObject {
     func attach(_ view: NSView)
     func openSession(_ id: String)
     func openPath(_ path: String)
+    /// Opens an `http(s)` address in the default browser; the bridge has checked the address and the user's action.
+    func openExternal(_ url: URL)
     func notify(_ tone: PluginNoticeTone, _ text: String)
     /// Runs the package's command `<pluginId>/<name>` on the server and answers what it answered
     /// (`CommandResult`), as parsed JSON; the host takes no action of its own from it.
@@ -305,6 +312,16 @@ final class PluginBridge {
                 // A file of the project the view belongs to; a view with no project has none.
                 guard services.context.projectId != nil else { throw PluginBridgeFailure(.forbidden, "This view has no project") }
                 services.openPath(path)
+                finish(id, .success(NSNull()))
+            case .openExternal:
+                let value = try Self.text(Self.only(params, ["url"]), "url", max: PluginBridgeLimits.url)
+                guard let url = URL(string: value), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
+                      url.host?.isEmpty == false, url.user == nil, url.password == nil else {
+                    throw Self.invalid("url must be an http or https address without credentials")
+                }
+                try requireInteraction()
+                guard grant.externalLinks else { throw PluginBridgeFailure(.forbidden, "The view does not require bridge.navigation.openExternal") }
+                services.openExternal(url)
                 finish(id, .success(NSNull()))
             case .notifyInfo, .notifyError:
                 let text = try Self.text(Self.only(params, ["text"]), "text", max: PluginBridgeLimits.text)

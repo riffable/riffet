@@ -752,7 +752,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$"
+                  "pattern": "^[a-z0-9][a-zA-Z0-9.-]{0,63}$"
                 }
               },
               "files": {
@@ -927,6 +927,70 @@
             ],
             "additionalProperties": {}
           }
+        },
+        "assistantEvents": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "description": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "description"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "assistantPack": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "allOf": [
+                {
+                  "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^\\\\\\u0000]+$"
+                },
+                {
+                  "pattern": "^assets\\/.+$"
+                }
+              ]
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": {}
         },
         "tasks": {
           "type": "array",

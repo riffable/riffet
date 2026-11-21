@@ -1,4 +1,5 @@
 import type { SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
+import { HttpError } from '../../lib/errors';
 import {
   BRIDGE_CAPABILITY, BRIDGE_LIMITS, BRIDGE_VERSION, PLUGIN_BASE_STYLE_VERSION,
   type BridgeFileBytes, type BridgeHostInfo, type BridgePage, type BridgeProject, type BridgeRun, type BridgeCommandResult, type BridgeErrorBody, type BridgeErrorCode, type BridgeEvent, type BridgeEvents, type BridgeMethod, type BridgeMethods, type BridgeSession, type BridgeTheme, type BridgeViewContext,
@@ -38,6 +39,8 @@ export interface BridgeServices {
   active(): boolean;
   openSession(sessionId: string): void;
   openPath(path: string): void;
+  /** Opens an `http(s)` address in a new browser tab; the bridge has checked the address and the user's action. */
+  openExternal?(url: string): void;
   /** Bytes of a file of the view's project, read as the user reads it; absent where the host cannot read files. */
   readFile?(path: string, offset: number, length: number, signal: AbortSignal): Promise<BridgeFileBytes>;
   notify(tone: 'info' | 'error', text: string): void;
@@ -45,10 +48,12 @@ export interface BridgeServices {
   execute?(commandId: string, args: Record<string, string | number | boolean> | undefined, signal: AbortSignal): Promise<BridgeCommandResult>;
 }
 
-/** What the package holds: the grant of the installed version, or what a trusted development package asks for, and the commands it declares. */
+/** What the package holds: the grant of the installed version, or what a trusted development package asks for, and what it declares. */
 export interface BridgeGrant {
   capabilities: ReadonlySet<string>;
   commands: ReadonlySet<string>;
+  /** The view lists `bridge.navigation.openExternal` in its `requires`. */
+  externalLinks?: boolean;
 }
 
 export interface Bridge {
@@ -105,6 +110,15 @@ function projectPath(params: Record<string, unknown>): string {
   return value.replace(/^(?:\.\/)+/, '') || '.';
 }
 
+/** An `http:` or `https:` address without credentials, as the browser will open it. */
+function externalUrl(params: Record<string, unknown>): string {
+  const value = text(params, 'url', BRIDGE_LIMITS.url);
+  let parsed: URL;
+  try { parsed = new URL(value); } catch { throw invalid('url must be an http or https address'); }
+  if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || parsed.username || parsed.password) throw invalid('url must be an http or https address without credentials');
+  return parsed.toString();
+}
+
 /** Steering the app (selecting a conversation, previewing a file) follows the user's own action in the view, never a script on its own. */
 function interacting({ services }: Call): void {
   if (!services.active()) throw new Failure('denied', 'Click in the view first');
@@ -128,7 +142,7 @@ function page<T>(params: unknown, keys: string[], values: readonly T[]): BridgeP
   return { items: values.slice(offset, end), ...(end < values.length ? { next: end } : {}) };
 }
 function hostInfo(services: BridgeServices): BridgeHostInfo {
-  const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary).filter(method => method !== 'files.read' || services.readFile);
+  const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary).filter(method => method !== 'files.read' || services.readFile).filter(method => method !== 'navigation.openExternal' || services.openExternal);
   return { platform: 'web', webApiVersion: 1, bridgeVersion: BRIDGE_VERSION, baseStyleVersion: PLUGIN_BASE_STYLE_VERSION, renderers: ['tasks', 'list', 'form', 'detail'], methods, execution: { server: services.context().serviceId, client: 'web' } };
 }
 
@@ -207,6 +221,14 @@ const methods: Methods = {
     call.services.openPath(path);
     return null;
   },
+  'navigation.openExternal': (params, call) => {
+    const url = externalUrl(only(params, ['url']));
+    interacting(call);
+    if (!call.grant.externalLinks) throw new Failure('forbidden', 'The view does not require bridge.navigation.openExternal');
+    if (!call.services.openExternal) throw new Failure('unsupported', 'This host cannot open addresses');
+    call.services.openExternal(url);
+    return null;
+  },
   'notify.info': (params, { services }) => { services.notify('info', text(only(params, ['text']), 'text', BRIDGE_LIMITS.text)); return null; },
   'notify.error': (params, { services }) => { services.notify('error', text(only(params, ['text']), 'text', BRIDGE_LIMITS.text)); return null; },
   'commands.execute': (params, { services, grant, signal }) => {
@@ -224,6 +246,9 @@ const failure = (error: unknown): BridgeErrorBody => {
   if (error instanceof Failure) return { code: error.code, message: error.message };
   if (error instanceof Error && error.name === 'AbortError') return { code: 'aborted', message: 'The call was cancelled' };
   const status = (error as { status?: unknown } | null)?.status;
+  // A refusal of the view's own request (4xx: the plugin's `host.error`, a validation failure) carries a reason the view
+  // can show; server failures stay generic so host internals don't reach the package.
+  if (error instanceof HttpError && error.status >= 400 && error.status < 500 && error.message) return { code: 'failed', message: error.message };
   return { code: 'failed', message: typeof status === 'number' && status > 0 ? `The request failed (${status})` : 'The request failed' };
 };
 

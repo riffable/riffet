@@ -69,7 +69,7 @@ import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPref
 import type { SessionView } from '../state/navStore';
 import type { ViewEntry } from '@/plugins/catalog';
 import { localizedText } from '@/lib/plugins';
-import { pluginIcon } from '@/plugins/icons';
+import { viewIcon } from '@/plugins/viewIcons';
 import { PluginView } from '@/plugins/PluginView';
 
 const TerminalView = lazy(() => import('./TerminalView').then((module) => ({ default: module.TerminalView })));
@@ -328,7 +328,7 @@ function ViewSwitch({ views, value, onChange }: { views: ViewEntry[]; value: Ses
   return (
     <div role="tablist" aria-label={t`会话视图`} className="flex items-center gap-0.5">
       {views.map((view, index) => {
-        const Icon = pluginIcon(view.icon);
+        const Icon = viewIcon(view);
         return (
           <Tip key={view.id} label={view.title} kbd={viewShortcut(index)}>
             <Button size="icon-sm" variant="quiet" role="tab" aria-selected={value === view.id} aria-label={view.title} className={cn('size-7', value === view.id ? 'text-fg' : 'text-fg-4 hover:text-fg-2')} onClick={() => onChange(view.id)}><Icon /></Button>

@@ -13,7 +13,7 @@
  * A change to the text that is not purely additive bumps `PLUGIN_BASE_STYLE_VERSION`; `host.info` reports it.
  */
 
-export const PLUGIN_BASE_STYLE_VERSION = 2;
+export const PLUGIN_BASE_STYLE_VERSION = 3;
 
 const FOCUS = 'color-mix(in srgb,var(--accent) 50%,transparent)';
 const TEXT_FIELD = 'input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color],[type=button],[type=submit],[type=reset],[type=image])';
@@ -46,6 +46,8 @@ export const PLUGIN_BASE_STYLE: string = [
   ':where(input,textarea,select):disabled{opacity:.5}',
   ':where(:focus-visible){outline:2px solid var(--riffet-focus-ring);outline-offset:1px}',
   ':where(input,textarea,select):focus-visible{outline:none}',
+  // Focus no navigating key brought paints no ring (`PLUGIN_FOCUS_SCRIPT` sets the mark); a view's own `:focus-visible` rules add `:not([data-pointer-focus])`.
+  '[data-pointer-focus]:focus-visible{outline:none}',
   '::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}',
   ':where(code,kbd,samp,pre){font-family:var(--riffet-font-mono);font-size:.86em}',
   ':where(pre){margin:0;padding:var(--riffet-space-2) var(--riffet-space-3);overflow:auto;border:var(--riffet-border-width) solid var(--line);border-radius:var(--riffet-radius-container);background:var(--bg-subtle);font-size:var(--riffet-text-small);line-height:var(--riffet-leading-ui)}',
@@ -61,3 +63,22 @@ export const PLUGIN_BASE_STYLE: string = [
   ':where(*)::-webkit-scrollbar-track,:where(*)::-webkit-scrollbar-corner{background:transparent}',
   '@media (prefers-reduced-motion:reduce){:where(*){transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}',
 ].join('\n');
+
+/**
+ * The page's focus-ring policy, the app's own (apps/web/src/lib/focus-ring.ts, design decision 2026-11-19): a ring
+ * shows only on an element a navigating key (Tab, an arrow, Home/End, Page Up/Down) moved focus onto. Focus from a
+ * press, a script or any other key gets `data-pointer-focus`, which the base style uses to drop the ring, so a
+ * clicked tab does not light up when a shortcut or a screenshot key is pressed later. Focus that comes in from outside
+ * the page (`relatedTarget` null) with no press first is the reader tabbing in from the app, and keeps its ring. A view
+ * that moves focus with keys of its own (j/k) removes the mark from the element it focused. Both hosts run it before
+ * the view's script.
+ */
+export const PLUGIN_FOCUS_SCRIPT: string = '(function(w){'
+  + 'var K={Tab:1,ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,Home:1,End:1,PageUp:1,PageDown:1},M="data-pointer-focus",n=false,p=false,'
+  + 'F=\'a[href],button,input,select,textarea,[tabindex],[role="button"],[role="menuitem"],[role="option"],[role="radio"],[role="checkbox"],[role="switch"],[role="tab"]\','
+  + 'T=\'input,textarea,[contenteditable]:not([contenteditable="false"])\';'
+  + 'w.addEventListener("pointerdown",function(e){n=false;p=true;var t=e.target instanceof Element?e.target.closest(F):null;if(t)t.setAttribute(M,"")},true);'
+  + 'w.addEventListener("focusin",function(e){var t=e.target;if(!(t instanceof Element)||t.closest(T))return;if(n||(!p&&e.relatedTarget===null))t.removeAttribute(M);else t.setAttribute(M,"")},true);'
+  + 'w.addEventListener("keydown",function(e){p=false;n=!!K[e.key]&&!e.metaKey&&!e.ctrlKey&&!e.altKey},true);'
+  + 'w.addEventListener("keyup",function(){n=false},true)'
+  + '})(window)';

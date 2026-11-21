@@ -8,7 +8,7 @@ import {
 import { AppError } from '../errors.js';
 import { confined } from '../plugins/development.js';
 
-type Kind = 'font' | 'image' | 'palette' | 'iconPack' | 'agentIcon';
+type Kind = 'font' | 'image' | 'palette' | 'iconPack' | 'packageIcon';
 interface Source { id: string; appearance: AppearanceDeclarations; root: string }
 interface Resolved { file: string; sha256: string; size: number; type: string }
 
@@ -28,7 +28,7 @@ const TYPES: Record<string, { kind: Kind; type: string; limit: number; magic?: (
   '.json': { kind: 'palette', type: 'application/json', limit: APPEARANCE_MAX_PALETTE_BYTES },
 };
 /** An Agent icon is a mark, not artwork: a larger file is refused. */
-const AGENT_ICON_MAX_BYTES = 64 * 1024;
+const PACKAGE_ICON_MAX_BYTES = 64 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 const SHARE_EXTENSIONS: Record<string, string> = { 'font/woff2': '.woff2', 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
 /** What clients paint a plugin palette under: `plugin-` and the first 16 hex digits of its content hash (`paletteKey` in the web's `lib/appearance-select.ts`). */
@@ -52,6 +52,7 @@ export class AppearanceService {
     /** Other versions of an installed plugin that are still on disk, whose asset addresses stay valid. */
     retainedAppearanceSources?(pluginId: string): Promise<Source[]>;
     agentIconSources?(): Array<{ agentId: string; svg: string; root: string }>;
+    viewIconSources?(): Array<{ viewId: string; svg: string; root: string }>;
   }) {}
 
   async catalog(): Promise<AppearanceCatalog> {
@@ -205,30 +206,40 @@ export class AppearanceService {
    * path is reachable, and a client draws it as an image, which never runs the script an SVG could carry.
    */
   async agentIcon(agentId: string): Promise<Resolved> {
-    const declared = this.registry.agentIconSources?.().find(item => item.agentId === agentId);
+    const found = await this.packageSvg(this.registry.agentIconSources?.().find(item => item.agentId === agentId));
+    if (found) return found;
+    throw new AppError('AGENT_ICON_NOT_FOUND', 'The Agent declares no icon', 404);
+  }
+
+  /**
+   * The outline a package declares as the icon of one of its views (`ViewDeclaration.icon.svg`), served at
+   * `VIEW_ICON_ROUTE`. The same checks as an Agent's icon; the web client takes only the shapes out of it
+   * and draws them with its own stroke and colour, so a plugin's view sits among the app's own glyphs.
+   */
+  async viewIcon(viewId: string): Promise<Resolved> {
+    const found = await this.packageSvg(this.registry.viewIconSources?.().find(item => item.viewId === viewId));
+    if (found) return found;
+    throw new AppError('VIEW_ICON_NOT_FOUND', 'The view declares no icon', 404);
+  }
+
+  private async packageSvg(declared: { svg: string; root: string } | undefined): Promise<Resolved | undefined> {
     const root = declared ? await realpath(declared.root).catch(() => undefined) : undefined;
     const file = root && declared ? await confined(root, declared.svg).catch(() => undefined) : undefined;
-    if (file && extname(file).toLowerCase() === '.svg') {
-      const info = await stat(file).catch(() => undefined);
-      if (info && info.size <= AGENT_ICON_MAX_BYTES) {
-        const stamp = `${info.ino}:${info.size}:${info.mtimeMs}`;
-        const cached = this.resolved.get(file);
-        if (cached?.stamp === stamp && cached.kind === 'agentIcon') {
-          if (typeof cached.result !== 'string') return cached.result;
-          throw new AppError('AGENT_ICON_NOT_FOUND', 'The Agent declares no icon', 404);
-        }
-        const bytes = await readFile(file).catch(() => undefined);
-        if (bytes) {
-          if (bytes.length <= AGENT_ICON_MAX_BYTES && /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(bytes.subarray(0, 512).toString('utf8'))) {
-            const result: Resolved = { file, size: bytes.length, type: 'image/svg+xml', sha256: createHash('sha256').update(bytes).digest('hex') };
-            this.resolved.set(file, { stamp, kind: 'agentIcon', result });
-            return result;
-          }
-          this.resolved.set(file, { stamp, kind: 'agentIcon', result: 'invalid svg' });
-        }
-      }
+    if (!file || extname(file).toLowerCase() !== '.svg') return undefined;
+    const info = await stat(file).catch(() => undefined);
+    if (!info || info.size > PACKAGE_ICON_MAX_BYTES) return undefined;
+    const stamp = `${info.ino}:${info.size}:${info.mtimeMs}`;
+    const cached = this.resolved.get(file);
+    if (cached?.stamp === stamp && cached.kind === 'packageIcon') return typeof cached.result === 'string' ? undefined : cached.result;
+    const bytes = await readFile(file).catch(() => undefined);
+    if (!bytes) return undefined;
+    if (bytes.length <= PACKAGE_ICON_MAX_BYTES && /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(bytes.subarray(0, 512).toString('utf8'))) {
+      const result: Resolved = { file, size: bytes.length, type: 'image/svg+xml', sha256: createHash('sha256').update(bytes).digest('hex') };
+      this.resolved.set(file, { stamp, kind: 'packageIcon', result });
+      return result;
     }
-    throw new AppError('AGENT_ICON_NOT_FOUND', 'The Agent declares no icon', 404);
+    this.resolved.set(file, { stamp, kind: 'packageIcon', result: 'invalid svg' });
+    return undefined;
   }
 
   private async resolve(source: Source, path: string, kind: Kind, refused?: (reason: string) => void): Promise<Resolved | undefined> {

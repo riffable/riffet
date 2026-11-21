@@ -125,6 +125,11 @@ export class AssistantRuns {
     return [...this.inState('queued'), ...this.inState('running')].some(run => run.job === job && run.subject === subject);
   }
 
+  /** How many runs of [job] about [subject] are waiting or going. */
+  pendingCount(job: AssistantJob, subject: string): number {
+    return [...this.inState('queued'), ...this.inState('running')].filter(run => run.job === job && run.subject === subject).length;
+  }
+
   /** Starts queued runs while there is room, and while the last 24 hours have not used up the owner's limit. */
   async pump(): Promise<void> {
     if (this.pumping) return;

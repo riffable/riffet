@@ -223,10 +223,16 @@ struct AssistantSettingsView: View {
             }
         )
         return SettingsRow(pack.title, detail: detail) {
-            Toggle(pack.title, isOn: binding)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .disabled(save.busy)
+            if pack.providedBy != nil {
+                Text("随插件启停")
+                    .font(RiffetFont.text(RiffetTextSize.x2xs))
+                    .foregroundStyle(palette.fg3)
+            } else {
+                Toggle(pack.title, isOn: binding)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(save.busy)
+            }
         }
     }
 
@@ -353,6 +359,7 @@ private struct AssistantDelegationsSheet: View {
         return switch trigger.kind {
         case "schedule": String(localized: "定时 \(trigger.cron ?? "")")
         case "github-release": String(localized: "\(trigger.repo ?? "") 发版")
+        case "plugin-event": trigger.topic ?? ""
         default: String(localized: "\(trigger.url ?? "") 有变化")
         }
     }

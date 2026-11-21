@@ -8,6 +8,7 @@ import type { AssistantRuns } from '../assistant/runs.js';
 import type { NativeBackendService } from '../backends/service.js';
 import type { GitService } from '../git/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
+import type { PluginApprovals } from '../plugins/approvals.js';
 import type { ServiceMonitor } from '../monitor.js';
 import type { NativeDispatcher } from '../native/dispatch.js';
 import type { SessionLock } from '../agent-host/session-lock.js';
@@ -52,6 +53,8 @@ export interface RouteDeps {
   stateDir: string;
   /** Tasks (docs/TASK-BOARD.md). */
   workItems: WorkItemService;
+  /** What plugins ask the owner to approve (docs/TASK-BOARD.md §7). */
+  pluginApprovals: PluginApprovals;
   /** Multi-model discussions. */
   council: CouncilService;
   contextReferences: SessionReferenceService;

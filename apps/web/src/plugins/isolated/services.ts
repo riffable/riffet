@@ -74,6 +74,8 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
       // The files panel shows the project that is open; a view of another project does not steer it.
       if (nav.get().projectId === context().projectId) ui.preview(path);
     },
+    // The user's click in the frame is what lets the browser open a tab; no opener, no referrer.
+    openExternal: (url) => { window.open(url, '_blank', 'noopener,noreferrer'); },
     readFile: async (path, offset, length, signal) => {
       const projectId = context().projectId!;
       const read = await readFileRange(projectFileUrl(projectId, path), offset, offset + length - 1, signal);

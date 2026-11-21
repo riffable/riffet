@@ -271,6 +271,7 @@ msgstr ""
 msgid "定时检查"
 msgstr ""
 
+#: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "展开"
 msgstr ""
@@ -409,6 +410,7 @@ msgstr ""
 msgid "收件箱"
 msgstr ""
 
+#: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收起"
@@ -459,6 +461,10 @@ msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发送回答"
+msgstr ""
+
+#: src/app/work-items/ApprovalRow.tsx
+msgid "无法完成这项操作"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx

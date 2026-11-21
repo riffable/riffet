@@ -311,6 +311,7 @@ function WatchSection({ item, watchDue, onSaveWatch, onAccepted }: {
       case 'github-release': return t`${trigger.repo} 发版`;
       case 'page': return t`${trigger.url} 有变化`;
       case 'task-status': return t`任务 #${trigger.taskNumber} 状态变化`;
+      case 'plugin-event': return trigger.topic;
     }
   };
 

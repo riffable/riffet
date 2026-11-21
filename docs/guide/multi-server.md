@@ -84,7 +84,7 @@
 - 作用范围由核心按扩展点和视图位置登记（`packages/contracts/src/plugins.ts` 的 `DECLARATION_SCOPES` 和 `VIEW_LOCATION_SCOPES`），插件的 manifest 不加字段，已发布的插件不用改。
 - `object`：依附在会话、项目、任务等对象上，由对象所在的服务器提供，视图包和数据经链接取来。例子：Agent 后端、`session-view`、`file` 位置的视图（文件查看器，由文件所在的服务器提供）、`taskProviders`、`runtimeControl`。
 - `global`：只用入口本机的，并且不能出现在对端的对象上。例子：`sidebar` 视图、插件页、设置页里的操作、`avatarStyles`、`imChannels`。
-- `global` 还包括：`assistantEvents`、`assistantPack`（每台服务器的助理只在本机，事件只送本机的委托，包只装进本机助理，§3.6）；视图桥的 `navigation.openExternal`（只打开入口所在客户端的浏览器，不依附对象，转发时不需要服务器）。
+- `global` 还包括：`host.approvals`（插件放进收件箱的审批，只在入口服务器的收件箱里，对端不提供，链接策略拒绝 `/api/plugin-approvals`）、`assistantEvents`、`assistantPack`（每台服务器的助理只在本机，事件只送本机的委托，包只装进本机助理，§3.6）；视图桥的 `navigation.openExternal`（只打开入口所在客户端的浏览器，不依附对象，转发时不需要服务器）。
 - 新扩展点或新视图位置要先在这张表里归入其中一种，不能两者都是；两张表的类型覆盖全部键，漏登记编译不过。
 - 插件视图运行在不透明源的 iframe 里（`sandbox="allow-scripts"`），对端的视图包可以在入口渲染；宿主桥接调用（`sessions.*`、`navigation.*`、`commands.execute`）按视图所属对象的服务器转发，权限检查带上服务器。
 

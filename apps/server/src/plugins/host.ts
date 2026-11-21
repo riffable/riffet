@@ -32,6 +32,12 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   streamModel?: (request: Parameters<NonNullable<NonNullable<PluginHost['models']>['stream']>>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
   /** The model uses this plugin declares: `use` may name these only. */
   ownModelUses?: readonly ModelUseDeclaration[];
+  /** Hands an event to the 助理's delegations (`host.assistant.emit`); the topic has been checked against `ownAssistantEvents`. Absent for an isolated installed package, which gets none. */
+  emitAssistantEvent?: (topic: string, payload: unknown, key: string | undefined) => void;
+  /** The assistant event topics this plugin declares: `emit` may name these only. */
+  ownAssistantEvents?: readonly string[];
+  /** The inbox's approvals (`host.approvals`), keyed by plugin here. Absent for an isolated installed package, which gets none. */
+  approvals?: { request(pluginId: string, request: Parameters<NonNullable<PluginHost['approvals']>['request']>[0]): void; withdraw(pluginId: string, id: string): void };
 }): PluginHost {
   const directory = join(options.stateDir, 'plugin-data', id);
   return {
@@ -73,6 +79,16 @@ export function createPluginHost(id: PluginManifest['id'], options: {
     ...(options.completeModel ? { models: {
       complete: request => options.completeModel!(request, options.ownModelUses ?? []),
       ...(options.streamModel ? { stream: request => options.streamModel!(request, options.ownModelUses ?? []) } : {}),
+    } } : {}),
+    ...(options.emitAssistantEvent && options.ownAssistantEvents?.length ? { assistant: {
+      emit(topic: string, payload?: unknown, emitOptions?: { key?: string }): void {
+        if (typeof topic !== 'string' || !topic.startsWith(`${id}/`) || !options.ownAssistantEvents!.includes(topic)) throw new AppError('PLUGIN_ASSISTANT_EVENT_UNDECLARED', `${id} can only emit topics declared in contributes.assistantEvents (${options.ownAssistantEvents!.join(', ')})`, 403);
+        options.emitAssistantEvent!(topic, payload, emitOptions?.key);
+      },
+    } } : {}),
+    ...(options.approvals ? { approvals: {
+      request: request => options.approvals!.request(id, request),
+      withdraw: approvalId => options.approvals!.withdraw(id, approvalId),
     } } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };

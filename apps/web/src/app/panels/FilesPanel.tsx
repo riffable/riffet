@@ -36,7 +36,7 @@ import { useFileOperations } from './useFileOperations';
 import { Notice } from '@/components/ui/notice';
 import { useLists, useUi } from '../state/stores';
 import { quoteIntoComposer } from '../session/composerQuotes';
-import { pluginIcon } from '@/plugins/icons';
+import { viewIcon } from '@/plugins/viewIcons';
 import { PluginView } from '@/plugins/PluginView';
 import { useFileViews } from './useSidebarViews';
 const CodeView = lazy(() => import('./CodeView').then((module) => ({ default: module.CodeView })));
@@ -746,7 +746,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
               {preview && !edit.editing && !preview.binary && viewAs !== 'tail' && <DropdownMenuItem onSelect={() => setViewAs('tail')}><IconArrowDownToLine /><Trans>查看末尾</Trans></DropdownMenuItem>}
               {preview && !edit.editing && viewAs !== 'hex' && <DropdownMenuItem onSelect={() => setViewAs('hex')}><IconBinary /><Trans>以十六进制查看</Trans></DropdownMenuItem>}
               {preview && !edit.editing && fileViews.filter((view) => view.id !== viewAs).map((view) => {
-                const Icon = pluginIcon(view.icon);
+                const Icon = viewIcon(view);
                 return <DropdownMenuItem key={view.id} onSelect={() => setViewAs(view.id)}><Icon />{view.title}</DropdownMenuItem>;
               })}
               <DropdownMenuSeparator />

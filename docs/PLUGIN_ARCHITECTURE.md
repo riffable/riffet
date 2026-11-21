@@ -72,7 +72,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 `PLUGIN_API_VERSION` 是宿主提供的插件 API 版本，当前为 1，只做可加性变更：新增可选成员不升版本，任何会让既有插件出错的改动都要升版本。`PLUGIN_API_MIN_VERSION`（当前为 1）是宿主仍然加载的最旧版本。manifest 的 `apiVersion` 落在 [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`] 内即被接受，区间之外的插件不会加载，在插件管理页和 doctor 中显示原因：比宿主新的写明宿主最高提供的版本，比下限旧的写明宿主不再加载该版本。提高下限是唯一的破坏性步骤，与新增版本分开进行。区间判断集中在 `apiVersionProblem`（`packages/plugin-api/src/manifest.ts`），注册表、安装和打包共用。`hostApi.server` 仍是对 `PLUGIN_API_VERSION` 求值的 semver 范围，与此区间无关。
 
-可加性由发布基线检查：`packages/plugin-api/released/<版本>/`（`@riffet/plugin-web` 的桥协议在 `packages/plugin-web/released/<版本>/`）是该 SDK 版本发布时根入口生成的 `.d.ts`，对 `@riffet/contracts` 的引用不动（契约有自己的快照）。`src/released-compat.ts` 在 `pnpm typecheck` 内逐项比较，不另设 CI 步骤，分两个方向：宿主提供给插件的类型（`PluginHost`、各 `*Context` 等），当前类型必须可赋给基线类型，即宿主仍给出承诺过的全部成员；插件提供给宿主的类型（`Plugin`、`Contributions`、`ModelSourceProvider` 等），基线类型必须可赋给当前类型，即新成员只能是可选的。`PluginHost.runProcess`、`resolveCli`、`secrets`、`gateway.fetchModels` 等常用方法另按参数和返回值逐一比较，因为方法简写的参数是双变的。拟议成员不在承诺内，由 `PROPOSED_CONTRIBUTIONS`（`agentBackends`、`runtimeHooks`、`services`、`channels`、`agentTools`、`speechRecognizer`、`imChannels`）和 `PROPOSED_HOST_MEMBERS`（`agentProfiles`、`services`、`sessions`）两份清单排除：它们只给进程内的包（内置、开发、受信任安装），不升 API 版本也可能变化，出现第二个独立使用方后再纳入承诺。桥协议按方法比较：旧视图的参数仍被接受、结果仍是旧视图所期望的，已发布的方法和事件不得消失。升 SDK 版本时运行 `pnpm gen:plugin-api` 写入新版本的基线；`pnpm gen:plugin-api:check` 只确认当前版本有基线，不会重写已发布版本。
+可加性由发布基线检查：`packages/plugin-api/released/<版本>/`（`@riffet/plugin-web` 的桥协议在 `packages/plugin-web/released/<版本>/`）是该 SDK 版本发布时根入口生成的 `.d.ts`，对 `@riffet/contracts` 的引用不动（契约有自己的快照）。`src/released-compat.ts` 在 `pnpm typecheck` 内逐项比较，不另设 CI 步骤，分两个方向：宿主提供给插件的类型（`PluginHost`、各 `*Context` 等），当前类型必须可赋给基线类型，即宿主仍给出承诺过的全部成员；插件提供给宿主的类型（`Plugin`、`Contributions`、`ModelSourceProvider` 等），基线类型必须可赋给当前类型，即新成员只能是可选的。`PluginHost.runProcess`、`resolveCli`、`secrets`、`gateway.fetchModels` 等常用方法另按参数和返回值逐一比较，因为方法简写的参数是双变的。拟议成员不在承诺内，由 `PROPOSED_CONTRIBUTIONS`（`agentBackends`、`runtimeHooks`、`services`、`channels`、`agentTools`、`speechRecognizer`、`imChannels`、`approvals`）和 `PROPOSED_HOST_MEMBERS`（`agentProfiles`、`services`、`sessions`、`approvals`）两份清单排除：它们只给进程内的包（内置、开发、受信任安装），不升 API 版本也可能变化，出现第二个独立使用方后再纳入承诺。桥协议按方法比较：旧视图的参数仍被接受、结果仍是旧视图所期望的，已发布的方法和事件不得消失。升 SDK 版本时运行 `pnpm gen:plugin-api` 写入新版本的基线；`pnpm gen:plugin-api:check` 只确认当前版本有基线，不会重写已发布版本。
 
 入口与稳定性：
 
@@ -212,7 +212,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 入口：与其他插件视图同一套门槛：插件已启用、视图声明 `web`、`compatibility.web.ok` 不为 false；位置为 `session-view`、`sidebar` 或 `file`（`settings` 位置只能由内置入口绘制）；没有 `webEntry` 的非内置包没有 Web 视图。实例按上下文定 key，换会话、项目或（`file` 位置的）文件是新框架，旧通道随之关闭。
 - 框架：宿主用用户的会话经 `GET /api/integrations/:id/files/<path>` 取脚本（至多 8 MB），有 `integrity` 先校验，不符或写法不认识都拒绝；再放进 `<iframe sandbox="allow-scripts" srcdoc csp=…>`，没有 `allow-same-origin`，页面的源不透明：没有 cookie、存储，读不到应用页面。`csp` 属性与页面 CSP 相同（嵌入式强制），支持它的浏览器还会拒绝框架被导航到不声明接受该策略的页面，其余浏览器忽略它。页面 CSP：`default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'`；包持有 `network` 时 `connect-src https:`。已知缺口（Web）：在不支持嵌入式强制的浏览器里，CSP 拦不住脚本把自己的框架导航到别处（实测请求照常发出），也拦不住 WebRTC；宿主只能在框架第二次加载时丢弃该视图，拦不住那次请求，也发现不了页面加载中途的导航。所以 Web 上的 `network` 不是对 `sessions.read` 的真实防线：持有 `sessions.read` 的包能读到什么就能送出什么。Mac 的 WebView 拒绝除引导页外的所有导航。
-- 基础样式：引导页的 `<style>` 在颜色变量之后带一份带版本的基础样式（`packages/plugin-web/src/base-style.ts` 的 `PLUGIN_BASE_STYLE`，版本常量 `PLUGIN_BASE_STYLE_VERSION`，现为 1）。Web 的 `document.ts` 直接引用它；Mac 的 `PluginPageDocument.swift` 里是 `pnpm gen:plugin-style` 生成的同一份文本，`gen:plugin-style:check` 在 CI 中核对。内容分两层：`--riffet-*` 自定义属性（间距 4/8/12/16/24、圆角 8/10/12、界面与等宽字体栈、阅读/界面/次要三档字号与行高、控件高度 32、边框宽度 1px、焦点环），数值取自应用自己的控件与 `docs/design/riffet-style.md`；以及只针对原生元素的规则（`body`、`a`、`button`、`input`/`textarea`/`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条），全部包在 `:where()` 里，特异性为零，包自己的 CSS 不需要 `!important` 即可覆盖。没有类名组件、工具类和脚本；CSP 不变（内联 `<style>` 已被 `style-src 'unsafe-inline'` 允许）。`BRIDGE_VERSION` 不变，`host.info` 暂不报告样式版本。
+- 基础样式（`[data-pointer-focus]:focus-visible` 一条不在 `:where()` 里，特异性高于视图自己的 `:focus-visible`，见下文焦点环策略）：引导页的 `<style>` 在颜色变量之后带一份带版本的基础样式（`packages/plugin-web/src/base-style.ts` 的 `PLUGIN_BASE_STYLE`，版本常量 `PLUGIN_BASE_STYLE_VERSION`，现为 3）。Web 的 `document.ts` 直接引用它；Mac 的 `PluginPageDocument.swift` 里是 `pnpm gen:plugin-style` 生成的同一份文本，`gen:plugin-style:check` 在 CI 中核对。内容分两层：`--riffet-*` 自定义属性（间距 4/8/12/16/24、圆角 8/10/12、界面与等宽字体栈、阅读/界面/次要三档字号与行高、控件高度 32、边框宽度 1px、焦点环），数值取自应用自己的控件与 `docs/design/riffet-style.md`；以及只针对原生元素的规则（`body`、`a`、`button`、`input`/`textarea`/`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条），全部包在 `:where()` 里，特异性为零，包自己的 CSS 不需要 `!important` 即可覆盖。没有类名组件和工具类。唯一的脚本是焦点环策略 `PLUGIN_FOCUS_SCRIPT`（同文件），与应用的 `lib/focus-ring.ts` 同一规则：两端都在视图脚本之前运行它，Mac 的那份由 `gen:plugin-style` 生成为 `focusScript`；CSP 不变（内联 `<style>` 已被 `style-src 'unsafe-inline'` 允许）。`BRIDGE_VERSION` 不变，`host.info` 暂不报告样式版本。
 - 通道：请求通道的是宿主生成的引导页自己，不是视图：引导页的第一段脚本（`document.ts` 的 `CHANNEL_SCRIPT`）先挂上 `riffet-plugin:init` 的监听、把端口的 `Promise` 放在 `window.__riffetPort`，再向父窗口发 `riffet-plugin:ready`，此后才注入视图的脚本；`connect()` 只取这个 `Promise`，不再自己发请求，页面不是宿主生成的则以 `unsupported` 失败。宿主只回应它自己嵌入的那个窗口（以 `event.source` 为准），只回应第一次：同一窗口的消息按序到达，所以第一个请求必然是引导页发的，之后任何请求（包括框架被导航到的页面发的）都被忽略，握手也无法重置通道的限流。不以框架的第一次 `load` 为界：Chrome 实测在页面加载中发出的消息晚于 `load` 才送达（`load,message:ready`），按 `load` 判界会拒绝引导页自己的请求。宿主在框架渲染前就挂好监听（Web 用 layout effect），框架第二次 `load` 仍丢弃该视图。宿主创建 `MessageChannel`，把一个端口随 `riffet-plugin:init` 交给框架。之后所有请求都在这个端口上，包的身份、能力、项目都绑在端口上，载荷里的自报字段不读。请求 `{ id, method, params }`，回复 `{ id, result }` 或 `{ id, error: { code, message } }`，推送 `{ event, data }`。
 - 校验顺序：频率与并发、大小、方法是否已知、包是否持有该方法的能力、参数 schema（多余的键也拒绝），最后才到服务。限制：请求 64 KB、结果 1 MB、同时 16 个、令牌桶 60 个突发每秒补 30 个、文本 500 字符、时间线至多 200 行。视图卸载或上下文变化时通道关闭，未完成的请求中止，之后不再回复。
 
@@ -228,6 +228,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 | `files.read` | `{ path?, offset?, length? }`（`path` 缺省为上下文的文件，`length` 至多 512 KB） | `{ path, size, offset, data }`，`data` 为 base64；到文件末尾后为空 | 视图自己的文件不需要能力，项目里的其他文件要 `projects.read`；按用户自己的读取规则（项目外、凭据文件同样受限），经 `GET /api/projects/:id/file/raw` 的 Range 请求读取 |
 | `navigation.openSession` | `{ sessionId }` | `null` | 限视图所属项目；仅在用户操作过该视图之后（Web：`document.activeElement` 是该框架；Mac：视图可见且是或包含第一响应者），否则 `denied` |
 | `navigation.openPath` | `{ path }`（相对项目根，不含 `..`） | `null` | 同上 |
+| `navigation.openExternal` | `{ url }`（`http:` 或 `https:`，至多 2000 字符，不带用户名密码） | `null` | 视图的 `requires` 列出 `bridge.navigation.openExternal`，否则 `forbidden`；同样要求用户操作过该视图。Web 在新标签页打开（`noopener,noreferrer`，依赖用户在框架里的点击让浏览器放行），Mac 用默认浏览器。不在 `host.info.methods` 里的宿主视为不支持 |
 | `notify.info` / `notify.error` | `{ text }` | `null` | 无；提示前加包名 |
 | `commands.execute` | `{ id, args? }`（`args` 为名称到文本、数字或布尔值） | 服务端的 `CommandResult`（`done`、`open` 或 `task`） | 只限本包 `contributes.commands` 声明的命令（`id` 以 `<包 id>/` 开头）；宿主以视图的项目与会话经 `POST /api/integrations/:id/commands/:name` 执行，宿主不据结果自行跳转，由视图决定（可再调 `navigation.*`） |
 
@@ -235,6 +236,24 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 客户端：`packages/plugin-web/src/bridge-client.ts` 无依赖，随视图一起打包：`connect()` 返回连接，`call(method, params)` 带类型地调用，`on('context' | 'theme', fn)` 监听推送，主题变量默认写到文档根上，视图的 CSS 直接用 `var(--fg)`。协议类型（`BridgeMethods`、`BridgeEvents`、`BRIDGE_LIMITS`）从 `@riffet/plugin-web` 导出。样例：`examples/plugins/session-stats/`。
 - Mac：非内置包、声明 `web` 客户端、有 `webEntry`、侧栏位置的视图，在没有原生渲染器时用 `WKWebView` 承接（Mac 没有会话视图注册，只有侧栏）；内置的仅 Web 视图仍不可用。页面由 `riffet-plugin://<插件 id>/index.html` 的 scheme handler 提供，脚本经带令牌的客户端取回并校验 `integrity`；数据存储是非持久的，内容规则列表在没有 `network` 时拦截所有网络请求，除引导页外的导航一律拒绝。页内的垫片在文档开始时提供同样的端口语义（`MessageChannel` 一端留在页内，经 `WKScriptMessageHandler` 与 `evaluateJavaScript` 往返），所以同一个客户端不改就能用；引导页发请求的脚本与 Web 逐字相同，垫片只回应第一次，之后的握手不新建桥，限流与未完成计数不会被重置。请求的校验用 Swift 再实现一遍，调色板用同一套角色名推送。`navigation.*` 要求视图可见且是或包含窗口的第一响应者，否则 `denied`；长按链接预览关闭；`commands.execute` 经带令牌的客户端 POST 到命令路由。入口脚本的地址带 `?v=<入口 integrity，没有则包版本>`，升级后不会命中旧缓存。Mac 另按自己的桥协议版本（1）核对 `compatibility.web.range`（范围匹配与服务端的 `satisfies` 相同），不兼容的视图不提供，与服务端判 `ok: false` 同。
+
+## 助理扩展点
+
+插件有两个面向个人助理的扩展点，细节见 [助理](ASSISTANT.md) §7.3、§8.2，声明字段见 [插件](PLUGINS.md)「声明」。
+
+- 事件（`contributes.assistantEvents`）：进程内的包调用 `host.assistant?.emit(topic, payload?, { key? })`，核心把它交给订阅了该主题的委托（`assistant/delegations.ts#pluginEvent`），每条委托入队一次 `delegation` 后台运行，受 `ASSISTANT_BUDGET` 的每日运行数与并发限制。事件只在内存里经过：服务器关着或还没启动完时发生的事件不补发，插件重启后重新发出即可（同一 `key` 不会重复起运行）。
+- 能力包（`contributes.assistantPack`）：`assistant/plugin-packs.ts#syncPluginPacks` 让助理的 `packs/` 与已启用插件的声明一致（懒启动、尚未启动的插件也算启用），在服务启动后和每次插件变化后运行。只装进程内的包（内置、开发、受信任安装）的能力包：包里的 hooks 和 MCP 服务器以用户身份运行，隔离安装的包不能借此越过沙箱；装好的文件夹带 `.riffet-plugin.json`（插件 id、版本、内容摘要），只有带它的文件夹才会被同步替换或删除。变化后主对话的 CLI 在空闲时重启（`restartWhenRested`）。
+
+## 收件箱审批
+
+插件要用户确认一次待执行的写操作时，不自己做界面，而是请求一条审批，用户在收件箱里点按钮（目前只有 Web 的收件箱，iOS 只收到推送提醒）（[任务看板](TASK-BOARD.md) §7，要你回答的一个来源）。只给进程内的包（内置、开发、受信任安装），隔离安装的包没有；宿主没有这项能力时 `host.approvals` 缺省。没有清单声明，也不需要权限。
+
+- 请求：`host.approvals?.request({ id, title, body, actions: [{ id, label, tone? }], expiresAt?, sessionId? })`。`id` 在插件内唯一，已打开的 `id` 再请求什么都不改，所以插件重启后可以放心再发。`body` 是短 Markdown；`tone` 为 `primary`、`danger`、`neutral`，缺省 `neutral`。字段与条数上限在 `PLUGIN_APPROVAL_BUDGET`（每个插件同时打开 20 条、至多 4 个按钮）：超出、字段不合法或 `expiresAt` 已过时抛 `AppError`，已满时是 429 `PLUGIN_APPROVAL_LIMIT`。
+- 撤回：`host.approvals?.withdraw(id)`，不存在的 `id` 不报错。到 `expiresAt` 的条目由服务端移除；插件被停用或卸载时，它的全部条目随之撤回（`app.ts` 在插件变化后清理，`PluginRegistry.offPlugins`）。
+- 决定：用户点按钮后，核心找到插件（懒启动的插件先启动）并调用 `Contributions.approvals.decide(id, actionId, { signal })`。返回即成功，条目移除，`message`（本地化文字）显示给用户；抛 `host.error(...)` 即拒绝，错误显示给用户，条目保留可以再点。同一条同时只处理一个决定。条目在重启后仍在，所以 `decide` 要能容忍重复执行。
+- 保存：`plugin_approvals` 表（`plugins/approvals.ts#PluginApprovals`），不经插件自己的状态目录。
+- 作用范围：`global`（[多服务器](guide/multi-server.md) §3.5）。
+- 手机推送：新条目（不是重复请求）经 `PushService.approval` 推给不在前台的 iOS 设备，不属于任何会话。
 
 ## 模型用途
 

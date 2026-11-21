@@ -3,6 +3,7 @@ import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
+import { existsSync } from 'node:fs';
 import { mkdir, rm, utimes } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir, hostname } from 'node:os';
@@ -69,12 +70,16 @@ import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
+import { registerPluginApprovalRoutes } from './routes/plugin-approvals.js';
+import { PluginApprovals } from './plugins/approvals.js';
 import { AssistantBoard, Supervision, Verification, WorkItemService, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AssistantRuns } from './assistant/runs.js';
 import { AssistantDelegations } from './assistant/delegations.js';
 import { createAssistantWorkbenchQueries, workbenchReads } from './assistant/workbench-queries.js';
+import { assistantEventsRead } from './assistant/plugin-events.js';
+import { syncPluginPacks } from './assistant/plugin-packs.js';
 import { Consolidation } from './assistant/consolidation.js';
 import { nextCronTime, parseCron } from './orchestration/cron.js';
 import { assistantSearch } from './search/assistant-search.js';
@@ -255,17 +260,27 @@ export async function createApp(options: AppOptions = {}) {
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;
+  // docs/TASK-BOARD.md §7: what in-process plugins ask the owner to approve (`host.approvals`); the inbox's 要你回答 lists it.
+  const pluginApprovals=new PluginApprovals({db:store.db,pluginName:id=>plugins.pluginName(id),
+    decide:async(pluginId,id,actionId)=>{const {handler,signal}=await plugins.approvalHandler(pluginId);return handler.decide(id,actionId,{signal});},
+    opened:approval=>{void push.approval(approval).catch(()=>undefined);}});
   const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>{clearAuxiliaryAuthCache();nativeBackends.catalog.invalidateModelCatalogs();},savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input),
     // docs/PLUGIN_ARCHITECTURE.md「模型用途」: a completion on the model chosen for the use, else its fallback (`default` or `chat`).
     completeModel:(request,uses):Promise<string>=>completeForPlugin(request,uses,{default:()=>settings.getSettings().auxiliaryModels?.default,chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details),record:recordAuxiliaryCall}),
     streamModel:(request,uses):Promise<string>=>streamForPlugin(request,uses,{default:()=>settings.getSettings().auxiliaryModels?.default,chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details),record:recordAuxiliaryCall}),
+    // docs/ASSISTANT.md §7.3: an event of an in-process plugin starts the runs of the delegations subscribed to its topic.
+    emitAssistantEvent:(topic,payload,key)=>{if(!assistantDelegationsRef)throw new AppError('SERVICE_STARTING','The assistant is starting; emit again after activation',503);if(!plugins.assistantEventDeclared(topic))throw new AppError('PLUGIN_ASSISTANT_EVENT_UNAVAILABLE','The plugin is off; its events go nowhere',409);assistantDelegationsRef.pluginEvent(topic,payload,key);},
+    approvals:{request:(pluginId,request)=>pluginApprovals.request(pluginId,request),withdraw:(pluginId,id)=>pluginApprovals.withdraw(pluginId,id)},
     // docs/BROWSER.md §2: what a plugin with agent tools or channels may read and do in a conversation.
     sessions:{
       get:id=>{let session;try{session=store.getSession(id);}catch{return undefined;}let projectPath:string|undefined;try{projectPath=store.getProject(session.projectId).cwd;}catch{/* removed project */}return {id:session.id,title:session.title,projectId:session.projectId,...(projectPath?{projectPath}:{}),archived:Boolean(session.archivedAt)};},
       wake:(id,note)=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);orchestrationRef.scheduleWakeup(id,{dueAt:new Date(),note});},
       notify:(id,notice)=>{notices.add({sessionId:id,...(notice.title?{title:notice.title}:{}),body:notice.body,source:'agent'});},
       saveImage:async(id,image)=>{const attachment=await workspace.upload(store.getProject(store.getSession(id).projectId),{name:image.name,mimeType:image.mimeType,dataBase64:image.data.toString('base64')});return {id:attachment.id,path:attachment.path};},
+      assistantMainSessionId:()=>assistantMainRef?.(),
     }});
+  // A plugin turned off or uninstalled takes its approvals with it.
+  const stopApprovalSweep=plugins.onChange(()=>{const ids=pluginApprovals.pluginIds();if(ids.length)void plugins.offPlugins(ids).then(off=>{for(const id of off)pluginApprovals.withdrawAll(id);}).catch(()=>undefined);});
   const appearance=new AppearanceService(plugins);
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source),source=>plugins.modelSourceRole(source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
@@ -488,7 +503,7 @@ export async function createApp(options: AppOptions = {}) {
     pluginToolGroups:session=>riffetMcp.pluginToolGroups(session),restartability:()=>dispatch.restartability(),
   });
   riffetMcp.registerCapabilities(new CapabilityCatalog(
-    [...workbenchReads(workbenchQueries), attentionRead(assistantRef), instanceSettingsRead(settings), webThemeRead(themes,()=>appearance.catalog()), sharedThemeRead(themes),
+    [...workbenchReads(workbenchQueries), attentionRead(assistantRef), assistantEventsRead(()=>plugins.assistantEvents()), instanceSettingsRead(settings), webThemeRead(themes,()=>appearance.catalog()), sharedThemeRead(themes),
       agentDefaultsRead(settings,nativeBackends.catalog,nativeBackends)],
     [instanceSettingCommand(settings), sharedThemeCommand(themes), agentDefaultsCommand(settings,nativeBackends.catalog,nativeBackends)],
   ));
@@ -535,7 +550,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -549,6 +564,7 @@ export async function createApp(options: AppOptions = {}) {
   registerExternalSessionRoutes(app,deps);
   registerMarkRoutes(app,deps);
   registerWorkItemRoutes(app,deps);
+  registerPluginApprovalRoutes(app,deps);
   registerCouncilRoutes(app,deps);
   const shares=new ShareService(deps);
   registerShareRoutes(app,deps,shares);
@@ -677,6 +693,7 @@ export async function createApp(options: AppOptions = {}) {
       events:(id,cursor,limit)=>workItems.taskStatusEvents(id,cursor,limit),
       subscribe:listener=>workItems.onStatusChange(listener)},
     fire:({delegation,reason,payload,key})=>{queue('delegation',key,{goal:delegation.goal,attention:delegation.attention,trigger:JSON.stringify(delegation.trigger),until:delegation.until,cursor:delegation.cursor??'（还没有）',reason,payload:payload||'（没有附带内容）'},delegation.id);},
+    pluginEvents:{declared:topic=>plugins.assistantEventDeclared(topic),backlog:id=>runs.pendingCount('delegation',id)},
     expired:delegation=>runs.addPending(undefined,`委托「${delegation.goal.slice(0,80)}」已到期结束。`),
     changed:()=>store.workItemsChanged()});
   assistantDelegationsRef=delegations;
@@ -721,6 +738,20 @@ export async function createApp(options: AppOptions = {}) {
   const resumeWaiting=setTimeout(()=>{try{workItems.resumeWaiting();}catch(error){console.warn('[riffet] waiting tasks were not started',error instanceof Error?error.message:error);}},15_000);
   resumeWaiting.unref?.();
   stopAssistantWork.push(()=>clearTimeout(resumeWaiting));
+  // docs/ASSISTANT.md §8.2: the capability packs of the enabled plugins are kept in `packs/`; the main conversation's CLI restarts when they change.
+  let packProblemIds=new Set<string>();
+  let packSync:Promise<unknown>=Promise.resolve();
+  const syncPacks=()=>{packSync=packSync.then(async()=>{
+    const sources=plugins.assistantPackSources();
+    if(!sources.length&&!packProblemIds.size&&!existsSync(join(stateDir,'assistant','packs')))return;
+    const result=await syncPluginPacks(assistantProject(store,stateDir).cwd,sources);
+    for(const id of packProblemIds)plugins.setAssistantPackProblem(id,undefined);
+    packProblemIds=new Set(result.problems.keys());
+    for(const [id,problem] of result.problems)plugins.setAssistantPackProblem(id,problem);
+    if(result.changed){const id=assistantMain();if(id)reclaimer.restartWhenRested(id);}
+  }).catch(error=>console.warn('[riffet] plugin capability packs were not synced',error));};
+  stopAssistantWork.push(plugins.onChange(syncPacks));
+  syncPacks();
   workItems.retitleBriefConversations();
   workItems.dropComposerItems();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
@@ -759,12 +790,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,links,registeredRoutes,workItems,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,links,registeredRoutes,workItems,pluginApprovals,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

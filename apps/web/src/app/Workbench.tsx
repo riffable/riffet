@@ -38,7 +38,7 @@ import { useSessionActions } from './use-session-actions';
 import { useProjectActions } from './use-project-actions';
 import { useTerminalActions } from './use-terminal-actions';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
-import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
+import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useApprovals, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
 import { countWorkItemInbox } from './work-items/model';
 import { NO_PAGE, STORAGE_KEYS, type NavPage } from './state/navStore';
 import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sidebarMaxWidth } from './state/uiStore';
@@ -308,7 +308,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [loaded, assistantMain, selectedProjectId, selectedSessionId, nav]);
   const onAssistantMain = Boolean(assistantMain && session?.id === assistantMain.id);
   useEffect(() => { if (onAssistantMain) settingsStore.syncAssistantTimeZone(); }, [onAssistantMain, settings.assistant?.timeZone]);
-  const inboxCount = useMemo(() => workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0, [workItemSummaries, sessions]);
+  const approvalCount = useApprovals((state) => state.approvals.length);
+  const inboxCount = useMemo(() => (workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0) + approvalCount, [workItemSummaries, sessions, approvalCount]);
   /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
   const startWorkItem = async (item: WorkItem): Promise<boolean> => {
     if (item.assignee.kind !== 'agent') return false;

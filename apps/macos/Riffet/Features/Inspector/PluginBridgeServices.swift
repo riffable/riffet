@@ -80,6 +80,10 @@ final class WorkbenchPluginServices: PluginBridgeServices {
         if workbench.currentProjectId == context.projectId { workbench.preview(path: path) }
     }
 
+    func openExternal(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
     /// The Mac has no in-app notice that fits a plugin (the only one belongs to a conversation and
     /// reads as a bookmark), so a notice is a system notification. A package's notices replace one
     /// another, so it cannot fill the list.

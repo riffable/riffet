@@ -3,6 +3,7 @@ import { chmod, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, sym
 import { delimiter, extname, join, posix, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Plugin, PluginManifest } from '@riffet/plugin-api';
+import { ASSISTANT_PACK_NAME } from '../../../../packages/contracts/src/index.js';
 import { isPackagePath } from './declarations.js';
 
 // Trusted local development packages (docs/PLUGIN_ARCHITECTURE.md): a directory named in
@@ -51,6 +52,17 @@ export function failure(directory: string, manifest: Record<string, unknown> | u
   return { id: text(manifest?.id, name), vendor: text(manifest?.vendor, ''), name: text(manifest?.name, name), reason };
 }
 
+/** Why a capability pack folder of the package cannot be installed into the 助理, if it cannot: it needs `.claude-plugin/plugin.json` with a usable `name`. */
+export async function assistantPackProblem(root: string, path: unknown): Promise<string | undefined> {
+  if (!isPackagePath(path) || !path.startsWith('assets/')) return 'contributes.assistantPack.path must be a folder under assets/';
+  const file = await confined(root, `${path}/.claude-plugin/plugin.json`);
+  if (!file) return `${path}/.claude-plugin/plugin.json is not a file in the package`;
+  try {
+    const name = (JSON.parse(await readFile(file, 'utf8')) as { name?: unknown }).name;
+    return typeof name === 'string' && ASSISTANT_PACK_NAME.test(name) ? undefined : `${path}/.claude-plugin/plugin.json needs a "name" of lowercase letters, digits and hyphens (at most 40 characters)`;
+  } catch { return `${path}/.claude-plugin/plugin.json is not valid JSON`; }
+}
+
 export interface PackageManifest { root: string; manifest: PluginManifest; entries: { server?: string; web?: string } }
 
 /** Reads and validates a package directory's `riffet-plugin.json` and its entry paths without running anything: what a development package and an installed one share. */
@@ -83,6 +95,8 @@ export async function readPackage(directory: string): Promise<PackageManifest | 
     if (key === 'server' && !SERVER_ENTRY.test(path)) return fail('entries.server must be a JavaScript or TypeScript module');
     entries[key] = path;
   }
+  const pack = (rest as { contributes?: { assistantPack?: { path?: unknown } } }).contributes?.assistantPack;
+  if (pack) { const problem = await assistantPackProblem(root, pack.path); if (problem) return fail(problem); }
   return { root, manifest: rest as unknown as PluginManifest, entries };
 }
 

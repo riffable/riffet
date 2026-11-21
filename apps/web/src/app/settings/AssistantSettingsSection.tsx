@@ -78,7 +78,9 @@ export function AssistantSettingsSection() {
     {packs && packs.length > 0 && <SettingsGroup title={t`能力包`} note={t`个人助理空闲时生效；去掉后记忆保留`}>
       {packs.map((pack) => (
         <SettingsRow key={pack.id} title={pack.title} description={pack.description}>
-          <Switch aria-label={pack.title} checked={pack.installed} disabled={packBusy === pack.id} onCheckedChange={(value) => void togglePack(pack, value)} />
+          {pack.providedBy
+            ? <span className="text-xs text-fg-3" title={pack.providedBy}>{t`随插件启停`}</span>
+            : <Switch aria-label={pack.title} checked={pack.installed} disabled={packBusy === pack.id} onCheckedChange={(value) => void togglePack(pack, value)} />}
         </SettingsRow>
       ))}
     </SettingsGroup>}

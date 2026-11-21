@@ -106,6 +106,12 @@ export interface BridgeMethods {
   'files.read': { params: { path?: string; offset?: number; length?: number }; result: BridgeFileBytes };
   /** Previews a file of the view's own project; `path` is relative to the project root. */
   'navigation.openPath': { params: { path: string }; result: null };
+  /**
+   * Opens an `http:` or `https:` address (at most `BRIDGE_LIMITS.url` characters, no credentials in it) in the user's browser: a
+   * new tab on the web, the default browser on the Mac. After a user action in the view, and only for a view whose `requires` lists
+   * `bridge.navigation.openExternal`; `forbidden` otherwise.
+   */
+  'navigation.openExternal': { params: { url: string }; result: null };
   'notify.info': { params: { text: string }; result: null };
   'notify.error': { params: { text: string }; result: null };
   /** Runs a command the package declares (`contributes.commands`) and answers what the server did: `{ kind: 'done', message? }`, `{ kind: 'open', ... }` or `{ kind: 'task', taskId }` (`CommandResult`). The host takes no action of its own from it. */
@@ -141,6 +147,7 @@ export const BRIDGE_CAPABILITY: Readonly<Record<BridgeMethod, string | undefined
   'files.read': undefined,
   'navigation.openSession': undefined,
   'navigation.openPath': undefined,
+  'navigation.openExternal': undefined,
   'notify.info': undefined,
   'notify.error': undefined,
   'commands.execute': undefined,
@@ -169,6 +176,8 @@ export const BRIDGE_LIMITS = {
   perSecond: 30,
   /** Characters of a notification or a path. */
   text: 500,
+  /** Characters of an address `navigation.openExternal` opens. */
+  url: 2000,
   /** Bytes of one `files.read`, before base64. */
   fileBytes: 512 * 1024,
   rows: 200,

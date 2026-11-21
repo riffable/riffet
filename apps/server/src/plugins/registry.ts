@@ -3,11 +3,11 @@ import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup, type ImChannelProvider,
-  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type SpeechRecognizer, type TaskProvider,
+  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type PluginApprovalHandler, type SharePublisher, type SpeechRecognizer, type TaskProvider,
 } from '@riffet/plugin-api';
 import { protocolBackends, sourceProtocols } from '@riffet/plugin-api/kit';
 import { AGENT_PROTOCOL_VERSION, type AgentBackend } from '@riffet/plugin-api/experimental/agent';
-import type { ActionStep, AppearanceDeclarations, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import type { ActionStep, AppearanceDeclarations, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, LocalizedText, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 // The core's only import of the built-in list (`pnpm check:plugins`), so a build can swap it here.
 import { builtinPlugins } from '../../../../plugins/index.js';
@@ -115,6 +115,10 @@ export interface PluginRegistryOptions {
   completeModel?: Parameters<typeof createPluginHost>[1]['completeModel'];
   /** `host.models.stream` of an in-process plugin, given its own declared model uses. */
   streamModel?: Parameters<typeof createPluginHost>[1]['streamModel'];
+  /** `host.assistant.emit` of an in-process plugin that declares `assistantEvents`: hands the event to the 助理's delegations. */
+  emitAssistantEvent?: Parameters<typeof createPluginHost>[1]['emitAssistantEvent'];
+  /** `host.approvals` of an in-process plugin: the inbox's approvals, keyed by plugin. */
+  approvals?: Parameters<typeof createPluginHost>[1]['approvals'];
 }
 
 const MODEL_SOURCE_CLAIM = 'model-source:';
@@ -162,6 +166,10 @@ export class PluginRegistry {
   private readonly agentBackendProvided: (id: string) => boolean;
   private readonly changeListeners = new Set<() => void>();
   private readonly hostOptions: Parameters<typeof createPluginHost>[1];
+  private readonly emitAssistantEvent?: Parameters<typeof createPluginHost>[1]['emitAssistantEvent'];
+  private readonly approvals?: Parameters<typeof createPluginHost>[1]['approvals'];
+  /** Why a plugin's capability pack is not installed, by plugin id; set by whoever installs packs (`setAssistantPackProblem`). */
+  private readonly packProblems = new Map<string, string>();
   /** Development and installed packages are loaded once, before anything evaluates. */
   private readonly loading: Promise<void>;
   readonly packages: PackageStore;
@@ -191,6 +199,8 @@ export class PluginRegistry {
     this.invalidate = options.invalidateModelCatalogs ?? (() => undefined);
     this.agentBackendProvided = options.agentBackendProvided ?? (() => false);
     this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}), ...(options.completeModel ? { completeModel: options.completeModel } : {}), ...(options.streamModel ? { streamModel: options.streamModel } : {}) };
+    if (options.emitAssistantEvent) this.emitAssistantEvent = options.emitAssistantEvent;
+    if (options.approvals) this.approvals = options.approvals;
     this.runningTasks = options.runningTasks ?? (() => 0);
     this.statusTimeoutMs = options.statusTimeoutMs ?? STATUS_TIMEOUT_MS;
     for (const plugin of options.plugins ?? builtinPlugins) this.register(plugin, 'builtin');
@@ -468,12 +478,84 @@ export class PluginRegistry {
     return kept;
   }
 
+  /**
+   * The approval handler of plugin `pluginId` (`Contributions.approvals`), turning the plugin on first when it is lazy or
+   * has not started yet: an approval outlives the server run that asked for it.
+   */
+  async approvalHandler(pluginId: string): Promise<{ handler: PluginApprovalHandler; signal: AbortSignal }> {
+    await this.loading;
+    const entry = this.entries.get(pluginId);
+    if (!entry) throw new AppError('PLUGIN_NOT_FOUND', 'Unknown plugin', 404);
+    await this.ensureEntry(entry, 'approvals');
+    const handler = entry.active?.contributions?.approvals;
+    if (!entry.active || typeof handler?.decide !== 'function') throw new AppError('PLUGIN_APPROVALS_UNAVAILABLE', `${entry.plugin.manifest.name} cannot decide approvals now`, 409);
+    return { handler: { decide: (id, actionId, context) => this.guarded(entry, () => handler.decide(id, actionId, context), 'APPROVAL_FAILED') }, signal: entry.active.controller.signal };
+  }
+
+  /** Of [ids], the plugins that are gone from this build or turned off, so what they left in the inbox is stale. One that is merely not started yet is not off. */
+  async offPlugins(ids: readonly string[]): Promise<string[]> {
+    await this.loading;
+    return ids.filter(id => {
+      const entry = this.entries.get(id);
+      return !entry || (Boolean(entry.evaluated) && entry.allowed === false && !entry.active);
+    });
+  }
+
+  /** The display name of plugin `pluginId`, when it is in this build. */
+  pluginName(pluginId: string): string | undefined { return this.entries.get(pluginId)?.plugin.manifest.name; }
+
+  /** The assistant event topics the enabled plugins declare, with their plugin, for the 助理 to find (`workbench.assistant_events`). */
+  assistantEvents(): Array<{ id: string; plugin: string; title: LocalizedText; description: LocalizedText }> {
+    return [...this.entries.values()].flatMap(entry => this.servesAssistant(entry)
+      ? (entry.plugin.manifest.contributes?.assistantEvents ?? []).map(({ id, title, description }) => ({ id, plugin: String(entry.plugin.manifest.id), title, description })) : []);
+  }
+
+  /** Whether an enabled plugin declares [topic] as an assistant event. */
+  assistantEventDeclared(topic: string): boolean {
+    return this.assistantEvents().some(event => event.id === topic);
+  }
+
+  /** The capability packs of the enabled plugins, with the directory each `path` is relative to. Disabled and uninstalled plugins have none, which is how their packs are removed. */
+  assistantPackSources(): Array<{ pluginId: string; version: string; root: string; path: string }> {
+    return [...this.entries.values()].flatMap(entry => {
+      const { id, contributes } = entry.plugin.manifest;
+      const root = entry.root ?? (entry.source === 'builtin' ? builtinPackageRoot(id) : undefined);
+      return this.servesAssistant(entry) && contributes?.assistantPack && root ? [{ pluginId: String(id), version: entry.version ?? entry.plugin.manifest.version ?? '0.0.0', root, path: contributes.assistantPack.path }] : [];
+    });
+  }
+
+  /**
+   * Whether a plugin's assistant events and capability pack count: it runs in-process (an isolated installed package gets
+   * neither, as it gets no `host.assistant`; a pack's hooks and MCP servers would run outside its sandbox), and it is on,
+   * including a lazy one that has not been started and one still on its way at startup, so neither loses its pack.
+   */
+  private servesAssistant(entry: Entry): boolean {
+    if (entry.source === 'installed' && !entry.trusted) return false;
+    if (entry.active) return true;
+    if (!this.permitted(entry) || entry.allowed === false) return false;
+    return this.isLazy(entry) || !entry.evaluated || Boolean(entry.starting);
+  }
+
+  /** Records, or with `undefined` clears, why a plugin's capability pack is not installed; shown with its diagnostics. */
+  setAssistantPackProblem(pluginId: string, problem: string | undefined): void {
+    if (problem === undefined) this.packProblems.delete(pluginId); else this.packProblems.set(pluginId, problem);
+  }
+
   /** The `icon.svg` of every Agent a loaded plugin declares, enabled or not, with the directory its path is relative to. */
   agentIconSources(): Array<{ agentId: string; svg: string; root: string }> {
     return [...this.entries.values()].flatMap(entry => {
       const { id, contributes } = entry.plugin.manifest;
       const root = entry.root ?? (entry.source === 'builtin' ? builtinPackageRoot(id) : undefined);
       return root ? (contributes?.agentBackends ?? []).flatMap(agent => agent.icon?.svg ? [{ agentId: agent.id, svg: agent.icon.svg, root }] : []) : [];
+    });
+  }
+
+  /** The `icon.svg` of every view a loaded plugin declares, with the directory its path is relative to. */
+  viewIconSources(): Array<{ viewId: string; svg: string; root: string }> {
+    return [...this.entries.values()].flatMap(entry => {
+      const { id, contributes } = entry.plugin.manifest;
+      const root = entry.root ?? (entry.source === 'builtin' ? builtinPackageRoot(id) : undefined);
+      return root ? (contributes?.views ?? []).flatMap(view => view.icon?.svg ? [{ viewId: view.id, svg: view.icon.svg, root }] : []) : [];
     });
   }
 
@@ -1174,7 +1256,7 @@ export class PluginRegistry {
     if (!this.entries.has(id) && rejected) return [{ id, label: rejected.name, status: 'fail', detail: rejected.reason }];
     const entry = this.require(id);
     const checks: DoctorCheck[] = [
-      ...[entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? [])].filter((value): value is string => Boolean(value)).map((detail, index) => ({ id: id + ':' + index, label: entry.plugin.manifest.name, status: 'warn' as const, detail })),
+      ...[entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? []), this.packProblems.get(id)].filter((value): value is string => Boolean(value)).map((detail, index) => ({ id: id + ':' + index, label: entry.plugin.manifest.name, status: 'warn' as const, detail })),
     ];
     checks.push(...this.hookNotes(id));
     const activation = entry.active;
@@ -1209,7 +1291,7 @@ export class PluginRegistry {
     for (const entry of this.entries.values()) {
       const { manifest } = entry.plugin;
       const label = `${manifest.name} (${manifest.id})`;
-      for (const detail of [entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? [])]) if (detail) checks.push({ id: `integration:${manifest.id}`, label, status: 'warn', detail });
+      for (const detail of [entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? []), this.packProblems.get(manifest.id)]) if (detail) checks.push({ id: `integration:${manifest.id}`, label, status: 'warn', detail });
       for (const note of this.hookNotes(manifest.id)) checks.push({ ...note, id: `integration:${manifest.id}`, label });
       const run = entry.active?.contributions?.doctorChecks;
       if (!run) continue;
@@ -1257,6 +1339,8 @@ export class PluginRegistry {
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
       ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
       ownModelUses: manifest.contributes?.modelUses ?? [],
+      ...(this.approvals ? { approvals: this.approvals } : {}),
+      ...(this.emitAssistantEvent ? { emitAssistantEvent: this.emitAssistantEvent, ownAssistantEvents: (manifest.contributes?.assistantEvents ?? []).map(declared => declared.id) } : {}),
       service: (pluginId, name, range) => this.serviceOf(manifest.id, pluginId, name, range),
     });
     host.logger = Object.fromEntries((['debug', 'info', 'warn', 'error'] as const).map(level => [level, (message: string) => {
@@ -1670,6 +1754,7 @@ export class PluginRegistry {
     if (manifest.contributes?.sharePublisher && !contributions.sharePublisher) throw new Error('Declared share publisher is not provided');
     if (contributions.speechRecognizer !== undefined && (!manifest.contributes?.speechRecognizer || typeof contributions.speechRecognizer?.open !== 'function' || typeof contributions.speechRecognizer.status !== 'function')) throw new Error('speechRecognizer is not declared in contributes.speechRecognizer or has no open() and status()');
     if (manifest.contributes?.speechRecognizer && !contributions.speechRecognizer) throw new Error('Declared speech recognizer is not provided');
+    if (contributions.approvals !== undefined && typeof contributions.approvals?.decide !== 'function') throw new Error('approvals has no decide()');
     // A command is run by its id from the declaration: each handler must be declared by this integration.
     for (const [commandId, handler] of Object.entries(contributions.commands ?? {})) {
       // A command this host left out of the manifest stays unrunnable (`command()` finds no declaration); its handler is not an error.

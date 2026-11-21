@@ -205,13 +205,14 @@
 
 | 类别 | 例子 |
 | --- | --- |
-| 要你回答 | 审批、Agent 的提问、计划卡片 |
+| 要你回答 | 审批、Agent 的提问、计划卡片、插件请你确认的写操作 |
 | 要你验收 | 待验收的任务，附核对结论和证据 |
 | 推不动 | 跟进处理不了的停顿，附它的判断 |
 
 - 每一条都能就地处理：回答、批准、完成、返工，不必打开会话。
 - 顺序：要你回答的在前，因为不处理 Agent 就一直停着；要你验收的在后。同一类里等得久的在前。
 - 手机推送只推收件箱里新出现的条目。
+- **插件审批。** 进程内的插件用 `host.approvals.request` 把一次待执行的写操作放进收件箱，在任意客户端点按钮确认，选择交给插件的 `approvals.decide` 去执行（SDK 见 [插件架构](PLUGIN_ARCHITECTURE.md)「收件箱审批」）。它是要你回答的一个来源，排在任务相关条目之前，同类里先请求的在前；行里是标题、插件名、折叠的 Markdown 正文和按钮，`danger` 语气的按钮用危险按钮样式。服务端持久保存（重启后仍在），到 `expiresAt`、被插件撤回、插件停用或卸载时消失；`decide` 报错时错误显示给用户、条目保留，成功后条目移除。每个插件同时打开的条数有上限（`PLUGIN_APPROVAL_BUDGET`）。新条目像其他收件箱条目一样推到手机，推送不属于任何会话，只提示有一条待处理。
 
 ## 8. 约束：不做成 subagent
 
@@ -242,7 +243,7 @@
 
 详细的视觉取值见 [DECISIONS.md](design/DECISIONS.md) 2026-11-14 的条目和原型。
 
-Mac：M，概览随 `/tasks` 在 Web 查看。
+Mac：M，概览随 `/tasks` 在 Web 查看。插件审批同属收件箱：Web 已列出，Mac 与 Android、iOS 目前没有收件箱页面，待收件箱进菜单栏与通知（[Mac 范围规范](guide/mac-scope.md) §5 第 5 项）和手机的任务页时一并接入 `GET /api/plugin-approvals`。
 
 ### 多服务器
 
@@ -290,6 +291,11 @@ P4 已加：
 - Web：侧栏导航的「个人助理」入口与助理页（[ASSISTANT.md](ASSISTANT.md) §3；2026-11-16 前是新会话页的页签）、计划卡片 `work-items/PlanDock.tsx`。
 - 助理配置：`AppSettings.assistant`（Agent、Provider、模型）；`GET/PUT /api/assistant/instructions`；首页卡片 `work-items/AssistantSetup.tsx`。
 - 任务开的会话以任务标题命名；之前取了「任务 #N：…」的会话，服务端启动时去掉前缀（`WorkItemService.retitleBriefConversations`）。
+
+插件审批已加：
+
+- 表 `plugin_approvals`（同一个工作台数据库，`CREATE TABLE IF NOT EXISTS`），服务在 `apps/server/src/plugins/approvals.ts`，路由 `routes/plugin-approvals.ts`：`GET /api/plugin-approvals`、`POST /api/plugin-approvals/:pluginId/:id/decide`（body `{ actionId }`，成功返回 `{ message? }`，条目不存在或已过期 404）。变化经 `/api/lists/stream` 的 `plugin-approvals` 事件通知。契约在 `packages/contracts/src/plugins.ts`。
+- 作用范围 `global`：链接策略对 `/api/plugin-approvals` 一律拒绝，客户端只读入口服务器的条目。
 
 P3 已加：
 

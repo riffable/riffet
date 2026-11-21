@@ -17,6 +17,7 @@ description: 用户希望长期关注一件事时使用，例如任务待验收�
   - GitHub 发版：`{ "kind": "github-release", "repo": "owner/name" }`。
   - 网页变化：`{ "kind": "page", "url": "https://…" }`。
   - 任务状态变化用 `{ "kind": "task-status", "task": 42, "status": "review" }`。任务编号来自 `task_get`。`todo` 是待办，`doing` 是进行中，`review` 是待验收，`done` 是已完成，`cancelled` 是已取消。委托从保存后发生的下一次状态变化开始生效。用户要求进入指定状态就提醒时，把这点写进关注点。
+  - 插件事件：`{ "kind": "plugin-event", "topic": "<插件 id>/<名称>" }`。可用的 topic 用 `capability_find` 找 `workbench.assistant_events`，再 `capability_read`。事件由插件发出，服务端关着时发生的不补发。
   - GitHub 和网页订阅可以带 `everyMinutes`，最短 15 分钟，默认 60。
 - 关注点：什么样的变化值得处理，什么样的值得打扰用户。「有新版本就说」和「只有可能影响我们选型时才说」是两种委托。
 - 期限：到什么时候为止。用户没说就问；默认三个月，最长一年。

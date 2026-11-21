@@ -9937,6 +9937,10 @@ msgstr ""
 msgid "随会话删除"
 msgstr ""
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "随插件启停"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随文件视图"
 msgstr ""

@@ -161,7 +161,9 @@ export type AssistantDelegationTrigger =
   | { kind: 'schedule'; cron: string; timeZone?: string }
   | { kind: 'github-release'; repo: string; everyMinutes?: number }
   | { kind: 'page'; url: string; everyMinutes?: number }
-  | { kind: 'task-status'; workItemId: string; taskNumber: number; status: WorkItemStatus };
+  | { kind: 'task-status'; workItemId: string; taskNumber: number; status: WorkItemStatus }
+  /** An event a plugin emits (`host.assistant.emit`); `topic` is a declared `contributes.assistantEvents` id. */
+  | { kind: 'plugin-event'; topic: string };
 /**
  * Something the owner handed the 助理 to follow over time (docs/ASSISTANT.md §7.3). It ends on `until`,
  * or when the owner or the 助理 ends it. `cursor` holds a release tag, page digest, or last consumed task event id.
@@ -205,6 +207,8 @@ export interface AssistantPack {
   entry?: string;
   installed: boolean;
   builtIn: boolean;
+  /** The plugin that provides this pack while it is enabled; the pack is not removed on its own. */
+  providedBy?: string;
 }
 /** `GET`/`PUT /api/assistant/instructions`; `custom` is false while the file holds Riffet's own text. A `PUT` of `null` restores it. */
 export interface AssistantInstructions { text: string; custom: boolean; }

@@ -188,6 +188,7 @@ export function createServerLists(deps: ListsDeps) {
     onPlugins: entry.onPlugins,
     onDevices: entry.onDevices,
     onChannels: entry.onChannels,
+    onPluginApprovals: entry.onPluginApprovals,
     onServers: entry.onServers,
   };
 }

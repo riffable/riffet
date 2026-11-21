@@ -138,6 +138,15 @@ export const ASSISTANT_BUDGET = {
   watchFetchBytes: 512 * KIB,
   /** Task status events consumed in one pass of a delegation. */
   taskStatusEvents: 64,
+  /** Bytes of a plugin event's payload (serialized JSON); a larger one is refused, not cut. */
+  pluginEventBytes: 16 * KIB,
+  /** Characters of an event's key, which names it for deduplication. */
+  pluginEventKeyChars: 128,
+  /** Queued or running runs of one delegation past which a plugin event is dropped (events are not kept for later). */
+  pluginEventBacklog: 20,
+  /** Files and bytes of a plugin's capability pack. */
+  packFiles: 200,
+  packBytes: 2 * MIB,
   /** Largest file of its `files/` folder handed out; a bigger one is listed but not served. */
   servedFileBytes: 50 * MIB,
 } as const;
@@ -317,6 +326,18 @@ export const AGENT_PROCESS_BUDGET = {
   orphanGraceMinutes: 10,
 } as const;
 
+/** Approvals plugins put in the inbox (`host.approvals`, docs/TASK-BOARD.md §7). */
+export const PLUGIN_APPROVAL_BUDGET = {
+  /** Open at once per plugin; a further request throws until one is decided, withdrawn or expires. */
+  openPerPlugin: 20,
+  /** Buttons on one approval. */
+  actions: 4,
+  idChars: 128,
+  titleChars: 200,
+  bodyChars: 4_000,
+  labelChars: 40,
+} as const;
+
 /** Plugin commands run from a message's menu (docs/PLUGIN_ARCHITECTURE.md「消息菜单」). */
 export const PLUGIN_COMMAND_BUDGET = {
   /** Longest message a client sends with a command; a longer message lists no plugin items. */
@@ -458,6 +479,14 @@ export const PLUGIN_PAGE_BUDGET = {
   summaryRows: 5,
   /** Row count above which a subpage adds a local filter input. */
   filterThreshold: 12,
+} as const;
+
+/** Outlines plugin views declare as their icon (`VIEW_ICON_ROUTE`), as the web client keeps them. */
+export const PLUGIN_VIEW_ICON_BUDGET = {
+  /** Views whose outline is kept, in memory and in local storage. */
+  entries: 64,
+  /** Shapes taken from one outline; a file with more is drawn with the fallback glyph. */
+  shapes: 64,
 } as const;
 
 /** Server links (docs/SERVER-LINKS.md §6). */

@@ -1,5 +1,5 @@
 import { THEME_ROLES } from '@contracts';
-import { BRIDGE_INIT, BRIDGE_PORT, BRIDGE_READY, BRIDGE_VERSION, PLUGIN_BASE_STYLE, type BridgeTheme } from '@riffet/plugin-web';
+import { BRIDGE_INIT, BRIDGE_PORT, BRIDGE_READY, BRIDGE_VERSION, PLUGIN_BASE_STYLE, PLUGIN_FOCUS_SCRIPT, type BridgeTheme } from '@riffet/plugin-web';
 
 /*
  * The page an isolated view runs in. The host builds it (the Mac host does the same in
@@ -73,7 +73,8 @@ export function bootstrapDocument({ code, network, theme, locale }: BootstrapOpt
     `<meta http-equiv="Content-Security-Policy" content="${attribute(pluginPolicy(network))}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<style>:root{color-scheme:${theme.scheme};${vars}}${PLUGIN_BASE_STYLE}</style>`,
-    `<script>${CHANNEL_SCRIPT}</script>`,
+    // The channel request and the app's focus-ring policy, in one element ahead of the view's code.
+    `<script>${CHANNEL_SCRIPT};${PLUGIN_FOCUS_SCRIPT}</script>`,
     '</head><body><div id="root"></div>',
     // The view's script runs as a classic script created here, so it needs no `src` and the policy needs no origin.
     `<script>(function(){var s=document.createElement("script");s.textContent=${literal(code)};document.head.appendChild(s)})()</script>`,

@@ -1,10 +1,10 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PLUGIN_BASE_STYLE, PLUGIN_BASE_STYLE_VERSION } from '../packages/plugin-web/src/base-style.js';
+import { PLUGIN_BASE_STYLE, PLUGIN_BASE_STYLE_VERSION, PLUGIN_FOCUS_SCRIPT } from '../packages/plugin-web/src/base-style.js';
 
 /**
- * Writes the base stylesheet of isolated views (`packages/plugin-web/src/base-style.ts`) into the region
+ * Writes the base stylesheet and the focus-ring script of isolated views (`packages/plugin-web/src/base-style.ts`) into the region
  * of `PluginPageDocument.swift` between the two markers, so the Mac page carries the same text as the
  * web page. `--check` fails when the committed Swift is stale, as `gen:styles` does.
  */
@@ -14,6 +14,7 @@ const BEGIN = '    // BEGIN GENERATED plugin-base-style (scripts/gen-plugin-styl
 const END = '    // END GENERATED plugin-base-style';
 
 if (PLUGIN_BASE_STYLE.includes('"""#')) throw new Error('gen:plugin-style: the stylesheet contains the Swift literal terminator');
+if (PLUGIN_FOCUS_SCRIPT.includes('"#')) throw new Error('gen:plugin-style: the focus script contains the Swift literal terminator');
 const region = [
   BEGIN,
   '    /// `PLUGIN_BASE_STYLE` of packages/plugin-web: tokens and element rules, the same text as the web page.',
@@ -21,6 +22,8 @@ const region = [
   '    static let baseStyle = #"""',
   PLUGIN_BASE_STYLE,
   '"""#',
+  '    /// `PLUGIN_FOCUS_SCRIPT` of packages/plugin-web: a ring only where a navigating key moved focus.',
+  `    static let focusScript = #"${PLUGIN_FOCUS_SCRIPT}"#`,
   END,
 ].join('\n');
 

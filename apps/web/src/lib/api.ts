@@ -3,7 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
+  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, PluginApprovalDecision, PluginApprovalList, PluginApprovalResult, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -1058,6 +1058,9 @@ export const api = {
   markFacets: (etag?: string, signal?: AbortSignal) => requestList<MarkFacets>(`${API.marks}/facets`, etag, signal),
   /** 任务 (docs/TASK-BOARD.md). Read conditionally under the work items revision, like 收藏. */
   workItems: (etag?: string, signal?: AbortSignal) => requestList<WorkItemList>('/api/work-items', etag, signal),
+  /** What plugins ask the owner to approve (docs/TASK-BOARD.md §7); deciding runs the plugin's write. */
+  pluginApprovals: (signal?: AbortSignal) => request<PluginApprovalList>('/api/plugin-approvals', { signal }),
+  decidePluginApproval: (pluginId: string, id: string, body: PluginApprovalDecision) => request<PluginApprovalResult>(`/api/plugin-approvals/${encodeURIComponent(pluginId)}/${encodeURIComponent(id)}/decide`, json('POST', body)),
   /** Idempotent on the client-generated `id`. */
   createWorkItem: (body: WorkItemCreate) => request<WorkItem>('/api/work-items', json('POST', body)),
   updateWorkItem: (id: string, body: WorkItemPatch) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}`, json('PATCH', body)),

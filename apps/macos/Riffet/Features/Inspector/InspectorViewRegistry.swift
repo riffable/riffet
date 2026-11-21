@@ -96,7 +96,8 @@ enum InspectorViewRegistry {
               view.clients.contains("web"), view.renderer == nil, pluginRenderers[view.id] == nil else { return nil }
         let package = PluginWebPackage(
             id: plugin.id, title: plugin.displayTitle, entryPath: entry.path, integrity: entry.integrity, version: plugin.version,
-            capabilities: Set(plugin.capabilities ?? []), commands: Set((plugin.declared?.commands ?? []).map(\.id))
+            capabilities: Set(plugin.capabilities ?? []), commands: Set((plugin.declared?.commands ?? []).map(\.id)),
+            externalLinks: view.requires.contains("bridge.navigation.openExternal")
         )
         let instances = view.instances
         return { workbench, project in AnyView(PluginWebView(package: package, viewId: view.id, instances: instances, workbench: workbench, project: project)) }

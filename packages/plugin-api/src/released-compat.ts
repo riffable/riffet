@@ -23,8 +23,8 @@ import type * as Released from '../released/1.0.0/index.js';
  * consumer exists. Their types reference the experimental Agent protocol, which is why they are omitted from the
  * assertions below rather than compared.
  */
-export const PROPOSED_CONTRIBUTIONS = ['agentBackends', 'runtimeHooks', 'services', 'channels', 'agentTools', 'speechRecognizer', 'imChannels'] as const;
-export const PROPOSED_HOST_MEMBERS = ['agentProfiles', 'services', 'sessions'] as const;
+export const PROPOSED_CONTRIBUTIONS = ['agentBackends', 'runtimeHooks', 'services', 'channels', 'agentTools', 'speechRecognizer', 'imChannels', 'approvals'] as const;
+export const PROPOSED_HOST_MEMBERS = ['agentProfiles', 'services', 'sessions', 'approvals'] as const;
 
 type Proposed = (typeof PROPOSED_CONTRIBUTIONS)[number];
 type ProposedHost = (typeof PROPOSED_HOST_MEMBERS)[number];

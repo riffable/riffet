@@ -1,6 +1,6 @@
 import { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AssistantPack } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_PACK_NAME, type AssistantPack } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { assistantPackFile } from '../prompts/index.js';
 import { SERVER_VERSION } from '../version.js';
@@ -15,7 +15,13 @@ import { commitAssistantHome } from './home.js';
 
 const PACKS_DIR = 'packs';
 const MANIFEST = 'pack.json';
-const ID = /^[a-z][a-z0-9-]{0,39}$/;
+/** A pack's folder name. */
+export const PACK_ID = ASSISTANT_PACK_NAME;
+const ID = PACK_ID;
+/** The folder marker of a pack a plugin installed (`plugin-packs.ts`). */
+const PLUGIN_MARKER = '.riffet-plugin.json';
+
+export const builtInPackIds = (): string[] => BUILT_IN.map(pack => pack.id);
 
 interface PackManifest { title: string; description?: string; entry?: string }
 
@@ -47,6 +53,11 @@ function manifestOf(dir: string): PackManifest | undefined {
   } catch { return undefined; }
 }
 
+/** The plugin that installed the pack in [dir], when it did. */
+function providerOf(dir: string): string | undefined {
+  try { const value = JSON.parse(readFileSync(join(dir, PLUGIN_MARKER), 'utf8')) as { pluginId?: unknown }; return typeof value.pluginId === 'string' ? value.pluginId : undefined; } catch { return undefined; }
+}
+
 function isPlugin(dir: string): boolean {
   try { return lstatSync(dir).isDirectory() && lstatSync(join(dir, '.claude-plugin', 'plugin.json')).isFile(); } catch { return false; }
 }
@@ -66,7 +77,8 @@ export function listAssistantPacks(cwd: string): AssistantPack[] {
   const own = names.filter(name => !BUILT_IN.some(pack => pack.id === name) && isPlugin(join(root, name))).map((name): AssistantPack => {
     const manifest = manifestOf(join(root, name));
     const command = entry(name, manifest?.entry);
-    return { id: name, title: manifest?.title ?? name, ...(manifest?.description ? { description: manifest.description } : {}), ...(command ? { entry: command } : {}), installed: true, builtIn: false };
+    const providedBy = providerOf(join(root, name));
+    return { id: name, title: manifest?.title ?? name, ...(manifest?.description ? { description: manifest.description } : {}), ...(command ? { entry: command } : {}), installed: true, builtIn: false, ...(providedBy ? { providedBy } : {}) };
   });
   return [...builtIn, ...own];
 }
@@ -76,6 +88,7 @@ export async function addAssistantPack(cwd: string, id: string): Promise<Assista
   const pack = BUILT_IN.find(item => item.id === id);
   if (!pack) throw new AppError('NOT_FOUND', 'No such pack', 404);
   const dir = join(cwd, PACKS_DIR, pack.id);
+  if (providerOf(dir)) throw new AppError('PACK_PROVIDED_BY_PLUGIN', `packs/${pack.id} is provided by a plugin`, 409);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(join(dir, '.claude-plugin'), { recursive: true, mode: 0o700 });
   writeFileSync(join(dir, '.claude-plugin', 'plugin.json'), `${JSON.stringify({ name: pack.id, version: SERVER_VERSION, description: pack.description ?? pack.title }, null, 2)}\n`, { mode: 0o600 });
@@ -95,6 +108,7 @@ export async function removeAssistantPack(cwd: string, id: string): Promise<Assi
   if (!ID.test(id)) throw new AppError('INVALID_ARGUMENT', 'Invalid pack id', 400);
   const dir = join(cwd, PACKS_DIR, id);
   if (!isPlugin(dir)) throw new AppError('NOT_FOUND', 'No such pack', 404);
+  if (providerOf(dir)) throw new AppError('PACK_PROVIDED_BY_PLUGIN', 'A plugin provides this pack; turn the plugin off to remove it', 409);
   rmSync(dir, { recursive: true, force: true });
   await commitAssistantHome(cwd);
   return listAssistantPacks(cwd);

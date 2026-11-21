@@ -9,6 +9,7 @@ import { replacePageUrl } from '@/lib/overlay-navigation';
 import { createCatalogStore, type CatalogState } from './catalogStore';
 import { createServerLists, type ServerListsState } from './serverLists';
 import { createMarksStore, type MarksState } from './marksStore';
+import { createApprovalsStore, type ApprovalsState } from './approvalsStore';
 import { createWorkItemsStore, type WorkItemsState, type WorkItemsStore } from './workItemsStore';
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
 import { pageAddressUrl } from './page-url';
@@ -57,8 +58,9 @@ export function createWorkbenchStores() {
   const marks = createMarksStore(lists);
   const workItems = createWorkItemsStore(lists, cached?.workItemSummaries, () => lists.refreshCache());
   workItemsRef = workItems;
+  const approvals = createApprovalsStore(lists);
   const tabs = createTabsStore({ lists, nav, ui, handlers });
-  return { handlers, catalog, settings, nav, ui, lists, marks, workItems, tabs };
+  return { handlers, catalog, settings, nav, ui, lists, marks, workItems, approvals, tabs };
 }
 
 export type WorkbenchStores = ReturnType<typeof createWorkbenchStores>;
@@ -162,3 +164,4 @@ export function WorkbenchEffects() {
 
   return null;
 }
+export const useApprovals = <S,>(selector: (state: ApprovalsState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().approvals, selector, isEqual);

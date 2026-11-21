@@ -13,14 +13,16 @@ struct PluginWebPackage {
     let version: String?
     let capabilities: Set<String>
     let commands: Set<String>
+    /// The view lists `bridge.navigation.openExternal` in its `requires`.
+    var externalLinks = false
 
     var network: Bool { capabilities.contains("network") }
-    var grant: PluginBridgeGrant { PluginBridgeGrant(packageId: id, capabilities: capabilities, commands: commands) }
+    var grant: PluginBridgeGrant { PluginBridgeGrant(packageId: id, capabilities: capabilities, commands: commands, externalLinks: externalLinks) }
 
     /// Changes when the page or what the package holds changes, so a running view is rebuilt: a
     /// revoked capability must not outlive the page that was opened with it.
     var fingerprint: String {
-        [id, entryPath, integrity ?? "", version ?? "", capabilities.sorted().joined(separator: ","), commands.sorted().joined(separator: ",")].joined(separator: "|")
+        [id, entryPath, integrity ?? "", version ?? "", capabilities.sorted().joined(separator: ","), commands.sorted().joined(separator: ","), externalLinks ? "ext" : ""].joined(separator: "|")
     }
 }
 

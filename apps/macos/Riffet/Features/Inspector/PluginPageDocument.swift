@@ -50,7 +50,7 @@ enum PluginPageDocument {
 
     // BEGIN GENERATED plugin-base-style (scripts/gen-plugin-style.ts)
     /// `PLUGIN_BASE_STYLE` of packages/plugin-web: tokens and element rules, the same text as the web page.
-    static let baseStyleVersion = 2
+    static let baseStyleVersion = 3
     static let baseStyle = #"""
 :root{--riffet-space-1:4px;--riffet-space-2:8px;--riffet-space-3:12px;--riffet-space-4:16px;--riffet-space-5:24px;--riffet-radius-control:8px;--riffet-radius-container:10px;--riffet-radius-card:12px;--riffet-font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI","Helvetica Neue",sans-serif;--riffet-font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,"PingFang SC",monospace;--riffet-text-reading:calc(14px*var(--text-scale,1));--riffet-leading-reading:calc(23px*var(--text-scale,1));--riffet-text-ui:calc(13px*var(--text-scale,1));--riffet-leading-ui:calc(20px*var(--text-scale,1));--riffet-text-small:calc(12px*var(--text-scale,1));--riffet-leading-small:calc(16px*var(--text-scale,1));--riffet-control-height:32px;--riffet-border-width:1px;--riffet-focus-ring:color-mix(in srgb,var(--accent) 50%,transparent)}
 :where(html,body){margin:0;height:100%}
@@ -69,6 +69,7 @@ enum PluginPageDocument {
 :where(input,textarea,select):disabled{opacity:.5}
 :where(:focus-visible){outline:2px solid var(--riffet-focus-ring);outline-offset:1px}
 :where(input,textarea,select):focus-visible{outline:none}
+[data-pointer-focus]:focus-visible{outline:none}
 ::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}
 :where(code,kbd,samp,pre){font-family:var(--riffet-font-mono);font-size:.86em}
 :where(pre){margin:0;padding:var(--riffet-space-2) var(--riffet-space-3);overflow:auto;border:var(--riffet-border-width) solid var(--line);border-radius:var(--riffet-radius-container);background:var(--bg-subtle);font-size:var(--riffet-text-small);line-height:var(--riffet-leading-ui)}
@@ -84,6 +85,8 @@ enum PluginPageDocument {
 :where(*)::-webkit-scrollbar-track,:where(*)::-webkit-scrollbar-corner{background:transparent}
 @media (prefers-reduced-motion:reduce){:where(*){transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 """#
+    /// `PLUGIN_FOCUS_SCRIPT` of packages/plugin-web: a ring only where a navigating key moved focus.
+    static let focusScript = #"(function(w){var K={Tab:1,ArrowUp:1,ArrowDown:1,ArrowLeft:1,ArrowRight:1,Home:1,End:1,PageUp:1,PageDown:1},M="data-pointer-focus",n=false,p=false,F='a[href],button,input,select,textarea,[tabindex],[role="button"],[role="menuitem"],[role="option"],[role="radio"],[role="checkbox"],[role="switch"],[role="tab"]',T='input,textarea,[contenteditable]:not([contenteditable="false"])';w.addEventListener("pointerdown",function(e){n=false;p=true;var t=e.target instanceof Element?e.target.closest(F):null;if(t)t.setAttribute(M,"")},true);w.addEventListener("focusin",function(e){var t=e.target;if(!(t instanceof Element)||t.closest(T))return;if(n||(!p&&e.relatedTarget===null))t.removeAttribute(M);else t.setAttribute(M,"")},true);w.addEventListener("keydown",function(e){p=false;n=!!K[e.key]&&!e.metaKey&&!e.ctrlKey&&!e.altKey},true);w.addEventListener("keyup",function(){n=false},true)})(window)"#
     // END GENERATED plugin-base-style
 
     /// The first script of the page (`CHANNEL_SCRIPT` of the web host, with the protocol's names filled in):
@@ -100,7 +103,8 @@ enum PluginPageDocument {
             "<meta http-equiv=\"Content-Security-Policy\" content=\"\(attribute(policy(network: network)))\">",
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
             "<style>:root{color-scheme:\(theme.scheme);\(vars)}\(baseStyle)</style>",
-            "<script>\(channelScript)</script>",
+            // The channel request and the app's focus-ring policy, in one element ahead of the view's code.
+            "<script>\(channelScript);\(focusScript)</script>",
             "</head><body><div id=\"root\"></div>",
             // The view's script runs as a classic script created here, so it needs no `src` and the policy needs no origin.
             "<script>(function(){var s=document.createElement(\"script\");s.textContent=\(literal(code));document.head.appendChild(s)})()</script>",

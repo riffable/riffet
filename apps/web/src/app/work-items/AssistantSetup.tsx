@@ -195,6 +195,7 @@ export function DelegationsDialog({ open, delegations, onClose, onEnded }: { ope
   const triggerLabel = (trigger: AssistantDelegationTrigger) => {
     if (trigger.kind === 'schedule') return t`定时 ${trigger.cron}`;
     if (trigger.kind === 'task-status') return `#${trigger.taskNumber} · ${statusLabel(trigger.status)}`;
+    if (trigger.kind === 'plugin-event') return trigger.topic;
     const source = trigger.kind === 'github-release' ? trigger.repo : trigger.url;
     return trigger.kind === 'github-release' ? t`${source} 发版` : t`${source} 有变化`;
   };

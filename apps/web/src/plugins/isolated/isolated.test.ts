@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connect, BridgeError } from '../../../../../packages/plugin-web/src/bridge-client';
-import { BRIDGE_INIT, BRIDGE_LIMITS, BRIDGE_READY, BRIDGE_VERSION, type BridgeSession } from '@riffet/plugin-web';
+import { BRIDGE_INIT, BRIDGE_LIMITS, BRIDGE_READY, BRIDGE_VERSION, PLUGIN_FOCUS_SCRIPT, type BridgeSession } from '@riffet/plugin-web';
 import { serveBridge, type BridgeGrant, type BridgePort, type BridgeServices } from './bridgeHost';
 import { CHANNEL_SCRIPT, bootstrapDocument, pluginPolicy } from './document';
 import { verifyIntegrity } from './entry';
@@ -292,10 +292,10 @@ describe('isolated page', () => {
   it('carries the script as data, so it cannot end its own element or break out of the page', () => {
     const hostile = `var a = "</script><script>window.top.alert(1)</script><!-- "; /* ${String.fromCharCode(0x2028)} */`;
     const page = bootstrapDocument({ code: hostile, network: false, theme: { scheme: 'dark', vars: { '--bg': '#000', '--evil': '#fff;}</style><script>x()</script>' } }, locale: 'en"><x' });
-    // The page's own channel request, then the view's code.
+    // The page's own channel request with the focus-ring policy, then the view's code.
     expect(page.match(/<script/g)).toHaveLength(2);
     expect(page.indexOf(CHANNEL_SCRIPT)).toBeGreaterThan(-1);
-    expect(page.indexOf(CHANNEL_SCRIPT)).toBeLessThan(page.indexOf('textContent='));
+    expect(page.indexOf(PLUGIN_FOCUS_SCRIPT)).toBeLessThan(page.indexOf('textContent='));
     expect(page).not.toContain('</script><script>');
     expect(page).not.toContain('--evil');
     expect(page).toContain('lang="en&quot;>&lt;x"');

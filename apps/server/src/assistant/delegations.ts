@@ -6,7 +6,7 @@ import type { Store } from '../store.js';
 
 /*
  * Delegations (docs/ASSISTANT.md §7.3): what the owner handed the 助理 to follow over time. The server checks each
- * one's trigger itself and starts a background run when it fires: a time, a release, a page change or a task status.
+ * one's trigger itself and starts a background run when it fires: a time, a release, a page change, a task status or an event a plugin emits.
  */
 
 const DEFAULT_EVERY_MINUTES = 60;
@@ -21,6 +21,7 @@ const PAYLOAD_CHARS = 12_000;
 export interface DelegationFire { delegation: AssistantDelegation; reason: string; payload: string; cursor: string; key: string }
 type TaskStatusTrigger = Extract<AssistantDelegationTrigger, { kind: 'task-status' }>;
 type TaskStatusEvent = Extract<WorkItemEvent, { kind: 'status' }>;
+const pluginEventKey = (delegationId: string) => `delegation-event:${delegationId}:`;
 
 export interface AssistantDelegationsDeps {
   store: Store;
@@ -34,6 +35,8 @@ export interface AssistantDelegationsDeps {
     events(workItemId: string, cursor: string, limit: number): TaskStatusEvent[] | undefined;
     subscribe(listener: (workItemId: string) => void): () => void;
   };
+  /** Plugin events (`host.assistant.emit`): which topics an enabled plugin declares, and how many runs of a delegation are still queued or going. */
+  pluginEvents?: { declared(topic: string): boolean; backlog(delegationId: string): number };
   /** A delegation that ended on its date, for the main conversation to mention. */
   expired(delegation: AssistantDelegation): void;
   fetch?: typeof fetch;
@@ -115,7 +118,7 @@ export class AssistantDelegations {
     // A new source has nothing handled yet.
     if (trigger) { delete next.cursor; Object.assign(next, trigger); }
     const due = this.nextCheck(id) ?? this.firstCheck(next, now);
-    this.write(next, trigger ? this.firstCheck(next, now) : next.trigger.kind === 'task-status' ? Math.min(due, Date.parse(next.until)) : due);
+    this.write(next, trigger ? this.firstCheck(next, now) : next.trigger.kind === 'task-status' ? Math.min(due, Date.parse(next.until)) : next.trigger.kind === 'plugin-event' ? Date.parse(next.until) : due);
     return next;
   }
 
@@ -172,11 +175,16 @@ export class AssistantDelegations {
       const { cursor, ...subject } = this.deps.taskStatuses.baseline(task);
       return { trigger: { kind: 'task-status', status, ...subject }, cursor };
     }
-    throw invalid('trigger.kind must be schedule, github-release, page or task-status');
+    if (value.kind === 'plugin-event') {
+      const topic = text(value.topic, 'topic', 128, true)!;
+      if (!this.deps.pluginEvents?.declared(topic)) throw invalid('topic must be declared by an enabled plugin; read workbench.assistant_events for the topics');
+      return { trigger: { kind: 'plugin-event', topic } };
+    }
+    throw invalid('trigger.kind must be schedule, github-release, page, task-status or plugin-event');
   }
 
   private firstCheck(delegation: AssistantDelegation, now: Date): number {
-    if (delegation.trigger.kind === 'task-status') return Date.parse(delegation.until);
+    if (delegation.trigger.kind === 'task-status' || delegation.trigger.kind === 'plugin-event') return Date.parse(delegation.until);
     // A watch looks once at the start, to learn where the source is; that look fires nothing.
     return delegation.trigger.kind === 'schedule' ? this.cronAfter(delegation, now) : now.getTime();
   }
@@ -220,6 +228,37 @@ export class AssistantDelegations {
       if (delegation.trigger.kind !== 'task-status') continue;
       try { this.checkTaskStatus(delegation, delegation.trigger, now); } catch (error) { this.checkFailed(delegation.id, error, now); }
     }
+  }
+
+  /**
+   * A plugin emitted [topic] (`host.assistant.emit`). Every open delegation subscribed to it queues one run with the payload
+   * in its brief, once per event key; the cursor records the last key. Nothing is kept for a delegation that is not there yet
+   * or for a server that is down: the next event is the next chance.
+   */
+  pluginEvent(topic: string, payload: unknown, key?: string): { delegations: number } {
+    if (key !== undefined && (typeof key !== 'string' || !key || key.length > ASSISTANT_BUDGET.pluginEventKeyChars || /[\u0000-\u001f]/.test(key))) throw invalid(`key must be text of 1 to ${ASSISTANT_BUDGET.pluginEventKeyChars} characters`);
+    const body = payload === undefined ? '' : JSON.stringify(payload);
+    if (body === undefined) throw invalid('payload must be JSON');
+    if (Buffer.byteLength(body) > ASSISTANT_BUDGET.pluginEventBytes) throw new AppError('PAYLOAD_TOO_LARGE', `The event payload is over ${ASSISTANT_BUDGET.pluginEventBytes} bytes`, 413);
+    const eventKey = key ?? createHash('sha256').update(topic).update('\0').update(body).digest('hex').slice(0, 32);
+    const now = new Date();
+    let queued = 0;
+    const subscribed = this.db.prepare(`SELECT json, next_check_at FROM assistant_delegations WHERE state='active'
+      AND json_extract(json,'$.trigger.kind')='plugin-event' AND json_extract(json,'$.trigger.topic')=?`).all(topic);
+    for (const row of subscribed) {
+      const { delegation } = this.row(row)!;
+      if (Date.parse(delegation.until) <= now.getTime() || delegation.cursor === eventKey) continue;
+      if (this.deps.pluginEvents && this.deps.pluginEvents.backlog(delegation.id) >= ASSISTANT_BUDGET.pluginEventBacklog) {
+        console.warn('[riffet] delegation has too many runs waiting; plugin event dropped', delegation.id, topic);
+        continue;
+      }
+      this.deps.store.transaction(() => {
+        this.deps.fire({ delegation, reason: `插件事件 ${topic}。`, payload: JSON.stringify({ topic, key: eventKey, ...(payload !== undefined ? { payload } : {}) }), cursor: eventKey, key: pluginEventKey(delegation.id) + eventKey });
+        this.write({ ...delegation, cursor: eventKey, lastCheckedAt: now.toISOString(), lastRunAt: now.toISOString() }, Date.parse(delegation.until));
+      });
+      queued += 1;
+    }
+    return { delegations: queued };
   }
 
   private checkFailed(id: string, error: unknown, now: Date): void {
@@ -272,6 +311,8 @@ export class AssistantDelegations {
       this.deps.expired(ended);
       return;
     }
+    // Nothing to look at: the plugin brings the event (`pluginEvent`); the row only waits for the deadline.
+    if (trigger.kind === 'plugin-event') return;
     if (trigger.kind === 'schedule') {
       // The slot is moved on before the run starts, so a restart does not run it twice; the key does the rest.
       const slot = new Date(this.nextCheck(delegation.id) ?? now.getTime());

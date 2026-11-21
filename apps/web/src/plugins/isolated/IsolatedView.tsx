@@ -48,7 +48,7 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
   const held = source.capabilities.join(',');
   const declared = source.commands.join(',');
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `held` and `declared` are the content of the two lists
-  const grant = useMemo<BridgeGrant>(() => ({ capabilities: new Set(source.capabilities), commands: new Set(source.commands) }), [held, declared]);
+  const grant = useMemo<BridgeGrant>(() => ({ capabilities: new Set(source.capabilities), commands: new Set(source.commands), externalLinks: source.externalLinks === true }), [held, declared, source.externalLinks]);
 
   useEffect(() => {
     const controller = new AbortController();

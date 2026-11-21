@@ -14,10 +14,11 @@ import type {
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { ImChannelProvider } from './im-channel.js';
-import type { GatewayProtocol } from '@riffet/contracts';
+import type { GatewayProtocol, PluginApprovalRequest, PluginApprovalResult } from '@riffet/contracts';
 
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
+export type { PluginApprovalAction, PluginApprovalRequest, PluginApprovalTone } from '@riffet/contracts';
 export type { CommandMessage, CommandSelection, PluginCommandResult };
 export type * from './im-channel.js';
 
@@ -126,6 +127,8 @@ export interface Contributions {
   page?: PluginPageProvider;
   /** Transcribes dictation (docs/VOICE.md §3), declared by the manifest's `contributes.speechRecognizer`. In-process packages only. */
   speechRecognizer?: SpeechRecognizer;
+  /** Decides the approvals this plugin asked for with `host.approvals.request`. In-process packages only (built-in, development, explicitly trusted installs). */
+  approvals?: PluginApprovalHandler;
   /** Keyed by declaration id; each is declared in the manifest's `contributes.imChannels`. The channel layer connects its accounts while the plugin is on. In-process packages only. */
   imChannels?: Record<string, ImChannelProvider>;
 }
@@ -158,6 +161,20 @@ export interface SpeechRecognizer {
   status(): SpeechRecognizerStatus | Promise<SpeechRecognizerStatus>;
   /** Throw `host.error(...)` when it cannot open; its message reaches the user. */
   open(options: SpeechSessionOptions): SpeechSession | Promise<SpeechSession>;
+}
+
+export interface PluginApprovalContext {
+  /** Aborts when the plugin is turned off while the decision runs. */
+  readonly signal: AbortSignal;
+}
+
+export interface PluginApprovalHandler {
+  /**
+   * The owner chose `actionId` on the approval `id`. Do the write, then return; `message` is shown to the owner. Throw
+   * `host.error(...)` to refuse: its message is shown, the approval stays open and the owner may choose again. Returning
+   * removes the approval. A restart in between keeps it open, so a decision must be safe to run again.
+   */
+  decide(id: string, actionId: string, context: PluginApprovalContext): Promise<PluginApprovalResult | void>;
 }
 
 // ── The plugin's page (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────────────────
@@ -341,6 +358,8 @@ export interface PluginHost {
    */
   sessions?: {
     get(sessionId: string): PluginSessionView | undefined;
+    /** The personal assistant's active main conversation id, if one exists. Absent on a host that predates it. */
+    assistantMainSessionId?(): string | undefined;
     wake(sessionId: string, note: string): void;
     notify(sessionId: string, notice: { title?: string; body: string }): void;
     /**
@@ -350,6 +369,27 @@ export interface PluginHost {
      */
     saveImage?(sessionId: string, image: { name: string; mimeType: string; data: Buffer }): Promise<{ id: string; path: string }>;
   };
+  /**
+   * Tells the personal assistant something happened (docs/ASSISTANT.md §7.3). `topic` is one of this plugin's
+   * `contributes.assistantEvents` ids (`<pluginId>/<name>`); anything else throws. Every open delegation subscribed to
+   * the topic starts a background run with `payload` (JSON, at most `ASSISTANT_BUDGET.pluginEventBytes` serialized; a
+   * larger one throws) in its brief. `options.key` (at most 128 characters) names the event: a delegation skips an event whose
+   * key is the one it last ran for, so emitting the same event twice in a row starts one run; keys further back are not
+   * remembered, so give each occurrence its own key (a date, an id). Without it the key is a hash of topic and payload.
+   * Events are not kept: one emitted while the server is starting or down, with the plugin off, or with no delegation
+   * subscribed, is gone (an off plugin's emit throws). In-process packages
+   * (built-in, development, explicitly trusted installs) only; absent on a host that predates it.
+   */
+  assistant?: { emit(topic: string, payload?: unknown, options?: { key?: string }): void };
+  /**
+   * Asks the owner to approve a pending write in the 收件箱 (docs/TASK-BOARD.md §7; the web lists it, a phone gets a push);
+   * the choice reaches `contributes.approvals.decide`. `id` is scoped to this plugin and idempotent: requesting an open id
+   * changes nothing, so a plugin may request again after a restart. Open approvals are kept across restarts, and drop out
+   * when `expiresAt` passes, when `withdraw`n, and when the plugin is turned off or uninstalled. At most
+   * `PLUGIN_APPROVAL_BUDGET.openPerPlugin` are open per plugin; a further request, or one over the field limits, throws.
+   * Scope `global`: only the entry server's owner sees them. In-process packages only; absent on a host that predates it.
+   */
+  approvals?: { request(request: PluginApprovalRequest): void; withdraw(id: string): void };
   /**
    * One completion on a model the user chose in Riffet, so the plugin keeps no key of its own: a system prompt and one
    * user message in, the text back. With `use`, one of the plugin's own `modelUses`, it runs on the model chosen for that

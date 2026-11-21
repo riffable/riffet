@@ -271,6 +271,7 @@ msgstr "Schedule {0}"
 msgid "定时检查"
 msgstr "Schedule"
 
+#: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "展开"
 msgstr "Expand"
@@ -409,6 +410,7 @@ msgstr "Search tasks, #number…"
 msgid "收件箱"
 msgstr "Inbox"
 
+#: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收起"
@@ -460,6 +462,10 @@ msgstr "Couldn’t post the comment"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发送回答"
 msgstr "Couldn't send the answer"
+
+#: src/app/work-items/ApprovalRow.tsx
+msgid "无法完成这项操作"
+msgstr "Could not complete this"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法开启助理追踪"

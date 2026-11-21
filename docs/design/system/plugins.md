@@ -63,6 +63,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 - 语义同[基础](foundations.md) §1：文字用 `fg` 到 `fg-4`，面用 `bg`、`bg-subtle`、`bg-elevated`，线用 `line`、`line-strong`，状态用 `success`、`warning`、`danger` 及其 `-soft`。
 - 应用内模块直接用与应用相同的 Tailwind 类（`text-fg`、`bg-elevated`），`@source` 已包含 `plugins/`。
 - `main` 位置的工作台类视图（总览、看板、统计）是概览面，可以用 `--chart-1` 作数据色，只画在图形上；面用同一个中性底色，一屏至多一处渐变。条件和数值见[基础](foundations.md) §12。`sidebar`、`panel` 位置的视图，以及视图里的详情、正文、diff，按阅读面做：不染色，不用渐变。
+- 金融类视图的涨跌：数字和箭头可以用 `danger` / `success`，带正负号和文字，默认红涨绿跌，用户可切换；面和图形不着色（[设计决定](../DECISIONS.md)「金融类视图的涨跌色」）。
 
 ### 3.2 `--riffet-*` 与元素规则
 
@@ -76,7 +77,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 | 字号与行高 | `--riffet-text-reading` 14/23、`-ui` 13/20、`-small` 12/16 |
 | 其他 | `--riffet-control-height` 32、`--riffet-border-width` 1px、`--riffet-focus-ring`（与宿主的 `--focus-ring` 同值，`--accent` 50%，随推送的 `--accent` 变化） |
 
-元素规则全部包在 `:where()` 里（特异性为零），插件自己的 CSS 无需 `!important` 即可覆盖：`body`、`a`、`button` 与 `input[type=button|submit|reset]`、文本类 `input`、`textarea`、`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条，以及 `prefers-reduced-motion` 下把过渡与动画压到近零。`host.info` 返回 `baseStyleVersion`（即 `PLUGIN_BASE_STYLE_VERSION`），插件据此判断拿到的是哪一版。用原生元素写的界面因此与宿主的按钮、输入框同形。没有类名组件和工具类。
+元素规则全部包在 `:where()` 里（特异性为零，只有 `[data-pointer-focus]:focus-visible` 一条例外），插件自己的 CSS 无需 `!important` 即可覆盖：`body`、`a`、`button` 与 `input[type=button|submit|reset]`、文本类 `input`、`textarea`、`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条，以及 `prefers-reduced-motion` 下把过渡与动画压到近零。焦点环与应用同一规则（[基础](foundations.md) 焦点一节）：宿主在视图脚本之前运行 `PLUGIN_FOCUS_SCRIPT`，点击、脚本和非导航键得到的焦点带 `data-pointer-focus`，基础样式对它不画环；视图自己写的 `:focus-visible` 规则加 `:not([data-pointer-focus])`，用自定义按键（如 j/k）移动焦点后去掉目标上的这个属性。`host.info` 返回 `baseStyleVersion`（即 `PLUGIN_BASE_STYLE_VERSION`），插件据此判断拿到的是哪一版。用原生元素写的界面因此与宿主的按钮、输入框同形。没有类名组件和工具类。
 
 ### 3.3 现状
 
@@ -306,7 +307,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 ## 9. 无障碍
 
 - 每个交互元素有名称；纯图标按钮写 `aria-label`（[基础](foundations.md) §10）。声明式页面里 `label` 即名称。
-- 键盘可达全部操作，Tab 顺序与视觉顺序一致；焦点环只在键盘操作时显示，隔离页面用基础样式的 `:focus-visible`，不要 `outline: none` 而不补替代。
+- 键盘可达全部操作，Tab 顺序与视觉顺序一致；焦点环只在键盘操作时显示，隔离页面用基础样式的 `:focus-visible`（含 `data-pointer-focus` 规则），不要 `outline: none` 而不补替代。
 - 隔离页面的 `lang` 取应用语言；文字对比度按所在角色，不用 `fg-4` 写正文。
 - 状态不只靠颜色：错误同时有文字或图标。
 - 桥的 `navigation.*` 需要视图持有焦点且用户操作过，否则 `denied`；视图要让这类操作由可聚焦的按钮触发。

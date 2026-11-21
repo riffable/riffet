@@ -9937,6 +9937,10 @@ msgstr "随主题与字号推送"
 msgid "随会话删除"
 msgstr "随会话删除"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "随插件启停"
+msgstr "随插件启停"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随文件视图"
 msgstr "随文件视图"

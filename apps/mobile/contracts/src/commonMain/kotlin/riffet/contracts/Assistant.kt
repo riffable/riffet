@@ -55,6 +55,8 @@ data class AssistantPack(
     val entry: String? = null,
     val installed: Boolean = false,
     val builtIn: Boolean = false,
+    /** The plugin that provides the pack while it is enabled; the pack cannot be removed on its own. */
+    val providedBy: String? = null,
 )
 
 /** `GET`, `PUT` and `DELETE /api/assistant/packs[/:id]`. */
@@ -117,6 +119,7 @@ data class AssistantDelegationTrigger(
     val workItemId: String? = null,
     val taskNumber: Int? = null,
     val status: String? = null,
+    val topic: String? = null,
 )
 
 /** Something the owner handed the 助理 to follow over time (docs/ASSISTANT.md §7.3). */

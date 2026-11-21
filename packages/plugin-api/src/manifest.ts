@@ -27,6 +27,8 @@ const FONT_FAMILY = /^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$/;
 const UNICODE_RANGE = /^U\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?(?:, ?U\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?)*$/;
 const FONT_WEIGHT = /^(?:[1-9]\d{2}|1000)(?: (?:[1-9]\d{2}|1000))?$/;
 /** A reference to a contribution of any plugin: `<pluginId>/<name>`. */
+/** A client capability a view needs, e.g. `bridge.navigation.openSession`: bridge method names are camelCase. */
+const VIEW_REQUIREMENT = /^[a-z0-9][a-zA-Z0-9.-]{0,63}$/;
 const CONTRIBUTION_REFERENCE = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]{0,63}$/;
 
 /** A model source's declared host: a lowercase hostname, optionally with a leading `*.` label and a `:port`. */
@@ -101,7 +103,7 @@ function view(pluginId: string, value: unknown, path: string): string | undefine
   const clients = oneOf(value.clients, PLUGIN_CLIENTS, `${path}.clients`, 'client');
   if (clients) return clients;
   if (!VIEW_INSTANCES.includes(value.instances as never)) return `${path}.instances must be single, per-session or per-project`;
-  if (value.requires !== undefined && !(Array.isArray(value.requires) && value.requires.length <= 64 && value.requires.every(item => typeof item === 'string' && /^[a-z0-9][a-z0-9.-]{0,63}$/.test(item)))) return `${path}.requires must list client capabilities`;
+  if (value.requires !== undefined && !(Array.isArray(value.requires) && value.requires.length <= 64 && value.requires.every(item => typeof item === 'string' && VIEW_REQUIREMENT.test(item)))) return `${path}.requires must list client capabilities`;
   if (value.files !== undefined || (value.locations as unknown[]).includes('file')) {
     const files = filesSchema.safeParse(value.files);
     if (!files.success) return `${path}.files must list the extensions the view shows (lowercase, no dot, at most ${MAX_VIEW_EXTENSIONS})`;
@@ -211,6 +213,27 @@ function command(pluginId: string, value: unknown, path: string): string | undef
   return value.when === undefined ? undefined : condition(value.when, `${path}.when`);
 }
 
+/** The folder of a capability pack inside the package. Whether it holds `.claude-plugin/plugin.json` is checked where the package is read. */
+export const ASSISTANT_PACK_PATH = /^assets\/.+$/;
+function assistantEvents(pluginId: string, value: unknown): string | undefined {
+  if (!Array.isArray(value) || value.length > 16) return 'contributes.assistantEvents must be a list of at most 16 events';
+  const ids = new Set<string>();
+  for (const [index, item] of value.entries()) {
+    const path = `contributes.assistantEvents[${index}]`;
+    if (!isRecord(item)) return `${path} must be an object`;
+    if (!isContributionOf(pluginId, item.id)) return `${path}.id must be "${pluginId}/<name>"`;
+    if (ids.has(item.id)) return `${path}.id "${item.id}" is declared twice`;
+    ids.add(item.id);
+    const problem = localized(item.title, `${path}.title`, 80) ?? localized(item.description, `${path}.description`, 400);
+    if (problem) return problem;
+  }
+  return undefined;
+}
+function assistantPack(value: unknown): string | undefined {
+  if (!isRecord(value)) return 'contributes.assistantPack must be an object';
+  return isPackagePath(value.path) && ASSISTANT_PACK_PATH.test(value.path) ? undefined : 'contributes.assistantPack.path must be a folder under the package\'s assets/';
+}
+
 /** An appearance asset: under the package's `assets/` directory (the part of a built-in package a build ships), with an extension of the allowed kind. */
 const assetPath = (value: unknown, extensions: RegExp): value is string => isPackagePath(value) && value.startsWith('assets/') && extensions.test(value);
 const optionalReference = (value: unknown) => value === undefined || (typeof value === 'string' && CONTRIBUTION_REFERENCE.test(value));
@@ -298,6 +321,8 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     if (!isRecord(declarations.page)) return 'contributes.page must be an object';
     if (declarations.page.title !== undefined) { const problem = localized(declarations.page.title, 'contributes.page.title', 40); if (problem) return problem; }
   }
+  if (declarations.assistantEvents !== undefined) { const problem = assistantEvents(pluginId, declarations.assistantEvents); if (problem) return problem; }
+  if (declarations.assistantPack !== undefined) { const problem = assistantPack(declarations.assistantPack); if (problem) return problem; }
   if (declarations.actions !== undefined) {
     if (!Array.isArray(declarations.actions) || declarations.actions.length > 64) return 'contributes.actions must be a list of at most 64 actions';
     const ids = new Set<string>();
@@ -360,6 +385,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
     ...(item.when ? { when: pick(item.when, CONDITION_KEYS) } : {}),
     ...(item.params ? { params: item.params.map(field => pick(field, ['key', 'label', 'kind', 'options', 'default', 'required'])) } : {}),
   }));
+  const assistantEvents = declarations.assistantEvents?.map(item => pick(item, ['id', 'title', 'description']));
   const tasks = declarations.tasks?.map(item => pick(item, ['id', 'title', 'projectType']));
   const agentBackends = declarations.agentBackends?.map(item => ({ ...pick(item, ['id', 'title']), ...(item.icon ? { icon: pick(item.icon, ['svg', 'sfSymbol']) } : {}) }));
   const avatarStyles = declarations.avatarStyles?.map(item => pick(item, ['id', 'title', 'credit', 'needsName']));
@@ -369,7 +395,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const modelUses = declarations.modelUses?.map(item => pick(item, ['id', 'title', 'fallback']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(imChannels?.length ? { imChannels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(assistantEvents?.length ? { assistantEvents } : {}), ...(declarations.assistantPack ? { assistantPack: pick(declarations.assistantPack, ['path']) } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(imChannels?.length ? { imChannels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -422,7 +448,7 @@ export const rendererSchema = z.discriminatedUnion('kind', [
 /** The extensions a file view declares: lowercase, no dot, as `extname` gives them without it. */
 const MAX_VIEW_EXTENSIONS = 32;
 const filesSchema = z.object({ extensions: z.array(z.string().regex(/^[a-z0-9][a-z0-9_+-]{0,15}$/)).min(1).max(MAX_VIEW_EXTENSIONS) }).strict();
-const viewSchema = z.object({ id: z.string(), title: titleSchema, icon: iconSchema.optional(), locations: z.array(z.enum(VIEW_LOCATIONS)).min(1), defaultLocation: z.enum(VIEW_LOCATIONS).optional(), settingsCategory: z.enum(['agent', 'providers']).optional(), clients: z.array(z.enum(PLUGIN_CLIENTS)).min(1), instances: z.enum(VIEW_INSTANCES), when: conditionSchema.optional(), renderer: rendererSchema.optional(), requires: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).max(64).optional(), files: filesSchema.optional() }).passthrough();
+const viewSchema = z.object({ id: z.string(), title: titleSchema, icon: iconSchema.optional(), locations: z.array(z.enum(VIEW_LOCATIONS)).min(1), defaultLocation: z.enum(VIEW_LOCATIONS).optional(), settingsCategory: z.enum(['agent', 'providers']).optional(), clients: z.array(z.enum(PLUGIN_CLIENTS)).min(1), instances: z.enum(VIEW_INSTANCES), when: conditionSchema.optional(), renderer: rendererSchema.optional(), requires: z.array(z.string().regex(VIEW_REQUIREMENT)).max(64).optional(), files: filesSchema.optional() }).passthrough();
 const modelSourceSchema = z.object({ role: z.enum(['source', 'adapter']).optional(), usage: z.boolean().optional(), id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), title: titleSchema, protocols: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).min(1).max(8).optional(), backends: z.array(z.enum(['claude', 'codex'])).optional(), defaultEndpoint: z.url().refine(value => /^https?:/.test(value), 'must use http or https').optional(), overridable: z.array(z.enum(['apiEndpoint', 'apiKey'])).optional(), loginAction: z.string().max(64).optional(), hint: z.object({ text: z.string().max(2000), command: z.string().max(2000).optional() }).optional(), hosts: z.array(z.string().refine(validSourceHost, 'must be a lowercase hostname, optionally with a leading "*." and a ":port"')).max(MAX_SOURCE_HOSTS).optional() }).passthrough();
 const licenseSchema = z.object({ redistributable: z.boolean() });
 const contributionSchema = { id: z.string(), title: titleSchema };
@@ -440,6 +466,8 @@ const declarationsSchema = z.object({
   speechRecognizer: z.object({ title: titleSchema }).optional(),
   views: z.array(viewSchema).optional(),
   commands: z.array(z.object({ ...contributionSchema, when: conditionSchema.optional(), keybinding: z.string().regex(KEYBINDING).optional(), scope: z.enum(COMMAND_SCOPES).optional(), params: paramsSchema.optional(), menus: z.array(z.enum(COMMAND_MENUS)).min(1).optional(), icon: z.enum(COMMAND_ICONS).optional() }).passthrough()).optional(),
+  assistantEvents: z.array(z.object({ id: z.string(), title: titleSchema, description: localizedSchema(400) }).passthrough()).max(16).optional(),
+  assistantPack: z.object({ path: pathSchema.regex(ASSISTANT_PACK_PATH) }).passthrough().optional(),
   tasks: z.array(z.object({ ...contributionSchema, projectType: z.string().regex(CONDITION_TOKEN).optional() }).passthrough()).optional(),
   agentBackends: z.array(z.object({ ...contributionSchema, icon: iconSchema.optional() }).passthrough()).optional(),
   avatarStyles: z.array(z.object({ ...contributionSchema, credit: z.string().max(AVATAR_CREDIT_MAX).optional(), needsName: z.boolean().optional() }).passthrough()).max(64).optional(),

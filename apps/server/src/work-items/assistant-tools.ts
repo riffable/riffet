@@ -67,9 +67,10 @@ const ASSISTANT_TOOLS: readonly BoardDefinition[] = [...BOARD_TOOLS,
 /** Delegations (docs/ASSISTANT.md §7.3): the 助理's conversations manage what it follows over time. */
 const TRIGGER = {
   type: 'object',
-  description: 'What starts a run: {"kind":"schedule","cron":"0 9 * * 5"} (five fields, the owner\'s time zone), {"kind":"github-release","repo":"owner/name"}, {"kind":"page","url":"https://…"}, or {"kind":"task-status","task":42,"status":"review"}. Use the task number or ID from task_get. The task trigger follows future transitions into the status. GitHub and page triggers may add "everyMinutes" (15 or more, default 60).',
+  description: 'What starts a run: {"kind":"schedule","cron":"0 9 * * 5"} (five fields, the owner\'s time zone), {"kind":"github-release","repo":"owner/name"}, {"kind":"page","url":"https://…"}, {"kind":"task-status","task":42,"status":"review"}, or {"kind":"plugin-event","topic":"<pluginId>/<name>"}. Use the task number or ID from task_get. The task trigger follows future transitions into the status. The topics plugins can raise are listed by the capability workbench.assistant_events (capability_find, then capability_read); a plugin event is not replayed if the server was down when it happened. GitHub and page triggers may add "everyMinutes" (15 or more, default 60).',
   properties: {
-    kind: { type: 'string', enum: ['schedule', 'github-release', 'page', 'task-status'] },
+    kind: { type: 'string', enum: ['schedule', 'github-release', 'page', 'task-status', 'plugin-event'] },
+    topic: { type: 'string' },
     cron: { type: 'string' }, timeZone: { type: 'string' }, repo: { type: 'string' }, url: { type: 'string' },
     task: { anyOf: [{ type: 'integer', minimum: 1 }, { type: 'string', minLength: 1, maxLength: 100 }] },
     status: { type: 'string', enum: ['todo', 'doing', 'review', 'done', 'cancelled'] },
