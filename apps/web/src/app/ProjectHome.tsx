@@ -118,6 +118,9 @@ export interface NewSessionComposerProps {
   onError: (message: string) => void;
   /** Called when the user picks a model here, so the choice can be remembered globally. */
   onRememberModel?: (model: string) => void;
+  /** Fullscreen editing; the host makes the rest of the page inert while it is open. */
+  fullscreen?: boolean;
+  onFullscreenChange?: (open: boolean) => void;
 }
 
 interface Props extends NewSessionComposerProps {
@@ -135,7 +138,7 @@ interface Props extends NewSessionComposerProps {
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
-export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel }: NewSessionComposerProps) {
+export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
   // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
@@ -424,7 +427,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           it is offered right where the request is written — and only here, so that clicking
           "new session" in the sidebar stays a plain navigation step. Fixed `h-7` keeps the
           composer in place when switching between 新建任务 and 快速对话. */}
-      <div className="mb-1.5 flex h-7 items-center gap-1">
+      <div className="mb-1.5 flex h-7 items-center gap-1" inert={fullscreen || undefined}>
         {!quickChat && !assistant && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" title={project?.cwd} className="flex h-7 max-w-full items-center gap-1.5 rounded-lg px-2 text-xs text-fg-2 transition-colors outline-none hover:bg-hover hover:text-fg data-[state=open]:bg-active data-[state=open]:text-fg focus-visible:ring-2 focus-visible:ring-focus">
@@ -455,6 +458,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         referencesEnabled={!quickChat}
         // One composer and one draft across task/chat tabs; only task references are project-bound.
         draftKey="new:home"
+        fullscreen={fullscreen}
+        onFullscreenChange={onFullscreenChange}
         enterBehavior={settings.composerEnterBehavior}
         placeholder={quickChat || assistant ? t`输入消息…` : t`描述任务…`}
         commands={(!quickChat ? slash.catalog?.items : undefined) ?? capabilities?.slashCommands ?? []}
@@ -475,7 +480,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         onRetryModels={onRetryCatalog}
         toolbar={!quickChat && capabilities?.permissions.length ? (
           <ApprovalPicker
-            side="bottom"
+            side={fullscreen ? 'top' : 'bottom'}
             value={approval}
             options={capabilities.permissions}
             onChange={setApproval}
@@ -574,13 +579,15 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
   // Only the phone's home lists recent conversations; a desktop has them in the sidebar.
   const recent = useMemo(() => mobile ? sortSessionsByActivity(sessions.filter((session) => !session.archivedAt)).slice(0, 5) : [], [mobile, sessions]);
   const runnerOpen = useRunnerOpen();
+  const [composerFullscreen, setComposerFullscreen] = useState(false);
+  const behind = composerFullscreen || undefined;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {header}
+      <div className="contents" inert={behind} aria-hidden={behind}>{header}</div>
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto flex w-full max-w-[720px] flex-col px-4 pb-6 pt-6 md:px-8 md:pb-16 md:pt-[max(48px,14vh)]">
-          <div className="mb-4 flex flex-col items-center gap-2 text-center md:mb-6">
+          <div className="mb-4 flex flex-col items-center gap-2 text-center md:mb-6" inert={behind} aria-hidden={behind}>
             <LiveBrandMark className="mb-1 size-12 text-fg md:mb-2 md:size-16" />
             {/* Reserve the heading's own line height so switching 新建任务 / 快速对话 never shifts the composer. */}
             <div className="flex min-h-(--text-xl--line-height) w-full items-center justify-center md:min-h-(--text-2xl--line-height)">
@@ -588,9 +595,9 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
             </div>
           </div>
 
-          <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} />
+          <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} fullscreen={composerFullscreen} onFullscreenChange={setComposerFullscreen} />
 
-          <div key={quickChat ? 'chat' : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]">
+          <div key={quickChat ? 'chat' : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]" inert={behind} aria-hidden={behind}>
             {quickChat && project ? <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} /> : <>
               {project && isAssistantProject(project) && <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} />}
               {project && !isAssistantProject(project) && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">

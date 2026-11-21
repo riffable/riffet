@@ -53,6 +53,7 @@
 - `'newline'`（**默认**）：Enter 换行、⌘/Ctrl+Enter 发送。
 - `'send'`：Enter 发送、Shift+Enter 换行（Riffet 现状）。
 - **已定**（2026-10-09）：默认按换行来，设置里给一个开关切回发送。
+- **全屏编辑不读这个设置**（2026-11-22）：全屏里 Enter 总是换行，⌘/Ctrl+Enter 发送，发送键提示 `⌘↵`（`Composer.tsx` 的 `keyBehavior`）。进入全屏就是要写长消息。
 
 字段命名为 `composerEnterBehavior` 而不是 `enterBehavior`：`AppSettings` 是扁平的，服务端 `validateSettings` 对未知键是**抛错**的（`apps/server/src/settings/index.ts:684`），以后输入框还会有别的键，先给它一个命名空间，避免以后叫 `enterBehavior` 的第二个设置撞名。
 
@@ -105,7 +106,7 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 
 **只做按钮，不做快捷键**（已定，2026-10-09）：
 
-- 桌面端输入非空文字后，在模式选择右侧显示无边框的四角展开图标（手机端暂不提供入口），`aria-pressed` + `aria-label`（「全屏编辑 / 退出全屏」，落地时用 `aria-pressed` 而不是 `aria-expanded`：它报告的是自己切换的模式），进入后按钮换成收起图标（`IconMaximize` / `IconMinimize`）；焦点在进入时给文本域，退出时还给这个按钮。
+- 会话页和新会话页都提供。桌面端输入非空文字后显示（会话页在权限按钮右侧，新会话页在发送键左边）无边框的四角展开图标（手机端暂不提供入口），`aria-pressed` + `aria-label`（「全屏编辑 / 退出全屏」，落地时用 `aria-pressed` 而不是 `aria-expanded`：它报告的是自己切换的模式），进入后按钮换成收起图标（`IconMaximize` / `IconMinimize`）；焦点在进入时给文本域，退出时还给这个按钮。
 - 退出还有 Esc（§3.3）。
 - **不加 `⌘⇧E` 之类的全局键**。理由：DSH 没有全屏编辑，也就没有可参照的键位；而全屏是一个「看得见的状态切换」，按钮 + Esc 已经够用，新增一个没有先例的组合键只会多一个要记、要在快捷键帮助里解释、还要防冲突的东西。以后若真有用户要，再按 DSH 的做法把它登记进快捷键清单（`apply.ts:239-249` 那种登记方式），而不是先埋一个。
 

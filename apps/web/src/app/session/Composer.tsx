@@ -639,6 +639,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * fullscreen instead of stranding the card in a panel sized for a desktop.
    */
   const fullscreen = fullscreenRequested && !isMobile;
+  /** Fullscreen is for writing at length: Enter breaks the line there whatever the setting, ⌘/Ctrl+Enter sends. */
+  const keyBehavior: EnterKeyBehavior = fullscreen ? 'newline' : enterBehavior;
   /** One setter for the toggle, the scrim and the close button, so the host never sees two owners. */
   const setFullscreen = (open: boolean) => {
     setFullscreenOpen(open);
@@ -1510,7 +1512,22 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    */
   const modelLeadsRow = !isMobile && Boolean(props.modelLeading);
   const renderModelPicker = () => props.onModelChange ? (
-    <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} onSelectProvider={props.onSelectModelProvider} leading={props.modelLeading} />
+    <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero && !fullscreen ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} onSelectProvider={props.onSelectModelProvider} leading={props.modelLeading} />
+  ) : null;
+  const fullscreenToggle = !isMobile && fullscreenOffered && (text.trim() || fullscreen) ? (
+    <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>
+      <button
+        ref={fullscreenToggleRef}
+        type="button"
+        aria-label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}
+        aria-pressed={fullscreen}
+        disabled={disabled}
+        onClick={() => setFullscreen(!fullscreen)}
+        className="grid size-7 shrink-0 place-items-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
+      >
+        {fullscreen ? <IconMinimize className="size-4" /> : <IconMaximize className="size-4" />}
+      </button>
+    </Tip>
   ) : null;
 
   return (
@@ -1787,7 +1804,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 composing: false,
                 repeat: event.repeat,
                 hasDraft: Boolean(textRef.current.trim()),
-              }, isMobile ? 'send' : enterBehavior);
+              }, isMobile ? 'send' : keyBehavior);
               if (outcome.preventDefault) event.preventDefault();
               if (outcome.action === 'send') void submit();
             }}
@@ -1872,23 +1889,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
                   model and send controls off the row instead of truncating itself. */}
               <div className="hidden min-w-0 items-center gap-1 md:flex">
-                {modelLeadsRow && props.onModelChange && <span className="inline-flex min-w-0">{renderModelPicker()}</span>}
                 {!isMobile && props.toolbar}
-                {!isMobile && fullscreenOffered && (text.trim() || fullscreen) && (
-                  <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>
-                    <button
-                      ref={fullscreenToggleRef}
-                      type="button"
-                      aria-label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}
-                      aria-pressed={fullscreen}
-                      disabled={disabled}
-                      onClick={() => setFullscreen(!fullscreen)}
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
-                    >
-                      {fullscreen ? <IconMinimize className="size-4" /> : <IconMaximize className="size-4" />}
-                    </button>
-                  </Tip>
-                )}
+                {/* Fixed icons first, then the model; a control that comes and goes (fullscreen) waits by send. */}
+                {modelLeadsRow && props.onModelChange && <span className="inline-flex min-w-0">{renderModelPicker()}</span>}
+                {!modelLeadsRow && fullscreenToggle}
               </div>
               {hasMobileSettings && <>
                 {isMobile && props.usage && !compact && !holdInFooter && <ContextMeter usage={props.usage} onCompact={props.onCompact} compacting={props.compacting} compactDisabled={props.compactDisabled} />}
@@ -1944,10 +1948,11 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               {!isMobile && props.startPickers && <span className="hidden min-w-0 md:inline-flex">{props.startPickers}</span>}
               {!isMobile && !modelLeadsRow && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
               {!isMobile && props.endPickers && <span className="hidden min-w-0 md:inline-flex">{props.endPickers}</span>}
+              {modelLeadsRow && fullscreenToggle}
               {(!compact || showStop) && (
                 <Tip
                   label={showStop ? props.stopping ? t`正在停止` : running ? t`停止` : t`停止后台任务` : scheduledAt ? t`定时发送 (${formatWhen(scheduledAt.toISOString())})` : props.submitIntent === 'steer' ? t`补充到当前任务` : running ? t`加入队列` : t`发送`}
-                  kbd={showStop ? undefined : primaryEnterHint(enterBehavior)}
+                  kbd={showStop ? undefined : primaryEnterHint(keyBehavior)}
                 >
                   <button
                     type="button"
