@@ -78,6 +78,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import riffet.ui.app.LocalRiffetWindowInfo
+import riffet.ui.app.PageBackHandler
+import riffet.ui.focus.rememberKeyboardUpWhen
 import riffet.ui.app.RiffetWindowInfo
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -102,6 +104,10 @@ internal fun RiffetDropdownMenu(
     scrollState: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // Opened over a page whose keyboard is up, the menu leaves it up: its window does not take focus,
+    // so back reaches the page, and closes the menu once the keyboard has gone.
+    val keepKeyboard = rememberKeyboardUpWhen(expanded)
+    PageBackHandler(enabled = expanded && keepKeyboard, onBack = onDismissRequest)
     RiffetMaterialWindow {
         val style = LocalInterfaceStyle.current
         val metrics = style.metrics
@@ -110,7 +116,7 @@ internal fun RiffetDropdownMenu(
         val shape = RoundedCornerShape(metrics.menuRadius)
         val window = LocalRiffetWindowInfo.current
         if (window.folds.any { it.separating || it.occluding }) {
-            FoldBoundedMenu(expanded, onDismissRequest, modifier, offset, scrollState, window, content)
+            FoldBoundedMenu(expanded, onDismissRequest, modifier, offset, scrollState, window, keepKeyboard, content)
             return@RiffetMaterialWindow
         }
         // The stationary menu surface clips and scrolls; recipes only choose its decoration.
@@ -132,6 +138,7 @@ internal fun RiffetDropdownMenu(
         DropdownMenu(
             expanded = expanded, onDismissRequest = onDismissRequest,
             modifier = panel.selectableGroup(), offset = offset, scrollState = scrollState,
+            properties = PopupProperties(focusable = !keepKeyboard),
             shape = shape, containerColor = Color.Transparent,
             tonalElevation = 0.dp, shadowElevation = metrics.floatingShadowOffset / 2,
         ) {
@@ -152,6 +159,7 @@ private fun FoldBoundedMenu(
     offset: DpOffset,
     scrollState: ScrollState,
     window: RiffetWindowInfo,
+    keepKeyboard: Boolean,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) return
@@ -201,7 +209,7 @@ private fun FoldBoundedMenu(
         }
     }
     Popup(popupPositionProvider = position, onDismissRequest = onDismissRequest,
-        properties = PopupProperties(focusable = true, dismissOnBackPress = true, dismissOnClickOutside = true)) {
+        properties = PopupProperties(focusable = !keepKeyboard, dismissOnBackPress = true, dismissOnClickOutside = true)) {
         RiffetMaterialWindow {
             val focusManager = LocalFocusManager.current
             val inputMode = LocalInputModeManager.current

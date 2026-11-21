@@ -30,6 +30,7 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.app.AdaptiveModalViewport
 import riffet.ui.app.LocalRiffetWindowInfo
 import riffet.ui.app.adaptiveDialogProperties
+import riffet.ui.focus.rememberKeyboardHandoff
 import riffet_mobile.shared.generated.resources.*
 
 internal val LocalDialogAction = staticCompositionLocalOf { false }
@@ -62,7 +63,12 @@ internal fun ConfirmDialog(
     )
 }
 
-/** Callers own operation state. A form has navigation actions; a short alert has an action row. */
+/**
+ * Callers own operation state. A form has navigation actions; a short alert has an action row.
+ *
+ * Opened over a page whose keyboard is up, the dialog appears once the page has put the keyboard away
+ * ([rememberKeyboardHandoff]), so the page follows the keyboard down instead of dropping in one frame.
+ */
 @Composable
 internal fun AlertDialog(
     onDismissRequest: () -> Unit,
@@ -81,6 +87,8 @@ internal fun AlertDialog(
     properties: DialogProperties = DialogProperties(),
     wideContent: Boolean = false,
 ) {
+    val handoff = rememberKeyboardHandoff()
+    if (handoff.value) return
     val type = LocalRiffetTypography.current
     val splitWindow = LocalRiffetWindowInfo.current.folds.any { it.separating || it.occluding }
     if (!splitWindow && !materialBackdropEnabled && LocalInterfaceStyle.current.components.dialogs.backend == ComponentBackend.MATERIAL) {

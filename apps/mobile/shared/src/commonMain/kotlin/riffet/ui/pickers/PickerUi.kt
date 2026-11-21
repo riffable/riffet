@@ -17,6 +17,7 @@ import riffet.ui.settings.SettingsNoticeKind
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import riffet.ui.focus.keyboardPadding
+import riffet.ui.focus.rememberKeyboardHandoff
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
@@ -60,7 +61,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
@@ -214,9 +214,10 @@ internal fun PickerSheetFrame(
     }
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    // Read in the page's window: the panel's own has not heard of the keyboard yet.
-    val pageIme = WindowInsets.ime
-    val keyboardUp = remember { pageIme.getBottom(density) > 0 }
+    // Read in the page's window: the panel's own has not heard of the keyboard yet. While the page's
+    // keyboard leaves, the panel's window stays unfocusable so the keyboard leaves from the page.
+    val handoff = rememberKeyboardHandoff()
+    val keyboardUp = remember { handoff.value }
     // 0 is below the screen, 1 is in place; the scrim follows the same value.
     val shown = remember { Animatable(0f) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -302,7 +303,7 @@ internal fun PickerSheetFrame(
             override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize) = IntOffset.Zero
         } },
         onDismissRequest = host::requestBack,
-        properties = PopupProperties(focusable = true, dismissOnClickOutside = false, clippingEnabled = false),
+        properties = PopupProperties(focusable = !handoff.value, dismissOnClickOutside = false, clippingEnabled = false),
     ) {
         RiffetMaterialWindow {
             Box(
