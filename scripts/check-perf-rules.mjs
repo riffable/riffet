@@ -10,6 +10,8 @@
 //     moduleCollection   Web/server module-level `new Map()` / `new Set()` that grows at runtime: bound it or clear it
 //                        when its owner goes (§3.1)
 //     staticDictionary   Swift `static var x = [:]`: the same, for Mac and iPhone
+//     webInterval        Web `setInterval`: a timer that keeps firing in a hidden tab; use useVisibleInterval
+//                        (apps/web/src/lib/use-visible-interval.ts) or say why it must run (web-performance.md §2.7)
 //
 // A deliberate exception carries `perf-rules: allow <reason>` on the line or the line above.
 //
@@ -58,6 +60,11 @@ const RATCHETS = {
     lang: /\.swift$/,
     test: (line) => /\bstatic\s+(private\s+)?var\s+\w+\s*(:\s*\[[^\]]+:[^\]]+\])?\s*=\s*\[:\]/.test(line),
     hint: 'static mutable dictionary — bound it or clear it with its owner (performance.md §3.1)',
+  },
+  webInterval: {
+    lang: /^apps\/web\/src\/(?!lib\/use-visible-interval\.ts$).*\.tsx?$/,
+    test: (line) => /\bsetInterval\(/.test(line),
+    hint: 'setInterval keeps firing in a hidden tab — use useVisibleInterval, or say why with perf-rules: allow (web-performance.md §2.7)',
   },
 };
 

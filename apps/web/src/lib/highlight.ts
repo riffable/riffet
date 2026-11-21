@@ -13,7 +13,9 @@
  * untouched and the preview always has a plain-text fallback.
  */
 import type { Syntax } from 'refractor/core';
+import { TEXT_CACHE_BYTES } from '@contracts';
 import { boundedCache } from './bounded-cache';
+import { registerBounded } from './cache-registry';
 
 type RefractorModule = typeof import('refractor/core');
 type ToHtmlModule = typeof import('hast-util-to-html');
@@ -299,6 +301,13 @@ export function languageForFence(info: string): string | undefined {
 }
 
 /**
+ * Longest fence highlighted on the main thread; a longer one stays plain monospace. Refractor plus
+ * `toHtml` cost about 0.3 ms per KB here (6,000 lines of TypeScript, 650 KB: 200 ms), more on a
+ * phone, and the work cannot yield; 100 KB keeps one fence near a frame or two of work.
+ */
+const HIGHLIGHT_MAX_CHARS = 100_000;
+
+/**
  * Highlight a whole block and return its inner HTML, or `undefined` for the plain-text fallback.
  *
  * The HTML is `hast-util-to-html`'s output over `refractor`'s tree: text nodes are entity-escaped
@@ -306,7 +315,7 @@ export function languageForFence(info: string): string | undefined {
  * a chat fence wants — the per-line variant above exists for the preview's line-numbered gutter.
  */
 export async function highlightCode(code: string, language: string | undefined): Promise<string | undefined> {
-  if (!language) return undefined;
+  if (!language || code.length > HIGHLIGHT_MAX_CHARS) return undefined;
   const cached = cachedHighlight(code, language);
   if (cached !== undefined) return cached;
   try {
@@ -328,7 +337,10 @@ export async function highlightCode(code: string, language: string | undefined):
  * Bounded by count and by total length, the HTML being several times the size of its source; only
  * successes are kept, so a grammar that failed to load is tried again.
  */
-const codeCache = boundedCache<string, string>({ limit: 256, maxWeight: 2_000_000, weigh: (key, html) => key.length + html.length });
+/** A quarter of the web's text-cache budget; weight counts string length, two bytes each at worst. */
+const CODE_CACHE_BYTES = TEXT_CACHE_BYTES.web / 4 / 2;
+const codeCache = boundedCache<string, string>({ limit: 256, maxWeight: CODE_CACHE_BYTES, weigh: (key, html) => key.length + html.length });
+registerBounded('highlighted-code', codeCache, 256, CODE_CACHE_BYTES);
 
 /** What `highlightCode` already produced for this exact text, synchronously, so a fence can paint it on mount. */
 export function cachedHighlight(code: string, language: string | undefined): string | undefined {

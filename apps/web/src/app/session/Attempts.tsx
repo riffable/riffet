@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -363,11 +364,7 @@ export function AttemptGroupPage({ groupId, findSession, onOpenSession, onAdopte
   const attempts = useMemo(() => (group && data ? aliveAttempts(group, data.attempts) : []), [group, data]);
   const stateOf = useCallback((attempt: AttemptComparison) => findSession?.(attempt.sessionId)?.state ?? attempt.state ?? 'idle', [findSession]);
   const anyActive = attempts.some((attempt) => activeStates.has(stateOf(attempt)));
-  useEffect(() => {
-    if (!anyActive) return;
-    const timer = setInterval(() => void refresh(), 4000);
-    return () => clearInterval(timer);
-  }, [anyActive, refresh]);
+  useVisibleInterval(() => void refresh(), 4000, anyActive);
 
   const unionFiles = useMemo(() => [...new Set(attempts.flatMap((attempt) => attempt.comparison?.files.map((file) => file.path) ?? []))].sort(), [attempts]);
   const changers = (path: string) => attempts.filter((attempt) => attempt.comparison?.files.some((file) => file.path === path));

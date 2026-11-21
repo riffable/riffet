@@ -621,6 +621,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const attachmentKeysRef = useRef(new Map<string, string>());
   const pendingAttachmentKeysRef = useRef(new Set<string>());
   const draftGenerationRef = useRef(0);
+  const uploadControllersRef = useRef(new Map<string, AbortController>());
+  useEffect(() => () => { for (const controller of uploadControllersRef.current.values()) controller.abort(); }, []);
   const referencesRef = useRef(references);
   const referencesRevisionRef = useRef(0);
   const submittingRef = useRef(false);
@@ -1028,16 +1030,17 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   useEffect(() => {
     if (!searchable || !mentionQuery) return;
     let active = true;
+    const controller = new AbortController();
     const settle = (entries: FileEntry[]) => { if (active) setFound({ project: projectId, query: mentionQuery, entries }); };
     const timer = window.setTimeout(() => {
-      api.find(projectId, mentionQuery)
+      api.find(projectId, mentionQuery, controller.signal)
         .then((result) => {
           const entries = Array.isArray(result) ? result : result.entries ?? [];
           settle(entries.filter((entry) => entry.kind === 'file').slice(0, 10));
         })
         .catch(() => settle([]));
     }, 140);
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => { active = false; controller.abort(); window.clearTimeout(timer); };
   }, [projectId, mentionQuery, searchable]);
 
   const referenceCandidates = useMemo(() => (props.referenceSessions ?? []).filter(item => item.id !== props.recipientSessionId), [props.referenceSessions, props.recipientSessionId]);
@@ -1181,6 +1184,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const uploadFile = async (key: string, original: File, generation = draftGenerationRef.current) => {
     if (activeUploadKeysRef.current.has(key)) return;
     activeUploadKeysRef.current.add(key);
+    const controller = new AbortController();
+    uploadControllersRef.current.set(key, controller);
     updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: undefined } : item));
     try {
       const mimeType = attachmentMimeType(original);
@@ -1189,15 +1194,17 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       const attachment = await api.upload(projectId, {
         name: uploadName(file, data.mimeType), mimeType: data.mimeType, dataBase64: data.dataBase64,
         ...(data.width && data.height ? { width: data.width, height: data.height } : {}),
-      });
+      }, controller.signal);
+      if (controller.signal.aborted) return;
       if (generation !== draftGenerationRef.current) return;
       attachmentKeysRef.current.set(attachment.id, key);
       updateAttachments(current => [...current, attachment]);
       updatePendingUploads(current => current.filter(item => item.key !== key));
       uploadFilesRef.current.delete(key);
     } catch (error) {
-      if (generation === draftGenerationRef.current) updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: errorMessage(error, t`上传失败`) } : item));
+      if (generation === draftGenerationRef.current && !controller.signal.aborted) updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: errorMessage(error, t`上传失败`) } : item));
     } finally {
+      if (uploadControllersRef.current.get(key) === controller) uploadControllersRef.current.delete(key);
       if (generation === draftGenerationRef.current) { pendingAttachmentKeysRef.current.delete(key); activeUploadKeysRef.current.delete(key); }
     }
   };
@@ -1230,6 +1237,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   };
 
   const removeUpload = (key: string) => {
+    uploadControllersRef.current.get(key)?.abort();
+    uploadControllersRef.current.delete(key);
     uploadFilesRef.current.delete(key);
     pendingAttachmentKeysRef.current.delete(key);
     updatePendingUploads(current => current.filter(item => item.key !== key));

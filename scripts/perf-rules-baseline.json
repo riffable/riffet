@@ -123,7 +123,6 @@
     "apps/web/src/app/panels/useSidebarViews.ts": 1,
     "apps/web/src/app/session/Activities.tsx": 1,
     "apps/web/src/app/session/Composer.tsx": 1,
-    "apps/web/src/app/session/Markdown.tsx": 1,
     "apps/web/src/app/session/MermaidDiagram.tsx": 2,
     "apps/web/src/app/session/ToolsPicker.tsx": 1,
     "apps/web/src/app/session/useSessionTranscript.ts": 1,
@@ -161,5 +160,29 @@
     "apps/macos/Riffet/Features/Workbench/SessionTabs.swift": 1,
     "apps/macos/Riffet/Services/SystemIntegration.swift": 1,
     "apps/mobile/iosApp/Riffet/Features/Conversation/ConversationView.swift": 1
+  },
+  "webInterval": {
+    "apps/web/src/app/automations/AutomationsPage.tsx": 1,
+    "apps/web/src/app/automations/SendLater.tsx": 2,
+    "apps/web/src/app/design/foundations/MotionChapter.tsx": 1,
+    "apps/web/src/app/design/overview/Opening.tsx": 1,
+    "apps/web/src/app/onboarding/Onboarding.tsx": 1,
+    "apps/web/src/app/panels/ByteViews.tsx": 1,
+    "apps/web/src/app/panels/PublishSection.tsx": 1,
+    "apps/web/src/app/ProjectHome.tsx": 1,
+    "apps/web/src/app/session/agentCalls.tsx": 1,
+    "apps/web/src/app/session/ModelPicker.tsx": 1,
+    "apps/web/src/app/settings/channels/AddBotDialog.tsx": 1,
+    "apps/web/src/app/settings/LinksSection.tsx": 1,
+    "apps/web/src/app/settings/StorageSection.tsx": 1,
+    "apps/web/src/app/shares/ShareDialog.tsx": 1,
+    "apps/web/src/app/state/listsStore.ts": 1,
+    "apps/web/src/app/tabs/useZoneDrag.ts": 1,
+    "apps/web/src/app/terminal/TerminalView.tsx": 1,
+    "apps/web/src/lib/client-metrics.ts": 1,
+    "apps/web/src/lib/main-thread-monitor.ts": 2,
+    "apps/web/src/lib/use-now.ts": 1,
+    "apps/web/src/plugins/TasksView.tsx": 2,
+    "apps/web/src/sync/lane.ts": 1
   }
 }

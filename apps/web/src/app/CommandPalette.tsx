@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconFolderClosed, IconMessagesSquare } from '@/components/icons';
@@ -7,6 +7,7 @@ import type { ProjectRecord } from '@/lib/api';
 import { matchCommands, type CommandCandidate, type CommandKind } from '@/lib/command-search';
 import { sortSessionsByActivity } from '@/lib/session-order';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
+import { useListWindow } from '@/lib/use-list-window';
 import { cn } from '@/lib/utils';
 import { isComposingKey } from './session/composerKeyboard';
 import { QuickInput, quickListTallClass, SessionSearchResults, type SessionSearchProps } from './SessionSearchDialog';
@@ -135,6 +136,7 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
   const { t } = useLingui();
   const KIND_LABEL: Record<CommandKind, string> = { command: t({ message: '命令', context: 'workbench-command-label' }), conversation: t({ message: '会话', context: 'workbench-session-noun' }), project: t`项目` };
   const listRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
 
   const projectNames = useMemo(() => new Map(projects.map((project) => [project.id, project.name])), [projects]);
   const candidates = useMemo<CommandCandidate[]>(() => [
@@ -156,9 +158,15 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
   // A shrinking result set must not leave the highlight past its end; deriving the index keeps Enter
   // correct in the render right after the query changed, before any effect has run.
   const activeIndex = matches.length ? Math.min(active, matches.length - 1) : 0;
+  // Every conversation is a candidate: thousands of rows, so only those near the viewport mount.
+  const rowKind = useCallback(() => 'row', []);
+  const rowHeight = useCallback(() => 40, []);
+  const rows = useListWindow({ count: matches.length, kindOf: rowKind, estimate: rowHeight, scroller: listRef, list: rowsRef });
+  const { reveal } = rows;
   useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex, matches]);
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' }); else reveal(activeIndex);
+  }, [activeIndex, matches, reveal]);
 
   const run = (candidate: CommandCandidate) => onRun(handleById.get(candidate.id), Boolean(actionById.get(candidate.id)?.takesFocus));
 
@@ -202,9 +210,10 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
         onKeyDown={onQueryKeyDown}
       />
       <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t({ message: '命令', context: 'workbench-command-label' })} className={quickListTallClass}>
-        {matches.length ? matches.map((candidate, index) => (
+        {matches.length ? <div ref={rowsRef} role="presentation" style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}>{matches.slice(rows.from, rows.to).map((candidate, offset) => { const index = rows.from + offset; return (
           <div
             key={candidate.id}
+            ref={rows.measure(index)}
             id={optionId(index)}
             role="option"
             aria-selected={index === activeIndex}
@@ -218,7 +227,7 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
             {candidate.detail && <span className="max-w-[40%] shrink-0 truncate text-xs text-fg-4">{candidate.detail}</span>}
             <span className="shrink-0 text-2xs text-fg-4">{KIND_LABEL[candidate.kind]}</span>
           </div>
-        )) : <p className="px-3 py-8 text-center text-sm text-fg-3"><Trans>没有匹配的结果</Trans></p>}
+        ); })}</div> : <p className="px-3 py-8 text-center text-sm text-fg-3"><Trans>没有匹配的结果</Trans></p>}
       </div>
     </>
   );

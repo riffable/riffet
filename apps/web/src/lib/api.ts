@@ -716,7 +716,7 @@ export const api = {
     if (offset !== undefined) params.set('offset', String(offset));
     return request<FileEntry[]>(`/api/projects/${encodeURIComponent(projectId)}/files?${params.toString()}`);
   },
-  find: (projectId: string, query: string) => request<FileSearchResult | FileEntry[]>(`/api/projects/${encodeURIComponent(projectId)}/find?q=${encodeURIComponent(query)}`),
+  find: (projectId: string, query: string, signal?: AbortSignal) => request<FileSearchResult | FileEntry[]>(`/api/projects/${encodeURIComponent(projectId)}/find?q=${encodeURIComponent(query)}`, signal ? { signal } : {}),
   search: (projectId: string, query: string, signal?: AbortSignal) => request<SearchHit[]>(`/api/projects/${encodeURIComponent(projectId)}/search?q=${encodeURIComponent(query)}`, signal ? { signal } : {}),
   definition: (projectId: string, at: { path: string; line: number; column: number; word: string }, signal?: AbortSignal) => request<CodeDefinitions>(`/api/projects/${encodeURIComponent(projectId)}/code/definition?${new URLSearchParams({ path: at.path, line: String(at.line), column: String(at.column), word: at.word }).toString()}`, signal ? { signal } : {}),
   references: (projectId: string, at: { path: string; word: string; scope: 'module' | 'project' }, signal?: AbortSignal) => request<CodeReferences>(`/api/projects/${encodeURIComponent(projectId)}/code/references?${new URLSearchParams(at).toString()}`, signal ? { signal } : {}),
@@ -730,7 +730,7 @@ export const api = {
   openInEditor: (projectId: string, path: string, line?: number) => request<void>(`/api/projects/${encodeURIComponent(projectId)}/open`, json('POST', { path, ...(line === undefined ? {} : { line }) })),
   revealInFinder: (projectId: string, path: string) => request<{ opened: true }>(`/api/projects/${encodeURIComponent(projectId)}/reveal`, json('POST', { path })),
   finderSupport: (projectId: string) => request<{ supported: boolean }>(`/api/projects/${encodeURIComponent(projectId)}/reveal`),
-  upload: (projectId: string, body: { name: string; mimeType: string; dataBase64: string; width?: number; height?: number }) => request<Attachment>(projectId ? `/api/projects/${encodeURIComponent(projectId)}/attachments` : '/api/attachments', json('POST', body)),
+  upload: (projectId: string, body: { name: string; mimeType: string; dataBase64: string; width?: number; height?: number }, signal?: AbortSignal) => request<Attachment>(projectId ? `/api/projects/${encodeURIComponent(projectId)}/attachments` : '/api/attachments', { ...json('POST', body), ...(signal ? { signal } : {}) }),
   attachmentMetadata: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}/metadata`),
   attachment: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}`),
   /** `fresh` reads again even when the server is following the project and knows of no change. */

@@ -1,6 +1,8 @@
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
+import { TEXT_CACHE_BYTES } from '@contracts';
 import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 
 import { computeAlignment, type AlignedDiff, type DiffLine } from '../../../../../packages/timeline/src/lineDiff';
 
@@ -11,7 +13,15 @@ export type { DiffLine };
  * its own context. Alignment is the expensive part (O(n·m) over the changed middle), so it is done
  * once per pair of texts and shared; a few dozen recent edits cover a transcript's visible rows.
  */
-const alignedCache = boundedCache<string, AlignedDiff | null>({ limit: 48 });
+const ALIGNED_CACHE_BYTES = TEXT_CACHE_BYTES.web / 4 / 2;
+// The key holds both texts; the aligned lines hold roughly the longer one again plus per-line objects.
+const alignedCache = boundedCache<string, AlignedDiff | null>({ limit: 48, maxWeight: ALIGNED_CACHE_BYTES, weigh: (key, aligned) => key.length + (aligned ? aligned.full.length * 96 + key.length / 2 : 0) });
+registerBounded('line-diff-alignments', alignedCache, 48, ALIGNED_CACHE_BYTES);
+
+/** Whether this pair is already aligned, so counting it again costs nothing. */
+export function alignmentCached(before: string, after: string): boolean {
+  return alignedCache.has(`${before.length}:${before}\u0000${after}`);
+}
 
 function alignLines(before: string, after: string): AlignedDiff | null {
   const key = `${before.length}:${before}\u0000${after}`;

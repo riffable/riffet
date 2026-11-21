@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconMessagesSquare, IconSearch } from '@/components/icons';
@@ -10,6 +10,7 @@ import { sidebarProjectMap } from '@/lib/project-family';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { createTitleMatcher } from '@/lib/title-search';
 import { useMessageSearch } from '@/lib/use-message-search';
+import { useListWindow } from '@/lib/use-list-window';
 import { cn, relativeTime } from '@/lib/utils';
 import { isComposingKey } from './session/composerKeyboard';
 
@@ -47,6 +48,9 @@ export function QuickInput({ inputRef, trailing, className, ...props }: Componen
 
 /** The list area of either scope: the same height, so switching scope does not resize the dialog. */
 export const quickListClass = 'min-h-0 h-[min(480px,56dvh)] shrink overflow-y-auto p-2';
+
+/** Conversations the content-search scope menu lists besides the current one; older ones are a title search away. */
+const SCOPE_MENU_SESSIONS = 100;
 /** The command scope has no 标题 / 内容 row (h-10), so its list takes that height back. */
 export const quickListTallClass = 'min-h-0 h-[calc(min(480px,56dvh)+2.5rem)] shrink overflow-y-auto p-2';
 
@@ -68,6 +72,7 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
   const [active, setActive] = useState(0);
   const { t } = useLingui();
   const listRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
   const needle = query.trim();
   const projectMap = useMemo(() => sidebarProjectMap(projects, true), [projects]);
   const ordered = useMemo(() => sortSessionsByActivity(sessions), [sessions]);
@@ -97,9 +102,15 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
     setActive(0);
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [query, mode, scope]);
+  // A broad title query matches thousands of conversations: only rows near the viewport mount.
+  const rowKind = useCallback(() => 'title', []);
+  const rowHeight = useCallback(() => 66, []);
+  const titleRows = useListWindow({ count: content || offerContent ? 0 : titles.length, kindOf: rowKind, estimate: rowHeight, scroller: listRef, list: rowsRef });
+  const { reveal } = titleRows;
   useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex, count]);
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' }); else reveal(activeIndex);
+  }, [activeIndex, count, reveal]);
 
   const select = (index: number) => {
     if (offerContent) { setMode('content'); inputRef.current?.focus(); return; }
@@ -123,6 +134,7 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
   const row = (index: number, id: string, title: string, projectId: string, at: string, archived: boolean, snippet?: string) => (
     <div
       key={id}
+      ref={snippet === undefined ? titleRows.measure(index) : undefined}
       id={optionId(index)}
       role="option"
       aria-selected={index === activeIndex}
@@ -182,7 +194,7 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
                 <DropdownMenuRadioItem value=""><Trans>全部会话</Trans></DropdownMenuRadioItem>
                 {currentSession && <DropdownMenuRadioItem value={currentSession.id} textValue={currentSession.title}><span className="truncate"><Trans>当前会话 · {currentSession.title}</Trans></span></DropdownMenuRadioItem>}
                 <DropdownMenuSeparator />
-                {ordered.filter((session) => session.id !== currentSessionId).map((session) => (
+                {ordered.filter((session) => session.id !== currentSessionId).slice(0, SCOPE_MENU_SESSIONS).map((session) => (
                   <DropdownMenuRadioItem key={session.id} value={session.id} textValue={session.title}><span className="truncate">{session.title}</span></DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -201,7 +213,11 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
                 <span className="min-w-0 flex-1 truncate"><Trans>在内容中搜索「{needle}」</Trans></span>
               </div>
             )
-            : titles.map((session, index) => row(index, session.id, session.title, session.projectId, sessionActivityAt(session), Boolean(session.archivedAt)))}
+            : (
+              <div ref={rowsRef} role="presentation" style={{ paddingTop: titleRows.padTop, paddingBottom: titleRows.padBottom }}>
+                {titles.slice(titleRows.from, titleRows.to).map((session, offset) => row(titleRows.from + offset, session.id, session.title, session.projectId, sessionActivityAt(session), Boolean(session.archivedAt)))}
+              </div>
+            )}
         {!count && (!content || needle) && <div role="status" className="flex h-full flex-col items-center justify-center gap-3 pb-6 text-sm text-fg-4">
           {busy ? <Spinner className="size-6" /> : <IconSearch aria-hidden className="size-6" />}
           <span>{busy ? t`搜索中…` : needle ? t`没有匹配的结果` : t`还没有会话`}</span>

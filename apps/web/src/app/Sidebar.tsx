@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -23,6 +23,7 @@ import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends'
 import { useLocale } from '@/lib/i18n';
 import { useShortcutHint } from './shortcuts';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { useListWindow } from '@/lib/use-list-window';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
 import { useLists, useSettings, useStores, useWorkItems } from './state/stores';
@@ -271,6 +272,15 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   );
 });
 
+/** One line of the sidebar's conversation section. */
+type SidebarEntry =
+  | { kind: 'label'; key: string; label: string }
+  | { kind: 'session'; key: string; session: Session; project?: ProjectRecord }
+  | { kind: 'project'; key: string; project: ProjectRecord; open: boolean; spaced: boolean }
+  | { kind: 'more'; key: string; projectId: string; hidden: number }
+  | { kind: 'less'; key: string; projectId: string }
+  | { kind: 'empty'; key: string };
+
 export function Sidebar(props: Props) {
   const { t } = useLingui();
   // `timeBucket` reads the active catalog directly, so the timeline must recompute on a switch.
@@ -370,6 +380,116 @@ export function Sidebar(props: Props) {
     />
   );
 
+  // One flat list of what the section shows, so a long one mounts only what is near the viewport.
+  const entries = useMemo<SidebarEntry[]>(() => {
+    const list: SidebarEntry[] = [];
+    if (layout === 'time') {
+      timeline.forEach((bucket, index) => {
+        // The first group's name is the section header above: two labels never stack.
+        if (index > 0) list.push({ kind: 'label', key: `label:${bucket.label}`, label: bucket.label });
+        for (const { session, project } of bucket.items) list.push({ kind: 'session', key: session.id, session, project });
+      });
+      return list;
+    }
+    groups.forEach(({ project, sessions: sessionsOfProject }, index) => {
+      const open = !collapsed.has(project.id);
+      list.push({ kind: 'project', key: `project:${project.id}`, project, open, spaced: index > 0 && !mobile });
+      if (!open) return;
+      const activeOrPinned = sessionsOfProject.filter((session) => session.pinnedAt || isActiveSession(session)).length;
+      const limit = Math.max(PROJECT_SESSION_LIMIT, activeOrPinned);
+      const expanded = expandedProjects.has(project.id);
+      let shown = sessionsOfProject;
+      if (sessionsOfProject.length > limit && !expanded) {
+        shown = sessionsOfProject.slice(0, limit);
+        const current = selectedSessionId ? sessionsOfProject.find((session) => session.id === selectedSessionId) : undefined;
+        if (current && !shown.includes(current)) shown = [...shown, current];
+      }
+      for (const session of shown) list.push({ kind: 'session', key: session.id, session });
+      const hidden = sessionsOfProject.length - shown.length;
+      if (hidden > 0) list.push({ kind: 'more', key: `more:${project.id}`, projectId: project.id, hidden });
+      if (sessionsOfProject.length > limit && expanded) list.push({ kind: 'less', key: `less:${project.id}`, projectId: project.id });
+      if (!sessionsOfProject.length) list.push({ kind: 'empty', key: `empty:${project.id}` });
+    });
+    return list;
+  }, [layout, timeline, groups, collapsed, expandedProjects, selectedSessionId, mobile]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const kindOf = useCallback((index: number) => {
+    const entry = entries[index]!;
+    return entry.kind === 'project' && entry.spaced ? 'project-spaced' : entry.kind;
+  }, [entries]);
+  const estimate = useCallback((kind: string) => ({ session: mobile ? 45 : 33, label: 29, project: mobile ? 45 : 33, 'project-spaced': 41 } as Record<string, number>)[kind] ?? 29, [mobile]);
+  const listWindow = useListWindow({ count: entries.length, kindOf, estimate, scroller: scrollRef, list: listRef });
+
+  const renderEntry = (entry: SidebarEntry) => {
+    switch (entry.kind) {
+      case 'label':
+        return <div className={cn('flex h-7 items-end px-2 pb-1 font-medium', mobile ? 'text-xs text-fg-3' : 'text-2xs text-fg-4')}>{entry.label}</div>;
+      case 'session':
+        return renderSession(entry.session, entry.project);
+      case 'more': {
+        const hiddenCount = entry.hidden;
+        return (
+          <button
+            type="button"
+            onClick={() => toggleShowAll(entry.projectId)}
+            className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
+          >
+            <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconEllipsis className="size-3.5" /></span>
+            <span><Trans>展开其余 {hiddenCount} 个会话</Trans></span>
+          </button>
+        );
+      }
+      case 'less':
+        return (
+          <button
+            type="button"
+            onClick={() => toggleShowAll(entry.projectId)}
+            className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
+          >
+            <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconChevronRight className="-rotate-90 size-3.5" /></span>
+            <span><Trans>收起历史会话</Trans></span>
+          </button>
+        );
+      case 'empty':
+        return <div className="flex h-7 items-center pl-8 text-xs text-fg-3"><Trans>暂无会话</Trans></div>;
+      case 'project': {
+        const { project, open } = entry;
+        const activeProject = project.id === selectedSidebarProjectId;
+        return (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => { if (project.system === 'task-workspace') props.onSelectNoProject?.(); else props.onSelectProject(project); if (!open) toggleProject(project.id); }}
+            onKeyDown={(event) => activateOnKey(event, () => project.system === 'task-workspace' ? props.onSelectNoProject?.() : props.onSelectProject(project))}
+            className={cn(
+              'group/project flex h-8 cursor-default items-center gap-2 rounded-lg px-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
+              mobile ? cn('text-sm text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg') : cn('text-xs font-medium text-fg-3 hover:text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg hover:text-fg'),
+              project.archivedAt && 'opacity-60',
+            )}
+          >
+            {/* The phone's touch target widens the toggle to 44px; the negative margin keeps that
+                width out of the layout, so the name starts where its conversations' titles do. */}
+            <button type="button" aria-label={open ? t`折叠` : t`展开`} onClick={(event) => { event.stopPropagation(); toggleProject(project.id); }} className={cn('relative grid size-4 shrink-0 place-items-center', mobile ? '-mx-3.5 text-fg-3' : 'text-fg-4')}>
+              <span className="group-hover/project:opacity-0">{open ? <IconFolderOpen className={mobile ? 'size-4' : 'size-3.5'} /> : <IconFolderClosed className={mobile ? 'size-4' : 'size-3.5'} />}</span>
+              <IconChevronRight className={cn('absolute size-3.5 opacity-0 transition-transform group-hover/project:opacity-100', open && 'rotate-90')} />
+            </button>
+            <span className={cn('min-w-0 flex-1 truncate', mobile && 'font-medium')}>{project.name}</span>
+            <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/project:opacity-100 has-[[data-state=open]]:opacity-100 focus-within:opacity-100 no-hover:opacity-100">
+              {!project.system && <RowMenu label={t`项目操作`}>
+                <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'tags')}><IconTag /><Trans>编辑标签</Trans></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'archive')}>{project.archivedAt ? <><IconArchiveRestore /><Trans>恢复项目</Trans></> : <><IconArchive /><Trans>归档项目</Trans></>}</DropdownMenuItem>
+              </RowMenu>}
+              <Tip label={t`在此目录新建会话`}><button type="button" aria-label={t`在“${project.name}”中新建会话`} onClick={(event) => { event.stopPropagation(); if (project.system === 'task-workspace') props.onSelectNoProject?.(); else props.onSelectProject(project); }} className="grid size-6 place-items-center rounded-md text-fg-3 hover:bg-active hover:text-fg"><IconPlus className="size-4" /></button></Tip>
+            </span>
+          </div>
+        );
+      }
+    }
+  };
+
   const owner = useLists((state) => state.owner);
   const sidebarPinned = useSettings((settings) => settings.sidebarPinned);
   const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
@@ -464,7 +584,7 @@ export function Sidebar(props: Props) {
 
       <Collapse open={Boolean(offlineBanner)}>{heldOfflineBanner}</Collapse>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <div data-touch-row className={cn('group/section flex items-center px-2', mobile ? 'h-8 pt-1' : 'mt-3 h-7')}>
           <span className={cn('font-medium', mobile ? 'text-xs text-fg-3' : 'text-2xs text-fg-4')}>{layout === 'time' ? timeline[0]?.label ?? t({ message: '会话', context: 'workbench-session-noun' }) : t`项目`}</span>
           <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/section:opacity-100 has-[[data-state=open]]:opacity-100 focus-within:opacity-100 no-hover:opacity-100">
@@ -508,94 +628,19 @@ export function Sidebar(props: Props) {
           </div>
         )}
 
-        {layout === 'time' ? (
-          <div className="flex flex-col gap-px">
-            {timeline.map((bucket, index) => (
-              <div key={bucket.label} className="flex flex-col gap-px">
-                {/* The first group's name is the section header above: two labels never stack. */}
-                {index > 0 && <div className={cn('flex h-7 items-end px-2 pb-1 font-medium', mobile ? 'text-xs text-fg-3' : 'text-2xs text-fg-4')}>{bucket.label}</div>}
-                {bucket.items.map(({ session, project }) => renderSession(session, project))}
-              </div>
-            ))}
-            {!timeline.length && <p className="px-3 py-8 text-center text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有会话`}</p>}
-          </div>
-        ) : (
-        <div className="flex flex-col gap-px">
-          {groups.map(({ project, sessions: list }) => {
-            const open = !collapsed.has(project.id);
-            const activeProject = project.id === selectedSidebarProjectId;
-            const activeOrPinned = list.filter((session) => session.pinnedAt || isActiveSession(session)).length;
-            const limit = Math.max(PROJECT_SESSION_LIMIT, activeOrPinned);
-            const showAll = list.length <= limit || expandedProjects.has(project.id);
-            const visibleList = showAll ? list : (() => {
-              const head = list.slice(0, limit);
-              const current = selectedSessionId ? list.find((session) => session.id === selectedSessionId) : undefined;
-              return current && !head.some((session) => session.id === current.id) ? [...head, current] : head;
-            })();
-            const hiddenCount = list.length - visibleList.length;
-            const canCollapse = list.length > limit && expandedProjects.has(project.id);
-            return (
-              <div key={project.id} className={cn('flex flex-col gap-px', !mobile && '[&+&]:mt-2')}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => { if (project.system === 'task-workspace') props.onSelectNoProject?.(); else props.onSelectProject(project); if (!open) toggleProject(project.id); }}
-                  onKeyDown={(event) => activateOnKey(event, () => project.system === 'task-workspace' ? props.onSelectNoProject?.() : props.onSelectProject(project))}
-                  className={cn(
-                    'group/project flex h-8 cursor-default items-center gap-2 rounded-lg px-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
-                    mobile ? cn('text-sm text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg') : cn('text-xs font-medium text-fg-3 hover:text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg hover:text-fg'),
-                    project.archivedAt && 'opacity-60',
-                  )}
-                >
-                  {/* The phone's touch target widens the toggle to 44px; the negative margin keeps that
-                      width out of the layout, so the name starts where its conversations' titles do. */}
-                  <button type="button" aria-label={open ? t`折叠` : t`展开`} onClick={(event) => { event.stopPropagation(); toggleProject(project.id); }} className={cn('relative grid size-4 shrink-0 place-items-center', mobile ? '-mx-3.5 text-fg-3' : 'text-fg-4')}>
-                    <span className="group-hover/project:opacity-0">{open ? <IconFolderOpen className={mobile ? 'size-4' : 'size-3.5'} /> : <IconFolderClosed className={mobile ? 'size-4' : 'size-3.5'} />}</span>
-                    <IconChevronRight className={cn('absolute size-3.5 opacity-0 transition-transform group-hover/project:opacity-100', open && 'rotate-90')} />
-                  </button>
-                  <span className={cn('min-w-0 flex-1 truncate', mobile && 'font-medium')}>{project.name}</span>
-                  <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/project:opacity-100 has-[[data-state=open]]:opacity-100 focus-within:opacity-100 no-hover:opacity-100">
-                    {!project.system && <RowMenu label={t`项目操作`}>
-                      <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'tags')}><IconTag /><Trans>编辑标签</Trans></DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => props.onProjectAction(project, 'archive')}>{project.archivedAt ? <><IconArchiveRestore /><Trans>恢复项目</Trans></> : <><IconArchive /><Trans>归档项目</Trans></>}</DropdownMenuItem>
-                    </RowMenu>}
-                    <Tip label={t`在此目录新建会话`}><button type="button" aria-label={t`在“${project.name}”中新建会话`} onClick={(event) => { event.stopPropagation(); if (project.system === 'task-workspace') props.onSelectNoProject?.(); else props.onSelectProject(project); }} className="grid size-6 place-items-center rounded-md text-fg-3 hover:bg-active hover:text-fg"><IconPlus className="size-4" /></button></Tip>
-                  </span>
-                </div>
-                {open && visibleList.map((session) => renderSession(session))}
-                {open && hiddenCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => toggleShowAll(project.id)}
-                    className="flex h-7 items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
-                  >
-                    <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconEllipsis className="size-3.5" /></span>
-                    <span><Trans>展开其余 {hiddenCount} 个会话</Trans></span>
-                  </button>
-                )}
-                {open && canCollapse && (
-                  <button
-                    type="button"
-                    onClick={() => toggleShowAll(project.id)}
-                    className="flex h-7 items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
-                  >
-                    <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconChevronRight className="-rotate-90 size-3.5" /></span>
-                    <span><Trans>收起历史会话</Trans></span>
-                  </button>
-                )}
-                {open && !list.length && <div className="flex h-7 items-center pl-8 text-xs text-fg-3"><Trans>暂无会话</Trans></div>}
-              </div>
-            );
-          })}
-          {!groups.length && (
-            <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
-              <p className="text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有项目`}</p>
-              {!filterTag && <Button size="sm" onClick={props.onAddProject}><IconFolderPlus /><Trans>添加项目</Trans></Button>}
+        <div ref={listRef} style={{ paddingTop: listWindow.padTop, paddingBottom: listWindow.padBottom }}>
+          {entries.slice(listWindow.from, listWindow.to).map((entry, offset) => (
+            <div key={entry.key} ref={listWindow.measure(listWindow.from + offset)} className={cn('pb-px', entry.kind === 'project' && entry.spaced && 'pt-2')}>
+              {renderEntry(entry)}
             </div>
-          )}
+          ))}
         </div>
+        {layout === 'time' && !timeline.length && <p className="px-3 py-8 text-center text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有会话`}</p>}
+        {layout === 'project' && !groups.length && (
+          <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+            <p className="text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有项目`}</p>
+            {!filterTag && <Button size="sm" onClick={props.onAddProject}><IconFolderPlus /><Trans>添加项目</Trans></Button>}
+          </div>
         )}
 
       </div>

@@ -4,6 +4,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconDownload, IconImage, IconX } from '@/components/icons';
 import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 import { cn } from '@/lib/utils';
 import { cssDurationMs, exit } from '@/lib/motion';
 import { isTextField } from '@/lib/tap-focus';
@@ -19,6 +20,7 @@ import { PrintImage, PrintRenderingContext } from './printRendering';
  * Weighed by the URL: an inline `data:` image is its own key.
  */
 const naturalSizes = boundedCache<string, PixelSize>({ limit: 500, maxWeight: 4_000_000, weigh: (key) => key.length });
+registerBounded('image-natural-sizes', naturalSizes, 500, 4_000_000);
 
 export interface PixelSize { width: number; height: number }
 
@@ -206,6 +208,7 @@ function ZoomableImageFrame({ src, name, label, path, className, size, maxHeight
             src={src}
             alt={name}
             loading="lazy"
+            decoding="async"
             onLoad={(event) => {
               const image = event.currentTarget;
               const natural = { width: image.naturalWidth, height: image.naturalHeight };

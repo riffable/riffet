@@ -43,6 +43,16 @@
 - 改完运行 `pnpm i18n:extract`，在 `src/locales/en/` 对应的 `.po` 里补英文，再运行 `pnpm i18n:check`。
 - 同一个中文在不同目录下要译成不同英文时，加 `context` 区分，不要让两份目录互相冲突。
 
+## 性能
+
+规则与预算在 [Web 流畅度规范](../../docs/guide/web-performance.md)，这里只列最容易做错的。
+
+- 条目可能过百的列表用 `src/lib/use-list-window.ts` 的 `useListWindow`，不整表 `map`；下拉菜单给条目数设上限。
+- 传给子组件的数组和对象在源头用 `useMemo` 做一次，不在 JSX 里写 `list.filter(...)`。
+- 组件里的定时器用 `useVisibleInterval`；隐藏的标签页不轮询（`pnpm check:perf` 的 `webInterval`）。
+- 重连用 `reconnectDelay`；被取代的请求传 `AbortSignal` 并在 effect 清理时中止。
+- 改了列表、转录、输入框或页面切换，跑 `pnpm perf:web run <场景>`，读数写进 PR。
+
 ## 设计规范页
 
 - 新组件或新变体：在 `src/app/design/components/` 对应的章节里加一个 `Specimen`，用真实组件画出每种状态。

@@ -110,13 +110,8 @@ function useServiceMonitor() {
   useEffect(() => {
     mounted.current = true;
     void refresh(true);
-    const timer = window.setInterval(() => void refresh(), POLL_MS);
-    const onVisibility = () => { if (document.visibilityState === 'visible') void refresh(); };
-    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       mounted.current = false;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisibility);
       inFlight.current?.abort();
       inFlight.current = undefined;
     };

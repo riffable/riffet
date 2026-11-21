@@ -86,6 +86,7 @@ pnpm verify [路径...]        # 按改动路径选出检查、模块验证和�
 ## 性能
 
 - 缓存、流缓冲、轮询、长列表、持久化数据、服务拉起的长期子进程按 [性能与资源规范](docs/guide/performance.md) 做：上限取自 `packages/contracts/src/budgets.ts`，不在业务代码里另写数字；每份常驻数据要有释放时机，每个子进程要有所有者和回收条件。
+- 帧预算与主线程规则按端分开写：[Android](docs/guide/android-performance.md)、[Web](docs/guide/web-performance.md)。Web 的结论只取自 `pnpm perf:web` 在生产构建上的读数，不看开发构建。
 - 规范 §6「现状」列着不符合规则的现有代码。迁移了哪条就删哪条；新留下的不一致也记进去。
 
 ## 测试与验证

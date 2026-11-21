@@ -7,7 +7,7 @@ import { Terminal, type IDisposable } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
-import { TERMINAL_ACK_CHARS, TERMINAL_SCROLLBACK_ROWS, type TerminalInfo, type TerminalServerMessage } from '@contracts';
+import { TERMINAL_ACK_CHARS, TERMINAL_KEPT_ROWS, type TerminalInfo, type TerminalServerMessage } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -19,7 +19,8 @@ import { pageTerminalAppearance, terminalFont, terminalTheme } from '@/lib/termi
 import { customThemeAnsi } from '@/lib/theme-library';
 import { useTheme } from '@/lib/theme';
 import { useDisplaySettings } from '@/lib/display-settings';
-import { cn, downloadJson, errorMessage } from '@/lib/utils';
+import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
+import { cn, downloadJson, errorMessage, reconnectDelay } from '@/lib/utils';
 import { clipboardFiles, readUploadData, uploadName } from '../session/image-upload';
 import { attachmentMimeType, planIntake } from '../session/composerAttachmentIntake';
 import { attachSmoothScroll } from './smooth-scroll';
@@ -290,7 +291,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
       ...terminalFont,
       fontSize: fontSizeRef.current,
       // The server's snapshot carries the pane's history, so the emulator owns scrollback.
-      scrollback: TERMINAL_SCROLLBACK_ROWS,
+      scrollback: window.matchMedia(MOBILE_LAYOUT_QUERY).matches ? TERMINAL_KEPT_ROWS.phone : TERMINAL_KEPT_ROWS.web,
       convertEol: false,
       allowProposedApi: false,
       theme: paletteRef.current,
@@ -498,8 +499,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
         lastResizeRef.current = undefined;
         setHasControl(false);
         retryCount.current += 1;
-        const delay = Math.min(1000 * 2 ** Math.min(retryCount.current - 1, 5), 20000);
-        retryRef.current = window.setTimeout(connect, delay);
+        retryRef.current = window.setTimeout(connect, reconnectDelay(retryCount.current));
       };
     };
     // A phone freezes a background page with its socket. On return, retry now instead of waiting

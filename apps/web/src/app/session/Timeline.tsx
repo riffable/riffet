@@ -1,5 +1,5 @@
 import { IconCopy, IconCornerUpRight, IconEllipsis, IconGitFork, IconImageDown, IconRotateCcw, IconTextQuote } from '@/components/icons';
-import { createContext, memo, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -22,7 +22,7 @@ import { cleanLabel, cn, formatBytes, formatDateTime, isRecord, pixelEdge, str }
 import { CopyButton } from '@/components/ui/copy-button';
 import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { Markdown } from './Markdown';
-import { lineDiff } from './lineDiff';
+import { alignmentCached, lineDiff } from './lineDiff';
 import { nativeDeliveryStatus, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
 import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, taskLabel, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
@@ -734,6 +734,28 @@ export const ToolRow = memo(function ToolRow({ item, onOpenPath, onOpenInEditor,
   return <RegularToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={stale} more={more} />;
 });
 
+/**
+ * The +N −M of a call's diffs. Aligning an edit is O(n·m), and every tool row asks, folded or not,
+ * so an edit with lines on both sides is counted when the browser is idle; a new file or a deletion
+ * has one side empty and is counted at once. The previous counts stay until the new ones arrive.
+ */
+function useDiffStats(view: ToolView): ReturnType<typeof toolDiffStats> {
+  const cheap = useMemo(() => {
+    const diffs = view.contents.filter((entry) => entry.type === 'diff');
+    // A row that scrolls back into the window finds its alignment cached: counted at once, no flicker.
+    return diffs.every((entry) => !entry.oldText || !entry.newText || alignmentCached(String(entry.oldText), String(entry.newText))) ? toolDiffStats(view) : null;
+  }, [view]);
+  const [late, setLate] = useState<ReturnType<typeof toolDiffStats>>();
+  useEffect(() => {
+    if (cheap !== null) return;
+    const compute = () => setLate(toolDiffStats(view));
+    if (typeof requestIdleCallback !== 'function') { const timer = window.setTimeout(compute, 50); return () => window.clearTimeout(timer); }
+    const handle = requestIdleCallback(compute, { timeout: 1_000 });
+    return () => cancelIdleCallback(handle);
+  }, [cheap, view]);
+  return cheap !== null ? cheap : late;
+}
+
 const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenInEditor, root, stale, more }: { item: Extract<TimelineItem, { kind: 'tool' }>; onOpenPath?: (path: string, line?: number) => void; onOpenInEditor?: (path: string, line?: number) => void; root?: string; stale?: boolean; more?: ReactNode }) {
   const { t } = useLingui();
   const view = useMemo(() => toolView(item.event, root), [item.event, root]);
@@ -779,7 +801,7 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   const taskTitle = taskName?.text ?? title;
   const taskIsCommand = backgroundTask ? taskName?.mono ?? isCommandTitle(taskTitle, taskView.command) : isCommand;
   const activityStopping = activity?.status === 'stopping' || Boolean(activity && controls?.stopping.has(activity.id));
-  const stats = useMemo(() => toolDiffStats(view), [view]);
+  const stats = useDiffStats(view);
   const images = failed ? [] : view.contents.flatMap(entry => isRecord(entry.content) && entry.content.type === 'image' ? [entry.content] : []);
   // Every agent call leads to its own transcript page, the way the aside's subagent rows do —
   // even when the backend sent no `subagent` record to identify it by.

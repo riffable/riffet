@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { SessionShare, ShareCapability } from '@contracts';
 import { Button } from '@/components/ui/button';
@@ -33,15 +34,12 @@ export function SharesSection() {
     return () => { active = false; };
   }, [revision]);
   const polling = Boolean(items?.some(item => item.operation && item.operation !== 'uncertain'));
-  useEffect(() => {
-    if (!polling) return;
-    let active = true;
-    const timer = window.setInterval(() => {
-      void shares.list().then(values => { if (active) setItems(values); })
-        .catch(reason => { if (active) setError(errorMessage(reason, t`无法读取分享记录`)); });
-    }, 2000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [polling]);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useVisibleInterval(() => {
+    void shares.list().then(values => { if (mounted.current) setItems(values); })
+      .catch(reason => { if (mounted.current) setError(errorMessage(reason, t`无法读取分享记录`)); });
+  }, 2000, polling);
   const act = async (share: SessionShare, action: 'reconcile' | 'retry' | 'remove') => {
     setBusy(share.id); setError('');
     try {

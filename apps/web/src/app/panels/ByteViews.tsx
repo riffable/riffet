@@ -176,9 +176,13 @@ export function TailView({ url, preview, active, render }: {
         });
       } catch { /* the next tick asks again */ } finally { reading = false; }
     };
-    const timer = window.setInterval(() => void poll(), FILE_BUDGET.followMs);
+    // A hidden page does not follow; it catches up once when shown again.
+    let missed = false;
+    const timer = window.setInterval(() => { if (document.visibilityState === 'hidden') missed = true; else void poll(); }, FILE_BUDGET.followMs);
+    const onVisibility = () => { if (document.visibilityState === 'visible' && missed) { missed = false; void poll(); } };
+    document.addEventListener('visibilitychange', onVisibility);
     void poll();
-    return () => { stopped = true; controller.abort(); window.clearInterval(timer); };
+    return () => { stopped = true; controller.abort(); window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
   }, [following, active, url, text === undefined]);
 
   if (failed) return <EmptyState title={t`无法读取文件`} />;

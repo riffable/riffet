@@ -86,7 +86,7 @@ function ImageTile({ attachment, disabled, onRemove, onError }: {
           <button type="button" data-attachment-tile aria-label={t`预览图片：${attachment.name}`} title={attachment.name} className="grid shrink-0 cursor-zoom-in place-items-center overflow-hidden rounded-lg border border-line bg-subtle" style={TILE_STYLE}>
             {/* Remounting on retry is what makes the browser ask for the bytes again; the button
                 itself stays, so focus is never lost to a failed load. */}
-            <img key={attempt} className="size-full object-cover" src={source} alt={attachment.name} onError={() => { setFailed(true); onError(t`图片无法加载：${attachment.name}`); }} />
+            <img key={attempt} className="size-full object-cover" loading="lazy" decoding="async" src={source} alt={attachment.name} onError={() => { setFailed(true); onError(t`图片无法加载：${attachment.name}`); }} />
           </button>
         </ImageViewer>
       )}

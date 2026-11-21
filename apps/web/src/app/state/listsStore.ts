@@ -12,6 +12,10 @@ import { createStore } from '@/lib/store';
 
 /** How often the session list is re-read while the tab is hidden; see the notification poll. */
 const HIDDEN_POLL_MS = 15_000;
+/** A stream open this long counts as recovered, and its retry backoff starts over. */
+const STREAM_STABLE_MS = 10_000;
+const RECONNECT_COALESCE_MS = 1000;
+const REFRESH_DEDUPE_MS = 1500;
 /** While the server pushes list changes the poll is only a safety net. */
 const PUSHED_POLL_MS = 30_000;
 /** A running turn moves the session list every few hundred milliseconds; the local copy follows at this pace. */
@@ -525,10 +529,18 @@ export function createListsStore(deps: ListsDeps) {
       let nextSocketAttempt = 0;
       let usingSse = false;
       const supportsWebSocket = () => negotiatedProtocol?.features.includes('list-stream-ws') === true;
+      let stableTimer: number | undefined;
+      let reconnectedTimer: number | undefined;
       const streamOpened = () => {
-        retries = 0; pushed = true;
-        if (opened) reconnected();
-        else if (!hasDelta()) refreshProjects(true);
+        // A flapping stream keeps its backoff; the counter resets only once it has stayed open.
+        window.clearTimeout(stableTimer);
+        stableTimer = window.setTimeout(() => { retries = 0; }, STREAM_STABLE_MS);
+        pushed = true;
+        if (opened) {
+          // One catch-up per flap burst, on the trailing edge.
+          window.clearTimeout(reconnectedTimer);
+          reconnectedTimer = window.setTimeout(() => { if (active) reconnected(); }, RECONNECT_COALESCE_MS);
+        } else if (!hasDelta()) refreshProjects(true);
         opened = true;
       };
       const events: Record<string, (event: Event) => void> = {
@@ -536,6 +548,7 @@ export function createListsStore(deps: ListsDeps) {
       };
       const retry = () => {
         pushed = false;
+        window.clearTimeout(stableTimer);
         closeStream?.();
         closeStream = undefined;
         if (active) retryTimer = window.setTimeout(connect, reconnectDelay(++retries));
@@ -595,7 +608,12 @@ export function createListsStore(deps: ListsDeps) {
       else connect();
       const timer = window.setInterval(() => { if (missed || !pushed || Date.now() - lastPoll >= PUSHED_POLL_MS) poll(); }, 5000);
       // While the stream is up it has told every project change; without it the projects are read again.
+      let lastRefresh = 0;
       const refresh = () => {
+        // focus, visibilitychange and online arrive together on a tab switch.
+        const now = Date.now();
+        if (now - lastRefresh < REFRESH_DEDUPE_MS) return;
+        lastRefresh = now;
         poll();
         if (!pushed) refreshProjects(true);
         if (usingSse && supportsWebSocket() && Date.now() >= nextSocketAttempt) {
@@ -606,13 +624,15 @@ export function createListsStore(deps: ListsDeps) {
           connect();
         }
       };
-      const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); else poll(); };
+      const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+      // Coming back online is news even right after a focus whose read failed offline.
+      const onOnline = () => { lastRefresh = 0; refresh(); };
       window.addEventListener('focus', refresh);
-      window.addEventListener('online', refresh);
+      window.addEventListener('online', onOnline);
       document.addEventListener('visibilitychange', onVisibility);
       return () => {
-        active = false; closeStream?.(); window.clearTimeout(retryTimer); window.clearTimeout(saveTimer); window.clearInterval(timer);
-        window.removeEventListener('focus', refresh); window.removeEventListener('online', refresh);
+        active = false; closeStream?.(); window.clearTimeout(retryTimer); window.clearTimeout(stableTimer); window.clearTimeout(reconnectedTimer); window.clearTimeout(saveTimer); window.clearInterval(timer);
+        window.removeEventListener('focus', refresh); window.removeEventListener('online', onOnline);
         document.removeEventListener('visibilitychange', onVisibility);
       };
     },

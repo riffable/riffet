@@ -167,6 +167,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const recentDirectories = useMemo(() => sortProjectsByRecentUse(regular, sessions, projectVisits), [regular, sessions, projectVisits]);
   const lastTaskProject = useMemo(() => recentDirectories.filter((item) => !item.archivedAt).sort((a, b) => (projectVisits[b.id] ?? 0) - (projectVisits[a.id] ?? 0))[0], [recentDirectories, projectVisits]);
   const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
+  // Stable between list updates, so the sidebar's grouping does not rerun on every render of the page.
+  const sidebarProjects = useMemo(() => projects.filter((item) => !isQuickChatProject(item)), [projects]);
   const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
   // The 助理's directory has extensions of its own, reached from its page.
   const extensionProjects = useMemo(() => assistantProject ? [{ ...assistantProject, name: t`个人助理` }, ...regular] : regular, [regular, assistantProject, t]);
@@ -410,7 +412,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
   const sidebar = (mobile: boolean) => (
     <Sidebar
-      projects={projects.filter((item) => !isQuickChatProject(item))}
+      projects={sidebarProjects}
       onSelectNoProject={projectlessTasks ? selectNoProject : undefined}
       sessions={sessions}
       selectedProjectId={anyPageOpen ? '' : selectedProjectId}

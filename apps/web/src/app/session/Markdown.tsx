@@ -113,13 +113,11 @@ function digest(text: string): string {
 /**
  * Previews (graphs, pages) that have been on screen, by their text: a fence the transcript window
  * mounts again goes straight to its preview instead of showing the source until the observer
- * reports it in view. Cleared wholesale past a bound; forgetting only costs that one wait.
+ * reports it in view. Least recently used go first; forgetting only costs that one wait.
  */
-const shownPreviews = new Set<string>();
-function rememberPreview(key: string): void {
-  if (shownPreviews.size >= 2_000) shownPreviews.clear();
-  shownPreviews.add(key);
-}
+const shownPreviews = boundedCache<string, true>({ limit: 2_000, weigh: (key) => key.length });
+registerBounded('shown-previews', shownPreviews, 2_000);
+function rememberPreview(key: string): void { shownPreviews.set(key, true); }
 
 /** Some agents cite code as ```12:40:path/to/file.ts — a line range and a file, not a language. */
 function citation(info: string): { start: number; end: number; path: string } | undefined {

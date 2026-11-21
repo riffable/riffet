@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ChannelAccountInfo, ChannelBindCode, ChannelHealth } from '@contracts';
 import { Button } from '@/components/ui/button';
@@ -34,11 +35,7 @@ export function useChannelHealth(account: ChannelAccountInfo | undefined, interv
   }, [id]);
   // A change of connection state or of the platform's last event is worth a fresh read.
   useEffect(() => { void read(false); }, [read, connection, account?.enabled]);
-  useEffect(() => {
-    if (!intervalMs) return;
-    const timer = window.setInterval(() => void read(false), intervalMs);
-    return () => window.clearInterval(timer);
-  }, [read, intervalMs]);
+  useVisibleInterval(() => void read(false), intervalMs ?? 0, Boolean(intervalMs));
   return { health, loading, refresh: () => read(true) };
 }
 
