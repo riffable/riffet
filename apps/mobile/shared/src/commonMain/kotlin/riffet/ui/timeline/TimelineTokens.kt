@@ -9,6 +9,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import riffet.shared.DisplaySettings
 import riffet.theme.RiffetCodeColors
 import riffet.theme.RiffetColors
@@ -58,10 +59,11 @@ internal data class ProseScale(val fontScale: Float, val typography: RiffetTypog
 
     /** Reading styles share the active theme, including explicit leading and font overrides. */
     val body: TextStyle = typography.body.copy(lineHeightStyle = ProseLineHeight)
-    val h1: TextStyle = typography.title.copy(lineHeightStyle = ProseLineHeight)
-    val h2: TextStyle = typography.headline.copy(lineHeightStyle = ProseLineHeight)
-    val h3: TextStyle = typography.subhead.copy(lineHeightStyle = ProseLineHeight)
-    val h4: TextStyle = typography.subhead.copy(lineHeightStyle = ProseLineHeight)
+    // Three amplified steps above body (22/19/17sp on 16sp body); h4–h6 return to body size (surfaces.md §1.2).
+    val h1: TextStyle = proseHeading(body, 1.375f, 1.875f)
+    val h2: TextStyle = proseHeading(body, 1.1875f, 1.75f)
+    val h3: TextStyle = proseHeading(body, 1.0625f, 1.625f)
+    val h4: TextStyle = body
     val code: TextStyle = typography.code.copy(lineHeightStyle = ProseLineHeight)
     val table: TextStyle = typography.bodySmall.copy(lineHeightStyle = ProseLineHeight)
 
@@ -86,6 +88,15 @@ internal data class ProseScale(val fontScale: Float, val typography: RiffetTypog
 }
 
 private val ProseLineHeight = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+
+private fun proseHeading(base: TextStyle, sizeScale: Float, lineHeightScale: Float): TextStyle {
+    if (!base.fontSize.isSpecified) return base
+    return base.copy(
+        fontSize = base.fontSize * sizeScale,
+        lineHeight = base.fontSize * lineHeightScale,
+        lineHeightStyle = ProseLineHeight,
+    )
+}
 
 /**
  * The monospace family is part of the published contract, so code that has to be monospaced

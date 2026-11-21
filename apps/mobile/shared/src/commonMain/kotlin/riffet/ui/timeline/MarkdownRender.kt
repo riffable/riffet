@@ -72,9 +72,9 @@ import riffet_mobile.shared.generated.resources.*
  *  - colours come from `RiffetColors` — body text from the caller's `fg`/`fg2`, links `accent`,
  *    inline code and fenced code and table backgrounds `bgSubtle`, rules `line`, quote bars
  *    `lineStrong`;
- *  - type and block spacing come from the generated prose scale (`RiffetProse` through
- *    `TimelineTheme.prose`): the web's `.md` as it is laid out on a phone, so reasoning and the
- *    answer keep one scale, and lists, quotes and headings are spaced by `ProseBlocks`;
+ *  - type and block spacing come from `TimelineTheme.prose` (`ProseScale`): derived from the
+ *    active theme's typography and metrics so reasoning and the answer keep one scale, headings
+ *    step down cleanly to body size, and lists, quotes and headings are spaced by `ProseBlocks`;
  *  - a fenced block is the web's `.md pre`: a language header with a copy button over coloured,
  *    sideways-scrolling code (`MarkdownCodeBlockView`);
  *  - a table wraps its cells instead of ellipsising them, and still scrolls horizontally when it
@@ -479,8 +479,8 @@ private fun markdownColors(colors: RiffetColors, text: Color, chip: Color): Mark
 private fun heading(style: TextStyle, color: Color): TextStyle = style.copy(fontWeight = FontWeight.Medium, color = color)
 
 /**
- * The type half of the theme, from the generated prose scale (`RiffetProse`, the web's `.md` on a
- * phone: a 15sp body, headings 20/17/15sp, 12.5sp code).
+ * The type half of the theme, from `TimelineTheme.prose` (headings scaled above `body` across three
+ * steps, with h4–h6 returning to body size, matching `docs/design/system/surfaces.md` §1.2).
  *
  * `base` is the caller's style — the answer's and the reasoning's own body, never a second scale.
  * Headings keep `fg` even inside reasoning, which is what the web does: `.md h1 { color: var(--fg) }`
