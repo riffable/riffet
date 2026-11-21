@@ -183,7 +183,8 @@ co-change:
 **Agent 驱动**。在驱动契约处定义场景目录：启动、流式输出、工具调用、权限请求、中断、恢复、子 agent、压缩、异常退出等。覆盖情况是一张「场景 × 后端 × CLI 版本」矩阵：
 
 - **录制**：统一入口 `pnpm record <后端> <场景>`，合并现有 `probe-*-e2e` 与 `scripts/record-terminal-fixtures.ts` 的做法，保存原始输入和 CLI 版本，存放在 `apps/server/src/backends/<后端>/fixtures/<通道>/<CLI 版本>/`，沿用 Claude 屏幕录制的目录约定；
-- **回放**：CI 只用录制数据，不接真实 CLI。断言的是驱动输出的会话行，不是解析的中间状态，以便重构解析代码时测试不变；
+- **回放**：CI 只用录制数据，不接真实 CLI。既断言驱动输出的会话行（不绑死解析的中间状态，以便重构解析代码时测试不变），也断言关键出站控制动作已真实发出（如中断场景必须向终端发出 `C-c`，避免屏幕误判跳过按键后仍靠脚本硬喂后续事件通过测试）；高危时序（如首字或首工具到达前中断）应有对应场景或回归用例；
+- **屏幕解析覆盖**：终端驱动在 `apps/server/src/adapters/cli/` 导出的屏幕判断与解析函数，都必须在真实录屏测试（如 `apps/server/src/backends/claude/screen-fixtures.test.ts`）中覆盖全部已录 CLI 版本，不以单元测试里的手写旧版假屏幕代替真实快照；
 - **重录**：CLI 升级时用 `record` 重录，录制数据的差异作为代码评审的一部分；
 - **漂移检测**：演进回路每周用本机最新版本的 CLI 跑一遍场景，与录制结果对比。有差异就提示重录或修改解析代码，这样在用户遇到问题之前就能发现；
 - **新后端接入**：以填满矩阵为完成标准，不依赖接入者记得测什么；
@@ -203,7 +204,7 @@ co-change:
 
 rollout 通道：同一次录制里 CLI 写下的 rollout 文件，按解析器实际读取的记录类型白名单保留（`ROLLOUT_KEEP`），去掉 base 与 developer 指令、注入用户消息的环境与指令段落、world state 和名称含 instructions 的字段；回放测试把它交给用量、上下文、计划、压缩与分享的解析函数，比对规整后的输出。
 
-当前覆盖：Codex 在 0.167.2 上有 App Server 与 rollout 两个通道、三个场景（单回合回答、执行命令、两回合）；Codex 的 hook、审批与中断场景、Claude 的会话记录文件与 hook、其余后端都还没有录制；Claude 屏幕有两个版本。
+当前覆盖：Codex 在 0.167.2 上有 App Server 与 rollout 两个通道、三个场景（单回合回答、执行命令、两回合）；Claude Code 在 2.1.322 上有转写与 hook 录制（9 个场景：`answer`、`tool`、`approval`、`interrupt`、`subagent`、`compact`、`resume`、`clear`、`stop-failure`，回放同时校验 `interrupt` 实际发出 `C-c`），屏幕录制覆盖 2.1.302 与 2.1.322 两个版本。Codex 的 hook、审批与中断场景、Claude 首字前中断场景以及其余后端待补录。
 
 **同步协议**。`gen:timeline-fixtures` 已为 Kotlin 解码器提供共享测试数据，扩展到 Web 的 TypeScript 消费方，使两套客户端逻辑用同一份数据测试。
 

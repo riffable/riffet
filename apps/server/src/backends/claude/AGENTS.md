@@ -68,3 +68,4 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - hook 全部没有反应：`riffet logs --scope claude` 中的 `hook descriptor could not be written` 或 `hook bridge could not start`。
 - 服务重启后引导一直补充不进当前回合、每次都变成下一条消息：引导只看 `runtime.ts#steerTarget`，没有 `started`（本服务没启动这个 CLI）时要求这一回合的工具 hook 已到达本服务（`outputPromptId`）；状态里有 `activeTurn` 而这里不认，就会在 `enqueue` 抛 `STEER_TARGET_CHANGED` 并由 `requeueSteer` 转成排队消息。
 - 屏幕解析在新版 CLI 上失效：`npx vitest run apps/server/src/backends/claude/screen-fixtures.test.ts`，再用 `scripts/probe-claude-e2e.ts --capture` 录制现场。
+- 点停止后界面显示「已停止」但 Claude 仍在跑：查 `journal.db` 是否未发 `C-c` 就写入合成 `turn_ended(cancelled)`，并跑 `screen-fixtures.test.ts` 与 `recordings.test.ts` 核对当前 CLI 版本的忙碌屏识别与 `C-c` 发送。
