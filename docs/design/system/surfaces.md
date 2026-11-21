@@ -195,7 +195,7 @@ Web 和 Mac 的输入框是一张实底卡片：`bg-elevated` 加 `shadow-compos
 | 部分 | 取值 |
 |---|---|
 | 卡片 | `bg-elevated`，圆角 16，`shadow-composer`；聚焦 `shadow-composer-focus`。手机：圆角 24，1px `line-strong` 描边，`shadow-soft` |
-| 形态 | `dock`（会话，文本区下限 52，自动增高至 240）、`hero`（新会话，76，至 320）、`embedded`（侧边讨论与并行尝试，下限 52，至 120，圆角 12、`bg-subtle`、描边、无阴影）、`compact`（手机未聚焦，44，单行） |
+| 形态 | `dock`（会话，文本区下限 52，自动增高至 240）、`hero`（新会话，76，至 320）、`embedded`（侧边讨论与并行尝试，下限 52，至 120，圆角 12、`bg-subtle`、描边、无阴影）、`compact`（手机未聚焦且空着，52 的单行：发送键距上下与距右边相等，归档条、终端保持条同高；[设计决定](../DECISIONS.md) 2026-11-22） |
 | 文本区 | 左右 16，`text-base` / `leading-6` |
 | 工具行 | 左右 8，上 4、下 8，间距 4；手机允许换行 |
 | 左侧按钮 | 28 方，图标 18：常驻「+」（附件、引用会话、技能与工具）与权限模式图标；其余入口先看能否放进已有菜单 |
@@ -236,6 +236,7 @@ Android、iPhone、手机浏览器同一套（[决定](../DECISIONS.md) 2026-11-
 
 - 停靠卡片与输入框卡片各自写了一遍阴影与底色（`session/ComposerDock.tsx` 的 `dockSurface`），而不是共用一个表面类。
 - 手机上输入框的描边与阴影是 `max-md:` 单独写的一套，与桌面不是同一个配方。
+- Android 的 `compact` 单行仍是 44 高（`ui/composer/Composer.kt` 的 `allowCompact`），未按 2026-11-22 加到 52。
 
 ## 2. 新会话
 

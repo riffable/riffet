@@ -72,7 +72,7 @@ struct ConversationComposer: View {
             attachmentChips
             if archived {
                 HStack { Text("会话已归档").foregroundStyle(palette.fg3); Spacer(); Button("恢复会话") { Task { await workbench.update(session, archived: false) } }.tint(palette.accent) }
-                    .riffetFont(.label).padding(.horizontal, 16).frame(minHeight: RiffetMetrics.hitTarget + 8).riffetComposerSurface()
+                    .riffetFont(.label).padding(.horizontal, 16).frame(minHeight: ConversationComposer.barHeight).riffetComposerSurface()
             } else if session.terminalHold != nil {
                 TerminalHoldBar(workbench: workbench, sessionID: session.id)
             } else {
@@ -172,6 +172,8 @@ struct ConversationComposer: View {
                     stopButton
                 }
             }
+            // One line, the send button as far from the card's top and bottom as from its right edge.
+            .frame(minHeight: expanded ? nil : ConversationComposer.barHeight)
             .padding(.leading, expanded ? 0 : Self.toolsLeading).padding(.trailing, expanded ? 0 : Self.toolsTrailing)
             if expanded { footer.transition(.opacity) }
         }
@@ -192,6 +194,9 @@ struct ConversationComposer: View {
     private static let toolsTrailing: CGFloat = 4
     private static let sendInset: CGFloat = (RiffetMetrics.hitTarget - RiffetMetrics.sendButton) / 2
     private static let sendEdge: CGFloat = toolsTrailing + sendInset
+    /// The one-line forms: the empty, unfocused input and the bars that stand in for it. The send button is as far
+    /// from the card's top and bottom as from its right edge.
+    static let barHeight: CGFloat = RiffetMetrics.sendButton + 2 * sendEdge
     private static let toolWidth: CGFloat = 40
     private static let glyphSize: CGFloat = 20
     private var tools: some View {
@@ -399,7 +404,7 @@ private struct TerminalHoldBar: View {
             Spacer(minLength: 8)
             Button("收回") { release(force: false) }.tint(palette.accent).disabled(releasing)
         }
-        .riffetFont(.label).padding(.horizontal, 16).frame(minHeight: RiffetMetrics.hitTarget + 8).riffetComposerSurface()
+        .riffetFont(.label).padding(.horizontal, 16).frame(minHeight: ConversationComposer.barHeight).riffetComposerSurface()
         .confirmationDialog("结束终端中的进程？", isPresented: $confirming, titleVisibility: .visible) {
             Button("结束并收回", role: .destructive) { release(force: true) }
         }

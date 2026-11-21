@@ -49,6 +49,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On Android, the app now opens on New session by default (a launch tab you picked earlier stays). Swiping left or right on a tab moves to the neighbouring tab, the page following your finger, and quick swipes in a row move one tab each without waiting for the page to land; the sidebar opens with a right swipe only on New session, and from the menu button anywhere.
 - The Android terminal key bar always fits the screen width, so ⏎ is never cut off, and ⏎ is filled like the send button; ↑ sits directly above ↓. Newline is now on the first row and inserts a line break in Claude Code and Codex without sending; ⏎ still sends. Under More, paste, attachment, line input, and release control come first.
 - The iPhone New session page no longer has a quick chat tab; it only starts tasks.
+- On iPhone, the empty conversation composer is a little taller, still one line, so the send button has the same room above, below and to its right; the archived and terminal bars match it.
 
 ### Fixes
 
