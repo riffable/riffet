@@ -345,7 +345,13 @@ export function rowVisible(row: TraceRow, filter: Filter): boolean {
 
 export type Line =
   | { type: 'turn'; turn: Turn; expanded: boolean; shown: number }
-  | { type: 'item'; item: Item; turn: Turn }
+  | {
+    type: 'item'; item: Item; turn: Turn;
+    /** The model request whose output this is, when that request is listed too: drawn one level in under it. */
+    parent?: string;
+    /** A model request's place in its turn, from 1, and whether it names its model (the first, and where the model changes). */
+    request?: number; namesModel?: boolean;
+  }
   | { type: 'row'; row: TraceRow };
 
 /** The rows the span list draws: each turn, then its visible items when it is open. A turn with no visible item is left out while filtering. */
@@ -355,14 +361,34 @@ export function spanLines(folded: Folded, filter: Filter, collapsed: ReadonlySet
   const filtering = filter.query !== '' || filter.errorsOnly || filter.range !== undefined;
   const all = folded.loose ? [folded.loose, ...folded.turns] : folded.turns;
   for (const turn of all) {
-    const visible = turn.children.filter((item) => itemVisible(item, filter));
+    const items: Array<Extract<Line, { type: 'item' }>> = [];
+    let request = 0, model: string | undefined, parent: string | undefined;
+    for (const item of turn.children) {
+      const visible = itemVisible(item, filter);
+      if (item.type === 'step') {
+        request += 1;
+        const name = item.step.model ?? item.step.requestedModel;
+        const namesModel = request === 1 || name !== model;
+        model = name;
+        parent = visible ? item.id : undefined;
+        if (visible) items.push({ type: 'item', item, turn, request, namesModel });
+        continue;
+      }
+      if (!visible) continue;
+      items.push({ type: 'item', item, turn, ...(parent && isOutput(item) ? { parent } : {}) });
+    }
     const turnMatches = filter.errorsOnly ? Boolean(turn.error || turn.status === 'failed') : false;
-    if (filtering && visible.length === 0 && !turnMatches) continue;
+    if (filtering && items.length === 0 && !turnMatches) continue;
     const expanded = !collapsed.has(turn.id);
-    lines.push({ type: 'turn', turn, expanded, shown: visible.length });
-    if (expanded) for (const item of visible) lines.push({ type: 'item', item, turn });
+    lines.push({ type: 'turn', turn, expanded, shown: items.length });
+    if (expanded) lines.push(...items);
   }
   return lines;
+}
+
+/** What a model request produces, and so follows it in the list: its tool calls, thinking and text. */
+function isOutput(span: Span): boolean {
+  return span.category === 'tool' || span.category === 'thinking' || span.category === 'draft' || span.kind === 'agent_message_chunk';
 }
 
 export function logLines(rows: readonly TraceRow[], filter: Filter): Line[] {

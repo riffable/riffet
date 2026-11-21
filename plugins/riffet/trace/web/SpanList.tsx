@@ -4,7 +4,7 @@ import { cn } from './cn';
 import { formatBytes, formatClock, formatCount, formatMs, formatOffset } from './format';
 import { IconActivity, IconBrain, IconChevronRight, IconCircleAlert, IconInfo, IconMessagesSquare, IconSparkle } from './icons';
 import { catalogs, type TraceMessages } from './messages';
-import { lineId, timeOf, type Item, type Line, type Turn } from './model';
+import { addStep, emptyTokens, lineId, timeOf, type Item, type Line, type Span, type Tokens } from './model';
 import { CATEGORY_COLOR } from './palette';
 import { TokenBar } from './TokenBar';
 
@@ -81,7 +81,7 @@ export function SpanList({ lines, selectedId, hoverId, onSelect, onHover, onTogg
       case 'End': move(lines.length - 1); break;
       case 'ArrowLeft':
         if (current?.type === 'turn' && current.expanded) onToggle(current.turn.id);
-        else if (current?.type === 'item') onSelect(current.turn.id);
+        else if (current?.type === 'item') onSelect(current.parent ?? current.turn.id);
         else return;
         break;
       case 'ArrowRight':
@@ -137,7 +137,7 @@ const LineView = memo(function LineView({ line, selected, hovered, mode, onSelec
     <div
       role="treeitem"
       aria-selected={selected}
-      aria-level={line.type === 'item' ? 2 : 1}
+      aria-level={line.type === 'item' ? (line.parent ? 3 : 2) : 1}
       {...(line.type === 'turn' ? { 'aria-expanded': line.expanded } : {})}
       onClick={() => onSelect(id)}
       onMouseEnter={() => onHover(id)}
@@ -149,7 +149,7 @@ const LineView = memo(function LineView({ line, selected, hovered, mode, onSelec
       )}
     >
       {line.type === 'turn' && <TurnLine line={line} m={m} onToggle={onToggle} />}
-      {line.type === 'item' && <ItemLine item={line.item} turn={line.turn} m={m} />}
+      {line.type === 'item' && <ItemLine line={line} m={m} />}
       {line.type === 'row' && mode === 'log' && <RowLine line={line} m={m} />}
     </div>
   );
@@ -190,12 +190,13 @@ function TurnLine({ line, m, onToggle }: { line: Extract<Line, { type: 'turn' }>
       {failed && <IconCircleAlert className="size-3.5 shrink-0 text-danger" />}
       {!turn.ended && turn.turnId && <span className="shrink-0 text-xs font-normal text-fg-3">{m.running}</span>}
       {tokens.measured && (
-        <span className="hidden w-32 shrink-0 items-center justify-end gap-2 font-mono text-xs font-normal text-fg-3 lg:flex">
+        <span className="hidden w-32 shrink-0 items-center justify-between gap-2 font-mono text-xs font-normal text-fg-3 lg:flex">
           <TokenBar tokens={tokens} className="h-1.5 w-8 shrink-0" />
-          {formatCount(tokens.input + tokens.cacheRead + tokens.cacheWrite)} → {formatCount(tokens.output)}
+          {tokenFlow(tokens)}
         </span>
       )}
-      <span className="w-10 shrink-0 text-right font-mono text-xs font-normal text-fg-3">{turn.tools || ''}</span>
+      {/* As wide as an item's bar, so the token columns of a turn and its requests line up. */}
+      <span className="w-10 shrink-0 text-right font-mono text-xs font-normal text-fg-3 md:w-28">{turn.tools || ''}</span>
       <span className="w-16 shrink-0 text-right font-mono text-xs font-normal text-fg-2">{turn.turnId ? formatMs(turn.end - turn.start) : ''}</span>
     </>
   );
@@ -211,34 +212,59 @@ function ItemIcon({ item }: { item: Item }) {
   return <IconInfo className={className} />;
 }
 
-function ItemLine({ item, turn, m }: { item: Item; turn: Turn; m: TraceMessages }) {
-  const label = item.type === 'step' ? item.step.model ?? m.categories.model : item.name ?? item.kind;
-  const title = item.type === 'step' ? stepTokens(item, m) : item.title;
+function ItemLine({ line, m }: { line: Extract<Line, { type: 'item' }>; m: TraceMessages }) {
+  const { item, turn } = line;
   // A row stamped before its turn began carries the provider's coarse time, not when it happened: no offset is shown for it.
   const right = item.timed ? formatMs(item.end - item.start) : item.start >= turn.start ? formatOffset(item.start - turn.start) : '';
+  const said = item.type === 'span' && (item.kind === 'user_message_chunk' || item.kind === 'agent_message_chunk');
   return (
     <>
-      <span className="w-9 shrink-0" />
+      <span className={cn('shrink-0', line.parent ? 'w-14' : 'w-9')} />
       <ItemIcon item={item} />
-      <span className={cn('max-w-48 shrink-0 truncate font-mono text-xs', item.error ? 'text-danger' : 'text-fg-2')}>{label}</span>
-      <span className="min-w-0 flex-1 truncate text-fg-3">{title}</span>
-      {item.type === 'span' && item.rows.length > 1 && <span className="shrink-0 font-mono text-2xs text-fg-4">×{item.rows.length}</span>}
-      {item.type === 'span' && <span className="hidden w-14 shrink-0 text-right font-mono text-2xs text-fg-4 lg:block">{formatBytes(item.bytes)}</span>}
+      {item.type === 'step' ? (
+        <>
+          <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
+            {m.requestAt(line.request ?? 0)}
+            {line.namesModel && (item.step.model ?? item.step.requestedModel) && <span className="ml-2 text-fg-3">{item.step.model ?? item.step.requestedModel}</span>}
+          </span>
+          <StepTokens item={item} />
+        </>
+      ) : (
+        <>
+          <span className={cn('max-w-48 shrink-0 truncate font-mono text-xs', item.error ? 'text-danger' : 'text-fg-2')}>{spanLabel(item, m)}</span>
+          <span className={cn('min-w-0 flex-1 truncate', said ? 'text-fg-2' : 'text-fg-3')}>{item.title}</span>
+        </>
+      )}
       <Bar start={item.start} end={item.end} from={turn.start} to={turn.end} timed={item.timed} error={item.error} color={CATEGORY_COLOR[item.category]} />
       <span className={cn('w-16 shrink-0 text-right font-mono text-xs', item.timed ? 'text-fg-2' : 'text-fg-4')}>{right}</span>
     </>
   );
 }
 
-function stepTokens(item: Extract<Item, { type: 'step' }>, m: TraceMessages): string {
-  const step = item.step;
-  const parts: string[] = [];
-  if (step.inputTokens !== undefined) parts.push(`${m.input} ${formatCount(step.inputTokens)}`);
-  if (step.cacheReadTokens) parts.push(`${m.cacheRead} ${formatCount(step.cacheReadTokens)}`);
-  if (step.cacheWriteTokens) parts.push(`${m.cacheWrite} ${formatCount(step.cacheWriteTokens)}`);
-  if (step.outputTokens !== undefined) parts.push(`${m.output} ${formatCount(step.outputTokens)}`);
-  if (step.tokens === 'estimated') parts.push(m.estimated);
-  return parts.join(' · ');
+/** Who said it for a message, what it is for thinking; a tool by its name. */
+function spanLabel(span: Span, m: TraceMessages): string {
+  if (span.kind === 'user_message_chunk') return m.user;
+  if (span.kind === 'agent_message_chunk') return m.assistant;
+  if (span.kind === 'agent_thought_chunk') return m.thinking;
+  return span.name ?? span.kind;
+}
+
+/** A request's tokens as the turn line shows its own: what went in, then what came out; the breakdown is in the inspector. */
+function StepTokens({ item }: { item: Extract<Item, { type: 'step' }> }) {
+  const tokens = emptyTokens();
+  addStep(tokens, item.step);
+  if (!tokens.measured) return null;
+  return (
+    <span className="hidden w-32 shrink-0 items-center justify-between gap-2 font-mono text-xs text-fg-3 lg:flex">
+      <TokenBar tokens={tokens} className="h-1.5 w-8 shrink-0" />
+      {tokenFlow(tokens)}
+    </span>
+  );
+}
+
+/** What went in, then what came out; `~` when the provider did not count them and they were estimated. */
+function tokenFlow(tokens: Tokens): string {
+  return `${tokens.estimated ? '~' : ''}${formatCount(tokens.input + tokens.cacheRead + tokens.cacheWrite)} → ${formatCount(tokens.output)}`;
 }
 
 function RowLine({ line, m }: { line: Extract<Line, { type: 'row' }>; m: TraceMessages }) {
