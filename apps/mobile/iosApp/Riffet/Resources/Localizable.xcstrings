@@ -11319,11 +11319,6 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove %lld devices?" } }
       }
     },
-    "新建任务" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "New task" } }
-      }
-    },
     "快速对话" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Quick chat" } }

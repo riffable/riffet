@@ -219,7 +219,6 @@ struct RiffetRootView: View {
             // An empty prompt (⌘N, riffet://new) only opens the page; it leaves the draft as it was.
             if !prompt.isEmpty { draft.text = draft.text.isEmpty ? prompt : draft.text + "\n\n" + prompt }
             tabRaw = RootTab.newTask.rawValue; newPath = []; model.pendingPrompt = nil
-            UserDefaults.standard.set(NewSessionTab.task.rawValue, forKey: NewSessionTab.storageKey)
         }
     }
 }

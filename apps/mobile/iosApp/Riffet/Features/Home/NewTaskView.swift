@@ -1,12 +1,6 @@
 import SwiftUI
 import RiffetKit
 
-/// The new-session page's two launch targets; the pick is remembered across launches.
-enum NewSessionTab: String {
-    case task, chat
-    static let storageKey = "riffet.ios.new-session-tab"
-}
-
 struct NewTaskView: View {
     let workbench: Workbench
     let onStart: (Session) -> Void
@@ -18,8 +12,6 @@ struct NewTaskView: View {
     @State private var projects = false
     @State private var browsing = false
     @State private var directories = false
-    @AppStorage(NewSessionTab.storageKey) private var tabRaw = NewSessionTab.task.rawValue
-    @State private var promptExpanded = false
     /// 跳过 on the setup card's project step: the composer returns without a project.
     @State private var setupSkipped = false
     @State private var options: SessionOptionFocus?
@@ -49,18 +41,15 @@ struct NewTaskView: View {
     @Environment(\.verticalSizeClass) private var verticalSize
     private var compact: Bool { verticalSize == .compact }
     private var markHidden: Bool { writing || compact }
-    /// The server's quick-chat project; the switch only exists while there is one.
-    private var chatProject: Project? { workbench.list.projects.first { $0.isQuickChat && $0.archivedAt == nil } }
-    private var chat: Bool { assistant == nil && tabRaw == NewSessionTab.chat.rawValue && chatProject != nil }
-    /// Quick chat and the assistant each keep their own draft, apart from the task's.
-    private var draft: MessageDraft { workbench.drafts.draft(assistant != nil ? "assistant" : chat ? "chat" : "new") }
+    /// The quick-chat project, whose sessions are not tasks: a pending creation in it is not this page's.
+    /// The assistant keeps its own draft, apart from the task's.
+    private var draft: MessageDraft { workbench.drafts.draft(assistant != nil ? "assistant" : "new") }
     /// The settings the composer's defaults come from: the assistant's own choice stands in for the agent's.
     private var settings: AppSettings? {
         assistant != nil ? AssistantKt.assistantSettings(settings: workbench.settings, backends: workbench.backends) : workbench.settings
     }
     private var catalog: NativeBackendCatalogEntry? { loadedCatalog.flatMap { $0.backendId == backend ? $0 : nil } }
     private var backend: NativeBackendId {
-        if chat { return .chat }
         // The assistant runs only on the agents that isolate it; a draft's other agent gives way to its own.
         return workbench.backends.first { $0.backendId.name == draft.backendName && (assistant == nil || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? workbench.backends.first(where: { $0.available })?.backendId ?? .claude
     }
@@ -69,7 +58,7 @@ struct NewTaskView: View {
     }
     /// What a warm CLI is held for: only an Agent that keeps one (Cursor) asks for it.
     private var prewarmBody: PrewarmBody? {
-        guard !chat, let project, let catalog, catalog.capabilities.supportsPrewarm?.boolValue == true else { return nil }
+        guard let project, let catalog, catalog.capabilities.supportsPrewarm?.boolValue == true else { return nil }
         let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: settings)
         return PrewarmBody(projectId: project.id, backendId: backend, backendProfileId: draft.profileID, model: draft.model,
                            mode: choice.mode, approval: choice.approval, agentId: nil, claimId: nil)
@@ -79,37 +68,14 @@ struct NewTaskView: View {
     private var rememberedTools: [String] { remembered ?? ToolGroups.shared.decode(raw: UserDefaults.standard.string(forKey: toolsKey)) }
     private var pickedTools: [String] { ToolsPick.offeredPicks(devices: toolDevices.devices, value: rememberedTools, plugins: toolDevices.plugins) }
     private var phonesShown: Bool {
-        catalog?.capabilities.supportsRiffetTools == true && backend != .chat && ToolsPick.offered(devices: toolDevices.devices, value: [], plugins: toolDevices.plugins)
+        catalog?.capabilities.supportsRiffetTools == true && ToolsPick.offered(devices: toolDevices.devices, value: [], plugins: toolDevices.plugins)
     }
     private var extensions: ExtensionsPick? {
-        ExtensionsPick.make(workbench: workbench, allowed: backend != .chat, capabilities: catalog?.capabilities, backendId: backend,
+        ExtensionsPick.make(workbench: workbench, allowed: true, capabilities: catalog?.capabilities, backendId: backend,
                             profileId: draft.profileID, projectId: draft.projectID, off: extensionsOff,
                             onChange: { extensionsOff = ExtensionsOff.shared.clean(value: $0) })
     }
     private var extensionsKey: String { "\(backend.name)|\(draft.profileID ?? "")|\(draft.projectID ?? "")" }
-    /// 对话 and the server's presets; a server that predates presets lists the chat catalog's modes.
-    private var chatModes: [(id: String, label: String, prompt: String?)] {
-        if let presets = workbench.settings?.quickChat?.presets {
-            return [("agent", String(localized: "对话", bundle: .riffet), nil)] + presets.map { ("preset:" + $0.id, $0.name, $0.prompt) }
-        }
-        return (catalog?.capabilities.modes ?? []).map { ($0.id, $0.label, $0.description_) }
-    }
-    private var chatMode: String { chatModes.contains { $0.id == draft.mode } ? draft.mode ?? "agent" : "agent" }
-    /// The model of the most recently active quick chat, offered when no default is saved.
-    private var recentChatModel: String? {
-        guard let id = chatProject?.id else { return nil }
-        func activity(_ session: Session) -> Date { ServerTime.date(session.lastActivityAt ?? session.createdAt) ?? .distantPast }
-        return workbench.list.sessions.filter { $0.projectId == id && $0.backendId == .chat && !($0.model ?? "").isEmpty }
-            .max { activity($0) < activity($1) }?.model
-    }
-    /// What the next quick chat starts with: a pick the catalog still offers, else the saved model, the latest chat's, the default.
-    private var chatChoice: NewSessionChoice? {
-        guard chat, let catalog else { return nil }
-        let recent = draft.model == nil && workbench.settings?.auxiliaryModels?.chat == nil ? recentChatModel : nil
-        return NewSessionDraft(profileId: nil, model: draft.model ?? recent, mode: draft.mode, approval: nil)
-            .resolve(catalog: catalog, saved: workbench.settings?.nativeBackendDefaults?[catalog.backendId], cursorModel: workbench.settings?.defaultModel, listed: nil)
-    }
-    private var shownModel: String? { chat ? chatChoice?.model : draft.model }
     private func pickTools(_ groups: [String]) {
         remembered = ToolGroups.shared.picks(groups: groups)
         UserDefaults.standard.set(ToolGroups.shared.encode(groups: groups), forKey: toolsKey)
@@ -127,16 +93,14 @@ struct NewTaskView: View {
                         LiveBrandMark(front: palette.fg, back: palette.accent)
                             .opacity(markHidden ? 0 : 1)
                             .allowsHitTesting(!markHidden)
-                        // The line and the card are what stays put across 新建任务 and 快速对话; what differs hangs below.
                         VStack(alignment: .leading, spacing: 0) {
                             slot.riffetTypeBoundary()
                             cardSlot.riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
                         VStack(alignment: .leading, spacing: 0) {
-                            if chat { presetPrompt.riffetTypeBoundary() }
                             notes.riffetTypeBoundary()
-                            if !chat { (assistant != nil ? AnyView(assistantCards) : AnyView(toolCards)).padding(.top, 12).riffetTypeBoundary() }
+                            (assistant != nil ? AnyView(assistantCards) : AnyView(toolCards)).padding(.top, 12).riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 24)
                     }
@@ -149,9 +113,7 @@ struct NewTaskView: View {
         }
         .navigationTitle(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : String(localized: "新会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // The switch is the page's heading, as Android keeps its tabs in the top bar: one header, not two.
-            if chatProject != nil, assistant == nil { ToolbarItem(placement: .principal) { tabSwitch } }
-            if !chat, assistant == nil, let project {
+            if assistant == nil, let project {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink { ProjectFilesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "doc") }
                         .accessibilityLabel(String(localized: "文件", bundle: .riffet))
@@ -177,7 +139,7 @@ struct NewTaskView: View {
             NavigationStack { NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
                 loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } }, focus: focus,
                 toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions,
-                quickChat: chat, selectedModel: chatChoice?.model, assistant: assistant != nil).toolbar {
+                assistant: assistant != nil).toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { options = nil } }
             } }
         }
@@ -209,16 +171,12 @@ struct NewTaskView: View {
             }
         } message: { Text("任务可能已创建，请先查看会话列表") }
         .task {
-            // Each draft tracks its own unconfirmed submission; one that belongs to the quick-chat project goes to the chat draft.
-            let task = workbench.drafts.draft("new"), quick = workbench.drafts.draft("chat")
+            // The task draft tracks its unconfirmed submission; a quick chat left by an earlier version is not a task's.
+            let task = workbench.drafts.draft("new")
             do {
-                for entry in [task, quick] {
-                    if let id = entry.pendingCreationID, try workbench.store.pendingCreation(id: id) == nil { entry.pendingCreationID = nil }
-                }
-                let claimed = Set([task, quick].compactMap(\.pendingCreationID))
-                if let open = try workbench.store.pendingCreations().first(where: { !claimed.contains($0.id) }) {
-                    let target = open.body.projectId != nil && open.body.projectId == chatProject?.id ? quick : task
-                    if target.pendingCreationID == nil { target.pendingCreationID = open.id }
+                if let id = task.pendingCreationID, try workbench.store.pendingCreation(id: id) == nil { task.pendingCreationID = nil }
+                if task.pendingCreationID == nil, let open = try workbench.store.pendingCreations().first(where: { $0.body.backendId != .chat }) {
+                    task.pendingCreationID = open.id
                 }
             } catch { draft.error = error.riffetMessage }
             if draft.backendName == nil { draft.backendName = backend.name }
@@ -234,12 +192,6 @@ struct NewTaskView: View {
         .onChange(of: project?.id, initial: true) { _, id in
             if assistant != nil, let id, draft.projectID != id { draft.projectID = id }
         }
-        .onChange(of: chatProject?.id, initial: true) { _, id in
-            let quick = workbench.drafts.draft("chat")
-            if quick.projectID != id { quick.projectID = id }
-            if id != nil, quick.backendName != NativeBackendId.chat.name { quick.backendName = NativeBackendId.chat.name }
-        }
-        .onChange(of: chatMode) { _, _ in promptExpanded = false }
         .onChange(of: extensionsKey) { _, _ in extensionsOff = [] }
         .readsToolDevices(toolDevices, workbench: workbench, enabled: catalog?.capabilities.supportsRiffetTools == true)
     }
@@ -264,7 +216,7 @@ struct NewTaskView: View {
     }
 
     /// The setup card stands in the composer's place while there is no Agent or no project (patterns.md §1.5).
-    private var setupShown: Bool { assistant == nil && !chat && ConnectedSetupCard.needed(workbench, skipped: setupSkipped) }
+    private var setupShown: Bool { assistant == nil && ConnectedSetupCard.needed(workbench, skipped: setupSkipped) }
     @ViewBuilder private var cardSlot: some View {
         if setupShown {
             ConnectedSetupCard(workbench: workbench, pickProject: { writing = false; if workbench.projects.isEmpty { directories = true } else { projects = true } },
@@ -285,7 +237,7 @@ struct NewTaskView: View {
                     .padding(.top, Self.holdTop).padding(.bottom, Self.holdTop - Self.sendInset).disabled(locked)
             } else {
             ComposerFieldLayout(key: writing ? nil : [AnyHashable(draft.text), AnyHashable(textSize), AnyHashable(compact)]) {
-                TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding(draft), axis: .vertical)
+                TextField(assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding(draft), axis: .vertical)
                     .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
             }
                 .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
@@ -311,10 +263,10 @@ struct NewTaskView: View {
                     holdBar(height: RiffetMetrics.sendButton).padding(.horizontal, RiffetMetrics.floatingGap).disabled(locked)
                 } else {
                 // The settings follow the attach button, as on Android; the send button keeps the far edge.
-                RiffetModelLabel(title: NativeConfigurationSummary.shortModel(catalog: catalog, selection: shownModel),
-                                 icon: chat ? .symbol("bubble.left") : .agent(backend.name), loading: loadingCatalog, failed: catalogError != nil) { openOptions(chat ? .model : .all) }
+                RiffetModelLabel(title: NativeConfigurationSummary.shortModel(catalog: catalog, selection: draft.model),
+                                 icon: .agent(backend.name), loading: loadingCatalog, failed: catalogError != nil) { openOptions(.all) }
                     .disabled(locked).accessibilityIdentifier("newTaskModel")
-                    .accessibilityLabel(String(localized: "模型：\(NativeConfigurationSummary.configuration(catalog: catalog, profileID: draft.profileID, selection: shownModel))", bundle: .riffet))
+                    .accessibilityLabel(String(localized: "模型：\(NativeConfigurationSummary.configuration(catalog: catalog, profileID: draft.profileID, selection: draft.model))", bundle: .riffet))
                     .accessibilityValue(catalogStatus)
                 Spacer(minLength: 4)
                 }
@@ -342,31 +294,12 @@ struct NewTaskView: View {
         ComposerHoldBar(voice: voice, draft: draft, host: workbench.host, hasContent: !draft.text.isEmpty || hasAttachments,
                         height: height, unfocus: { writing = false })
     }
-    /// 新建任务 / 快速对话 in the navigation bar, where the page title would be.
-    private var tabSwitch: some View {
-        Picker("", selection: Binding(get: { chat ? NewSessionTab.chat : .task },
-                                      set: { value in withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { tabRaw = value.rawValue } })) {
-            Text("新建任务").tag(NewSessionTab.task)
-            Text("快速对话").tag(NewSessionTab.chat)
-        }
-        .pickerStyle(.segmented).frame(width: 220)
-        .disabled(locked)
-    }
-    /// One line above the card, the same height for both targets: the directory, or the chat modes.
+    /// One line above the card: the directory.
     private var slot: some View {
         ZStack(alignment: .leading) {
-            if chat {
-                if chatModes.count > 1 {
-                    RiffetChipBar(items: chatModes.map { .init(value: $0.id, title: $0.label) },
-                                  selection: Binding(get: { chatMode }, set: { draft.mode = $0 }))
-                        .padding(.horizontal, -RiffetMetrics.pageInset).disabled(locked).transition(.opacity)
-                }
-            } else if assistant == nil, !setupShown {
-                projectLine.transition(.opacity)
-            }
+            if assistant == nil, !setupShown { projectLine.transition(.opacity) }
         }
         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading)
-        .riffetAnimation(RiffetMotion.spatial, value: chat)
     }
     private var projectLine: some View {
         HStack(spacing: 0) {
@@ -382,25 +315,15 @@ struct NewTaskView: View {
             Spacer(minLength: 8)
         }.buttonStyle(RiffetDimPressStyle())
     }
-    /// The selected preset's prompt, quiet under the card; a tap shows all of it.
-    @ViewBuilder private var presetPrompt: some View {
-        if let prompt = chatModes.first(where: { $0.id == chatMode && $0.id != "agent" })?.prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Text(prompt).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(promptExpanded ? nil : 2)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.top, 8)
-                .contentShape(Rectangle()).onTapGesture { withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { promptExpanded.toggle() } }
-        }
-    }
     private var plusMenu: some View {
         Menu {
             Button("照片", systemImage: "photo") { photos = true }
             Button("文件", systemImage: "doc") { files = true }
-            if !chat {
-                if assistant == nil { Button("引用项目文件", systemImage: "at") { references = true } }
-                if catalog?.capabilities.supportsSessionReferences == true {
-                    Button("引用会话", systemImage: "text.bubble") { sessionReferences = true }
-                }
-                Button("命令与技能", systemImage: "slash.circle") { commands = true }
+            if assistant == nil { Button("引用项目文件", systemImage: "at") { references = true } }
+            if catalog?.capabilities.supportsSessionReferences == true {
+                Button("引用会话", systemImage: "text.bubble") { sessionReferences = true }
             }
+            Button("命令与技能", systemImage: "slash.circle") { commands = true }
         } label: {
             Image(systemName: "plus").riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg)
                 .frame(width: Self.toolWidth, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
@@ -522,8 +445,6 @@ struct NewTaskView: View {
                 return
             }
             loadedCatalog = loaded; loadingCatalog = false
-            // Quick chat resolves its picks on read (`chatChoice`), so the latest chat's model is not frozen into the draft.
-            if chat { return }
             // Picks the catalog still offers stay; the rest follow the defaults.
             let choice = NativeConfigurationSummary.choice(catalog: loaded, draft: draft, settings: settings)
             if draft.model != choice.model { draft.model = choice.model }
@@ -552,19 +473,12 @@ struct NewTaskView: View {
                 request = saved
             } else {
                 guard let project, draft.canSend, let catalog, catalog.available else { return }
-                if chat {
-                    let model = chatChoice?.model
-                    request = try workbench.store.prepareCreation(projectId: project.id, prompt: draft.text, attachments: draft.attachments,
-                        backendId: .chat, backendProfileId: nil, model: model?.isEmpty == false ? model : nil,
-                        mode: chatMode, approval: nil, context: [], agentId: nil, toolGroups: nil, extensionsOff: nil)
-                } else {
-                    let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: settings)
-                    request = try workbench.store.prepareCreation(projectId: project.id, prompt: draft.text, attachments: draft.attachments,
-                        backendId: backend, backendProfileId: draft.profileID, model: draft.model,
-                        mode: choice.mode, approval: choice.approval, context: draft.references, agentId: nil,
-                        toolGroups: phonesShown ? pickedTools : nil,
-                        extensionsOff: extensions != nil && !extensionsOff.isEmpty ? extensionsOff : nil)
-                }
+                let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: settings)
+                request = try workbench.store.prepareCreation(projectId: project.id, prompt: draft.text, attachments: draft.attachments,
+                    backendId: backend, backendProfileId: draft.profileID, model: draft.model,
+                    mode: choice.mode, approval: choice.approval, context: draft.references, agentId: nil,
+                    toolGroups: phonesShown ? pickedTools : nil,
+                    extensionsOff: extensions != nil && !extensionsOff.isEmpty ? extensionsOff : nil)
                 draft.pendingCreationID = request.id
             }
             prewarm.sent()

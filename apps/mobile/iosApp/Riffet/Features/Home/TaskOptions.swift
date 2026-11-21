@@ -68,24 +68,16 @@ struct NewTaskOptions: View {
     @Environment(\.palette) private var palette
     /// The MCP and Skill switches of the new task; nil where the backend has none.
     var extensions: ExtensionsPick?
-    /// A quick chat has the chat backend's models and nothing else; [selectedModel] is the one it will start with.
-    var quickChat = false
-    var selectedModel: String?
     /// The assistant's composer, which offers only the agents that isolate it.
     var assistant = false
     private var agents: [NativeBackendCatalogEntry] { assistant ? workbench.backends.filter { AssistantKt.isAssistantBackend(id: $0.backendId) } : workbench.backends }
     @State private var reader = ExtensionsReader()
     var body: some View {
         Group {
-            if focus == .model || quickChat, let catalog, let projectID = draft.projectID, !loading, error == nil {
+            if focus == .model, let catalog, let projectID = draft.projectID, !loading, error == nil {
                 modelPicker(catalog, projectID: projectID)
-            } else if quickChat {
-                RiffetForm {
-                    if loading { Section { ProgressView() } }
-                    RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() })
-                }
             } else { optionsForm }
-        }.navigationTitle(focus == .model || quickChat ? String(localized: "选择模型", bundle: .riffet) : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(focus == .model ? String(localized: "选择模型", bundle: .riffet) : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
     /// Whether the MCP and Skill lists have anything to switch; nil while they are unknown or failed to read.
     private func hasSwitches(_ pick: ExtensionsPick) -> Bool? {
@@ -97,7 +89,7 @@ struct NewTaskOptions: View {
     }
     private func modelPicker(_ catalog: NativeBackendCatalogEntry, projectID: String) -> some View {
         NewTaskModelPicker(workbench: workbench, backend: backend, projectID: projectID, profiles: catalog.profiles,
-            selectedProfileID: draft.profileID, selection: selectedModel ?? draft.model ?? catalog.defaultModel) { selectedCatalog, profileID, value in
+            selectedProfileID: draft.profileID, selection: draft.model ?? catalog.defaultModel) { selectedCatalog, profileID, value in
             if !NativeConfigurationSummary.chooseModel(catalog: selectedCatalog, projectID: projectID, profileID: profileID, value: value, draft: draft) {
                 draft.error = String(localized: "项目或 Agent 配置已改变，请重新选择模型。", bundle: .riffet)
             } else { rememberPick(profileID: profileID, value: value) }
@@ -105,7 +97,7 @@ struct NewTaskOptions: View {
     }
     /// Saves a pick as the agent's default, so the next conversation starts on it; the server records it per provider.
     private func rememberPick(profileID: String?, value: String) {
-        guard !quickChat, !assistant, let api = workbench.api else { return }
+        guard !assistant, let api = workbench.api else { return }
         var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
         let old = defaults[backend]
         if old?.model == value && old?.profileId == profileID { return }
