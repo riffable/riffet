@@ -150,7 +150,7 @@ struct ConversationComposer: View {
                         .padding(.top, expanded ? RiffetMetrics.groupInset : 0).padding(.bottom, expanded ? RiffetMetrics.groupInset - Self.sendInset : 0)
                 } else {
                 ComposerFieldLayout(key: focused ? nil : [AnyHashable(draft.text), AnyHashable(textSize)]) {
-                    TextField(placeholder, text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
+                    TextField(placeholder, text: $draft.text, selection: voice.selectionBinding(draft), axis: .vertical)
                         .riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1...6).focused($focused)
                 }
                     .padding(.leading, expanded ? 16 : 0).padding(.vertical, expanded ? 14 : 0)

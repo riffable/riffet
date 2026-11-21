@@ -85,6 +85,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - The Android Git panel shows only "Not a Git repository" for a project that is not one, without a read-failure error above it.
 - Sending a message no longer flashes (briefly disappearing and fading back in) when a fast Agent accepts or finishes it before the timeline row arrives.
 - In the Personal Assistant conversation on the web, `/new` now appears as a "New topic" divider and collapses earlier topics by default (expandable anytime, and auto-expanded when searching or jumping from the outline), while background maintenance trims oversized old tool outputs past 14 days without affecting search or memory consolidation.
+- On iPhone, the first hold to talk after launch in a conversation where you had sent a message no longer crashes the app.
 
 ### Performance
 

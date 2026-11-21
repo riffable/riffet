@@ -285,7 +285,7 @@ struct NewTaskView: View {
                     .padding(.top, Self.holdTop).padding(.bottom, Self.holdTop - Self.sendInset).disabled(locked)
             } else {
             ComposerFieldLayout(key: writing ? nil : [AnyHashable(draft.text), AnyHashable(textSize), AnyHashable(compact)]) {
-                TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
+                TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding(draft), axis: .vertical)
                     .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
             }
                 .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
