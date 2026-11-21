@@ -24,6 +24,7 @@ internal class ConstantStrokePainter private constructor(
     private val vector: ImageVector,
     private val paths: List<Entry>,
     private val density: Float,
+    private val strokeWidth: Float? = null,
 ) : Painter() {
     class Entry(val source: VectorPath, val path: Path)
 
@@ -45,7 +46,8 @@ internal class ConstantStrokePainter private constructor(
                 val p = entry.source
                 p.fill?.let { drawPath(entry.path, it, p.fillAlpha * alpha, Fill, colorFilter) }
                 p.stroke?.let {
-                    val style = Stroke(p.strokeLineWidth * density / unit, p.strokeLineMiter, p.strokeLineCap, p.strokeLineJoin)
+                    val width = strokeWidth ?: p.strokeLineWidth
+                    val style = Stroke(width * density / unit, p.strokeLineMiter, p.strokeLineCap, p.strokeLineJoin)
                     drawPath(entry.path, it, p.strokeAlpha * alpha, style, colorFilter)
                 }
             }
@@ -57,7 +59,7 @@ internal class ConstantStrokePainter private constructor(
         private val parsed = HashMap<ImageVector, List<Entry>?>()
 
         /** Null when there is nothing to adjust (no stroked path) or the vector has groups; the caller then draws it as is. */
-        fun of(vector: ImageVector, density: Float): ConstantStrokePainter? {
+        fun of(vector: ImageVector, density: Float, strokeWidth: Float? = null): ConstantStrokePainter? {
             val entries = parsed.getOrPut(vector) {
                 val nodes = vector.root.toList()
                 if (nodes.any { it !is VectorPath } || nodes.none { (it as VectorPath).stroke != null }) null
@@ -66,7 +68,7 @@ internal class ConstantStrokePainter private constructor(
                     Entry(p, PathParser().addPathNodes(p.pathData).toPath().also { it.fillType = p.pathFillType })
                 }
             } ?: return null
-            return ConstantStrokePainter(vector, entries, density)
+            return ConstantStrokePainter(vector, entries, density, strokeWidth)
         }
     }
 }

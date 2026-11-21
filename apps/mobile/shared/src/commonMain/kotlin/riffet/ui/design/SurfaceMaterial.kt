@@ -126,6 +126,10 @@ internal fun RiffetMaterialScope(material: SurfaceMaterial, strength: Float, con
 internal val materialBackdropEnabled: Boolean
     @Composable @ReadOnlyComposable get() = LocalMaterial.current.material != SurfaceMaterial.SOLID
 
+internal val materialIsRefractive: Boolean
+    @Composable @ReadOnlyComposable get() =
+        LocalMaterial.current.material == SurfaceMaterial.GLASS || LocalMaterial.current.material == SurfaceMaterial.LIQUID
+
 /**
  * Isolate the shell's descendants from the HazeState sampled by the shell itself.
  * Nested surfaces inherit the shell instead of rendering again. Their sources are only consumed
@@ -300,7 +304,11 @@ private fun materialSpec(material: SurfaceMaterial, role: MaterialRole, strength
     }
     val readingSurface = role in listOf(MaterialRole.MENU, MaterialRole.SHEET,
         MaterialRole.DIALOG, MaterialRole.SIDEBAR)
-    val tintBase = if (readingSurface) 0.58f else 0.36f
+    val tintBase = when {
+        readingSurface -> 0.58f
+        role == MaterialRole.NAVIGATION -> 0.50f
+        else -> 0.36f
+    }
     val spec = when (material) {
         SurfaceMaterial.SOLID -> MaterialSpec(0f, 1f, 0f, 0f, 0f, 0f, 0f, 0f, false, false)
         SurfaceMaterial.FROSTED -> MaterialSpec(
@@ -374,16 +382,21 @@ internal fun Modifier.riffetMaterial(
     val tintBase = if (role == MaterialRole.COMPOSER) {
         if (navigation.cardSurface) surfaces.card else surfaces.navigation
     } else if (background.alpha == 0f) surfaces.floating else background.copy(alpha = 1f)
-    val islandInk = LocalRiffetColors.current.fg
-    val spec = remember(environment.material, opticalRole, environment.strength, surfaces.dark, tintBase, islandInk,
-        navigation.accentSelection, surfaces.focus, surfaces.selected) {
+    val islandColors = LocalRiffetColors.current
+    val islandInk = islandColors.fg
+    val secondaryInk = islandColors.fg3
+    val spec = remember(environment.material, role, opticalRole, environment.strength, surfaces.dark, tintBase, islandInk,
+        secondaryInk, navigation.accentSelection, surfaces.focus, surfaces.selected) {
         val resolved = materialSpec(environment.material, opticalRole, environment.strength, surfaces.dark)
         if (opticalRole == MaterialRole.NAVIGATION) {
             val textFloor = islandTintFloor(tintBase, islandInk)
-            val accentFloor = if (navigation.accentSelection) islandTintFloor(
-                tintBase, surfaces.focus, minimumContrast = 3f, overlay = surfaces.selected.copy(alpha = 0.32f),
+            val secondaryFloor = if (role == MaterialRole.NAVIGATION) islandTintFloor(
+                tintBase, secondaryInk, minimumContrast = 3f,
             ) else 0f
-            resolved.copy(tintAlpha = maxOf(resolved.tintAlpha, textFloor, accentFloor))
+            val accentFloor = if (navigation.accentSelection) islandTintFloor(
+                tintBase, surfaces.focus, minimumContrast = 3f, overlay = surfaces.selected.copy(alpha = 0.72f),
+            ) else 0f
+            resolved.copy(tintAlpha = maxOf(resolved.tintAlpha, textFloor, secondaryFloor, accentFloor))
         } else resolved
     }
     val sourceOwner = environment.sources.sourceOwner()

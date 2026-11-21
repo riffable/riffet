@@ -130,7 +130,7 @@ private val RiffetPreset = ThemePreset(
         // surfaces, so nothing is outlined and the only lines left are the soft ones between a card's rows.
         surfaces = SurfaceRecipe(pageMix = 0.03f, card = CardPresentation.ELEVATED,
             pressAlpha = 0.06f, transparentInput = false,
-            navigationAlpha = 0.92f, scrimAlpha = 0.28f, tonalSecondary = false, accentThumb = false,
+            navigationAlpha = 0.96f, scrimAlpha = 0.28f, tonalSecondary = false, accentThumb = false,
             softLines = true, neutralSelection = true, inkPrimary = true),
         ripple = false,
     ),

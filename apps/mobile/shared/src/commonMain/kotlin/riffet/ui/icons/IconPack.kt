@@ -16,7 +16,9 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import riffet.contracts.IconPackDocument
 
 /** Resolve at the rendering boundary: remembered actions and enum icons stay reactive without rebuilding screens. */
@@ -45,7 +47,13 @@ internal fun IconPackDocument.vectors(id: String): Map<String, ImageVector> {
 }
 
 @Composable
-fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) {
+fun Icon(
+    imageVector: ImageVector,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current,
+    strokeWidth: Dp? = null,
+) {
     val key = when {
         imageVector.name.startsWith("Lucide") -> imageVector.name.removePrefix("Lucide")
         imageVector.name == "RiffetMenu" -> "Menu"
@@ -54,9 +62,10 @@ fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifi
     val pack = key?.let { LocalIconVectors.current[it] }
     val brandPainter = AgentMarks.painter(imageVector)
     val density = LocalDensity.current.density
+    val resolvedStroke = strokeWidth?.takeIf { it.isSpecified && it > 0.dp }?.value
     // Lucide's own strokes keep a constant dp width; a pack's replacement glyph is drawn as its author made it.
-    val fixed = remember(imageVector, density, pack != null || key == null) {
-        if (pack == null && key != null) ConstantStrokePainter.of(imageVector, density) else null
+    val fixed = remember(imageVector, density, resolvedStroke, pack != null || key == null) {
+        if (pack == null && key != null) ConstantStrokePainter.of(imageVector, density, resolvedStroke) else null
     }
     // One call site: switching packs swaps the painter, not the node. A VectorPainter can only be
     // made by this composable, so it always runs; while [fixed] draws, it holds an empty vector.

@@ -6,6 +6,7 @@ import riffet.ui.icons.RiffetIcons
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
@@ -35,7 +36,6 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,9 +59,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,7 +80,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
@@ -300,15 +307,39 @@ internal fun ChipRow(
     // Each chip's placement in the row, so the indicator knows where to go.
     val bounds = remember { mutableStateMapOf<String, Pair<Dp, Dp>>() }
     val target = bounds[selected]
-    val x by animateDpAsState(target?.first ?: 0.dp, motion.spatial(), label = "chip-x")
-    val w by animateDpAsState(target?.second ?: 0.dp, motion.spatial(), label = "chip-w")
+    val xAnim = remember { Animatable(0f) }
+    val wAnim = remember { Animatable(0f) }
+    var placed by remember { mutableStateOf(false) }
+    var lastSelected by remember { mutableStateOf(selected) }
+    LaunchedEffect(selected, target) {
+        val (tx, tw) = target ?: return@LaunchedEffect
+        val animate = placed && (lastSelected != selected || xAnim.isRunning || wAnim.isRunning)
+        lastSelected = selected
+        if (!animate) {
+            xAnim.snapTo(tx.value)
+            wAnim.snapTo(tw.value)
+            placed = true
+        } else {
+            val spec = motion.spatial<Float>()
+            coroutineScope {
+                launch { xAnim.animateTo(tx.value, spec) }
+                launch { wAnim.animateTo(tw.value, spec) }
+            }
+        }
+    }
     Box(modifier.horizontalScroll(rememberScrollState()).padding(contentPadding)) {
         if (target != null) {
             Box(
                 Modifier
-                    .absoluteOffset(x = x)
-                    .offset(y = ((metrics.controlHeight - metrics.segmentedHeight) / 2).coerceAtLeast(0.dp))
-                    .size(w, metrics.segmentedHeight)
+                    .matchParentSize()
+                    .layout { measurable, constraints ->
+                        val currentX = if (placed && (xAnim.isRunning || lastSelected != selected)) xAnim.value.dp else target.first
+                        val currentW = if (placed && (wAnim.isRunning || lastSelected != selected)) wAnim.value.dp else target.second
+                        val pillH = metrics.segmentedHeight.roundToPx().coerceAtLeast(0)
+                        val placeable = measurable.measure(Constraints.fixed(currentW.roundToPx().coerceAtLeast(0), pillH))
+                        val y = ((metrics.controlHeight - metrics.segmentedHeight) / 2).coerceAtLeast(0.dp).roundToPx()
+                        layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(currentX.roundToPx(), y) }
+                    }
                     .riffetMaterial(MaterialRole.CONTROL, RoundedCornerShape(metrics.controlRadius), s.selected),
             )
         }
