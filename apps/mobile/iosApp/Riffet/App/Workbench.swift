@@ -27,7 +27,6 @@ final class Workbench {
     @ObservationIgnored private var sweptWaiting: Set<String>?
     private(set) var list: SessionListState
     private(set) var selected: Session?
-    private(set) var timeline: [TimelineItem] = []
     private(set) var status: NativeStatus?
     /// The server's control snapshot. Nil until hello or a control frame; the composer then keeps its own rules.
     private(set) var control: SessionControlSnapshot?
@@ -85,15 +84,16 @@ final class Workbench {
         self.api = host.api
         self.baseURL = baseURL
         self.list = store.list.value
+        self.projectRoots = Dictionary(store.list.value.projects.map { ($0.id, $0.cwd) }, uniquingKeysWith: { first, _ in first })
         self.drafts = DraftStore(server: baseURL.absoluteString)
         self.resources = ResourceClient(baseURL: baseURL, host: host)
         subscriptions.observe(store.list) { [weak self] in
             self?.list = $0
+            self?.projectRoots = Dictionary($0.projects.map { ($0.id, $0.cwd) }, uniquingKeysWith: { first, _ in first })
             self?.sweepNotifications()
         }
         subscriptions.observe(store.selected) { [weak self] in self?.selected = $0 }
         subscriptions.observe(store.removedSessions) { [weak self] ids in self?.sessionsRemoved(ids) }
-        subscriptions.observe(store.timeline) { [weak self] in self?.timeline = $0 }
         subscriptions.observe(store.status) { [weak self] in self?.status = $0 }
         subscriptions.observe(store.control) { [weak self] in self?.control = $0 }
         subscriptions.observe(store.runs) { [weak self] in self?.runs = $0 }
@@ -147,6 +147,21 @@ final class Workbench {
         RiffetNotifications.shared.withdrawSettled(waiting: waiting, known: Set(list.sessions.map(\.id)))
     }
     func project(_ id: String?) -> Project? { list.projects.first { $0.id == id } }
+    /// A project's directory without observing the session list: transcript rows that show paths relative
+    /// to it would otherwise all re-render on every list update.
+    func projectRoot(_ id: String) -> String? { projectRoots[id] }
+    /// A session of the list by id. Pages ask for theirs several times per pass; scanning thousands of
+    /// sessions through the Kotlin list each time cost an open about 100 ms. Reads `list`, so callers
+    /// still update when it changes; the index is rebuilt once per list.
+    func listedSession(_ id: String) -> Session? {
+        let list = list
+        if sessionIndex.list !== list {
+            sessionIndex = (list, Dictionary(list.sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }))
+        }
+        return sessionIndex.byID[id]
+    }
+    @ObservationIgnored private var sessionIndex: (list: SessionListState?, byID: [String: Session]) = (nil, [:])
+    @ObservationIgnored private var projectRoots: [String: String] = [:]
     func refresh() { store.refresh() }
     func consumeNotificationError(_ displayed: String) {
         if notificationError == displayed { notificationError = nil }
@@ -163,7 +178,7 @@ final class Workbench {
     func loadOlder() { store.loadOlder() }
     func open(_ session: Session) { store.select(session: session) }
     func open(sessionID: String) async {
-        if let session = list.sessions.first(where: { $0.id == sessionID }) { open(session); return }
+        if let session = listedSession(sessionID) { open(session); return }
         await perform {
             guard let session = try await api?.session(id: sessionID) else { throw ClientFailure(String(localized: "会话不存在或已移除", bundle: .riffet)) }
             open(session)

@@ -110,7 +110,7 @@ struct ConversationActivityRow: View {
             ConversationCode(text: command, language: "shell", output: true, stateID: "activity." + item.key + ".command")
         }
         if let text = fullText ?? activity.detail, !text.isEmpty {
-            ConversationCode(text: shellTail ? text.split(separator: "\n", omittingEmptySubsequences: false).suffix(6).joined(separator: "\n") : text, language: "output", output: true, stateID: "activity." + item.key + ".output")
+            ConversationCode(text: shellTail ? conversationLastLines(text, 6) : text, language: "output", output: true, stateID: "activity." + item.key + ".output")
                 .padding(.leading, shell ? 24 : 0)
         }
         if let ref = activity.blobRef, fullText == nil, !shellTail {
@@ -171,4 +171,20 @@ func conversationActivityStatus(_ activity: NativeActivity, view: ActivityView) 
     case .stopped: return String(localized: "已停止", bundle: .riffet)
     default: return String(localized: "状态未知", bundle: .riffet)
     }
+}
+
+/// The last `count` lines of `text`, found from its end: a running command's output can be thousands
+/// of lines, and splitting all of it on every pass to keep six walked the whole output each time.
+func conversationLastLines(_ text: String, _ count: Int) -> String {
+    let bytes = text.utf8
+    var index = bytes.endIndex, newlines = 0
+    while index > bytes.startIndex {
+        let previous = bytes.index(before: index)
+        if bytes[previous] == UInt8(ascii: "\n") {
+            newlines += 1
+            if newlines == count { return String(text[index...]) }
+        }
+        index = previous
+    }
+    return text
 }

@@ -19,7 +19,7 @@ struct ConversationTool: View {
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.conversationDisclosureState) private var disclosureState
-    private var presentation: ToolPresentation { ConversationToolPresentations.value(item: item, root: workbench.list.projects.first { $0.id == projectID }?.cwd, stale: !active) }
+    private var presentation: ToolPresentation { ConversationToolPresentations.value(item: item, root: workbench.projectRoot(projectID), stale: !active) }
     private var isExpanded: Bool {
         // Failures stay folded like everything else: bursting open with raw output is what made long turns
         // unreadable. The error is one tap away, preserved per tool.

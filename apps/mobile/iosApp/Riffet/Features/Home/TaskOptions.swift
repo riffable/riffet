@@ -286,7 +286,7 @@ struct SessionOptionsView: View {
     @Environment(\.palette) private var palette
     private var current: Session {
         let selected = workbench.selected?.id == session.id ? workbench.selected : nil
-        let latest = selected ?? workbench.list.sessions.first { $0.id == session.id } ?? session
+        let latest = selected ?? workbench.listedSession(session.id) ?? session
         // Bridge a just-saved response only until the shared store reaches its revision.
         // Once it catches up, live state (including archive and delivery changes) wins.
         if let receipt, let revision = receipt.configRevision,

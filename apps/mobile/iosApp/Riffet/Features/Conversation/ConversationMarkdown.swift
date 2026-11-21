@@ -3,6 +3,12 @@ import UIKit
 import ImageIO
 import RiffetKit
 
+/// Keeps a markdown view's content for its lifetime. It never publishes: the content is observed directly.
+final class ConversationMarkdownHolder: ObservableObject {
+    let content: ConversationMarkdownContent
+    init(_ content: ConversationMarkdownContent) { self.content = content }
+}
+
 /// The AST is shared with macOS; only the platform rendering lives here.
 struct ConversationMarkdown: View {
     let source: String
@@ -15,7 +21,8 @@ struct ConversationMarkdown: View {
     @State private var serverTarget: ConversationServerTarget?
     @Environment(\.palette) private var palette
     @Environment(\.conversationFindHighlight) private var findHighlight
-    @State private var content: ConversationMarkdownContent
+    @StateObject private var holder: ConversationMarkdownHolder
+    private var content: ConversationMarkdownContent { holder.content }
 
     init(source: String, workbench: Workbench, projectID: String, compact: Bool = false, stateID: String? = nil) {
         self.source = source
@@ -26,8 +33,10 @@ struct ConversationMarkdown: View {
         // First frame carries the parsed content (see
         // `ConversationMarkdownContent.preRendered`): an initially empty
         // markdown would measure as zero height off-screen and then pop to
-        // its real height inside the cell.
-        _content = State(initialValue: ConversationMarkdownContent.preRendered(source))
+        // its real height inside the cell. `StateObject` runs this once per
+        // view identity; `State(initialValue:)` would parse the whole source
+        // again on every parent update — each streamed token — and discard it.
+        _holder = StateObject(wrappedValue: ConversationMarkdownHolder(ConversationMarkdownContent.preRendered(source)))
     }
 
     /// Where each prose block starts in the row's count of the needle, when the blocks together hold the
@@ -519,36 +528,30 @@ struct ConversationImage: View {
             await load(key)
         }
         .sheet(isPresented: $preview) {
-            NavigationStack { Group { if let shown { ProjectImagePreview(image: shown).accessibilityLabel(label.isEmpty ? String(localized: "图片", bundle: .riffet) : label) } }.navigationTitle(label.isEmpty ? String(localized: "图片", bundle: .riffet) : label).navigationBarTitleDisplayMode(.inline).toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { preview = false } }
-                if let shown {
-                    ToolbarItem(placement: .topBarLeading) {
-                        let picture = Image(uiImage: shown)
-                        ShareLink(item: picture, preview: SharePreview(label.isEmpty ? String(localized: "图片", bundle: .riffet) : label, image: picture))
-                    }
-                }
-            } }
+            if let shown { ConversationImageViewer(inline: shown, label: label.isEmpty ? String(localized: "图片", bundle: .riffet) : label, load: data, done: { preview = false }) }
         }
+    }
+    /// The encoded image, read again for the viewer rather than kept: only attachments, which never
+    /// change, come from the disk cache (`ResourceClient`).
+    private func data() async throws -> Data {
+        if source.hasPrefix("data:"), let comma = source.firstIndex(of: ",") {
+            let payload = String(source[source.index(after: comma)...])
+            guard let decoded = await Task.detached(priority: .userInitiated, operation: { Data(base64Encoded: payload) }).value else { throw AttachmentImportError.unreadableImage }
+            return decoded
+        }
+        let url: URL?
+        if let attachmentID { url = workbench.resources.attachmentURL(attachmentID) }
+        else if let candidate = URL(string: source), candidate.scheme != nil { url = candidate }
+        else if let server = ConversationServerPath.url(source, base: workbench.resources.baseURL) { url = server }
+        else { url = workbench.resources.fileURL(projectID: projectID, path: source, image: true) }
+        guard let url else { throw URLError(.badURL) }
+        return try await workbench.resources.data(for: url)
     }
     private func load(_ key: String) async {
         error = nil
         image = nil
         do {
-            let data: Data
-            if source.hasPrefix("data:"), let comma = source.firstIndex(of: ",") {
-                let payload = String(source[source.index(after: comma)...])
-                guard let decoded = await Task.detached(priority: .userInitiated, operation: { Data(base64Encoded: payload) }).value else { throw AttachmentImportError.unreadableImage }
-                data = decoded
-            }
-            else {
-                let url: URL?
-                if let attachmentID { url = workbench.resources.attachmentURL(attachmentID) }
-                else if let candidate = URL(string: source), candidate.scheme != nil { url = candidate }
-                else if let server = ConversationServerPath.url(source, base: workbench.resources.baseURL) { url = server }
-                else { url = workbench.resources.fileURL(projectID: projectID, path: source, image: true) }
-                guard let url else { throw URLError(.badURL) }
-                data = try await workbench.resources.data(for: url)
-            }
+            let data = try await data()
             try Task.checkCancellation()
             let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data) }.value
             try Task.checkCancellation()
@@ -557,6 +560,36 @@ struct ConversationImage: View {
             // The frame was reserved up front, so only the picture fades in; nothing moves.
             withAnimation(RiffetMotion.release) { image = decoded }
         } catch is CancellationError { } catch { self.error = error.riffetMessage }
+    }
+}
+
+/// The viewer starts from the inline picture, decoded at display size, and replaces it with one decoded
+/// for zooming once that is ready (docs/guide/ios-performance.md §2.9).
+private struct ConversationImageViewer: View {
+    let inline: UIImage
+    let label: String
+    let load: () async throws -> Data
+    let done: () -> Void
+    @State private var full: UIImage?
+    var body: some View {
+        let shown = full ?? inline
+        NavigationStack {
+            ProjectImagePreview(image: shown).accessibilityLabel(label)
+                .navigationTitle(label).navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("完成", action: done) }
+                    ToolbarItem(placement: .topBarLeading) {
+                        let picture = Image(uiImage: shown)
+                        ShareLink(item: picture, preview: SharePreview(label, image: picture))
+                    }
+                }
+        }
+        .task {
+            guard let data = try? await load(), !Task.isCancelled else { return }
+            let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data, maximumPixelSize: ConversationImageDecoder.viewerEdge) }.value
+            guard let decoded, !Task.isCancelled, decoded.size.width * decoded.scale > inline.size.width * inline.scale else { return }
+            full = decoded
+        }
     }
 }
 

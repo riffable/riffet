@@ -9,7 +9,6 @@ struct ConversationView: View {
     /// Set for the assistant's main conversation (docs/ASSISTANT.md §3.1): a fixed title, and its setup in the session info.
     var assistant: AssistantSetup? = nil
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @Environment(ThemeStore.self) private var themeStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -33,8 +32,8 @@ struct ConversationView: View {
     @State private var offlineSince: Date?
     /// The pinned notice's height; the transcript starts below it.
     @State private var noticeHeight: CGFloat = 0
-    /// The floating composer zone's height; the transcript ends above it.
-    @State private var composerHeight: CGFloat = 0
+    /// The floating composer zone's height; the transcript ends above it. Not read by this body.
+    @State private var composerHeight = ConversationComposerHeight()
     /// The last read, with the key it was read for; it redraws the page when the read lands.
     @State private var loadedCatalog: (key: String, entry: NativeBackendCatalogEntry)?
     /// Rows newer than the resident window exist: its tail is not the session's latest.
@@ -62,6 +61,7 @@ struct ConversationView: View {
     @State private var processExpansion: [String: Bool] = [:]
     @State private var runningProcesses: Set<String> = []
     @State private var disclosureState = ConversationDisclosureState()
+    @State private var rowCache = TranscriptRowCache()
     @State private var selection: ConversationSelection?
     @State private var composerFocus = 0
     @State private var renaming = false
@@ -74,7 +74,7 @@ struct ConversationView: View {
     @State private var findReach: CGFloat = 0
     private let ledger = ConversationInteractionLedger.shared
     private var ledgerKey: String { "\(workbench.baseURL.absoluteString)|\(sessionID)" }
-    private var session: Session? { (workbench.selected?.id == sessionID ? workbench.selected : nil) ?? workbench.list.sessions.first { $0.id == sessionID } }
+    private var session: Session? { (workbench.selected?.id == sessionID ? workbench.selected : nil) ?? workbench.listedSession(sessionID) }
     private var rows: [any TimelineRow] { workbench.presentation?.sessionId == sessionID ? workbench.grouping?.rows ?? [] : [] }
     private var ready: Bool { workbench.presentation?.sessionId == sessionID && workbench.presentation?.loaded == true }
     private var lastVersion: String { guard workbench.presentation?.sessionId == sessionID, let item = workbench.grouping?.items.last else { return "" }; return "\(item.key)|\(ObjectIdentifier(item as AnyObject))" }
@@ -285,7 +285,7 @@ struct ConversationView: View {
                 ContentUnavailableView { Label("无法打开会话", systemImage: "exclamationmark.bubble") } description: { Text(AppModel.connectionMessage(error)) } actions: { Button("重试") { Task { await workbench.open(sessionID: sessionID) } } }
             } else { ProgressView() }
         }
-        .riffetToastClearance(composerHeight)
+        .modifier(ComposerToastClearance(height: composerHeight))
         .onAppear { workbench.visibleSessionID = sessionID }
         .onDisappear { feedback.pause(); if workbench.visibleSessionID == sessionID { workbench.visibleSessionID = nil } }
         .onChange(of: feedbackSource, initial: true) { _, _ in updateFeedback() }
@@ -298,7 +298,7 @@ struct ConversationView: View {
             updateFeedback()
         }
         .task(id: sessionID) { await workbench.open(sessionID: sessionID) }
-        .onChange(of: workbench.removal) { _, removal in if removal?.ids.contains(sessionID) == true { dismiss() } }
+        .modifier(DismissOnRemoval(workbench: workbench, sessionID: sessionID))
         .task(id: catalogKey) { if let session { await loadCatalog(session) } }
     }
 
@@ -428,19 +428,34 @@ struct ConversationView: View {
         let presentation = workbench.presentation?.sessionId == sessionID ? workbench.presentation : nil
         let rows = presentation?.grouping.rows ?? []
         let compactAbove = (presentation?.compactAbove ?? []).map(\.boolValue)
-        let speeds = presentation?.speeds ?? [:]
-        let rowKeys = Set(rows.map(\.key))
+        // Keyed by Kotlin strings: a hit compares through Unicode normalisation, so the keys are copied
+        // native once rather than compared slowly for every entry.
+        let speeds = (presentation?.speeds ?? [:]).reduce(into: [String: SpeedTag]()) { $0[ConversationRenderPlan.nativeKey($1.key)] = $1.value }
         let entries = ConversationRenderPlan.entries(rows: rows, compactAbove: compactAbove, expanded: effectiveProcessExpansion(), focusedRow: focusedRow,
                                                      scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom, disclosureState: disclosureState)
         var result: [ConversationTranscriptList.Row] = []
         let find = findHighlight
-        func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, highlight: ConversationFindHighlight? = nil, content: V) {
-            result.append(.init(id: id, revision: rowRevision(revision, colorScheme, dynamicTypeSize, locale.identifier, themeStore.codeThemeId, highlight ?? ConversationFindHighlight(needle: "", nth: 0)), content: AnyView(content
+        // A row whose revision and spacing are unchanged keeps the view built for it last pass: the list
+        // only reconfigures a cell when its revision changes, so building it again is thrown away, and
+        // on a live session every append rebuilt every row (ios-performance.md §2.4).
+        rowCache.begin(scope: sessionID + "|" + session.projectId)
+        // What every row draws with, hashed once per pass rather than into each row.
+        let environment = rowRevision(colorScheme, dynamicTypeSize, locale.identifier, themeStore.codeThemeId)
+        func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, highlight: ConversationFindHighlight? = nil, content: @autoclosure () -> V) {
+            let revision = highlight.map { rowRevision(revision, environment, $0) } ?? rowRevision(revision, environment)
+            if let kept = rowCache.row(id), kept.top == top, kept.row.revision == revision {
+                result.append(kept.row)
+                return
+            }
+            let content = content()
+            let row = ConversationTranscriptList.Row(id: id, revision: revision, content: AnyView(content
                 .environment(\.conversationFindHighlight, highlight)
                 .modifier(ConversationFindFlash(highlight: highlight))
                 .environment(\.colorScheme, colorScheme).environment(\.dynamicTypeSize, dynamicTypeSize).environment(\.locale, locale)
                 .environment(\.conversationReadingHistory, !nearBottom).environment(\.conversationFocusedRow, focusedRow)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, top))))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, top)))
+            rowCache.keep(id, (top, row))
+            result.append(row)
         }
         let docked = dockedInteraction?.id
         func appendRecords(_ values: [ConversationInteractionLedger.Record]) {
@@ -455,13 +470,7 @@ struct ConversationView: View {
             append("meta.empty", revision: 0, top: 20, content: ContentUnavailableView("还没有消息", systemImage: "bubble.left.and.text.bubble.right"))
         }
         appendRecords(byRow[nil] ?? [])
-        var readingKeys: [String: String] = [:], cells: [String: String] = [:]
-        for entry in entries {
-            if let key = entry.readingKey { readingKeys[entry.id] = key }
-            for key in entry.itemKeys where cells[key] == nil || entry.itemKeys.count == 1 { cells[key] = entry.id }
-        }
-        probe.readingKeys = readingKeys
-        probe.cells = cells
+        probe.entries = entries
         for entry in entries {
             let speed = speeds[entry.rowKey]
             // Only a process rendered as one cell reads `readingHistory` (to
@@ -476,7 +485,10 @@ struct ConversationView: View {
                    highlight: find.flatMap { found in Self.findHighlight(found, in: entry) }, content: transcriptEntry(entry, session: session, speed: speed))
             if entry.isLastInRow { appendRecords(byRow[entry.rowKey] ?? []) }
         }
-        appendRecords(records.filter { $0.afterRow.map { !rowKeys.contains($0) } ?? false })
+        if records.contains(where: { $0.afterRow != nil }) {
+            let rowKeys = Set(rows.map(\.key))
+            appendRecords(records.filter { $0.afterRow.map { !rowKeys.contains($0) } ?? false })
+        }
         // The compaction activity already shows progress in the timeline.
         let showsWorking = workbench.selected?.id == sessionID && (workbench.sendState.interrupting || workbench.status?.phase == .busy && !workbench.dock.compacting)
         if showsWorking {
@@ -507,6 +519,7 @@ struct ConversationView: View {
                 .accessibilityIdentifier("conversationBackground"))
         }
         append("transcriptEnd", revision: 0, content: Color.clear.frame(height: 18).accessibilityHidden(true))
+        rowCache.end(keeping: result)
         return result
     }
 
@@ -529,11 +542,14 @@ struct ConversationView: View {
     /// after it — two snapshots, one visible slide of everything above.
     private func effectiveProcessExpansion() -> [String: Bool] {
         var expanded = processExpansion
+        // Hashing every process key each pass costs more than the rest of the plan (Kotlin strings,
+        // ios-performance.md §2.13); only the pass right after a process stops has anything to do.
+        guard !runningProcesses.isEmpty else { return expanded }
+        let processes = rows.compactMap { $0 as? TimelineRowProcess }
+        let stopped = runningProcesses.subtracting(processes.filter(\.running).map(\.key))
+        guard !stopped.isEmpty else { return expanded }
         let scope = workbench.baseURL.absoluteString + "|" + sessionID
-        let running = Set(rows.compactMap { $0 as? TimelineRowProcess }.filter(\.running).map(\.key))
-        for process in rows.compactMap({ $0 as? TimelineRowProcess })
-        where runningProcesses.contains(process.key) && !running.contains(process.key)
-            && process.issueCount == 0 {
+        for process in processes where process.issueCount == 0 && stopped.contains(process.key) {
             if disclosureState.hasOpenDetail(in: process, scope: scope) && expanded[process.key] != false {
                 expanded[process.key] = true
             }
@@ -545,10 +561,13 @@ struct ConversationView: View {
         let processes = rows.compactMap { $0 as? TimelineRowProcess }
         let scope = workbench.baseURL.absoluteString + "|" + sessionID
         let running = Set(processes.filter(\.running).map(\.key))
-        let keys = Set(processes.map(\.key))
-        processExpansion = processExpansion.filter { keys.contains($0.key) }
-        for process in processes {
-            if runningProcesses.contains(process.key) && !running.contains(process.key),
+        if !processExpansion.isEmpty {
+            let keys = Set(processes.map(\.key))
+            processExpansion = processExpansion.filter { keys.contains($0.key) }
+        }
+        let stopped = runningProcesses.subtracting(running)
+        for process in stopped.isEmpty ? [] : processes {
+            if stopped.contains(process.key),
                process.issueCount == 0 && processExpansion[process.key] == nil {
                 if disclosureState.hasOpenDetail(in: process, scope: scope) {
                     processExpansion[process.key] = true
@@ -604,7 +623,7 @@ struct ConversationView: View {
         }
         // The transcript's column (see `TranscriptLayout.columnWidth`).
         .frame(maxWidth: RiffetMetrics.readingWidth)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight.value = $0 }
         .overlay(alignment: .topTrailing) {
             Group {
                 if hasNewer || !followsTail && !nearBottom {
@@ -815,5 +834,44 @@ private extension ToolbarContent {
     /// The title is text on the page, not a control: no glass capsule behind it.
     @ToolbarContentBuilder func sharedBackgroundHidden() -> some ToolbarContent {
         if #available(iOS 26.0, *) { sharedBackgroundVisibility(.hidden) } else { self }
+    }
+}
+
+/// Toasts clear the composer; reading its height here keeps the page itself from re-running as it grows.
+private struct ComposerToastClearance: ViewModifier {
+    let height: ConversationComposerHeight
+    func body(content: Content) -> some View { content.riffetToastClearance(height.value) }
+}
+
+/// Leaves the page when its conversation is deleted. `dismiss` changes whenever the navigation around
+/// the page does (keyboard, sheets, pushes); read here, those changes do not re-run the page.
+private struct DismissOnRemoval: ViewModifier {
+    let workbench: Workbench
+    let sessionID: String
+    @Environment(\.dismiss) private var dismiss
+    func body(content: Content) -> some View {
+        content.onChange(of: workbench.removal) { _, removal in if removal?.ids.contains(sessionID) == true { dismiss() } }
+    }
+}
+
+/// The rows of earlier `transcriptRows` passes, by id. A row kept as it was is not written again; rows
+/// that left the transcript are dropped once they make up a quarter of what is held, so it holds little
+/// more than the list does.
+private final class TranscriptRowCache {
+    typealias Entry = (top: CGFloat, row: ConversationTranscriptList.Row)
+    private var scope = ""
+    private var rows: [String: Entry] = [:]
+
+    func begin(scope: String) {
+        guard scope != self.scope else { return }
+        self.scope = scope
+        rows.removeAll()
+    }
+    func row(_ id: String) -> Entry? { rows[id] }
+    func keep(_ id: String, _ entry: Entry) { rows[id] = entry }
+    func end(keeping current: [ConversationTranscriptList.Row]) {
+        guard rows.count > current.count + current.count / 4 + 16 else { return }
+        let ids = Set(current.map(\.id))
+        rows = rows.filter { ids.contains($0.key) }
     }
 }

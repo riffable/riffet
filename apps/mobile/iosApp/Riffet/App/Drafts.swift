@@ -2,35 +2,79 @@ import Foundation
 import Observation
 import RiffetKit
 
+/// Values the app rewrites while it is being used: drafts on every edit, reading positions, learned
+/// image shapes. They live outside `UserDefaults.standard` because every write there makes each
+/// `@AppStorage` in the app report a change, so the root view and every open page re-evaluated
+/// on each keystroke (docs/guide/ios-performance.md §2.2).
+enum AppStateDefaults {
+    nonisolated(unsafe) static let store = UserDefaults(suiteName: "io.github.riffable.iphone.state") ?? .standard
+
+    /// A value written by an earlier version to the standard store, moved here on first read.
+    static func object(forKey key: String) -> Any? {
+        if let value = store.object(forKey: key) { return value }
+        guard let legacy = UserDefaults.standard.object(forKey: key) else { return nil }
+        store.set(legacy, forKey: key)
+        UserDefaults.standard.removeObject(forKey: key) // perf-rules: allow once per key, moving it out
+        return legacy
+    }
+    static func data(forKey key: String) -> Data? { object(forKey: key) as? Data }
+    static func string(forKey key: String) -> String? { object(forKey: key) as? String }
+    static func remove(_ key: String) {
+        store.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key) // perf-rules: allow a value never moved, on deletion only
+    }
+}
+
 @MainActor @Observable
 final class DraftStore {
     private let prefix: String
-    private var entries: [String: MessageDraft] = [:]
+    /// Not observed: `draft(_:)` runs inside `body`, and an observed insertion there invalidated every
+    /// view that had asked for any draft, the open conversation included, for one more full pass
+    /// (docs/guide/ios-performance.md §2.3). `loaded` tells the rows that read `hasContent` instead.
+    @ObservationIgnored private var entries: [String: MessageDraft] = [:]
     @ObservationIgnored private var unloadedContent: [String: Bool] = [:]
+    private var loaded = 0
     init(server: String) { prefix = "riffet.ios.\(server)." }
     func draft(_ key: String) -> MessageDraft {
         if let entry = entries[key] { return entry }
+        if entries.count >= Self.keptIdle { releaseIdle() }
         let entry = MessageDraft(key: prefix + "draft." + key)
         entries[key] = entry
+        // After this update: a row that read the saved value starts observing the live draft.
+        DispatchQueue.main.async { self.loaded += 1 }
         return entry
     }
     /// Avoid constructing and retaining a draft for every row in a large session list.
     /// Existing entries remain observable, so editing a loaded draft updates its row immediately.
     func hasContent(_ key: String) -> Bool {
+        _ = loaded
         if let entry = entries[key] { return entry.hasContent }
         if let saved = unloadedContent[key] { return saved }
         let saved = MessageDraft.savedHasContent(key: prefix + "draft." + key)
         unloadedContent[key] = saved
         return saved
     }
-    func readingAnchor(_ sessionID: String) -> String? { UserDefaults.standard.string(forKey: prefix + "anchor." + sessionID) }
-    func setReadingAnchor(_ anchor: String?, for sessionID: String) { UserDefaults.standard.set(anchor, forKey: prefix + "anchor." + sessionID) }
+    func readingAnchor(_ sessionID: String) -> String? { AppStateDefaults.string(forKey: prefix + "anchor." + sessionID) }
+    func setReadingAnchor(_ anchor: String?, for sessionID: String) {
+        if let anchor { AppStateDefaults.store.set(anchor, forKey: prefix + "anchor." + sessionID) } else { AppStateDefaults.remove(prefix + "anchor." + sessionID) }
+    }
     func flush() { entries.values.forEach { $0.save() } }
+    /// Loaded drafts past this are released once nothing else holds them and their last edit is
+    /// written; one opened later is read from the store again (docs/guide/performance.md §3.1).
+    private static let keptIdle = 32
+    private func releaseIdle() {
+        for key in Array(entries.keys) {
+            guard entries[key]!.settled, isKnownUniquelyReferenced(&entries[key]!) else { continue }
+            unloadedContent[key] = entries[key]!.hasContent
+            entries[key] = nil
+        }
+    }
     /// A deleted conversation's draft goes with it, unwritten.
     func discard(_ key: String) {
         entries[key] = nil
+        loaded += 1
         unloadedContent[key] = nil
-        UserDefaults.standard.removeObject(forKey: prefix + "draft." + key)
+        AppStateDefaults.remove(prefix + "draft." + key)
     }
 }
 
@@ -97,7 +141,7 @@ final class MessageDraft {
     }
     init(key: String) {
         self.key = key
-        let saved = UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(Snapshot.self, from: $0) }
+        let saved = AppStateDefaults.data(forKey: key).flatMap { try? JSONDecoder().decode(Snapshot.self, from: $0) }
         text = saved?.text ?? ""; attachments = saved?.attachments.map(\.value) ?? []
         pendingFiles = saved?.pendingFiles?.map(\.value) ?? []
         references = saved?.references?.map(\.value) ?? []
@@ -107,9 +151,11 @@ final class MessageDraft {
         restoring = false
     }
     var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !uploading && pendingFiles.isEmpty }
+    /// Nothing waits to be written or uploaded.
+    var settled: Bool { scheduledSave == nil && !uploading }
     var hasContent: Bool { !text.isEmpty || !attachments.isEmpty || !pendingFiles.isEmpty || !references.isEmpty }
     static func savedHasContent(key: String) -> Bool {
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = AppStateDefaults.data(forKey: key),
               let saved = try? JSONDecoder().decode(Snapshot.self, from: data) else { return false }
         return !saved.text.isEmpty || !saved.attachments.isEmpty || !(saved.pendingFiles?.isEmpty ?? true) || !(saved.references?.isEmpty ?? true)
     }
@@ -128,7 +174,7 @@ final class MessageDraft {
             let snapshot = self.snapshot(), key = self.key
             self.persistenceWriteCount += 1
             Self.persistence.async {
-                if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: key) }
+                if let data = try? JSONEncoder().encode(snapshot) { AppStateDefaults.store.set(data, forKey: key) }
             }
         }
     }
@@ -140,7 +186,7 @@ final class MessageDraft {
         let snapshot = snapshot(), key = key
         persistenceWriteCount += 1
         Self.persistence.sync {
-            if let data = try? JSONEncoder().encode(snapshot) { UserDefaults.standard.set(data, forKey: key) }
+            if let data = try? JSONEncoder().encode(snapshot) { AppStateDefaults.store.set(data, forKey: key) }
         }
     }
     func clear(sentText: String, sentAttachments: [Attachment], sentReferences: [PromptContextReference] = [], sentRevision: Int? = nil) {
@@ -182,6 +228,11 @@ final class MessageDraft {
                 guard pendingFiles.contains(where: { $0.id == file.id }) else { continue }
                 let uploaded = try await workbench.store.uploadAttachment(picked: picked, projectId: projectID)
                 guard pendingFiles.contains(where: { $0.id == file.id }) else { continue }
+                // The composer's thumbnail comes from the file still on the phone, not a download of what was just sent.
+                if file.mimeType.hasPrefix("image/"),
+                   let thumbnail = await Task.detached(priority: .utility, operation: { (try? file.data()).flatMap { ConversationImageDecoder.decode($0, maximumPixelSize: 160) } }).value {
+                    ConversationLayoutMemo.shared.store(thumbnail, for: "thumbnail:" + uploaded.id)
+                }
                 attachments.append(uploaded)
                 removePending(file.id)
             } catch {

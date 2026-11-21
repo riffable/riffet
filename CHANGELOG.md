@@ -78,6 +78,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Sending a message no longer flashes (briefly disappearing and fading back in) when a fast Agent accepts or finishes it before the timeline row arrives.
 - In the Personal Assistant conversation on the web, `/new` now appears as a "New topic" divider and collapses earlier topics by default (expandable anytime, and auto-expanded when searching or jumping from the outline), while background maintenance trims oversized old tool outputs past 14 days without affecting search or memory consolidation.
 
+### Performance
+
+- iPhone is smoother with thousands of conversations and long transcripts: the task list scrolls and opens a conversation without the second-long pause, a long conversation opens and keeps up with a streaming reply without rebuilding everything above it, and typing into a long draft no longer stutters. Opened attachments stay on the phone (up to 256 MB) instead of downloading again after a restart, the image viewer loads a sharper copy for zooming, and formulas draw without a web page each. The first search in Settings no longer freezes the page for over a second, an unreachable server's status page is asked less and less often, and the Git panel reconnects after the network drops.
+
 ## 0.9.0 - 2026-11-19
 
 ### Upgrade notes

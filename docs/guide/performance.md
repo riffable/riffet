@@ -2,7 +2,7 @@
 
 返回 [中文 README](../../README.zh-CN.md)。
 
-本文规定各端（服务端、Web、Mac、iOS、Android）在内存、CPU、网络和存储上的预算与写法。Android 与 Web 的帧预算与主线程规则另见 [Android 流畅度规范](android-performance.md) 与 [Web 流畅度规范](web-performance.md)。规则来自 2026-11-16 的一次全端排查：Mac 客户端运行 2.7 天后占用 857 MB、峰值 1.2 GB；服务端启动 5 分钟 RSS 774 MB；`workbench.db` 6.5 GB。各端的问题属于同几类，因此统一写在这里。
+本文规定各端（服务端、Web、Mac、iOS、Android）在内存、CPU、网络和存储上的预算与写法。Android 与 iPhone 的帧预算与主线程规则另见 [Android 流畅度规范](android-performance.md)、[iPhone 流畅度规范](ios-performance.md) 与 [Web 流畅度规范](web-performance.md)。规则来自 2026-11-16 的一次全端排查：Mac 客户端运行 2.7 天后占用 857 MB、峰值 1.2 GB；服务端启动 5 分钟 RSS 774 MB；`workbench.db` 6.5 GB。各端的问题属于同几类，因此统一写在这里。
 
 ## 1. 原则
 

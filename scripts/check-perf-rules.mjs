@@ -10,8 +10,13 @@
 //     moduleCollection   Web/server module-level `new Map()` / `new Set()` that grows at runtime: bound it or clear it
 //                        when its owner goes (§3.1)
 //     staticDictionary   Swift `static var x = [:]`: the same, for Mac and iPhone
+//     formatterPerCall   Swift date/number formatter or NSRegularExpression built outside a `static` declaration:
+//                        building one costs more than using it, and these sit on render paths (ios-performance.md §2.5)
 //     webInterval        Web `setInterval`: a timer that keeps firing in a hidden tab; use useVisibleInterval
 //                        (apps/web/src/lib/use-visible-interval.ts) or say why it must run (web-performance.md §2.7)
+//     standardDefaults   iPhone write to UserDefaults.standard: every write makes each @AppStorage in the app
+//                        report a change, so state rewritten while the app is used goes to AppStateDefaults
+//                        (ios-performance.md §2.2)
 //
 // A deliberate exception carries `perf-rules: allow <reason>` on the line or the line above.
 //
@@ -61,10 +66,22 @@ const RATCHETS = {
     test: (line) => /\bstatic\s+(private\s+)?var\s+\w+\s*(:\s*\[[^\]]+:[^\]]+\])?\s*=\s*\[:\]/.test(line),
     hint: 'static mutable dictionary — bound it or clear it with its owner (performance.md §3.1)',
   },
+  formatterPerCall: {
+    lang: /\.swift$/,
+    // A `static` or file-level declaration, or the body of a closure that initializes one, runs once.
+    test: (line, previous) => /\b(ISO8601DateFormatter|DateFormatter|NumberFormatter|ByteCountFormatter|DateComponentsFormatter|RelativeDateTimeFormatter|ListFormatter)\(\)|\bNSRegularExpression\(/.test(line)
+      && ![line, previous].some((text) => /\bstatic\b|^(private |fileprivate )?(nonisolated\(unsafe\) )?(let|var) /.test(text) && (text === line || /=\s*\{\s*$/.test(text))),
+    hint: 'formatter or regular expression built per call — keep one in a `static let` (ios-performance.md §2.5)',
+  },
   webInterval: {
     lang: /^apps\/web\/src\/(?!lib\/use-visible-interval\.ts$).*\.tsx?$/,
     test: (line) => /\bsetInterval\(/.test(line),
     hint: 'setInterval keeps firing in a hidden tab — use useVisibleInterval, or say why with perf-rules: allow (web-performance.md §2.7)',
+  },
+  standardDefaults: {
+    lang: /^apps\/mobile\/iosApp\/.*\.swift$/,
+    test: (line) => /\bUserDefaults\.standard\.(set|removeObject)\(/.test(line),
+    hint: 'UserDefaults.standard write — each one re-evaluates every @AppStorage; state rewritten during use goes to AppStateDefaults (ios-performance.md §2.2)',
   },
 };
 
@@ -97,7 +114,7 @@ for (const path of [...new Set(SOURCES.flatMap((dir) => [...walk(join(root, dir)
   for (const [kind, rule] of Object.entries(RATCHETS)) {
     if (!rule.lang.test(path)) continue;
     lines.forEach((line, index) => {
-      if (!rule.test(line) || allowed(lines, index)) return;
+      if (!rule.test(line, lines[index - 1] ?? '') || allowed(lines, index)) return;
       counts[kind][path] = (counts[kind][path] ?? 0) + 1;
       (hits[kind][path] ??= []).push(index + 1);
     });

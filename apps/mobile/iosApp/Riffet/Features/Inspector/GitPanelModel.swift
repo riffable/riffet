@@ -93,18 +93,26 @@ final class GitPanelModel {
         branch = try? await api().gitBranch(projectId: project.id)
     }
 
-    /// Follows the server's status stream while the panel is on screen; the manual refresh covers the rest.
+    /// Follows the server's status stream while the panel is on screen. A stream that drops (network
+    /// change, server restart) is followed again after a fresh read, backing off while it keeps failing.
     func watch() async {
-        await reload()
-        guard let api = try? api() else { return }
-        do {
-            for try await next in api.gitStatusStream(projectId: project.id) {
-                let moved = next.branch != status?.branch
-                status = next
-                statusError = nil
-                if moved || branch == nil { await reloadBranch() }
-            }
-        } catch {}
+        var delay = 1.0
+        while !Task.isCancelled {
+            await reload()
+            guard let api = try? api() else { return }
+            do {
+                for try await next in api.gitStatusStream(projectId: project.id) {
+                    delay = 1
+                    let moved = next.branch != status?.branch
+                    status = next
+                    statusError = nil
+                    if moved || branch == nil { await reloadBranch() }
+                }
+            } catch {}
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            delay = min(delay * 2, 30)
+        }
     }
 
     /// Runs one write; the panel takes one at a time.

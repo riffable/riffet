@@ -908,11 +908,7 @@ private struct DevicesView: View {
         return relative.localizedString(for: date, relativeTo: Date())
     }
 
-    private static func date(_ value: String) -> Date? {
-        let precise = ISO8601DateFormatter()
-        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return precise.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    }
+    private static func date(_ value: String) -> Date? { ServerTime.date(value) }
 
     /// Online first, then the most recently seen.
     private static func presence(_ a: PublicDevice, _ b: PublicDevice) -> Bool {

@@ -139,8 +139,20 @@ enum ServerTime {
 
     private nonisolated(unsafe) static let plain = ISO8601DateFormatter()
 
+    /// Rows re-render with the same timestamps (a list row's time, a step's start); parsing ISO 8601 costs
+    /// more than drawing the row, so parsed values are kept. Entries are a few dozen bytes.
+    private nonisolated(unsafe) static let parsed: NSCache<NSString, NSDate> = {
+        let cache = NSCache<NSString, NSDate>()
+        cache.countLimit = 4096
+        CacheRegistry.shared.register("serverTime.dates", limit: 0) { cache.removeAllObjects() }
+        return cache
+    }()
+
     static func date(_ value: String?) -> Date? {
         guard let value else { return nil }
-        return fractional.date(from: value) ?? plain.date(from: value)
+        if let known = parsed.object(forKey: value as NSString) { return known as Date }
+        guard let date = fractional.date(from: value) ?? plain.date(from: value) else { return nil }
+        parsed.setObject(date as NSDate, forKey: value as NSString)
+        return date
     }
 }

@@ -88,7 +88,8 @@ struct OwnerAvatarView: View {
             guard let url = url ?? workbench.ownerAvatarURL else { image = nil; return }
             if let cached = OwnerAvatarCache.shared.object(forKey: url.absoluteString as NSString) { image = cached; return }
             guard let data = try? await workbench.resources.data(for: url),
-                  let decoded = await Task.detached(priority: .userInitiated, operation: { UIImage(data: data) }).value else { return }
+                  // Decoded here, at display size: `UIImage(data:)` defers the full-size decode to the first draw on the main thread.
+                  let decoded = await Task.detached(priority: .userInitiated, operation: { ConversationImageDecoder.decode(data, maximumPixelSize: 300) }).value else { return }
             OwnerAvatarCache.shared.setObject(decoded, forKey: url.absoluteString as NSString)
             withAnimation(RiffetMotion.release) { image = decoded }
         }

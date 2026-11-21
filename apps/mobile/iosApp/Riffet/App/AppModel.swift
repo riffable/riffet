@@ -58,6 +58,9 @@ final class AppModel {
                 for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("riffet.ios.") {
                     UserDefaults.standard.removeObject(forKey: key)
                 }
+                for key in AppStateDefaults.store.dictionaryRepresentation().keys where key.hasPrefix("riffet.ios.") {
+                    AppStateDefaults.store.removeObject(forKey: key)
+                }
                 let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
                 let sharedCache = support.appendingPathComponent("Riffet", isDirectory: true)
                 if FileManager.default.fileExists(atPath: sharedCache.path) { try FileManager.default.removeItem(at: sharedCache) }
@@ -72,6 +75,9 @@ final class AppModel {
                 // An upgrade or a restored pairing never sees the welcome, now or after forgetting the server.
                 if workbench == nil && pairedServers.isEmpty { onboarding = true } else { UserDefaults.standard.set(true, forKey: Self.onboardingKey) }
             }
+            #if DEBUG
+            PerfProbe.install(model: self)
+            #endif
         } catch { self.error = error.riffetMessage }
     }
     func finishOnboarding() {

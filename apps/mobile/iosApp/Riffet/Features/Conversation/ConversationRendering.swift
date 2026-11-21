@@ -4,6 +4,7 @@ import JavaScriptCore
 import ImageIO
 import UIKit
 import Observation
+import RiffetKit
 
 /// One serial parser keeps the stream from spawning a queue of competing full-document parses.
 /// Callers debounce and check cancellation before publishing; completed answers share the macOS AST cache.
@@ -260,9 +261,14 @@ actor ConversationSyntax {
 }
 
 enum ConversationImageDecoder {
+    /// Long edge of an inline picture: the phone budget, about three times the transcript column.
+    static let displayEdge = Int(BudgetsKt.IMAGE_DISPLAY_EDGE_PX_PHONE)
+    /// Long edge of a picture in the viewer, which zooms to 5×: the original for any screenshot or
+    /// photo, without allocating a full panorama or a 48 MP bitmap.
+    static let viewerEdge = 4_096
     /// Decode downsampled thumbnails off the main actor, rather than allocating e.g. a 48MP bitmap
-    /// for a 360pt transcript image. The preview keeps sufficient resolution for a phone display.
-    static func decode(_ data: Data, maximumPixelSize: Int = 2_048) -> UIImage? {
+    /// for a 360pt transcript image.
+    static func decode(_ data: Data, maximumPixelSize: Int = displayEdge) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
               let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -341,7 +347,7 @@ struct ConversationParagraph: UIViewRepresentable {
     let quote: ((String) -> Void)?
     func makeCoordinator() -> Coordinator { Coordinator(open: open) }
     func makeUIView(context: Context) -> UITextView {
-        let view = ConversationParagraphTextView.make()
+        let view = ConversationParagraphTextView.reused() ?? ConversationParagraphTextView.make()
         view.backgroundColor = .clear; view.isEditable = false; view.isSelectable = true; view.isScrollEnabled = false
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
         view.delegate = context.coordinator
@@ -359,6 +365,10 @@ struct ConversationParagraph: UIViewRepresentable {
         context.coordinator.publish(to: view, width: view.bounds.width > 0 ? view.bounds.width : 320)
         context.coordinator.probe = context.environment.conversationFindProbe
         context.coordinator.reportMark(view)
+    }
+    static func dismantleUIView(_ view: UITextView, coordinator: Coordinator) {
+        coordinator.probe?.report(view, marked: false)
+        (view as? ConversationParagraphTextView)?.recycle()
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
@@ -455,6 +465,24 @@ final class ConversationParagraphTextView: UITextView {
         let view = ConversationParagraphTextView(frame: .zero, textContainer: container)
         view.storage = storage
         return view
+    }
+    /// Creating a text view costs more than laying out its paragraph (384 ms against 177 ms while a
+    /// long transcript opened), and rows come and go as the list scrolls, so released views are kept
+    /// for the next paragraph. Bounded to about two screens of paragraphs.
+    @MainActor private static var pool: [ConversationParagraphTextView] = []
+    private static let pooled = 48
+    @MainActor static func reused() -> ConversationParagraphTextView? { pool.popLast() }
+    private static let purgeOnWarning: Void = CacheRegistry.shared.register("conversation.paragraphViews", limit: 0) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { pool.removeAll() } }
+    }
+    @MainActor func recycle() {
+        _ = Self.purgeOnWarning
+        guard Self.pool.count < Self.pooled else { return }
+        if isFirstResponder { resignFirstResponder() }
+        delegate = nil; widthChanged = nil; previousWidth = -1
+        attributedText = NSAttributedString()
+        removeFromSuperview()
+        Self.pool.append(self)
     }
     /// The text view does not own a storage it was handed; this keeps it alive.
     private var storage: NSTextStorage?

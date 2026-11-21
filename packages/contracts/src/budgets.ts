@@ -17,11 +17,15 @@ export const LANE_WINDOW = {
   phone: { rows: 800, bytes: 4 * MIB },
 } as const;
 
-/** Decoded images kept for drawing, and the encoded bytes kept for a viewer or a save. */
+/**
+ * Decoded images kept for drawing, and the encoded bytes kept for a viewer or a save. `diskBytes`:
+ * attachment bytes the iPhone keeps on disk across launches (attachments never change); a response
+ * over 5% of it is not kept.
+ */
 export const IMAGE_CACHE = {
   mac: { decodedBytes: 64 * MIB, encodedBytes: 32 * MIB },
   web: { decodedBytes: 64 * MIB, encodedBytes: 32 * MIB },
-  phone: { decodedBytes: 32 * MIB, encodedBytes: 16 * MIB },
+  phone: { decodedBytes: 32 * MIB, encodedBytes: 16 * MIB, diskBytes: 256 * MIB },
 } as const;
 
 /** Long edge, in pixels, of the copy an inline image is decoded to; the viewer decodes the original. */

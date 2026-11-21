@@ -97,12 +97,20 @@ enum AssistantPage: String, Identifiable {
     }
 }
 
-private func relativeText(_ value: String?) -> String? {
+@MainActor private func relativeText(_ value: String?) -> String? {
     guard let value, let date = ServerTime.date(value) else { return nil }
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .full
-    formatter.locale = AppLocalization.shared.locale
-    return formatter.localizedString(for: date, relativeTo: Date())
+    let locale = AppLocalization.shared.locale
+    if RelativeTime.formatter.locale != locale { RelativeTime.formatter.locale = locale }
+    return RelativeTime.formatter.localizedString(for: date, relativeTo: Date())
+}
+
+/// One formatter for every row; only the app language can change it.
+@MainActor private enum RelativeTime {
+    static let formatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
 }
 
 /// The setup rows of the session info: 记忆, 规则, 能力 and, once there is one, 委托.
@@ -146,7 +154,7 @@ struct AssistantRootView: View {
     private var mainID: String? {
         if let id = workbench.assistantMain?.id { return id }
         guard let id = started else { return nil }
-        let held = workbench.list.sessions.first { $0.id == id }
+        let held = workbench.listedSession(id)
         return held?.archivedAt == nil ? id : nil
     }
 

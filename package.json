@@ -40,6 +40,7 @@
     "trace:android": "node scripts/android-frame-trace.mjs",
     "perf:android": "node scripts/android-perf.mjs",
     "perf:web": "node scripts/web-perf.mjs",
+    "perf:ios": "node scripts/ios-perf.mjs",
     "i18n:extract": "lingui extract --clean --config apps/web/lingui.config.ts",
     "i18n:check": "tsx scripts/check-i18n.ts",
     "replay:transcript": "tsx scripts/replay-transcript.ts",

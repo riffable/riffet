@@ -33,6 +33,7 @@ struct RiffetRootView: View {
     @State private var newPath: [MobileRoute] = []
     @State private var assistantPath: [MobileRoute] = []
     @State private var taskPath: [MobileRoute] = []
+    @State private var openFromList = RouteAction()
     /// Bumped when the current Tasks tab is tapped again; the list scrolls to its top.
     @State private var tasksScrollTop = 0
     @State private var deletionShown = false
@@ -160,7 +161,10 @@ struct RiffetRootView: View {
     }
     @ViewBuilder private var taskList: some View {
         if let workbench {
-            SessionHomeView(workbench: workbench, scrollToTop: tasksScrollTop, openSessionID: openTaskID) { openTask($0) }
+            // The action is refreshed each pass and handed over as the same object, so a push does not
+            // count as a change to the list: a closure would, and the list body would run again.
+            let _ = openFromList.run = { openTask($0) }
+            SessionHomeView(workbench: workbench, scrollToTop: tasksScrollTop, openSessionID: openTaskID, onOpen: openFromList)
         } else {
             NeedsServerView().navigationTitle(RootTab.tasks.title).navigationBarTitleDisplayMode(.inline)
         }
@@ -248,7 +252,7 @@ struct SessionHomeView: View {
     var scrollToTop = 0
     /// The session open beside the list on a wide window.
     var openSessionID: String?
-    let onOpen: (MobileRoute) -> Void
+    let onOpen: RouteAction
     @State private var query = ""
     @State private var scope: String?
     @State private var filter: HomeFilter
@@ -260,12 +264,13 @@ struct SessionHomeView: View {
     @State private var title = ""
     @State private var tagging: Session?
     @State private var tags = ""
+    @State private var order = SessionOrder()
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private static let topID = "tasks.top"
     private var preferenceKey: String { "riffet.ios.\(workbench.baseURL.absoluteString).home." }
 
-    init(workbench: Workbench, scrollToTop: Int = 0, openSessionID: String? = nil, onOpen: @escaping (MobileRoute) -> Void) {
+    init(workbench: Workbench, scrollToTop: Int = 0, openSessionID: String? = nil, onOpen: RouteAction) {
         self.workbench = workbench
         self.scrollToTop = scrollToTop
         self.openSessionID = openSessionID
@@ -285,7 +290,7 @@ struct SessionHomeView: View {
         // project scope adds the archived ones; every other filter leaves them out.
         let chats = chatProject?.id
         let withChats = filter == .quickChat || (filter == .archived && scope == nil)
-        return workbench.list.sessions.filter {
+        return order.sorted(workbench.list).filter {
             ($0.projectId == chats ? withChats : filter != .quickChat) &&
             (($0.archivedAt != nil || archivedProjects.contains($0.projectId)) == (filter == .archived)) &&
             (scope == nil || $0.projectId == scope || ($0.projectId == chats && filter == .quickChat)) &&
@@ -293,7 +298,7 @@ struct SessionHomeView: View {
             (filter != .unread || $0.id == openSessionID || SidebarModelKt.isDoneUnseen(session: $0)) &&
             (tag == nil || $0.tags.contains(tag!)) &&
             (query.isEmpty || "\($0.title) \(names[$0.projectId] ?? "") \($0.tags.joined(separator: " "))".localizedCaseInsensitiveContains(query))
-        }.sorted { SidebarModelKt.compareSessions(a: $0, b: $1) < 0 }
+        }
     }
     private var chatProject: Project? { workbench.list.projects.first { $0.isQuickChat && $0.archivedAt == nil } }
     /// 快速对话 only when the server keeps quick chats.
@@ -313,34 +318,18 @@ struct SessionHomeView: View {
 
     @ViewBuilder private var sessionList: some View {
         let visible = sessions
-        // What needs the reader, then what is still working, lead the list; a pinned session that
-        // is running shows among the running ones and returns to 置顶 when it settles.
-        let waiting = visible.filter { $0.state == .waiting }
-        let running = visible.filter { $0.state != .waiting && $0.state.isActive }
-        let settled = visible.filter { $0.state != .waiting && !$0.state.isActive }
-        let pinned = settled.filter { $0.pinnedAt != nil }
-        let recent = settled.filter { $0.pinnedAt == nil }
         ScrollViewReader { proxy in
             List {
                 controlsHeader.id(Self.topID)
                     .listRowInsets(EdgeInsets()).listRowSeparator(.hidden).listRowBackground(Color.clear)
-                Group {
-                    if !waiting.isEmpty { groupHeader(String(localized: "待处理", bundle: .riffet)); ForEach(waiting, id: \.id) { row($0) } }
-                    if !running.isEmpty { groupHeader(String(localized: "运行中", bundle: .riffet)); ForEach(running, id: \.id) { row($0) } }
-                    if !pinned.isEmpty { groupHeader(String(localized: "置顶", bundle: .riffet)); ForEach(pinned, id: \.id) { row($0) } }
-                    if grouping == .project && scope == nil {
-                        ForEach(workbench.list.projects.filter { project in recent.contains { $0.projectId == project.id } }, id: \.id) { project in
-                            let items = recent.filter { $0.projectId == project.id }
-                            projectHeader(project, count: items.count)
-                            if !collapsedProjects.contains(project.id) { ForEach(items, id: \.id) { row($0) } }
-                        }
-                        let unknown = recent.filter { workbench.project($0.projectId) == nil }
-                        if !unknown.isEmpty { groupHeader(String(localized: "其他会话", bundle: .riffet)); ForEach(unknown, id: \.id) { row($0) } }
-                    } else {
-                        ForEach(timeGroups(recent), id: \.title) { group in
-                            groupHeader(group.title)
-                            ForEach(group.items, id: \.id) { row($0) }
-                        }
+                // One ForEach over headers and sessions. List runs its content closure for every item on
+                // each pass, so the closure only picks the row's frame; what a row shows is worked out in
+                // `SessionRowLabel`, for the rows on screen (ios-performance.md §2.4).
+                ForEach(listItems(visible)) { item in
+                    switch item {
+                    case let .header(_, title): groupHeader(title)
+                    case let .project(project, count): projectHeader(project, count: count)
+                    case let .session(session): row(session)
                     }
                 }
                 if visible.isEmpty {
@@ -508,6 +497,38 @@ struct SessionHomeView: View {
             } label: { Image(systemName: "ellipsis") }.accessibilityLabel("筛选与分组")
         }
     }
+    /// The list's rows in order: what needs the reader, then what is still working, lead; a pinned
+    /// session that is running shows among the running ones and returns to 置顶 when it settles.
+    private func listItems(_ visible: [Session]) -> [HomeListItem] {
+        let waiting = visible.filter { $0.state == .waiting }
+        let running = visible.filter { $0.state != .waiting && $0.state.isActive }
+        let settled = visible.filter { $0.state != .waiting && !$0.state.isActive }
+        let pinned = settled.filter { $0.pinnedAt != nil }
+        let recent = settled.filter { $0.pinnedAt == nil }
+        var items: [HomeListItem] = []
+        items.reserveCapacity(visible.count + 8)
+        func group(_ key: String, _ title: String, _ sessions: [Session]) {
+            guard !sessions.isEmpty else { return }
+            items.append(.header("group." + key, title))
+            items.append(contentsOf: sessions.map(HomeListItem.session))
+        }
+        group("waiting", String(localized: "待处理", bundle: .riffet), waiting)
+        group("running", String(localized: "运行中", bundle: .riffet), running)
+        group("pinned", String(localized: "置顶", bundle: .riffet), pinned)
+        if grouping == .project && scope == nil {
+            let byProject = Dictionary(grouping: recent, by: \.projectId)
+            for project in workbench.list.projects {
+                guard let sessions = byProject[project.id] else { continue }
+                items.append(.project(project, count: sessions.count))
+                if !collapsedProjects.contains(project.id) { items.append(contentsOf: sessions.map(HomeListItem.session)) }
+            }
+            group("unknown", String(localized: "其他会话", bundle: .riffet), recent.filter { workbench.project($0.projectId) == nil })
+        } else {
+            for time in timeGroups(recent) { group("time." + time.title, time.title, time.items) }
+        }
+        return items
+    }
+
     private func timeGroups(_ sessions: [Session]) -> [(title: String, items: [Session])] {
         let calendar = Calendar.current
         let groups = Dictionary(grouping: sessions) { session -> Int in
@@ -560,72 +581,11 @@ struct SessionHomeView: View {
         NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .checkpoints) } label: { Label(gitText("Checkpoints"), systemImage: "clock.arrow.circlepath") }
         NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .worktrees) } label: { Label(gitText("Worktrees"), systemImage: "arrow.triangle.branch") }
     }
-    /// Project, tags and draft on one quiet line; whatever does not fit is truncated.
-    private func rowMeta(_ session: Session) -> String {
-        var parts: [String] = []
-        if scope == nil { parts.append(workbench.project(session.projectId)?.name ?? String(localized: "项目", bundle: .riffet)) }
-        if !session.tags.isEmpty { parts.append(session.tags.prefix(2).map { "#" + $0 }.joined(separator: " ")) }
-        if workbench.drafts.hasContent("session.\(session.id)") { parts.append(String(localized: "草稿", bundle: .riffet)) }
-        if failedUnseen(session), let reason = session.error?.split(whereSeparator: \.isNewline).first.map(String.init), !reason.isEmpty { parts.append(reason) }
-        return parts.joined(separator: " · ")
-    }
-    /// Today the clock, yesterday its name, within a week the weekday, else month/day.
-    private func timeText(_ session: Session) -> String {
-        guard let date = ServerTime.date(SidebarModelKt.activityAt(session: session)) else { return "" }
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)) }
-        if calendar.isDateInYesterday(date) { return String(localized: "昨天", bundle: .riffet) }
-        if date >= calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: .now))! { return date.formatted(.dateTime.weekday(.abbreviated).locale(AppLocalization.shared.locale)) }
-        let parts = calendar.dateComponents([.month, .day], from: date)
-        return "\(parts.month ?? 0)/\(parts.day ?? 0)"
-    }
-    /// A failure is called out until it is seen; after that the conversation tells it, and the row
-    /// reads like any other (docs/design/DECISIONS.md 2026-11-17).
-    private func failedUnseen(_ session: Session) -> Bool {
-        session.state == .failed && openSessionID != session.id && SidebarModelKt.isDoneUnseen(session: session)
-    }
-    private func avatarState(_ session: Session) -> AgentAvatarState {
-        switch session.state {
-        case .waiting: .waiting
-        case .failed: failedUnseen(session) ? .failed : .idle
-        default: session.state.isActive ? .running : .idle
-        }
-    }
-    /// A coloured status word where the session needs a look, then the quiet meta.
-    private func subtitle(_ session: Session) -> Text? {
-        let status: (String, Color)?
-        switch avatarState(session) {
-        case .waiting: status = (String(localized: "等待你", bundle: .riffet), palette.warning)
-        case .failed: status = (String(localized: "失败", bundle: .riffet), palette.danger)
-        // Running rows sit under their own heading and turn an arc on the avatar; no word needed.
-        case .running, .idle: status = nil
-        }
-        let meta = rowMeta(session)
-        guard let status else { return meta.isEmpty ? nil : Text(meta) }
-        let word = Text(status.0).fontWeight(.medium).foregroundStyle(status.1)
-        return meta.isEmpty ? word : word + Text(" · " + meta)
-    }
+    /// Builds only the row's frame: `List` calls this for every session on every pass over the
+    /// list, so what the row shows is worked out in `SessionRowLabel.body`, for the rows on screen.
     private func row(_ session: Session) -> some View {
-        let name = session.shownTitle.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.shownTitle
-        let time = timeText(session)
-        return Button { onOpen(.session(session.id, session.state == .waiting)) } label: {
-            HStack(spacing: 12) {
-                AgentAvatar(backend: (session.backendId ?? .cursor).name, state: avatarState(session))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(name).riffetFont(.headline).foregroundStyle(session.archivedAt == nil ? palette.fg : palette.fg2).lineLimit(1)
-                        Spacer(minLength: 0)
-                        if openSessionID != session.id, SidebarModelKt.isDoneUnseen(session: session) {
-                            RiffetStatusDot(state: .unread, size: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
-                        }
-                        Text(time).riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
-                    }
-                    if let line = subtitle(session) { line.riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1) }
-                }
-            }
-            .padding(.horizontal, 8).padding(.vertical, 10)
-            .frame(maxWidth: .infinity, minHeight: RiffetMetrics.rowMinHeight, alignment: .leading)
-            .background(openSessionID == session.id ? palette.selected : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        Button { onOpen.run(.session(session.id, session.state == .waiting)) } label: {
+            SessionRowLabel(session: session, workbench: workbench, openSessionID: openSessionID, showsProject: scope == nil)
         }
         .buttonStyle(RiffetRowPressStyle(radius: 10))
         .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -633,7 +593,6 @@ struct SessionHomeView: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
-        .accessibilityLabel([name, session.state.label, time].filter { !$0.isEmpty }.joined(separator: "，"))
         .accessibilityIdentifier("session.\(session.id)")
         .accessibilityAddTraits(openSessionID == session.id ? .isSelected : [])
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -651,6 +610,127 @@ struct SessionHomeView: View {
                 Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)
             }
         }
+    }
+}
+
+/// What a task-list row shows. Its body runs only for rows on screen.
+private struct SessionRowLabel: View {
+    let session: Session
+    let workbench: Workbench
+    /// The session open beside the list on a wide window.
+    let openSessionID: String?
+    let showsProject: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let name = session.shownTitle.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.shownTitle
+        let time = timeText(session)
+        HStack(spacing: 12) {
+            AgentAvatar(backend: (session.backendId ?? .cursor).name, state: avatarState(session))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(name).riffetFont(.headline).foregroundStyle(session.archivedAt == nil ? palette.fg : palette.fg2).lineLimit(1)
+                    Spacer(minLength: 0)
+                    if openSessionID != session.id, SidebarModelKt.isDoneUnseen(session: session) {
+                        RiffetStatusDot(state: .unread, size: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
+                    }
+                    Text(time).riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
+                }
+                if let line = subtitle(session) { line.riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1) }
+            }
+        }
+        .padding(.horizontal, 8).padding(.vertical, 10)
+        .frame(maxWidth: .infinity, minHeight: RiffetMetrics.rowMinHeight, alignment: .leading)
+        .background(openSessionID == session.id ? palette.selected : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([name, session.state.label, time].filter { !$0.isEmpty }.joined(separator: "，"))
+    }
+
+    /// Project, tags and draft on one quiet line; whatever does not fit is truncated.
+    func rowMeta(_ session: Session) -> String {
+        var parts: [String] = []
+        if showsProject { parts.append(workbench.project(session.projectId)?.name ?? String(localized: "项目", bundle: .riffet)) }
+        if !session.tags.isEmpty { parts.append(session.tags.prefix(2).map { "#" + $0 }.joined(separator: " ")) }
+        if workbench.drafts.hasContent("session.\(session.id)") { parts.append(String(localized: "草稿", bundle: .riffet)) }
+        if failedUnseen(session), let reason = session.error?.split(whereSeparator: \.isNewline).first.map(String.init), !reason.isEmpty { parts.append(reason) }
+        return parts.joined(separator: " · ")
+    }
+    /// Today the clock, yesterday its name, within a week the weekday, else month/day.
+    func timeText(_ session: Session) -> String {
+        guard let date = ServerTime.date(SidebarModelKt.activityAt(session: session)) else { return "" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)) }
+        if calendar.isDateInYesterday(date) { return String(localized: "昨天", bundle: .riffet) }
+        if date >= calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: .now))! { return date.formatted(.dateTime.weekday(.abbreviated).locale(AppLocalization.shared.locale)) }
+        let parts = calendar.dateComponents([.month, .day], from: date)
+        return "\(parts.month ?? 0)/\(parts.day ?? 0)"
+    }
+    /// A failure is called out until it is seen; after that the conversation tells it, and the row
+    /// reads like any other (docs/design/DECISIONS.md 2026-11-17).
+    func failedUnseen(_ session: Session) -> Bool {
+        session.state == .failed && openSessionID != session.id && SidebarModelKt.isDoneUnseen(session: session)
+    }
+    func avatarState(_ session: Session) -> AgentAvatarState {
+        switch session.state {
+        case .waiting: .waiting
+        case .failed: failedUnseen(session) ? .failed : .idle
+        default: session.state.isActive ? .running : .idle
+        }
+    }
+    /// A coloured status word where the session needs a look, then the quiet meta.
+    func subtitle(_ session: Session) -> Text? {
+        let status: (String, Color)?
+        switch avatarState(session) {
+        case .waiting: status = (String(localized: "等待你", bundle: .riffet), palette.warning)
+        case .failed: status = (String(localized: "失败", bundle: .riffet), palette.danger)
+        // Running rows sit under their own heading and turn an arc on the avatar; no word needed.
+        case .running, .idle: status = nil
+        }
+        let meta = rowMeta(session)
+        guard let status else { return meta.isEmpty ? nil : Text(meta) }
+        let word = Text(status.0).fontWeight(.medium).foregroundStyle(status.1)
+        return meta.isEmpty ? word : word + Text(" · " + meta)
+    }
+}
+
+/// A navigation action a page hands to a child view as one object across passes.
+final class RouteAction {
+    var run: (MobileRoute) -> Void = { _ in }
+}
+
+/// One row of the task list: a group heading, a project heading or a session.
+private enum HomeListItem: Identifiable {
+    case header(String, String)
+    case project(Project, count: Int)
+    case session(Session)
+    var id: String {
+        switch self {
+        case let .header(key, _): "header." + key
+        case let .project(project, _): "project." + project.id
+        case let .session(session): session.id
+        }
+    }
+}
+
+/// A page pushed over a tab's first page: on a phone it covers the tab bar, as settings pages do;
+/// a wide window keeps its tabs in reach.
+struct PushedPageTabBar: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var widthClass
+    @Environment(\.verticalSizeClass) private var heightClass
+    func body(content: Content) -> some View {
+        content.background(TabBarVisibility(hidden: !(widthClass == .regular && heightClass == .regular)))
+    }
+}
+
+/// The list's sessions in display order, sorted once per list rather than on every pass of the page:
+/// this page re-evaluates on every list update, filter and keystroke in its search (ios-performance.md §2.1).
+final class SessionOrder {
+    /// Held, so a later list can never be mistaken for it.
+    private var source: SessionListState?
+    private var sorted: [Session] = []
+    func sorted(_ list: SessionListState) -> [Session] {
+        if list !== source { source = list; sorted = SessionOrderKt.sortSessions(sessions: list.sessions) }
+        return sorted
     }
 }
 

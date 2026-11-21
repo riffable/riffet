@@ -17,6 +17,8 @@
 
 帧预算、主线程上能做什么、怎么测和每次要跑的场景在 [Android 流畅度规范](../../docs/guide/android-performance.md)。量帧和采样只用 benchmark 构建（`./gradlew :androidApp:assembleBenchmark`），debug 构建解释执行，数字不能用。
 
+iPhone 的在 [iPhone 流畅度规范](../../docs/guide/ios-performance.md)，用 `pnpm perf:ios` 量。量的时候不挂 XCTest：无障碍自动化会给每帧加约 40 ms。
+
 ## Compose 约定
 
 以下每条都对应过一次真机上的卡顿或闪烁；`pnpm check:compose` 会拦下其中能从文本识别的写法。

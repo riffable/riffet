@@ -14,6 +14,7 @@ final class MetricsReporter {
     func foreground(_ active: Bool) {
         timer?.invalidate()
         timer = nil
+        StallMonitor.shared.running(active)
         guard active else { return }
         let timer = Timer(timeInterval: Self.interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.report() }
@@ -34,7 +35,7 @@ final class MetricsReporter {
                 footprintBytes: KotlinLong(value: Self.footprint()),
                 managedHeapBytes: KotlinHeapKt.kotlinHeapBytes(),
                 streams: nil,
-                hitches: nil,
+                hitches: KotlinInt(value: Int32(StallMonitor.shared.takeHitches())),
                 caches: CacheRegistry.shared.snapshot().map { ClientCacheSample(name: $0.name, bytes: nil, limitBytes: KotlinLong(value: $0.limit), count: nil) }
             )
         )

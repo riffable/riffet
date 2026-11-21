@@ -26,6 +26,7 @@ struct ConversationComposer: View {
     @State private var voice = ComposerVoice()
     @Environment(\.palette) private var palette
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var textSize
     private var voiceInput: Bool { workbench.settings?.voiceInput?.recognizer != nil }
     private var dictating: Bool { voice.dictating }
     private var voiceActive: Bool { voice.mode && voiceInput }
@@ -148,8 +149,10 @@ struct ConversationComposer: View {
                         .padding(.leading, expanded ? RiffetMetrics.groupInset : 0).padding(.trailing, Self.sendEdge)
                         .padding(.top, expanded ? RiffetMetrics.groupInset : 0).padding(.bottom, expanded ? RiffetMetrics.groupInset - Self.sendInset : 0)
                 } else {
-                TextField(placeholder, text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
-                    .riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1...6).focused($focused)
+                ComposerFieldLayout(key: focused ? nil : [AnyHashable(draft.text), AnyHashable(textSize)]) {
+                    TextField(placeholder, text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
+                        .riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1...6).focused($focused)
+                }
                     .padding(.leading, expanded ? 16 : 0).padding(.vertical, expanded ? 14 : 0)
                     .frame(minHeight: RiffetMetrics.hitTarget)
                     .accessibilityIdentifier("messageComposer")
@@ -297,6 +300,36 @@ struct ConversationComposer: View {
                 onSent()
             })
         }
+    }
+}
+
+/// Around a growing text field (the composer, the new-task field): fills the width it is offered and
+/// asks the field for its height at that width only. The stacks around the field also probe it at zero
+/// and unbounded widths to learn how flexible it is, and the field lays out its whole text for each
+/// probe, the unbounded one as a single line: a long draft cost every keystroke tens of milliseconds
+/// (docs/guide/ios-performance.md §2.1).
+struct ComposerFieldLayout: Layout {
+    /// What else the field's height depends on (text, type size, line limits). The composer is laid out
+    /// again on every transcript update, and measuring a long draft each time costs milliseconds. Nil
+    /// while editing: marked text from an input method is not in the binding yet but changes the height.
+    var key: AnyHashable?
+    struct Cache { var width: CGFloat?; var height: CGFloat?; var key: AnyHashable? }
+    func makeCache(subviews: Subviews) -> Cache { Cache() }
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {}
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        guard let field = subviews.first else { return .zero }
+        guard let width = proposal.width, width.isFinite, width > 0 else {
+            // A flexibility probe: as narrow or as wide as offered, at the height last measured.
+            let height = cache.height ?? field.sizeThatFits(ProposedViewSize(width: cache.width ?? 320, height: nil)).height
+            return CGSize(width: proposal.width ?? cache.width ?? 0, height: height)
+        }
+        if let key, let height = cache.height, cache.width == width, cache.key == key { return CGSize(width: width, height: height) }
+        let height = field.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        cache = Cache(width: width, height: height, key: key)
+        return CGSize(width: width, height: height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
     }
 }
 

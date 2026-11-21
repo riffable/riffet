@@ -1,15 +1,23 @@
 import SwiftUI
 import WebKit
 
+/// A display formula is drawn by the shared formula renderer as a picture, like inline formulas: a web
+/// view per formula cost each block its own WebKit process work and a page load while the reader
+/// scrolled. A formula the renderer cannot draw (taller than it renders) falls back to a page of its own.
 struct ConversationMath: View {
     let tex: String
     let workbench: Workbench
     @Environment(\.colorScheme) private var scheme
     @ScaledMetric(relativeTo: .body) private var fontSize = 17.0
+    @State private var rendered: ConversationInlineMathRenderer.Rendered?
+    @State private var unrendered = false
     @State private var height: CGFloat?
     @State private var error: String?
     private var memoKey: String { "math|\(fontSize)|\(tex)" }
-    /// Before the page reports: the height this formula settled to before, else one line per `\\` row.
+    private var request: ConversationInlineMathRequest {
+        ConversationInlineMathRequest(origin: workbench.baseURL, tex: tex, fontSize: fontSize, dark: scheme == .dark, display: true)
+    }
+    /// Before the picture: the height this formula settled to before, else one line per `\\` row.
     private var reservedHeight: CGFloat {
         if let known = ConversationLayoutMemo.shared.height(memoKey) { return known }
         let rows = max(1, tex.components(separatedBy: "\\\\").count)
@@ -17,17 +25,40 @@ struct ConversationMath: View {
         return CGFloat(rows) * (tall ? 40 : 30) + 14
     }
     var body: some View {
+        let request = request
+        Group {
+            if let shown = rendered ?? (unrendered ? nil : ConversationInlineMathRenderer.shared.cached(request)) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Image(uiImage: shown.image).accessibilityHidden(true)
+                }
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                .frame(height: shown.image.size.height)
+            } else if unrendered {
+                page
+            } else {
+                Color.clear.frame(height: reservedHeight)
+            }
+        }
+        .accessibilityElement(children: .ignore).accessibilityLabel("公式：\(tex)")
+        .task(id: request) {
+            if let cached = ConversationInlineMathRenderer.shared.cached(request) { rendered = cached; unrendered = false; return }
+            let next = await ConversationInlineMathRenderer.shared.image(request)
+            guard !Task.isCancelled else { return }
+            rendered = next; unrendered = next == nil; error = nil
+            if let next { ConversationLayoutMemo.shared.setHeight(next.image.size.height, for: memoKey) }
+        }
+    }
+
+    @ViewBuilder private var page: some View {
         let encoded = tex.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
         let color = scheme == .dark ? "%23eeeeee" : "%23222222"
         if error == nil, let url = URL(string: "math#tex=\(encoded)&d=1&c=\(color)&s=\(scheme == .dark ? "dark" : "light")", relativeTo: workbench.baseURL.appendingPathComponent("/"))?.absoluteURL {
             ConversationPublicMathPage(url: url, fontSize: fontSize, heightChanged: { value in
                 height = value; ConversationLayoutMemo.shared.setHeight(value, for: memoKey)
             }, failed: { error = $0 })
-                .frame(height: height ?? reservedHeight).accessibilityLabel("公式：\(tex)")
-                .onChange(of: tex) { _, _ in error = nil }
+                .frame(height: height ?? reservedHeight)
         } else {
             Text(tex).riffetFont(.mono).textSelection(.enabled)
-                .onChange(of: tex) { _, _ in error = nil }
         }
     }
 }
@@ -42,18 +73,28 @@ struct ConversationCodePreview: View {
     let workbench: Workbench
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        if var components = URLComponents(url: workbench.baseURL, resolvingAgainstBaseURL: false) {
-            let diagram = Self.isDiagram(language)
-            let _ = components.path = diagram ? "/diagram" : "/content-preview"
-            let _ = components.queryItems = diagram ? [URLQueryItem(name: "engine", value: language.lowercased())] : nil
-            let _ = components.fragment = nil
-            var fragment = URLComponents()
-            let _ = fragment.queryItems = ConversationPreviewDocument.theme(dark: scheme == .dark) + [URLQueryItem(name: "language", value: language.lowercased()), URLQueryItem(name: "source", value: source)]
-            let _ = components.percentEncodedFragment = fragment.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
-            if let url = components.url {
-                ConversationWebPage(workbench: workbench, url: url).frame(height: 320)
-            }
+        if let url = Self.url(base: workbench.baseURL, source: source, language: language, dark: scheme == .dark) {
+            ConversationWebPage(workbench: workbench, url: url).frame(height: 320)
         }
+    }
+
+    /// The source travels percent-encoded in the fragment, which walks all of it; a block is drawn on
+    /// many passes but encoded once per source and theme.
+    private static let urls: NSCache<NSString, NSURL> = CacheRegistry.cache("conversation.previewURLs", count: 64)
+    private static func url(base: URL, source: String, language: String, dark: Bool) -> URL? {
+        let key = "\(base.absoluteString)|\(dark)|\(language)|\(source)" as NSString
+        if let known = urls.object(forKey: key) { return known as URL }
+        guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        let diagram = isDiagram(language)
+        components.path = diagram ? "/diagram" : "/content-preview"
+        components.queryItems = diagram ? [URLQueryItem(name: "engine", value: language.lowercased())] : nil
+        components.fragment = nil
+        var fragment = URLComponents()
+        fragment.queryItems = ConversationPreviewDocument.theme(dark: dark) + [URLQueryItem(name: "language", value: language.lowercased()), URLQueryItem(name: "source", value: source)]
+        components.percentEncodedFragment = fragment.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        guard let url = components.url else { return nil }
+        urls.setObject(url as NSURL, forKey: key)
+        return url
     }
 }
 
@@ -74,16 +115,29 @@ struct ConversationVisualization: View {
 struct ConversationWebPage: View {
     let workbench: Workbench
     let url: URL
-    @State private var html: String?
+    /// The sandboxed document, built once off the main thread: a diagram page inlines megabytes of script,
+    /// and escaping it into the iframe on the main thread stalled every cell that showed one.
+    @State private var document: String?
     @State private var error: String?
     @State private var retry = 0
     var body: some View {
         Group {
-            if let error { ContentUnavailableView { Label("预览加载失败", systemImage: "exclamationmark.triangle") } description: { Text(error) } actions: { Button("重试") { self.error = nil; html = nil; retry += 1 } } }
+            if let error { ContentUnavailableView { Label("预览加载失败", systemImage: "exclamationmark.triangle") } description: { Text(error) } actions: { Button("重试") { self.error = nil; document = nil; retry += 1 } } }
             else if url.path == "/math" { ConversationPublicMathPage(url: url) { error = $0 }.id(retry) }
-            else if let html { RestrictedResourcePage(html: html, baseURL: url) { error = $0 }.id(retry) }
+            else if let document { RestrictedResourcePage(document: document) { error = $0 }.id(retry) }
             else { ProgressView() }
-        }.task(id: "\(url.absoluteString)|\(retry)") { guard url.path != "/math" else { return }; error = nil; html = nil; do { let data = try await workbench.resources.data(for: url); guard let text = String(data: data, encoding: .utf8) else { throw ClientFailure(String(localized: "预览内容不是有效的 HTML", bundle: .riffet)) }; html = text } catch { self.error = error.riffetMessage } }
+        }.task(id: "\(url.absoluteString)|\(retry)") {
+            guard url.path != "/math" else { return }
+            error = nil; document = nil
+            do {
+                let data = try await workbench.resources.data(for: url)
+                let url = url
+                document = try await Task.detached(priority: .userInitiated) {
+                    guard let text = String(data: data, encoding: .utf8) else { throw ClientFailure(String(localized: "预览内容不是有效的 HTML", bundle: .riffet)) }
+                    return ConversationPreviewDocument.html(source: text, url: url)
+                }.value
+            } catch { self.error = error.riffetMessage }
+        }
     }
 }
 
@@ -140,8 +194,8 @@ enum ConversationPreviewDocument {
 }
 
 private struct RestrictedResourcePage: UIViewRepresentable {
-    let html: String
-    let baseURL: URL
+    /// From `ConversationPreviewDocument.html`.
+    let document: String
     let failed: (String) -> Void
     func makeCoordinator() -> Coordinator { Coordinator(failed: failed) }
     func makeUIView(context: Context) -> WKWebView {
@@ -152,13 +206,11 @@ private struct RestrictedResourcePage: UIViewRepresentable {
         view.navigationDelegate = context.coordinator
         view.isOpaque = false
         view.backgroundColor = .clear
-        let document = ConversationPreviewDocument.html(source: html, url: baseURL)
         context.coordinator.document = document
         view.loadHTMLString(document, baseURL: nil)
         return view
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {
-        let document = ConversationPreviewDocument.html(source: html, url: baseURL)
         guard context.coordinator.document != document else { return }
         context.coordinator.document = document
         uiView.loadHTMLString(document, baseURL: nil)
@@ -302,16 +354,18 @@ struct ConversationInlineMathRequest: Hashable {
     let tex: String
     let fontSize: Double
     let dark: Bool
+    /// A block formula (KaTeX display mode) rather than one in a line of text.
+    var display = false
     var url: URL? {
         guard var components = URLComponents(url: origin, resolvingAgainstBaseURL: false), ["http", "https"].contains(components.scheme?.lowercased() ?? ""), components.user == nil, components.password == nil else { return nil }
         components.path = "/math"; components.query = nil
         let fragment = URLComponents(string: "https://fragment.invalid")!
         var values = fragment
-        values.queryItems = [URLQueryItem(name: "tex", value: tex), URLQueryItem(name: "d", value: "0"), URLQueryItem(name: "c", value: dark ? "#eeeeee" : "#222222")]
+        values.queryItems = [URLQueryItem(name: "tex", value: tex), URLQueryItem(name: "d", value: display ? "1" : "0"), URLQueryItem(name: "c", value: dark ? "#eeeeee" : "#222222")]
         components.percentEncodedFragment = values.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
-    var cacheKey: String { "\(origin.absoluteString)|\(fontSize)|\(dark)|\(tex)" }
+    var cacheKey: String { "\(origin.absoluteString)|\(fontSize)|\(dark)|\(display)|\(tex)" }
 }
 
 /// Mirrors macOS InlineMathRenderer: one shared WebKit renderer produces native text attachments.

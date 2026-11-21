@@ -242,7 +242,7 @@ struct ProjectFilePage: View {
             } else if result.image != nil, let url = workbench.resources.fileURL(projectID: project.id, path: result.path, image: true) {
                 let data = try await workbench.resources.data(for: url)
                 guard !Task.isCancelled else { return }
-                let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data) }.value
+                let decoded = await Task.detached(priority: .userInitiated) { ConversationImageDecoder.decode(data, maximumPixelSize: ConversationImageDecoder.viewerEdge) }.value
                 try Task.checkCancellation()
                 guard let decoded else { throw AttachmentImportError.unreadableImage }
                 image = decoded

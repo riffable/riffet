@@ -99,27 +99,29 @@ enum ConversationRenderPlan {
             let spacing: CGFloat = index < compactAbove.count && compactAbove[index] ? 4 : (index > 0 ? rowGap : 0)
             switch onEnum(of: row) {
             case let .process(process):
-                let open = expanded[process.key] ?? (focusedRow == process.key || process.running || process.issueCount > 0)
-                result.append(Entry(id: process.key, rowKey: process.key, topSpacing: spacing, isLastInRow: false, content: .processHeader(process, open: open)))
-                if open { appendChildren(of: process, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, to: &result) }
+                let key = nativeKey(process.key)
+                let open = expanded[key] ?? (focusedRow == key || process.running || process.issueCount > 0)
+                result.append(Entry(id: key, rowKey: key, topSpacing: spacing, isLastInRow: false, content: .processHeader(process, open: open)))
+                if open { appendChildren(of: process, key: key, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, to: &result) }
                 if process.settled, process.endsTurn, let answer = process.answerText, !answer.isEmpty {
-                    result.append(Entry(id: childID(role: "footer", row: process.key), rowKey: process.key, topSpacing: 4, isLastInRow: false, content: .footer(process)))
+                    result.append(Entry(id: childID(role: "footer", row: key), rowKey: key, topSpacing: 4, isLastInRow: false, content: .footer(process)))
                 }
                 result[result.count - 1].isLastInRow = true
             case .single, .trigger:
-                result.append(Entry(id: row.key, rowKey: row.key, topSpacing: spacing, isLastInRow: true, content: .row(row)))
+                let key = nativeKey(row.key)
+                result.append(Entry(id: key, rowKey: key, topSpacing: spacing, isLastInRow: true, content: .row(row)))
             }
         }
         return result
     }
 
     @MainActor
-    private static func appendChildren(of process: TimelineRowProcess, scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState?, to result: inout [Entry]) {
+    private static func appendChildren(of process: TimelineRowProcess, key: String, scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState?, to result: inout [Entry]) {
         let items = Array(process.items)
         var previous: (any TimelineItem)?
         var index = 0
         func child(_ item: any TimelineItem, id: String, nested: Bool, spacing: CGFloat) {
-            result.append(Entry(id: id, rowKey: process.key, topSpacing: spacing, isLastInRow: false, content: .item(item, process: process, nested: nested)))
+            result.append(Entry(id: id, rowKey: key, topSpacing: spacing, isLastInRow: false, content: .item(item, process: process, nested: nested)))
         }
         while index < items.count {
             let end = toolRunEnd(items, from: index)
@@ -131,16 +133,16 @@ enum ConversationRenderPlan {
                 let choiceKey = scope + "|" + id
                 let choices = ConversationToolRunChoices.shared
                 let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, process: process, followed: followed, disclosureState: disclosureState), readingAbove: readingAbove)
-                result.append(Entry(id: id, rowKey: process.key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, kinds: kinds, open: open))))
+                result.append(Entry(id: id, rowKey: key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, kinds: kinds, open: open))))
                 if open {
-                    for member in members { child(member, id: childID(role: "item", row: process.key, item: member.key), nested: true, spacing: 0) }
+                    for member in members { child(member, id: childID(role: "item", row: key, item: member.key), nested: true, spacing: 0) }
                 }
                 previous = members.last
                 index = end
                 continue
             }
             let item = items[index]
-            child(item, id: childID(role: "item", row: process.key, item: item.key), nested: false, spacing: spacing(for: item, after: previous))
+            child(item, id: childID(role: "item", row: key, item: item.key), nested: false, spacing: spacing(for: item, after: previous))
             previous = item
             index += 1
         }
@@ -182,6 +184,19 @@ enum ConversationRenderPlan {
         case let .thought(thought): thought.channel != .narration
         default: false
         }
+    }
+
+    /// A Kotlin string reaches Swift as a bridged NSString, and hashing or comparing one walks it a
+    /// character at a time through Unicode normalisation. Every pass hashes each entry's id several
+    /// times (row cache, speeds, records), so the key is copied to native UTF-8 once per row
+    /// (ios-performance.md §2.13). `utf8String` copies the bridged string in bulk; `makeContiguousUTF8`
+    /// would copy it a scalar at a time.
+    static func nativeKey(_ key: String) -> String {
+        if key.utf8.withContiguousStorageIfAvailable({ _ in true }) == true { return key }
+        if let utf8 = (key as NSString).utf8String { return String(cString: utf8) }
+        var key = key
+        key.makeContiguousUTF8()
+        return key
     }
 
     /// Length prefixes keep arbitrary item keys containing separators unambiguous.
@@ -226,7 +241,13 @@ extension ConversationRenderPlan {
     static func revision(_ entry: Entry, speed: SpeedTag?) -> AnyHashable {
         var hasher = Hasher()
         switch entry.content {
-        case let .row(row): hasher.combine(ObjectIdentifier(row as AnyObject)); hasher.combine(speed?.label ?? ""); hasher.combine(speed?.estimated ?? false)
+        case let .row(row):
+            hasher.combine(ObjectIdentifier(row as AnyObject))
+            // Only a terminal result's footer draws the speed. Speeds arrive with the runs, after the
+            // rows: in every row's revision, they reconfigured and refitted each answer once per open.
+            if let single = row as? TimelineRowSingle, single.item is TimelineItemStatus, single.footer == .shown {
+                hasher.combine(speed?.label ?? ""); hasher.combine(speed?.estimated ?? false)
+            }
         case let .processHeader(process, open): hasher.combine(ObjectIdentifier(process)); hasher.combine(open)
         case let .toolRun(run): hasher.combine(run.open); for item in run.items { hasher.combine(ObjectIdentifier(item as AnyObject)) }
         case let .item(item, process, nested): hasher.combine(ObjectIdentifier(item as AnyObject)); hasher.combine(process.turnActive); hasher.combine(nested)

@@ -30,7 +30,7 @@ final class ConversationLayoutMemo {
     private let images: NSCache<NSString, UIImage> = CacheRegistry.cache("conversation.images", bytes: CacheRegistry.Budget.images)
 
     private init() {
-        let stored = UserDefaults.standard.dictionary(forKey: Self.aspectsKey) as? [String: Double] ?? [:]
+        let stored = AppStateDefaults.object(forKey: Self.aspectsKey) as? [String: Double] ?? [:]
         savedAspects = stored
         learnedAspects = stored
     }
@@ -55,6 +55,7 @@ final class ConversationLayoutMemo {
         if let pixelSize, pixelSize.width > 0, pixelSize.height > 0 { shape = .aspect(pixelSize.width / pixelSize.height) }
         else if let aspect = savedAspects[key], aspect > 0 { shape = .aspect(aspect) }
         else { shape = .box }
+        if shapes.count > 4_096 { shapes.removeAll(keepingCapacity: true) }
         shapes[key] = shape
         return shape
     }
@@ -77,7 +78,7 @@ final class ConversationLayoutMemo {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self else { return }
             self.saveScheduled = false
-            UserDefaults.standard.set(self.learnedAspects, forKey: Self.aspectsKey)
+            AppStateDefaults.store.set(self.learnedAspects, forKey: Self.aspectsKey)
         }
     }
 

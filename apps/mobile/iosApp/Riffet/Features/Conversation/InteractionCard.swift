@@ -251,10 +251,12 @@ struct InteractionCardView: View {
         .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous))
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $showingDetails) { detailView }
-        .task {
-            guard !readOnly else { return }
+        // The countdown is the only reader of `now`: a card without an expiry does not re-render every second.
+        .task(id: expires) {
+            guard !readOnly, let expires else { return }
             while !Task.isCancelled {
                 now = .now
+                if expires <= now { break }
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }

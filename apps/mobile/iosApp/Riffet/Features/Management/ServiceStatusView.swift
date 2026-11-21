@@ -30,9 +30,12 @@ struct ServiceStatusView: View {
         .refreshable { await read() }
         .task(id: "\(phase == .active)|\(refresh)") {
             guard phase == .active else { return }
+            // Every 5 s while it answers; an unreachable server is asked less and less often, up to once a minute.
+            var delay = 5.0
             while !Task.isCancelled {
                 await read()
-                try? await Task.sleep(for: .seconds(5))
+                delay = error == nil ? 5 : min(delay * 2, 60)
+                try? await Task.sleep(for: .seconds(delay))
             }
         }
         .modifier(EndProcessDialog(workbench: workbench, target: $confirming) { await read() })
@@ -318,12 +321,6 @@ private func memoryLabel(_ mb: Int32) -> String {
     mb == 0 ? String(localized: "不限", bundle: .riffet) : mb % 1024 == 0 ? "\(mb / 1024) GB" : "\(mb) MB"
 }
 
-private let agentTimestamp: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-}()
-
 /// Why the CLI is kept, else when it stops; an unknown reason says nothing.
 private func agentStatus(_ usage: AgentProcessUsage) -> String? {
     switch usage.retainedBy.first {
@@ -337,7 +334,7 @@ private func agentStatus(_ usage: AgentProcessUsage) -> String? {
     case "not-resumable": return String(localized: "不可恢复", bundle: .riffet)
     default: break
     }
-    guard let at = usage.reclaimAt, let date = agentTimestamp.date(from: at) ?? ISO8601DateFormatter().date(from: at) else { return nil }
+    guard let at = usage.reclaimAt, let date = ServerTime.date(at) else { return nil }
     let left = date.timeIntervalSinceNow
     return left <= 60 ? String(localized: "即将停止", bundle: .riffet) : String(localized: "\(duration(left)) 后停止", bundle: .riffet)
 }

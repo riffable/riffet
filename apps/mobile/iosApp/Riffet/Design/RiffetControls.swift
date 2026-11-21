@@ -272,8 +272,10 @@ private struct SearchFold: UIViewControllerRepresentable {
             scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: top + bar.bounds.height), animated: false)
             // Folding the bar takes its height out of the inset and moves the list by it once more, while the
             // bar is still animating shut; for a moment after, a list left under its top goes back on it.
+            // The snap waits for the layout pass that moved the list to finish: setting the offset from inside
+            // it fights UIKit's own scroll-position restore, and the list loops until UIKit breaks it (~1.5 s).
             offsetObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] scroll, _ in
-                MainActor.assumeIsolated { self?.snapToTop(scroll) }
+                MainActor.assumeIsolated { self?.snapAfterLayout(scroll) }
             }
             for delay in [0.3, 0.8] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak scroll] in
@@ -283,6 +285,17 @@ private struct SearchFold: UIViewControllerRepresentable {
                 }
             }
             return true
+        }
+
+        private var snapPending = false
+        private func snapAfterLayout(_ scroll: UIScrollView) {
+            guard !snapPending else { return }
+            snapPending = true
+            DispatchQueue.main.async { [weak self, weak scroll] in
+                guard let self else { return }
+                snapPending = false
+                if let scroll { snapToTop(scroll) }
+            }
         }
 
         /// Puts a list that sits just under its top (by up to a bar's height) back on it.

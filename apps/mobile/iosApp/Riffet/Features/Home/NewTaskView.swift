@@ -153,9 +153,9 @@ struct NewTaskView: View {
             if chatProject != nil, assistant == nil { ToolbarItem(placement: .principal) { tabSwitch } }
             if !chat, assistant == nil, let project {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink { ProjectFilesView(workbench: workbench, project: project) } label: { Image(systemName: "doc") }
+                    NavigationLink { ProjectFilesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "doc") }
                         .accessibilityLabel(String(localized: "文件", bundle: .riffet))
-                    NavigationLink { ProjectChangesView(workbench: workbench, project: project) } label: { Image(systemName: "arrow.triangle.branch") }
+                    NavigationLink { ProjectChangesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "arrow.triangle.branch") }
                         .accessibilityLabel(String(localized: "变更", bundle: .riffet))
                 }
             }
@@ -284,8 +284,10 @@ struct NewTaskView: View {
                 holdBar(height: holdBarHeight).padding(.leading, RiffetMetrics.groupInset).padding(.trailing, Self.sendEdge)
                     .padding(.top, Self.holdTop).padding(.bottom, Self.holdTop - Self.sendInset).disabled(locked)
             } else {
-            TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
-                .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
+            ComposerFieldLayout(key: writing ? nil : [AnyHashable(draft.text), AnyHashable(textSize), AnyHashable(compact)]) {
+                TextField(chat || assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding, axis: .vertical)
+                    .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
+            }
                 .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
                 .accessibilityLabel("任务内容").accessibilityIdentifier("newTaskText").disabled(locked || voice.dictating)
@@ -464,7 +466,7 @@ struct NewTaskView: View {
     private var toolCards: some View {
         HStack(spacing: 10) {
             if let project {
-                NavigationLink { TerminalPage(workbench: workbench, projectID: project.id) } label: { toolCard("终端", symbol: "terminal") }
+                NavigationLink { TerminalPage(workbench: workbench, projectID: project.id).modifier(PushedPageTabBar()) } label: { toolCard("终端", symbol: "terminal") }
             }
             Button { writing = false; importing = true } label: { toolCard("继续终端会话", symbol: "clock.arrow.circlepath") }.disabled(locked)
         }.buttonStyle(RiffetDimPressStyle())

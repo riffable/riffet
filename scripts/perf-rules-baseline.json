@@ -161,6 +161,20 @@
     "apps/macos/Riffet/Services/SystemIntegration.swift": 1,
     "apps/mobile/iosApp/Riffet/Features/Conversation/ConversationView.swift": 1
   },
+  "formatterPerCall": {
+    "apps/macos/Riffet/Features/Composer/ModelPicker.swift": 1,
+    "apps/macos/Riffet/Features/Inspector/GitGraphView.swift": 2,
+    "apps/macos/Riffet/Features/Inspector/TasksPanel.swift": 1,
+    "apps/macos/Riffet/Features/Marks/MarksPage.swift": 1,
+    "apps/macos/Riffet/Features/Settings/AssistantSettings.swift": 2,
+    "apps/macos/Riffet/Features/Settings/DiagnosticsSettings.swift": 1,
+    "apps/macos/Riffet/Features/Share/ShareCard.swift": 2,
+    "apps/macos/Riffet/Features/Share/ShareSheet.swift": 1,
+    "apps/macos/Riffet/Features/Sidebar/UnreadStore.swift": 1,
+    "apps/macos/Riffet/Features/Tasks/TasksModel.swift": 1,
+    "apps/macos/Riffet/Services/Performance/MemorySampler.swift": 1,
+    "apps/macos/Riffet/Services/Performance/PerfMonitor.swift": 2
+  },
   "webInterval": {
     "apps/web/src/app/automations/AutomationsPage.tsx": 1,
     "apps/web/src/app/automations/SendLater.tsx": 2,
@@ -184,5 +198,16 @@
     "apps/web/src/lib/use-now.ts": 1,
     "apps/web/src/plugins/TasksView.tsx": 2,
     "apps/web/src/sync/lane.ts": 1
+  },
+  "standardDefaults": {
+    "apps/mobile/iosApp/Riffet/App/AppModel.swift": 5,
+    "apps/mobile/iosApp/Riffet/Features/Conversation/InteractionCard.swift": 2,
+    "apps/mobile/iosApp/Riffet/Features/Home/AppearanceSettings.swift": 2,
+    "apps/mobile/iosApp/Riffet/Features/Home/HomeView.swift": 3,
+    "apps/mobile/iosApp/Riffet/Features/Home/NewTaskView.swift": 1,
+    "apps/mobile/iosApp/Riffet/Features/Inspector/TerminalPage.swift": 1,
+    "apps/mobile/iosApp/Riffet/Platform/RiffetNotifications.swift": 1,
+    "apps/mobile/iosApp/Riffet/Platform/RiffetPush.swift": 2,
+    "apps/mobile/iosApp/Riffet/Theme/Theme.swift": 3
   }
 }

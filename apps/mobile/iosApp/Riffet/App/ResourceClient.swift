@@ -8,6 +8,17 @@ final class ResourceClient {
     private let host: IOSHost
     private let redirects = ResourceRedirectPolicy()
     private lazy var session = URLSession(configuration: .ephemeral, delegate: redirects, delegateQueue: nil)
+    /// Attachments only: an attachment's bytes never change, so they are read from disk after the
+    /// first download, across launches (docs/guide/ios-performance.md §2.9). Project files can change
+    /// under the same address and keep going to the server.
+    private lazy var attachmentSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = Self.attachmentCache
+        configuration.requestCachePolicy = .returnCacheDataElseLoad
+        return URLSession(configuration: configuration, delegate: redirects, delegateQueue: nil)
+    }()
+    private static let attachmentCache = URLCache(memoryCapacity: 0, diskCapacity: Int(BudgetsKt.IMAGE_CACHE_PHONE_DISK_BYTES),
+        directory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?.appendingPathComponent("riffet-attachments", isDirectory: true))
     private lazy var mintSession = URLSession(configuration: .ephemeral, delegate: ResourceNoRedirect(), delegateQueue: nil)
     init(baseURL: URL, host: IOSHost) { self.baseURL = baseURL; self.host = host }
 
@@ -25,8 +36,15 @@ final class ResourceClient {
     func data(for url: URL) async throws -> Data {
         if url.scheme == "data", let comma = url.absoluteString.firstIndex(of: ","),
            let data = Data(base64Encoded: String(url.absoluteString[url.absoluteString.index(after: comma)...])) { return data }
-        let (body, response) = try await session.data(for: request(for: url))
-        try validate(response)
+        let attachment = ServerAddress.sameOrigin(url, baseURL) && url.query == nil && url.path.hasPrefix("/api/attachments/") && !url.path.hasSuffix("/metadata")
+        var request = try await request(for: url)
+        if attachment { request.cachePolicy = .returnCacheDataElseLoad }
+        let (body, response) = try await (attachment ? attachmentSession : session).data(for: request)
+        do { try validate(response) } catch {
+            // A failure is never replayed from disk: the next attempt asks the server again.
+            if attachment { Self.attachmentCache.removeCachedResponse(for: request) }
+            throw error
+        }
         guard body.count <= 32 * 1024 * 1024 else { throw ClientFailure(String(localized: "资源过大，请下载后预览", bundle: .riffet)) }
         return body
     }

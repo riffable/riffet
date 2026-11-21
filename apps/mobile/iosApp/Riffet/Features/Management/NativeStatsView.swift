@@ -437,16 +437,11 @@ private enum NativeStatsLatencyMetric: String, CaseIterable, Identifiable {
 private struct NativeStatsPlotPoint: Identifiable {
     let id: String, start: Date, series: String
     let amount: Double
-    static func date(_ value: String) -> Date? {
-        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    }
+    static func date(_ value: String) -> Date? { ServerTime.date(value) }
     static func make(_ series: StatsSeries, metric: NativeStatsMetric) -> [Self] {
         var output: [Self] = []
-        let formatter = ISO8601DateFormatter(); formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let fallback = ISO8601DateFormatter()
         for point in series.points {
-            guard let date = formatter.date(from: point.start) ?? fallback.date(from: point.start) else { continue }
+            guard let date = ServerTime.date(point.start) else { continue }
             for key in series.keys {
                 if let value = point.values[key.key], value.doubleValue.isFinite {
                     output.append(Self(id: point.start + "|" + key.key, start: date, series: key.label, amount: metric.plotted(value.doubleValue)))

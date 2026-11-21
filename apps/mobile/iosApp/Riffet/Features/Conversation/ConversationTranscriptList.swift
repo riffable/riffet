@@ -6,11 +6,29 @@ import Observation
 /// list find where find's mark is drawn.
 final class ConversationTranscriptProbe {
     var visibleIDs: () -> [String] = { [] }
+    /// The entries of the latest pass. The maps below are built from them when first read: they are read
+    /// on a find or a saved reading place, and building them on every pass cost a live session more than
+    /// the rest of the pass.
+    var entries: [ConversationRenderPlan.Entry] = [] {
+        didSet { maps = nil }
+    }
+    private var maps: (readingKeys: [String: String], cells: [String: String])?
     /// Cell id to the timeline item at its top; only cells of the timeline are listed.
-    var readingKeys: [String: String] = [:]
+    var readingKeys: [String: String] { built().readingKeys }
     /// Timeline item key to the cell drawing it: the item's own cell over a folded run holding it.
-    var cells: [String: String] = [:]
+    var cells: [String: String] { built().cells }
     func topRowKey() -> String? { visibleIDs().lazy.compactMap { self.readingKeys[$0] }.first }
+
+    private func built() -> (readingKeys: [String: String], cells: [String: String]) {
+        if let maps { return maps }
+        var readingKeys: [String: String] = [:], cells: [String: String] = [:]
+        for entry in entries {
+            if let key = entry.readingKey { readingKeys[entry.id] = key }
+            for key in entry.itemKeys where cells[key] == nil || entry.itemKeys.count == 1 { cells[key] = entry.id }
+        }
+        maps = (readingKeys, cells)
+        return (readingKeys, cells)
+    }
 
     /// Paragraphs drawing find's mark: the one in a cell, and any the list's sizing host measures off screen.
     let markViews = NSHashTable<UITextView>.weakObjects()
@@ -22,6 +40,13 @@ final class ConversationTranscriptProbe {
             DispatchQueue.main.async { [weak self] in self?.markChanged() }
         } else { markViews.remove(view) }
     }
+}
+
+/// The floating composer's height, written by the composer and read only by those that place
+/// themselves against it.
+@MainActor @Observable
+final class ConversationComposerHeight {
+    var value: CGFloat = 0
 }
 
 /// UIKit owns the scrolling geometry; each SwiftUI transcript entry is one self-sizing cell.
@@ -49,7 +74,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
     let currentApprovalID: String?
     /// The floating composer's height. The list runs under it (so rows pass behind it while scrolling)
     /// but ends above it: the safe area it ignores to do so no longer reserves that space.
-    var bottomInset: CGFloat = 0
+    var bottomInset = ConversationComposerHeight()
     /// What floats under the top bar (the find bar): rows rest below it, and still scroll beneath it.
     var topInset: CGFloat = 0
     /// near bottom, at bottom, approval visible, within about two screens of the oldest loaded row.
@@ -80,9 +105,12 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private let hostingEnvironment: TranscriptHostingEnvironment
         private var pendingParentEnvironment: EnvironmentValues?
         private var rowsByID: [String: Row] = [:]
+        private var orderedRows: [Row] = []
         private var orderedIDs: [String] = []
         private var appliedRevisions: [String: AnyHashable] = [:]
         private var viewportHeight: CGFloat?
+        /// Rows to refit for a new viewport height, at the next snapshot.
+        private var viewportChanged: Set<String> = []
         private var lastSettledWidth: CGFloat = 0
         private var environmentRevision = 0
         private var appliedEnvironmentRevision = 0
@@ -309,8 +337,17 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             let scale = max(1, collection.traitCollection.displayScale)
             let height = available > 0 ? (available * scale).rounded() / scale : nil
             guard viewportHeight != height else { return }
+            // Only a code viewport reads the height, capped at 0.65 of it, so a row shorter than that
+            // share of both heights measures the same: those keep their heights. Refitting every row
+            // here cost 400 ms on open and ran again each time the composer grew a line.
+            // Before the first height, rows used the window's.
+            let previous = viewportHeight ?? collection.window?.bounds.height ?? collection.bounds.height
             viewportHeight = height
-            environmentRevision &+= 1
+            let threshold = 0.65 * min(previous, height ?? previous)
+            for id in orderedIDs where (layout.knownHeight(id)?.height ?? 0) >= threshold {
+                measuredFingerprints[id] = nil
+                viewportChanged.insert(id)
+            }
             scheduleEnvironmentRefresh()
         }
 
@@ -328,7 +365,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 }
                 if self.hostingEnvironment.viewportHeight != self.viewportHeight { self.hostingEnvironment.viewportHeight = self.viewportHeight }
                 guard self.isViewLoaded else { return }
-                if self.appliedEnvironmentRevision != self.environmentRevision { self.applyLatestRows() }
+                if self.appliedEnvironmentRevision != self.environmentRevision || !self.viewportChanged.isEmpty { self.applyLatestRows() }
                 self.collection.setNeedsLayout()
             }
         }
@@ -358,15 +395,15 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             }
             // Off-screen cells read the newest row when their provider is called.
             var nextRows: [String: Row] = [:]
-            var nextIDs: [String] = []
-            nextRows.reserveCapacity(value.rows.count); nextIDs.reserveCapacity(value.rows.count)
+            var nextIDs: [String] = [], nextOrdered: [Row] = []
+            nextRows.reserveCapacity(value.rows.count); nextIDs.reserveCapacity(value.rows.count); nextOrdered.reserveCapacity(value.rows.count)
             for row in value.rows {
                 // A malformed caller cannot hand duplicate identifiers to diffable data source.
-                if nextRows.updateValue(row, forKey: row.id) == nil { nextIDs.append(row.id) }
+                if nextRows.updateValue(row, forKey: row.id) == nil { nextIDs.append(row.id); nextOrdered.append(row) }
             }
-            rowsByID = nextRows; orderedIDs = nextIDs
+            rowsByID = nextRows; orderedIDs = nextIDs; orderedRows = nextOrdered
             guard isViewLoaded else { return }
-            applyBottomInset(value.bottomInset)
+            trackBottomInset()
             applyTopInset(value.topInset)
             collection.accessibilityValue = value.accessibilityValue
             applyLatestRows()
@@ -388,6 +425,22 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             return true
         }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        /// The composer's height is watched here, not passed down by the page: a line wrap while typing
+        /// would otherwise re-run the page and rebuild every row (docs/guide/ios-performance.md §2.3).
+        private weak var trackedBottomInset: ConversationComposerHeight?
+        private func trackBottomInset() {
+            let box = configuration.bottomInset
+            guard trackedBottomInset !== box else { return }
+            trackedBottomInset = box
+            observeBottomInset(box)
+        }
+        private func observeBottomInset(_ box: ConversationComposerHeight) {
+            guard active, trackedBottomInset === box else { return }
+            withObservationTracking { applyBottomInset(box.value) } onChange: { [weak self, weak box] in
+                DispatchQueue.main.async { if let self, let box { self.observeBottomInset(box) } }
+            }
+        }
 
         private func applyBottomInset(_ inset: CGFloat) {
             let inset = max(0, inset.rounded())
@@ -422,11 +475,17 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             var snapshot = dataSource.snapshot()
             let previousIDs = snapshot.itemIdentifiers
             let identifiersChanged = previousIDs != orderedIDs
-            let previousSet = Set(previousIDs)
             // UIKit can retain prepared/prefetched cells outside the visible index paths.
             // Reconfigure every changed existing ID so those cells cannot enter with stale data;
             // diffable data source decides which prepared cells need an actual configuration.
-            let changedExisting = orderedIDs.filter { id in previousSet.contains(id) && (appliedRevisions[id] != rowsByID[id]?.revision || appliedEnvironmentRevision != environmentRevision) }
+            // `appliedRevisions` holds exactly the rows of the applied snapshot: one lookup per row tells
+            // both whether it is there and whether it changed. A live session runs this on every append.
+            let environmentChanged = appliedEnvironmentRevision != environmentRevision
+            var changedExisting: [String] = []
+            for row in orderedRows {
+                guard let applied = appliedRevisions[row.id] else { continue }
+                if environmentChanged || applied != row.revision || (!viewportChanged.isEmpty && viewportChanged.contains(row.id)) { changedExisting.append(row.id) }
+            }
             if !identifiersChanged && changedExisting.isEmpty {
                 appliedRevisions = rowsByID.mapValues(\.revision)
                 appliedEnvironmentRevision = environmentRevision
@@ -453,12 +512,13 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 snapshot.appendSections([0]); snapshot.appendItems(orderedIDs, toSection: 0)
                 // A row the reader opens enters at its real height, so its first frame is its last:
                 // no estimate-sized gaps for the rows below to slide across.
-                if readerChanging { measureEntering(orderedIDs.filter { !previousSet.contains($0) }) }
+                if readerChanging { let previousSet = Set(previousIDs); measureEntering(orderedIDs.filter { !previousSet.contains($0) }) }
             }
             if !changedExisting.isEmpty { snapshot.reconfigureItems(changedExisting) }
             let revisions = rowsByID.mapValues(\.revision)
             let environment = environmentRevision
             let token = lifetime
+            viewportChanged.removeAll()
             applyingSnapshot = true
             dataSource.apply(snapshot, animatingDifferences: identifiersChanged && animatesReaderChange) { [weak self] in
                 guard let self, self.active, self.lifetime == token else { return }
@@ -661,7 +721,10 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             // Not before the first positioning: the list is laid out from the top before it jumps to the end.
             let settled = initiallyPositioned && pendingRequest == nil && pendingAlignment == nil && viewport > 0
             let nearTop = settled && collection.contentOffset.y + insets.top <= Self.olderPrefetchScreens * viewport
-            return Position(nearBottom: remaining < 80, atBottom: remaining <= 2, approvalVisible: approvalVisible, nearTop: nearTop)
+            // Until then it reads as the bottom, where it starts: reporting the top first flipped the page
+            // into history and back, which changed every process row's revision on open.
+            let positioned = initiallyPositioned && viewport > 0
+            return Position(nearBottom: !positioned || remaining < 80, atBottom: !positioned || remaining <= 2, approvalVisible: approvalVisible, nearTop: nearTop)
         }
 
         private func queuePosition() {

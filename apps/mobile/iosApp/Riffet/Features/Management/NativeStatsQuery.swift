@@ -94,7 +94,7 @@ struct NativeStatsSelection: Equatable {
     }
     func query(now: Date = Date(), calendar: Calendar = Self.calendar) throws -> [URLQueryItem] {
         guard [projects, backends, models].allSatisfy({ $0.count <= Self.maximumSelections }) else { throw QueryError.tooManySelections }
-        let window = try window(now: now, calendar: calendar), format = ISO8601DateFormatter()
+        let window = try window(now: now, calendar: calendar), format = Self.timestamp
         var values = [URLQueryItem(name: "from", value: format.string(from: window.start)), URLQueryItem(name: "to", value: format.string(from: window.end)),
                       URLQueryItem(name: "tz", value: calendar.timeZone.identifier), URLQueryItem(name: "agentKind", value: agentKind),
                       URLQueryItem(name: "includeArchived", value: includeArchived ? "true" : "false"), URLQueryItem(name: "includeEstimated", value: includeEstimated ? "true" : "false")]
@@ -104,6 +104,8 @@ struct NativeStatsSelection: Equatable {
         }
         return values
     }
+    /// Shared: `key` is read on every pass of the statistics page.
+    private nonisolated(unsafe) static let timestamp = ISO8601DateFormatter()
     var key: String {
         var components = URLComponents()
         components.queryItems = (try? query()) ?? [URLQueryItem(name: "invalid", value: "\(range.rawValue)|\(from.timeIntervalSince1970)|\(to.timeIntervalSince1970)")]
