@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelInputModalities, Project, Session } from '../../../../../packages/contracts/src/index.js';
 import type { UsageRecord } from '../../stats/types.js';
 import type { NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
@@ -204,6 +204,46 @@ describe('DSH attempt usage', () => {
     });
     expect(usage[0]!.runId).toBeUndefined();
     stop();
+    return runtime.dispose(session.id);
+  });
+
+  it('falls back to observed attempt wall time when batched deltas imply an impossible stream rate', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-burst-'));
+    dirs.push(dir);
+    const usage: Array<{ sessionId: string; runId: string | undefined; usage: UsageRecord }> = [];
+    const session = { id: 'session-dsh-burst', projectId: 'project-dsh', kind: 'native', title: 'DSH', tags: [], state: 'idle', mode: 'agent', nativeSessionId: 'riffet-burst', createdAt: '', updatedAt: '' } as Session;
+    const project = { id: 'project-dsh', name: 'Project', cwd: dir, createdAt: '', updatedAt: '' } as Project;
+    const profile = { id: 'local', backendId: 'dsh', name: 'DSH', config: { configDir: dir, executable: 'dsh' } } as NativeBackendProfileConfig;
+    const host = {
+      getSession: () => session,
+      updateSession: (_id: string, patch: Partial<Session>) => Object.assign(session, patch),
+      stats: {
+        recordUsage: (sessionId: string, runId: string | undefined, record: UsageRecord) => { usage.push({ sessionId, runId, usage: record }); },
+        observeEvents: () => undefined,
+      },
+    } as unknown as NativeBackendHost;
+    const runtime = new DshProfileRuntime(profile, host);
+    const stop = runtime.subscribe(session, project, profile, () => undefined);
+    const start = 1_790_000_000_000;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    const notify = (assistantStream: Record<string, unknown>) => {
+      runtime.handleNotification('agent/assistant-stream', { nativeSessionId: 'riffet-burst', sessionId: session.id, assistantStream });
+    };
+    try {
+      notify({ type: 'start', attemptId: 'attempt-burst', turn: 1, step: 1 });
+      clock.mockReturnValue(start + 2_000);
+      notify({ type: 'item', attemptId: 'attempt-burst', time: start + 1_998, chunk: { type: 'text-delta', text: 'ab' } });
+      notify({ type: 'item', attemptId: 'attempt-burst', time: start + 2_000, chunk: { type: 'text-delta', text: 'cd' } });
+      notify({ type: 'item', attemptId: 'attempt-burst', chunk: { type: 'usage', usage: { outputTokens: 120 } } });
+      notify({ type: 'end', attemptId: 'attempt-burst' });
+      expect(usage).toHaveLength(1);
+      expect(usage[0]!.usage).toMatchObject({
+        startedAt: start, endedAt: start + 2_000, window: 'observed', outputTokens: 120,
+      });
+    } finally {
+      clock.mockRestore();
+      stop();
+    }
     return runtime.dispose(session.id);
   });
 });

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { NativeStreamMessage, NativeWorkbenchEvent, Run, RunMetrics, StepMetrics } from '../../../../packages/contracts/src/index.js';
+import { isPlausibleSpeed } from '../metrics/turn-metrics.js';
 import type { Store } from '../store.js';
 import { ensureStatsSchema, type RunFactRow, type ToolCallRow, type UsageStepRow } from './schema.js';
 import type { RecordedUsageObservation, StatsSink, UsageEntry, UsageIngest, UsageObservation, UsageRecord } from './types.js';
@@ -283,6 +284,7 @@ export class StatsLedger implements StatsSink {
       for (const row of rows) {
         const id = row.native_message_id!;
         const durationMs = row.duration_ms ?? row.ended_at! - row.started_at!;
+        if (row.output_tokens! > 0 && !isPlausibleSpeed(row.output_tokens!, durationMs)) continue;
         const window = row.window as StepMetrics['window'];
         const existing = turns.get(id);
         if (existing) {
@@ -422,6 +424,7 @@ export class StatsLedger implements StatsSink {
       if (step.agent_kind !== 'main' || step.output_tokens === null || step.observation_id !== null) continue;
       const duration = step.duration_ms ?? span(step.started_at ?? undefined, step.ended_at ?? undefined);
       if (duration && duration > 0) {
+        if (step.output_tokens > 0 && !isPlausibleSpeed(step.output_tokens, duration)) continue;
         measured += duration; measuredAny = true;
         speedTokens += step.output_tokens;
         if (step.token_source === 'estimated') speedEstimatedTokens += step.output_tokens;

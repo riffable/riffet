@@ -136,6 +136,8 @@ export interface DshAttempt {
    * span to measure, so it is timed from here instead and reported over the wider window.
    */
   startedWallAt: number;
+  /** True when the attempt carried non-streamed tool-call payloads whose generation preceded delivery. */
+  hasUnstreamed?: boolean;
   /**
    * Provider accounting from the attempt's `usage` chunk or its committed message.
    * `inputTokens` is the cache miss; cache read and write are separate and are not subtracted.

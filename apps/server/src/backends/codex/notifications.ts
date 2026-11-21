@@ -332,7 +332,8 @@ export class CodexNotifications {
     if (method === 'item/started' && item.type === 'agentMessage' && !str(item.text) && messagePhase(item.phase)) {
       ctx.drafts.note('item/agentMessage/delta', { itemId: item.id, turnId, delta: '', phase: item.phase }, ctx.threadId() ?? 'unknown');
     }
-    noteItemMeter(ctx.metering, method, item, turnId);
+    const itemTiming = itemNotificationTiming(params, item);
+    noteItemMeter(ctx.metering, method, item, turnId, itemTiming);
     const turn = ctx.turns.turnRun(turnId);
     const commandId = ctx.commandIdOf(item, turnId);
     if (commandId) ctx.turns.noteLiveCommand(commandId, toIso(Number(params.startedAtMs)));
@@ -346,7 +347,7 @@ export class CodexNotifications {
         : projectCompletedTool(item, ctx.sessionId, ctx.threadId() ?? 'unknown', turnId, turn?.runId, turn?.createdAt, span, id => ctx.observation?.changes(ctx.sessionId, id))
       : ctx.log.projectItem(item, itemTurn, { span });
     if (item.type === 'userMessage') this.noteUserMessage(turnId, projected);
-    if (method === 'item/completed') ctx.metering.noteCompletedOutput(turnId, item);
+    if (method === 'item/completed') ctx.metering.noteCompletedOutput(turnId, item, itemTiming);
     if (method === 'item/completed' && item.type === 'agentMessage') ctx.interactions.noteAsyncQuestions(item, turnId);
     if (item.type === 'userMessage') {
       // Answered from the TUI or another client: the envelope names the questions it settles.
@@ -384,4 +385,13 @@ export class CodexNotifications {
     if (text) this.ctx.refreshStatus({ notice: { text, level: 'info', source: 'transient' } });
     else if (this.ctx.noticeSource() === 'transient') this.ctx.refreshStatus({ notice: undefined });
   }
+}
+
+/** Extract real epoch millisecond timestamps from an item notification, ignoring small test/ordinal values. */
+function itemNotificationTiming(params: Params, item: RpcItem): { startedAtMs?: number; completedAtMs?: number } | undefined {
+  const MIN_EPOCH_MS = 1_000_000_000_000;
+  const pick = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= MIN_EPOCH_MS ? value : undefined;
+  const startedAtMs = pick(params.startedAtMs) ?? pick(item.startedAtMs);
+  const completedAtMs = pick(params.completedAtMs) ?? pick(item.completedAtMs);
+  return startedAtMs !== undefined || completedAtMs !== undefined ? { startedAtMs, completedAtMs } : undefined;
 }

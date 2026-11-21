@@ -12,6 +12,7 @@ import { auxiliaryEndpoint, profileModelEndpoint, listAuxiliaryModels, type Gate
 import type { AuxiliaryCallRecorder } from '../../auxiliary/telemetry.js';
 import type { LaneWriter, TranscriptSource } from '../../journal/ingest.js';
 import { estimatedTokens, estimateTokens } from '../../metrics/tokens.js';
+import { measuredWindow } from '../../metrics/turn-metrics.js';
 import { historyCompactionPrompt, quickChatSystemPrompt } from '../../prompts/index.js';
 import { firstMessageTitlePatch } from '../../session-title.js';
 import type {
@@ -299,6 +300,8 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     let endpoint: GatewayEndpoint | undefined;
     let authMs = 0;
     let firstTextAt: number | undefined;
+    let firstDeltaAt: number | undefined;
+    let lastDeltaAt: number | undefined;
     let requestStartedAt = startedAt;
     try {
       if (!model) throw new Error('No model is available; add a profile with an API endpoint first');
@@ -315,8 +318,13 @@ export class ChatBackendAdapter implements NativeBackendDriver {
         ...(model.fast && fastens(model.backendId) ? { fast: true } : {}),
         ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
         onDelta: (kind, piece) => {
+          if (piece) {
+            const now = Date.now();
+            firstDeltaAt ??= now;
+            lastDeltaAt = now;
+            if (kind === 'text' && firstTextAt === undefined) firstTextAt = now;
+          }
           if (kind === 'text') {
-            if (firstTextAt === undefined && piece) firstTextAt = Date.now();
             live.text += piece;
           } else {
             live.reasoning += piece;
@@ -367,12 +375,21 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     }
     if (answer || result) {
       const endedAt = Date.now();
+      const outputTokens = result?.outputTokens ?? estimatedTokens(answer + reasoning);
+      const range = measuredWindow({
+        streamStart: firstDeltaAt,
+        streamEnd: lastDeltaAt,
+        fallbackStart: requestStartedAt,
+        outputTokens,
+        now: endedAt,
+      }) ?? { startedAt: requestStartedAt, endedAt, window: 'observed' as const };
       host.stats.recordUsage(sessionId, live.runId, {
         stepId: live.assistantId, ...(result?.model ?? model?.model ? { model: result?.model ?? model!.model } : {}),
-        startedAt, endedAt, durationMs: endedAt - startedAt, nativeMessageId: answerEventId(live.assistantId, 'text'),
+        startedAt: range.startedAt, endedAt: range.endedAt, durationMs: Math.max(0, range.endedAt - range.startedAt),
+        nativeMessageId: answerEventId(live.assistantId, 'text'),
         ...(result?.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
-        outputTokens: result?.outputTokens ?? estimatedTokens(answer + reasoning),
-        tokenSource: result?.outputTokens !== undefined ? 'provider' : 'estimated', window: 'stream',
+        outputTokens,
+        tokenSource: result?.outputTokens !== undefined ? 'provider' : 'estimated', window: range.window,
       });
     }
     host.transcript?.wake(sessionId);

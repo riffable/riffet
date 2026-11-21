@@ -183,4 +183,137 @@ describe('CursorTranscriptMeter', () => {
       ['4:answer', 3_000],
     ]);
   });
+
+  it('does not anchor post-restart drafts or commits to minute-precise historical replay timestamps', () => {
+    const { instance, steps, usage } = meter();
+    // Server restarted 10 minutes into a running turn: the reset replay carries only the prompt's time.
+    instance.observe([
+      event({ nativeId: '1:prompt:0', type: 'user_message_chunk', createdAt: at(0) }),
+      event({ nativeId: '2:old-answer:0', type: 'agent_message_chunk', createdAt: at(0), data: { content: { type: 'text', text: 'earlier work' } } }),
+      event({ nativeId: '3:old-tool:0', type: 'tool_call_update', createdAt: at(0) }),
+    ], { historical: true });
+
+    // The first draft/commit after restart started before we were watching: skip instead of logging a 10m duration.
+    instance.observeDraft([
+      event({ nativeId: '4:draft:0', type: 'agent_thought_chunk', createdAt: at(600_000), data: { content: { type: 'text', text: 'mid-flight after restart' } } }),
+      event({ nativeId: '4:draft:1', type: 'tool_call', createdAt: at(600_000), data: { rawInput: { path: 'a.ts' } } }),
+    ], Date.parse(at(600_000)));
+    expect(steps()).toHaveLength(0);
+
+    instance.observe([
+      event({ nativeId: '4:call:0', type: 'agent_thought_chunk', createdAt: at(605_000), data: { content: { type: 'text', text: 'mid-flight after restart' } } }),
+      event({ nativeId: '4:call:1', type: 'tool_call', createdAt: at(605_000), data: { rawInput: { path: 'a.ts' } } }),
+      event({ nativeId: '5:toolresult:0', type: 'tool_call_update', createdAt: at(605_000) }),
+    ]);
+    expect(usage).toHaveLength(0);
+
+    // Subsequent steps now have a real observed anchor (605s) and measure accurately.
+    instance.observe([
+      event({ nativeId: '6:answer:0', type: 'agent_message_chunk', createdAt: at(608_000), data: { content: { type: 'text', text: 'done' } } }),
+    ]);
+    expect(usage).toHaveLength(1);
+    expect(usage[0]!.usage.endedAt! - usage[0]!.usage.startedAt!).toBe(3_000);
+  });
+
+  it('resolves runId and promptSentAt via request:<nativeTurnId> alias and pre-warms async lookups on prompt', () => {
+    const frames: NativeStreamMessage[] = [];
+    const saved: Array<{ runId: string; metrics: RunMetrics }> = [];
+    const usage: Array<{ sessionId: string; runId: string | undefined; usage: UsageRecord }> = [];
+    let lookups = 0;
+    const instance = new CursorTranscriptMeter(
+      message => frames.push(message),
+      (runId, metrics) => saved.push({ runId, metrics }),
+      nativeMessageId => {
+        if (nativeMessageId !== 'request:req-42') return undefined;
+        // Mimic CursorPort's async cache: first call triggers lookup, second returns the cached run id.
+        lookups += 1;
+        return lookups >= 2 ? 'run-42' : undefined;
+      },
+      runId => (runId === 'run-42' ? Date.parse(at(1_000)) : undefined),
+      { recordUsage: (sessionId, runId, record) => { usage.push({ sessionId, runId, usage: record }); }, observeEvents: () => undefined },
+      'session',
+    );
+    instance.observe([
+      event({ nativeId: '2:blobhash:0', nativeTurnId: 'req-42', type: 'user_message_chunk', createdAt: at(0) }),
+    ]);
+    instance.observe([
+      event({ nativeId: '3:answer:0', nativeTurnId: 'req-42', type: 'agent_message_chunk', createdAt: at(4_000), data: { content: { type: 'text', text: 'hello world' } } }),
+    ]);
+    expect(saved.at(-1)).toMatchObject({ runId: 'run-42', metrics: { durationMs: 3_000, steps: 1 } });
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ runId: 'run-42', usage: { nativeMessageId: 'request:req-42', startedAt: Date.parse(at(1_000)), endedAt: Date.parse(at(4_000)) } });
+  });
+
+  it('streams live-tap deltas over a true stream window without double-counting when SQLite commits', () => {
+    const frames: NativeStreamMessage[] = [];
+    const saved: Array<{ runId: string; metrics: RunMetrics }> = [];
+    const usage: Array<{ sessionId: string; runId: string | undefined; usage: UsageRecord }> = [];
+    const instance = new CursorTranscriptMeter(
+      message => frames.push(message),
+      (runId, metrics) => saved.push({ runId, metrics }),
+      nativeMessageId => (nativeMessageId === 'request:req-9' ? 'run-9' : undefined),
+      runId => (runId === 'run-9' ? Date.parse(at(0)) : undefined),
+      { recordUsage: (sessionId, runId, record) => { usage.push({ sessionId, runId, usage: record }); }, observeEvents: () => undefined },
+      'session',
+    );
+    const t0 = Date.parse(at(0));
+    instance.observe([event({ nativeId: '1:prompt:0', nativeTurnId: 'req-9', type: 'user_message_chunk', createdAt: at(0) })]);
+
+    // A stale already-sealed snapshot from before restart is ignored.
+    instance.observeLiveStep({ turn: 'req-9', at: at(0), step: 'req-9:0', sealed: true, parts: [{ type: 'text', text: 'stale' }] }, t0 + 1_000);
+    expect(frames).toHaveLength(0);
+
+    // Live tap starts streaming after 2s of TTFT: stream window is [t0+2000, t0+4000] = 2s (not 4s).
+    instance.observeLiveStep({
+      turn: 'req-9', at: at(0), step: 'req-9:1', sealed: false,
+      firstDeltaAt: t0 + 2_000, lastDeltaAt: t0 + 2_600,
+      parts: [{ type: 'text', text: 'a'.repeat(120) }],
+    }, t0 + 2_600);
+    instance.observeLiveStep({
+      turn: 'req-9', at: at(0), step: 'req-9:1', sealed: true,
+      firstDeltaAt: t0 + 2_000, lastDeltaAt: t0 + 4_000,
+      parts: [{ type: 'text', text: 'a'.repeat(400) }],
+    }, t0 + 4_000);
+    // SQLite commits the same message 500ms later.
+    instance.observe([
+      event({ nativeId: '2:answer:0', nativeTurnId: 'req-9', type: 'agent_message_chunk', createdAt: at(4_500), data: { content: { type: 'text', text: 'a'.repeat(400) } } }),
+    ]);
+
+    expect(saved.at(-1)?.metrics).toMatchObject({
+      outputTokens: estimatedTokens('a'.repeat(400)),
+      durationMs: 2_000,
+      window: 'stream',
+      steps: 1,
+    });
+    expect(usage).toHaveLength(1);
+    expect(usage[0]!.usage).toMatchObject({
+      stepId: '2:answer',
+      startedAt: t0 + 2_000,
+      endedAt: t0 + 4_000,
+      window: 'stream',
+    });
+  });
+
+  it('measures incremental live-tap deltas for already-running CLIs that lack tap timestamps', () => {
+    const frames: NativeStreamMessage[] = [];
+    const instance = new CursorTranscriptMeter(
+      message => frames.push(message),
+      () => undefined,
+      () => undefined,
+    );
+    const t0 = Date.parse(at(0));
+    // First observation records existing prefix as baseline without emitting a 0ms burst.
+    instance.observeLiveStep({ turn: 'req-old', at: at(0), step: 'req-old:1', sealed: false, parts: [{ type: 'reasoning', text: 'existing prefix ' }] }, t0);
+    expect(frames).toHaveLength(0);
+    // Subsequent delta measures only the newly generated tail over [t0, t0+2000].
+    instance.observeLiveStep({ turn: 'req-old', at: at(0), step: 'req-old:1', sealed: true, parts: [{ type: 'reasoning', text: 'existing prefix ' + 'b'.repeat(200) }] }, t0 + 2_000);
+    const step = frames.flatMap(frame => frame.type === 'metrics' ? [frame.metrics] : []).at(-1);
+    expect(step).toMatchObject({
+      stepId: 'live:req-old:1',
+      outputTokens: estimatedTokens('b'.repeat(200)),
+      durationMs: 2_000,
+      window: 'stream',
+      live: false,
+    });
+  });
 });

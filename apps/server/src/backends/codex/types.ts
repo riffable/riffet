@@ -122,6 +122,8 @@ export interface CodexTurnMeter {
   requestStartAt?: number;
   waiting?: boolean;
   activeWaits: Set<string>;
+  /** Wait keys registered via `item/started` in this turn, so late completions after a wait clear do not close a new request. */
+  knownWaits: Set<string>;
   requestAccounted?: boolean;
   pendingUsageInterval?: boolean;
   accountedTextLength?: number;

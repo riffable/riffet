@@ -1,4 +1,5 @@
 import type { MetricsTokenSource, MetricsWindow, OutputRate, StepMetrics } from '../../../../packages/contracts/src/index.js';
+import { isPlausibleSpeed } from './turn-metrics.js';
 
 /** Look back three minutes for output samples, without counting quiet time as generation. */
 const WINDOW_MS = 180_000;
@@ -7,6 +8,8 @@ const CLOCK_SKEW_MS = 5_000;
 // Tool execution can pause an unfinished response much longer than the output window.
 const LIVE_BASELINE_TTL_MS = 24 * 60 * 60_000;
 const MAX_STEPS = 1_024;
+/** Reject sub-250ms batched bursts whose implied rate exceeds plausible model decode speed. */
+const MIN_BURST_MS = 250;
 
 interface Segment { start: number; end: number; tokens: number; durationMs: number }
 interface StepSample {
@@ -37,6 +40,7 @@ export class OutputRateTracker {
     if (start === undefined || end === undefined || !Number.isFinite(start) || !Number.isFinite(end)
       || end < start || end > now + CLOCK_SKEW_MS || !Number.isFinite(total) || total < 0
       || !Number.isFinite(step.durationMs) || step.durationMs <= 0 || end <= now - STALE_MS) return;
+    if (total > 0 && step.durationMs < MIN_BURST_MS && !isPlausibleSpeed(total, step.durationMs)) return;
     const previous = this.steps.get(step.stepId);
     // A delayed live event must never undo a settled/provider measurement or move time backwards.
     if (previous && (end < previous.end || (previous.settled && step.live)
@@ -55,25 +59,40 @@ export class OutputRateTracker {
     }
 
     const correction = (previous.source === 'estimated' && step.tokens === 'provider') || total < previous.total;
+    let addedDuringBaseline = false;
     if (correction && previous.total > 0) {
-      // Preserve when the output happened: a usage notice arriving after a tool call is not a
-      // new burst of tokens. Scaling retained intervals also corrects only their remaining share
-      // when part of the response has already left the window.
-      const factor = total / previous.total;
-      for (const segment of previous.segments) segment.tokens *= factor;
+      if (previous.segments.length === 0) {
+        // Mid-flight baseline or segments pruned during a long tool pause settled/upgraded to a
+        // provider count: count only newly measured output instead of scaling an empty list.
+        const addedDuration = Math.max(0, step.durationMs - previous.durationMs);
+        if (total > previous.total && addedDuration > 0) {
+          previous.segments.push({ start: end, end, tokens: total - previous.total, durationMs: addedDuration });
+          addedDuringBaseline = true;
+        }
+      } else {
+        // Preserve when the output happened: a usage notice arriving after a tool call is not a
+        // new burst of tokens. Scaling retained intervals also corrects only their remaining share
+        // when part of the response has already left the window.
+        const factor = total / previous.total;
+        for (const segment of previous.segments) segment.tokens *= factor;
+      }
     } else if (total > previous.total) {
       // Live deltas have their own observed timestamp. Do not spread a newly received chunk
       // backwards over a silent tool call. Transcript-only cumulative updates have no chunk
       // boundary, so their delta retains the interval between the two records, as in Kaboo.
       const deltaStart = step.live || !previous.settled ? end : previous.end;
       const addedDuration = previous.total === 0 ? step.durationMs : Math.max(0, step.durationMs - previous.durationMs);
-      previous.segments.push({ start: deltaStart, end, tokens: total - previous.total,
-        durationMs: addedDuration > 0 ? addedDuration : Math.max(0, end - previous.end) });
+      // If measured response duration did not advance, do not pull silent tool-pause wall time
+      // (`end - previous.end`) into the denominator when existing segments already hold the span.
+      const segmentDuration = addedDuration > 0
+        ? addedDuration
+        : previous.segments.length > 0 ? 0 : Math.min(step.durationMs, Math.max(0, end - previous.end));
+      previous.segments.push({ start: deltaStart, end, tokens: total - previous.total, durationMs: segmentDuration });
     }
     // A finalized window can replace a wider provisional one. Correct its retained share without
     // moving any sample in time or assigning time from an expired baseline to a new delta.
-    if (step.durationMs !== previous.durationMs && ((correction && previous.total > 0)
-      || step.durationMs < previous.durationMs || (!step.live && total <= previous.total))) {
+    if (!addedDuringBaseline && previous.durationMs > 0 && step.durationMs !== previous.durationMs
+      && ((correction && previous.total > 0) || step.durationMs < previous.durationMs || (!step.live && total <= previous.total))) {
       const factor = step.durationMs / previous.durationMs;
       for (const segment of previous.segments) segment.durationMs *= factor;
     }

@@ -239,6 +239,16 @@ describe('StatsLedger', () => {
       native: { metrics: { outputTokens: 90, durationMs: 2_000 } } });
   });
 
+  it('keeps total output tokens while excluding implausible single-step bursts from speed totals', () => {
+    const { store, session, run } = setup();
+    const ledger = new StatsLedger(store);
+    ledger.recordUsage(session.id, run.id, { stepId: 'good', outputTokens: 200, startedAt: 1_000, endedAt: 5_000, tokenSource: 'provider', window: 'stream' });
+    ledger.recordUsage(session.id, run.id, { stepId: 'corrupt-burst', outputTokens: 500, startedAt: 6_000, endedAt: 6_002, tokenSource: 'provider', window: 'stream' });
+    complete(store, run.id, {});
+    expect(facts(store, run.id)).toMatchObject({ output_tokens: 700, measured_ms: 4_000, speed_output_tokens: 200 });
+    ledger.close();
+  });
+
   it('keeps untimed output and a child agent out of the measured main-agent rate', () => {
     const { store, session, run } = setup();
     const ledger = new StatsLedger(store);

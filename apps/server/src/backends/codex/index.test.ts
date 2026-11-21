@@ -3081,6 +3081,54 @@ describe('Codex request generation windows', () => {
       clock.mockRestore(); unsubscribe(); await h.adapter.dispose(h.host, h.session.id);
     }
   });
+
+  it('extends a short streamed delta to the observed request window when unstreamed tool args or reasoning follow', async () => {
+    const { h, messages, unsubscribe } = await metering();
+    await h.send('cmd-unstreamed-tail');
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    const emit = (method: string, params: Record<string, unknown>) => h.transport!.emitNativeNotification(method, { threadId: 'native-thread', turnId: 'turn-1', ...params });
+    try {
+      emit('turn/started', { turn: { id: 'turn-1', startedAt: start / 1_000 } });
+      // Model thinks for 4s without deltas, streams a 4ms message burst, then generates tool args for 6s.
+      clock.mockReturnValue(start + 4_000);
+      emit('item/agentMessage/delta', { itemId: 'msg-1', delta: 'Running ' });
+      clock.mockReturnValue(start + 4_004);
+      emit('item/agentMessage/delta', { itemId: 'msg-1', delta: 'tool.' });
+      clock.mockReturnValue(start + 10_000);
+      emit('item/started', { item: { type: 'commandExecution', id: 'tool-1', command: 'ls', status: 'inProgress' } });
+      emit('thread/tokenUsage/updated', { tokenUsage: { last: { outputTokens: 500, reasoningOutputTokens: 300 }, total: { outputTokens: 500, reasoningOutputTokens: 300 } } });
+      clock.mockReturnValue(start + 70_000);
+      emit('item/completed', { item: { type: 'commandExecution', id: 'tool-1', command: 'ls', status: 'completed', exitCode: 0 } });
+      h.transport!.finishTurn('turn-1', 'completed');
+      const settled = messages.flatMap(message => message.type === 'metrics' && !message.metrics.live ? [message.metrics] : []).at(-1);
+      expect(settled).toMatchObject({ outputTokens: 500, durationMs: 10_000, window: 'observed' });
+    } finally {
+      clock.mockRestore(); unsubscribe(); await h.adapter.dispose(h.host, h.session.id);
+    }
+  });
+
+  it('does not charge an unannounced subAgentActivity wait to parent model generation', async () => {
+    const { h, messages, unsubscribe } = await metering();
+    await h.send('cmd-subagent-wait');
+    const start = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start);
+    const emit = (method: string, params: Record<string, unknown>) => h.transport!.emitNativeNotification(method, { threadId: 'native-thread', turnId: 'turn-1', ...params });
+    try {
+      emit('turn/started', { turn: { id: 'turn-1', startedAt: start / 1_000 } });
+      clock.mockReturnValue(start + 10_000);
+      emit('item/completed', { item: { type: 'reasoning', id: 'rs-1', summary: [] } });
+      // Subagent runs for 20 minutes and delivers only item/completed without item/started.
+      clock.mockReturnValue(start + 1_210_000);
+      emit('item/completed', { item: { type: 'subAgentActivity', id: 'call-sub-1', kind: 'started', agentThreadId: 'child-1' } });
+      emit('thread/tokenUsage/updated', { tokenUsage: { last: { outputTokens: 500, reasoningOutputTokens: 400 }, total: { outputTokens: 500, reasoningOutputTokens: 400 } } });
+      h.transport!.finishTurn('turn-1', 'completed');
+      const settled = messages.flatMap(message => message.type === 'metrics' && !message.metrics.live ? [message.metrics] : []).at(-1);
+      expect(settled).toMatchObject({ outputTokens: 500, durationMs: 10_000, window: 'observed' });
+    } finally {
+      clock.mockRestore(); unsubscribe(); await h.adapter.dispose(h.host, h.session.id);
+    }
+  });
 });
 
 describe('Codex skills', () => {

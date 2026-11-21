@@ -23,6 +23,10 @@ export interface CursorLiveStep {
   step: string;
   /** The step's checkpoint arrived, or the run ended: the store has, or is about to have, all of it. */
   sealed: boolean;
+  /** Epoch ms of the first text/reasoning delta received for this step, when recorded by the tap. */
+  firstDeltaAt?: number;
+  /** Epoch ms of the latest text/reasoning delta received for this step, when recorded by the tap. */
+  lastDeltaAt?: number;
   /** Empty until the model's first output: the run is then only its prompt. */
   parts: Array<{ type: 'reasoning' | 'text'; text: string }>;
 }
@@ -54,11 +58,15 @@ function parse(value: unknown): (CursorLiveStep & { pid: number }) | undefined {
   const parts = value.parts.filter((part): part is CursorLiveStep['parts'][number] =>
     isRecord(part) && (part.type === 'reasoning' || part.type === 'text') && typeof part.text === 'string' && part.text.length > 0);
   if (!parts.length && !(typeof value.prompt === 'string' && value.prompt)) return undefined;
+  const firstDeltaAt = typeof value.firstDeltaAt === 'number' && Number.isFinite(value.firstDeltaAt) && value.firstDeltaAt > 0 ? value.firstDeltaAt : undefined;
+  const lastDeltaAt = typeof value.lastDeltaAt === 'number' && Number.isFinite(value.lastDeltaAt) && value.lastDeltaAt > 0 ? value.lastDeltaAt : undefined;
   return {
     pid: value.pid as number, turn: value.turn, at: value.at, step: value.step, sealed: value.sealed, parts,
     ...(typeof value.prompt === 'string' && value.prompt ? { prompt: value.prompt } : {}),
     ...(typeof value.run === 'string' && value.run ? { run: value.run } : {}),
     ...(typeof value.requestedModel === 'string' && value.requestedModel ? { requestedModel: value.requestedModel } : {}),
+    ...(firstDeltaAt !== undefined ? { firstDeltaAt } : {}),
+    ...(lastDeltaAt !== undefined ? { lastDeltaAt } : {}),
   };
 }
 

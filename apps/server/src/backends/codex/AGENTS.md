@@ -43,6 +43,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 - hook（PreToolUse / PostToolUse，只处理 Bash）：`observation.ts#CodexObservation`，记录命令改动的文件。hook 载荷与 App Server 消息录在同一份录制里；回放不投递它们（算改动需要真实的工作区），由 `recording.ts#hookProblems` 检查观察依赖的约定：每条命令有一对 hook，`tool_use_id` 是 item id，`session_id` 是线程，PreToolUse 先于 item 完成。
 - 录制会按 Riffet 的方式确认 hook 信任，这会写用户 `config.toml` 里与正在运行的 Riffet 同名的信任项；`scripts/record.ts` 运行前记下、结束后写回。
 - `pnpm record codex all --check` 用本机 CLI 跑一遍场景并与录制比较，不写入仓库；有漂移时再重录。CLI 升级后先运行 `pnpm record codex all`，再运行 `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u`，在代码评审中检查行的差异。
+- 测速（`metering.ts`）：`subAgentActivity` 的所有状态变更都属于等待事件（尽管只有 `kind: 'started'` 投影为时间线行），无 `item/started` 的子代理完成通知不得把子代理等待时间计入父模型生成耗时；当请求在短流式 delta 后继续生成未流式工具参数或隐藏推理时，请求窗口扩展为 `observed` 全程耗时。
 
 ## 排障
 

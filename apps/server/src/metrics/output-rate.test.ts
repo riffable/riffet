@@ -150,4 +150,21 @@ describe('OutputRateTracker', () => {
     tracker.update(step({ outputTokens: 3_000, startedAt: 1_000, endedAt: 63_000, durationMs: 60_000, live: true }), 63_000);
     expect(tracker.sample(63_000)).toMatchObject({ outputTokens: 3_000, durationMs: 60_000, tokensPerSecond: 50 });
   });
+
+  it('does not pull tool-pause wall time into durationMs when a late token delta keeps duration unchanged', () => {
+    const tracker = new OutputRateTracker();
+    tracker.update(step({ outputTokens: 500, startedAt: 1_000, endedAt: 11_000, durationMs: 10_000, live: true }), 11_000);
+    tracker.update(step({ outputTokens: 600, startedAt: 1_000, endedAt: 131_000, durationMs: 10_000, live: true }), 131_000);
+    expect(tracker.sample(131_000)).toMatchObject({ outputTokens: 600, durationMs: 10_000, tokensPerSecond: 60 });
+  });
+
+  it('records newly measured provider output after a mid-flight estimated baseline and drops sub-50ms corrupt bursts', () => {
+    const tracker = new OutputRateTracker();
+    tracker.update(step({ tokens: 'estimated', outputTokens: 1_000, startedAt: 1_000, endedAt: 500_000, durationMs: 20_000, live: true }), 500_000);
+    tracker.update(step({ tokens: 'provider', outputTokens: 1_200, startedAt: 1_000, endedAt: 504_000, durationMs: 24_000, live: false }), 504_000);
+    expect(tracker.sample(504_000)).toMatchObject({ state: 'live', outputTokens: 200, durationMs: 4_000, tokensPerSecond: 50, tokens: 'provider' });
+
+    tracker.update(step({ stepId: 'burst', outputTokens: 500, startedAt: 504_000, endedAt: 504_002, durationMs: 2, live: false }), 504_002);
+    expect(tracker.sample(504_002)).toMatchObject({ outputTokens: 200, tokensPerSecond: 50 });
+  });
 });

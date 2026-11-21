@@ -10,6 +10,7 @@ import type {
 } from '../../../../../packages/contracts/src/index.js';
 import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
+import { PiStepMetering } from './metering.js';
 import { activityEvent, activityId, withActivity } from '../../journal/activity.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import { firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
@@ -21,7 +22,7 @@ import type {
   NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage,
   NativeDispatchBinding,
 } from '../types.js';
-import { findPiTranscript, piEntryUsage, readPiTranscript, type PiEntry, type PiTranscript } from './history.js';
+import { findPiTranscript, readPiTranscript, type PiEntry, type PiTranscript } from './history.js';
 import {
   piDefaultModel, piLaunchCommand, piEnvironment, listPiModels, piModelInfos,
   probePiCli, readPiSettings,
@@ -126,6 +127,7 @@ interface PiConversation {
   /** Confirmed native user entries, mapped to the command they answered. */
   readonly turns: Map<string, { commandId: string; runId: string }>;
   readonly drafts: Map<string, PiDraft>;
+  readonly metering: PiStepMetering;
   /** The turn the streamed blocks belong to: a confirmed entry id, else the command id. */
   streamTurn?: string;
   activeTurn?: string;
@@ -274,6 +276,7 @@ export class PiRuntime {
       deliveries: new Map(),
       turns: new Map(),
       drafts: new Map(),
+      metering: undefined as unknown as PiStepMetering,
       assistantStep: 0,
       stopRequested: false,
       pending: [],
@@ -284,6 +287,7 @@ export class PiRuntime {
       dormancy: new DormancyClock(),
       compactions: 0,
     };
+    (state as { metering: PiStepMetering }).metering = new PiStepMetering(this.host, msg => notify(state, msg));
     state.status = this.statusOf(state);
     this.conversations.set(session.id, state);
     return state;
@@ -776,6 +780,7 @@ export class PiRuntime {
       state.retryNotice = undefined;
       dropPending(state);
       state.drafts.clear();
+      state.metering.clearOpen();
       state.activeTurn = undefined;
       state.activeRunId = undefined;
       state.streamTurn = undefined;
@@ -987,26 +992,7 @@ export class PiRuntime {
         if (draft.entryId || draft.messageTimestamp !== timestamp) continue;
         draft.entryId = entry.id;
       }
-      const usage = piEntryUsage(entry);
-      if (usage) {
-        let ancestor: PiEntry | undefined = entry;
-        const seen = new Set<string>();
-        while (ancestor && !isPiPrompt(ancestor) && !seen.has(ancestor.id)) {
-          seen.add(ancestor.id);
-          ancestor = ancestor.parentId ? byId.get(ancestor.parentId) : undefined;
-        }
-        const runId = ancestor ? state.turns.get(ancestor.id)?.runId : undefined;
-        const provider = str(message.provider), model = str(message.model);
-        this.host.stats.recordUsage(state.workbenchSessionId, runId, {
-          stepId: `pi:${entry.id}`, nativeMessageId: `msg:${entry.id}`,
-          ...(model ? { model: provider ? `${provider}/${model}` : model } : {}),
-          endedAt: Date.parse(entry.timestamp),
-          inputTokens: usage.input, outputTokens: usage.output,
-          cacheReadTokens: usage.cacheRead, cacheWriteTokens: usage.cacheWrite,
-          ...(typeof record(message.usage)?.reasoning === 'number' ? { reasoningTokens: record(message.usage)!.reasoning as number } : {}),
-          tokenSource: 'provider',
-        });
-      }
+      state.metering.recordEntry(state.workbenchSessionId, entry, message, timestamp, byId, state.turns);
     }
     state.boundary = entries.at(-1)?.id ?? state.boundary;
     wake(state);
@@ -1033,6 +1019,7 @@ export class PiRuntime {
         if (message?.role === 'assistant') {
           state.assistantStep++;
           state.streamTurn = state.activeTurn ?? state.streamTurn;
+          state.metering.start(state.assistantStep, state.activeTurn ?? state.streamTurn, state.activeRunId);
         }
         return;
       }
@@ -1107,6 +1094,9 @@ export class PiRuntime {
     const update = record(frame.assistantMessageEvent);
     const kind = str(update?.type);
     if (!update || !kind) return;
+    const partial = record(frame.message);
+    const messageTimestamp = typeof partial?.timestamp === 'number' ? partial.timestamp : undefined;
+    state.metering.update(state.assistantStep, kind, str(update.delta), messageTimestamp, state.activeTurn ?? state.streamTurn, state.activeRunId);
     const contentIndex = typeof update.contentIndex === 'number' && Number.isSafeInteger(update.contentIndex) && update.contentIndex >= 0 ? update.contentIndex : 0;
     const thought = kind.startsWith('thinking');
     if (!thought && !kind.startsWith('text')) return;
@@ -1127,8 +1117,7 @@ export class PiRuntime {
       const content = str(update.content);
       if (content) draft.text = content;
     }
-    const partial = record(frame.message);
-    if (typeof partial?.timestamp === 'number') draft.messageTimestamp = partial.timestamp;
+    if (messageTimestamp !== undefined) draft.messageTimestamp = messageTimestamp;
     state.drafts.set(key, draft);
     wake(state);
   }
@@ -1137,6 +1126,7 @@ export class PiRuntime {
     const message = record(frame.message);
     if (message?.role === 'assistant') {
       proc.lastAssistant = message;
+      state.metering.finish(state.assistantStep, message, state.activeTurn ?? state.streamTurn, state.activeRunId);
       for (const draft of state.drafts.values()) {
         if (!draft.key.includes(`:${state.assistantStep}:`)) continue;
         if (typeof message.timestamp === 'number') draft.messageTimestamp = message.timestamp;
@@ -1170,6 +1160,7 @@ export class PiRuntime {
     state.activeRunId = undefined;
     state.streamTurn = undefined;
     state.drafts.clear();
+    state.metering.clearOpen();
     state.stopRequested = false;
     state.nativeActive = false;
     dropPending(state);

@@ -146,6 +146,15 @@ describe('measuredWindow', () => {
     expect(measuredWindow({ streamStart: 1_000, streamEnd: 2_000 })).toMatchObject({ window: 'stream' });
     expect(measuredWindow({ streamStart: 1_000, streamEnd: 2_000, fallbackStart: 500 })).toMatchObject({ startedAt: 1_000 });
   });
+
+  it('falls back to observed when a short stream span implies an impossible token rate', () => {
+    expect(measuredWindow({
+      streamStart: 4_995, streamEnd: 5_000, fallbackStart: 1_000, outputTokens: 200, now: 5_000,
+    })).toEqual({ startedAt: 1_000, endedAt: 5_000, window: 'observed' });
+    expect(measuredWindow({
+      streamStart: 1_000, streamEnd: 3_000, fallbackStart: 500, outputTokens: 200, now: 3_000,
+    })).toEqual({ startedAt: 1_000, endedAt: 3_000, window: 'stream' });
+  });
 });
 
 describe('rememberTracker', () => {

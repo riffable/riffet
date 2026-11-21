@@ -10,8 +10,8 @@ import type {
 } from '../../../../../packages/contracts/src/index.js';
 import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
-import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
-import { estimateTokens } from '../../metrics/tokens.js';
+import { type RunMetricsTracker } from '../../metrics/turn-metrics.js';
+import { publishDroidStep, settleDroidStep, type DroidCallUsage, type DroidStep } from './metering.js';
 import { agentTitlePatch, firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import { resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
@@ -89,14 +89,6 @@ interface PendingRequest {
   resolve(result: unknown): void;
 }
 
-/** One streamed assistant message, measured from its first delta to its last. */
-interface DroidStep {
-  turnId?: string;
-  text: string;
-  startedAt: number;
-  lastAt: number;
-}
-
 /** A child session a `Task` call started, followed so its row can open the subagent's transcript. */
 interface DroidSubagent {
   readonly toolCallId: string;
@@ -169,6 +161,8 @@ interface DroidConversation {
   firstMessage?: string;
   readonly metrics: Map<string, RunMetricsTracker>;
   readonly steps: Map<string, DroidStep>;
+  /** Wall clock when the current model request began (user prompt or last tool result). */
+  requestStartAt?: number;
   /** System activities this process saw (compaction, fire-and-forget commands), for the status summary; the journal has their rows. */
   readonly activities: ActivityLedger;
   /** The compaction Droid is in the middle of, if any. */
@@ -176,7 +170,7 @@ interface DroidConversation {
   compactions: number;
   /** Looks for the end of detached commands by their process id; runs only while one is live. */
   backgroundWatch?: NodeJS.Timeout;
-  lastCallUsage?: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheCreationTokens?: number };
+  lastCallUsage?: DroidCallUsage;
   idleTimer?: NodeJS.Timeout;
 }
 
@@ -1117,6 +1111,8 @@ export class DroidRuntime {
     state.lateCommands.clear();
     state.steps.clear();
     state.drafts.clear();
+    state.requestStartAt = undefined;
+    state.lastCallUsage = undefined;
     for (const item of state.subagents.values()) if (item.running) this.finishSubagent(state, item);
     if (state.idleTimer) clearTimeout(state.idleTimer);
     state.idleTimer = undefined;
@@ -1294,6 +1290,8 @@ export class DroidRuntime {
       case 'droid_working_state_changed': {
         const previous = state.working;
         state.working = str(notification.newState) ?? 'idle';
+        if (state.working === 'idle') state.requestStartAt = undefined;
+        else if (state.requestStartAt === undefined) state.requestStartAt = Date.now();
         this.trackCompaction(state, previous);
         this.emitStatus(state);
         return;
@@ -1385,6 +1383,7 @@ export class DroidRuntime {
       }
       state.activeTurn = message.id;
       state.turnActive = true;
+      state.requestStartAt = Date.now();
       const events = this.keep(state, projectDroidMessage(message, {
         sessionId: state.workbenchSessionId,
         ...(command ? { commandId: command.commandId, runId: command.runId, ...(command.attachments ? { attachments: command.attachments } : {}) } : {}),
@@ -1400,7 +1399,11 @@ export class DroidRuntime {
     const turn = state.activeTurn ? state.turns.get(state.activeTurn) : undefined;
     this.keep(state, projectDroidMessage(message, { sessionId: state.workbenchSessionId, ...(turn ? { runId: turn.runId } : {}) }));
     for (const [key, block] of state.drafts) if (block.messageId === message.id) state.drafts.delete(key);
-    if (message.role === 'assistant') this.settleStep(state, message.id);
+    if (message.role === 'assistant') {
+      const hasToolUse = message.content.some(block => record(block)?.type === 'tool_use');
+      settleDroidStep(this.host, msg => notify(state, msg), state, message.id, true, hasToolUse);
+      state.requestStartAt = undefined;
+    }
     wake(state);
   }
 
@@ -1409,11 +1412,17 @@ export class DroidRuntime {
     const delta = str(notification.textDelta);
     if (!messageId || !delta) return;
     const now = Date.now();
-    const step = state.steps.get(messageId) ?? { ...(state.activeTurn ? { turnId: state.activeTurn } : {}), text: '', startedAt: now, lastAt: now };
+    const step = state.steps.get(messageId) ?? {
+      ...(state.activeTurn ? { turnId: state.activeTurn } : {}),
+      text: '',
+      requestStartAt: state.requestStartAt ?? now,
+      startedAt: now,
+      lastAt: now,
+    };
     step.text += delta;
     step.lastAt = now;
     state.steps.set(messageId, step);
-    this.publishStep(state, messageId, step, true);
+    publishDroidStep(this.host, msg => notify(state, msg), state, messageId, step, true);
     const blockIndex = typeof notification.blockIndex === 'number' && Number.isSafeInteger(notification.blockIndex) && notification.blockIndex >= 0 ? notification.blockIndex : 0;
     const key = `${messageId}:${blockIndex}:${String(notification.type)}`;
     const block = state.drafts.get(key) ?? { messageId, blockIndex, thought: notification.type === 'thinking_text_delta', text: '', at: new Date(now).toISOString() };
@@ -1441,6 +1450,7 @@ export class DroidRuntime {
     if (event) this.keep(state, [event]);
     const subagent = state.subagents.get(toolUseId);
     if (subagent?.running) this.finishSubagent(state, subagent);
+    state.requestStartAt = Date.now();
     wake(state);
     this.trackBackgroundShell(state, toolUseId, notification.content, notification.isError === true);
   }
@@ -1450,7 +1460,9 @@ export class DroidRuntime {
     const reason = state.proc?.modelMismatch ? 'model_changed' : str(notification.reason) ?? 'completed';
     const turn = turnId ? state.turns.get(turnId) : undefined;
     const superseded = state.activeTurn !== undefined && turnId !== undefined && state.activeTurn !== turnId;
-    for (const [messageId, step] of state.steps) if (!superseded || step.turnId === turnId) this.settleStep(state, messageId, !superseded);
+    for (const [messageId, step] of state.steps) {
+      if (!superseded || step.turnId === turnId) settleDroidStep(this.host, msg => notify(state, msg), state, messageId, !superseded);
+    }
     this.recordChildUsage(state, turnId, notification);
     // An interrupted turn can finish after its replacement has already echoed. Its accounting
     // still settles, but the new turn owns the drafts, requests, children and deferred settings.
@@ -1477,6 +1489,7 @@ export class DroidRuntime {
     state.turnActive = state.commands.size > 0;
     state.activeTurn = undefined;
     state.toolMessage = undefined;
+    state.requestStartAt = undefined;
     dropPending(state);
     const proc = state.proc;
     const deferred = state.deferred;
@@ -1717,54 +1730,6 @@ export class DroidRuntime {
       if (required) throw error;
       // The meter keeps its last value during ordinary background refreshes.
     }
-  }
-
-  private metricsFor(state: DroidConversation, runId: string | undefined, key: string): RunMetricsTracker {
-    return runTracker(state.metrics, runId ?? key, { runId }, {
-      emit: message => notify(state, message), save: (id, run) => this.host.saveRunMetrics(id, run),
-    });
-  }
-
-  private publishStep(state: DroidConversation, messageId: string, step: DroidStep, live: boolean, outputTokens?: number): void {
-    const range = measuredWindow({ streamStart: step.startedAt, streamEnd: step.lastAt, fallbackStart: step.startedAt });
-    if (!range) return;
-    const runId = step.turnId ? state.turns.get(step.turnId)?.runId : undefined;
-    this.metricsFor(state, runId, `turn:${step.turnId ?? messageId}`).update({
-      stepId: messageId,
-      text: step.text,
-      ...(outputTokens !== undefined ? { outputTokens } : {}),
-      ...range,
-      live,
-    }, !live);
-  }
-
-  /** Publishes a finished assistant message once, with the count Droid reported just before committing it. */
-  private settleStep(state: DroidConversation, messageId: string, useCallUsage = true): void {
-    const step = state.steps.get(messageId);
-    if (!step) return;
-    state.steps.delete(messageId);
-    // Aggregate call usage can already belong to the replacement turn when an old end arrives.
-    const usage = useCallUsage ? state.lastCallUsage : undefined;
-    if (useCallUsage) state.lastCallUsage = undefined;
-    this.publishStep(state, messageId, step, false, usage?.outputTokens);
-    const range = measuredWindow({ streamStart: step.startedAt, streamEnd: step.lastAt, fallbackStart: step.startedAt });
-    if (!range) return;
-    const provider = usage?.outputTokens !== undefined;
-    const outputTokens = provider ? usage!.outputTokens! : Math.max(0, Math.round(estimateTokens(step.text)));
-    if (!provider && !step.text.trim()) return;
-    try {
-      this.host.stats.recordUsage(state.workbenchSessionId, step.turnId ? state.turns.get(step.turnId)?.runId : undefined, {
-        stepId: messageId,
-        ...(state.reported?.modelId ? { model: state.reported.modelId } : {}),
-        startedAt: range.startedAt,
-        endedAt: range.endedAt,
-        window: range.window,
-        tokenSource: provider ? 'provider' : 'estimated',
-        outputTokens,
-        ...(usage?.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
-        ...(usage?.cacheReadTokens !== undefined ? { cacheReadTokens: usage.cacheReadTokens } : {}),
-      });
-    } catch { /* statistics must never affect the stream */ }
   }
 }
 

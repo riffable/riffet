@@ -91,7 +91,10 @@ export class ClaudeStepMeter {
   private readonly order: string[] = [];
   private readonly subagents: ClaudeStepMeasurement[] = [];
   private readonly toolParents = new Map<string, { stepId: string; subagentType?: string; nativeMessageId?: string; commandId?: string }>();
-  private previousAt: number | undefined;
+  /** Timestamp of the explicit `api-request` preceding the next assistant response, if any. */
+  private apiRequestAt: number | undefined;
+  /** Timestamp of the last conversation-flow boundary (`user`, `assistant`, or `api-request`). */
+  private boundaryAt: number | undefined;
   private turnId: string | undefined;
   private nativeTurnId: string | undefined;
   private commandId: string | undefined;
@@ -129,6 +132,15 @@ export class ClaudeStepMeter {
       let entry = this.open.get(messageId);
       if (!entry) {
         const assistant = events.find(event => event.runId);
+        // Prefer the explicit `api-request` row when present and non-inverted; otherwise fall back
+        // to the previous conversation boundary (`user`/`assistant`). Asynchronous side records
+        // (`attachment`, `queue-operation`, `file-history-delta`, …) never move these markers.
+        const startedAt = this.apiRequestAt !== undefined && this.apiRequestAt <= stamp
+          ? this.apiRequestAt
+          : this.boundaryAt !== undefined && this.boundaryAt <= stamp
+            ? this.boundaryAt
+            : stamp;
+        this.apiRequestAt = undefined;
         entry = {
           step: {
             stepId: messageId,
@@ -137,7 +149,7 @@ export class ClaudeStepMeter {
             ...(this.nativeMessageId ? { nativeMessageId: this.nativeMessageId } : {}),
             text: '',
             outputTokens: 0,
-            startedAt: this.previousAt ?? stamp,
+            startedAt,
             endedAt: stamp,
             live: false,
           },
@@ -197,7 +209,9 @@ export class ClaudeStepMeter {
         text: '',
         // One number only. The CLI does not split this total into input, cache, or output.
         outputTokens: noticeTokens,
-        startedAt: durationMs !== undefined ? stamp - durationMs : (this.previousAt ?? stamp),
+        startedAt: durationMs !== undefined
+          ? stamp - durationMs
+          : (this.boundaryAt !== undefined && this.boundaryAt <= stamp ? this.boundaryAt : stamp),
         endedAt: stamp,
         live: false,
         agentKind: 'subagent',
@@ -206,7 +220,17 @@ export class ClaudeStepMeter {
       });
       this.cache = undefined;
     }
-    if (stamp !== undefined) this.previousAt = stamp;
+    if (stamp !== undefined) {
+      if (row.type === 'api-request') {
+        this.apiRequestAt = stamp;
+        this.boundaryAt = this.boundaryAt === undefined ? stamp : Math.max(this.boundaryAt, stamp);
+      } else if (row.type === 'user') {
+        this.apiRequestAt = undefined;
+        this.boundaryAt = stamp;
+      } else if (row.type === 'assistant') {
+        this.boundaryAt = this.boundaryAt === undefined ? stamp : Math.max(this.boundaryAt, stamp);
+      }
+    }
   }
 
   /** The same array until a row changes a measurement, so a caller can tell nothing moved. */

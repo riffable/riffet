@@ -1,6 +1,6 @@
 import type { NativeContext, NativeStreamMessage } from '../../../../../packages/contracts/src/index.js';
 import { estimateTokens } from '../../metrics/tokens.js';
-import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
+import { isPlausibleSpeed, measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import type { NativeBackendHost, NativeControlMessage } from '../types.js';
 import type { CodexTurnMeter, RpcItem } from './types.js';
 import { isCodexToolItem, codexNativeContext } from './transcript.js';
@@ -56,7 +56,7 @@ export class CodexTurnMetering {
       ?? (nativeMessageId ? this.context.host.findRunIdByNativeMessage?.(this.context.sessionId, nativeMessageId) : undefined);
     const model = this.context.model();
     const meter: CodexTurnMeter = {
-      text: '', durationMs: 0, activeWaits: new Set(), streamedItems: new Set(), completedItems: new Set(),
+      text: '', durationMs: 0, activeWaits: new Set(), knownWaits: new Set(), streamedItems: new Set(), completedItems: new Set(),
       requestStartAt: this.turnMeterStart(turnId),
       nativeMessageId,
       ...(runId ? { runId } : {}),
@@ -96,7 +96,7 @@ export class CodexTurnMetering {
   }
 
   /** A provider can deliver a completed item without sending any text delta. */
-  noteCompletedOutput(turnId: string, item: RpcItem): void {
+  noteCompletedOutput(turnId: string, item: RpcItem, timing?: { startedAtMs?: number; completedAtMs?: number }): void {
     if (this.settled.has(turnId) || (item.type !== 'agentMessage' && item.type !== 'reasoning')) return;
     const meter = this.meterFor(turnId);
     const key = item.id ?? item.type;
@@ -113,12 +113,17 @@ export class CodexTurnMetering {
     const at = Date.now();
     if (!text) {
       // Encrypted reasoning items carry no text, but still prove the request has been generating
-      // since `requestStartAt` rather than only during a short trailing AgentMessage delta.
+      // since `requestStartAt` (or the item's own timestamps) rather than only during a short trailing delta.
       if (item.type === 'reasoning' && !meter.requestAccounted) {
-        const start = meter.requestStartAt ?? at;
+        const hasSpan = timing?.startedAtMs !== undefined && timing?.completedAtMs !== undefined && timing.completedAtMs > timing.startedAtMs;
+        const spanEnd = hasSpan ? timing!.completedAtMs! : at;
+        const start = hasSpan ? timing!.startedAtMs! : (meter.requestStartAt ?? spanEnd);
         const request = meter.request ??= { start };
-        request.unstreamedStartAt ??= request.start ?? start;
-        request.completedAt = at;
+        const unstreamedStart = hasSpan ? timing!.startedAtMs! : (request.start ?? start);
+        request.unstreamedStartAt = request.unstreamedStartAt !== undefined
+          ? Math.min(request.unstreamedStartAt, unstreamedStart)
+          : unstreamedStart;
+        request.completedAt = Math.max(request.completedAt ?? spanEnd, spanEnd);
         meter.pendingUsageInterval = false;
       }
       return;
@@ -157,9 +162,15 @@ export class CodexTurnMetering {
 
   /** Only protocol boundaries split a response; a long pause between chunks may be a slow model. */
   closeMeterRequest(meter: CodexTurnMeter, observeRequest = false, at = Date.now()): void {
-    // A tool/approval can finish a request that generated only tool-call arguments. It has no text
-    // deltas, but its provider tokens must still have an observed generation interval.
-    if (observeRequest && !meter.request && !meter.requestAccounted && !meter.pendingUsageInterval
+    // A tool/approval can finish a request that generated tool-call arguments after a brief text
+    // or reasoning delta, or generated only tool-call arguments with no deltas at all.
+    if (observeRequest && meter.request) {
+      const knownEnd = Math.max(meter.request.lastDeltaAt ?? -Infinity, meter.request.completedAt ?? -Infinity);
+      if (at > knownEnd) {
+        meter.request.unstreamedStartAt ??= meter.request.start;
+        meter.request.completedAt = at;
+      }
+    } else if (observeRequest && !meter.request && !meter.requestAccounted && !meter.pendingUsageInterval
       && meter.requestStartAt !== undefined && at > meter.requestStartAt) {
       meter.request = { start: meter.requestStartAt, completedAt: at };
     }
@@ -193,11 +204,12 @@ export class CodexTurnMetering {
     const advanced = !meter.usage || outputTokens > previousOutputTokens;
     const textAdvanced = meter.text.length > (meter.accountedTextLength ?? 0);
     const streamedReasoning = meter.request?.streamedTypes?.has('reasoning') === true;
+    const stepOutput = Math.max(0, outputTokens - previousOutputTokens);
+    const addedReasoning = reasoningTokens !== undefined ? Math.max(0, reasoningTokens - previousReasoningTokens) : 0;
+    const addedTextTokens = textAdvanced ? Math.max(0, Math.round(estimateTokens(meter.text.slice(meter.accountedTextLength ?? 0)))) : 0;
     const addedUnstreamed = !textAdvanced
-      ? Math.max(0, outputTokens - previousOutputTokens)
-      : (!streamedReasoning && reasoningTokens !== undefined && reasoningTokens > previousReasoningTokens
-        ? reasoningTokens - previousReasoningTokens
-        : 0);
+      ? stepOutput
+      : Math.max(!streamedReasoning ? addedReasoning : 0, stepOutput - addedTextTokens);
     if (addedUnstreamed > 0) {
       meter.unstreamedTokens = (meter.unstreamedTokens ?? 0) + addedUnstreamed;
     }
@@ -216,8 +228,19 @@ export class CodexTurnMetering {
     // This notification accounts for a completed provider request, not for an entire turn.
     // With no deltas it is still a measurable, explicitly observed request interval.
     if (!hadPendingInterval) {
-      if (!meter.request && !meter.waiting && outputTokens > 0) {
-        meter.request = { start: meter.requestStartAt ?? Date.now(), completedAt: Date.now() };
+      const now = Date.now();
+      if (meter.request) {
+        const streamSpan = meter.request.firstDeltaAt !== undefined && meter.request.lastDeltaAt !== undefined
+          ? meter.request.lastDeltaAt - meter.request.firstDeltaAt
+          : 0;
+        const hasUnstreamedReasoning = !streamedReasoning && addedReasoning > 0;
+        const implausibleStream = streamSpan > 0 && stepOutput > 0 && !isPlausibleSpeed(stepOutput, streamSpan);
+        if ((hasUnstreamedReasoning || implausibleStream) && meter.request.start !== undefined) {
+          meter.request.unstreamedStartAt ??= meter.request.start;
+          meter.request.completedAt = Math.max(meter.request.completedAt ?? now, now);
+        }
+      } else if (!meter.waiting && outputTokens > 0) {
+        meter.request = { start: meter.requestStartAt ?? now, completedAt: now };
       }
       this.closeMeterRequest(meter);
     } else {
@@ -366,25 +389,51 @@ export function contextBreakdownOf(response: { contextWindowUsage?: unknown }): 
   });
 }
 
+/** Tool calls and all subagent activities pause parent generation even when only `started` projects as a timeline row. */
+function isCodexWaitItem(item: RpcItem): boolean {
+  return isCodexToolItem(item) || item.type === 'subAgentActivity';
+}
+
 /** What an item's start or completion does to its turn's wait accounting. */
-export function noteItemMeter(metering: CodexTurnMetering, method: string, item: RpcItem, turnId: string): void {
-  if (isCodexToolItem(item) && !metering.isSettled(turnId)) {
+export function noteItemMeter(
+  metering: CodexTurnMetering,
+  method: string,
+  item: RpcItem,
+  turnId: string,
+  timing?: { startedAtMs?: number; completedAtMs?: number },
+): void {
+  if (isCodexWaitItem(item) && !metering.isSettled(turnId)) {
     const meter = metering.meterFor(turnId);
     const waitKey = `tool:${item.id ?? item.type}`;
     if (method === 'item/started') {
       meter.activeWaits.add(waitKey);
+      meter.knownWaits.add(waitKey);
       meter.waiting = true;
-      metering.closeMeterRequest(meter, true);
+      metering.closeMeterRequest(meter, true, timing?.startedAtMs ?? Date.now());
       meter.requestStartAt = undefined;
     } else {
       const hadWait = meter.activeWaits.delete(waitKey);
-      if (!hadWait && !meter.waiting) {
-        const toolDuration = typeof item.durationMs === 'number' && Number.isFinite(item.durationMs) && item.durationMs > 0 ? item.durationMs : 0;
-        metering.closeMeterRequest(meter, true, Math.max(meter.requestStartAt ?? 0, Date.now() - toolDuration));
+      const wasKnown = meter.knownWaits.delete(waitKey);
+      const now = Date.now();
+      if (!hadWait && !wasKnown && !meter.waiting) {
+        if (item.type === 'subAgentActivity') {
+          // A subagent notification can arrive minutes after the parent request that spawned it,
+          // without an earlier `item/started`. Close any already-captured request at its own end
+          // rather than attributing the entire subagent wait to parent generation.
+          const hadOpenRequest = Boolean(meter.request) || !meter.requestAccounted;
+          if (meter.request) metering.closeMeterRequest(meter, false, now);
+          if (hadOpenRequest) meter.pendingUsageInterval = true;
+        } else {
+          const toolDuration = typeof item.durationMs === 'number' && Number.isFinite(item.durationMs) && item.durationMs > 0 ? item.durationMs : 0;
+          const itemStart = timing?.startedAtMs !== undefined && timing?.completedAtMs !== undefined && timing.completedAtMs > timing.startedAtMs
+            ? timing.startedAtMs
+            : (toolDuration > 0 ? now - toolDuration : now);
+          metering.closeMeterRequest(meter, true, Math.max(meter.requestStartAt ?? 0, itemStart));
+        }
       }
       meter.waiting = meter.activeWaits.size > 0;
       if (!meter.waiting) {
-        meter.requestStartAt = Date.now();
+        meter.requestStartAt = now;
         meter.requestAccounted = false;
       }
     }

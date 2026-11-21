@@ -149,13 +149,23 @@ export class RunMetricsTracker {
   }
 }
 
+/** Upper bound on plausible single-step generation rate; higher readings indicate batched or unstreamed bursts. */
+export const MAX_PLAUSIBLE_TOKENS_PER_SECOND = 1_000;
+
+export function isPlausibleSpeed(outputTokens: number, durationMs: number): boolean {
+  return Number.isFinite(outputTokens) && Number.isFinite(durationMs)
+    && outputTokens > 0 && durationMs > 0
+    && (outputTokens / durationMs) * 1_000 <= MAX_PLAUSIBLE_TOKENS_PER_SECOND;
+}
+
 /**
  * What a step's milliseconds actually bracket.
  *
  * A real span between the first and last streamed chunk is the honest measurement, and it is the
  * only one that excludes the provider's time-to-first-token. An answer delivered as a single chunk
- * has no span at all, and a provider that streams nothing has none either; both fall back to the
- * step's own start and are reported over the wider `observed` window rather than not at all.
+ * has no span at all, a batched burst whose span implies an impossible decode rate does not bracket
+ * the real generation time, and a provider that streams nothing has none either; all fall back to
+ * the step's own start and are reported over the wider `observed` window rather than not at all.
  * Returning undefined — and so reporting nothing — is reserved for a step with no start to use.
  */
 export function measuredWindow(options: {
@@ -163,13 +173,22 @@ export function measuredWindow(options: {
   streamEnd?: number;
   fallbackStart?: number;
   now?: number;
+  outputTokens?: number;
+  minSpanMs?: number;
 }): { startedAt: number; endedAt: number; window: MetricsWindow } | undefined {
-  const { streamStart, streamEnd, fallbackStart } = options;
+  const { streamStart, streamEnd, fallbackStart, outputTokens, minSpanMs } = options;
+  const end = options.now ?? Date.now();
   if (streamStart !== undefined && streamEnd !== undefined && streamEnd > streamStart) {
-    return { startedAt: streamStart, endedAt: streamEnd, window: 'stream' };
+    const spanMs = streamEnd - streamStart;
+    const tooShort = minSpanMs !== undefined && spanMs < minSpanMs;
+    const implausible = outputTokens !== undefined && outputTokens > 0 && !isPlausibleSpeed(outputTokens, spanMs);
+    if ((!tooShort && !implausible) || fallbackStart === undefined) {
+      return { startedAt: streamStart, endedAt: streamEnd, window: 'stream' };
+    }
+    return { startedAt: fallbackStart, endedAt: Math.max(end, streamEnd), window: 'observed' };
   }
   if (fallbackStart === undefined) return undefined;
-  return { startedAt: fallbackStart, endedAt: options.now ?? Date.now(), window: 'observed' };
+  return { startedAt: fallbackStart, endedAt: end, window: 'observed' };
 }
 
 /**

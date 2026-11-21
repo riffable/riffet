@@ -5,6 +5,7 @@ import type {
   StatsRunsPage, StatsSeries, StatsSeriesMetric, StatsSplit, StatsStepBucket, StatsSummary, StatsTokens, StatsTotals,
 } from '../../../../packages/contracts/src/index.js';
 import { isNativeBackendId, isPluginAgentId, normalizeStatsModel, resolveStatsEffort } from '../../../../packages/contracts/src/index.js';
+import { MAX_PLAUSIBLE_TOKENS_PER_SECOND } from '../metrics/turn-metrics.js';
 import { autoGranularity, boundedGranularity, bucketEdges, bucketIndex, localDate, localParts, previousDate } from './buckets.js';
 import type { RunFactRow, ToolCallRow, UsageStepRow } from './schema.js';
 
@@ -31,8 +32,7 @@ export interface StatsLabels {
 export const UNKNOWN_MODEL = '__unknown__';
 export const DEFAULT_PROFILE = 'default';
 export const OTHER_KEY = '__other__';
-const MIN_SPEED_WINDOW_MS = 2_000;
-const MAX_PLAUSIBLE_TOKENS_PER_SECOND = 1_000;
+const MIN_SPEED_WINDOW_MS = 500;
 const SERIES_KEYS = 8;
 
 const BACKEND_LABELS: Record<string, string> = { codex: 'Codex', claude: 'Claude Code', dsh: 'DeepSeek Harness', droid: 'Droid', traex: 'TRAE CLI', chat: '快速对话' };

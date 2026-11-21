@@ -567,6 +567,19 @@ describe('Claude transcript measurements', () => {
     expect(steps).toHaveLength(1);
     expect(steps[0]!.endedAt).toBe(steps[0]!.startedAt);
   });
+
+  it('prefers api-request and ignores out-of-order auxiliary records between request and response', async () => {
+    const steps = await measure([
+      user({ uuid: 'u1', at: '2026-10-04T05:00:00.000Z', text: 'hello' }),
+      { type: 'api-request', uuid: 'r1', timestamp: '2026-10-04T05:00:01.000Z' },
+      { type: 'file-history-delta', uuid: 'fh1', timestamp: '2026-10-04T05:00:05.980Z' },
+      { type: 'attachment', uuid: 'att1', timestamp: '2026-10-04T05:00:07.500Z' },
+      { type: 'queue-operation', uuid: 'q1', timestamp: '2026-10-04T05:00:05.995Z' },
+      assistant({ id: 'msg_1', uuid: 'a1', at: '2026-10-04T05:00:06.000Z', outputTokens: 250, text: 'done' }),
+    ]);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.endedAt - steps[0]!.startedAt).toBe(5_000);
+  });
 });
 
 describe('Claude subagent transcripts', () => {

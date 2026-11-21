@@ -1,4 +1,6 @@
 import type { NativeInteraction, NativeStatus } from '../../../../../packages/contracts/src/index.js';
+import { estimateTokens } from '../../metrics/tokens.js';
+import { measuredWindow } from '../../metrics/turn-metrics.js';
 import type { DshContextBreakdown } from './context.js';
 import type { DshSessionReadResult, DshConversation, DshAttempt } from './types.js';
 import { KeyedTurnTrackers } from '../shared/turn-tracker.js';
@@ -37,6 +39,20 @@ export function mergeDshUsage(current: DshAttempt['usage'] | undefined, next: No
     ...(next.cacheWriteTokens !== undefined ? { cacheWriteTokens: next.cacheWriteTokens } : current.cacheWriteTokens !== undefined ? { cacheWriteTokens: current.cacheWriteTokens } : {}),
     ...(next.model ? { model: next.model } : current.model ? { model: current.model } : {}),
   };
+}
+
+export function dshAttemptWindow(attempt: DshAttempt, now = Date.now()) {
+  if (attempt.hasUnstreamed && attempt.startedWallAt) {
+    return { startedAt: attempt.startedWallAt, endedAt: Math.max(now, attempt.lastAt || 0), window: 'observed' as const };
+  }
+  const outputTokens = attempt.usage?.outputTokens ?? (attempt.text ? Math.max(1, Math.round(estimateTokens(attempt.text))) : undefined);
+  return measuredWindow({
+    streamStart: attempt.startedAt || undefined,
+    streamEnd: attempt.lastAt || undefined,
+    fallbackStart: attempt.startedWallAt || undefined,
+    outputTokens,
+    now,
+  });
 }
 
 export function sessionGeneration(nativeSessionId: string, result: DshSessionReadResult): string {

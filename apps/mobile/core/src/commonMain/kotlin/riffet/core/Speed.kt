@@ -18,6 +18,8 @@ import riffet.contracts.RunMetricsTokenSource
  * no output shows zero; completed turns keep their own average over generation time.
  */
 
+private const val MAX_PLAUSIBLE_TOKENS_PER_SECOND = 1_000.0
+
 /**
  * `tok/s` for a measured turn, or null when there is nothing honest to divide.
  *
@@ -25,7 +27,8 @@ import riffet.contracts.RunMetricsTokenSource
  */
 fun tokensPerSecond(metrics: RunMetrics?): Double? {
     if (metrics == null || !(metrics.durationMs > 0) || !(metrics.outputTokens > 0)) return null
-    return (metrics.outputTokens.toDouble() / metrics.durationMs.toDouble()) * 1000.0
+    val rate = (metrics.outputTokens.toDouble() / metrics.durationMs.toDouble()) * 1000.0
+    return rate.takeIf { it.isFinite() && it <= MAX_PLAUSIBLE_TOKENS_PER_SECOND }
 }
 
 /** Rates below ten keep a decimal, because 0 and 0.4 are very different answers. */
@@ -65,7 +68,7 @@ fun speedDescription(metrics: RunMetrics): String {
 /** A known quiet window is zero; unavailable or old measurements have no live speed. */
 fun outputTokensPerSecond(sample: OutputRate?): Double? {
     if (sample == null || (sample.state != OutputRateState.LIVE && sample.state != OutputRateState.ZERO)) return null
-    return sample.tokensPerSecond.takeIf { it.isFinite() && it >= 0 }
+    return sample.tokensPerSecond.takeIf { it.isFinite() && it >= 0 && it <= MAX_PLAUSIBLE_TOKENS_PER_SECOND }
 }
 
 fun outputRateDescription(sample: OutputRate): String {

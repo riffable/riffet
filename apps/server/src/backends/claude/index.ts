@@ -567,7 +567,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     if (!nativeSessionId || !file) return known === 'none' ? undefined : { generation: 'none', entries: [] };
     const info = await stat(file);
     const quiet = Date.now() - info.mtimeMs >= TRANSCRIPT_QUIET_MS;
-    const generation = `metrics-v2:${info.size}:${Math.round(info.mtimeMs)}:${quiet ? 'quiet' : 'busy'}`;
+    const generation = `metrics-v3:${info.size}:${Math.round(info.mtimeMs)}:${quiet ? 'quiet' : 'busy'}`;
     if (generation === known) return undefined;
     const steering = new DeferredSteerInputs(host, { backendId, sessionId: session.id, currentTarget: () => undefined });
     // Streamed: a transcript runs to hundreds of megabytes, and only the meter's state is kept (docs/guide/performance.md §3.8).

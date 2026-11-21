@@ -2,6 +2,9 @@ import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
 import type { OutputRate, RunMetrics } from '@contracts';
 
+/** Rates above this indicate corrupt or batched timestamps rather than real model decode speed. */
+const MAX_PLAUSIBLE_TOKENS_PER_SECOND = 1_000;
+
 /**
  * `tok/s` for a measured turn, or undefined when there is nothing honest to divide.
  *
@@ -12,7 +15,8 @@ import type { OutputRate, RunMetrics } from '@contracts';
 export function tokensPerSecond(metrics: RunMetrics | undefined): number | undefined {
   if (!metrics || !Number.isFinite(metrics.durationMs) || !Number.isFinite(metrics.outputTokens)
     || !(metrics.durationMs > 0) || !(metrics.outputTokens > 0)) return undefined;
-  return (metrics.outputTokens / metrics.durationMs) * 1000;
+  const rate = (metrics.outputTokens / metrics.durationMs) * 1000;
+  return rate <= MAX_PLAUSIBLE_TOKENS_PER_SECOND ? rate : undefined;
 }
 
 /** Rates below ten keep a decimal, because 0 and 0.4 are very different answers. */
@@ -23,7 +27,8 @@ export function formatTokensPerSecond(rate: number): string {
 /** A known quiet window is zero; unavailable or old measurements have no live speed. */
 export function outputTokensPerSecond(sample: OutputRate | undefined, connected = true): number | undefined {
   if (!connected || !sample || (sample.state !== 'live' && sample.state !== 'zero')) return undefined;
-  return Number.isFinite(sample.tokensPerSecond) && sample.tokensPerSecond >= 0 ? sample.tokensPerSecond : undefined;
+  return Number.isFinite(sample.tokensPerSecond) && sample.tokensPerSecond >= 0 && sample.tokensPerSecond <= MAX_PLAUSIBLE_TOKENS_PER_SECOND
+    ? sample.tokensPerSecond : undefined;
 }
 
 export function outputRateDescription(sample: OutputRate): string {

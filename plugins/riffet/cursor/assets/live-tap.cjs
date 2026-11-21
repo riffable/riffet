@@ -161,6 +161,8 @@ class Live {
     this.sealed = true;
     this.parts = [];
     this.size = 0;
+    this.firstDeltaAt = undefined;
+    this.lastDeltaAt = undefined;
     this.timer = undefined;
     this.closed = false;
   }
@@ -240,8 +242,13 @@ class Live {
       this.sealed = false;
       this.parts = [];
       this.size = 0;
+      this.firstDeltaAt = undefined;
+      this.lastDeltaAt = undefined;
     }
     if (this.size + text.length > PART_LIMIT) return;
+    const now = Date.now();
+    if (this.firstDeltaAt === undefined) this.firstDeltaAt = now;
+    this.lastDeltaAt = now;
     this.size += text.length;
     const last = this.parts.at(-1);
     if (last?.type === type) last.text += text;
@@ -271,6 +278,8 @@ class Live {
       v: 1, pid: process.pid, turn: this.turn ?? this.request, at: this.at, ...(this.info.prompt ? { prompt: this.info.prompt } : {}),
       ...(this.info.run ? { run: this.info.run } : {}),
       ...(this.info.requestedModel ? { requestedModel: this.info.requestedModel } : {}),
+      ...(this.firstDeltaAt !== undefined ? { firstDeltaAt: this.firstDeltaAt } : {}),
+      ...(this.lastDeltaAt !== undefined ? { lastDeltaAt: this.lastDeltaAt } : {}),
       step: `${this.request}:${this.step}`, sealed: this.sealed, parts: this.parts,
     };
     const temporary = path.join(this.dir, `.${conversation}.${process.pid}.tmp`);

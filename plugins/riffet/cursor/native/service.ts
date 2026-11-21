@@ -167,6 +167,7 @@ export class NativeService {
   /** Terminals launched by `restart()` for a config switch that have not yet reached their idle prompt. */
   private readonly configBootTerminals = new Map<string, string>();
   private readonly stats: StatsSink;
+  private readonly stopLiveMetrics?: () => void;
   private turnObserver?: NativeTurnObserver;
 
   constructor(private readonly port: CursorPort, private readonly options: NativeServiceOptions) {
@@ -174,6 +175,22 @@ export class NativeService {
     this.pollMs = options.pollMs ?? 700;
     this.sweepTimer = setInterval(() => { void this.sweep(); }, STATE_SWEEP_MS);
     this.sweepTimer.unref();
+    this.stopLiveMetrics = options.live?.watch?.(chatId => this.observeLiveMetrics(chatId));
+  }
+
+  private observeLiveMetrics(chatId: string, only?: Watch): void {
+    const step = this.options.live?.read(chatId);
+    if (!step) return;
+    const targets = only ? [only] : [...this.watches.values()];
+    for (const watch of targets) {
+      if (watch.closed) continue;
+      let watchChatId = watch.chat?.chatId;
+      if (!watchChatId) {
+        try { watchChatId = this.port.getSession(watch.sessionId).nativeSessionId; } catch { continue; }
+      }
+      if (watchChatId !== chatId) continue;
+      watch.metrics.observeLiveStep(step);
+    }
   }
 
   useTurnObserver(observer: NativeTurnObserver): void { this.turnObserver = observer; }
@@ -921,6 +938,7 @@ export class NativeService {
 
   closeAll(): void {
     clearInterval(this.sweepTimer);
+    this.stopLiveMetrics?.();
     for (const watch of this.watches.values()) watch.close();
     this.watches.clear();
     this.stoppedLiveSteps.clear();
@@ -1339,7 +1357,8 @@ export class NativeService {
     this.turnObserver?.transcript?.(session, change.events);
     // Measured over the unfiltered batch: the hidden bookkeeping this drops for display still
     // corresponds to model output that the provider billed for.
-    watch.metrics.observe(change.events);
+    watch.metrics.observe(change.events, { historical: change.reset });
+    if (change.reset) this.observeLiveMetrics(chat.chatId, watch);
     if (change.draftChanged && chat.draft.length) watch.metrics.observeDraft(chat.draft);
     if (JSON.stringify(change.context) !== JSON.stringify(watch.context)) {
       watch.context = change.context;

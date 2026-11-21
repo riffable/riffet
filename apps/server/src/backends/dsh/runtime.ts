@@ -9,7 +9,7 @@ import type {
 } from '../../../../../packages/contracts/src/index.js';
 import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { estimateTokens } from '../../metrics/tokens.js';
-import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
+import { runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { AppError } from '../../errors.js';
 import { firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
@@ -34,7 +34,7 @@ import {
 } from './selection.js';
 import { BRIDGE_PROTOCOL, peerHandlers, listenForBridge, waitForBridge, provisionBridgeProfile, closeServer } from './bridge.js';
 import {
-  readDshUsage, mergeDshUsage, sessionGeneration, sameBreakdown, openTurn, recentRecord,
+  readDshUsage, mergeDshUsage, dshAttemptWindow, sessionGeneration, sameBreakdown, openTurn, recentRecord,
   statusFor, dshTurns, interactionRequestId, pickRunId,
 } from './transcript.js';
 
@@ -1000,6 +1000,11 @@ export class DshProfileRuntime {
     // not turned into transcript rows — the durable tool call is what the timeline renders — but
     // leaving them out of the measurement ended the window early on every tool-using step and made
     // the reported rate read high.
+    if (chunk.type === 'tool-call') {
+      const attempt = state.attempts.get(attemptId);
+      if (attempt) attempt.hasUnstreamed = true;
+      return;
+    }
     const streamingAnswer = chunk.type === 'text-delta' || chunk.type === 'reasoning-delta';
     if (!streamingAnswer && chunk.type !== 'tool-call-delta') return;
     const produced = streamingAnswer
@@ -1053,17 +1058,8 @@ export class DshProfileRuntime {
     });
   }
 
-  /** The attempt's measured span, from the stream when it has one and its opening otherwise. */
-  private attemptWindow(attempt: DshAttempt) {
-    return measuredWindow({
-      streamStart: attempt.startedAt || undefined,
-      streamEnd: attempt.lastAt || undefined,
-      fallbackStart: attempt.startedWallAt || undefined,
-    });
-  }
-
   private publishAttempt(state: DshConversation, attempt: DshAttempt): void {
-    const range = this.attemptWindow(attempt);
+    const range = dshAttemptWindow(attempt);
     if (!range) return;
     const tracker = this.metricsFor(state, this.runForTurn(state, attempt.turn), attempt.turn);
     tracker.update({
@@ -1080,7 +1076,7 @@ export class DshProfileRuntime {
     const attempt = state.attempts.get(attemptId);
     if (!attempt) return;
     state.attempts.delete(attemptId);
-    const range = this.attemptWindow(attempt);
+    const range = dshAttemptWindow(attempt);
     if (!range) return;
     const tracker = this.metricsFor(state, this.runForTurn(state, attempt.turn), attempt.turn);
     tracker.update({
