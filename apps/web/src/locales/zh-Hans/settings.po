@@ -2081,7 +2081,7 @@ msgstr "写进 patterns.md"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "冲突"
-msgstr "函数"
+msgstr "冲突"
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "减少动态效果"

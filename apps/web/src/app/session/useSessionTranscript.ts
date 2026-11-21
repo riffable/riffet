@@ -58,7 +58,7 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   // a change to these derived snapshots. Each snapshot that has an identity of its own is held
   // stable while its contents are, so a streamed frame invalidates only what it actually changed.
   const { timelineVersion, turnsVersion } = native;
-  /** Runs waiting their turn; they live in the composer dock, not the transcript (see `messagePlace`). */
+  /** Runs waiting their turn; they live in the composer dock, not the transcript (`control.inbox`; `messagePlace` only for a server without one). */
   // The first run of a created session is already in the transcript: it was sent directly, not
   // queued behind a previous turn, so it must not also appear in the dock.
   const inlineCommandId = native.inlineRun?.commandId;
@@ -99,6 +99,7 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
       }
       return queued;
     }
+    // Fallback for a server that sends no control snapshot.
     // The run the server starts next when nothing runs: the oldest one it holds. None while an
     // earlier send is still on its way into the CLI: the session is about to work, and the rest wait.
     const starting = native.runs.some((run) => sendPhase(run) === 'starting' || (run.native?.delivery === 'input_sent' && (run.state === 'queued' || run.state === 'running')));

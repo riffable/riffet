@@ -105,7 +105,6 @@ describe('message search', () => {
     expect(store.searchIndexedMessages(likePattern('a'), 10)).toEqual([]);
   });
 });
-
 describe('indexing a deleted conversation', () => {
   it('skips the row instead of failing the batch', () => {
     const { store, session } = fixture();

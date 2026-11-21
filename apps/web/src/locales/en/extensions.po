@@ -73,7 +73,7 @@ msgstr "Primary file"
 #: src/app/extensions/ExtensionInspector.tsx
 msgctxt "extensions-runtime-session"
 msgid "会话"
-msgstr "Session"
+msgstr "Sessions"
 
 #. placeholder {0}: value.sessionId
 #: src/app/extensions/ExtensionInspector.tsx

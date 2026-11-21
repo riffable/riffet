@@ -36,9 +36,9 @@ iPhone 的在 [iPhone 流畅度规范](../../docs/guide/ios-performance.md)，�
 - 随内容变大的工作（解析、diff、高亮、转义、解码）不在组合里做；行数可能过百的内容用 `LazyColumn` 并给有界高度，按最宽行对齐时量最长的几行定宽，不用 `IntrinsicSize.Max`。
 - 列表里的 WebView 等重量级视图等列表停下（`LocalListSettled`）再创建，先占住尺寸。
 - 按一份会整体换新的列表做 `remember` 键去算每一行，流式更新时每帧全部重算：按行键和对象身份记忆。
+- 横向手势只经窗口的横滑仲裁（`ui/gesture/HorizontalSwipes.kt`，规则见 [MOBILE.md](../../docs/MOBILE.md)「手势调度」）：要接横滑的表面加 `swipeSurface`，能横向滚动的子控件用 `riffetHorizontalScroll` / `horizontalSwipeChild`，暂时不接触摸的层用 `swallowTouches`。不自写横向拖动检测，也不从返回目标的类型推断谁能接横滑；新开一个弹窗窗口且里面有滑动返回时，在弹窗根上加 `horizontalSwipeArbiter()`。
 
 ## 排查
-- 横向手势只经窗口的横滑仲裁（`ui/gesture/HorizontalSwipes.kt`，规则见 [MOBILE.md](../../docs/MOBILE.md)「手势调度」）：要接横滑的表面加 `swipeSurface`，能横向滚动的子控件用 `riffetHorizontalScroll` / `horizontalSwipeChild`，暂时不接触摸的层用 `swallowTouches`。不自写横向拖动检测，也不从返回目标的类型推断谁能接横滑；新开一个弹窗窗口且里面有滑动返回时，在弹窗根上加 `horizontalSwipeArbiter()`。
 
 - 重建：`adb shell setprop log.tag.RiffetLifecycle DEBUG` 后重启 App，`adb logcat -s RiffetLifecycle` 里同一个标签无故出现 `-` 再 `+`，说明该子树被重新挂载了。
 - 同一开关下出现 `shift <key> 旧高→新高`，说明一行已结束的内容在屏幕上变了高度（读者自己展开的除外），即首帧与稳定帧不一致。

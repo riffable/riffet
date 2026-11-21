@@ -2081,7 +2081,7 @@ msgstr "Write it into patterns.md"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "冲突"
-msgstr "Function"
+msgstr "Conflict"
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "减少动态效果"
@@ -2390,7 +2390,7 @@ msgstr "{0} / {1} left"
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "剩余 {remaining}%"
-msgstr "{remaining}% remaining"
+msgstr "{remaining}% left"
 
 #: src/app/settings/settingsSections.ts
 msgid "功能"
