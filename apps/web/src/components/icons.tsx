@@ -1,5 +1,5 @@
 import {
-  Clock, Blocks, Network, Activity, Archive, ArchiveRestore, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRightLeft, ArrowUp, ArrowUpRight, AtSign, Binary, Bookmark, BookmarkMinus, BookmarkPlus,
+  Clock, Blocks, Link, Activity, Archive, ArchiveRestore, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRightLeft, ArrowUp, ArrowUpRight, AtSign, Binary, Bookmark, BookmarkMinus, BookmarkPlus,
   BookOpen, Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine, FilePlus,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
@@ -129,7 +129,7 @@ export const IconRotateCw = icon(RotateCw);
 export const IconSave = icon(Save);
 export const IconSearch = icon(Search);
 export const IconServer = icon(Server);
-export const IconNetwork = icon(Network);
+export const IconLink = icon(Link);
 export const IconSettings = icon(Settings);
 export const IconSettings2 = icon(Settings2);
 export const IconShieldCheck = icon(ShieldCheck);

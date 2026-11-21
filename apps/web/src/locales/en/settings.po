@@ -8749,7 +8749,6 @@ msgid "设计规范页的组、文档和代码目录一一对应。"
 msgstr "Groups, docs and code directories of the design system page correspond one to one."
 
 #: src/app/settings/PreferencesSections.tsx
-#: src/app/settings/settingsSections.ts
 msgid "访问"
 msgstr "Access"
 
@@ -9431,6 +9430,11 @@ msgstr "Remote server"
 msgctxt "settings-connect-action"
 msgid "连接"
 msgstr "Connect"
+
+#: src/app/settings/settingsSections.ts
+msgctxt "settings-group"
+msgid "连接"
+msgstr "Connections"
 
 #: src/app/settings/settingsSections.ts
 msgid "连接与访问"

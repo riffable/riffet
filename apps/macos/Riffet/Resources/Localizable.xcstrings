@@ -7031,12 +7031,18 @@
         }
       }
     },
-    "访问": {
+    "settings.group.connections": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Access"
+            "value": "Connections"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接"
           }
         }
       }

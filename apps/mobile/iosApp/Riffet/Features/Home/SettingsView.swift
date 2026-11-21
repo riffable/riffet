@@ -171,7 +171,7 @@ struct SettingsView: View {
                 server(String(localized: "模型提供商", bundle: .riffet), "server.rack", identifier: "nativeManagement") { AnyView(NativeProvidersView(workbench: $0)) },
                 server(String(localized: "辅助模型", bundle: .riffet), "brain") { AnyView(AuxiliaryModelsView(workbench: $0)) },
             ]),
-            SettingsGroup(title: String(localized: "访问", bundle: .riffet), entries: [
+            SettingsGroup(title: String(localized: "settings.group.connections", defaultValue: "连接", bundle: .riffet), entries: [
                 SettingsEntry(title: String(localized: "连接与配对", bundle: .riffet), icon: "link", value: model.pairedServers.first(where: model.isCurrent)?.displayName, kind: .link { AnyView(ConnectionSettingsView(workbench: workbench)) }),
                 server(String(localized: "已授权设备", bundle: .riffet), "iphone", value: deviceCount.map(String.init)) { AnyView(DevicesView(workbench: $0)) },
             ]),

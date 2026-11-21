@@ -8749,7 +8749,6 @@ msgid "设计规范页的组、文档和代码目录一一对应。"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
-#: src/app/settings/settingsSections.ts
 msgid "访问"
 msgstr ""
 
@@ -9429,6 +9428,11 @@ msgstr ""
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgctxt "settings-connect-action"
+msgid "连接"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgctxt "settings-group"
 msgid "连接"
 msgstr ""
 

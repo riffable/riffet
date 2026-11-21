@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { LINK_BUDGET, type LinkAuditEntry, type LinkInfo, type LinkInviteResult } from '@contracts';
-import { IconChevronRight, IconCircleAlert, IconExternalLink, IconNetwork, IconRefreshCw } from '@/components/icons';
+import { IconChevronRight, IconCircleAlert, IconExternalLink, IconLink, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -57,7 +57,7 @@ export function LinksSection() {
 
   return <div className="flex flex-col gap-6">
     <FeedbackNotice scope="links" message={actionError || error} tone="danger" />
-    {links.length === 0 && <EmptyState icon={<IconNetwork />} title={t`没有互联的服务器`} />}
+    {links.length === 0 && <EmptyState icon={<IconLink />} title={t`没有互联的服务器`} />}
     {links.map((link) => <LinkGroup key={link.serverId} link={link} busy={busy === link.serverId}
       onInbound={(inbound) => void run(link.serverId, () => api.updateLink(link.serverId, inbound), t`无法保存`)}
       onRemove={() => void remove(link)} />)}

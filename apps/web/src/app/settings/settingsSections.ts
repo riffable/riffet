@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconKeyboard, IconLaptop, IconLayers, IconMessagesSquare, IconNetwork, IconPanelLeft, IconPanelRight, IconPencilLine, IconSend, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSquareKanban, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
+import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconKeyboard, IconLaptop, IconLayers, IconLink, IconMessagesSquare, IconPanelLeft, IconPanelRight, IconPencilLine, IconSend, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSquareKanban, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
 
 /** The settings dialog's box, shared with the frame that stands in while its chunk loads. */
 export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';
@@ -24,7 +24,7 @@ const groupTitles: Record<SettingsSectionGroup, MessageDescriptor | undefined> =
   behavior: msg`行为`,
   features: msg`功能`,
   models: msg`模型`,
-  access: msg`访问`,
+  access: msg({ message: '连接', context: 'settings-group' }),
   server: msg`服务器`,
   support: msg`支持`,
 };
@@ -77,7 +77,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'connection', label: msg`连接与访问`, group: 'access', icon: IconLaptop },
   { id: 'shares', label: msg`会话分享`, group: 'access', icon: IconSquareArrowOutUpRight, parent: 'connection' },
   { id: 'devices', label: msg`设备管理`, group: 'access', icon: IconSmartphone },
-  { id: 'links', label: msg`互联`, group: 'access', icon: IconNetwork },
+  { id: 'links', label: msg`互联`, group: 'access', icon: IconLink },
   { id: 'service', label: msg`服务管理`, group: 'server', icon: IconServer },
   { id: 'storage', label: msg`存储空间`, group: 'server', icon: IconDatabase },
   { id: 'backup', label: msg`备份与恢复`, group: 'server', icon: IconHardDriveDownload },

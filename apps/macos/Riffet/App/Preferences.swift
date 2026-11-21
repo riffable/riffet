@@ -250,7 +250,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
         case .behavior: String(localized: "行为")
         case .features: String(localized: "功能")
         case .models: String(localized: "模型")
-        case .access: String(localized: "访问")
+        case .access: String(localized: "settings.group.connections", defaultValue: "连接")
         case .serverGroup: String(localized: "服务器")
         case .support: String(localized: "支持")
         }
