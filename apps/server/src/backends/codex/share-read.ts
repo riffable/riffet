@@ -16,6 +16,7 @@ import { MAX_ROLLOUT_BYTES } from './config.js';
 import { shareHistoryTooLarge, shareRolloutReader } from './share-rollout.js';
 import { shareModelInfo } from '../shared/share-model.js';
 import { projectCodexItem } from './project-item.js';
+import { reasoningChannel } from './drafts.js';
 
 interface ProjectedRollout { events: NativeWorkbenchEvent[]; modelInfo?: Record<string, ShareModelInfo>; children: Array<{ toolCallId: string; agentId: string; title?: string; prompt?: string; model?: string }> }
 
@@ -157,7 +158,7 @@ export function projectShareRollout(content: string, sessionId: string, threadId
       const summary = asArray<unknown>(item.summary).map(value => str(value) ?? str(asRecord(value)?.text) ?? '').filter(Boolean);
       const body = asArray<unknown>(item.content).map(value => str(value) ?? str(asRecord(value)?.text) ?? '').filter(Boolean);
       const text = [...summary, ...body].join('\n\n');
-      if (text) events.push(event(`${base}:thinking`, 'agent_thought_chunk', { channel: summary.length ? 'narration' : 'thinking', content: { type: 'text', text } }));
+      if (text) events.push(event(`${base}:thinking`, 'agent_thought_chunk', { channel: reasoningChannel(summary[0]), content: { type: 'text', text } }));
     } else if (item.type === 'contextCompaction') {
       events.push(event(`${base}:compaction`, 'session/update', { sessionUpdate: 'activity', activity: { id: base, kind: 'compaction', title: '上下文压缩', status: 'completed' } }));
     } else if (isCodexToolItem(item)) {

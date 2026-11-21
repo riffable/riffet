@@ -8,6 +8,17 @@ export function messagePhase(value: unknown): 'commentary' | 'final_answer' | un
   return value === 'commentary' || value === 'final_answer' ? value : undefined;
 }
 
+/**
+ * How the clients show a reasoning item: a summary as narration prose, raw reasoning folded into
+ * the thinking row. The summary slot alone does not settle it: a Responses gateway in front of
+ * another model (DeepSeek) relays that model's raw chain of thought as `summary_text`. An OpenAI
+ * summary opens each part with a bold heading — the one the CLI shows as its status — so only
+ * text that does reads as narration.
+ */
+export function reasoningChannel(summary: string | undefined): 'narration' | 'thinking' {
+  return summary?.trimStart().startsWith('**') ? 'narration' : 'thinking';
+}
+
 interface Draft {
   turnId: string;
   type: 'agent_message_chunk' | 'agent_thought_chunk';
@@ -210,9 +221,8 @@ export class CodexDraftStream {
     const { sessionId, runId, createdAt } = this.options.eventContext(draft.turnId);
     return {
       sequence, sessionId, nativeTurnId: draft.turnId, ...(runId ? { runId } : {}), type: draft.type,
-      // The clients render a summary as narration prose and raw reasoning as a thinking row, the
-      // same split the committed item makes.
-      data: { sessionUpdate: draft.type, ...(draft.phase ? { phase: draft.phase } : {}), ...(draft.channel ? { channel: draft.channel === 'summary' ? 'narration' : 'thinking' } : {}), content: { type: 'text', text } },
+      // The same split the committed item makes.
+      data: { sessionUpdate: draft.type, ...(draft.phase ? { phase: draft.phase } : {}), ...(draft.channel ? { channel: reasoningChannel(draft.channel === 'summary' ? draft.text : undefined) } : {}), content: { type: 'text', text } },
       createdAt, nativeId: `${draft.chunkPrefix}:${chunk}`,
     };
   }

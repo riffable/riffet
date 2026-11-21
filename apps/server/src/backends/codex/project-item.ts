@@ -1,6 +1,6 @@
 import type { NativeActivity, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
 import { ACTIVITY_EVENT_TYPE } from '../../journal/activity.js';
-import { messagePhase } from './drafts.js';
+import { messagePhase, reasoningChannel } from './drafts.js';
 import { asyncQuestionReplyDisplay } from './interactions.js';
 import type { CodexQuestionHistory } from './question-history.js';
 import { isCodexToolItem, isFinalTurnStatus, projectToolItem, spanTime, subagentToolCallId, taskNotice, userItemText, type ItemSpan, type ObservedChanges } from './transcript.js';
@@ -99,11 +99,7 @@ export function projectCodexItem(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'star
   if (item.type === 'reasoning') {
     const summary = asArray<unknown>(item.summary).map(value => str(value) ?? '').filter(Boolean);
     const text = [...summary, ...asArray<unknown>(item.content).map(value => str(value) ?? '').filter(Boolean)].join('\n\n');
-    // The summary is the short progress note the CLI itself shows, so it reads as narration. A
-    // model that writes none (TRAE CLI's DeepSeek and gateway models) leaves its raw chain of
-    // thought as the only text, and the clients fold that into their thinking row instead.
-    const channel = summary.length ? 'narration' : 'thinking';
-    return text ? [event(`${base}:thinking`, 'agent_thought_chunk', { channel, content: { type: 'text', text } })] : [];
+    return text ? [event(`${base}:thinking`, 'agent_thought_chunk', { channel: reasoningChannel(summary[0]), content: { type: 'text', text } })] : [];
   }
   // Historical ThreadItem.type='plan' is unstructured prose — Codex's "Proposed Plan", written in
   // planning mode. It must not reach the `plan` event, whose readers want `entries` and would drop

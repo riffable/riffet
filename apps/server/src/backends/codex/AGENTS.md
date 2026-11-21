@@ -38,6 +38,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 
 ## 外部行为
 
+- reasoning 是旁白还是思考看内容，不看字段（`drafts.ts#reasoningChannel`）：OpenAI 的 summary 每段以粗体标题开头，算旁白平铺；兼容 Responses 的网关会把别家模型（DeepSeek）的原始思维链放进 `summary_text`，没有标题，按思考折叠。
 - App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`；TRAE CLI（`traex`）录制 answer 与 command，放在 `fixtures/traex/`，不含 hook，用 `pnpm record traex <场景>`。
 - rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。录制数据在 `fixtures/rollout/`，只保留解析器读取的记录类型。
 - 打断后，未完成的回答不在 CLI 的定稿副本里（`thread/turns/list` 只返回用户消息），会话日志里也就没有这段回答。

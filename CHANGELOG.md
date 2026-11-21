@@ -51,6 +51,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Codex conversations on a model that is not OpenAI’s behind a custom endpoint (such as DeepSeek) fold the model’s thinking into the thinking row instead of showing it as prose between tool calls.
 - In the web composer's fullscreen editor, Enter now starts a new line whatever the Enter key setting, and ⌘/Ctrl+Enter sends. The new-conversation page offers fullscreen editing too; there its button sits left of Send, and the permission icon comes before the model.
 - Reading an assistant reply near the top of a Web conversation while it is still streaming no longer jumps upward when the turn finishes and its process block folds; folding now waits until the process block scrolls out of view.
 - A conversation forked from a task’s conversation now gets a task of its own; changing the original’s status no longer changes the fork’s. A handoff still stays on the original task.

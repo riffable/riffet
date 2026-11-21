@@ -85,17 +85,21 @@ describe('CodexDraftStream', () => {
 
   it('follows the reasoning channel that streamed first and separates summary parts', () => {
     const { drafts } = stream();
-    drafts.note('item/reasoning/summaryTextDelta', { turnId: 'turn-1', itemId: 'rs-1', summaryIndex: 0, delta: 'First' }, 'thread');
+    drafts.note('item/reasoning/summaryTextDelta', { turnId: 'turn-1', itemId: 'rs-1', summaryIndex: 0, delta: '**First**' }, 'thread');
     drafts.note('item/reasoning/textDelta', { turnId: 'turn-1', itemId: 'rs-1', contentIndex: 0, delta: 'raw thought' }, 'thread');
-    drafts.note('item/reasoning/summaryTextDelta', { turnId: 'turn-1', itemId: 'rs-1', summaryIndex: 1, delta: 'Second' }, 'thread');
+    drafts.note('item/reasoning/summaryTextDelta', { turnId: 'turn-1', itemId: 'rs-1', summaryIndex: 1, delta: '**Second**' }, 'thread');
     const [row] = drafts.snapshot();
     expect(row?.type).toBe('agent_thought_chunk');
     expect(row?.data.channel).toBe('narration');
-    expect(text(row!)).toBe('First\n\nSecond');
+    expect(text(row!)).toBe('**First**\n\n**Second**');
     // A model that writes no summary streams raw reasoning only, which the clients fold away.
     const raw = stream();
     raw.drafts.note('item/reasoning/textDelta', { turnId: 'turn-1', itemId: 'rs-2', contentIndex: 0, delta: 'raw thought' }, 'thread');
     expect(raw.drafts.snapshot()[0]?.data.channel).toBe('thinking');
+    // A gateway relaying another model's chain of thought as a summary has no heading; it folds too.
+    const relayed = stream();
+    relayed.drafts.note('item/reasoning/summaryTextDelta', { turnId: 'turn-1', itemId: 'rs-3', summaryIndex: 0, delta: 'Need inspect cwd.' }, 'thread');
+    expect(relayed.drafts.snapshot()[0]?.data.channel).toBe('thinking');
   });
 
   it('reports whether a settled item had been shown, and forgets a finished turn', () => {

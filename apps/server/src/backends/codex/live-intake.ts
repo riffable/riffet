@@ -1,5 +1,5 @@
 import type { NativeActivity, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
-import { messagePhase } from './drafts.js';
+import { messagePhase, reasoningChannel } from './drafts.js';
 import { notificationSpan } from './item-spans.js';
 import { normalizePlanEntries } from './rollout-plan.js';
 import { isFinalTurnStatus, turnStatus, type ItemSpan } from './transcript.js';
@@ -181,7 +181,7 @@ export class CodexLiveIntake {
       finalId,
       event: {
         sequence: 0, sessionId: this.context.sessionId, runId: runId ?? draft.turnId, type, nativeId: finalId, nativeTurnId: draft.turnId, createdAt: new Date().toISOString(),
-        data: { sessionUpdate: type, ...(draft.reasoning ? { channel: draft.channel === 'summary' ? 'narration' : 'thinking' } : phase ? { phase } : {}), content: { type: 'text', text: draft.text } },
+        data: { sessionUpdate: type, ...(draft.reasoning ? { channel: reasoningChannel(draft.channel === 'summary' ? draft.text : undefined) } : phase ? { phase } : {}), content: { type: 'text', text: draft.text } },
       },
     };
   }
