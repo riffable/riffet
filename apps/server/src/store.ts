@@ -1191,6 +1191,49 @@ export class Store {
     return (this.sql("SELECT json FROM runs WHERE session_id=? AND json_extract(json,'$.native.nativeSessionId')=? AND json_extract(json,'$.native.nativeTurnId')=? ORDER BY rowid")
       .all(sessionId, nativeSessionId, turnId) as { json: string }[]).map(row => this.run(row.json));
   }
+  /**
+   * Whether persisted history already proves the turn a steer targeted is over, independent of
+   * whether the CLI is online now: a confirmed stop (`steer_stopped`), a settled owner turn,
+   * a later non-steer turn observed on the same native session, or an exited PTY terminal for a
+   * hook-observed PTY backend.
+   */
+  isSteerTargetTurnEnded(run: Run): boolean {
+    const native = run.native;
+    if (native?.intent !== 'steer') return false;
+    if (native.stage === 'steer_stopped') return true;
+    const settledOwner = (candidate: Run) =>
+      candidate.native?.intent !== 'steer'
+      && (['completed', 'failed', 'cancelled'].includes(candidate.state)
+        || (candidate.state === 'interrupted' && candidate.native?.delivery === 'cancelled'));
+    if (native.ownerRunId) {
+      try { if (settledOwner(this.getRun(native.ownerRunId))) return true; } catch { /* owner deleted */ }
+    }
+    if (native.nativeSessionId && native.nativeTurnId) {
+      if (this.findRunsByNativeTurn(run.sessionId, native.nativeSessionId, native.nativeTurnId).some(settledOwner)) return true;
+      const anchor = this.sql('SELECT rowid FROM runs WHERE id=?').get(run.id) as { rowid: number } | undefined;
+      if (anchor) {
+        const steerAt = native.timings?.dispatchAt ?? (Date.parse(run.createdAt) || 0);
+        const newer = this.sql(`SELECT 1 FROM runs
+          WHERE session_id=?
+            AND id!=?
+            AND (rowid > ? OR (? > 0 AND COALESCE(json_extract(json,'$.native.timings.observedAt'), json_extract(json,'$.native.timings.dispatchAt'), 0) > ?))
+            AND json_extract(json,'$.native.intent') IS NULL
+            AND json_extract(json,'$.native.nativeSessionId')=?
+            AND json_extract(json,'$.native.nativeTurnId') IS NOT NULL
+            AND json_extract(json,'$.native.nativeTurnId')!=?
+            AND (json_extract(json,'$.native.delivery')='observed' OR json_extract(json,'$.state') IN ('completed','failed'))
+          LIMIT 1`).get(run.sessionId, native.ownerRunId ?? '', anchor.rowid, steerAt, steerAt, native.nativeSessionId, native.nativeTurnId);
+        if (newer) return true;
+      }
+    }
+    if (native.terminalId && restartObservation(native.backendId ?? '') === 'hook') {
+      try {
+        const terminal = this.getTerminal(native.terminalId);
+        if (terminal.sessionId === run.sessionId && terminal.state === 'exited') return true;
+      } catch { /* terminal pruned */ }
+    }
+    return false;
+  }
   /** Exact native receipt identity; repeated prompt text is never a safe turn identifier. */
   findRunByNativeMessage(sessionId: string, nativeMessageId: string): IdentifiedRun | undefined {
     const row = this.sql("SELECT json FROM runs WHERE session_id=? AND json_extract(json,'$.native.nativeMessageId')=? ORDER BY rowid DESC LIMIT 1")
@@ -1699,15 +1742,19 @@ export class Store {
                 this.transitionNativeRun(run.id, [delivery], { delivery: 'queued' }, { state: 'queued', error: undefined });
               }
             } else if (delivery === 'dispatching' || delivery === 'input_sent') {
-              this.transitionNativeRun(run.id, [delivery], { delivery: 'uncertain' }, {
+              const released = run.native.intent === 'steer' && this.isSteerTargetTurnEnded(run);
+              this.transitionNativeRun(run.id, [delivery], {
+                delivery: 'uncertain',
+                ...(released ? { queueReleasedAt: now() } : {}),
+              }, {
                 state: 'interrupted',
                 error: 'Local service restarted while native terminal delivery was in progress; the prompt was not resent.',
               });
-            } else if (restartObservation(run.native.backendId) === 'hook'
+            } else if (!run.native.queueReleasedAt && (restartObservation(run.native.backendId) === 'hook'
               && (delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId
                 && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? ''))
               && (run.native.expectsTurnOutcome || run.native.intent === 'steer')
-              || restartObservation(run.native.backendId) === 'daemon' && delivery === 'observed' && run.native.nativeTurnId && !run.native.queueReleasedAt) {
+              || restartObservation(run.native.backendId) === 'daemon' && delivery === 'observed' && run.native.nativeTurnId)) {
               // A missing Stop, or a turn end the daemon recorded while we were down, is an unknown outcome,
               // not an unknown send. Keep the durable receipt and wait for this turn's end; the provider's
               // record (transcript end rows, the daemon's turn status) or the current idle/exit closes it
@@ -1716,6 +1763,10 @@ export class Store {
               this.transitionNativeRun(run.id, [delivery], { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true }, {
                 state: 'running', error: undefined,
               });
+            } else if (delivery === 'uncertain' && run.native.intent === 'steer' && !run.native.queueReleasedAt && this.isSteerTargetTurnEnded(run)) {
+              // A steer can only affect its own turn; once that turn is provably over, release it so
+              // an offline or restarted CLI does not resurrect it as an unconfirmed queue hold.
+              this.transitionNativeRun(run.id, ['uncertain'], { queueReleasedAt: now() });
             }
           } else if (run.state === 'running') {
             this.updateRun(run.id, { state: 'interrupted', error: 'Local service restarted; prompt was not resubmitted.' });

@@ -935,7 +935,7 @@ export class ChannelService {
   private async stop(sessionId: string): Promise<boolean> {
     const { store, nativeBackends, dispatch } = this.deps;
     const session = store.getSession(sessionId);
-    if (!store.listUnfinishedNativeRuns(sessionId).length) return false;
+    if (!store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt)) return false;
     const active = nativeBackends.status(sessionId).activeTurn;
     const nativeSessionId = active?.nativeSessionId ?? session.nativeSessionId;
     if (!nativeSessionId) return false;

@@ -320,7 +320,7 @@ export class AgentReclaimer {
     const reasons: AgentRetention[] = [];
     if (ATTENDED.has(session.state)) reasons.push('interaction');
     else if (!RESTING.has(session.state)) reasons.push('turn');
-    if (this.deps.store.listUnfinishedNativeRuns(session.id).length) reasons.push('turn');
+    if (this.deps.store.listUnfinishedNativeRuns(session.id).some(run => !run.native?.queueReleasedAt)) reasons.push('turn');
     // A terminal holds it: for Codex that terminal is joined to the very app-server this would stop.
     if (session.terminalHold) reasons.push('terminal-held');
     // Only known while the provider runtime is loaded; an unloaded one reports `offline`.

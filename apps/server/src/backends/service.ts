@@ -598,7 +598,7 @@ export class NativeBackendService {
   }
 
   private hasUnfinishedRun(sessionId: string): boolean {
-    try { return this.options.store.listUnfinishedNativeRuns(sessionId).length > 0; }
+    try { return this.options.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt); }
     catch { return false; }
   }
 

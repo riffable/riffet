@@ -61,7 +61,7 @@ export class TerminalHolds {
       if (session.kind !== 'native') throw new AppError('NOT_NATIVE', 'Only agent conversations continue in a terminal', 409);
       if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'Restore this conversation first', 409);
       if (session.terminalHold && await this.occupied(session)) throw new AppError('SESSION_IN_TERMINAL', 'This conversation is already open in a terminal', 409);
-      if (!RESTING.has(session.state) || this.deps.store.listUnfinishedNativeRuns(sessionId).length) {
+      if (!RESTING.has(session.state) || this.deps.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt)) {
         throw new AppError('SESSION_BUSY', 'Wait for the current turn to finish', 409);
       }
       const launch = await this.deps.nativeBackends.releaseToTerminal(session);
@@ -86,7 +86,7 @@ export class TerminalHolds {
       if (session.kind !== 'native') throw new AppError('NOT_NATIVE', 'Only agent conversations continue in a terminal', 409);
       // A held Codex conversation's terminal is joined to the app-server stopping would end.
       if (session.terminalHold) throw sessionInTerminal();
-      if (!RESTING.has(session.state) || this.deps.store.listUnfinishedNativeRuns(sessionId).length) {
+      if (!RESTING.has(session.state) || this.deps.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt)) {
         throw new AppError('SESSION_BUSY', 'Wait for the current turn to finish', 409);
       }
       await this.deps.nativeBackends.stopOwnCli(session);

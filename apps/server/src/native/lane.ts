@@ -25,6 +25,8 @@ export interface LaneFacts {
   waitsWhileStarting: boolean;
   /** The session has a config change that only a relaunch applies (`relaunchesForPendingConfig` and `configPending`). */
   pendingRelaunch?: boolean;
+  /** Whether persisted history already proves a steer's target turn is over, even while the CLI is offline. */
+  steerTurnSettled?: (run: Run) => boolean;
   /** When the run may be tried again after the CLI refused it, in epoch ms. */
   retryAt(runId: string): number;
   now: number;
@@ -39,19 +41,25 @@ const IN_FLIGHT = new Set(['preparing', 'dispatching', 'input_sent', 'observed',
  * Whether the turn a steer was addressed to is over. A steer reaches only its own turn (a hook's
  * context at that turn's tool boundary, or a provider call naming the turn), so once the CLI is no
  * longer in that turn nothing of it can reach a later one: it no longer holds back other messages.
- * Over means the CLI is at its prompt, or names another turn of the same chat; an offline or
- * starting CLI proves nothing (a provider may keep running a turn its connection lost).
+ * Over means persisted history already proves that turn ended (confirmed stop, settled owner, later
+ * turn, exited PTY), or the live CLI is at its prompt or names another turn of the same chat; an
+ * offline or starting CLI on its own proves nothing (a provider may keep running a turn its
+ * connection lost).
  */
-export function steerTurnEnded(run: Run, status: NativeStatus | undefined): boolean {
-  if (!status || run.native?.intent !== 'steer') return false;
-  const active = status.activeTurn;
-  if (active) return active.nativeSessionId === run.native.nativeSessionId && active.turnId !== run.native.nativeTurnId;
-  return status.phase === 'idle';
+export function steerTurnEnded(run: Run, status: NativeStatus | undefined, settled?: (run: Run) => boolean): boolean {
+  if (run.native?.intent !== 'steer') return false;
+  if (run.native.stage === 'steer_stopped') return true;
+  if (status) {
+    const active = status.activeTurn;
+    if (active && active.nativeSessionId === run.native.nativeSessionId && active.turnId !== run.native.nativeTurnId) return true;
+    if (!active && status.phase === 'idle') return true;
+  }
+  return Boolean(settled?.(run));
 }
 
 /** An unconfirmed delivery holds the conversation: what the CLI may still be running must not be raced. */
-export function holdsUnconfirmed(run: Run, status: NativeStatus | undefined): boolean {
-  return run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt && !steerTurnEnded(run, status);
+export function holdsUnconfirmed(run: Run, status: NativeStatus | undefined, settled?: (run: Run) => boolean): boolean {
+  return run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt && !steerTurnEnded(run, status, settled);
 }
 
 /** The queued message that starts first: a stop's follow-up, then a steer sent on as a message, then the oldest. */
@@ -61,12 +69,12 @@ function nextQueued(runs: readonly Run[]): Run | undefined {
 }
 
 export function admission(facts: LaneFacts): Admission {
-  const { runs, status } = facts;
+  const { runs, status, steerTurnSettled } = facts;
   const next = nextQueued(runs);
   const held = (reason: QueueHold['reason'], runId?: string): Admission => ({ ...(next ? { next } : {}), held: { reason, ...(runId ? { runId } : {}) } });
   // An unknown delivery is named before anything else: it is the one hold the user has to settle, and
   // clients read "an unconfirmed message holds the conversation" from it (`holdsUnconfirmed`).
-  const unconfirmed = runs.find(run => holdsUnconfirmed(run, status));
+  const unconfirmed = runs.find(run => holdsUnconfirmed(run, status, steerTurnSettled));
   if (unconfirmed) return held('unconfirmed', unconfirmed.id);
   if (facts.workspaceReserved) return held('workspace');
   if (facts.stopping) return held('stopping');
@@ -74,7 +82,7 @@ export function admission(facts: LaneFacts): Admission {
   // An earlier message that may still be on its way in holds every later one: its execution may still be
   // in flight. A released one does not; a steer whose turn is over cannot; a preparing one only while a
   // worker is preparing it (one left behind has written nothing and must not stall the queue).
-  const holding = runs.filter(run => run.native && !run.native.queueReleasedAt && IN_FLIGHT.has(run.native.delivery) && !steerTurnEnded(run, status)
+  const holding = runs.filter(run => run.native && !run.native.queueReleasedAt && IN_FLIGHT.has(run.native.delivery) && !steerTurnEnded(run, status, steerTurnSettled)
     && (run.native.delivery !== 'preparing' || run.native.intent === 'steer' || facts.sending));
   // Steers are sent only by their own operation, never by the queue, and go first.
   const steering = runs.find(run => run.native?.intent === 'steer' && (run.native.delivery === 'queued' || run.native.delivery === 'preparing'));
@@ -82,11 +90,12 @@ export function admission(facts: LaneFacts): Admission {
   const earlier = holding[0];
   if (earlier) return held(earlier.native!.delivery === 'observed' ? 'turn_running' : 'sending', earlier.id);
   if (facts.sending) return held('sending');
-  // Released history does not waive the provider's current execution boundary.
-  if (runs.some(run => run.native?.queueReleasedAt)
-    && (!status || status.phase !== 'idle' || status.activeTurn || status.activity?.background || status.activity?.compacting)) return held('turn_running');
-  if (status?.phase === 'busy') return held('turn_running');
   if (status?.phase === 'attention') return held('attention');
+  // Released history does not waive the provider's current execution boundary,
+  // but an offline CLI must still be admitted so the worker can launch or reconnect it.
+  if (runs.some(run => run.native?.queueReleasedAt)
+    && (!status || (status.phase !== 'idle' && status.phase !== 'offline') || status.activeTurn || status.activity?.background || status.activity?.compacting)) return held('turn_running');
+  if (status?.phase === 'busy') return held('turn_running');
   // The relaunch that applies a pending config waits for the CLI's turn and background work to finish; admitting the
   // message now would only have the backend refuse it (CLI_BUSY) and put it back, over and over.
   if (facts.pendingRelaunch && (status?.activeTurn || status?.activity?.background || status?.activity?.compacting)) return held('turn_running');

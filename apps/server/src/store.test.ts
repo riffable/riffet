@@ -345,6 +345,56 @@ describe('native backend session identity', () => {
     } finally { restored.close(); }
   });
 
+  it('releases uncertain steers on restart only when persisted history proves their target turn ended', () => {
+    const file = scratch(), first = new Store(file);
+    const project = first.createProject('/tmp/steer-restart-release', 'Steer restart release');
+    const input = { text: 'steer me', attachmentIds: [], context: [] };
+
+    // 1. Cursor session with confirmed stop, settled owner, and a still-running owner.
+    const cursor = first.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', nativeSessionId: 'cursor-chat' });
+    const stoppedSteer = first.acceptNativeRun(cursor.id, 'stopped-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-stopped' } });
+    first.transitionNativeRun(stoppedSteer.id, ['queued'], { delivery: 'uncertain', stage: 'steer_stopped' }, { state: 'interrupted' });
+    const completedOwner = first.acceptNativeRun(cursor.id, 'done-owner', input, { mode: 'agent' });
+    first.transitionNativeRun(completedOwner.id, ['queued'], { delivery: 'observed', stage: 'completed', nativeSessionId: 'cursor-chat', nativeTurnId: 'turn-done', nativeMessageId: 'msg-done' }, { state: 'completed' });
+    const doneOwnerSteer = first.acceptNativeRun(cursor.id, 'done-owner-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-done' }, ownerRunId: completedOwner.id });
+    first.transitionNativeRun(doneOwnerSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation' }, { state: 'interrupted' });
+    const liveOwner = first.acceptNativeRun(cursor.id, 'live-owner', input, { mode: 'agent' });
+    first.transitionNativeRun(liveOwner.id, ['queued'], { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true, nativeSessionId: 'cursor-chat', nativeTurnId: 'turn-live', nativeMessageId: 'msg-live' }, { state: 'running' });
+    const liveSteer = first.acceptNativeRun(cursor.id, 'live-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-live' }, ownerRunId: liveOwner.id });
+    first.transitionNativeRun(liveSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation' }, { state: 'interrupted' });
+    const lateObservedReleasedSteer = first.acceptNativeRun(cursor.id, 'late-observed-released', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-done' }, ownerRunId: completedOwner.id });
+    first.transitionNativeRun(lateObservedReleasedSteer.id, ['queued'], { delivery: 'observed', stage: 'steer_stopped', nativeMessageId: 'msg-late', queueReleasedAt: new Date(0).toISOString() }, { state: 'interrupted' });
+
+    // 2. Exited PTY terminal proves an orphaned Claude steer's turn ended, but an exited Codex drawer does not.
+    const claude = first.createSession({ projectId: project.id, kind: 'native', backendId: 'claude', nativeSessionId: 'claude-chat' });
+    first.saveTerminal({ id: 'term-claude', projectId: project.id, sessionId: claude.id, title: 'Claude', kind: 'native', state: 'exited', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: new Date(0).toISOString() });
+    const claudeSteer = first.acceptNativeRun(claude.id, 'claude-exited-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'claude-chat', turnId: 'turn-ext' } });
+    first.transitionNativeRun(claudeSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation', terminalId: 'term-claude' }, { state: 'interrupted' });
+
+    const codex = first.createSession({ projectId: project.id, kind: 'native', backendId: 'codex', nativeSessionId: 'codex-chat' });
+    first.saveTerminal({ id: 'term-codex', projectId: project.id, sessionId: codex.id, title: 'Codex', kind: 'native', state: 'exited', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: new Date(0).toISOString() });
+    const codexSteer = first.acceptNativeRun(codex.id, 'codex-exited-drawer-steer', input, { mode: 'default' }, undefined, { target: { nativeSessionId: 'codex-chat', turnId: 'turn-daemon' } });
+    first.transitionNativeRun(codexSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation', terminalId: 'term-codex' }, { state: 'interrupted' });
+    first.close();
+
+    const restored = new Store(file);
+    try {
+      restored.recoverInterruptedRuns();
+      for (const run of [stoppedSteer, doneOwnerSteer, claudeSteer]) {
+        expect(restored.getRun(run.id).native).toMatchObject({ delivery: 'uncertain', queueReleasedAt: expect.any(String) });
+      }
+      for (const run of [liveSteer, codexSteer]) {
+        expect(restored.getRun(run.id).native?.delivery).toBe('uncertain');
+        expect(restored.getRun(run.id).native?.queueReleasedAt).toBeUndefined();
+      }
+      // A released hook steer that already received a late receipt stays interrupted across restarts.
+      expect(restored.getRun(lateObservedReleasedSteer.id)).toMatchObject({
+        state: 'interrupted',
+        native: { delivery: 'observed', stage: 'steer_stopped', queueReleasedAt: expect.any(String) },
+      });
+    } finally { restored.close(); }
+  });
+
   it('keeps backend and profile in the idempotent session creation identity', () => {
     const store = new Store(':memory:');
     try {

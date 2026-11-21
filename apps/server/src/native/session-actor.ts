@@ -81,6 +81,16 @@ type ActorMessage =
   | { type: 'observation'; sessionId: string; observation: DispatchObservation }
   | { type: 'settle' };
 
+/**
+ * Whether an unfinished native run still needs a standing live watch on its provider.
+ * A steer whose target turn already ended (`queueReleasedAt`) can never run in a later turn, so
+ * it must not pin the provider watch or keep an idle CLI from being reclaimed; late journal
+ * receipts still settle it through `subscribeCorrections`.
+ */
+export function runNeedsDispatchWatch(run: Run): boolean {
+  return !(run.native?.intent === 'steer' && Boolean(run.native.queueReleasedAt));
+}
+
 /** Process-wide services a session actor may use. Cross-session state stays on the coordinator. */
 export interface SessionActorHost {
   readonly store: Store;
@@ -171,7 +181,7 @@ export class SessionActor {
 
   /** No unfinished work, no in-flight operation, and no timer left to fire. */
   isIdle(runs = this.store.listUnfinishedNativeRuns(this.sessionId)): boolean {
-    return runs.length === 0 && this.worker === undefined && !this.interrupting && this.interruptionTask === undefined
+    return !runs.some(runNeedsDispatchWatch) && this.worker === undefined && !this.interrupting && this.interruptionTask === undefined
       && !this.recoveryActive && this.recoveryChecks.size === 0 && this.steerTasks.size === 0
       && this.startReservations === 0 && this.drainHeldSteers.size === 0 && this.timer === undefined;
   }
@@ -214,7 +224,7 @@ export class SessionActor {
       let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
       // A watch is released only once a later step finds the conversation already finished. The step
       // that observed the completion keeps it, so the rest of that turn's events still have a listener.
-      startedIdle = runs.length === 0;
+      startedIdle = !runs.some(runNeedsDispatchWatch);
       if (startedIdle) this.dropObserver();
       const unfinishedIds = new Set(runs.map(run => run.id));
       for (const id of this.nextAttempt.keys()) if (!unfinishedIds.has(id)) this.nextAttempt.delete(id);
@@ -227,8 +237,9 @@ export class SessionActor {
       if (!this.host.workspaceReserved(session)) {
         // Opening the watch resolves the conversation's profile, which may no longer exist. That is this
         // conversation's problem: it goes on unobserved, and the send below fails its queued run with the same error.
-        if (runs.length) this.ensureObserver();
+        if (runs.some(runNeedsDispatchWatch)) this.ensureObserver();
         if (!this.native.pending?.(session.backendId ?? '')) {
+          if (this.releaseEndedSteers(runs)) runs = this.store.listUnfinishedNativeRuns(this.sessionId);
           if (this.sendOrphanedSteers(this.sessionId, runs)) runs = this.store.listUnfinishedNativeRuns(this.sessionId);
           // Nothing to start: the provider's status is not read for it. Draining: nothing new reaches a CLI.
           if (runs.some(run => run.native?.intent !== 'steer' && run.native?.delivery === 'queued') && !this.host.draining() && this.worker === undefined) {
@@ -238,6 +249,10 @@ export class SessionActor {
         }
       }
       this.watchDeliveries(runs);
+      const afterWatch = this.store.listUnfinishedNativeRuns(this.sessionId);
+      if (afterWatch.some(run => run.native?.intent === 'steer' && run.native.delivery === 'uncertain' && !run.native.queueReleasedAt)) {
+        this.releaseEndedSteers(afterWatch, this.readStatus(this.sessionId));
+      }
     } finally {
       this.finish(startedIdle, 'wake');
     }
@@ -273,7 +288,7 @@ export class SessionActor {
     let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     // Re-arm the watch when a correction reopened a turn. Releasing it waits until a later step
     // finds the conversation already idle, so events already in hand still reach this listener.
-    if (runs.length > 0 && !this.workspaceBlocked()) this.ensureObserver();
+    if (runs.some(runNeedsDispatchWatch) && !this.workspaceBlocked()) this.ensureObserver();
     if (!this.attached()) { this.clearTimer(); return; }
     runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     this.scheduleTimer(runs);
@@ -450,12 +465,27 @@ export class SessionActor {
       workspaceReserved: this.host.workspaceReserved(session),
       waitsWhileStarting: Boolean(this.traits(session.backendId).acceptsInputWhileBusy),
       pendingRelaunch: Boolean(session.configPending && this.traits(session.backendId).relaunchesForPendingConfig),
+      steerTurnSettled: run => this.store.isSteerTargetTurnEnded(run),
       retryAt: runId => this.nextAttempt.get(runId) ?? 0, now: now(),
     });
   }
 
   private readStatus(sessionId: string): NativeStatus | undefined {
     try { return this.native.status(sessionId); } catch { return undefined; }
+  }
+
+  /**
+   * Persists the release of any unconfirmed steer whose target turn is already over, so an offline
+   * CLI or later restart cannot resurrect it as a queue hold while still keeping its receipt history.
+   */
+  private releaseEndedSteers(runs: readonly Run[], status?: NativeStatus): boolean {
+    let released = false;
+    for (const run of runs) {
+      if (run.native?.intent !== 'steer' || run.native.delivery !== 'uncertain' || run.native.queueReleasedAt) continue;
+      if (!steerTurnEnded(run, status, item => this.store.isSteerTargetTurnEnded(item))) continue;
+      if (this.store.transitionNativeRun(run.id, ['uncertain'], { queueReleasedAt: new Date().toISOString() })) released = true;
+    }
+    return released;
   }
 
   /**
@@ -468,7 +498,7 @@ export class SessionActor {
     if (!orphaned.length) return false;
     const status = this.readStatus(sessionId);
     let moved = false;
-    for (const run of orphaned) if (steerTurnEnded(run, status)) moved = this.requeueSteer(run.id) || moved;
+    for (const run of orphaned) if (steerTurnEnded(run, status, item => this.store.isSteerTargetTurnEnded(item))) moved = this.requeueSteer(run.id) || moved;
     return moved;
   }
 
@@ -629,7 +659,7 @@ export class SessionActor {
           }
           const owner = this.store.findRunsByNativeTurn(sessionId, target.nativeSessionId, target.turnId).find(run => !run.native?.intent);
           if (owner) this.trackTurnOutcome(owner, status);
-          if (this.store.listUnfinishedNativeRuns(sessionId).some(other => other.id !== runId && holdsUnconfirmed(other, status))) {
+          if (this.store.listUnfinishedNativeRuns(sessionId).some(other => other.id !== runId && holdsUnconfirmed(other, status, item => this.store.isSteerTargetTurnEnded(item)))) {
             throw new AppError('NATIVE_DELIVERY_UNCERTAIN', 'Another message has an unconfirmed outcome; check it first', 409);
           }
           return session;
@@ -974,6 +1004,7 @@ export class SessionActor {
         this.reconcileIdleRun(sessionId, run.id, message.status);
       }
     }
+    this.releaseEndedSteers(this.store.listUnfinishedNativeRuns(sessionId), message.type === 'status' ? message.status : undefined);
   }
 
   private turnOutcomeScope(sessionId: string, event: NativeWorkbenchEvent): { key: string; nativeSessionId: string; turnId: string } | undefined {
@@ -1278,9 +1309,9 @@ export class SessionActor {
   private stopTargets(sessionId: string, stop?: NativeStopRequest): Map<string, NativeDeliveryState> {
     return new Map(this.store.listUnfinishedNativeRuns(sessionId).filter(run => {
       const native = run.native;
-      if (!native || native.delivery === 'queued') return false;
+      if (!native || native.delivery === 'queued' || native.queueReleasedAt) return false;
       if (!stop) return true;
-      if (native.queueReleasedAt || native.nativeSessionId !== stop.nativeSessionId) return false;
+      if (native.nativeSessionId !== stop.nativeSessionId) return false;
       if (stop.terminalId !== undefined && native.terminalId !== undefined && native.terminalId !== stop.terminalId) return false;
       if (stop.turnId === undefined) return true;
       if (native.nativeTurnId === stop.turnId) return true;
@@ -1508,10 +1539,11 @@ export class SessionActor {
       if (preparing && run.native?.intent === 'steer') { this.requeueSteer(run.id); continue; }
       const allowed: NativeDeliveryState[] = preparing ? ['queued', 'preparing'] : [delivery];
       if (!preparing && run.native?.intent === 'steer' && !run.native.nativeMessageId) {
-        // Stopping the turn does not establish whether an unconfirmed input reached it.
-        // Preserve that ambiguity until its exact receipt appears or tracking is discarded.
+        // Stopping the turn does not establish whether an unconfirmed input reached it,
+        // but a confirmed stop ends the turn this steer was bound to, so release the queue hold.
         this.store.transitionNativeRun(run.id, allowed, {
           delivery: 'uncertain', stage: 'steer_stopped',
+          queueReleasedAt: run.native.queueReleasedAt ?? new Date().toISOString(),
           timings: { ...run.native.timings, interruptedAt: now() },
         }, { state: 'interrupted', error: run.error ?? '任务已停止，补充消息是否收到仍无法确认。' });
         continue;

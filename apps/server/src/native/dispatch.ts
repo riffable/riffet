@@ -7,7 +7,7 @@ import type { NativeBackendTraits, NativeDispatchBinding } from '../backends/typ
 import { AppError } from '../errors.js';
 import { backendIdOf } from '../session-identity.js';
 import { admission, queueOf } from './lane.js';
-import { SessionActor, type SessionActorHost, type SessionDispatchOptions } from './session-actor.js';
+import { runNeedsDispatchWatch, SessionActor, type SessionActorHost, type SessionDispatchOptions } from './session-actor.js';
 
 const now = () => Date.now();
 /** How long a drain holds deliveries without being renewed; whoever waits for a restart renews it as it polls. */
@@ -124,16 +124,24 @@ export class NativeDispatcher {
     if (sessionId !== undefined) {
       const existing = this.actors.get(sessionId);
       if (existing) existing.step();
-      else if (this.store.listUnfinishedNativeRuns(sessionId).length > 0) this.actor(sessionId).step();
+      else if (this.store.listUnfinishedNativeRuns(sessionId).some(runNeedsDispatchWatch)) this.actor(sessionId).step();
       return;
     }
     if (this.scanning) return;
     this.scanning = true;
     try {
-      const sessions = new Set(this.store.listUnfinishedNativeRuns().map(run => run.sessionId));
+      const sessions = new Set(this.store.listUnfinishedNativeRuns().filter(runNeedsDispatchWatch).map(run => run.sessionId));
       for (const id of sessions) this.actor(id).step();
       for (const id of [...this.actors.keys()]) if (!sessions.has(id)) this.actors.get(id)?.step();
     } finally { this.scanning = false; }
+  }
+
+  /** Drops and stops any in-memory actor for a deleted conversation so no watch or timer outlives it. */
+  async forget(sessionId: string): Promise<void> {
+    const actor = this.actors.get(sessionId);
+    if (!actor) return;
+    this.actors.delete(sessionId);
+    await actor.shutdown();
   }
 
   /**
@@ -195,7 +203,7 @@ export class NativeDispatcher {
   busy(sessionId: string): boolean {
     const actor = this.actors.get(sessionId);
     return actor?.worker !== undefined || (actor?.startReservations ?? 0) > 0 || actor?.interrupting === true
-      || actor?.recoveryActive === true || this.store.listUnfinishedNativeRuns(sessionId).length > 0;
+      || actor?.recoveryActive === true || this.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt);
   }
 
   /** Where the conversation's queue stands, for clients (`NativeStatus.queue`), read against the status it goes out with. */
@@ -209,6 +217,7 @@ export class NativeDispatcher {
       workspaceReserved: this.workspaceReserved(session),
       waitsWhileStarting: Boolean(this.traits(session.backendId).acceptsInputWhileBusy),
       pendingRelaunch: Boolean(session.configPending && this.traits(session.backendId).relaunchesForPendingConfig),
+      steerTurnSettled: run => this.store.isSteerTargetTurnEnded(run),
       retryAt: () => 0, now: now(),
     }));
   }
@@ -282,7 +291,7 @@ export class NativeDispatcher {
       const cwd = workspacePath(this.store.getProject(session.projectId).cwd);
       if (!paths.some(path => overlappingPaths(path, cwd))) continue;
       if (['starting', 'running', 'waiting', 'cancelling'].includes(session.state)
-        || this.store.listUnfinishedNativeRuns(session.id).length
+        || this.store.listUnfinishedNativeRuns(session.id).some(run => !run.native?.queueReleasedAt)
         || this.actors.get(session.id)?.blocksWorkspace()) throw this.workspaceBusy();
     }
     const token = Symbol('workspace');

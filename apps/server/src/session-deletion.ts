@@ -24,7 +24,7 @@ export interface SessionDeletionDeps {
   stateDir: string;
   sessionCommands: SessionCommands;
   sessionLock: SessionLock;
-  dispatch: { busy(sessionId: string): boolean };
+  dispatch: { busy(sessionId: string): boolean; forget?(sessionId: string): Promise<void> };
   nativeBackends: { status(sessionId: string): NativeStatus; dispose(sessionId: string): Promise<void> };
   terminal: { stop(id: string): Promise<void> };
   ingest: { forget(sessionId: string): void };
@@ -88,7 +88,7 @@ export class SessionDeletion {
         const record = store.transaction(() => {
           check();
           // A message accepted since the last check (its admission passed before the fence went up) keeps the conversation.
-          if (ids.some(id => store.listUnfinishedNativeRuns(id).length)) throw blocked('running');
+          if (ids.some(id => store.listUnfinishedNativeRuns(id).some(run => !run.native?.queueReleasedAt))) throw blocked('running');
           // Past every check, so a refused deletion leaves them pending; the rows still exist for the devices' lease cancels.
           this.deps.orchestration.cancelWakeupsOf(ids);
           for (const id of ids) {
@@ -153,7 +153,8 @@ export class SessionDeletion {
 
   /** What could still write: the runtime (which reads its address from the row), its terminal and the transcript reader. */
   private async stop(id: string): Promise<void> {
-    const { store, nativeBackends, terminal, ingest } = this.deps;
+    const { store, dispatch, nativeBackends, terminal, ingest } = this.deps;
+    await dispatch.forget?.(id);
     await nativeBackends.dispose(id);
     for (const item of store.listTerminals()) if (item.sessionId === id && isAgentTerminal(item) && item.state !== 'exited') await terminal.stop(item.id);
     ingest.forget(id);

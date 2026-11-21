@@ -373,7 +373,7 @@ export async function patchSession(deps: RouteDeps, id: string, body: SessionPat
     if(body.archived!==undefined){
       if(body.archived){
         const session=store.getSession(id);
-        const activeRuns=store.listUnfinishedNativeRuns(id).some(run=>!['queued','preparing'].includes(run.native!.delivery));
+        const activeRuns=store.listUnfinishedNativeRuns(id).some(run=>!run.native?.queueReleasedAt&&!['queued','preparing'].includes(run.native!.delivery));
         if(activeRuns)await dispatch.interrupt(id);
         await nativeBackends.dispose(id);
         if(session.terminalId)await terminal.stop(session.terminalId);

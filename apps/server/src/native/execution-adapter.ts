@@ -184,6 +184,22 @@ export class ExecutionAdapter {
     if (params.isClosed()) throw new AppError('DISPATCH_STOPPED', 'The service is restarting', 409);
     if (argvPrompt === undefined && this.store.getRun(runId).native?.delivery !== 'preparing') return { settled: false };
     session = this.store.getSession(run.sessionId);
+    if (!params.now && argvPrompt === undefined) {
+      // Reconnecting an offline backend can reveal a turn or prompt already running on the CLI;
+      // re-apply the live status gates from `lane.ts` before writing so a fresh message never
+      // steers an active turn.
+      const liveStatus = params.readStatus(session.id);
+      if (liveStatus?.phase === 'attention' || liveStatus?.interaction) {
+        throw new AppError('CLI_INTERACTION_REQUIRED', 'Handle the pending confirmation first', 409);
+      }
+      if (liveStatus?.phase === 'busy') {
+        throw new AppError('CLI_BUSY', 'A turn is already running', 409);
+      }
+      if (liveStatus && (liveStatus.activeTurn || liveStatus.activity?.background || liveStatus.activity?.compacting)
+        && this.store.listUnfinishedNativeRuns(session.id).some(item => item.native?.queueReleasedAt)) {
+        throw new AppError('CLI_BUSY', 'Finish active or background work first', 409);
+      }
+    }
     // The launch returned without passing through the fence hook, so whether a CLI got the prompt
     // on its argv is unknown; pasting it as well could run it twice.
     if (argvPrompt !== undefined && !argvFenced) {

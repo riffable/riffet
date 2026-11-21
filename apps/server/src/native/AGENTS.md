@@ -43,6 +43,7 @@ verify:
 - 消息停在 `queued` 且队列有 `held`：看 `lane.ts#admission` 的返回，再看该会话 `runs` 表里 json 的 `native.delivery` 与 `native.stage`。
 - 消息一直是 `running` 而 CLI 早已空闲：回合在回执到达前就结束、期间没有收到过 busy 状态时出现过，原因是只对见过输出或 busy 的消息读状态。现在有回执就读（`session-actor.ts#SessionActor` 的 `watchDeliveries`），空闲满 `session-actor.ts#IDLE_RECONCILE_MS` 后按「结果未确认」关闭。
 - 补充消息（hook steer）一直停在 `input_sent` 且前端看起来像已送达：hook 返回 `additional_context` 但 CLI 未写入 transcript 时，父轮次原本就处于 `busy`，不能用 `busy`/`attention` 跳过 `confirmationMs` 超时（仅带 `providerAcceptedAt` 的直接 RPC steer 豁免），且客户端判定 steer `received` 时不能采信父轮次的 `hasTurnOutput` 或 `running`。
+- 上一轮早已结束但后续消息卡在「等待上一条消息确认」或终端离线后不再拉起：旧的未确认 steer（`steer_stopped` 或回执超时）若未在目标回合结束时持久化 `queueReleasedAt`，CLI 在线 `idle` 时会被 `steerTurnEnded` 暂时放行，但 CLI 退出/服务重启进入 `offline` 后会重新触发 `unconfirmed` 死锁；同时 `lane.ts` 对 `queueReleasedAt` 历史记录的放行判断需允许 `offline` 状态下放行拉起终端。现已在 `session-actor.ts#SessionActor` 与 `apps/server/src/store.ts#Store` 的重启恢复中按 `isSteerTargetTurnEnded` 持久化释放，且空闲回收、终端接管、编排忙碌与删除校验均忽略已释放的历史记录。
 - 重启被拒或一直等待：`GET /api/service/restartable`，对应 `dispatch.ts#restartability`；暂停派发是 30 s 租约（`dispatch.ts#DRAIN_LEASE_MS`），等待方不续期会自行失效。
 - 空闲 CLI 不被回收或被误回收：监控接口 `agentProcesses` 给出每个 CLI 的 `AgentRetention` 与预计停止时间；回收日志无 scope，按消息文本过滤 `riffet logs`，如 `reclaimed idle agent CLIs`、`agent reclaim pass failed`。生命周期见 docs/guide/performance.md §3.10。
 - 终端持有的会话无法发送：日志 `releasing a terminal hold failed`、`following a terminal-held conversation failed`；持有的 token 存在会话旁的 `terminal-hold:` 密钥里（`terminal-hold.ts#SECRET_PREFIX`）。

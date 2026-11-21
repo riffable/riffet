@@ -60,7 +60,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
   app.delete<{Params:{id:string}}>('/api/terminals/:id',async(request)=>{
     const current=await terminal.get(request.params.id);
     if(current.sessionId&&current.kind==='native'){
-      const activeRuns=store.listUnfinishedNativeRuns(current.sessionId).some(run=>!['queued','preparing'].includes(run.native!.delivery));
+      const activeRuns=store.listUnfinishedNativeRuns(current.sessionId).some(run=>!run.native?.queueReleasedAt&&!['queued','preparing'].includes(run.native!.delivery));
       if(activeRuns)await dispatch.interrupt(current.sessionId);
       await nativeBackends.dispose(current.sessionId);
     }

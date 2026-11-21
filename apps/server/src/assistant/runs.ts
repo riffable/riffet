@@ -260,7 +260,7 @@ export class AssistantRuns {
     if (session.state === 'waiting') return true;
     if (ACTIVE.has(session.state)) return false;
     const runs = this.deps.store.listRuns(session.id);
-    return runs.length > 0 && this.deps.store.listUnfinishedNativeRuns(session.id).length === 0 && runs.every(run => ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.state));
+    return runs.length > 0 && !this.deps.store.listUnfinishedNativeRuns(session.id).some(run => !run.native?.queueReleasedAt) && runs.every(run => ['completed', 'failed', 'cancelled', 'interrupted'].includes(run.state));
   }
 
   /**

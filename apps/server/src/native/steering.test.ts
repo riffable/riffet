@@ -29,12 +29,20 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
   const owner = store.acceptNativeRun(session.id, 'original', input('original task'), config);
   store.transitionNativeRun(owner.id, ['queued'], { delivery: 'observed', nativeTurnId: target.turnId, nativeMessageId: 'original-user', timings: { busyAt: Date.now() - 1000, firstOutputAt: Date.now() - 500 } }, { state: 'running' });
   let listener: ((message: DispatchObservation) => void) | undefined;
+  let corrections: ((sessionId: string, message: DispatchObservation) => void) | undefined;
   const events: NativeWorkbenchEvent[] = [];
   let status: NativeStatus = { phase: 'busy', activeTurn: { ...target, ownerRunId: owner.id } };
   let mode: 'echo' | 'silent' | 'reject' | 'unknown' | 'expire' | 'deferred' = 'echo';
   const deferredFences = new Map<string, () => void>();
   let supported = true, missingAttachment = false;
-  const emit = (event: NativeWorkbenchEvent) => { events.push(event); listener?.({ type: 'events', events: [event] }); };
+  const emit = (event: NativeWorkbenchEvent) => {
+    events.push(event);
+    if (listener) listener({ type: 'events', events: [event] });
+    else if (['run_completed', 'run_failed', 'run_cancelled'].includes(event.type)
+      || (event.type === 'user_message_chunk' && typeof event.data.commandId === 'string')) {
+      corrections?.(session.id, { type: 'events', events: [event] });
+    }
+  };
   const user = (run: Run) => emit({ sequence: events.length + 1, sessionId: session.id, nativeId: `user:${run.commandId}`, nativeTurnId: target.turnId, runId: run.id,
     type: 'user_message_chunk', data: { commandId: run.commandId, content: { text: run.prompt } }, createdAt: new Date().toISOString() });
   const native = {
@@ -43,6 +51,7 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
     status: () => status,
     supportsSteer: vi.fn(async () => supported),
     subscribe: vi.fn((_id: string, fn: typeof listener) => { listener = fn; return () => { listener = undefined; }; }),
+    subscribeCorrections: vi.fn((fn: typeof corrections) => { corrections = fn; return () => { corrections = undefined; }; }),
     snapshot: vi.fn(async () => ({ status, nativeSessionId: target.nativeSessionId, events: [...events] })),
     interrupt: vi.fn(async () => undefined),
     sendRun: vi.fn(async () => undefined),
@@ -97,6 +106,7 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
     listener?.({ type: 'status', status });
   };
   return { app, store, session, owner, target, native, runtime, dispatch, readNativeInput, submit, acceptSteer, finish, user, internal, claim, steerQueued, emit,
+    hasListener: () => Boolean(listener),
     setMode: (next: typeof mode) => { mode = next; }, setStatus: (next: NativeStatus) => { status = next; listener?.({ type: 'status', status }); },
     setSupported: (next: boolean) => { supported = next; }, removeAttachment: () => { missingAttachment = true; } };
 }
@@ -193,7 +203,10 @@ describe('native steering through HTTP and durable dispatch', () => {
     const run = (await h.submit()).json<Run>();
     await h.dispatch.interrupt(h.session.id);
     expect(h.store.getRun(h.owner.id).state).toBe('interrupted');
-    expect(h.store.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'steer_stopped' } });
+    expect(h.store.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'steer_stopped', queueReleasedAt: expect.any(String) } });
+    // Releasing the stopped steer drops the standing live watch so idle reclaim is not pinned,
+    // while late journal receipts still settle the run through subscribeCorrections.
+    expect(h.hasListener()).toBe(false);
     h.user(run);
     expect(h.store.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', nativeMessageId: 'user:steer-1' } });
     h.finish('run_cancelled');
@@ -359,7 +372,7 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.store.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', nativeMessageId: 'steer:receipt' } });
   });
 
-  it('holds the next message behind an unconfirmed steer only while its turn runs', async () => {
+  it('holds the next message behind an unconfirmed steer only while its turn runs, even after the CLI goes offline', async () => {
     const h = harness(); h.setMode('unknown');
     const steer = (await h.submit()).json<Run>();
     expect(steer).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
@@ -367,11 +380,30 @@ describe('native steering through HTTP and durable dispatch', () => {
     h.dispatch.kick();
     expect(h.dispatch.queue(h.session.id, h.native.status())).toMatchObject({ next: queued.id, held: { reason: 'unconfirmed', runId: steer.id } });
     h.finish();
-    expect(h.store.getRun(steer.id).native?.delivery).toBe('uncertain');
-    expect(h.dispatch.queue(h.session.id, h.native.status()).held?.reason).not.toBe('unconfirmed');
+    expect(h.store.getRun(steer.id).native).toMatchObject({ delivery: 'uncertain', queueReleasedAt: expect.any(String) });
+    // Going offline (reclaimed CLI or restart) must not resurrect the ended steer as an unconfirmed hold.
+    h.setStatus({ phase: 'offline' });
+    expect(h.dispatch.queue(h.session.id, h.native.status())).toEqual({ next: queued.id });
     h.dispatch.kick();
     await vi.waitFor(() => expect(h.native.sendRun).toHaveBeenCalledTimes(1));
     expect(h.native.sendRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: queued.id }), expect.any(Function), undefined);
+  });
+
+  it('releases a stopped unconfirmed steer so later messages dispatch after the CLI goes offline', async () => {
+    const h = harness(); h.setMode('unknown');
+    const steer = (await h.submit()).json<Run>();
+    await h.dispatch.interrupt(h.session.id);
+    expect(h.store.getRun(steer.id)).toMatchObject({
+      state: 'interrupted',
+      native: { delivery: 'uncertain', stage: 'steer_stopped', queueReleasedAt: expect.any(String) },
+    });
+    expect(h.dispatch.busy(h.session.id)).toBe(false);
+    h.setStatus({ phase: 'offline' });
+    const next = h.store.acceptNativeRun(h.session.id, 'after-stop-offline', input('follow up'), config);
+    expect(h.dispatch.queue(h.session.id, h.native.status())).toEqual({ next: next.id });
+    h.dispatch.kick();
+    await vi.waitFor(() => expect(h.native.sendRun).toHaveBeenCalledTimes(1));
+    expect(h.native.sendRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: next.id }), expect.any(Function), undefined);
   });
 
   it('keeps deferred cancellation and stop cancellable before the provider fence', async () => {

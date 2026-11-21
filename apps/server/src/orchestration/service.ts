@@ -169,7 +169,7 @@ export class OrchestrationService {
   private write<T>(key: string, value: Record<string, T>): void { this.deps.store.setSetting(key, value); }
   private busy(sessionId: string): boolean {
     const session = this.deps.store.getSession(sessionId);
-    return this.deps.store.listUnfinishedNativeRuns(sessionId).length > 0
+    return this.deps.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt)
       || ['starting', 'running', 'waiting', 'cancelling'].includes(session.state)
       || ['starting', 'busy', 'attention'].includes(this.deps.nativeBackends.status(sessionId).phase);
   }
@@ -180,7 +180,7 @@ export class OrchestrationService {
     if (['starting', 'running', 'waiting', 'cancelling'].includes(session.state)) return true;
     if (['starting', 'busy', 'attention'].includes(this.deps.nativeBackends.status(sessionId).phase)) return true;
     return this.deps.store.listUnfinishedNativeRuns(sessionId).some(run =>
-      ['preparing', 'dispatching', 'input_sent', 'observed'].includes(run.native?.delivery ?? ''),
+      !run.native?.queueReleasedAt && ['preparing', 'dispatching', 'input_sent', 'observed'].includes(run.native?.delivery ?? ''),
     );
   }
 

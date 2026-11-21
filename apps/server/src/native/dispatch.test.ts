@@ -684,7 +684,10 @@ describe('NativeDispatcher durable delivery', () => {
     ] as const;
     const resolved = preserved.map(({ stage, state, delivery }) => {
       const run = store.acceptNativeRun(session.id, stage, input(stage), config, 0, { target, ownerRunId: owner.id });
-      return store.transitionNativeRun(run.id, ['queued'], { delivery, stage, nativeMessageId: `receipt:${stage}` }, { state })!;
+      return store.transitionNativeRun(run.id, ['queued'], {
+        delivery, stage, nativeMessageId: `receipt:${stage}`,
+        ...(stage === 'steer_stopped' ? { queueReleasedAt: new Date(0).toISOString() } : {}),
+      }, { state })!;
     });
     const other = store.acceptNativeRun(session.id, 'other-turn', input('other'), config, 0);
     resolved.push(store.transitionNativeRun(other.id, ['queued'], { delivery: 'cancelled', stage: 'provider_cancelled', nativeSessionId: target.nativeSessionId, nativeTurnId: 'other-turn', nativeMessageId: 'other-receipt' }, { state: 'interrupted' })!);
@@ -1877,6 +1880,51 @@ describe('message recovery and targeted stop', () => {
       backend.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 2, 'run_completed', ''), data: { commandId: run.commandId } }] });
       expect(store.getRun(run.id).state).toBe('completed');
       expect(backend.writes).toEqual([]);
+    } finally { await dispatcher.close(); store.close(); }
+  });
+
+  it('admits a queued message when the CLI is offline despite earlier released uncertain history', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), old = accept(session.id, 'released-old', 'old input');
+    store.transitionNativeRun(old.id, ['queued'], {
+      delivery: 'uncertain', stage: 'confirmation', queueReleasedAt: new Date(0).toISOString(),
+    }, { state: 'interrupted' });
+    const next = accept(session.id, 'next-after-offline', 'new input');
+    const backend = new FakeNative(store), runtime = makeRuntime();
+    backend.argvInitialPrompt = false;
+    backend.currentStatus = { phase: 'offline' };
+    const dispatcher = new NativeDispatcher(store, backend, runtime, workspace as never);
+    try {
+      expect(dispatcher.queue(session.id, backend.currentStatus)).toEqual({ next: next.id });
+      expect(dispatcher.busy(session.id)).toBe(true);
+      dispatcher.kick();
+      await until(() => backend.writes.length === 1, 'offline released history admits next run');
+      expect(runtime.ensureCalls).toEqual([session.id]);
+      expect(backend.writes).toEqual([{ sessionId: session.id, text: 'new input' }]);
+    } finally { await dispatcher.close(); store.close(); }
+  });
+
+  it('requeues without writing when reconnecting an offline session reveals an active turn', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), old = accept(session.id, 'released-before-reconnect', 'old input');
+    store.transitionNativeRun(old.id, ['queued'], {
+      delivery: 'uncertain', stage: 'confirmation', queueReleasedAt: new Date(0).toISOString(),
+    }, { state: 'interrupted' });
+    const next = accept(session.id, 'wait-for-reconnected-turn', 'new input');
+    const backend = new FakeNative(store), runtime = makeRuntime();
+    backend.argvInitialPrompt = false;
+    backend.currentStatus = { phase: 'offline' };
+    const baseEnsure = runtime.ensure.bind(runtime);
+    runtime.ensure = async (targetSession, options) => {
+      await baseEnsure(targetSession, options);
+      backend.currentStatus = { phase: 'busy', activeTurn: { nativeSessionId: session.cursorSessionId!, turnId: 'live-turn' } };
+    };
+    const dispatcher = new NativeDispatcher(store, backend, runtime, workspace as never);
+    try {
+      dispatcher.kick();
+      await until(() => runtime.ensureCalls.length === 1 && store.getRun(next.id).native?.stage === 'waiting', 'reconnected busy session requeues run');
+      expect(backend.writes).toEqual([]);
+      expect(store.getRun(next.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'waiting' } });
     } finally { await dispatcher.close(); store.close(); }
   });
 
