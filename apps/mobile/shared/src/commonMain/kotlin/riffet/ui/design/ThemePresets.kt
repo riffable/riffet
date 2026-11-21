@@ -121,9 +121,9 @@ private val RiffetPreset = ThemePreset(
             sectionBackground = false, focusBorder = true, compactChevron = true,
             valueBelowLabel = false, groupSeparatorLine = false, selectionAtEnd = true, plainObjectMarks = true),
         navigation = NavigationRecipe(topBar = ComponentBackend.SHARED, largeTitle = ComponentBackend.SHARED,
-            capsulePanel = true, capsuleIndicator = true,
+            capsulePanel = true, capsuleIndicator = true, pageBarLine = false,
             rail = ComponentBackend.SHARED, tabs = ComponentBackend.SHARED, badges = ComponentBackend.SHARED),
-        sheets = SheetRecipe(insetFloating = true, nativeDragHandle = false, dragHandle = false, flatRows = true),
+        sheets = SheetRecipe(insetFloating = true, nativeDragHandle = false, dragHandle = false, flatRows = true, headerLine = false),
         dialogs = DialogRecipe(backend = ComponentBackend.SHARED),
         composer = ComposerRecipe(tonal = false, settingsSurface = false),
         // The page is a step darker than the palette's paper and cards are its raised tone: tone separates

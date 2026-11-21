@@ -545,7 +545,7 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
         }
         return
     }
-    Column(Modifier.fillMaxWidth().sheetLine(0.dp)) {
+    Column(Modifier.fillMaxWidth().then(if (style.components.sheets.headerLine) Modifier.sheetLine(0.dp) else Modifier)) {
         // Under a grabber the header is one control tall; alone at the panel's edge it is a bar, so the
         // title has the same room above it as below.
         Row(Modifier.fillMaxWidth().heightIn(min = if (style.components.sheets.dragHandle) metrics.controlHeight else maxOf(metrics.barHeight, metrics.controlHeight)),
@@ -617,7 +617,7 @@ internal fun Modifier.pickerRowDivider(start: androidx.compose.ui.unit.Dp = Shee
     return sheetLine(start)
 }
 
-/** The header's line, which every panel with lines keeps: the list scrolls away under it. */
+/** A row's or the header's line ([SheetRecipe.headerLine]): the list scrolls away under the header. */
 @Composable
 private fun Modifier.sheetLine(start: androidx.compose.ui.unit.Dp): Modifier {
     val metrics = LocalInterfaceStyle.current.metrics

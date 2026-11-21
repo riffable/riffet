@@ -697,7 +697,7 @@ fun SessionScreen(
                             resuming = resuming,
                             resumeEnabled = !restartingProfile,
                         )
-                        if (!materialBackdropEnabled) HorizontalDivider(color = colors.line)
+                        if (LocalInterfaceStyle.current.components.navigation.pageBarLine && !materialBackdropEnabled) HorizontalDivider(color = colors.line)
 
                         WaitingStrip(session = current, status = status, scope = store to current.id, visible = feedbackVisible, cardShown = interaction != null)
 

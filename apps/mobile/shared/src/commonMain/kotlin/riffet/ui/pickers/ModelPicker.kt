@@ -451,7 +451,7 @@ private fun ParamStrip(
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     Column(Modifier.fillMaxWidth()) {
-        HorizontalDivider(color = colors.line)
+        if (LocalInterfaceStyle.current.components.sheets.headerLine) HorizontalDivider(color = colors.line)
         Row(
             modifier = Modifier
                 .fillMaxWidth()

@@ -79,6 +79,8 @@ internal data class NavigationRecipe(
     val accentSelection: Boolean = false,
     val cardSurface: Boolean = false,
     val indicatorHeightExtra: Float = 0f,
+    /** A line under a page's own top bar (the session page's): off where tone, not lines, separates the bar. */
+    val pageBarLine: Boolean = true,
 )
 
 @Immutable
@@ -100,6 +102,8 @@ internal data class SheetRecipe(
     /** A grouped style's rows sit on the panel bare: the panel is the card, so a fill per row would band it. */
     val flatRows: Boolean = false,
     val maxHeightDp: Int = 640,
+    /** A line under the header and above a bottom bar (a model's parameters): the list scrolls between them. */
+    val headerLine: Boolean = true,
 )
 
 @Immutable
