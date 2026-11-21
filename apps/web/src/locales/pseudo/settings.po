@@ -114,10 +114,25 @@ msgstr ""
 msgid "{0} 后停止"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 在这台电脑上的操作"
+msgstr ""
+
 #. placeholder {0}: minutes / 60
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderUsage.tsx
 msgid "{0} 小时"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 已断开互联"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 未允许这台电脑操作它"
 msgstr ""
 
 #. placeholder {0}: settings.titleRules.length
@@ -133,6 +148,11 @@ msgstr ""
 #. placeholder {0}: STYLES.length
 #: src/app/design/mac/StylesChapter.tsx
 msgid "{0} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 被他人控制时，对方也能操作这台电脑"
 msgstr ""
 
 #. placeholder {0}: MAC.terminal.min
@@ -870,6 +890,11 @@ msgstr ""
 msgid "不限额"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "与 {0} 断开互联？"
+msgstr ""
+
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "与 Web 弹窗相同的四档；高度随内容，超过窗口高减 64 时正文滚动。"
 msgstr ""
@@ -912,6 +937,10 @@ msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "丢弃无法备份的文件、删除会话"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "两台服务器都会断开，之后要重新互联"
 msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
@@ -1096,6 +1125,10 @@ msgstr ""
 msgid "主风格，以 Web 为准：内缩卡片、项目树侧栏、会话标签栏，菜单与弹出层共用一种浮层。"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "也可以在这台机器上运行 <0>riffet link ssh 主机</0>，隧道经 SSH 建立"
+msgstr ""
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "事件循环延迟"
 msgstr ""
@@ -1110,6 +1143,11 @@ msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "二维码"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+#: src/app/settings/settingsSections.ts
+msgid "互联"
 msgstr ""
 
 #: src/app/design/android/PlatformChapter.tsx
@@ -1663,12 +1701,21 @@ msgstr ""
 msgid "允许"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "允许 {0} 操作这台电脑"
+msgstr ""
+
 #: src/app/settings/DevicesSection.tsx
 msgid "允许 Agent 操作"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "允许一次"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "允许对方操作这台电脑"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -2341,6 +2388,10 @@ msgstr ""
 msgid "功能"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "加入另一台服务器"
+msgstr ""
+
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
@@ -2704,6 +2755,10 @@ msgstr ""
 msgid "叠放顺序"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "另一台服务器连到这里用的地址"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "只写存储位置、能否撤销、是否跨设备、是否需重启、权限与计费。"
 msgstr ""
@@ -2776,6 +2831,11 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "可以使用的人"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "可以操作 {0}"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -3215,6 +3275,10 @@ msgstr ""
 msgid "在几种选择控件之间怎么选"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "在另一台服务器的「设置 › 互联」粘贴。5 分钟内有效，只能用一次"
+msgstr ""
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "在哪里找"
 msgstr ""
@@ -3260,6 +3324,7 @@ msgid "在视图和条目之间移动。页签切换一级视图，行进入一�
 msgstr ""
 
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "在线"
 msgstr ""
 
@@ -3551,6 +3616,7 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "完成"
 msgstr ""
 
@@ -3654,6 +3720,10 @@ msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "对方的质询要先正面回答。"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "对方被他人控制时，也能操作这台电脑"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -4784,6 +4854,11 @@ msgstr ""
 msgid "打开 · 读取中"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "打开 {0} 的网页"
+msgstr ""
+
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -5540,6 +5615,10 @@ msgstr ""
 msgid "文档页"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "断开"
+msgstr ""
+
 #: src/app/design/components/DisplayChapter.tsx
 msgid "新"
 msgstr ""
@@ -5653,10 +5732,15 @@ msgstr ""
 msgid "无气泡，占满阅读列"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "无法互联"
+msgstr ""
+
 #: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/channels/CardSettings.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "无法保存"
 msgstr ""
 
@@ -5789,6 +5873,10 @@ msgstr ""
 msgid "无法整理存储空间"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "无法断开互联"
+msgstr ""
+
 #: src/app/settings/UpdateSection.tsx
 msgid "无法检查更新"
 msgstr ""
@@ -5815,6 +5903,10 @@ msgstr ""
 
 #: src/app/settings/PairingDialogs.tsx
 msgid "无法生成配对码"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "无法生成链接串"
 msgstr ""
 
 #: src/app/settings/ProfileSection.tsx
@@ -5844,6 +5936,10 @@ msgstr ""
 #: src/app/settings/UpdateSection.tsx
 msgctxt "settings-build-read-failed"
 msgid "无法读取"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "无法读取互联的服务器"
 msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -6832,6 +6928,10 @@ msgstr ""
 msgid "没有 Agent"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "没有互联的服务器"
+msgstr ""
+
 #: src/app/design/foundations/IconChapter.tsx
 msgid "没有匹配的图标"
 msgstr ""
@@ -6862,6 +6962,7 @@ msgid "没有符合条件的收藏"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "没有记录"
 msgstr ""
 
@@ -7036,6 +7137,10 @@ msgstr ""
 #: src/app/settings/ProviderModelList.tsx
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "添加互联"
 msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
@@ -7228,6 +7333,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "生成配对码"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "生成链接串"
 msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
@@ -7552,6 +7661,10 @@ msgstr ""
 msgid "离开页面"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "离线"
+msgstr ""
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "离线时 Web 端还能用吗？"
 msgstr ""
@@ -7566,6 +7679,7 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/ProfileSection.tsx
 #: src/app/settings/PushKeySection.tsx
 msgid "移除"
@@ -7796,6 +7910,10 @@ msgstr ""
 
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "粘贴对话内容"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "粘贴链接串"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -9310,6 +9428,7 @@ msgid "连接与访问"
 msgstr ""
 
 #: src/app/settings/ChannelsSection.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "连接中"
 msgstr ""
 
@@ -9483,6 +9602,10 @@ msgstr ""
 msgid "避免"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "邀请另一台服务器"
+msgstr ""
+
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "都先问我"
 msgstr ""
@@ -9603,6 +9726,7 @@ msgstr ""
 #: src/app/settings/ChannelsSection.tsx
 #: src/app/settings/DefaultApprovalSetting.tsx
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/ProviderUsage.tsx
 #: src/app/settings/ServiceStatusSection.tsx
@@ -9625,6 +9749,10 @@ msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "链接串"
 msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx

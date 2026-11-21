@@ -6,6 +6,7 @@ For a workbench feature, note the owner question it answers, the existing or new
 
 - [ ] `pnpm typecheck` and `pnpm test` pass
 - [ ] Generated files updated when affected (`pnpm gen:*`)
+- [ ] Multi-server: classified per `docs/guide/multi-server.md`; new routes declare link handling (delete if no server or client behavior changed)
 
 ## Interface changes
 

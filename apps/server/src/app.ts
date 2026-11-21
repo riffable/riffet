@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { mkdir, rm, utimes } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
 import { encodingFor, registerWebAssets, WorkbenchDocumentProofs } from './static-assets.js';
@@ -134,6 +134,10 @@ import { ApnsClient, type ApnsTransport } from './push/apns.js';
 import { PushService, type PushTiming } from './push/service.js';
 import { registerPushRoutes } from './push/routes.js';
 import { readServerId } from './server-id.js';
+import { LinkService } from './links/service.js';
+import { linkPolicy } from './links/policy.js';
+import { linkOfRequest } from './links/socket.js';
+import { LINK_TUNNEL_ROUTE, registerLinkRoutes } from './routes/links.js';
 import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
 import { registerChannelRoutes } from './channels/routes.js';
@@ -331,11 +335,15 @@ export async function createApp(options: AppOptions = {}) {
   const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,notices,recordAuxiliaryCall,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
   orchestrationRef=orchestration;
   const app=Fastify({logger:options.logger??false,bodyLimit:36*1024*1024,requestTimeout:60_000});
+  // Every route as registered, so `links/links.test.ts` can check that the link policy classifies each one.
+  const registeredRoutes:Array<{method:string;url:string}>=[];
+  app.addHook('onRoute',route=>{for(const method of [route.method].flat())registeredRoutes.push({method:String(method),url:route.url});});
+  let linksRef:LinkService|undefined;
   listening=()=>app.server.address();
   await app.register(websocket,{options:{maxPayload:256*1024}});
   const streams=new Set<import('node:http').ServerResponse>();
   // Exact matches on the matched route pattern, so a shaped or encoded path stays guarded.
-  const PUBLIC_API=new Set(['/api/auth/status','/api/auth/login','/api/devices/pair','/api/devices/prove','/api/client-reports']);
+  const PUBLIC_API=new Set(['/api/auth/status','/api/auth/login','/api/devices/pair','/api/devices/prove','/api/client-reports',LINK_TUNNEL_ROUTE]);
   // Read-only access to an explicit path outside the project (e.g. a /tmp screenshot the agent just
   // produced). Unset, it follows the binding: on for loopback, off once other machines can connect —
   // including through `tailscale serve` or a reverse proxy, which reach a loopback binding too.
@@ -345,6 +353,17 @@ export async function createApp(options: AppOptions = {}) {
   const monitor=new ServiceMonitor({store,terminal,streams,agentProcesses:()=>reclaimerRef?.report()});
   monitor.observe(app);
   app.addHook('onRequest',async(request,reply)=>{
+    // A connection that came through a server link (docs/SERVER-LINKS.md §4): the tunnel authenticated it, so only
+    // this server's inbound switch and the link policy decide; no Host, Origin, cookie or token applies.
+    const linkedFrom=linkOfRequest(request.raw);
+    if (linkedFrom) {
+      request.headers['x-riffet-link']=linkedFrom;
+      reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer').header('Cache-Control','no-store');
+      if (!linksRef?.admits(linkedFrom)) throw new AppError('LINK_INBOUND_DISABLED','This server does not allow yours to operate it',403);
+      if (linkPolicy(request.method,request.routeOptions?.url)==='deny') throw new AppError('LINK_FORBIDDEN','This is not available through a server link',403);
+      if (request.headers.upgrade) linksRef.record(linkedFrom,{at:new Date().toISOString(),method:request.method,path:(request.raw.url??'').split('?')[0]!.slice(0,300),status:101,...linkOrigin(request.headers)});
+      return;
+    }
     auth.checkOrigin(request);
     reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer');
     if (isApiRequest(request)) {
@@ -357,6 +376,12 @@ export async function createApp(options: AppOptions = {}) {
       if (route===FILE_SITE_ROUTE) return;
       if (!route || !PUBLIC_API.has(route)) auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
     }
+  });
+  // What a linked server changed here, for this server's record of it (reads and streams it opened are not kept).
+  app.addHook('onResponse',async(request,reply)=>{
+    const from=linkOfRequest(request.raw);
+    if(!from||['GET','HEAD','OPTIONS'].includes(request.method))return;
+    linksRef?.record(from,{at:new Date().toISOString(),method:request.method,path:(request.raw.url??'').split('?')[0]!.slice(0,300),status:reply.statusCode,...linkOrigin(request.headers)});
   });
   registerProjectVisibilityHook(app,store);
   registerSessionVisibilityHook(app,id=>store.getSession(id));
@@ -548,6 +573,12 @@ export async function createApp(options: AppOptions = {}) {
   registerWorkbenchAppearanceRoutes(app,{auth,workbenchAppearance,documentProofs});
   registerDeviceRoutes(app,deps);
   registerChannelRoutes(app,deps);
+  // Links to other servers (docs/SERVER-LINKS.md). Dialing starts once the server can take forwarded connections.
+  const links=new LinkService({stateDir,serverId,name:()=>hostname().replace(/\.local$/i,'').slice(0,64)||'Riffet',version:SERVER_VERSION,protocol:PROTOCOL_INFO,httpServer:()=>app.server,log:message=>console.warn(message)});
+  linksRef=links;
+  links.onRevoke(id=>auth.revokeLink(id));
+  registerLinkRoutes(app,{links,auth,deviceName:id=>auth.device(id)?.name});
+  app.addHook('onReady',async()=>{links.start();});
   // Background pushes to iOS devices, straight to APNs with the owner's key (docs/DEVICES.md §3「后台推送」).
   const apns=new ApnsClient({stateDir,...(options.push?.transport?{transport:options.push.transport}:{}),...(options.push?.retryDelaysMs?{retryDelaysMs:options.push.retryDelaysMs}:{})});
   const push=new PushService({serverId,store,auth,devices,apns,timing:options.push?.timing,
@@ -692,12 +723,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,workItems,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,links,registeredRoutes,workItems,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */
@@ -705,3 +736,8 @@ const JOURNAL_SWEEP_MS = 6 * 60 * 60_000;
 /** Attachments and exited terminals older than this, and unreferenced, are removed. */
 const RETENTION_MS = 30 * 24 * 60 * 60_000;
 const MAINTENANCE_DELAY_MS = 60_000;
+/** The client of the other server that sent a linked request, as that server reported it (`links/forward.ts`). */
+function linkOrigin(headers:import('node:http').IncomingHttpHeaders):{origin?:string}{
+  const value=headers['x-riffet-link-origin'];
+  return typeof value==='string'&&value?{origin:value.slice(0,120)}:{};
+}

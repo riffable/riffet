@@ -22,6 +22,7 @@ import { BackupSection, DiagnosticsSection } from './SupportSections';
 import { SharesSection } from '../shares/SharesSection';
 import { ChannelsSection } from './ChannelsSection';
 import { DevicesSection } from './DevicesSection';
+import { LinksSection } from './LinksSection';
 import { TabsSection } from './TabsSection';
 import { ShortcutSettings } from './ShortcutSettings';
 import { shortcutsSuspended } from '../shortcuts';
@@ -256,6 +257,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'connection' && <ConnectionSection onLogout={onLogout} onOpenShares={() => void selectSection('shares')} />}
             {section === 'shares' && <SharesSection />}
             {section === 'devices' && <DevicesSection />}
+            {section === 'links' && <LinksSection />}
             {section === 'channels' && <ChannelsSection />}
             {section === 'service' && <><ReclaimSection settings={settings} onSaved={onSettingsChanged} onError={onError} /><Suspense fallback={sectionFallback}><ServiceStatusSection /></Suspense></>}
             {section === 'storage' && <Suspense fallback={sectionFallback}><StorageSection /></Suspense>}

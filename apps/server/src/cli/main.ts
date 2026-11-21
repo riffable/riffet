@@ -10,6 +10,7 @@ import { doctor } from './doctor.js';
 import { configure, open, resolveLaunchOptions, restart, savedLaunchArgs, serve, start, stop, type LaunchOptions } from './launch.js';
 import { logs } from './logs.js';
 import { pair } from './pair.js';
+import { linkInvite, linkJoin, linkList, linkRemove, linkSsh, linkStdio } from './link.js';
 import { buildPluginIndex, deletePluginData, developPlugin, inspectPlugin, installPlugin, listPlugins, manageSources, readPluginLogs, recoverPlugins, selectPlugin, uninstallPlugin, unlinkDevelopmentPlugin, updatePlugins, type PluginCliContext } from './plugins.js';
 import { installService, serviceStatus, uninstallService } from './service.js';
 import { list, resume } from './sessions.js';
@@ -130,6 +131,28 @@ export function buildProgram(relaunchArgs?: string[]): Command {
     .option('--url <url>', 'the address devices reach this server by (VPN, tunnel or HTTPS proxy)')
     .option('--json', 'machine-readable output, including the code')
     .action(async (_opts, command: Command) => { await pair(options(command)); });
+  const link = program.command('link').description('link with another Riffet server, so either one\'s workbench shows both');
+  link.command('invite').description('make a one-time link string for another server to join')
+    .option('--url <url>', 'the address the other server reaches this one by')
+    .option('--allow-in', 'let the other server operate this one')
+    .option('--json', 'machine-readable output')
+    .action(async (_opts, command: Command) => { await linkInvite(options(command)); });
+  link.command('join <link>').description('join the server that made a link string')
+    .option('--allow-in', 'let the other server operate this one')
+    .option('--json', 'machine-readable output')
+    .action(async (value: string, _opts, command: Command) => { await linkJoin({ ...options(command), link: value }); });
+  link.command('ssh <destination>').description('link with Riffet on a machine you reach over SSH; the tunnel runs over SSH too')
+    .option('--allow-in', 'let the other server operate this one')
+    .option('--remote-command <path>', 'how to run riffet on the other machine (default: riffet)')
+    .option('--json', 'machine-readable output')
+    .action(async (destination: string, _opts, command: Command) => { await linkSsh({ ...options(command), host: destination }); });
+  link.command('list').description('linked servers and their state')
+    .option('--json', 'machine-readable output')
+    .action(async (_opts, command: Command) => { await linkList(options(command)); });
+  link.command('remove <server>').description('end a link on both servers')
+    .action(async (server: string, _opts, command: Command) => { await linkRemove({ ...options(command), server }); });
+  link.command('stdio', { hidden: true }).option('--role <role>').option('--join <invite>')
+    .action(async (_opts, command: Command) => { await linkStdio(options(command)); });
   program.command('url').description('print the address of the workbench')
     .option('--login', 'include the access token, for signing in once')
     .action((_opts, command: Command) => {

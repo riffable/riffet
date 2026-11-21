@@ -9,6 +9,7 @@ import type {
   ApiError,
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
+  LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest,
   CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
@@ -885,6 +886,15 @@ export const api = {
   devices: (signal?: AbortSignal) => request<{ devices: DeviceInfo[]; currentId?: string }>('/api/devices', { signal }),
   /** The device must pair again to come back. */
   revokeDevice: (id: string) => request<void>(`/api/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /** Servers linked with this one (docs/SERVER-LINKS.md). */
+  links: (signal?: AbortSignal) => request<{ links: LinkInfo[] }>('/api/links', { signal }),
+  createLinkInvite: (input: LinkInviteRequest) => request<LinkInviteResult>('/api/links/invites', json('POST', input)),
+  joinLink: (input: LinkJoinRequest) => request<{ link: LinkInfo }>('/api/links/join', json('POST', input)),
+  /** Whether the other server may operate this one. */
+  updateLink: (serverId: string, inbound: boolean) => request<{ link: LinkInfo }>(`/api/links/${encodeURIComponent(serverId)}`, json('PATCH', { inbound })),
+  /** Ends the link on both servers. */
+  removeLink: (serverId: string) => request<{ removed: true }>(`/api/links/${encodeURIComponent(serverId)}`, { method: 'DELETE' }),
+  linkAudit: (serverId: string, signal?: AbortSignal) => request<{ entries: LinkAuditEntry[] }>(`/api/links/${encodeURIComponent(serverId)}/audit`, { signal }),
   /** The APNs key this server pushes to iPhones with; the key text is accepted, never returned. */
   pushKey: (signal?: AbortSignal) => request<PushKeyStatus>('/api/settings/push', { signal }),
   savePushKey: (input: PushKeyInput) => request<PushKeyStatus>('/api/settings/push', json('PUT', input)),

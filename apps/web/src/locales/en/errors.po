@@ -283,6 +283,16 @@ msgid "error.INVALID_INTERACTION_ANSWER"
 msgstr "The answer is invalid; choose again"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK"
+msgstr "This is not a complete Riffet link string; copy it again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_URL"
+msgstr "The address must start with http:// or https://"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/marks.json
 msgid "error.INVALID_MARK_NOTE"
 msgstr "The note exceeds 4 KiB"
@@ -371,6 +381,71 @@ msgstr "Invalid sync request; refresh"
 #: ../../i18n/errors/previews.json
 msgid "error.INVALID_VISUALIZATION"
 msgstr "{subject, select, file {A visualization preview must be an HTML file} text {A visualization preview must be an HTML text} other {A visualization preview must be HTML}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ADDRESS_REQUIRED"
+msgstr "The link string has no address to reach; use riffet link ssh instead"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXISTS"
+msgstr "Already linked with {name}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXPIRED"
+msgstr "The link string has expired or was already used; create a new one"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FORBIDDEN"
+msgstr "This can't be done through a server link; open the other server's own page"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_INBOUND_DISABLED"
+msgstr "The other server doesn't let this one operate it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_MISMATCH"
+msgstr "The other server's identity doesn't match the one it linked with"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_ALLOWED"
+msgstr "{name} doesn't let this server operate it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_FOUND"
+msgstr "No such linked server"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_OFFLINE"
+msgstr "{name} is offline"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_PROOF_INVALID"
+msgstr "The link string doesn't match the other server; create a new one"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_REMOVED"
+msgstr "The other server ended the link"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_SELF"
+msgstr "This link string was created on this server"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/marks.json

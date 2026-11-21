@@ -283,6 +283,16 @@ msgid "error.INVALID_INTERACTION_ANSWER"
 msgstr "答案无效，请重新选择"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK"
+msgstr "这不是完整的 Riffet 链接串，请重新复制"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_URL"
+msgstr "地址要以 http:// 或 https:// 开头"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/marks.json
 msgid "error.INVALID_MARK_NOTE"
 msgstr "备注超过 4 KiB"
@@ -371,6 +381,71 @@ msgstr "同步参数无效，请刷新"
 #: ../../i18n/errors/previews.json
 msgid "error.INVALID_VISUALIZATION"
 msgstr "{subject, select, file {交互预览必须是 HTML 文件} text {交互预览必须是 HTML 文本} other {交互预览必须是 HTML}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ADDRESS_REQUIRED"
+msgstr "链接串里没有可连的地址，请改用 riffet link ssh"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXISTS"
+msgstr "已经和 {name} 互联"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXPIRED"
+msgstr "链接串已过期或已用过，请重新生成"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FORBIDDEN"
+msgstr "这项操作不能经互联进行，请打开对方的网页"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_INBOUND_DISABLED"
+msgstr "对方未允许这台服务器操作它"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_MISMATCH"
+msgstr "对方的身份和互联时记录的不一致"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_ALLOWED"
+msgstr "{name} 未允许这台服务器操作它"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_FOUND"
+msgstr "没有这台互联的服务器"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_OFFLINE"
+msgstr "{name} 离线"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_PROOF_INVALID"
+msgstr "链接串和对方不匹配，请重新生成"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_REMOVED"
+msgstr "对方已断开互联"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_SELF"
+msgstr "这个链接串是在这台服务器上生成的"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/marks.json

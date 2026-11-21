@@ -5,6 +5,7 @@ import { networkInterfaces, hostname } from 'node:os';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors.js';
 import { mdnsNames } from './mdns-name.js';
+import { linkOfRequest } from './links/socket.js';
 import type { DevicePushRegistration, DeviceReport } from '../../../packages/contracts/src/index.js';
 
 /**
@@ -12,7 +13,9 @@ import type { DevicePushRegistration, DeviceReport } from '../../../packages/con
  * loopback binding too, so the peer address alone does not mean the request came from this machine.
  */
 export const proxiedRequest = (headers?: import('node:http').IncomingHttpHeaders): boolean =>
-  Boolean(headers && (headers['x-forwarded-for'] || headers.forwarded || headers['x-real-ip'] || headers['tailscale-user-login']));
+  // `x-riffet-link` is set by the server itself on requests that came through a link (`app.ts`); a client sending it
+  // only makes its own request count as remote.
+  Boolean(headers && (headers['x-forwarded-for'] || headers.forwarded || headers['x-real-ip'] || headers['tailscale-user-login'] || headers['x-riffet-link']));
 const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 /** Sent from this machine itself: a loopback peer, not relayed by a proxy, and addressed by a loopback name. */
@@ -44,9 +47,12 @@ export interface FileSiteScope { projectId: string; root: string; only?: string 
 export const FILE_SITE_ROUTE = '/api/file-sites/*';
 /** A preview left open over a working day keeps following its links; reopening it mints a fresh token. */
 const FILE_SITE_TTL_MS = 12 * 3600_000;
-/** Cookie callers keep their CSRF obligations; a paired device proves itself with a bearer token. */
-export type AuthKind = 'cookie' | 'device';
-export interface AuthContext { kind: AuthKind; cookie?: string; deviceId?: string }
+/**
+ * Cookie callers keep their CSRF obligations; a paired device proves itself with a bearer token; a linked server is
+ * the one whose pinned certificate opened the tunnel the connection came through (docs/SERVER-LINKS.md §4).
+ */
+export type AuthKind = 'cookie' | 'device' | 'link';
+export interface AuthContext { kind: AuthKind; cookie?: string; deviceId?: string; linkServerId?: string }
 
 const DEVICE_TOKEN = /^wkn_([0-9a-f]{16})_(.+)$/;
 /** Persisting every request would rewrite the file on each poll; the timestamp is in-memory between flushes. */
@@ -120,6 +126,8 @@ export class Auth {
     return hosts;
   }
   checkOrigin(request: FastifyRequest) {
+    // A tunneled connection is not a browser's: no Host to check, and the tunnel's TLS authenticated it.
+    if (linkOfRequest(request.raw)) return;
     // Absolute-form targets (`GET http://host/api/x`) are proxy syntax; the router would still
     // map them onto API routes, so only origin-form paths reach any handler.
     if (!(request.raw?.url ?? request.url ?? '/').startsWith('/')) throw new AppError('INVALID_REQUEST_TARGET','Request target must be an absolute path',400);
@@ -324,6 +332,8 @@ export class Auth {
    * carries no CSRF obligation — that check exists for cookies the browser attaches on its own.
    */
   authenticate(request: FastifyRequest, mutate = false): AuthContext {
+    const link=linkOfRequest(request.raw);
+    if (link) return {kind:'link',linkServerId:link};
     const device=this.bearer(request);
     if (device) { this.touchDevice(device); return {kind:'device',deviceId:device.id}; }
     const session=this.cookieSession(request),cookie=session?.cookie;
@@ -336,6 +346,7 @@ export class Auth {
     const context=this.authenticate(request);
     const keys:string[]=[];
     if(context.deviceId)keys.push(`device:${context.deviceId}`);
+    if(context.linkServerId)keys.push(`link:${context.linkServerId}`);
     // A cookie ends by logout or revoke-all even when it carries no device id (master-token sessions).
     const nonce=context.kind==='cookie'?this.cookieSession(request)?.nonce:undefined;
     if(nonce)keys.push(`cookie:${nonce}`);
@@ -353,6 +364,8 @@ export class Auth {
       }
     };
   }
+  /** Closes the streams a linked server holds open here: the link ended or lost its inbound switch. */
+  revokeLink(serverId: string) { this.closeStreams(`link:${serverId}`); }
   private closeStreams(key: string) {
     const listeners=this.revocations.get(key);
     this.revocations.delete(key);

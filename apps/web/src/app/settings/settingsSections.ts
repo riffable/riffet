@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconKeyboard, IconLaptop, IconLayers, IconMessagesSquare, IconPanelLeft, IconPanelRight, IconPencilLine, IconSend, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSquareKanban, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
+import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconKeyboard, IconLaptop, IconLayers, IconMessagesSquare, IconNetwork, IconPanelLeft, IconPanelRight, IconPencilLine, IconSend, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSquareKanban, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
 
 /** The settings dialog's box, shared with the frame that stands in while its chunk loads. */
 export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';
@@ -12,7 +12,7 @@ export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col 
  * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
  * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'shortcuts' | 'notifications' | 'titles' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'workitems' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'shortcuts' | 'notifications' | 'titles' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'workitems' | 'connection' | 'shares' | 'devices' | 'links' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
 /** The navigation's groups. 通用设置 and 个人资料 stand alone at the top, untitled; the others are titled. */
@@ -77,6 +77,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'connection', label: msg`连接与访问`, group: 'access', icon: IconLaptop },
   { id: 'shares', label: msg`会话分享`, group: 'access', icon: IconSquareArrowOutUpRight, parent: 'connection' },
   { id: 'devices', label: msg`设备管理`, group: 'access', icon: IconSmartphone },
+  { id: 'links', label: msg`互联`, group: 'access', icon: IconNetwork },
   { id: 'service', label: msg`服务管理`, group: 'server', icon: IconServer },
   { id: 'storage', label: msg`存储空间`, group: 'server', icon: IconDatabase },
   { id: 'backup', label: msg`备份与恢复`, group: 'server', icon: IconHardDriveDownload },

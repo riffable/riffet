@@ -42,6 +42,8 @@ Claude、Droid、DSH、TRAE、Git、JSON、Markdown、URL。
 | 后端 | Backend | |
 | 服务器 | Server | 客户端连接的 Riffet 服务器：地址、连接、配对、版本。不写「服务端」，也不单独写「服务」 |
 | 本机服务器 | Local server | 运行在这台电脑上的服务器 |
+| 互联 | Link | 两台服务器之间的长期信任关系：互联以后，任意一台的 Web 都能看到并操作另一台的会话。动作写「互联」「断开」。不写「连接」：「连接」指客户端连到服务器（[SERVER-LINKS.md](SERVER-LINKS.md)） |
+| 互联的服务器 | Linked server | 与本机服务器互联的另一台服务器 |
 | 服务 | Service | 只用于系统托管的后台服务（登录服务、launchd、systemd）、模型服务、分享服务；MCP 服务器沿用此写法 |
 | 提示词 | Prompt | |
 | 草稿 | Draft | |

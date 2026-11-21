@@ -283,6 +283,16 @@ msgid "error.INVALID_INTERACTION_ANSWER"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_URL"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/marks.json
 msgid "error.INVALID_MARK_NOTE"
 msgstr ""
@@ -370,6 +380,71 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/previews.json
 msgid "error.INVALID_VISUALIZATION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ADDRESS_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXISTS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_EXPIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_FORBIDDEN"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_INBOUND_DISABLED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_MISMATCH"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_ALLOWED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_OFFLINE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_PROOF_INVALID"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_REMOVED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_SELF"
 msgstr ""
 
 #. js-lingui-explicit-id

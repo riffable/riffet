@@ -430,3 +430,48 @@ export const PLUGIN_PAGE_BUDGET = {
   /** Row count above which a subpage adds a local filter input. */
   filterThreshold: 12,
 } as const;
+
+/** Server links (docs/SERVER-LINKS.md §6). */
+export const LINK_BUDGET = {
+  /** A link string is accepted this long after it was made, once. */
+  inviteTtlMs: 5 * 60_000,
+  /** Link strings waiting to be used at once; the oldest is dropped beyond this. */
+  pendingInvites: 8,
+  /** A tunnel's TLS handshake and its first control exchange must finish within this. */
+  handshakeMs: 10_000,
+  /** Tunnels not yet tied to a link (a handshake, or a join in progress) open at once; more are closed at once. */
+  pendingTunnels: 16,
+  /** HTTP/2 ping on each live tunnel; this many unanswered in a row drop it. */
+  pingMs: 15_000,
+  missedPings: 3,
+  /** The dialing side retries a dropped tunnel with exponential backoff between these. */
+  reconnectMinMs: 1_000,
+  reconnectMaxMs: 60_000,
+  /**
+   * HTTP/2 session memory per tunnel, in megabytes. Node's default of 10 resets a stream while a large upload is in
+   * flight (measured in `scripts/probe-link-tunnel.ts`); this covers the 36 MB request body limit with room.
+   */
+  sessionMemoryMb: 64,
+  /** A forwarded WebSocket message, either way; a session stream frame stays far below it. */
+  relayMessageBytes: 64 * 1024 * 1024,
+  /** Messages a browser sends before the peer has answered the upgrade. */
+  relayPendingBytes: 4 * 1024 * 1024,
+  /** One tunnel WebSocket frame; each write is split below the receiving server's 256 KB payload limit. */
+  tunnelFrameBytes: 128 * 1024,
+  /** What the dialing side accepts from the tunnel WebSocket in one message. */
+  tunnelMessageBytes: 4 * 1024 * 1024,
+  /** Bytes a relayed WebSocket may have waiting for a slow receiver; past it the relay closes with 1013, as the terminal socket does. */
+  relayBufferBytes: 8 * 1024 * 1024,
+  /** A control request inside the tunnel (hello, join, state, remove). */
+  controlBytes: 64 * 1024,
+  /** Forwarded connections open on one tunnel at once; more are refused with 503. */
+  maxStreams: 256,
+  /** A control request inside the tunnel (hello, state, remove) gives up after this. */
+  controlMs: 10_000,
+  /** Entries of the record of what a peer did here, per link; the oldest is dropped beyond this. */
+  auditEntries: 200,
+  /** A peer's name, as it reports it. */
+  nameChars: 64,
+  /** 设置 › 互联 rereads the links this often while it is open, to show a tunnel coming up or dropping. */
+  settingsPollMs: 5_000,
+} as const;
