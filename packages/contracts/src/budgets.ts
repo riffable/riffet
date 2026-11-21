@@ -350,6 +350,13 @@ export const PLUGIN_COMMAND_BUDGET = {
   keptResults: 64,
 } as const;
 
+/** Structured data queries from an isolated plugin view (docs/PLUGINS.md). */
+export const PLUGIN_QUERY_BUDGET = {
+  requestBytes: 64 * KIB,
+  resultBytes: MIB,
+  timeoutMs: 30_000,
+} as const;
+
 /** Plugin indexes the server reads (docs/PLUGINS.md「插件市场」). */
 export const PLUGIN_MARKET_BUDGET = {
   /** Sources a user may add; the built-in one is not counted. */

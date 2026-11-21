@@ -13,6 +13,7 @@ import { encodingFor, registerWebAssets, WorkbenchDocumentProofs } from './stati
 import { registerMathAssets } from './math-assets.js';
 import { registerDiagramAssets } from './diagram-assets.js';
 import { registerContentPreview } from './previews/content.js';
+import { registerPluginViewFrame } from './plugins/view-frame.js';
 import { applyProcessEnvironment, expandHome } from './environment.js';
 import { Store } from './store.js';
 import { startWalCheckpoints } from './wal-checkpoint.js';
@@ -109,6 +110,7 @@ import { TaskService } from './tasks/service.js';
 import { registerTaskRoutes } from './tasks/routes.js';
 import { isOpen } from './tasks/store.js';
 import { registerCommandRoutes } from './plugins/commands.js';
+import { registerQueryRoutes } from './plugins/queries.js';
 import { AppearanceService } from './appearance/index.js';
 import { attentionRead } from './work-items/assistant-tools.js';
 import { CapabilityCatalog } from './riffet-mcp/capability-catalog.js';
@@ -607,6 +609,7 @@ export async function createApp(options: AppOptions = {}) {
   registerDictationRoutes(app,deps);
   registerTaskRoutes(app,deps);
   registerCommandRoutes(app,deps);
+  registerQueryRoutes(app,deps);
   registerAppearanceRoutes(app,{appearance});
   registerOwnerRoutes(app,deps);
   registerRiffetMcpRoutes(app,deps);
@@ -640,6 +643,7 @@ export async function createApp(options: AppOptions = {}) {
   registerMathAssets(app);
   registerDiagramAssets(app);
   registerContentPreview(app);
+  registerPluginViewFrame(app);
   app.addHook('preClose',async()=>{for(const stream of streams)stream.end();});
   registerStatsRoutes(app,{store,auth,subscribe:listener=>stats.subscribe(listener),streams,
     profileLabel:(backendId,profileId)=>isNativeBackendId(backendId)?settings.getNativeBackendProfiles(backendId).profiles.find(profile=>profile.id===profileId)?.name:undefined,

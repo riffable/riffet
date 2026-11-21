@@ -3,11 +3,12 @@ import { useLingui } from '@lingui/react/macro';
 import type { BridgeViewContext, ViewContext } from '@riffet/plugin-web';
 import { Spinner } from '@/components/ui/controls';
 import { useDisplaySettings } from '@/lib/display-settings';
+import { onPluginData } from '@/lib/plugin-data-events';
 import { useTheme } from '@/lib/theme';
 import { useStores } from '../../app/state/stores';
 import type { IsolatedSource } from '../catalog';
 import type { BridgeGrant } from './bridgeHost';
-import { bootstrapDocument, pluginPolicy, readTheme } from './document';
+import { bootstrapStyle, pluginFrameUrl, pluginPolicy, readTheme } from './document';
 import { loadEntryCode } from './entry';
 import { attachFrame, type FrameChannel } from './frameHost';
 import { createIsolatedServices } from './services';
@@ -27,7 +28,7 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
   const frame = useRef<HTMLIFrameElement>(null);
   const channel = useRef<FrameChannel | undefined>(undefined);
   const loads = useRef(0);
-  const [page, setPage] = useState<string>();
+  const [loadedEntry, setLoadedEntry] = useState<{ key: string; code: string }>();
   // A failure is thrown into the error boundary around the view.
   const [, fail] = useState();
 
@@ -37,36 +38,47 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
   }), [context.serviceId, context.instanceId, context.projectId, context.sessionId, context.path, context.visible, i18n.locale]);
   const latest = useRef(current);
   latest.current = current;
+  const label = useRef(source.label);
+  label.current = source.label;
 
   const network = source.capabilities.includes('network');
+  const entryKey = JSON.stringify([source.pluginId, source.path, source.integrity, source.version]);
+  const code = loadedEntry?.key === entryKey ? loadedEntry.code : undefined;
   const services = useMemo(() => createIsolatedServices({
-    stores, context: () => latest.current, label: source.label, pluginId: source.pluginId,
+    stores, context: () => latest.current, label: () => label.current, pluginId: source.pluginId,
     // The frame has the keyboard focus only after the user clicked or tabbed into it.
-    active: () => frame.current !== null && document.activeElement === frame.current,
-  }), [stores, source.label, source.pluginId]);
-  // By content: a descriptor refresh gives `source` a new identity, and a new grant would close a channel the page cannot ask for again.
+    active: () => latest.current.visible && frame.current !== null && document.activeElement === frame.current,
+  }), [stores, source.pluginId]);
+  // A changed grant needs a fresh frame as well as a fresh channel: the old iframe already finished its handshake.
   const held = source.capabilities.join(',');
   const declared = source.commands.join(',');
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `held` and `declared` are the content of the two lists
-  const grant = useMemo<BridgeGrant>(() => ({ capabilities: new Set(source.capabilities), commands: new Set(source.commands), externalLinks: source.externalLinks === true }), [held, declared, source.externalLinks]);
+  const declaredQueries = source.queries.join(',');
+  const declaredViews = source.views.join(',');
+  const frameKey = JSON.stringify([entryKey, held, declared, declaredQueries, declaredViews, source.externalLinks === true]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keys capture the content of the lists
+  const grant = useMemo<BridgeGrant>(() => ({ capabilities: new Set(source.capabilities), commands: new Set(source.commands), queries: new Set(source.queries), views: new Set(source.views), externalLinks: source.externalLinks === true }), [held, declared, declaredQueries, declaredViews, source.externalLinks]);
 
   useEffect(() => {
     const controller = new AbortController();
     loadEntryCode(source, controller.signal).then(
-      (code) => { if (!controller.signal.aborted) setPage(bootstrapDocument({ code, network, theme: readTheme(), locale: latest.current.locale })); },
+      (code) => { if (!controller.signal.aborted) setLoadedEntry({ key: entryKey, code }); },
       (error: unknown) => { if (!controller.signal.aborted) fail(() => { throw error; }); },
     );
     return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the entry is read again for another file or content, not for a new object
-  }, [source.pluginId, source.path, source.integrity, source.version, network]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- entryKey captures the fields the loader reads
+  }, [entryKey]);
 
   // Before the frame is laid out: the page asks for its channel while it loads, and an effect that ran after that would miss it.
   useLayoutEffect(() => {
-    if (page === undefined) return;
-    const attached = attachFrame({ frame: () => frame.current?.contentWindow ?? null, grant, services });
+    if (code === undefined) return;
+    loads.current = 0;
+    const attached = attachFrame({
+      frame: () => frame.current?.contentWindow ?? null, grant, services,
+      bootstrap: () => ({ code, style: bootstrapStyle(readTheme()), locale: latest.current.locale }),
+    });
     channel.current = attached;
     return () => { attached.dispose(); channel.current = undefined; };
-  }, [page, grant, services]);
+  }, [frameKey, code, grant, services]);
 
   useEffect(() => { channel.current?.push('context', current); }, [current]);
   useEffect(() => {
@@ -75,16 +87,22 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
     let previous = revision();
     return stores.lists.subscribe(() => { const next = revision(); if (next !== previous) { previous = next; channel.current?.push('data', { kind: 'sessions', projectId: context.projectId! }); } });
   }, [stores, source.capabilities, context.projectId]);
+  useEffect(() => onPluginData((event) => {
+    if (event === undefined || event.pluginId === source.pluginId) {
+      channel.current?.push('plugin.data', event?.topic ? { topic: event.topic } : {});
+    }
+  }), [source.pluginId]);
   useEffect(() => {
     // The document has applied the new palette by the next frame.
     const id = requestAnimationFrame(() => channel.current?.push('theme', readTheme()));
     return () => cancelAnimationFrame(id);
   }, [theme.resolved, theme.themeId, theme.revision, theme.paletteKey, textSize]);
 
-  if (page === undefined) return <div className="flex min-h-0 flex-1 items-center justify-center"><Spinner /></div>;
+  if (code === undefined) return <div className="flex min-h-0 flex-1 items-center justify-center"><Spinner /></div>;
   return (
     <iframe
-      ref={frame} title={source.label} srcDoc={page} sandbox="allow-scripts" referrerPolicy="no-referrer"
+      key={frameKey}
+      ref={frame} title={source.label} src={pluginFrameUrl(network)} sandbox="allow-scripts" referrerPolicy="no-referrer"
       // The page's own policy again, on the embedding side (embedded enforcement): a browser that supports it also refuses a page the frame is navigated to unless that page opts in. Others ignore the attribute.
       {...{ csp: pluginPolicy(network) }}
       className="min-h-0 w-full flex-1 border-0"

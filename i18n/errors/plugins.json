@@ -46,5 +46,29 @@
   "PLUGIN_TASKS_RUNNING": {
     "zh": "请等待运行中的任务结束后再重载插件",
     "en": "Wait for running tasks before reloading this plugin"
+  },
+  "QUERY_CANCELLED": {
+    "zh": "查询已取消",
+    "en": "Query cancelled"
+  },
+  "QUERY_FAILED": {
+    "zh": "插件查询失败：{message}",
+    "en": "Plugin query failed: {message}"
+  },
+  "QUERY_NOT_FOUND": {
+    "zh": "找不到这个插件查询",
+    "en": "Unknown plugin query"
+  },
+  "QUERY_TIMEOUT": {
+    "zh": "插件查询超时",
+    "en": "The plugin query timed out"
+  },
+  "QUERY_TOO_LARGE": {
+    "zh": "插件查询结果过大",
+    "en": "The plugin query result is too large"
+  },
+  "QUERY_UNAVAILABLE": {
+    "zh": "这个插件查询当前不可用",
+    "en": "This plugin query is currently unavailable"
   }
 }

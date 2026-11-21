@@ -1,0 +1,59 @@
+{
+  "id": "example.workbench-sample",
+  "vendor": "Example",
+  "name": "Workbench sample",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "defaultEnabled": false,
+  "title": {
+    "zh-Hans": "工作台样例",
+    "en": "Workbench sample"
+  },
+  "description": {
+    "zh-Hans": "演示顶层工作台视图、只读数据查询与增量推送。",
+    "en": "Demonstrates a top-level main view, read-only plugin queries, and invalidation pushes."
+  },
+  "hostApi": {
+    "server": ">=1",
+    "web": ">=1"
+  },
+  "entries": {
+    "server": "server/index.mjs",
+    "web": "web/index.js"
+  },
+  "activation": ["view", "command"],
+  "contributes": {
+    "views": [
+      {
+        "id": "example.workbench-sample/main",
+        "title": {
+          "zh-Hans": "工作台样例",
+          "en": "Workbench sample"
+        },
+        "locations": ["main"],
+        "clients": ["web"],
+        "instances": "single",
+        "requires": ["bridge.plugin.query", "bridge.commands.execute"]
+      }
+    ],
+    "queries": [
+      {
+        "id": "example.workbench-sample/summary",
+        "title": {
+          "zh-Hans": "摘要",
+          "en": "Summary"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "id": "example.workbench-sample/bump",
+        "title": {
+          "zh-Hans": "计数加一",
+          "en": "Increment counter"
+        },
+        "scope": "global"
+      }
+    ]
+  }
+}

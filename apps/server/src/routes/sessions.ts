@@ -258,7 +258,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
 }
 
 const LIST_CHANGE_DEBOUNCE_MS = 250;
-type ListEvent = 'changed' | 'notice' | 'task' | 'integrations' | 'owner' | 'devices' | 'channels' | 'plugin-approvals' | 'servers';
+type ListEvent = 'changed' | 'notice' | 'task' | 'integrations' | 'plugin-data' | 'owner' | 'devices' | 'channels' | 'plugin-approvals' | 'servers';
 
 /** Both transports notify clients of the same revisions and changes. */
 function subscribeLists({ store, notices, tasks, plugins, owner, devices, channels, pluginApprovals, links }: RouteDeps, request: FastifyRequest, unwatch: () => void, write: (event: ListEvent, json: string) => void): () => void {
@@ -289,6 +289,7 @@ function subscribeLists({ store, notices, tasks, plugins, owner, devices, channe
       emit('task', task);
     }),
     plugins.onChange(() => emit('integrations', {})),
+    plugins.onViewData(event => emit('plugin-data', event)),
     owner.subscribe(record => emit('owner', record)),
     devices.onChange(() => emit('devices', {})),
     channels.onChange(() => emit('channels', {})),

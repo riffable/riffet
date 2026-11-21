@@ -28,6 +28,8 @@ export type ChildToHost = {
   'host.exec': { params: { command: string; args: string[]; timeoutMs?: number; maxOutputBytes?: number; env?: Record<string, string> }; result: { code: number | null; stdout: string; stderr: string; timedOut: boolean; truncated: boolean } };
   /** `tasks.run`: the package's own task providers only; `confirm` is the plan fingerprint the user approved. */
   'host.tasks.start': { params: { projectId: string; actionId: string; params?: TaskParams; providerId?: string; confirm?: string }; result: Task };
+  /** Notifies mounted views of this plugin that cached query data changed. */
+  'host.views.invalidate': { params: { topic?: string }; result: null };
 };
 
 export interface ChildContributions {
@@ -36,6 +38,8 @@ export interface ChildContributions {
   actions: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   /** The ids of the commands it handles (`Contributions.commands`); the server checks each against the manifest. */
   commands: string[];
+  /** The ids of the queries it handles (`Contributions.queries`); absent from a child written before queries existed. */
+  queries?: string[];
   /** The ids of the avatar styles it provides (`Contributions.avatarStyles`); the server checks each against the manifest. */
   avatarStyles: string[];
   status: boolean;
@@ -85,4 +89,7 @@ export type HostToChild = {
   'avatar.generate': { params: { id: string; request: AvatarStyleRequest }; result: string };
   /** `message` and `locale` are absent from a server written before the message menu, `selection` from one written before the selection menu. */
   'command.run': { params: { id: string; projectId?: string; sessionId?: string; args: Record<string, string | number | boolean>; message?: CommandMessage; selection?: CommandSelection; locale?: string; timeoutMs: number }; result: PluginCommandResult };
+  /** Read-only structured data query for this plugin's views. */
+  'query.run': { params: { id: string; projectId?: string; sessionId?: string; params: Record<string, unknown>; locale?: string; resultBytes: number }; result: string };
+  'query.cancel': { params: { requestId: number }; result: null };
 };

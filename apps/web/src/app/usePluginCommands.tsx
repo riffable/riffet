@@ -52,12 +52,13 @@ export function usePluginCommands({ project, sessionId, openSession }: {
   const projectTypes = useProjectTypes(project?.id);
   const hasGit = useHasGit(project);
   const projectId = project?.id;
+  const projectSystem = project?.system;
   const hasSession = Boolean(project && sessionId);
 
   const all = useMemo(() => enabledCommands(descriptors, i18n.locale), [descriptors, i18n.locale]);
   const offered = useMemo(
-    () => all.filter((command) => offersCommand(command, { hasProject: Boolean(projectId), hasSession, projectTypes, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES })),
-    [all, projectId, hasSession, projectTypes, hasGit],
+    () => all.filter((command) => offersCommand(command, { hasProject: Boolean(projectId), hasSession, projectSystem, projectTypes, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES })),
+    [all, projectId, hasSession, projectSystem, projectTypes, hasGit],
   );
 
   const [form, setForm] = useState<{ command: PluginCommand; context: RunContext }>();
@@ -109,7 +110,10 @@ export function usePluginCommands({ project, sessionId, openSession }: {
 
   /** Runs with the defaults, or asks first when a parameter has none. */
   const start = useCallback((command: PluginCommand) => {
-    const context: RunContext = command.scope === 'global' ? {} : { ...(projectId ? { projectId } : {}), ...(command.scope === 'session' && sessionId ? { sessionId } : {}) };
+    const context: RunContext = {
+      ...(projectId && (command.scope !== 'global' || command.when?.projectSystem) ? { projectId } : {}),
+      ...(command.scope === 'session' && sessionId ? { sessionId } : {}),
+    };
     if (needsForm(command)) setForm({ command, context });
     else void run(command, context, defaultArgs(command));
   }, [projectId, sessionId, run]);

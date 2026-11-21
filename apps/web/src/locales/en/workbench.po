@@ -2406,6 +2406,10 @@ msgstr "No projects yet"
 msgid "这个任务的项目已移除或归档"
 msgstr "This task’s project was removed or archived"
 
+#: src/app/Workbench.tsx
+msgid "这个插件视图当前不可用"
+msgstr "This plugin view is currently unavailable"
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"
 msgid "进行中"

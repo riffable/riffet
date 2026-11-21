@@ -29,6 +29,8 @@ import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
 import { useLists, useSettings, useStores, useWorkItems } from './state/stores';
 import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
+import type { ViewEntry } from '@/plugins/catalog';
+import { viewIcon } from '@/plugins/viewIcons';
 import { useTabs } from './tabs/useTabs';
 import type { SettingsSection } from './settings/settingsSections';
 import { SidebarUpdateButton } from './SidebarUpdateButton';
@@ -76,6 +78,10 @@ interface Props {
   onOpenExtensions: () => void;
   onOpenPlugins: () => void;
   pluginsActive?: boolean;
+  /** Top-level (`location: 'main'`) plugin views offered in the sidebar or 更多 menu. */
+  mainViews?: readonly ViewEntry[];
+  activeMainViewId?: string;
+  onOpenMainView?: (viewId: string) => void;
   onOpenSearch: () => void;
   statsActive?: boolean;
   automationsActive?: boolean;
@@ -287,6 +293,8 @@ type SidebarEntry =
 
 export function Sidebar(props: Props) {
   const { t } = useLingui();
+  const sidebarHint = useShortcutHint('toggleSidebar');
+  const searchHint = useShortcutHint('search');
   // `timeBucket` reads the active catalog directly, so the timeline must recompute on a switch.
   const locale = useLocale();
   const { projects, sessions, selectedProjectId, selectedSessionId } = props;
@@ -303,8 +311,6 @@ export function Sidebar(props: Props) {
   };
   const tabStyle = useTabs((state) => state.style);
   const [storedSort, setStoredSort] = useState<SidebarSort>(() => readStored(SORT_KEY) === 'tabs' ? 'tabs' : 'activity');
-  const sidebarHint = useShortcutHint('toggleSidebar');
-  const searchHint = useShortcutHint('search');
   const setSort = (value: string) => {
     const next: SidebarSort = value === 'tabs' ? 'tabs' : 'activity';
     writeStored(SORT_KEY, next === 'tabs' ? next : undefined);
@@ -503,6 +509,8 @@ export function Sidebar(props: Props) {
   const owner = useLists((state) => state.owner);
   const linkedStatus = useLists((state) => state.linkedStatus);
   const sidebarPinned = useSettings((settings) => settings.sidebarPinned);
+  const mainViews = props.mainViews ?? [];
+  const mainViewMap = useMemo(() => new Map(mainViews.map((view) => [view.id, view])), [mainViews]);
   const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
     ...(props.onOpenAssistant ? { assistant: {
       open: props.onOpenAssistant, active: props.assistantActive,
@@ -519,9 +527,22 @@ export function Sidebar(props: Props) {
     extensions: { open: props.onOpenExtensions, active: props.extensionsActive },
     stats: { open: props.onOpenStats, active: props.statsActive },
   };
-  const { pinned, more } = splitSidebarDestinations(sidebarPinned, WEB_SIDEBAR_DESTINATIONS.filter((id) => destinations[id]));
+  const offeredIds: string[] = [
+    ...WEB_SIDEBAR_DESTINATIONS.filter((id) => destinations[id]),
+    ...(props.onOpenMainView ? mainViews.map((view) => view.id) : []),
+  ];
+  const { pinned, more } = splitSidebarDestinations(sidebarPinned, offeredIds);
+  const destinationOf = (id: string) => {
+    if (id in SIDEBAR_DESTINATION_META) {
+      const meta = SIDEBAR_DESTINATION_META[id as WebSidebarDestination];
+      const entry = destinations[id as WebSidebarDestination]!;
+      return { icon: meta.icon, label: t(meta.label), open: entry.open, active: entry.active, trailing: entry.trailing };
+    }
+    const view = mainViewMap.get(id)!;
+    return { icon: viewIcon(view), label: view.title, open: () => props.onOpenMainView?.(view.id), active: props.activeMainViewId === view.id, trailing: undefined };
+  };
   // The page open behind the menu marks the row that reaches it.
-  const moreActive = more.some((id) => destinations[id]!.active);
+  const moreActive = more.some((id) => destinationOf(id).active);
 
   const offlineBanner = props.stale?.mode === 'offline' && (
     <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{offlineLabel(props.stale.savedAt)}</Notice>
@@ -560,18 +581,17 @@ export function Sidebar(props: Props) {
           <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{searchHint}</span>
         </button>
         {pinned.map((id) => {
-          const { icon: Icon, label } = SIDEBAR_DESTINATION_META[id];
-          const entry = destinations[id]!;
+          const { icon: Icon, label, open, active, trailing } = destinationOf(id);
           return (
             <button
               key={id}
               type="button"
-              aria-current={entry.active ? 'page' : undefined}
-              onClick={entry.open}
-              className={mobile ? cn(mobileNavRow, entry.active && 'bg-active') : cn(navRow, entry.active && 'bg-active text-fg')}
+              aria-current={active ? 'page' : undefined}
+              onClick={open}
+              className={mobile ? cn(mobileNavRow, active && 'bg-active') : cn(navRow, active && 'bg-active text-fg')}
             >
-              <Icon className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />{t(label)}
-              {entry.trailing}
+              <Icon className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />{label}
+              {trailing}
             </button>
           );
         })}
@@ -583,9 +603,8 @@ export function Sidebar(props: Props) {
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" className="w-56">
             {more.map((id) => {
-              const { icon: Icon, label } = SIDEBAR_DESTINATION_META[id];
-              const entry = destinations[id]!;
-              return <DropdownMenuItem key={id} aria-current={entry.active ? 'page' : undefined} onSelect={entry.open}><Icon />{t(label)}{entry.trailing}</DropdownMenuItem>;
+              const { icon: Icon, label, open, active, trailing } = destinationOf(id);
+              return <DropdownMenuItem key={id} aria-current={active ? 'page' : undefined} onSelect={open}><Icon />{label}{trailing}</DropdownMenuItem>;
             })}
             {more.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={props.onCustomizeSidebar}><IconSettings2 /><Trans>自定义侧栏</Trans></DropdownMenuItem>

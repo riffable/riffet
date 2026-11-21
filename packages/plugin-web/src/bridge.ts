@@ -106,6 +106,10 @@ export interface BridgeMethods {
   'files.read': { params: { path?: string; offset?: number; length?: number }; result: BridgeFileBytes };
   /** Previews a file of the view's own project; `path` is relative to the project root. */
   'navigation.openPath': { params: { path: string }; result: null };
+  /** Opens another declared view (`main` or `sidebar`) of this package, after a user action in the view. */
+  'navigation.openView': { params: { viewId: string }; result: null };
+  /** Opens the personal assistant page, after a user action in the view. */
+  'navigation.openAssistant': { params: undefined; result: null };
   /**
    * Opens an `http:` or `https:` address (at most `BRIDGE_LIMITS.url` characters, no credentials in it) in the user's browser: a
    * new tab on the web, the default browser on the Mac. After a user action in the view, and only for a view whose `requires` lists
@@ -116,6 +120,8 @@ export interface BridgeMethods {
   'notify.error': { params: { text: string }; result: null };
   /** Runs a command the package declares (`contributes.commands`) and answers what the server did: `{ kind: 'done', message? }`, `{ kind: 'open', ... }` or `{ kind: 'task', taskId }` (`CommandResult`). The host takes no action of its own from it. */
   'commands.execute': { params: { id: string; args?: Record<string, string | number | boolean> }; result: BridgeCommandResult };
+  /** Calls a read-only structured query declared by this package (`contributes.queries`). */
+  'plugin.query': { params: { id: string; params?: Record<string, unknown> }; result: unknown };
 }
 
 export type BridgeMethod = keyof BridgeMethods;
@@ -126,6 +132,8 @@ export interface BridgeEvents {
   theme: BridgeTheme;
   /** Data in this view's project changed; reread only the pages in use. */
   data: { kind: 'sessions'; projectId: string };
+  /** This plugin's server invalidated cached query data (`host.views.invalidate`). */
+  'plugin.data': { topic?: string };
 }
 
 export type BridgeEvent = keyof BridgeEvents;
@@ -147,10 +155,13 @@ export const BRIDGE_CAPABILITY: Readonly<Record<BridgeMethod, string | undefined
   'files.read': undefined,
   'navigation.openSession': undefined,
   'navigation.openPath': undefined,
+  'navigation.openView': undefined,
+  'navigation.openAssistant': undefined,
   'navigation.openExternal': undefined,
   'notify.info': undefined,
   'notify.error': undefined,
   'commands.execute': undefined,
+  'plugin.query': undefined,
 };
 
 export type BridgeErrorCode =

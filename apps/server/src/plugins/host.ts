@@ -32,6 +32,8 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   streamModel?: (request: Parameters<NonNullable<NonNullable<PluginHost['models']>['stream']>>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
   /** The model uses this plugin declares: `use` may name these only. */
   ownModelUses?: readonly ModelUseDeclaration[];
+  /** Notifies mounted views of this plugin that cached query data changed. */
+  invalidateViews?: (topic?: string) => void;
   /** Hands an event to the 助理's delegations (`host.assistant.emit`); the topic has been checked against `ownAssistantEvents`. Absent for an isolated installed package, which gets none. */
   emitAssistantEvent?: (topic: string, payload: unknown, key: string | undefined) => void;
   /** The assistant event topics this plugin declares: `emit` may name these only. */
@@ -90,6 +92,7 @@ export function createPluginHost(id: PluginManifest['id'], options: {
       request: request => options.approvals!.request(id, request),
       withdraw: approvalId => options.approvals!.withdraw(id, approvalId),
     } } : {}),
+    ...(options.invalidateViews ? { views: { invalidate: topic => options.invalidateViews!(topic) } } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };
 }

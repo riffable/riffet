@@ -114,10 +114,10 @@ export function orderViews(entries: readonly ViewEntry[], order: readonly string
 export function useSessionViews(facts: ViewFacts): ViewEntry[] {
   const catalog = useViewCatalog();
   const order = useViewPrefs((state) => state.order);
-  const { hasProject, hasSession, projectType, capabilities } = facts;
+  const { hasProject, hasSession, projectType, projectSystem, projectTypes, capabilities } = facts;
   return useMemo(
-    () => orderViews(catalog.filter((view) => view.location === 'session-view' && matches(view.when, { hasProject, hasSession, projectType, capabilities })), order),
-    [catalog, order, hasProject, hasSession, projectType, capabilities],
+    () => orderViews(catalog.filter((view) => view.location === 'session-view' && matches(view.when, { hasProject, hasSession, projectSystem, projectType, projectTypes, capabilities })), order),
+    [catalog, order, hasProject, hasSession, projectSystem, projectType, projectTypes, capabilities],
   );
 }
 

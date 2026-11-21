@@ -39,6 +39,10 @@ export interface BridgeServices {
   active(): boolean;
   openSession(sessionId: string): void;
   openPath(path: string): void;
+  /** Opens a view of this package (a `main` page or a `sidebar` panel). */
+  openView?(viewId: string): boolean;
+  /** Navigates to the personal assistant conversation, when available. */
+  openAssistant?(): boolean;
   /** Opens an `http(s)` address in a new browser tab; the bridge has checked the address and the user's action. */
   openExternal?(url: string): void;
   /** Bytes of a file of the view's project, read as the user reads it; absent where the host cannot read files. */
@@ -46,12 +50,16 @@ export interface BridgeServices {
   notify(tone: 'info' | 'error', text: string): void;
   /** Runs a command of the package through the server and answers what it answered; absent where the host has no command path, which answers `unsupported`. */
   execute?(commandId: string, args: Record<string, string | number | boolean> | undefined, signal: AbortSignal): Promise<BridgeCommandResult>;
+  /** Runs a declared read-only query of the package through the server. */
+  query?(queryId: string, params: Record<string, unknown> | undefined, signal: AbortSignal): Promise<unknown>;
 }
 
 /** What the package holds: the grant of the installed version, or what a trusted development package asks for, and what it declares. */
 export interface BridgeGrant {
   capabilities: ReadonlySet<string>;
   commands: ReadonlySet<string>;
+  queries?: ReadonlySet<string>;
+  views?: ReadonlySet<string>;
   /** The view lists `bridge.navigation.openExternal` in its `requires`. */
   externalLinks?: boolean;
 }
@@ -142,7 +150,16 @@ function page<T>(params: unknown, keys: string[], values: readonly T[]): BridgeP
   return { items: values.slice(offset, end), ...(end < values.length ? { next: end } : {}) };
 }
 function hostInfo(services: BridgeServices): BridgeHostInfo {
-  const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary).filter(method => method !== 'files.read' || services.readFile).filter(method => method !== 'navigation.openExternal' || services.openExternal);
+  const methods = Object.keys(BRIDGE_CAPABILITY)
+    .filter(method => method !== 'projects.list' || services.projects)
+    .filter(method => method !== 'sessions.list' || services.sessions)
+    .filter(method => method !== 'sessions.runs' || services.runs)
+    .filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary)
+    .filter(method => method !== 'files.read' || services.readFile)
+    .filter(method => method !== 'plugin.query' || services.query)
+    .filter(method => method !== 'navigation.openView' || services.openView)
+    .filter(method => method !== 'navigation.openAssistant' || services.openAssistant)
+    .filter(method => method !== 'navigation.openExternal' || services.openExternal);
   return { platform: 'web', webApiVersion: 1, bridgeVersion: BRIDGE_VERSION, baseStyleVersion: PLUGIN_BASE_STYLE_VERSION, renderers: ['tasks', 'list', 'form', 'detail'], methods, execution: { server: services.context().serviceId, client: 'web' } };
 }
 
@@ -221,6 +238,21 @@ const methods: Methods = {
     call.services.openPath(path);
     return null;
   },
+  'navigation.openView': (params, call) => {
+    const viewId = text(only(params, ['viewId']), 'viewId', 200);
+    interacting(call);
+    if (!call.grant.views?.has(viewId)) throw new Failure('forbidden', 'The package does not declare this view');
+    if (!call.services.openView) throw new Failure('unsupported', 'This host cannot open views');
+    if (!call.services.openView(viewId)) throw new Failure('not_found', 'This view is not available here');
+    return null;
+  },
+  'navigation.openAssistant': (params, call) => {
+    if (params !== undefined && !(isRecord(params) && Object.keys(params).length === 0)) throw invalid('takes no params');
+    interacting(call);
+    if (!call.services.openAssistant) throw new Failure('unsupported', 'This host has no assistant surface');
+    if (!call.services.openAssistant()) throw new Failure('not_found', 'No assistant is available here');
+    return null;
+  },
   'navigation.openExternal': (params, call) => {
     const url = externalUrl(only(params, ['url']));
     interacting(call);
@@ -239,6 +271,15 @@ const methods: Methods = {
     const args = input.args;
     if (args !== undefined && !(isRecord(args) && Object.values(args).every((value) => ['string', 'number', 'boolean'].includes(typeof value)))) throw invalid('args must map names to text, numbers or booleans');
     return services.execute(id, args as Record<string, string | number | boolean> | undefined, signal);
+  },
+  'plugin.query': (params, { services, grant, signal }) => {
+    const input = only(params, ['id', 'params']);
+    const id = text(input, 'id', 200);
+    if (!grant.queries?.has(id)) throw new Failure('forbidden', 'The package does not declare this query');
+    if (!services.query) throw new Failure('unsupported', 'This host has no query path');
+    const queryParams = input.params;
+    if (queryParams !== undefined && !isRecord(queryParams)) throw invalid('params must be an object');
+    return services.query(id, queryParams as Record<string, unknown> | undefined, signal);
   },
 };
 

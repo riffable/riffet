@@ -111,6 +111,8 @@ export interface Contributions {
   agentBackends?: AgentBackend[];
   /** Keyed by command id; each is declared in the manifest's `contributes.commands`. Run by `POST /api/integrations/:id/commands/:name` after the server has checked the caller, the scope, `when` and the arguments. */
   commands?: Record<string, CommandHandler>;
+  /** Keyed by query id; each is declared in the manifest's `contributes.queries`. Run by `POST /api/integrations/:id/queries/:name` for this plugin's views. */
+  queries?: Record<string, PluginQueryHandler>;
   /**
    * Services other plugins can use, by name (`/^[a-z0-9][a-z0-9.-]{0,63}$/`), each with a semver `version` and its methods. A
    * consumer must list this plugin in its `requires` and asks `host.services.get`. In-process packages only, including explicitly trusted installs: an
@@ -175,6 +177,22 @@ export interface PluginApprovalHandler {
    * removes the approval. A restart in between keeps it open, so a decision must be safe to run again.
    */
   decide(id: string, actionId: string, context: PluginApprovalContext): Promise<PluginApprovalResult | void>;
+}
+
+export interface PluginQueryContext {
+  readonly projectId?: string;
+  readonly sessionId?: string;
+  /** Plain JSON parameters sent by the view; validated by the query handler. */
+  readonly params: Readonly<Record<string, unknown>>;
+  /** The client's language as a BCP-47 tag, when sent. */
+  readonly locale?: string;
+  /** Aborts when the client disconnects, the call times out, or the plugin is turned off. */
+  readonly signal: AbortSignal;
+}
+
+export interface PluginQueryHandler {
+  /** Returns plain JSON-serializable data (at most 1 MB serialized). */
+  run(context: PluginQueryContext): Promise<unknown> | unknown;
 }
 
 // ── The plugin's page (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────────────────
@@ -369,6 +387,8 @@ export interface PluginHost {
      */
     saveImage?(sessionId: string, image: { name: string; mimeType: string; data: Buffer }): Promise<{ id: string; path: string }>;
   };
+  /** Notifies mounted views of this plugin that cached query data changed (`plugin.data` bridge push). Absent on a host that predates it. */
+  views?: { invalidate(topic?: string): void };
   /**
    * Tells the personal assistant something happened (docs/ASSISTANT.md §7.3). `topic` is one of this plugin's
    * `contributes.assistantEvents` ids (`<pluginId>/<name>`); anything else throws. Every open delegation subscribed to

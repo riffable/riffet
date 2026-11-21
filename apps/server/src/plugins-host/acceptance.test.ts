@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppearanceCatalog, PluginDescriptor, PluginsResponse } from '../../../../packages/contracts/src/index.js';
+import { PLUGIN_QUERY_BUDGET, PLUGIN_QUERY_ROUTE, type AppearanceCatalog, type PluginDescriptor, type PluginsResponse } from '../../../../packages/contracts/src/index.js';
 import { packPlugin, tarball } from '../../../../scripts/pack-plugin.js';
 import { readDirectory } from './archive.js';
 import { createApp } from '../app.js';
@@ -30,13 +30,14 @@ async function temp(): Promise<string> {
 async function boot(devPlugins: string[] = [], existingStateDir?: string, auth = false) {
   const stateDir = existingStateDir ?? await temp();
   if (devPlugins.length) vi.stubEnv('RIFFET_DEV_PLUGINS', devPlugins.join(':'));
-  const { app } = await createApp({ stateDir, auth, cliPath: '/nonexistent/cursor-agent' });
+  const { app, plugins } = await createApp({ stateDir, auth, cliPath: '/nonexistent/cursor-agent' });
   cleanups.push(() => app.close());
   const status = await app.inject({ method: auth ? 'POST' : 'GET', url: auth ? '/api/auth/login' : '/api/auth/status', headers: { host: '127.0.0.1:4317' }, ...(auth ? { payload: { token: (await readFile(join(stateDir, 'access-token'), 'utf8')).trim() } } : {}) });
   const cookie = String(status.headers['set-cookie']).split(';')[0]!;
   const csrf = (status.json() as { csrfToken: string }).csrfToken;
+  const authHeaders = { cookie, 'x-csrf-token': csrf };
   const call = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown, headers: Record<string, string> = {}, remoteAddress?: string) => app.inject({
-    method, url, headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, ...headers }, ...(payload === undefined ? {} : { payload: payload as object }),
+    method, url, headers: { host: '127.0.0.1:4317', ...authHeaders, ...headers }, ...(payload === undefined ? {} : { payload: payload as object }),
     ...(remoteAddress ? { remoteAddress } : {}),
   });
   const upload = (archive: Buffer, grant: string[], name = 'package.tgz', fields: Record<string, string> = {}, options: { remoteAddress?: string; headers?: Record<string, string> } = {}) => {
@@ -47,7 +48,7 @@ async function boot(devPlugins: string[] = [], existingStateDir?: string, auth =
   };
   const list = async () => ((await call('GET', '/api/integrations')).json() as PluginsResponse).integrations;
   const row = async (id: string) => (await list()).find(item => item.id === id) as PluginDescriptor;
-  return { app, stateDir, call, upload, list, row };
+  return { app, stateDir, call, upload, list, row, plugins, authHeaders };
 }
 
 /** A copy of a sample with one file replaced and a new version, packed (without the packer's own checks, so the server's are what is tested). */
@@ -75,6 +76,61 @@ async function gateway(): Promise<{ url: string; asked: string[] }> {
 }
 
 describe('the sample packages, installed through the HTTP API', () => {
+  it('runs a declared query in the installed package and reports changes to its views', async () => {
+    const { app, call, upload, plugins } = await boot([], undefined, true);
+    const pluginId = 'example.workbench-sample';
+    const query = PLUGIN_QUERY_ROUTE(pluginId, 'summary');
+    expect((await upload(await sample('workbench-sample'), [])).statusCode).toBe(200);
+    expect((await call('PATCH', `/api/integrations/${pluginId}`, { enablement: 'on' })).statusCode).toBe(200);
+    const denied = await app.inject({ method: 'POST', url: query, headers: { host: '127.0.0.1:4317' }, payload: {} });
+    expect(denied.statusCode).toBe(401);
+    expect((await call('POST', query, {})).json()).toMatchObject({ count: 0 });
+
+    const notify = vi.fn();
+    cleanups.push(plugins.onViewData(notify));
+    const bump = await call('POST', `/api/integrations/${pluginId}/commands/bump`, { requestId: 'bump' });
+    expect(bump.statusCode).toBe(200);
+    expect(notify).toHaveBeenCalledExactlyOnceWith({ pluginId, topic: 'summary' });
+    expect((await call('POST', query, {})).json()).toMatchObject({ count: 1 });
+    expect((await call('POST', PLUGIN_QUERY_ROUTE(pluginId, 'missing'), {})).statusCode).toBe(404);
+  });
+
+  it('sends JSON query results and cancels just the disconnected caller inside the plugin process', async () => {
+    const { app, call, upload, authHeaders } = await boot([], undefined, true);
+    const query = PLUGIN_QUERY_ROUTE('example.workbench-sample', 'summary');
+    const archive = await variant('workbench-sample', '1.0.0', { 'server/index.mjs': `
+      export default { activate() {
+        let state = 'idle';
+        return { queries: { 'example.workbench-sample/summary': { run({ params, signal }) {
+          if (params.invalid) return () => state;
+          if (params.large) return '界'.repeat(${Math.ceil(PLUGIN_QUERY_BUDGET.resultBytes / 3)});
+          if (!params.wait) return state;
+          state = 'running';
+          return new Promise(resolve => signal.addEventListener('abort', () => { state = 'cancelled'; resolve(null); }, { once: true }));
+        } } } };
+      } };
+    ` });
+    expect((await upload(archive, [])).statusCode).toBe(200);
+    expect((await call('PATCH', '/api/integrations/example.workbench-sample', { enablement: 'on' })).statusCode).toBe(200);
+    const readState = async () => (await call('POST', query, {})).json();
+    expect(await readState()).toBe('idle');
+    expect((await call('POST', query, { params: { invalid: true } })).json().error.code).toBe('QUERY_FAILED');
+    expect((await call('POST', query, { params: { large: true } })).json().error.code).toBe('QUERY_TOO_LARGE');
+
+    const address = await app.listen({ host: '127.0.0.1', port: 0 });
+    const controller = new AbortController();
+    const disconnected = fetch(new URL(query, address), {
+      method: 'POST', headers: { ...authHeaders, 'content-type': 'application/json' }, body: JSON.stringify({ params: { wait: true } }), signal: controller.signal,
+    }).catch((error: unknown) => error);
+    try {
+      await vi.waitFor(async () => { expect(await readState()).toBe('running'); });
+    } finally {
+      controller.abort();
+      await disconnected;
+    }
+    await vi.waitFor(async () => { expect(await readState()).toBe('cancelled'); });
+  });
+
   it('protects management writes, rejects stale configuration, and retains metadata in recovery', async () => {
     const { app, call, upload, row } = await boot();
     for (const url of ['/api/integrations/recovery', '/api/integrations/development', '/api/integrations/example.gateway-models/reload', '/api/integrations/example.gateway-models/diagnostics']) {

@@ -83,7 +83,7 @@
 
 - 作用范围由核心按扩展点和视图位置登记（`packages/contracts/src/plugins.ts` 的 `DECLARATION_SCOPES` 和 `VIEW_LOCATION_SCOPES`），插件的 manifest 不加字段，已发布的插件不用改。
 - `object`：依附在会话、项目、任务等对象上，由对象所在的服务器提供，视图包和数据经链接取来。例子：Agent 后端、`session-view`、`file` 位置的视图（文件查看器，由文件所在的服务器提供）、`taskProviders`、`runtimeControl`。
-- `global`：只用入口本机的，并且不能出现在对端的对象上。例子：`sidebar` 视图、插件页、设置页里的操作、`avatarStyles`、`imChannels`。
+- `global`：只用入口本机的，并且不能出现在对端的对象上。例子：`sidebar` 和 `main` 视图、插件页、设置页里的操作、`avatarStyles`、`imChannels`。
 - `global` 还包括：`host.approvals`（插件放进收件箱的审批，只在入口服务器的收件箱里，对端不提供，链接策略拒绝 `/api/plugin-approvals`）、`assistantEvents`、`assistantPack`（每台服务器的助理只在本机，事件只送本机的委托，包只装进本机助理，§3.6）；视图桥的 `navigation.openExternal`（只打开入口所在客户端的浏览器，不依附对象，转发时不需要服务器）。
 - 新扩展点或新视图位置要先在这张表里归入其中一种，不能两者都是；两张表的类型覆盖全部键，漏登记编译不过。
 - 插件视图运行在不透明源的 iframe 里（`sandbox="allow-scripts"`），对端的视图包可以在入口渲染；宿主桥接调用（`sessions.*`、`navigation.*`、`commands.execute`）按视图所属对象的服务器转发，权限检查带上服务器。
@@ -140,7 +140,7 @@
 下面是已知不符合本规范的现有代码，迁移了哪条就删哪条，新留下的不一致也记进来。
 
 - **Web**：请求层之外直接写的 `/api/` 路径和 `new WebSocket(` 记在 `scripts/servers-baseline.json`，只许减少。其中不带对象 id 的（`lib/shares.ts`、`plugins/isolated/services.ts` 等）经链接时仍发往入口。
-- **Web 合并**：任务看板（`app/state/workItemsStore.ts`）只读入口的任务；对端会话上的插件视图仍取自入口的插件（`object` 类扩展跟着对象走还没接）。
+- **Web 合并**：任务看板（`app/state/workItemsStore.ts`）只读入口的任务；对端会话上的插件视图仍取自入口的插件（`object` 类扩展跟着对象走还没接）。在接入对端插件目录前，对端对象上的视图无法执行 `plugin.query`。
 - **Kotlin 客户端**：`RiffetApi` 一个实例只连一台；`SessionStore`、`ListsFeed` 与各缓存按裸 id 存放。
 - **契约**：任务的 `number` 是服务器内递增的；Project、Terminal、WorkItem、Automation、Mark 没有 zod schema，列表流的 `changed` 事件和 bootstrap 没有命名类型。
 - **助理**：`defineRead` 没有声明 `servers`。

@@ -36,7 +36,7 @@ export interface PluginProcessOptions {
   sandbox?: { node: string; libraries: readonly string[]; network: boolean; withhold?: readonly number[] };
 }
 
-interface Waiting { method: string; resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }
+interface Waiting { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout; detach?: () => void }
 
 /**
  * What the permission model is told: exactly these and nothing else. Exported so a test can show what an
@@ -162,13 +162,21 @@ export class PluginProcess {
   }
 
   /** A request to the child. A timeout or a dead process fails the plugin; the caller sees the same error. */
-  call<M extends keyof HostToChild>(method: M, params: HostToChild[M]['params'], timeoutMs: number): Promise<HostToChild[M]['result']> {
+  call<M extends keyof HostToChild>(method: M, params: HostToChild[M]['params'], timeoutMs: number, querySignal?: AbortSignal): Promise<HostToChild[M]['result']> {
     if (this.failure) return Promise.reject(new Error(this.failure));
     if (this.ended || this.stopping) return Promise.reject(new Error('the process is not running'));
+    if (querySignal?.aborted) return Promise.reject(querySignal.reason);
     return new Promise<HostToChild[M]['result']>((resolve, reject) => {
       const id = this.nextId++;
       const timer = setTimeout(() => this.fail(`${method} did not answer within ${Math.round(timeoutMs / 1000)}s`), timeoutMs);
-      this.waiting.set(id, { method, resolve: resolve as (value: unknown) => void, reject, timer });
+      const entry: Waiting = { resolve: resolve as (value: unknown) => void, reject, timer };
+      if (querySignal) {
+        // Keep the original RPC until the child answers; a non-cooperative child still has a hard deadline.
+        const cancel = () => { void this.call('query.cancel', { requestId: id }, timeoutMs).catch(() => undefined); };
+        querySignal.addEventListener('abort', cancel, { once: true });
+        entry.detach = () => querySignal.removeEventListener('abort', cancel);
+      }
+      this.waiting.set(id, entry);
       this.send({ id, method, params });
     });
   }
@@ -217,6 +225,7 @@ export class PluginProcess {
       if (!entry) return this.fail(`protocol error: an answer to request ${id}, which nobody asked`);
       this.waiting.delete(id);
       clearTimeout(entry.timer);
+      entry.detach?.();
       if (error && typeof error === 'object') entry.reject(childError(error as RpcError));
       else entry.resolve(result ?? null);
       return;
@@ -236,7 +245,12 @@ export class PluginProcess {
   }
 
   private rejectAll(error: Error): void {
-    for (const [id, entry] of this.waiting) { clearTimeout(entry.timer); entry.reject(error); this.waiting.delete(id); }
+    for (const entry of this.waiting.values()) {
+      clearTimeout(entry.timer);
+      entry.detach?.();
+      entry.reject(error);
+    }
+    this.waiting.clear();
   }
 
   private fail(reason: string): void {

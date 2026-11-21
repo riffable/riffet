@@ -5,7 +5,7 @@ import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
-import { UnderlineTabs } from '@/components/ui/controls';
+import { EmptyState, UnderlineTabs } from '@/components/ui/controls';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { IconArchive, IconSquareKanban, IconBookmark, IconBot, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconMessagesSquare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal, IconWrench } from '@/components/icons';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery, useMobileViewport } from '@/lib/use-media-query';
@@ -46,7 +46,12 @@ import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
 import { useSessionViews, setViewVisible } from './session/viewPrefs';
 import { shownView, useSidebarViews } from './panels/useSidebarViews';
 import { DockHost, loadingPanel, PanelHost } from './WorkbenchPanels';
+import { PageScaffold } from './PageScaffold';
+import { PluginView } from '@/plugins/PluginView';
+import { viewIcon } from '@/plugins/viewIcons';
 import { useViewCatalog } from '@/plugins/registry';
+import { mainViewsIn } from '@/plugins/catalog';
+import { serverOfObject } from '@/lib/server-routing';
 import { TabChromeContext } from './tabs/chrome';
 import { TabBar } from './tabs/TabBar';
 import { useTabs } from './tabs/useTabs';
@@ -119,6 +124,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const extensionsMounted = useNav((state) => state.extensionsMounted);
   const marksOpen = useNav((state) => state.marksOpen);
   const designOpen = useNav((state) => state.designOpen);
+  const mainViewId = useNav((state) => state.mainViewId);
   const attemptsGroupId = useNav((state) => state.attemptsGroupId);
   const sessionView = useNav((state) => state.sessionView);
   const statsState = useNav((state) => state.statsState);
@@ -201,7 +207,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   /** The model the composer opens with: under the 助理, its own. */
   const composerSettings = useMemo(() => assistantPick ? withAssistantDefaults(settings, assistantPick) : settings, [settings, assistantPick]);
   const sidebarViews = useSidebarViews(project, session?.id);
-  const sessionViews = useSessionViews({ hasProject: Boolean(project), hasSession: Boolean(session), capabilities: new Set() });
+  const sessionViews = useSessionViews({ hasProject: Boolean(project), hasSession: Boolean(session), projectSystem: project?.system, capabilities: new Set() });
   const catalogProject = project;
   const catalogSession = session;
   const catalogBackendId = catalogSession ? sessionBackend(catalogSession) : quickChat ? 'chat' : homeBackendId;
@@ -249,14 +255,19 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
   const viewCatalog = useViewCatalog();
-  const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || designOpen;
+  const mainViews = useMemo(() => mainViewsIn(viewCatalog), [viewCatalog]);
+  const activeMainView = mainViewId ? mainViews.find((view) => view.id === mainViewId) : undefined;
+  const openMainView = (viewId: string) => {
+    void nav.navigate(() => { nav.openMainView(viewId); ui.setMobileSidebar(false); });
+  };
+  const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || designOpen || Boolean(mainViewId);
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   /** On the 助理 page: its project, with no page over it, showing its main conversation or the empty state. Derived, so it has no address of its own. */
   const assistantPage = isAssistantProject(project) && !anyPageOpen && (!session || session.id === mainSessionIdOf(project));
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -294,12 +305,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   };
   /** Its page: sidebar row, then the main conversation or, before there is one, the empty state (docs/ASSISTANT.md). */
   const openAssistant = () => {
-    if (!assistantProject) return;
+    if (!assistantProject) return false;
     void nav.navigate(() => {
       nav.set({ projectId: assistantProject.id, sessionId: assistantMain?.id ?? '', ...NO_PAGE });
       ui.set({ previewTarget: undefined });
       ui.setMobileSidebar(false);
     });
+    return true;
   };
   // Every way onto the 助理 with no conversation selected (a restored position, a link, the sidebar's
   // group) lands on its main conversation instead of a page that would start a second one.
@@ -394,6 +406,18 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     handlers.reload = () => void loadBootstrap().catch(bootstrapFailed);
     handlers.sessionAction = (target, action) => void sessionAction(target, action);
     handlers.openMark = (id) => void openMark(id);
+    handlers.openAssistant = openAssistant;
+    handlers.openPluginView = (id) => {
+      if (mainViews.some((view) => view.id === id && !view.unavailable)) { openMainView(id); return true; }
+      if (!project || quickChat || serverOfObject(project.id) || !sidebarViews.some((view) => view.id === id && !view.unavailable)) return false;
+      void nav.navigate(() => {
+        nav.set({ ...NO_PAGE, extensionsOpen: false });
+        ui.set({ panelTab: id });
+        ui.setPanelOpen(true);
+        ui.setMobileSidebar(false);
+      });
+      return true;
+    };
   });
 
   /** Stable per conversation, so the conversation's header memo is not rebuilt as the page re-renders. */
@@ -442,6 +466,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onOpenExtensions={() => openPage('extensions')}
       onOpenPlugins={() => openPage('plugins')}
       pluginsActive={pluginsOpen}
+      mainViews={mainViews}
+      activeMainViewId={mainViewId}
+      onOpenMainView={openMainView}
       onOpenMarks={() => openPage('marks')}
       onOpenSearch={ui.openSearch}
       statsActive={statsOpen}
@@ -504,18 +531,21 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
   let content: ReactNode;
   if (pluginsOpen) {
-    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews].map(view => view.id)} onOpenModels={() => openSettingsAt('providers')} onOpenProviderSettings={(target) => { void nav.navigate(() => { ui.openProviderSettings(target); ui.setMobileSidebar(false); }); }} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} onOpenSettings={openSettingsAt} onOpenTask={openPluginTask} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
+    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews, ...mainViews].map(view => view.id)} onOpenModels={() => openSettingsAt('providers')} onOpenProviderSettings={(target) => { void nav.navigate(() => { ui.openProviderSettings(target); ui.setMobileSidebar(false); }); }} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} onOpenSettings={openSettingsAt} onOpenTask={openPluginTask} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
       onSelect={(id, tab = 'overview') => nav.set({ pluginId: id, pluginViewId: '', pluginDetailTab: tab })}
       onClose={() => { void nav.navigate(() => nav.set({ pluginsOpen: false })); }}
       onBeforeLeaveChange={nav.registerPluginBeforeLeave}
       sidebarCollapsed={desktop && sidebarCollapsed}
       onOpenSidebar={openMobileSidebar}
       onExpandSidebar={expandSidebar}
-      onOpenFeature={(view) => { void nav.navigate(() => {
-        nav.set({ pluginsOpen: false });
-        if (view.locations.includes('session-view') && session) { setViewVisible(view.id, true); nav.set({ sessionView: { sessionId: session.id, view: view.id } }); }
-        else { ui.set({ panelTab: view.id }); ui.setPanelOpen(true); }
-      }); }} />;
+      onOpenFeature={(view) => {
+        if (mainViews.some((entry) => entry.id === view.id)) { openMainView(view.id); return; }
+        void nav.navigate(() => {
+          nav.set({ pluginsOpen: false });
+          if (view.locations.includes('session-view') && session) { setViewVisible(view.id, true); nav.set({ sessionView: { sessionId: session.id, view: view.id } }); }
+          else { ui.set({ panelTab: view.id }); ui.setPanelOpen(true); }
+        });
+      }} />;
   } else if (extensionsOpen) {
     content = null;
   } else if (statsOpen) {
@@ -529,6 +559,23 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onExpandSidebar={expandSidebar}
         onOpenSession={openStatsSession}
       />
+    );
+  } else if (mainViewId) {
+    content = (
+      <PageScaffold
+        column="none"
+        divided
+        title={activeMainView?.title ?? mainViewId}
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={() => nav.set({ mainViewId: '' })}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
+        actions={activeMainView?.pluginId ? <Button size="sm" variant="quiet" onClick={() => { void nav.navigate(() => nav.openPlugins(activeMainView.pluginId!)); }}><Trans>管理插件</Trans></Button> : undefined}
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          {activeMainView ? <PluginView entry={activeMainView} /> : <EmptyState title={t`这个插件视图当前不可用`} />}
+        </div>
+      </PageScaffold>
     );
   } else if (marksOpen) {
     content = (
@@ -698,6 +745,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     { id: 'open-council', label: t`打开模型协作`, keywords: 'council debate prism insight 模型协作 讨论 辩论 审阅', icon: <IconMessagesSquare className="size-4 shrink-0 text-fg-3" />, run: () => openPage('council') },
     { id: 'open-marks', label: t`打开收藏夹`, keywords: 'marks bookmarks highlights saved 收藏 收藏夹 高亮 书签', icon: <IconBookmark className="size-4 shrink-0 text-fg-3" />, run: () => openPage('marks') },
     { id: 'open-plugins', label: t`管理插件`, keywords: 'plugins install packages', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('plugins') },
+    ...mainViews.map((view) => {
+      const Icon = viewIcon(view);
+      return { id: `open-view:${view.id}`, label: view.title, keywords: `plugin view ${view.id} ${view.title}`, icon: <Icon className="size-4 shrink-0 text-fg-3" />, run: () => openMainView(view.id) };
+    }),
     { id: 'open-extensions', label: t`打开扩展管理`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconWrench className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },
     { id: 'toggle-sidebar', label: desktop ? (sidebarCollapsed ? t`展开侧栏` : t`收起侧栏`) : t`打开侧栏`, keywords: 'sidebar 侧栏', icon: <IconPanelLeft className="size-4 shrink-0 text-fg-3" />, run: () => { if (desktop) ui.setSidebarCollapsed((value) => !value); else ui.setMobileSidebar((value) => !value); } },
     ...(quickChat || isAssistantProject(project) ? [] : [{ id: 'toggle-terminal', label: ui.get().dockOpen ? t`隐藏终端` : t`显示终端`, keywords: 'terminal 终端', icon: <IconTerminal className="size-4 shrink-0 text-fg-3" />, run: () => { void nav.navigate(() => ui.setDockOpen((value) => !value)); } }]),

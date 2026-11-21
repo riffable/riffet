@@ -2406,6 +2406,10 @@ msgstr "还没有项目"
 msgid "这个任务的项目已移除或归档"
 msgstr "这个任务的项目已移除或归档"
 
+#: src/app/Workbench.tsx
+msgid "这个插件视图当前不可用"
+msgstr "这个插件视图当前不可用"
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"
 msgid "进行中"

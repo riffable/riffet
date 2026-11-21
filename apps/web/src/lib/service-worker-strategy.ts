@@ -28,7 +28,7 @@ const CACHE_FIRST_PATHS = new Set(['/manifest.json', '/favicon.svg', '/theme-ini
  * Server pages that are not the app shell. A navigation to one is left to the browser: answering it
  * with the shell offline would show the wrong page, and storing it would replace the shell.
  */
-const NON_SHELL_PATHS = new Set(['/math', '/mermaid', '/diagram', '/content-preview', '/health']);
+const NON_SHELL_PATHS = new Set(['/math', '/mermaid', '/diagram', '/content-preview', '/plugin-view', '/health']);
 const NON_SHELL_PREFIXES = ['/katex/'] as const;
 /**
  * Plugin appearance files (fonts, images, palettes) are the one thing under `/api` that may be kept:

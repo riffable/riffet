@@ -11,7 +11,7 @@
 | 谁绘制 | 宿主组件，按插件给出的结构 | 插件的 React 组件，用 `UiKit` | 插件自带的页面，在 iframe 或 `WKWebView` 里 |
 | 平台 | Web、Mac、手机 | Web | Web、Mac |
 | 样式来源 | 宿主组件 | `UiKit` 与应用相同的 Tailwind 类 | 颜色角色变量、`--riffet-*`、元素规则 |
-| 可用位置 | `settings`、`sidebar`、`session-view` | 全部 | `session-view`、`sidebar`、`file` |
+| 可用位置 | `settings`、`sidebar`、`session-view` | 全部 | `session-view`、`sidebar`、`file`、单实例 `main` |
 | 谁能用 | 所有插件 | 内置插件（画布、Cursor 设置页） | 本地开发包与独立安装包 |
 
 选择顺序：
@@ -38,7 +38,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 
 - 视图按容器宽度排版，不假定 380：悬浮或全屏时宽度会变，手机上侧栏与设置是全屏。
 - 视图的内边距、标题、关闭按钮由宿主绘制，视图内容从容器边缘开始。声明式页面的内边距由宿主给出。
-- 隔离视图当前只能出现在 `session-view`、`sidebar` 与 `file`；`settings` 位置只能由内置入口绘制（PLUGIN_ARCHITECTURE「自定义视图」）。
+- Web 隔离视图可出现在 `session-view`、`sidebar`、`file` 与单实例 `main`。顶层页面出现在侧栏「更多」中，可在侧栏设置里固定和排序；`settings` 位置只能由内置入口绘制（PLUGIN_ARCHITECTURE「自定义视图」）。
 - 视图实例按 `serviceId`、`projectId`、`sessionId`、`instanceId` 定 key；`ViewContext.visible` 为 false 时暂停轮询和动画。
 
 ### 2.1 宿主菜单里的命令

@@ -524,6 +524,7 @@ data class PluginCondition(
     val hasSession: Boolean? = null,
     val projectType: String? = null,
     val capability: String? = null,
+    val projectSystem: String? = null,
 )
 
 /** [scope] is `global`, `project` or `session`, `project` when absent; [params] are the values a run takes. */

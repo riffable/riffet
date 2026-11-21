@@ -3,6 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { SYNC_BUDGET, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
 import { apiFor, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { entryListCache, type ListCache } from '@/lib/list-cache';
+import { emitPluginData } from '@/lib/plugin-data-events';
 import { reconcileById, sameRecord } from '@/lib/reconcile';
 import { confirmSessionGone, isSessionDeleted } from '@/lib/session-deletion';
 import { reconnectDelay } from '@/lib/utils';
@@ -37,9 +38,9 @@ export interface ListsState {
   sessionReferences: boolean;
   /** The server can delete conversations (`session-delete-v1`); older ones only archive. */
   sessionDelete: boolean;
-  projects: ProjectRecord[];
   /** The server saves, creates, moves and deletes project files (`file-write-v1`). */
   fileWrites: boolean;
+  projects: ProjectRecord[];
   sessions: Session[];
   terminals: TerminalInfo[];
   /** The workbench owner's personal info (docs/OWNER.md); absent until a server that has one has answered. */
@@ -89,8 +90,8 @@ export function createListsStore(deps: ListsDeps) {
     projectlessTasks: cached?.bootstrap.protocol?.features.includes('projectless-tasks') ?? false,
     sessionReferences: cached?.bootstrap.protocol?.features.includes('session-references-v1') ?? false,
     sessionDelete: cached?.bootstrap.protocol?.features.includes('session-delete-v1') ?? false,
-    projects: cached?.bootstrap.projects ?? [],
     fileWrites: cached?.bootstrap.protocol?.features.includes('file-write-v1') ?? false,
+    projects: cached?.bootstrap.projects ?? [],
     sessions: cached?.bootstrap.sessions ?? [],
     terminals: cached?.bootstrap.terminals ?? [],
     owner: cached?.bootstrap.owner,
@@ -217,8 +218,8 @@ export function createListsStore(deps: ListsDeps) {
           projectlessTasks: data.protocol?.features.includes('projectless-tasks') ?? false,
           sessionReferences: data.protocol?.features.includes('session-references-v1') ?? false,
           sessionDelete: data.protocol?.features.includes('session-delete-v1') ?? false,
-          projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
           fileWrites: data.protocol?.features.includes('file-write-v1') ?? false,
+          projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
           sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle)),
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
@@ -545,7 +546,7 @@ export function createListsStore(deps: ListsDeps) {
         }).catch(() => {});
       };
       const reconnected = () => {
-        if (!linked) { refreshOwner(); announceTask(undefined); announcePlugins(); announceDevices(); announceChannels(); announceApprovals(); announceServers(); }
+        if (!linked) { refreshOwner(); announceTask(undefined); announcePlugins(); emitPluginData(undefined); announceDevices(); announceChannels(); announceApprovals(); announceServers(); }
         // A `list-delta` server opens the stream with a `changed` naming every list's revision; an older one is read again.
         if (hasDelta()) return;
         announce({}); refreshProjects(true); poll();
@@ -570,9 +571,17 @@ export function createListsStore(deps: ListsDeps) {
         } else if (!hasDelta()) refreshProjects(true);
         opened = true;
       };
+      const pluginData = (event: Event) => {
+        try {
+          const parsed = JSON.parse((event as MessageEvent<string>).data) as { pluginId?: unknown; topic?: unknown };
+          if (typeof parsed.pluginId === 'string') {
+            emitPluginData({ pluginId: parsed.pluginId, ...(typeof parsed.topic === 'string' ? { topic: parsed.topic } : {}) });
+          }
+        } catch { /* ignore malformed push */ }
+      };
       // A linked server's stream says only that its lists moved; everything else on it belongs to that server's own workbench.
       const events: Record<string, (event: Event) => void> = linked ? { changed } : {
-        changed, task, owner, integrations: announcePlugins, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, servers: announceServers,
+        changed, task, owner, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, servers: announceServers,
       };
       const retry = () => {
         pushed = false;

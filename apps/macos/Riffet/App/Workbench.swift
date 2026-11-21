@@ -621,6 +621,7 @@ final class Workbench {
         var facts = InspectorFacts(hasProject: project != nil, hasSession: !showingHome && selected != nil)
         if let project {
             facts.projectTypes = projectTypes[project.id] ?? []
+            facts.projectSystem = project.system
             // The Changes view is always offered here; a task workspace's repository is not asked about.
             if !project.isTaskWorkspace { facts.capabilities.insert("git") }
         }

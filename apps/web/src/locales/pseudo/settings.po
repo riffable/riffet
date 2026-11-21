@@ -1413,7 +1413,7 @@ msgid "会话视图"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
-msgid "会话视图、侧栏"
+msgid "会话视图、侧栏、文件、单实例主页面"
 msgstr ""
 
 #: src/app/design/android/notes.ts

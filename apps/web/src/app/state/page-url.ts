@@ -8,7 +8,7 @@ export type DesignPlatform = (typeof DESIGN_PLATFORMS)[number];
  * The pages with an address of their own. A page covers the conversation, so its address does not
  * name one: a reload restores the conversation underneath from the stored selection.
  */
-const PAGES = ['tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design'] as const;
+const PAGES = ['tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design', 'view'] as const;
 export type AddressPage = (typeof PAGES)[number];
 
 /**
@@ -16,7 +16,7 @@ export type AddressPage = (typeof PAGES)[number];
  *
  * - `/c/<sessionId>`: a conversation; its project comes with it. `?mark=<markId>` locates a 收藏.
  * - `/p/<projectId>`: a project's new-conversation page.
- * - `/tasks` (任务), `/automations` (自动化), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
+ * - `/tasks` (任务), `/automations` (自动化), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`, `/view?id=<viewId>`.
  * - `/design/<chapter>?platform=macos`: a chapter of the design system; no chapter is its overview.
  * - `/settings/<sectionId>`: opens the settings dialog at that section on load. A dialog is not a page, so
  *   the address is not mirrored while it is open: the first mirror replaces it with the page underneath.
@@ -30,6 +30,8 @@ export interface PageAddress {
   projectId?: string;
   markId?: string;
   pluginId?: string;
+  /** The `main` plugin view id (`/view?id=<pluginId>/<name>`). */
+  mainViewId?: string;
   /** Which platform the design page shows; absent is the web. */
   designPlatform?: DesignPlatform;
   /** The design page's chapter; absent is the overview. */
@@ -53,6 +55,8 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
     address.page = head as AddressPage;
     const pluginId = head === 'plugins' ? search.get('id') : undefined;
     if (pluginId) address.pluginId = pluginId;
+    const mainViewId = head === 'view' ? search.get('id') : undefined;
+    if (mainViewId) address.mainViewId = mainViewId;
     const platform = head === 'design' ? search.get('platform') : undefined;
     if (platform && platform !== 'web' && (DESIGN_PLATFORMS as readonly string[]).includes(platform)) address.designPlatform = platform as DesignPlatform;
     // A chapter is `<group>/<slug>`.
@@ -61,8 +65,9 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
   return address;
 }
 
-export function pageAddressUrl(address: Required<Pick<PageAddress, 'sessionId' | 'projectId' | 'pluginId' | 'stats'>> & Pick<PageAddress, 'page' | 'designPlatform' | 'designChapter'>): string {
-  const { page, sessionId, projectId, pluginId, stats, designPlatform, designChapter } = address;
+export function pageAddressUrl(address: Required<Pick<PageAddress, 'sessionId' | 'projectId' | 'pluginId' | 'stats'>> & Pick<PageAddress, 'page' | 'mainViewId' | 'designPlatform' | 'designChapter'>): string {
+  const { page, sessionId, projectId, pluginId, mainViewId, stats, designPlatform, designChapter } = address;
+  if (page === 'view') return mainViewId ? `/view?${new URLSearchParams({ id: mainViewId })}` : '/';
   if (page === 'plugins') return pluginId ? `/plugins?${new URLSearchParams({ id: pluginId })}` : '/plugins';
   if (page === 'design') {
     const path = designChapter ? `/design/${designChapter.split('/').map(encodeURIComponent).join('/')}` : '/design';

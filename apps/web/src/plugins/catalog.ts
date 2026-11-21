@@ -15,7 +15,7 @@ import { localizedText } from '@/lib/plugins';
 /** Ids a stored value may still carry from before views had stable ids. Applied wherever one is read. */
 const LEGACY_VIEW_IDS: Readonly<Record<string, string>> = { git: 'changes', canvas: 'riffet.canvas/canvas' };
 
-export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.navigation.openExternal', 'bridge.files.read', 'bridge.notify.info', 'bridge.notify.error']);
+export const WEB_VIEW_CAPABILITIES = new Set(['renderer.tasks', 'renderer.list', 'renderer.form', 'renderer.detail', 'bridge.host.info', 'bridge.context.get', 'bridge.theme.get', 'bridge.projects.list', 'bridge.sessions.list', 'bridge.sessions.get', 'bridge.sessions.outline', 'bridge.sessions.turnSummary', 'bridge.sessions.turnSummaries', 'bridge.sessions.timeline', 'bridge.sessions.runs', 'bridge.commands.execute', 'bridge.plugin.query', 'bridge.navigation.openSession', 'bridge.navigation.openPath', 'bridge.navigation.openView', 'bridge.navigation.openAssistant', 'bridge.navigation.openExternal', 'bridge.files.read', 'bridge.notify.info', 'bridge.notify.error']);
 
 export const migrateViewId = (id: string): string => LEGACY_VIEW_IDS[id] ?? id;
 
@@ -36,6 +36,10 @@ export interface IsolatedSource {
   capabilities: readonly string[];
   /** The commands the package declares. */
   commands: readonly string[];
+  /** The read-only queries the package declares. */
+  queries: readonly string[];
+  /** The views the package declares. */
+  views: readonly string[];
   /** The view lists `bridge.navigation.openExternal` in its `requires`: it may ask for an address to be opened in the browser. */
   externalLinks?: boolean;
 }
@@ -72,6 +76,8 @@ export interface ViewFacts {
   hasProject: boolean;
   hasSession: boolean;
   projectType?: string;
+  /** System project kind (`'assistant'`, `'quick-chat'`, etc.), when the current project is a system project. */
+  projectSystem?: string;
   /** The types the project's task providers recognise it as (`GET /api/projects/:id/task-actions`); absent until read, which fails a `projectType` condition. */
   projectTypes?: ReadonlySet<string>;
   capabilities: ReadonlySet<string>;
@@ -82,8 +88,16 @@ export function matches(when: Condition | undefined, facts: ViewFacts): boolean 
   if (when.hasProject && !facts.hasProject) return false;
   if (when.hasSession && !facts.hasSession) return false;
   if (when.projectType !== undefined && when.projectType !== facts.projectType && !facts.projectTypes?.has(when.projectType)) return false;
+  if (when.projectSystem !== undefined && when.projectSystem !== facts.projectSystem) return false;
   if (when.capability !== undefined && !facts.capabilities.has(when.capability)) return false;
   return true;
+}
+
+const MAIN_VIEW_FACTS: ViewFacts = { hasProject: false, hasSession: false, capabilities: new Set() };
+
+/** Main views are pages of the entry workbench and have no project or conversation context. */
+export function mainViewsIn(catalog: readonly ViewEntry[]): ViewEntry[] {
+  return catalog.filter((view) => view.location === 'main' && matches(view.when, MAIN_VIEW_FACTS));
 }
 
 /** The entry of a development or installed package that has a web script, with what its views may do; undefined for a built-in plugin or a package without one. */
@@ -97,6 +111,8 @@ function isolatedSource(descriptor: PluginDescriptor, locale: string): IsolatedS
     ...(descriptor.version ? { version: descriptor.version } : {}),
     capabilities: descriptor.capabilities ?? [],
     commands: (descriptor.declared?.commands ?? []).map((command) => command.id),
+    queries: (descriptor.declared?.queries ?? []).map((query) => query.id),
+    views: (descriptor.declared?.views ?? []).map((view) => view.id),
   };
 }
 
@@ -153,7 +169,7 @@ export function buildCatalog({ descriptors, plugins, pending, icons, renderers, 
         else if (!pending?.has(descriptor.id)) continue;
       }
       for (const location of view.locations) {
-        if (location !== 'session-view' && location !== 'sidebar' && location !== 'file') continue;
+        if (location !== 'session-view' && location !== 'sidebar' && location !== 'file' && !(location === 'main' && view.instances === 'single')) continue;
         if (location === 'file' && !view.files?.extensions.length) continue;
         entries.push({
           id: view.id, pluginId: descriptor.id, active: descriptor.active, activateOnView: descriptor.activation?.events.includes('view'), activationState: descriptor.activation?.state, unavailable: !compatible || Boolean(view.requires?.some(capability => !WEB_VIEW_CAPABILITIES.has(capability))), location, instances: view.instances,

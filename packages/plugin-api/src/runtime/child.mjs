@@ -29,6 +29,8 @@ let activation;
 const flows = new Map();
 /** The `signal` of each command running now. */
 const running = new Set();
+/** Query cancellation addresses the request on this pipe, not the manifest's query id. */
+const runningQueries = new Map();
 
 const describe = error => (error instanceof Error && error.message ? error.message : String(error));
 const failure = error => ({
@@ -104,6 +106,9 @@ const host = {
     effortOption,
   },
   invalidateModelCatalogs: () => { call('host.invalidateModelCatalogs').catch(() => undefined); },
+  views: {
+    invalidate: topic => { call('host.views.invalidate', topic !== undefined ? { topic } : {}).catch(() => undefined); },
+  },
   get tasks() {
     return state.granted.includes('tasks.run') ? { start: (projectId, actionId, params, options) => call('host.tasks.start', { projectId, actionId, ...(params ? { params } : {}), ...(options?.providerId ? { providerId: options.providerId } : {}), ...(options?.confirm ? { confirm: options.confirm } : {}) }) } : undefined;
   },
@@ -130,6 +135,12 @@ const commandOf = id => {
   const command = commands && Object.hasOwn(commands, id) ? commands[id] : undefined;
   if (!command || typeof command.run !== 'function') throw new Error(`no command ${id}`);
   return command;
+};
+const queryOf = id => {
+  const queries = activation?.contributions.queries;
+  const handler = queries && Object.hasOwn(queries, id) ? queries[id] : undefined;
+  if (!handler || typeof handler.run !== 'function') throw new Error(`no query ${id}`);
+  return handler;
 };
 const avatarStyleOf = id => {
   const styles = activation?.contributions.avatarStyles;
@@ -191,6 +202,7 @@ const handlers = {
       taskProviders: (contributions.taskProviders ?? []).map(provider => ({ id: provider.id, diagnostics: typeof provider.diagnostics === 'function' })),
       actions: Object.entries(contributions.actions ?? {}).map(([id, action]) => ({ id, label: action.label, kind: action.kind })),
       commands: Object.keys(contributions.commands ?? {}),
+      queries: Object.keys(contributions.queries ?? {}),
       avatarStyles: Object.keys(contributions.avatarStyles ?? {}),
       status: typeof contributions.status === 'function',
       doctorChecks: typeof contributions.doctorChecks === 'function',
@@ -205,6 +217,7 @@ const handlers = {
     current.ended = true;
     current.controller.abort();
     for (const controller of running) controller.abort();
+    for (const controller of runningQueries.values()) controller.abort();
     const failures = [];
     for (const dispose of [...(typeof current.contributions.dispose === 'function' ? [() => current.contributions.dispose()] : []), ...[...current.disposers].reverse()]) {
       try { await bounded(dispose, DISPOSE_STEP_MS); } catch (error) { failures.push(describe(error)); }
@@ -267,6 +280,25 @@ const handlers = {
     } finally { clearTimeout(timer); running.delete(controller); }
   },
 
+  async 'query.run'({ id, projectId, sessionId, params, locale, resultBytes }, requestId) {
+    const handler = queryOf(id);
+    const controller = new AbortController();
+    runningQueries.set(requestId, controller);
+    try {
+      const value = await handler.run({ ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), params, ...(locale ? { locale } : {}), signal: controller.signal });
+      let json;
+      try { json = JSON.stringify(value ?? null); } catch { /* refuse non-JSON data */ }
+      if (json === undefined) throw Object.assign(new Error(`${id} returned non-JSON data`), { code: 'QUERY_FAILED' });
+      if (Buffer.byteLength(json, 'utf8') > resultBytes) throw Object.assign(new Error(`${id} returned more than 1 MB`), { code: 'QUERY_TOO_LARGE' });
+      return json;
+    } finally { runningQueries.delete(requestId); }
+  },
+
+  'query.cancel'({ requestId }) {
+    runningQueries.get(requestId)?.abort();
+    return null;
+  },
+
   'task.detect'({ provider, project }) { return providerOf(provider).detect(projectOf(project)); },
   'task.actions'({ provider, project }) { return providerOf(provider).actions(projectOf(project)); },
   'task.plan'({ provider, action, taskParams, project }) { return providerOf(provider).plan(action, taskParams, projectOf(project)); },
@@ -290,7 +322,7 @@ async function receive(message) {
   const handler = Object.hasOwn(handlers, message.method) ? handlers[message.method] : undefined;
   try {
     if (!handler) throw new Error(`unknown method ${message.method}`);
-    const result = await handler(message.params ?? {});
+    const result = await handler(message.params ?? {}, message.id);
     send({ id: message.id, result: result ?? null });
   } catch (error) {
     send({ id: message.id, error: failure(error) });

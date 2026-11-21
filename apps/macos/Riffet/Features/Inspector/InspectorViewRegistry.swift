@@ -38,6 +38,7 @@ struct InspectorFacts {
     var hasSession = false
     /// The types, such as `android`, of the task providers that recognise the project.
     var projectTypes: Set<String> = []
+    var projectSystem: String?
     var capabilities: Set<String> = []
     /// Every condition holds: settings list the views this Mac can draw whatever the project is.
     var everything = false
@@ -47,6 +48,7 @@ struct InspectorFacts {
         if condition.hasProject?.boolValue == true, !hasProject { return false }
         if condition.hasSession?.boolValue == true, !hasSession { return false }
         if let type = condition.projectType, !projectTypes.contains(type) { return false }
+        if let system = condition.projectSystem, projectSystem != system { return false }
         if let capability = condition.capability, !capabilities.contains(capability) { return false }
         return true
     }

@@ -1,7 +1,10 @@
 import type { Run, Session, TimelinePage, TurnOutlineV3 } from '@contracts';
+import { PLUGIN_QUERY_ROUTE } from '@contracts';
 import type { BridgeCommandResult, BridgeSession, BridgeViewContext } from '@riffet/plugin-web';
 import { request } from '@/lib/api';
+import { HttpError } from '@/lib/errors';
 import { projectFileUrl, readFileRange } from '@/lib/files';
+import { serverOfObject } from '@/lib/server-routing';
 import { toast } from '@/lib/toast';
 import type { WorkbenchStores } from '../../app/state/stores';
 import { readTheme } from './document';
@@ -38,7 +41,7 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
   /** The view's context as it is now. */
   context: () => BridgeViewContext;
   /** Names the package in what it shows the user. */
-  label: string;
+  label: () => string;
   /** The package the view belongs to: the only one whose commands it can run. */
   pluginId: string;
   /** Whether the user is working in the view now. */
@@ -74,15 +77,17 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
       // The files panel shows the project that is open; a view of another project does not steer it.
       if (nav.get().projectId === context().projectId) ui.preview(path);
     },
+    openView: (viewId) => handlers.openPluginView(viewId),
     // The user's click in the frame is what lets the browser open a tab; no opener, no referrer.
     openExternal: (url) => { window.open(url, '_blank', 'noopener,noreferrer'); },
+    openAssistant: () => handlers.openAssistant(),
     readFile: async (path, offset, length, signal) => {
       const projectId = context().projectId!;
       const read = await readFileRange(projectFileUrl(projectId, path), offset, offset + length - 1, signal);
       if (read === 'past-end') return { path, size: offset, offset, data: '' };
       return { path, size: read.size, offset, data: base64(read.bytes) };
     },
-    notify: (tone, text) => (tone === 'error' ? toast.error : toast.info)(`${label}: ${text}`),
+    notify: (tone, text) => (tone === 'error' ? toast.error : toast.info)(`${label()}: ${text}`),
     execute: (commandId, args, signal) => {
       // The id is `<pluginId>/<name>`; the route takes the name, and the package is the view's own.
       const name = commandId.startsWith(`${pluginId}/`) ? commandId.slice(pluginId.length + 1) : '';
@@ -91,6 +96,19 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
       return request<BridgeCommandResult>(`/api/integrations/${encodeURIComponent(pluginId)}/commands/${encodeURIComponent(name)}`, {
         method: 'POST', signal,
         body: JSON.stringify({ requestId: crypto.randomUUID(), ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), ...(args === undefined ? {} : { args }) }),
+      });
+    },
+    query: (queryId, params, signal) => {
+      const name = queryId.startsWith(`${pluginId}/`) ? queryId.slice(pluginId.length + 1) : '';
+      if (!name || name.includes('/')) return Promise.reject(Object.assign(new Error('Not a query of this package'), { status: 403 }));
+      const { projectId, sessionId, locale } = context();
+      // The entry's catalog carries its own plugin packages. A grant from it cannot authorize a query about a linked server's objects.
+      if (serverOfObject(projectId) || serverOfObject(sessionId)) {
+        return Promise.reject(new HttpError(403, 'Queries for this view are unavailable on a linked server'));
+      }
+      return request<unknown>(PLUGIN_QUERY_ROUTE(pluginId, name), {
+        method: 'POST', signal,
+        body: JSON.stringify({ ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), ...(locale ? { locale } : {}), ...(params === undefined ? {} : { params }) }),
       });
     },
   };

@@ -1413,8 +1413,8 @@ msgid "会话视图"
 msgstr "Session views"
 
 #: src/app/design/engineering/PluginsChapter.tsx
-msgid "会话视图、侧栏"
-msgstr "Conversation view, sidebar"
+msgid "会话视图、侧栏、文件、单实例主页面"
+msgstr "Session view, sidebar, file, single-instance workbench page"
 
 #: src/app/design/android/notes.ts
 msgid "会话行只有一行：行首是 Agent 的标志，行尾是状态或时间"

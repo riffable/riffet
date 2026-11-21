@@ -38,7 +38,8 @@ riffet plugin unlink example.echo
 | --- | --- | --- |
 | `agentBackends` | `plugins/riffet/cursor`、`plugins/riffet/antigravity`、`examples/plugins/echo` | `echo` 是最小形状；Cursor 是完整驱动 |
 | `modelSources` | `examples/plugins/gateway-models`、`official/litellm` | 样例的 `server/index.mjs`：异步 `prepare()` 配同步 `resolve()`；LiteLLM 是网关适配器（`role: 'adapter'`）和额度（`usage`） |
-| `views` | `plugins/riffet/canvas`、`plugins/riffet/trace`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools` | 会话视图、侧栏、隔离视图、声明式渲染器各一个 |
+| `views` | `plugins/riffet/canvas`、`plugins/riffet/trace`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools`、`examples/plugins/workbench-sample` | 会话视图、侧栏、隔离视图、声明式渲染器、顶层 `main` 视图各一个 |
+| `queries` | `examples/plugins/workbench-sample` | 视图经消息桥 `plugin.query` 读服务端结构化数据，配合 `host.views.invalidate` 增量刷新 |
 | `assistantEvents` | 暂无（核心仓库没有发事件的插件；外部的理财插件是第一个使用者） | 清单声明主题，进程内的运行时调用 `host.assistant?.emit` |
 | `approvals`（运行时，无清单声明） | 暂无（核心仓库没有请求审批的插件） | 进程内的运行时用 `host.approvals?.request` 把待执行的写操作放进收件箱，`contributes` 之外在 `Contributions.approvals.decide(id, actionId, context)` 里执行用户的选择，见 [插件架构](PLUGIN_ARCHITECTURE.md)「收件箱审批」 |
 | `assistantPack` | 暂无（同上） | 包内 `assets/` 下放一个 Claude Code 插件文件夹，见 [助理](ASSISTANT.md) §8.2 |
@@ -118,7 +119,8 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 
 | 种类 | 字段 | 说明 |
 | --- | --- | --- |
-| `views` | `id`、`title`、`icon?`（`{ svg?, sfSymbol? }`：`svg` 是包内 24×24 的 Lucide 式线稿，至多 64 KB，由 `GET /api/view-icons/<视图 ID>`（`VIEW_ICON_ROUTE`）提供，Web 只取其中的图形、用宿主的描边和文字颜色重画，带 `transform` 或别的 `viewBox` 时退回通用图标；`sfSymbol` 给 Mac）、`locations`、`defaultLocation?`、`clients`（`web`、`macos`）、`instances`（`single`、`per-session`、`per-project`）、`when?`、`renderer?`、`files?`（`{ extensions }`，小写、不带点，至多 32 个） | 工作台视图。位置取自 `session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`、`file`。`file` 是文件视图里打开的项目文件的另一种看法，必须声明 `files.extensions`，只对这些扩展名的文件出现在「更多操作」菜单里，每个文件一个实例，`ViewContext.path` 是该文件。`renderer` 可为 `tasks`、`list`、`form`、`detail`；由 Web/Mac 宿主绘制，操作复用本包声明的命令，不需要自定义 Web 入口。`requires` 声明客户端能力，缺失时显示不可用原因。非内置包的自定义视图位置只能是 `session-view`、`sidebar` 或 `file` |
+| `views` | `id`、`title`、`icon?`（`{ svg?, sfSymbol? }`：`svg` 是包内 24×24 的 Lucide 式线稿，至多 64 KB，由 `GET /api/view-icons/<视图 ID>`（`VIEW_ICON_ROUTE`）提供，Web 只取其中的图形、用宿主的描边和文字颜色重画，带 `transform` 或别的 `viewBox` 时退回通用图标；`sfSymbol` 给 Mac）、`locations`、`defaultLocation?`、`clients`（`web`、`macos`）、`instances`（`single`、`per-session`、`per-project`）、`when?`、`renderer?`、`files?`（`{ extensions }`，小写、不带点，至多 32 个） | 工作台视图。位置取自 `session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`、`file`。`file` 是文件视图里打开的项目文件的另一种看法，必须声明 `files.extensions`，只对这些扩展名的文件出现在「更多操作」菜单里，每个文件一个实例，`ViewContext.path` 是该文件。`main`（且 `instances: 'single'`）作为顶层工作台页面出现在侧栏「更多」里，用户可在「设置 › 侧栏」中固定并排序。`renderer` 可为 `tasks`、`list`、`form`、`detail`；由 Web/Mac 宿主绘制，操作复用本包声明的命令，不需要自定义 Web 入口。`requires` 声明客户端能力，缺失时显示不可用原因。非内置包的自定义视图位置只能是 `session-view`、`sidebar`、`file` 或单实例 `main` |
+| `queries` | `[{ id, title? }]` | 供本包视图读取结构化数据的只读查询。代码在运行时提供 `queries: { [id]: { run(context) } }`，经 `POST /api/integrations/:id/queries/:name` 和消息桥 `plugin.query` 调用，响应上限 1 MB、超时 30 秒。服务端数据变化时调用 `host.views.invalidate(topic?)` 通知已挂载视图按需刷新 |
 | `assistantEvents` | `[{ id, title, description }]`（至多 16 项，`title`、`description` 是本地化文字） | 插件可以对个人助理发出的事件，`id` 是 `<插件 id>/<名称>`。助理经能力 `workbench.assistant_events` 读到已启用插件声明的主题，把它作为委托的触发 `{ kind: 'plugin-event', topic }`。运行时 `host.assistant?.emit(topic, payload?, { key? })`：未声明的主题、别的插件的主题抛 403 `PLUGIN_ASSISTANT_EVENT_UNDECLARED`；`payload` 是 JSON，序列化后至多 `ASSISTANT_BUDGET.pluginEventBytes`（16 KB），超过抛 413；`key`（至多 128 字符）相同的事件对每条委托只起一次运行，缺省时取主题与内容的哈希。服务器启动完成前 emit 抛 503，关机期间发生的事件不补发。只有进程内的包（内置、开发包、显式信任的安装包）有 `host.assistant`；隔离安装的包没有。作用范围 `global`：事件只送本机的委托。见 [助理](ASSISTANT.md) §7.3 |
 | `assistantPack` | `{ path }`（包内 `assets/` 下的文件夹，含 `.claude-plugin/plugin.json`） | 随插件提供的能力包，见 [助理](ASSISTANT.md) §8.2。载入包时检查文件夹和 `name`（小写字母、数字、连字符，至多 40 字符）。只装进程内的包（内置、开发、受信任安装）的能力包，隔离安装的包声明了也不装。插件启用时装进助理的 `packs/<name>/`，版本或内容变化时替换，停用或卸载时删除；与自带包、用户自己的包或别的插件的包重名时不安装，原因写在插件诊断里。作用范围 `global` |
 | `commands` | `id`、`title`、`when?`、`keybinding?`、`scope?`（`global`、`project`、`session`，缺省 `project`）、`params?`（与任务操作相同的字段列表）、`menus?`（`message`、`selection`）、`icon?`（`COMMAND_ICONS` 里的名字） | 命令面板与快捷键引用它；声明了 `menus` 的只出现在那些菜单里，`message` 菜单的命令收到 `context.message`、`selection` 菜单的命令收到 `context.selection`（选中的文字），都带 `context.locale`，可以返回 `{ kind: 'text', text, title? }`，显示在那条回答下方，见 [插件架构](PLUGIN_ARCHITECTURE.md)「消息菜单」。代码在运行时提供 `commands: { [id]: { run(context) } }`，`context` 是 `{ projectId?, sessionId?, args, confirm?, signal }`，返回 `{ kind: 'done', message? }`、`{ kind: 'open', view?, sessionId?, path? }` 或 `{ kind: 'task', taskId }`；要启动任务用 `host.tasks.start(projectId, actionId, params?, { providerId? })`，只能是自己的任务提供方。执行路径是 `POST /api/integrations/:id/commands/:name`，服务端按插件开启、声明与处理函数、作用域和项目会话归属、`when`、`params` 的顺序重新检查，同一 `requestId` 十分钟内只执行一次。隔离安装的包也能提供命令：处理函数在它自己的进程里运行，宿主逐字段检查返回的结果（不合格是协议错误），调用期限 60 秒，`signal` 在期限前 5 秒与插件关闭时中止；持有 `tasks.run` 的包可以用 `host.tasks.start` 启动自己的任务提供方的任务，每条新计划仍先经用户确认。包的视图经消息桥的 `commands.execute` 执行本包声明的命令，结果原样交给视图 |
@@ -130,7 +132,13 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 | `modelUses` | `[{ id, title, fallback? }]` | 插件要在模型上做的事，「设置 › 辅助模型」按它多画一行，用户为它选模型；代码调用 `host.models.complete({ use: id, … })`。`fallback: 'chat'` 表示没选时用「快速对话」的默认模型。见 [插件架构](PLUGIN_ARCHITECTURE.md)「模型用途」 |
 | `avatarStyles` | `[{ id, title, credit?, needsName? }]` | 个人资料的随机头像风格，`id` 是 `<插件 id>/<名称>`，`credit`（至多 300 字）是署名。代码提供 `avatarStyles: { [id]: { generate({ seed, size, ink, paper, name? }) } }`，返回 SVG；核心校验后栅格化，见 [OWNER.md](OWNER.md)「随机头像」。隔离安装的包也能提供 |
 
-`when` 是结构化条件，不是表达式：`hasProject`、`hasSession`、`projectType`、`capability`。它只决定可见性，不授予任何权限。
+`when` 是结构化条件，不是表达式：`hasProject`、`hasSession`、`projectType`、`projectSystem`（`'assistant'`）、`capability`。它只决定可见性，不授予任何权限。
+
+### 多服务器
+
+插件属于 B 类。Web 的顶层 `main` 页只列入口服务器启用的插件，视图使用包内的贡献 ID。查询在提供插件与数据的服务器执行；当前 Web 的插件目录取自入口，因而对端对象上的视图不能使用入口插件查询。链接策略允许查询请求（`serve`），引导页 `/plugin-view` 由入口提供（`deny`）。宿主按插件分发刷新事件，断线重连后通知视图重读。查询结果由视图消费，宿主不做持久缓存。旧宿主可以通过视图的 `requires` 和 `host.info.methods` 判定能力。
+
+Mac：W 类工作路径。当前 SDK 的顶层页面和 `plugin.query` 由 Web 承载；Mac 侧栏插件可用的方法见[自定义视图](PLUGIN_ARCHITECTURE.md#自定义视图)。
 
 ## 能力与授权
 

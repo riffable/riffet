@@ -389,7 +389,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   useEffect(() => { setDiscussionFocus(undefined); }, [focus]);
   // The 个人助理's conversation is not work in a project: no side chats, forks, rewinds, hand-offs, view pager
   // or file mentions, which all act on a project's code or open another conversation there (docs/ASSISTANT.md §3).
-  const assistant = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'assistant');
+  const projectSystem = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system);
+  const assistant = projectSystem === 'assistant';
   // Its main conversation, where `/new` and the packs' entries are offered (docs/ASSISTANT.md §5.5, §8.2).
   const assistantMain = useLists((state) => { const project = state.projects.find((item) => item.id === session.projectId); return project?.system === 'assistant' && project.mainSessionId === session.id; });
   const discussionAllowed = session.origin?.kind !== 'discussion' && !assistant;
@@ -426,7 +427,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // On a desktop conversation, a view the reader turned off, or that is not offered now (its plugin
   // is off), is the transcript as well; the choice itself is kept, so the view returns with its plugin.
   const prefs = useViewPrefs((state) => state);
-  const offered = useSessionViews({ hasProject: Boolean(session.projectId), hasSession: true, capabilities: NO_CAPABILITIES });
+  const offered = useSessionViews({ hasProject: Boolean(session.projectId), hasSession: true, projectSystem, capabilities: NO_CAPABILITIES });
   const hostView = chosenView === 'chat' || chosenView === 'terminal';
   const view = !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
   const native = useSessionSync(session, { onSessionChanged, onError, notificationsEnabled, initialRun }, view === 'chat');
@@ -645,7 +646,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       return { ...(prompt ? { prompt } : {}), ...(name ? { model: name } : {}) };
     },
   }), [session.title, session.model, backendId, projectName, catalog, t]);
-  const messageCommands = useMemo(() => ({ sessionId: session.id, openModelSettings: (section: 'auxiliary' | 'quickchat') => stores.ui.openSettings(section) }), [session.id, stores.ui]);
+  const messageCommands = useMemo(() => ({ sessionId: session.id, ...(projectSystem ? { projectSystem } : {}), openModelSettings: (section: 'auxiliary' | 'quickchat') => stores.ui.openSettings(section) }), [session.id, projectSystem, stores.ui]);
   const liveActivities = useMemo(() => native.activities ?? liveBackgroundActivities(visibleTimeline), [native.activities, visibleTimeline, native.timelineVersion]);
   // The header and the side column list these; they keep their memo while the transcript streams.
   const backgroundKey = liveActivities.map((activity) => `${activity.id}:${activity.status}:${activity.title}:${activity.startedAt ?? ''}`).join('\n');

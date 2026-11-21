@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { AppSettings } from '@contracts';
 import { IconPin, IconPinFilled } from '@/components/icons';
@@ -7,6 +7,8 @@ import { SortableList, SortHandle } from '@/components/ui/sortable-list';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
+import { mainViewsIn } from '@/plugins/catalog';
+import { useViewCatalog } from '@/plugins/registry';
 import { reorderSidebarPinned, SIDEBAR_DESTINATION_META, splitSidebarDestinations, toggleSidebarPinned, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from '../sidebarDestinations';
 import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
 
@@ -19,12 +21,16 @@ interface Props {
 /** 侧栏: which destinations are sidebar rows, in what order; the rest sit under the sidebar's 更多. */
 export function SidebarSection({ settings, onSaved, onError }: Props) {
   const { t } = useLingui();
+  const catalog = useViewCatalog();
+  const mainViews = useMemo(() => mainViewsIn(catalog), [catalog]);
+  const mainViewMap = useMemo(() => new Map(mainViews.map((view) => [view.id, view])), [mainViews]);
+  const offered = useMemo<string[]>(() => [...WEB_SIDEBAR_DESTINATIONS, ...mainViews.map((view) => view.id)], [mainViews]);
   // A change shows at once and saves behind it; only the newest save's answer is applied.
   const [draft, setDraft] = useState<string[] | undefined>(undefined);
   const latest = useRef(0);
   const saved = draft ?? settings.sidebarPinned;
-  const { pinned, more } = splitSidebarDestinations(saved, WEB_SIDEBAR_DESTINATIONS);
-  const name = (id: WebSidebarDestination) => t(SIDEBAR_DESTINATION_META[id].label);
+  const { pinned, more } = splitSidebarDestinations(saved, offered);
+  const name = (id: string) => id in SIDEBAR_DESTINATION_META ? t(SIDEBAR_DESTINATION_META[id as WebSidebarDestination].label) : (mainViewMap.get(id)?.title ?? id);
   const persist = async (sidebarPinned: string[]) => {
     const request = ++latest.current;
     setDraft(sidebarPinned);
@@ -38,7 +44,7 @@ export function SidebarSection({ settings, onSaved, onError }: Props) {
     }
   };
   // A pin, not a switch: unpinning moves the page under 更多, it does not turn anything off.
-  const pin = (id: WebSidebarDestination, pinned: boolean) => {
+  const pin = (id: string, pinned: boolean) => {
     const label = pinned ? t`从侧栏移到更多` : t`固定到侧栏`;
     return (
       <Tip label={label}>

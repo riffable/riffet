@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
+import { isContributionOf, PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { AUXILIARY_MODEL_BACKENDS } from '../auxiliary/gateway.js';
@@ -390,8 +391,15 @@ export class SettingsService {
     }
     if (values.sidebarPinned !== undefined) {
       const pinned = values.sidebarPinned;
-      // Ids this server does not know are kept: a newer client may offer destinations this one does not.
-      if (!Array.isArray(pinned) || pinned.length > SIDEBAR_PINNED_MAX || pinned.some(id => typeof id !== 'string' || !/^[a-z][\w.-]{0,63}$/i.test(id))) throw new AppError('INVALID_SETTINGS', 'sidebarPinned must be a list of destination ids');
+      // Ids this server does not know are kept: a newer client may offer destinations this one does not,
+      // and main plugin views use `<pluginId>/<name>` contribution ids.
+      const validDestination = (id: unknown): boolean => {
+        if (typeof id !== 'string') return false;
+        if (/^[a-z][\w.-]{0,63}$/i.test(id)) return true;
+        const pluginId = id.split('/', 1)[0]!;
+        return pluginId.length <= 64 && PLUGIN_ID.test(pluginId) && isContributionOf(pluginId, id);
+      };
+      if (!Array.isArray(pinned) || pinned.length > SIDEBAR_PINNED_MAX || !pinned.every(validDestination)) throw new AppError('INVALID_SETTINGS', 'sidebarPinned must be a list of destination ids');
       result.sidebarPinned = [...new Set(pinned as string[])];
     }
     if (values.composerSendLater !== undefined) {

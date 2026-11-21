@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import Fastify from 'fastify';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { registerPluginViewFrame } from '../../../../server/src/plugins/view-frame';
 import { connect, BridgeError } from '../../../../../packages/plugin-web/src/bridge-client';
-import { BRIDGE_INIT, BRIDGE_LIMITS, BRIDGE_READY, BRIDGE_VERSION, PLUGIN_FOCUS_SCRIPT, type BridgeSession } from '@riffet/plugin-web';
+import { BRIDGE_INIT, BRIDGE_LIMITS, BRIDGE_READY, BRIDGE_VERSION, type BridgeSession } from '@riffet/plugin-web';
 import { serveBridge, type BridgeGrant, type BridgePort, type BridgeServices } from './bridgeHost';
-import { CHANNEL_SCRIPT, bootstrapDocument, pluginPolicy } from './document';
+import { bootstrapStyle, pluginPolicy } from './document';
 import { verifyIntegrity } from './entry';
 import { attachFrame } from './frameHost';
 
@@ -34,11 +36,11 @@ function servicesOf(calls: string[], overrides: Partial<BridgeServices> = {}): B
   };
 }
 
-function setup(grant: Partial<{ capabilities: string[]; commands: string[] }> = {}, overrides: Partial<BridgeServices> = {}, now?: () => number) {
+function setup(grant: Partial<{ capabilities: string[]; commands: string[]; queries: string[]; views: string[] }> = {}, overrides: Partial<BridgeServices> = {}, now?: () => number) {
   const port = new FakePort();
   const calls: string[] = [];
   const services = servicesOf(calls, overrides);
-  const bridgeGrant: BridgeGrant = { capabilities: new Set(grant.capabilities ?? []), commands: new Set(grant.commands ?? []) };
+  const bridgeGrant: BridgeGrant = { capabilities: new Set(grant.capabilities), commands: new Set(grant.commands), queries: new Set(grant.queries), views: new Set(grant.views) };
   const bridge = serveBridge({ port, grant: bridgeGrant, services, ...(now ? { now } : {}) });
   let next = 100;
   const ask = async (method: string, params?: unknown) => {
@@ -51,6 +53,21 @@ function setup(grant: Partial<{ capabilities: string[]; commands: string[] }> = 
 }
 
 const code = (reply: unknown) => (reply as { error?: { code: string } } | undefined)?.error?.code;
+
+let shellScript: string;
+let shellPolicies: (string | undefined)[];
+beforeAll(async () => {
+  const app = Fastify();
+  registerPluginViewFrame(app);
+  try {
+    const pages = await Promise.all(['/plugin-view', '/plugin-view?network=1'].map(url => app.inject(url)));
+    expect(pages.map(page => page.statusCode)).toEqual([200, 200]);
+    shellScript = pages[0]!.body.match(/<script>([\s\S]+)<\/script>/)![1]!;
+    shellPolicies = pages.map(page => page.headers['content-security-policy'] as string | undefined);
+  } finally {
+    await app.close();
+  }
+});
 
 describe('bridge host', () => {
   it('takes identity from the channel, not from the request', async () => {
@@ -184,6 +201,22 @@ describe('bridge host', () => {
     expect(ran).toHaveLength(1);
   });
 
+  it('keeps queries and view navigation within the package declarations and requires focus for navigation', async () => {
+    let active = false;
+    const query = vi.fn(async (_id: string, params: unknown) => params);
+    const openView = vi.fn((id: string) => id === 'acme.demo/main');
+    const { ask } = setup({ queries: ['acme.demo/count'], views: ['acme.demo/main', 'acme.demo/panel'] }, { query, openView, active: () => active });
+    expect(code(await ask('plugin.query', { id: 'other.plugin/count' }))).toBe('forbidden');
+    expect(await ask('plugin.query', { id: 'acme.demo/count', params: { page: 1 } })).toMatchObject({ result: { page: 1 } });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(code(await ask('navigation.openView', { viewId: 'acme.demo/main' }))).toBe('denied');
+    active = true;
+    expect(code(await ask('navigation.openView', { viewId: 'other.plugin/main' }))).toBe('forbidden');
+    expect(code(await ask('navigation.openView', { viewId: 'acme.demo/panel' }))).toBe('not_found');
+    expect(await ask('navigation.openView', { viewId: 'acme.demo/main' })).toMatchObject({ result: null });
+    expect(openView.mock.calls).toEqual([['acme.demo/panel'], ['acme.demo/main']]);
+  });
+
   it('aborts pending calls and sends nothing once closed', async () => {
     let seen: AbortSignal | undefined;
     let settled = false;
@@ -249,7 +282,8 @@ describe('frame host', () => {
     const own = frameWindow(), stranger = frameWindow();
     const events = listen();
     const ports: FakePort[] = [];
-    const channel = attachFrame({ frame: () => own.window, grant, services, listenOn: events.source, createChannel: () => { const port = new FakePort(); ports.push(port); return { port1: port, port2: {} as MessagePort }; } });
+    const bootstrap = () => ({ code: '// </script> stays in the message', locale: 'en', style: '' });
+    const channel = attachFrame({ frame: () => own.window, grant, services, bootstrap, listenOn: events.source, createChannel: () => { const port = new FakePort(); ports.push(port); return { port1: port, port2: {} as MessagePort }; } });
     events.dispatch({ source: stranger.window as never, data: ready });
     events.dispatch({ source: null, data: ready });
     events.dispatch({ source: own.window as never, data: { type: BRIDGE_READY, version: 99 } });
@@ -258,7 +292,7 @@ describe('frame host', () => {
     expect(stranger.posted).toEqual([]);
     events.dispatch({ source: own.window as never, data: ready });
     expect(own.posted).toHaveLength(1);
-    expect(own.posted[0]).toMatchObject({ message: { type: BRIDGE_INIT, version: BRIDGE_VERSION }, origin: '*' });
+    expect(own.posted[0]).toMatchObject({ message: { type: BRIDGE_INIT, version: BRIDGE_VERSION, bootstrap: bootstrap() }, origin: '*' });
     expect(own.posted[0]!.transfer).toHaveLength(1);
 
     // Asking again (a page the frame navigated to, say) gets nothing: the first channel stays the only one.
@@ -287,21 +321,17 @@ describe('isolated page', () => {
     expect(pluginPolicy(true)).toContain('connect-src https:');
     expect(pluginPolicy(false)).toMatch(/^default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:;/);
     expect(pluginPolicy(false)).toContain("form-action 'none'");
+    for (const [index, policy] of shellPolicies.entries()) {
+      expect(policy).toContain(pluginPolicy(index === 1));
+      expect(policy).toContain('sandbox allow-scripts');
+      expect(policy).toContain("frame-ancestors 'self'");
+    }
   });
 
-  it('carries the script as data, so it cannot end its own element or break out of the page', () => {
-    const hostile = `var a = "</script><script>window.top.alert(1)</script><!-- "; /* ${String.fromCharCode(0x2028)} */`;
-    const page = bootstrapDocument({ code: hostile, network: false, theme: { scheme: 'dark', vars: { '--bg': '#000', '--evil': '#fff;}</style><script>x()</script>' } }, locale: 'en"><x' });
-    // The page's own channel request with the focus-ring policy, then the view's code.
-    expect(page.match(/<script/g)).toHaveLength(2);
-    expect(page.indexOf(CHANNEL_SCRIPT)).toBeGreaterThan(-1);
-    expect(page.indexOf(PLUGIN_FOCUS_SCRIPT)).toBeLessThan(page.indexOf('textContent='));
-    expect(page).not.toContain('</script><script>');
-    expect(page).not.toContain('--evil');
-    expect(page).toContain('lang="en&quot;>&lt;x"');
-    // Executing the bootstrap's string literal gives the code back.
-    const literal = /textContent=("(?:[^"\\]|\\.)*");document/.exec(page)![1]!;
-    expect(JSON.parse(literal)).toBe(hostile);
+  it('uses the palette roles and rejects values that break out of the style rule', () => {
+    const style = bootstrapStyle({ scheme: 'dark', vars: { '--bg': '#000', '--evil': '#fff;}body{color:red' } });
+    expect(style).toContain(':root{color-scheme:dark;--bg:#000}');
+    expect(style).not.toContain('--evil');
   });
 });
 
@@ -335,8 +365,8 @@ describe('bridge client against the host', () => {
     };
     const frame = {
       parent,
-      addEventListener: (_: string, fn: (event: unknown) => void) => listeners.frame.add(fn),
-      removeEventListener: (_: string, fn: (event: unknown) => void) => listeners.frame.delete(fn),
+      addEventListener: (type: string, fn: (event: unknown) => void) => { if (type === 'message') listeners.frame.add(fn); },
+      removeEventListener: (type: string, fn: (event: unknown) => void) => { if (type === 'message') listeners.frame.delete(fn); },
       // The host answering the frame.
       postMessage: (data: unknown, _origin: string, transfer: MessagePort[]) => queueMicrotask(() => listeners.frame.forEach((fn) => fn({ data, source: parent, ports: transfer }))),
     };
@@ -348,18 +378,22 @@ describe('bridge client against the host', () => {
   it('connects, reads through the capability it holds, is refused the rest, follows pushes, and ends with the host', async () => {
     const { parent, frame, style } = windows();
     vi.stubGlobal('window', frame);
-    vi.stubGlobal('document', { documentElement: { style } });
+    const document = { documentElement: { style, lang: '' }, createElement: (tag: string) => ({ tag, textContent: '' }), head: { appendChild: vi.fn() } };
+    vi.stubGlobal('document', document);
     const calls: string[] = [];
     const channel = attachFrame({
       frame: () => frame as never, grant: { capabilities: new Set(['sessions.read']), commands: new Set() }, listenOn: parent as never,
+      bootstrap: () => ({ code: '/* </script> */', locale: 'en', style: ':root{}' }),
       services: servicesOf(calls, { theme: () => ({ scheme: 'dark', vars: { '--bg': '#111' } }) }),
     });
     // The page's own script asks, as the bootstrap page does, before any view code runs.
-    new Function('window', CHANNEL_SCRIPT)(frame);
+    new Function('window', 'document', shellScript)(frame, document);
     const bridge = await connect({ timeoutMs: 1000 });
     expect(bridge.context).toMatchObject({ projectId: 'p1', sessionId: 's1' });
     expect(style.values['--bg']).toBe('#111');
     expect(style.colorScheme).toBe('dark');
+    expect(document.documentElement.lang).toBe('en');
+    expect(document.head.appendChild.mock.calls).toEqual([[{ tag: 'style', textContent: ':root{}' }], [{ tag: 'script', textContent: '/* </script> */' }]]);
     await expect(bridge.call('sessions.get', { sessionId: 's1' })).resolves.toMatchObject({ id: 's1', projectId: 'p1' });
     await expect(bridge.call('sessions.get', { sessionId: 'other' })).rejects.toMatchObject({ name: 'BridgeError', code: 'not_found' });
     await expect(bridge.call('commands.execute', { id: 'acme.demo/run' })).rejects.toBeInstanceOf(BridgeError);
@@ -385,7 +419,7 @@ describe('bridge client against the host', () => {
     const channel = attachFrame({ frame: () => other, grant: { capabilities: new Set(), commands: new Set() }, listenOn: parent as never, services: servicesOf([]) });
     // Without the page's own request there is nothing to connect to; with it, nobody answers.
     await expect(connect({ timeoutMs: 20 })).rejects.toMatchObject({ code: 'unsupported' });
-    new Function('window', CHANNEL_SCRIPT)(frame);
+    new Function('window', shellScript)(frame);
     await expect(connect({ timeoutMs: 20 })).rejects.toMatchObject({ code: 'timeout' });
     expect(other.postMessage).not.toHaveBeenCalled();
     channel.dispose();

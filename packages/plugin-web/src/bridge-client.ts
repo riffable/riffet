@@ -106,7 +106,7 @@ async function open(port: MessagePort, apply: boolean, required: readonly Bridge
     if (typeof data.id === 'number') {
       const { error, result } = data;
       settle(data.id, (entry) => (error ? entry.reject(new BridgeError(error.code, error.message)) : entry.resolve(result)));
-    } else if (data.event === 'context' || data.event === 'theme' || data.event === 'data') {
+    } else if (data.event === 'context' || data.event === 'theme' || data.event === 'data' || data.event === 'plugin.data') {
       if (data.event === 'context') context = data.data as BridgeViewContext;
       else if (data.event === 'theme') { theme = data.data as BridgeTheme; if (apply) applyThemeVars(theme); }
       for (const listener of listeners.get(data.event) ?? []) (listener as (value: unknown) => void)(data.data);

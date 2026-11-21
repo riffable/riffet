@@ -638,6 +638,36 @@ msgid "error.PROJECT_PROMOTION_CONFLICT"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_CANCELLED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_TIMEOUT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.QUERY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.RESTORE_EXPIRED"
 msgstr ""

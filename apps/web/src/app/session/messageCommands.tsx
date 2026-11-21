@@ -17,7 +17,10 @@ import { Markdown } from './Markdown';
 // this tab together, within `PLUGIN_COMMAND_BUDGET.keptResults`; a row scrolled away and back finds its result again.
 
 /** The conversation a transcript shows, for commands run on its messages. Absent where its messages take no commands (a shared page, an image export). */
-export const MessageCommandsContext = createContext<{ sessionId: string; openModelSettings(section: 'auxiliary' | 'quickchat'): void } | undefined>(undefined);
+export const MessageCommandsContext = createContext<{ sessionId: string; projectSystem?: string; openModelSettings(section: 'auxiliary' | 'quickchat'): void } | undefined>(undefined);
+
+const matchesProjectSystem = (command: PluginCommand, projectSystem: string | undefined) =>
+  command.when?.projectSystem === undefined || command.when.projectSystem === projectSystem;
 
 const ICONS: Record<CommandIcon, ComponentType<{ className?: string }>> = {
   languages: IconLanguages, sparkles: IconSparkles, 'book-open': IconBookOpen, 'file-text': IconFileText,
@@ -144,7 +147,8 @@ export function useMessageCommandItems(text: string | undefined, runId: string |
   const { i18n } = useLingui();
   const scope = useContext(MessageCommandsContext);
   const descriptors = usePlugins();
-  const commands = useMemo(() => enabledCommands(descriptors, i18n.locale, 'message'), [descriptors, i18n.locale]);
+  const projectSystem = scope?.projectSystem;
+  const commands = useMemo(() => enabledCommands(descriptors, i18n.locale, 'message').filter(command => matchesProjectSystem(command, projectSystem)), [descriptors, i18n.locale, projectSystem]);
   const sessionId = scope?.sessionId;
   const run = useCallback((command: PluginCommand) => {
     if (!sessionId || !text) return;
@@ -178,7 +182,7 @@ export function useSelectionCommands(): {
   const { i18n } = useLingui();
   const scope = useContext(MessageCommandsContext);
   const descriptors = usePlugins();
-  const commands = useMemo(() => scope ? enabledCommands(descriptors, i18n.locale, 'selection') : [], [descriptors, i18n.locale, scope]);
+  const commands = useMemo(() => scope ? enabledCommands(descriptors, i18n.locale, 'selection').filter(command => matchesProjectSystem(command, scope.projectSystem)) : [], [descriptors, i18n.locale, scope]);
   const sessionId = scope?.sessionId;
   const openModelSettings = scope?.openModelSettings;
   const run = useCallback(async (
@@ -282,7 +286,7 @@ export function MessageCommandResults({ text, runId }: { text: string; runId?: s
         {...((entry.state === 'shown' || (entry.state === 'running' && entry.text !== undefined)) ? { text: entry.text } : {})}
         {...(entry.state === 'failed' ? {
           error: entry.error,
-          ...(command ? { onRetry: () => executeMessageCommand(command, scope.sessionId, text, runId, i18n.locale, pluginSettingsKey(descriptors, command.id, i18n.locale)) } : {}),
+          ...(command && matchesProjectSystem(command, scope.projectSystem) ? { onRetry: () => executeMessageCommand(command, scope.sessionId, text, runId, i18n.locale, pluginSettingsKey(descriptors, command.id, i18n.locale)) } : {}),
           ...(chooseModel && openSettings ? { action: { label: t`选择模型`, onClick: () => openSettings(chooseModel) } } : {}),
         } : {})}
         onClose={() => closeResult(key)}

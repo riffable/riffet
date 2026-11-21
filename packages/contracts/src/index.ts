@@ -17,7 +17,7 @@ export type * from './channels.js';
 export type * from './appearance.js';
 export { APPEARANCE_BACKGROUND_AREAS, APPEARANCE_BACKGROUND_FITS, APPEARANCE_DEFAULT, APPEARANCE_FONT_ROLES, APPEARANCE_FONT_STYLES, APPEARANCE_MAX_FONT_BYTES, APPEARANCE_MAX_IMAGE_BYTES, APPEARANCE_MAX_PALETTE_BYTES } from './appearance.js';
 export { PLUGIN_CAPABILITIES, PLUGIN_SOURCE_BUILTIN, PLUGIN_WEB_API_VERSION } from './plugin-packages.js';
-export { AGENT_ICON_ROUTE, VIEW_ICON_ROUTE, PLUGIN_CHANNEL_ROUTE, COMMAND_ICONS, COMMAND_MENUS, COMMAND_SCOPES, DECLARATION_SCOPES, MODEL_USE_FALLBACKS, PLUGIN_CLIENTS, PLUGIN_ID, ASSISTANT_PACK_NAME, VIEW_INSTANCES, VIEW_LOCATION_SCOPES, VIEW_LOCATIONS, isContributionOf, resolveLocalizedText } from './plugins.js';
+export { AGENT_ICON_ROUTE, VIEW_ICON_ROUTE, PLUGIN_CHANNEL_ROUTE, PLUGIN_QUERY_ROUTE, COMMAND_ICONS, COMMAND_MENUS, COMMAND_SCOPES, DECLARATION_SCOPES, MODEL_USE_FALLBACKS, PLUGIN_CLIENTS, PLUGIN_ID, ASSISTANT_PACK_NAME, VIEW_INSTANCES, VIEW_LOCATION_SCOPES, VIEW_LOCATIONS, isContributionOf, resolveLocalizedText } from './plugins.js';
 export { NATIVE_BACKEND_IDS, compareAgentOrder, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID_MAX, isAgentOfPlugin, isBuiltinBackendId, isNativeBackendId, isPluginAgentId } from './agent-ids.js';
 export type { BuiltinBackendId, NativeBackendId, PluginAgentId } from './agent-ids.js';
 export { isDoneUnseen, isRunningSession, isUnread, needsYou } from './session-attention.js';

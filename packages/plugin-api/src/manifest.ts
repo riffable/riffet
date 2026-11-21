@@ -17,7 +17,8 @@ const KEYBINDING = /^(?:(?:Mod|Ctrl|Alt|Shift|Meta)\+)*(?:[A-Za-z0-9`\-=[\]\\;',
 const SF_SYMBOL = /^[A-Za-z0-9.]{1,64}$/;
 const CONDITION_TOKEN = /^[a-z0-9][a-z0-9.:-]{0,63}$/;
 const ACTIVATION_EVENTS = ['startup', 'command', 'model-source', 'task', 'view'] as const;
-const CONDITION_KEYS = ['hasProject', 'hasSession', 'projectType', 'capability'] as const;
+const CONDITION_KEYS = ['hasProject', 'hasSession', 'projectType', 'projectSystem', 'capability'] as const;
+const PROJECT_SYSTEMS = ['assistant'] as const;
 const SETTING_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const PARAM_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const PARAM_KINDS = ['text', 'boolean', 'choice'] as const;
@@ -69,6 +70,7 @@ function condition(value: unknown, path: string): string | undefined {
   if (!isRecord(value)) return `${path} must be an object`;
   for (const [key, item] of Object.entries(value)) {
     if (key === 'hasProject' || key === 'hasSession') { if (item !== true) return `${path}.${key} must be true`; }
+    else if (key === 'projectSystem') { if (!PROJECT_SYSTEMS.includes(item as never)) return `${path}.projectSystem must be ${PROJECT_SYSTEMS.join(', ')}`; }
     else if (key === 'projectType' || key === 'capability') { if (typeof item !== 'string' || !CONDITION_TOKEN.test(item)) return `${path}.${key} is invalid`; }
     else return `${path} has an unknown condition "${key}"`;
   }
@@ -213,6 +215,12 @@ function command(pluginId: string, value: unknown, path: string): string | undef
   return value.when === undefined ? undefined : condition(value.when, `${path}.when`);
 }
 
+function query(pluginId: string, value: unknown, path: string): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  if (!isContributionOf(pluginId, value.id)) return `${path}.id must be "${pluginId}/<name>"`;
+  return value.title === undefined ? undefined : localized(value.title, `${path}.title`, 80);
+}
+
 /** The folder of a capability pack inside the package. Whether it holds `.claude-plugin/plugin.json` is checked where the package is read. */
 export const ASSISTANT_PACK_PATH = /^assets\/.+$/;
 function assistantEvents(pluginId: string, value: unknown): string | undefined {
@@ -333,7 +341,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     }
   }
   const seen = new Set<string>();
-  for (const [key, check] of [['views', view], ['commands', command], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle], ['agentTools', agentTools], ['channels', channel], ['imChannels', imChannel], ['modelUses', modelUse]] as const) {
+  for (const [key, check] of [['views', view], ['commands', command], ['queries', query], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle], ['agentTools', agentTools], ['channels', channel], ['imChannels', imChannel], ['modelUses', modelUse]] as const) {
     const items = declarations[key];
     if (items === undefined) continue;
     if (!Array.isArray(items)) return `contributes.${key} must be an array`;
@@ -359,7 +367,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
 /** The ids a plugin declares, for the registry's check that no two plugins claim one. */
 export function declaredIds(declarations: PluginDeclarations | undefined): string[] {
   const { palettes, fonts, backgrounds, presets, iconPacks } = declarations?.appearance ?? {};
-  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(declarations?.imChannels ?? []), ...(declarations?.modelUses ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
+  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.queries ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(declarations?.imChannels ?? []), ...(declarations?.modelUses ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
 }
 
 /** The members of a validated record that this version knows, in that order: whatever else a package wrote there is dropped. */
@@ -385,6 +393,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
     ...(item.when ? { when: pick(item.when, CONDITION_KEYS) } : {}),
     ...(item.params ? { params: item.params.map(field => pick(field, ['key', 'label', 'kind', 'options', 'default', 'required'])) } : {}),
   }));
+  const queries = declarations.queries?.map(item => pick(item, ['id', 'title']));
   const assistantEvents = declarations.assistantEvents?.map(item => pick(item, ['id', 'title', 'description']));
   const tasks = declarations.tasks?.map(item => pick(item, ['id', 'title', 'projectType']));
   const agentBackends = declarations.agentBackends?.map(item => ({ ...pick(item, ['id', 'title']), ...(item.icon ? { icon: pick(item.icon, ['svg', 'sfSymbol']) } : {}) }));
@@ -395,7 +404,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const modelUses = declarations.modelUses?.map(item => pick(item, ['id', 'title', 'fallback']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(assistantEvents?.length ? { assistantEvents } : {}), ...(declarations.assistantPack ? { assistantPack: pick(declarations.assistantPack, ['path']) } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(imChannels?.length ? { imChannels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(queries?.length ? { queries } : {}), ...(assistantEvents?.length ? { assistantEvents } : {}), ...(declarations.assistantPack ? { assistantPack: pick(declarations.assistantPack, ['path']) } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(imChannels?.length ? { imChannels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -434,7 +443,7 @@ function checkManifestRules(manifest: PluginManifest): string | undefined {
 const localizedSchema = (max: number) => z.record(z.string().regex(LANGUAGE_TAG), z.string().min(1).max(max).refine(value => Boolean(value.trim()), 'must contain text')).refine(value => Object.keys(value).length > 0, 'must contain a language');
 const pathSchema = z.string().min(1).max(256).regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\\\u0000]+$/).refine(isPackagePath, 'must be a relative path inside the package');
 const titleSchema = localizedSchema(80);
-const conditionSchema = z.object({ hasProject: z.literal(true).optional(), hasSession: z.literal(true).optional(), projectType: z.string().regex(CONDITION_TOKEN).optional(), capability: z.string().regex(CONDITION_TOKEN).optional() }).strict();
+const conditionSchema = z.object({ hasProject: z.literal(true).optional(), hasSession: z.literal(true).optional(), projectType: z.string().regex(CONDITION_TOKEN).optional(), projectSystem: z.enum(PROJECT_SYSTEMS).optional(), capability: z.string().regex(CONDITION_TOKEN).optional() }).strict();
 const iconSchema = z.object({ svg: pathSchema.optional(), sfSymbol: z.string().regex(SF_SYMBOL).optional() });
 const primitiveSchema = z.union([z.string(), z.number().finite(), z.boolean()]);
 const paramsSchema = z.array(z.object({ key: z.string().regex(PARAM_KEY), label: titleSchema, kind: z.enum(PARAM_KINDS), options: z.array(z.string().min(1).max(256)).min(1).max(64).optional(), default: primitiveSchema.optional(), required: z.boolean().optional() })).max(MAX_PARAMS);
@@ -466,6 +475,7 @@ const declarationsSchema = z.object({
   speechRecognizer: z.object({ title: titleSchema }).optional(),
   views: z.array(viewSchema).optional(),
   commands: z.array(z.object({ ...contributionSchema, when: conditionSchema.optional(), keybinding: z.string().regex(KEYBINDING).optional(), scope: z.enum(COMMAND_SCOPES).optional(), params: paramsSchema.optional(), menus: z.array(z.enum(COMMAND_MENUS)).min(1).optional(), icon: z.enum(COMMAND_ICONS).optional() }).passthrough()).optional(),
+  queries: z.array(z.object({ id: z.string(), title: titleSchema.optional() }).passthrough()).max(64).optional(),
   assistantEvents: z.array(z.object({ id: z.string(), title: titleSchema, description: localizedSchema(400) }).passthrough()).max(16).optional(),
   assistantPack: z.object({ path: pathSchema.regex(ASSISTANT_PACK_PATH) }).passthrough().optional(),
   tasks: z.array(z.object({ ...contributionSchema, projectType: z.string().regex(CONDITION_TOKEN).optional() }).passthrough()).optional(),

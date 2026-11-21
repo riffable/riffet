@@ -29,13 +29,15 @@ export interface WorkbenchHandlers {
   sessionAction: (session: Session, action: SessionAction) => void;
   /** Locates a 收藏 and opens its conversation at the message. */
   openMark: (id: string) => void;
+  openAssistant: () => boolean;
+  openPluginView: (id: string) => boolean;
 }
 
 const SEEN_REPORT_DELAY_MS = 1000;
 
 /** One workbench's state, split by what changes together. */
 export function createWorkbenchStores() {
-  const handlers: WorkbenchHandlers = { selectSession: () => {}, reload: () => {}, sessionAction: () => {}, openMark: () => {} };
+  const handlers: WorkbenchHandlers = { selectSession: () => {}, reload: () => {}, sessionAction: () => {}, openMark: () => {}, openAssistant: () => false, openPluginView: () => false };
   const cached = loadCachedLists()?.bootstrap;
   // `lists` is only read once a catalog request has answered, by which point it exists.
   const catalog = createCatalogStore({ offline: () => lists.get().status !== 'fresh' });
@@ -98,7 +100,7 @@ export function WorkbenchEffects() {
   useEffect(() => {
     return onSessionsDeleted((ids) => { tabs.retire(ids); lists.removeSessions(ids); });
   }, [tabs, lists]);
-  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.automationsOpen === b.automationsOpen && a.councilOpen === b.councilOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId);
+  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.automationsOpen === b.automationsOpen && a.councilOpen === b.councilOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId && a.mainViewId === b.mainViewId);
   const sidebarCollapsed = useStore(ui, (state) => state.sidebarCollapsed);
   const dockHeight = useStore(ui, (state) => state.dockHeight);
   const sidebarWidth = useStore(ui, (state) => state.sidebarWidth);
@@ -111,7 +113,7 @@ export function WorkbenchEffects() {
     let timer: number | undefined;
     const unseenOnScreen = () => {
       const state = nav.get();
-      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.extensionsOpen || state.marksOpen || state.designOpen || state.attemptsGroupId) return undefined;
+      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.extensionsOpen || state.marksOpen || state.designOpen || state.mainViewId || state.attemptsGroupId) return undefined;
       const session = lists.get().sessions.find((item) => item.id === state.sessionId);
       return session && isUnread(session) ? session : undefined;
     };
@@ -158,9 +160,9 @@ export function WorkbenchEffects() {
    */
   useEffect(() => {
     if (!loaded) return;
-    const page = pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : designOpen ? 'design' : tasksOpen ? 'tasks' : automationsOpen ? 'automations' : councilOpen ? 'council' : undefined;
-    replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, stats: statsState, designPlatform, designChapter }));
-  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, statsState]);
+    const page = mainViewId ? 'view' : pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : designOpen ? 'design' : tasksOpen ? 'tasks' : automationsOpen ? 'automations' : councilOpen ? 'council' : undefined;
+    replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, ...(mainViewId ? { mainViewId } : {}), stats: statsState, designPlatform, designChapter }));
+  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState]);
 
   return null;
 }

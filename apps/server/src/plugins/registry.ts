@@ -3,11 +3,11 @@ import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup, type ImChannelProvider,
-  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type PluginApprovalHandler, type SharePublisher, type SpeechRecognizer, type TaskProvider,
+  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type PluginApprovalHandler, type PluginQueryHandler, type SharePublisher, type SpeechRecognizer, type TaskProvider,
 } from '@riffet/plugin-api';
 import { protocolBackends, sourceProtocols } from '@riffet/plugin-api/kit';
 import { AGENT_PROTOCOL_VERSION, type AgentBackend } from '@riffet/plugin-api/experimental/agent';
-import type { ActionStep, AppearanceDeclarations, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, LocalizedText, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import type { ActionStep, AppearanceDeclarations, PluginPageExtraKind, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, QueryDeclaration, PluginDeclarations, LocalizedText, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 // The core's only import of the built-in list (`pnpm check:plugins`), so a build can swap it here.
 import { builtinPlugins } from '../../../../plugins/index.js';
@@ -75,6 +75,8 @@ export interface OwnedAgentTools { owner: PluginManifest['id']; declaration: Non
 export interface OwnedAvatarStyle { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['avatarStyles']>[number]; provider: AvatarStyleProvider }
 /** A command ready to run: the declaration, the handler, and the signal that aborts with the activation. */
 export interface ResolvedCommand { declaration: CommandDeclaration; handler: CommandHandler; signal: AbortSignal }
+/** A read-only query ready to run for a plugin's views. */
+export interface ResolvedQuery { declaration: QueryDeclaration; handler: PluginQueryHandler; signal: AbortSignal }
 
 export interface PluginRegistryOptions {
   stateDir: string;
@@ -165,6 +167,7 @@ export class PluginRegistry {
   private readonly invalidate: () => void;
   private readonly agentBackendProvided: (id: string) => boolean;
   private readonly changeListeners = new Set<() => void>();
+  private readonly viewDataListeners = new Set<(event: { pluginId: string; topic?: string }) => void>();
   private readonly hostOptions: Parameters<typeof createPluginHost>[1];
   private readonly emitAssistantEvent?: Parameters<typeof createPluginHost>[1]['emitAssistantEvent'];
   private readonly approvals?: Parameters<typeof createPluginHost>[1]['approvals'];
@@ -315,15 +318,17 @@ export class PluginRegistry {
     } catch { return false; }
   }
 
-  async ensureContribution(kind: 'command' | 'model-source' | 'task' | 'view', contributionId: string): Promise<void> {
+  async ensureContribution(kind: 'command' | 'model-source' | 'query' | 'task' | 'view', contributionId: string): Promise<void> {
     await this.loading;
     const entry = [...this.entries.values()].find(item => {
       const declared = item.plugin.manifest.contributes;
-      return (kind === 'command' ? declared?.commands : kind === 'model-source' ? declared?.modelSources : kind === 'task' ? declared?.tasks : declared?.views)?.some(value => value.id === contributionId)
+      return (kind === 'command' ? declared?.commands : kind === 'model-source' ? declared?.modelSources : kind === 'query' ? declared?.queries : kind === 'task' ? declared?.tasks : declared?.views)?.some(value => value.id === contributionId)
         || kind === 'model-source' && item.active?.contributions?.modelSources?.some(source => source.id === contributionId);
     });
     if (!entry) throw new AppError('PLUGIN_CONTRIBUTION_NOT_FOUND', 'Plugin contribution not found', 404);
-    if (!entry.active && !this.events(entry).includes(kind) && !this.events(entry).includes('startup')) throw new AppError('PLUGIN_ACTIVATION_UNSUPPORTED', `This plugin does not activate on ${kind}`, 409);
+    const events = this.events(entry);
+    const allowed = kind === 'query' ? (events.includes('view') || events.includes('command') || events.includes('startup')) : (events.includes(kind) || events.includes('startup'));
+    if (!entry.active && !allowed) throw new AppError('PLUGIN_ACTIVATION_UNSUPPORTED', `This plugin does not activate on ${kind}`, 409);
     await this.ensureEntry(entry, `${kind}:${contributionId}`);
   }
 
@@ -578,6 +583,12 @@ export class PluginRegistry {
     return () => { this.changeListeners.delete(listener); };
   }
 
+  /** Called when a plugin invalidates its views' cached data via `host.views.invalidate`. A listener must not throw. */
+  onViewData(listener: (event: { pluginId: string; topic?: string }) => void): () => void {
+    this.viewDataListeners.add(listener);
+    return () => { this.viewDataListeners.delete(listener); };
+  }
+
   /** Called when a turned-off activation has been released, disposers included, with what it contributed: nothing of it may be used after this. A listener must not throw. */
   onEnded(listener: (contributions: Contributions | undefined) => void): () => void {
     this.endListeners.add(listener);
@@ -704,6 +715,21 @@ export class PluginRegistry {
     const handler = declaration && commands && Object.hasOwn(commands, commandId) ? commands[commandId] : undefined;
     if (!declaration || !handler) throw unknown();
     return { declaration, handler: { run: context => this.guarded(entry, () => handler.run(context), 'COMMAND_FAILED') }, signal: entry.active.controller.signal };
+  }
+
+  /** The read-only query `queryId` of plugin `pluginId`, ready to run for its views. */
+  query(pluginId: string, queryId: string): ResolvedQuery {
+    const entry = this.entries.get(pluginId);
+    const unknown = () => new AppError('QUERY_NOT_FOUND', 'Unknown query', 404);
+    const declaration = entry?.plugin.manifest.contributes?.queries?.find(declared => declared.id === queryId);
+    if (!entry || !declaration) throw unknown();
+    const unavailable = (reason: string) => new AppError('QUERY_UNAVAILABLE', `${queryId} is unavailable: ${reason}`, 409, { reason });
+    if (!entry.active) throw unavailable(entry.problem ?? 'its plugin is off');
+    if (entry.waiting) throw unavailable(`its plugin is turning off after ${this.runningTasks(pluginId)} running task(s)`);
+    const queries = entry.active.contributions?.queries;
+    const handler = queries && Object.hasOwn(queries, queryId) ? queries[queryId] : undefined;
+    if (!handler) throw unknown();
+    return { declaration, handler: { run: context => this.guarded(entry, () => Promise.resolve(handler.run(context)), 'QUERY_FAILED') }, signal: entry.active.controller.signal };
   }
 
   /** `host.services.get` of `consumerId`: the object of another plugin's service, see `PluginHost.services`. */
@@ -1334,11 +1360,13 @@ export class PluginRegistry {
   }
 
   private createHost(manifest: PluginManifest, source: Source, trusted = false): PluginHost {
-    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined, completeModel: undefined, streamModel: undefined, ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id) } : {
+    const invalidateViews = (topic?: string) => this.emitViewData(manifest.id, topic);
+    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined, completeModel: undefined, streamModel: undefined, ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id), invalidateViews } : {
       ...this.hostOptions, ownAgentBackends: (manifest.contributes?.agentBackends ?? []).map(declared => declared.id),
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
       ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
       ownModelUses: manifest.contributes?.modelUses ?? [],
+      invalidateViews,
       ...(this.approvals ? { approvals: this.approvals } : {}),
       ...(this.emitAssistantEvent ? { emitAssistantEvent: this.emitAssistantEvent, ownAssistantEvents: (manifest.contributes?.assistantEvents ?? []).map(declared => declared.id) } : {}),
       service: (pluginId, name, range) => this.serviceOf(manifest.id, pluginId, name, range),
@@ -1732,6 +1760,13 @@ export class PluginRegistry {
     }
   }
 
+  private emitViewData(pluginId: string, topic?: string): void {
+    const payload = topic ? { pluginId, topic } : { pluginId };
+    for (const listener of this.viewDataListeners) {
+      try { listener(payload); } catch (error) { console.warn('[riffet] plugin view-data listener failed:', describeError(error)); }
+    }
+  }
+
   /** A profile names a source by id alone, so two providers of one id would be ambiguous. */
   private checked(contributions: Contributions, manifest: PluginManifest, skipped: readonly string[] = []): void {
     const taken = new Set(this.active().flatMap(contribution => contribution.modelSources ?? []).map(source => source.id));
@@ -1760,6 +1795,10 @@ export class PluginRegistry {
       // A command this host left out of the manifest stays unrunnable (`command()` finds no declaration); its handler is not an error.
       if (skipped.includes(commandId)) continue;
       if (!manifest.contributes?.commands?.some(declared => declared.id === commandId) || typeof handler?.run !== 'function') throw new Error(`command "${commandId}" is not declared in contributes.commands or has no run()`);
+    }
+    for (const [queryId, handler] of Object.entries(contributions.queries ?? {})) {
+      if (skipped.includes(queryId)) continue;
+      if (!manifest.contributes?.queries?.some(declared => declared.id === queryId) || typeof handler?.run !== 'function') throw new Error(`query "${queryId}" is not declared in contributes.queries or has no run()`);
     }
     for (const [styleId, provider] of Object.entries(contributions.avatarStyles ?? {})) {
       if (!manifest.contributes?.avatarStyles?.some(declared => declared.id === styleId) || typeof provider?.generate !== 'function') throw new Error(`avatar style "${styleId}" is not declared in contributes.avatarStyles or has no generate()`);

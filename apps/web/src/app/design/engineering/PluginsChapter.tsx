@@ -50,7 +50,7 @@ function Ways() {
         { label: t`谁绘制`, cells: [t`各端的宿主组件`, t`插件的 React 组件`, t`插件自带的页面`] },
         { label: t`平台`, cells: [t`Web、Mac、手机`, t`Web`, t`Web、Mac`] },
         { label: t`样式来源`, cells: [t`宿主组件`, t`UiKit 与 Tailwind 类`, t`颜色角色、--riffet-* 与元素规则`] },
-        { label: t`位置`, cells: [t`设置、侧栏、会话视图`, t`全部`, t`会话视图、侧栏`] },
+        { label: t`位置`, cells: [t`设置、侧栏、会话视图`, t`全部`, t`会话视图、侧栏、文件、单实例主页面`] },
         { label: t`适用`, cells: [t`设置、检测结果、数据、操作`, t`内置官方插件`, t`复杂界面的第三方包`] },
       ]} />
     </Frame>

@@ -119,6 +119,7 @@ export class CommandService {
     if (when?.hasProject && !project) throw unavailable('it needs a project');
     if (when?.hasSession && !session) throw unavailable('it needs a conversation');
     if (when?.projectType && !(project && (await this.options.projectTypes(project.id)).includes(when.projectType))) throw unavailable(`the project is not of type ${when.projectType}`);
+    if (when?.projectSystem && project?.system !== when.projectSystem) throw unavailable(`it needs the ${when.projectSystem} project`);
 
     const args = resolveParams(declaration.params, given, invalid);
 

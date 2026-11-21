@@ -171,6 +171,12 @@ export class HostService {
         this.need('models.provide');
         this.host.invalidateModelCatalogs();
         return null;
+      case 'host.views.invalidate': {
+        const topic = params.topic;
+        if (topic !== undefined && (typeof topic !== 'string' || topic.length > 128)) throw new AppError('INVALID_INPUT', 'topic must be text of at most 128 characters');
+        this.host.views?.invalidate(topic);
+        return null;
+      }
       case 'host.gateway.fetchModels': {
         this.need('network');
         const request = gatewayRequest(params.request);

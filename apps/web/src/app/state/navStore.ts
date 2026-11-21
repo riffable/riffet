@@ -49,6 +49,8 @@ export interface NavState {
   pluginsOpen: boolean;
   pluginId: string;
   pluginViewId: string;
+  /** The `main` plugin view showing as a top-level page; empty when none is. */
+  mainViewId: string;
   pluginDetailTab?: PluginDetailTab;
   /** Each explicit opening re-applies its destination, even when the same deep link is repeated. */
   pluginOpenRevision?: number;
@@ -105,7 +107,7 @@ function startingSelection(link: DeepLink | undefined, lists: { projects: Projec
 }
 
 /** Closes every page that covers the conversation, for a destination that is a conversation or project. */
-export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, designOpen: false, pluginsOpen: false, attemptsGroupId: '' } as const satisfies Partial<NavState>;
+export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, designOpen: false, pluginsOpen: false, mainViewId: '', attemptsGroupId: '' } as const satisfies Partial<NavState>;
 
 /**
  * What is selected and which page is showing, and the gate every change of destination goes through.
@@ -139,6 +141,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     pluginsOpen: view === 'plugins',
     pluginId: address.pluginId ?? '',
     pluginViewId: '',
+    mainViewId: view === 'view' ? (address.mainViewId ?? '') : '',
     attemptsGroupId: '',
     statsState: address.stats,
   });
@@ -164,6 +167,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
       || current.pluginsOpen !== previousDestination.pluginsOpen || current.pluginId !== previousDestination.pluginId
       || current.pluginViewId !== previousDestination.pluginViewId || current.pluginDetailTab !== previousDestination.pluginDetailTab
       || current.pluginOpenRevision !== previousDestination.pluginOpenRevision
+      || current.mainViewId !== previousDestination.mainViewId
       || current.attemptsGroupId !== previousDestination.attemptsGroupId) navigationRevision += 1;
     previousDestination = current;
   });
@@ -209,7 +213,10 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     /** The page header and browser-back handler already checked the guard. */
     closeExtensions() { store.set({ extensionsOpen: false }); },
     openPage(page: NavPage) {
-      store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', designOpen: page === 'design', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
+      store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', designOpen: page === 'design', mainViewId: '', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
+    },
+    openMainView(viewId: string) {
+      store.set({ ...NO_PAGE, extensionsOpen: false, mainViewId: viewId });
     },
     openPlugins(pluginId = '', pluginViewId = '', pluginDetailTab: PluginDetailTab = 'overview') { store.set({ ...NO_PAGE, extensionsOpen: false, pluginsOpen: true, pluginId, pluginViewId, pluginDetailTab, pluginOpenRevision: (store.get().pluginOpenRevision ?? 0) + 1 }); },
     openAttemptsGroup(groupId: string) {

@@ -23,7 +23,7 @@ export function useSidebarViews(project: ProjectRecord | undefined, sessionId: s
     // and the file routes refuse it (it lives in the state directory). Its memory has its own reader (docs/ASSISTANT.md §3.2).
     const own = project?.system === 'assistant';
     const capabilities = hasGit && !own ? GIT_CAPABILITIES : NO_CAPABILITIES;
-    const offered = catalog.filter((view) => view.location === 'sidebar' && !hidden.includes(view.id) && !(own && view.id === 'files') && matches(view.when, { hasProject, hasSession, capabilities, projectTypes }));
+    const offered = catalog.filter((view) => view.location === 'sidebar' && !hidden.includes(view.id) && !(own && view.id === 'files') && matches(view.when, { hasProject, hasSession, projectSystem: project?.system, capabilities, projectTypes }));
     return orderViews(offered, order);
   }, [catalog, order, hidden, hasProject, hasSession, hasGit, projectTypes, project?.system]);
 }
@@ -46,5 +46,5 @@ export function useFileViews(project: ProjectRecord, path: string | undefined): 
   const hasGit = useHasGit(project);
   const projectTypes = useProjectTypes(project.id);
   const inside = path !== undefined && !path.startsWith('/') && !path.startsWith('~');
-  return useMemo(() => (inside ? fileViewsFor(catalog, path, { hasProject: true, hasSession: false, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES, projectTypes }) : []), [catalog, path, inside, hasGit, projectTypes]);
+  return useMemo(() => (inside ? fileViewsFor(catalog, path, { hasProject: true, hasSession: false, projectSystem: project.system, capabilities: hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES, projectTypes }) : []), [catalog, path, inside, hasGit, projectTypes, project.system]);
 }

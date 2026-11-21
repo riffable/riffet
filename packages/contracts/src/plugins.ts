@@ -47,6 +47,8 @@ export interface Condition {
   hasSession?: true;
   /** A project type the host recognises, such as `android`. */
   projectType?: string;
+  /** A system project kind the host recognises, such as `assistant`. */
+  projectSystem?: 'assistant';
   /** A host capability that must be available. */
   capability?: string;
 }
@@ -252,6 +254,14 @@ export interface PluginApprovalDecision { actionId: string }
 /** The decided approval is gone; `message` is what the plugin says about the result. */
 export interface PluginApprovalResult { message?: LocalizedText }
 
+export const PLUGIN_QUERY_ROUTE = (pluginId: string, name: string): string => `/api/integrations/${encodeURIComponent(pluginId)}/queries/${encodeURIComponent(name)}`;
+
+export interface QueryDeclaration {
+  /** `<pluginId>/<name>`; the query route is `POST /api/integrations/<pluginId>/queries/<name>`. */
+  id: string;
+  title?: LocalizedText;
+}
+
 /** A topic a plugin may emit with `host.assistant.emit` (docs/ASSISTANT.md §7.3); the 助理 finds it through `workbench.assistant_events` and subscribes a delegation to it. */
 export interface AssistantEventDeclaration {
   /** `<pluginId>/<name>`. */
@@ -276,6 +286,8 @@ export interface PluginDeclarations {
   actions?: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   views?: ViewDeclaration[];
   commands?: CommandDeclaration[];
+  /** Read-only structured data queries served to this plugin's own views (`POST /api/integrations/:id/queries/:name`). */
+  queries?: QueryDeclaration[];
   /** Topics the plugin emits to the 助理's delegations. In-process packages only (`host.assistant`). */
   assistantEvents?: AssistantEventDeclaration[];
   /** A capability pack installed into the 助理 while the plugin is enabled. */
@@ -314,6 +326,8 @@ export const DECLARATION_SCOPES: Readonly<Record<keyof PluginDeclarations, LinkS
   // Each view by its location: VIEW_LOCATION_SCOPES.
   views: 'object',
   commands: 'global',
+  // Served to the plugin's own views, by the server that served the view.
+  queries: 'object',
   assistantEvents: 'global',
   assistantPack: 'global',
   agentBackends: 'object',

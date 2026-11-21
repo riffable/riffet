@@ -2,8 +2,8 @@ import { BRIDGE_INIT, BRIDGE_READY, BRIDGE_VERSION, type BridgeEvent, type Bridg
 import { serveBridge, type Bridge, type BridgeGrant, type BridgePort, type BridgeServices } from './bridgeHost';
 
 /*
- * Hands a frame its channel. The page the host built asks (`BRIDGE_READY`, see `CHANNEL_SCRIPT` in
- * `document.ts`) before any of the view's code exists, and the host answers only the window it embedded:
+ * Hands a frame its channel. The server's `/plugin-view` shell asks (`BRIDGE_READY`) before any of the
+ * view's code exists, and the host answers only the window it embedded:
  * `event.source` is the browser's own account of who posted, so another frame, another window or a
  * script on the page cannot get a port, and a message that names a plugin means nothing. The reply
  * carries one end of a fresh `MessageChannel`; every later request arrives on that port, which is what
@@ -32,11 +32,20 @@ export interface FrameWindow {
   postMessage(message: unknown, targetOrigin: string, transfer: Transferable[]): void;
 }
 
-export function attachFrame({ frame, grant, services, listenOn = window, createChannel = () => new MessageChannel() }: {
+/** The view's initial locale, theme stylesheet and integrity-checked script, sent once with `BRIDGE_INIT`. */
+export interface FrameBootstrap {
+  code: string;
+  style: string;
+  locale: string;
+}
+
+export function attachFrame({ frame, grant, services, bootstrap, listenOn = window, createChannel = () => new MessageChannel() }: {
   /** The frame's window now; null before it exists or after it is gone. */
   frame: () => FrameWindow | null;
   grant: BridgeGrant;
   services: BridgeServices;
+  /** Payload applied by the `/plugin-view` shell once the handshake succeeds. */
+  bootstrap?: () => FrameBootstrap;
   listenOn?: MessageSource;
   createChannel?: () => { port1: BridgePort; port2: MessagePort };
 }): FrameChannel {
@@ -52,7 +61,7 @@ export function attachFrame({ frame, grant, services, listenOn = window, createC
     const channel = createChannel();
     bridge = serveBridge({ port: channel.port1, grant, services });
     // An opaque origin cannot be named, so the target is any origin: the port goes to `target`, the window this host embedded.
-    target.postMessage({ type: BRIDGE_INIT, version: BRIDGE_VERSION }, '*', [channel.port2]);
+    target.postMessage({ type: BRIDGE_INIT, version: BRIDGE_VERSION, ...(bootstrap ? { bootstrap: bootstrap() } : {}) }, '*', [channel.port2]);
   };
   listenOn.addEventListener('message', onMessage);
 

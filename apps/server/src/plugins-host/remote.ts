@@ -7,7 +7,7 @@ import type {
   ModelSourceBackend, ModelSourceProvider, PluginCommandResult, ResolvedSource, SourceEndpoint, SourceOverrides, TaskDiagnostic, TaskProvider,
 } from '@riffet/plugin-api';
 import type { ChildContributions, ChildDeviceFlow, HostToChild } from '../../../../packages/plugin-api/src/runtime/protocol.js';
-import type { ModelStatus, NativeBackendUsage, UsageWindow } from '@riffet/contracts';
+import { PLUGIN_QUERY_BUDGET, type ModelStatus, type NativeBackendUsage, type UsageWindow } from '@riffet/contracts';
 import { confined } from '../plugins/development.js';
 import { HostService } from './host-service.js';
 import { PluginProcess } from './process.js';
@@ -18,7 +18,7 @@ import { SourceAddresses } from './addresses.js';
 // An installed package as an `Plugin`: its server entry runs in a separate process
 // (`process.ts`), and what it contributes reaches the registry as proxies that call into it. Only
 // what can cross a process boundary as data is supported: model sources, task providers, actions,
-// status, doctor checks, commands and avatar styles. Anything else the package returns is refused with its name.
+// status, doctor checks, commands, queries and avatar styles. Anything else the package returns is refused with its name.
 
 /** Every call to the child ends in failure if it takes longer. */
 export const TIMEOUTS = {
@@ -42,7 +42,7 @@ export function runtimeFile(): string {
   throw new Error('the plugin runtime file is missing from this build');
 }
 
-type Call = <M extends keyof HostToChild>(method: M, params: HostToChild[M]['params'], timeoutMs: number) => Promise<HostToChild[M]['result']>;
+type Call = <M extends keyof HostToChild>(method: M, params: HostToChild[M]['params'], timeoutMs: number, querySignal?: AbortSignal) => Promise<HostToChild[M]['result']>;
 
 export interface RemoteOptions {
   manifest: PluginManifest;
@@ -137,6 +137,7 @@ function describedByChild(raw: unknown): ChildContributions {
   }
   for (const item of list(raw.taskProviders, 'a task provider')) if (!isRecord(item) || !text(item.id, 200) || typeof item.diagnostics !== 'boolean') throw malformed('a task provider');
   for (const item of list(raw.commands, 'a command')) if (!text(item, 200)) throw malformed('a command');
+  for (const item of list(raw.queries ?? [], 'a query')) if (!text(item, 200)) throw malformed('a query');
   // Absent from a child written before avatar styles existed.
   for (const item of list(raw.avatarStyles ?? [], 'an avatar style')) if (!text(item, 200)) throw malformed('an avatar style');
   for (const item of list(raw.actions, 'an action')) if (!isRecord(item) || !text(item.id, 64) || !text(item.label, 200) || (item.kind !== 'run' && item.kind !== 'device-flow')) throw malformed('an action');
@@ -365,7 +366,8 @@ export function remotePlugin(options: RemoteOptions): Plugin {
       scope.onDispose(() => child.stop());
 
       let sent = '';
-      const call: Call = async (method, params, timeoutMs) => {
+      const call: Call = async (method, params, timeoutMs, querySignal) => {
+        querySignal?.throwIfAborted();
         // Settings and secrets change while it runs; the child is told before the call that may read them.
         const facts = service.facts();
         const state = JSON.stringify([options.settings(), options.secrets(), facts]);
@@ -373,7 +375,7 @@ export function remotePlugin(options: RemoteOptions): Plugin {
           sent = state;
           await child.call('state', { settings: { ...options.settings() }, secrets: { ...options.secrets() }, ...facts }, TIMEOUTS.status);
         }
-        return child.call(method, params, timeoutMs);
+        return child.call(method, params, timeoutMs, querySignal);
       };
 
       const facts = service.facts();
@@ -436,6 +438,18 @@ export function remotePlugin(options: RemoteOptions): Plugin {
             return commandResultFromChild(await call('command.run', {
               id, ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), args: { ...args }, ...(message ? { message: { ...message } } : {}), ...(locale ? { locale } : {}), timeoutMs: TIMEOUTS.command - COMMAND_GRACE_MS,
             }, TIMEOUTS.command));
+          },
+        }]));
+      }
+      if (description.queries?.length) {
+        contributions.queries = Object.fromEntries(description.queries.map((id): [string, NonNullable<Contributions['queries']>[string]] => [id, {
+          async run(context) {
+            const { projectId, sessionId, params, locale, signal } = context;
+            const json = await call('query.run', {
+              id, ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), params: { ...params }, ...(locale ? { locale } : {}), resultBytes: PLUGIN_QUERY_BUDGET.resultBytes,
+            }, PLUGIN_QUERY_BUDGET.timeoutMs + COMMAND_GRACE_MS, signal);
+            if (typeof json !== 'string') throw malformed('the query result');
+            return JSON.parse(json) as unknown;
           },
         }]));
       }

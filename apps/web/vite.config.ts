@@ -217,6 +217,10 @@ export default defineConfig(({ command, mode }): UserConfig => {
         target: devBackend,
         changeOrigin: false,
       },
+      '/plugin-view': {
+        target: devBackend,
+        changeOrigin: false,
+      },
       '/mermaid': {
         target: devBackend,
         changeOrigin: false,
