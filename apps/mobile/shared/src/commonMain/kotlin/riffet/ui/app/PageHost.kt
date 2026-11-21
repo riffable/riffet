@@ -33,9 +33,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -52,10 +50,15 @@ import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.InterfaceStyleTokens
 import riffet.ui.design.interfaceStyleTokens
+import riffet.ui.gesture.SwipeDirection
+import riffet.ui.gesture.SwipeDrag
+import riffet.ui.gesture.SwipeSurface
+import riffet.ui.gesture.SwipeVerdict
+import riffet.ui.gesture.swallowTouches
+import riffet.ui.gesture.swipeSurface
 import riffet.ui.timeline.rememberReducedMotion
 import riffet.ui.theme.LocalRiffetPageMotion
 import riffet.ui.theme.RiffetPageMotion
-import kotlin.math.abs
 
 internal enum class PageSwipeMode { FULL, EDGE, NONE }
 
@@ -344,6 +347,8 @@ internal fun SwipeBackPage(
     /** Leaves [content] out until this page is active or [cover] starts to leave it; [onBuilt] then ends the deferral. */
     deferred: Boolean = false,
     onBuilt: () -> Unit = {},
+    /** A leftward swipe goes on to the surface outside (the session's details drawer) instead of stopping here. */
+    passLeftward: Boolean = false,
     content: @Composable (() -> Unit) -> Unit,
 ) {
     val callback = rememberUpdatedState(onBack)
@@ -357,7 +362,26 @@ internal fun SwipeBackPage(
     state.clearFocus = { focus.clearFocus() }
     RegisterPageBackTarget(state, canGoBack)
     LaunchedEffect(state, state.pageMotion, state.reduced) { state.enter() }
-    val canDrag = rememberUpdatedState(active && canGoBack && gestures && mode != PageSwipeMode.NONE)
+    val covers = rememberUpdatedState(active && canGoBack && mode != PageSwipeMode.NONE)
+    val swipes = rememberUpdatedState(gestures)
+    val latestMode = rememberUpdatedState(mode)
+    val latestPassLeftward = rememberUpdatedState(passLeftward)
+    val density = LocalDensity.current.density
+    val surface = remember(state, dispatcher, density) {
+        SwipeSurface { start ->
+            // A root page, an inactive one or a pane without swipe back covers nothing: the swipe is the tabs' or the drawers'.
+            if (!covers.value) return@SwipeSurface SwipeVerdict.Pass
+            // A pushed page covers the tabs and the drawers beneath it: what it does not take, nobody does.
+            if (start.direction == SwipeDirection.LEFT) return@SwipeSurface if (latestPassLeftward.value) SwipeVerdict.Pass else SwipeVerdict.Refuse
+            if (!swipes.value || state.settling || state.dragging || state.entering > 0f) return@SwipeSurface SwipeVerdict.Refuse
+            // Swipe back is this page's back: while back would close something on it first (a search), it waits.
+            if (dispatcher != null && dispatcher.current !== state) return@SwipeSurface SwipeVerdict.Refuse
+            val edge = start.position.x <= EdgeWidth * density
+            if (latestMode.value == PageSwipeMode.EDGE && !edge) return@SwipeSurface SwipeVerdict.Refuse
+            // The edge is the page's own: it takes the swipe from a scroller or pager under the finger too.
+            SwipeVerdict.Take(overChildren = edge) { PageSwipe(state, start.size.width.toFloat().coerceAtLeast(1f), density) }
+        }
+    }
     val contentReady by remember(state, parentReady) { derivedStateOf { parentReady && state.entering == 0f } }
     val uncovering by remember(cover) {
         derivedStateOf { cover != null && (cover.dragging || cover.settling || cover.revealed > 0f || cover.preview > 0f) }
@@ -367,8 +391,6 @@ internal fun SwipeBackPage(
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val widthPx = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-        val density = LocalDensity.current.density
-        val edgePx = 24f * density
         // This sibling sits above the entire previous page, including the exposed strip. It also
         // prevents a covered page from catching a drag when the foreground rejects the gesture.
         if (active) {
@@ -383,53 +405,10 @@ internal fun SwipeBackPage(
             })
         }
         val accessibility = if (active) Modifier else Modifier.clearAndSetSemantics { }
-        // Track the pointer in the stationary parent. Measuring on the translated page subtracts
-        // its own movement from the next event and makes the page lag behind the finger.
+        // Enlisted on the stationary parent: the arbiter measures the finger in the window, so the
+        // translated page never subtracts its own movement from the drag.
         Box(
-            Modifier.fillMaxSize().pointerInput(state, mode, widthPx, density) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    if (!canDrag.value || state.settling || state.entering > 0f) return@awaitEachGesture
-                    if (dispatcher != null && dispatcher.current !== state) return@awaitEachGesture
-                    val edge = down.position.x <= edgePx
-                    if (mode == PageSwipeMode.EDGE && !edge) return@awaitEachGesture
-                    // Edge swipes own the edge; elsewhere children (pager, selection, horizontal
-                    // scrolling) see the Main pass first and can keep their gesture.
-                    val pass = if (edge) PointerEventPass.Initial else PointerEventPass.Main
-                    val tracker = VelocityTracker()
-                    tracker.addPosition(down.uptimeMillis, down.position)
-                    var locked = false
-                    var origin = down.position
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent(pass)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (event.changes.count { it.pressed } > 1 || (!edge && change.isConsumed)) break
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            val delta = change.position - down.position
-                            if (!locked) {
-                                if (!change.pressed) break
-                                if (abs(delta.y) > viewConfiguration.touchSlop && abs(delta.y) >= abs(delta.x)) break
-                                if (delta.x < -viewConfiguration.touchSlop) break
-                                if (delta.x <= viewConfiguration.touchSlop || delta.x < abs(delta.y) * 1.2f) continue
-                                locked = true
-                                origin = down.position.copy(x = down.position.x + viewConfiguration.touchSlop)
-                                state.start()
-                            }
-                            change.consume()
-                            state.drag((change.position.x - origin.x) / widthPx)
-                            if (!change.pressed) {
-                                val velocity = tracker.calculateVelocity().x
-                                state.release(velocity / widthPx, back = completesBackSwipe(state.amount, velocity / density))
-                                locked = false
-                                break
-                            }
-                        }
-                    } finally {
-                        if (locked) state.cancel()
-                    }
-                }
-            },
+            Modifier.fillMaxSize().swipeSurface(surface),
         ) {
             val corner = with(LocalDensity.current) { PreviewCorner.toPx() }
             val edgeShift = with(LocalDensity.current) { (widthPx / 20f - 8.dp.toPx()).coerceAtLeast(0f) }
@@ -460,15 +439,7 @@ internal fun SwipeBackPage(
                 }
                 // A second finger, accessibility action or tap cannot act on a page while it settles.
                 if (active && (state.dragging || state.settling || state.entering > 0f)) {
-                    Box(Modifier.fillMaxSize().pointerInput(Unit) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            do {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                event.changes.forEach { it.consume() }
-                            } while (event.changes.any { it.pressed })
-                        }
-                    })
+                    Box(Modifier.fillMaxSize().swallowTouches { true })
                 }
             }
         }
@@ -477,6 +448,26 @@ internal fun SwipeBackPage(
 
 /** The corner a page reaches at the end of a system back preview. */
 private val PreviewCorner = 28.dp
+
+/** From this close to the page's left edge, swipe back is the page's even over a horizontal child, in dp. */
+private const val EdgeWidth = 24f
+
+/** One in-app swipe back: the page follows the finger and the release decides back or stay. */
+private class PageSwipe(private val state: PageBackState, private val width: Float, private val density: Float) : SwipeDrag {
+    private var travelled = 0f
+
+    init { state.start() }
+
+    override fun drag(delta: Float) {
+        travelled += delta
+        state.drag(travelled / width)
+    }
+
+    override fun release(velocity: Float) =
+        state.release(velocity / width, back = completesBackSwipe(state.amount, velocity / density))
+
+    override fun cancel() = state.cancel()
+}
 
 /** Install a page's unsaved/in-flight guard for every way of returning, including the title bar. */
 @Composable

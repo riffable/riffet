@@ -1,5 +1,13 @@
 package riffet.ui.pickers
 
+import androidx.compose.animation.EnterExitState
+import riffet.ui.gesture.swipeSurface
+import riffet.ui.gesture.SwipeVerdict
+import riffet.ui.gesture.SwipeSurface
+import riffet.ui.gesture.SwipeDrag
+import riffet.ui.gesture.SwipeDirection
+import riffet.ui.gesture.horizontalSwipeArbiter
+import riffet.ui.gesture.swallowTouches
 import riffet.ui.design.materialContentBackground
 
 import riffet.ui.theme.LocalRiffetMotion
@@ -32,8 +40,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -99,8 +105,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -119,7 +123,6 @@ import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.shared.LocalNativeFeatures
 import riffet.shared.NativeFeature
-import kotlin.math.abs
 
 /*
  * ============================================================================================
@@ -305,14 +308,11 @@ internal fun PickerSheetFrame(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    // The popup is its own window: its sub-pages' swipe back and its scrollers enlist here.
+                    .horizontalSwipeArbiter()
                     // While the sheet leaves, nothing under it may react: consumed in the initial pass, the
                     // sheet's own rows and the scrim never see the touch.
-                    .pointerInput(closing) {
-                        if (!closing) return@pointerInput
-                        awaitPointerEventScope {
-                            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-                        }
-                    },
+                    .swallowTouches { closing },
             ) {
                 Box(
                     modifier = Modifier
@@ -455,33 +455,22 @@ internal fun <P : Any> PickerPages(
     val pageMotion = LocalRiffetPageMotion.current
     val host = LocalPickerHost.current
     val currentDepth = depth(page)
-    val swipe = if (currentDepth > 0 && LocalNativeFeatures.current.isOn(NativeFeature.SWIPE_BACK)) Modifier.pointerInput(currentDepth, host) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val edge = down.position.x <= 24.dp.toPx()
-            val pass = if (edge) PointerEventPass.Initial else PointerEventPass.Main
-            var locked = false
-            while (true) {
-                val event = awaitPointerEvent(pass)
-                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                if (!edge && change.isConsumed) break
-                val delta = change.position - down.position
-                if (!locked) {
-                    if (!change.pressed || abs(delta.y) > viewConfiguration.touchSlop && abs(delta.y) >= abs(delta.x) || delta.x < -viewConfiguration.touchSlop) break
-                    if (delta.x <= viewConfiguration.touchSlop || delta.x < abs(delta.y) * 1.2f) continue
-                    locked = true
-                }
-                change.consume()
-                if (!change.pressed) {
-                    if (delta.x > size.width * 0.25f) host?.requestBack()
-                    break
-                }
-            }
+    val gestures = LocalNativeFeatures.current.isOn(NativeFeature.SWIPE_BACK)
+    val canSwipe by rememberUpdatedState(currentDepth > 0 && gestures)
+    val latestHost by rememberUpdatedState(host)
+    val density = LocalDensity.current.density
+    // A sub-page goes back a level with a rightward swipe; from the left edge even over a scroller.
+    val swipe = remember(density) {
+        SwipeSurface { start ->
+            if (!canSwipe || start.direction == SwipeDirection.LEFT) return@SwipeSurface SwipeVerdict.Pass
+            val edge = start.position.x <= PickerEdgeWidth * density
+            val width = start.size.width.toFloat()
+            SwipeVerdict.Take(overChildren = edge) { PickerSwipe(width) { latestHost?.requestBack() } }
         }
-    } else Modifier
+    }
     AnimatedContent(
         targetState = page,
-        modifier = modifier.then(swipe),
+        modifier = modifier.swipeSurface(swipe),
         transitionSpec = {
             val from = depth(initialState)
             val to = depth(targetState)
@@ -491,8 +480,21 @@ internal fun <P : Any> PickerPages(
         label = "pickerPage",
     ) { shown ->
         val outer = LocalPickerPageActive.current
-        CompositionLocalProvider(LocalPickerPageActive provides (outer && transition.targetState == shown)) { content(shown) }
+        // The page coming in (or staying) is active; the one sliding out is not. `transition` here is this
+        // page's enter/exit transition, not the pager's: compare its target, not the page.
+        CompositionLocalProvider(LocalPickerPageActive provides (outer && transition.targetState == EnterExitState.Visible)) { content(shown) }
     }
+}
+
+/** From this close to the sheet's left edge a sub-page's swipe back wins over a scroller, in dp. */
+private const val PickerEdgeWidth = 24f
+
+/** A sub-page's swipe back: a release past a quarter of the sheet's width goes back a level. */
+private class PickerSwipe(private val width: Float, private val back: () -> Unit) : SwipeDrag {
+    private var travelled = 0f
+    override fun drag(delta: Float) { travelled += delta }
+    override fun release(velocity: Float) { if (travelled > width * 0.25f) back() }
+    override fun cancel() = Unit
 }
 
 /** A sheet of several [PickerPages]: the frame plus the pager, for callers that chain pickers. */

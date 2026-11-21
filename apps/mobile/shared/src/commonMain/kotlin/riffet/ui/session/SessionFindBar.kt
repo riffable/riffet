@@ -1,5 +1,6 @@
 package riffet.ui.session
 
+import riffet.ui.gesture.horizontalSwipeChild
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.CircleShape
@@ -91,6 +92,7 @@ internal fun SessionFindBar(find: SessionFind, readingKey: () -> String?) {
                 .weight(1f)
                 .height(metrics.buttonHeight)
                 .focusRequester(requester)
+                .horizontalSwipeChild()
                 .semantics { contentDescription = placeholder },
             decorationBox = { field ->
                 Row(

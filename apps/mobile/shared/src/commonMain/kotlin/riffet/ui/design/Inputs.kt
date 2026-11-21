@@ -1,5 +1,6 @@
 package riffet.ui.design
 
+import riffet.ui.gesture.horizontalSwipeChild
 import riffet.ui.theme.LocalRiffetMotion
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
@@ -134,7 +135,7 @@ internal fun RiffetSearchField(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
             interactionSource = source,
-            modifier = contents.weight(1f).heightIn(min = metrics.controlHeight).focusRequester(requester)
+            modifier = contents.weight(1f).heightIn(min = metrics.controlHeight).focusRequester(requester).horizontalSwipeChild()
                 .semantics { contentDescription = placeholder },
             decorationBox = { field ->
                 Box(contentAlignment = Alignment.CenterStart) {
@@ -185,11 +186,13 @@ internal fun RiffetTextField(
     val transformation = if (password) PasswordVisualTransformation() else VisualTransformation.None
     val textStyle = if (mono) typography.input.copy(fontFamily = typography.monoFamily) else typography.input
     val hint: (@Composable () -> Unit)? = placeholder?.let { { Text(it, style = textStyle) } }
+    // A single-line field scrolls its text sideways: swipes starting on it stay in it.
+    val fieldSwipes = if (singleLine) Modifier.horizontalSwipeChild() else Modifier
     if (recipe.fields == ComponentBackend.MIUIX) {
         Column(modifier.fillMaxWidth()) {
             label?.invoke()
             top.yukonga.miuix.kmp.basic.TextField(
-                value, onValueChange, modifier = Modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight),
+                value, onValueChange, modifier = Modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight).then(fieldSwipes),
                 cornerRadius = metrics.controlRadius, label = placeholder.orEmpty(), useLabelAsPlaceholder = true,
                 colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
                     backgroundColor = s.input, labelColor = if (enabled) colors.fg3 else s.disabledContent, borderColor = s.focus,
@@ -206,7 +209,7 @@ internal fun RiffetTextField(
             singleLine = singleLine, minLines = minLines, maxLines = maxLines, placeholder = hint,
             label = label, trailingIcon = trailingIcon, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
             textStyle = textStyle, visualTransformation = transformation, shape = shape,
-            interactionSource = source, modifier = modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight),
+            interactionSource = source, modifier = modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight).then(fieldSwipes),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = s.focus, unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                 disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = MaterialTheme.colorScheme.outline.alpha * 0.38f), cursorColor = colors.accent,
@@ -233,7 +236,7 @@ internal fun RiffetTextField(
                 keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
                 textStyle = fieldStyle, visualTransformation = transformation, interactionSource = source,
                 cursorBrush = SolidColor(colors.accent),
-                modifier = Modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight)
+                modifier = Modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight).then(fieldSwipes)
                     .clip(shape)
                     .background(s.input, shape)
                     .then(if (recipe.underline) Modifier.drawBehind {
@@ -297,12 +300,13 @@ internal fun GroupField(
     val s = surfaces
     val base = if (mono) typography.input.copy(fontFamily = typography.monoFamily) else typography.input
     val textStyle = base.copy(color = if (enabled) colors.fg else s.disabledContent)
+    val fieldSwipes = if (singleLine) Modifier.horizontalSwipeChild() else Modifier
     BasicTextField(
         value = value, onValueChange = onValueChange, enabled = enabled, singleLine = singleLine,
         minLines = minLines, maxLines = maxLines, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
         textStyle = textStyle, visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         cursorBrush = SolidColor(colors.accent),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().then(fieldSwipes),
         decorationBox = { inner ->
             Row(
                 Modifier.fillMaxWidth().heightIn(min = metrics.rowHeight)
@@ -342,9 +346,11 @@ internal fun RiffetSlider(
     val source = remember { MutableInteractionSource() }
     val s = surfaces
     val recipe = LocalInterfaceStyle.current.components.inputs
+    // A slider drags from the press: sideways swipes on it are its own, not the page's or the tabs'.
+    val claimed = modifier.horizontalSwipeChild { enabled }
     if (recipe.sliders == ComponentBackend.MIUIX && !metrics.isOverridden("sliderTrackHeight") && valueRange.start < valueRange.endInclusive) {
         top.yukonga.miuix.kmp.basic.Slider(
-            value, onValueChange, modifier.heightIn(min = metrics.controlHeight), enabled, valueRange, steps,
+            value, onValueChange, claimed.heightIn(min = metrics.controlHeight), enabled, valueRange, steps,
             onValueChangeFinished = onValueChangeFinished, height = metrics.sliderThumbSize,
         )
         return
@@ -352,7 +358,7 @@ internal fun RiffetSlider(
     if (recipe.sliders == ComponentBackend.MATERIAL) {
         val sliderColors = SliderDefaults.colors(thumbColor = s.primaryAction, activeTrackColor = s.primaryAction,
             disabledThumbColor = s.disabledContent, disabledActiveTrackColor = s.disabledContent)
-        Slider(value = value, onValueChange = onValueChange, modifier = modifier.heightIn(min = metrics.controlHeight), enabled = enabled,
+        Slider(value = value, onValueChange = onValueChange, modifier = claimed.heightIn(min = metrics.controlHeight), enabled = enabled,
             valueRange = valueRange, steps = steps, onValueChangeFinished = onValueChangeFinished, interactionSource = source,
             colors = sliderColors,
             thumb = { SliderDefaults.Thumb(source, colors = sliderColors, enabled = enabled,
@@ -366,7 +372,7 @@ internal fun RiffetSlider(
     val dragged by source.collectIsDraggedAsState()
     val focused by source.collectIsFocusedAsState()
     Slider(
-        value = value, onValueChange = onValueChange, modifier = modifier.heightIn(min = metrics.controlHeight), enabled = enabled,
+        value = value, onValueChange = onValueChange, modifier = claimed.heightIn(min = metrics.controlHeight), enabled = enabled,
         valueRange = valueRange, steps = steps, onValueChangeFinished = onValueChangeFinished,
         interactionSource = source,
         thumb = {

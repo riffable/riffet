@@ -1,5 +1,6 @@
 package riffet.ui.settings
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.ui.focus.FocusRequester
@@ -15,7 +16,6 @@ import androidx.compose.ui.text.input.ImeAction
 import riffet.ui.design.LocalRiffetSurfaces
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -279,7 +279,7 @@ private fun OwnerProfilePage(controller: OwnerController, onEditName: () -> Unit
     if (owner != null && owner.history.isNotEmpty()) {
         SettingsGroup(L10n.uiText("owner.history")) {
             Row(
-                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = metrics.rowPadding, vertical = metrics.rowPadding),
+                Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()).padding(horizontal = metrics.rowPadding, vertical = metrics.rowPadding),
                 horizontalArrangement = Arrangement.spacedBy(metrics.controlInset),
             ) {
                 owner.history.forEach { avatar -> key(avatar.sha256) { HistoryAvatar(controller, avatar, enabled = !state.busy) } }

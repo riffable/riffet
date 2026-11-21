@@ -1,5 +1,6 @@
 package riffet.ui.files
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.app.RiffetPageScaffold
 import androidx.compose.foundation.layout.PaddingValues
 
@@ -28,7 +29,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -449,7 +449,7 @@ private fun DirectoryHeader(projectName: String, path: String, favorites: Folder
         modifier = Modifier
             .fillMaxWidth()
             .height(40.dp)
-            .horizontalScroll(rememberScrollState())
+            .riffetHorizontalScroll(rememberScrollState())
             .padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset - 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -714,7 +714,7 @@ private fun TextPreview(preview: FilePreview, requestedLine: Int?, insets: Paddi
 
     // One horizontal viewport keeps every code line aligned; vertical padding remains inside
     // the lazy list, allowing its recorded content to scroll behind the fixed chrome.
-    Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+    Box(Modifier.fillMaxSize().riffetHorizontalScroll(rememberScrollState())) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxHeight(), contentPadding = insets) {
             items(lines.size, key = { it }) { index ->
                 LineRow(

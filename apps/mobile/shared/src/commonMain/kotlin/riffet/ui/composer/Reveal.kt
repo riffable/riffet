@@ -1,5 +1,6 @@
 package riffet.ui.composer
 
+import riffet.ui.gesture.swallowTouches
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Box
@@ -9,8 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import riffet.ui.theme.LocalRiffetMotion
 
@@ -34,11 +33,7 @@ internal fun <T : Any> Reveal(value: T?, modifier: Modifier = Modifier, onEntere
     AnimatedVisibility(visibleState = transition, modifier = modifier, enter = motion.expandIn(), exit = motion.collapseOut()) {
         val inert = if (closing) {
             Modifier
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-                    }
-                }
+                .swallowTouches { true }
                 .clearAndSetSemantics {}
         } else {
             Modifier

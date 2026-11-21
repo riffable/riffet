@@ -1,5 +1,6 @@
 package riffet.ui.stats
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.ViewTabs
 import riffet.ui.app.PageMoreAction
@@ -25,7 +26,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -178,7 +178,7 @@ internal fun StatsScreen(
         var rangeOpen by remember { mutableStateOf(false) }
         var agentsOpen by remember { mutableStateOf(false) }
         Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+            Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState())
                 .padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = LocalInterfaceStyle.current.metrics.controlInset / 2),
             horizontalArrangement = Arrangement.spacedBy(LocalInterfaceStyle.current.metrics.controlInset / 2),
         ) {

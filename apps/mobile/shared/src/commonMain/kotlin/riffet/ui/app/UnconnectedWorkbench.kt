@@ -1,5 +1,6 @@
 package riffet.ui.app
 
+import riffet.ui.gesture.swallowTouches
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,8 +12,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.CoroutineScope
@@ -102,14 +101,7 @@ internal fun UnconnectedWorkbench(
                     Box(Modifier.fillMaxSize().padding(tabInsets)
                         .focusProperties { canFocus = active.value }
                         .semantics { if (!active.value) hideFromAccessibility() }
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    if (!active.value) event.changes.forEach { it.consume() }
-                                }
-                            }
-                        }) {
+                        .swallowTouches { !active.value }) {
                         CompositionLocalProvider(LocalPageActive provides active.value) {
                             tabs.SaveableStateProvider(shown.name) {
                                 when (shown) {

@@ -1,10 +1,10 @@
 package riffet.ui.timeline
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalInterfaceStyle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -74,7 +74,7 @@ internal fun TranscriptMarkdownTable(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val tableWidth = maxOf(maxWidth, dimens.tableCellWidth * columns)
         val shape = RoundedCornerShape(LocalInterfaceStyle.current.rowRadius)
-        Box(Modifier.horizontalScroll(rememberScrollState())) {
+        Box(Modifier.riffetHorizontalScroll(rememberScrollState())) {
             Column(
                 Modifier.width(tableWidth).clip(shape)
                     .border(BorderStroke(TableGridThickness, colors.line), shape),

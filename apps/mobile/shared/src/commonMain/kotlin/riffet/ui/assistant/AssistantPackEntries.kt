@@ -1,6 +1,6 @@
 package riffet.ui.assistant
 
-import androidx.compose.foundation.horizontalScroll
+import riffet.ui.gesture.riffetHorizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +20,7 @@ internal fun AssistantPackEntries(packs: List<AssistantPack>, onPick: (String) -
     val entries = packs.filter { it.installed && !it.entry.isNullOrBlank() }
     if (entries.isEmpty()) return
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(LocalInterfaceStyle.current.metrics.controlInset / 2),
     ) {
         entries.forEach { pack -> ChipButton(pack.title, active = false, onClick = { onPick("${pack.entry} ") }, trailingIcon = null) }

@@ -1,5 +1,6 @@
 package riffet.ui.composer
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.contracts.SessionGoal
 import riffet.ui.design.riffetMaterial
 import riffet.ui.design.materialContentBackground
@@ -55,7 +56,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import riffet.ui.design.RiffetProgressIndicator as CircularProgressIndicator
 import riffet.ui.icons.Icon
 import riffet.ui.design.RiffetIconButton as IconButton
@@ -721,7 +721,7 @@ internal fun ComposerCard(
         Column(Modifier.fillMaxWidth().then(if (hero) Modifier else Modifier.weight(1f, fill = false)).animateContentSize(motion.spatial())
             .then(if (hero) Modifier else Modifier.verticalScroll(rememberScrollState()))) {
         if (sessionReferences.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = metrics.controlInset, vertical = metrics.controlInset / 3)) {
+            Row(Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()).padding(horizontal = metrics.controlInset, vertical = metrics.controlInset / 3)) {
                 sessionReferences.forEach { reference ->
                     if (LocalInterfaceStyle.current.components.controls.chips != ComponentBackend.MATERIAL) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

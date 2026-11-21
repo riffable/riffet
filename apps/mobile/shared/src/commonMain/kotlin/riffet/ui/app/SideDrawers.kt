@@ -9,11 +9,7 @@ import riffet.ui.design.MaterialRole
 import riffet.ui.design.RiffetMaterialContent
 import riffet.ui.design.riffetMaterial
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -52,8 +48,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -75,6 +69,11 @@ import riffet_mobile.shared.generated.resources.Res
 import riffet_mobile.shared.generated.resources.pickers_close
 import riffet_mobile.shared.generated.resources.session_details
 import riffet.ui.theme.LocalRiffetMotion
+import riffet.ui.gesture.SwipeDirection
+import riffet.ui.gesture.SwipeDrag
+import riffet.ui.gesture.SwipeSurface
+import riffet.ui.gesture.SwipeVerdict
+import riffet.ui.gesture.swipeSurface
 
 /** A fling faster than this settles the drawer the way it was flung, wherever it was let go. */
 private val SettleVelocity = 400.dp
@@ -87,10 +86,11 @@ private val DrawerEaseOut = CubicBezierEasing(0.18f, 0.72f, 0.32f, 1f)
  * phone page moves beside the panel; expanded and physically split windows keep their panes still.
  * Each style supplies its own sheet surface; the right sheet mirrors the left sheet's corners.
  *
- * On the top-level pages a rightward swipe starting anywhere opens the left drawer. Children see the
- * pointer first, so whatever can still move sideways keeps the drag: horizontal scrolling, and on
- * 新会话 the 快速会话 → 新建任务 swipe, so the drawer only opens from 新建任务. In a session a leftward
- * swipe opens the right drawer, and the rightward one is the session's swipe back. Material 3's
+ * The drawers are the outermost of the workbench's swipe surfaces (`riffet.ui.gesture`): they get a
+ * swipe only when nothing inside took it. So a rightward swipe opens the left drawer where no tab lies
+ * before it (新会话, or any top-level page on the rail), a leftward one in a session opens the right
+ * drawer (the rightward one is the session's swipe back), and a child that can still scroll sideways
+ * keeps its drag. Material 3's
  * `ModalNavigationDrawer` cannot do this: it listens for drags across the whole screen and keeps its
  * drag state internal, so a second one could neither share the screen with it nor be driven from
  * here. With a drawer open, a drag anywhere moves that drawer.
@@ -112,8 +112,6 @@ internal fun SideDrawers(
     modifier: Modifier = Modifier,
     /** The system back gesture while it would close the open drawer; read outside composition. */
     backSwipe: () -> BackSwipe? = { null },
-    /** Takes the horizontal drags that would otherwise open a drawer, before the drawers do. */
-    pageSwipe: PageSwipe? = null,
     content: @Composable () -> Unit,
 ) {
     val style = LocalInterfaceStyle.current
@@ -145,11 +143,13 @@ internal fun SideDrawers(
 
     val latestEndEnabled by rememberUpdatedState(endEnabled)
     val latestStartEnabled by rememberUpdatedState(startEnabled)
-    val latestPageSwipe by rememberUpdatedState(pageSwipe)
     val latestActive by rememberUpdatedState(LocalPageActive.current)
-    val backDispatcher = LocalPageBackDispatcher.current
     val latestStartChange by rememberUpdatedState(onStartOpenChange)
     val latestEndChange by rememberUpdatedState(onEndOpenChange)
+    // The details flag never outlives what it shows: once there is nothing for the right drawer (the
+    // session it showed was archived, deleted or left), the flag closes too, so back and the swipes do
+    // not keep answering to a drawer that is gone.
+    LaunchedEffect(endOpen, endEnabled) { if (endOpen && !endEnabled) latestEndChange(false) }
     // Keep content through the closing animation, then release its stream subscriptions.
     // Saveable state preserves each drawer's scroll position on reopening.
     val drawerState = rememberSaveableStateHolder()
@@ -178,79 +178,34 @@ internal fun SideDrawers(
         val pageShift = if (availableWidth >= TwoPaneMinWidth || fold != null) 0f else sheetPx
         val settlePx = with(density) { SettleVelocity.toPx() }
         val fullPx = constraints.maxWidth.toFloat()
+        // Outermost of the workbench's swipe surfaces: an open drawer follows any sideways drag;
+        // otherwise a swipe nothing inside took (no tab before 新会话, a session's leftward swipe)
+        // opens the drawer on that side.
+        val drawerSwipes = remember(sheetPx, settlePx, motion, scope) {
+            SwipeSurface { swipe ->
+                if (!latestActive || sheetPx <= 0f) return@SwipeSurface SwipeVerdict.Pass
+                val open = when {
+                    start.target > 0f || start.value > 0f -> start
+                    end.target > 0f || end.value > 0f -> end
+                    else -> null
+                }
+                val side = open ?: when {
+                    swipe.direction == SwipeDirection.RIGHT && latestStartEnabled -> start
+                    swipe.direction == SwipeDirection.LEFT && latestEndEnabled -> end
+                    else -> return@SwipeSurface SwipeVerdict.Pass
+                }
+                SwipeVerdict.Take {
+                    DrawerSwipe(side, sign = if (side === start) 1f else -1f, sheetPx, settlePx, motion, scope) { opened ->
+                        if (side === start) latestStartChange(opened) else latestEndChange(opened)
+                    }
+                }
+            }
+        }
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(sheetPx, motion) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        if (!latestActive || sheetPx <= 0f) return@awaitEachGesture
-                        // Sheets own their gestures; child scrolling and edge-back consume theirs
-                        // before this Main-pass detector decides which drawer to open.
-                        if (backDispatcher?.current != null && backDispatcher.current !is PageBackState && backDispatcher.current !is TabBackTarget && backDispatcher.current !is InlineBackTarget && !latestStartOpen && !latestEndOpen) return@awaitEachGesture
-                        var side: DrawerProgress? = null
-                        // Rightward moves the left drawer open; for the right drawer it is the reverse.
-                        var sign = 1f
-                        var progress = 0f
-                        // A page swipe instead: the pages follow the finger's pixels.
-                        var paging: PageSwipe? = null
-                        val drag = awaitHorizontalTouchSlopOrCancellation(down.id) { change, overSlop ->
-                            val drawerOpen = start.target > 0f || start.value > 0f || end.target > 0f || end.value > 0f
-                            val pages = latestPageSwipe
-                            if (!drawerOpen && overSlop != 0f && pages != null && pages.begin(forward = overSlop < 0f)) {
-                                paging = pages
-                                pages.drag(overSlop)
-                                change.consume()
-                                return@awaitHorizontalTouchSlopOrCancellation
-                            }
-                            val chosen = when {
-                                start.target > 0f || start.value > 0f -> start
-                                end.target > 0f || end.value > 0f -> end
-                                overSlop > 0f && latestStartEnabled -> start
-                                overSlop < 0f && latestEndEnabled -> end
-                                else -> null
-                            } ?: return@awaitHorizontalTouchSlopOrCancellation
-                            side = chosen
-                            sign = if (chosen === start) 1f else -1f
-                            progress = (chosen.value + sign * overSlop / sheetPx).coerceIn(0f, 1f)
-                            chosen.drag(progress)
-                            change.consume()
-                        } ?: return@awaitEachGesture
-
-                        val tracker = VelocityTracker()
-                        tracker.addPosition(drag.uptimeMillis, drag.position)
-                        paging?.let { pages ->
-                            var velocity = 0f
-                            try {
-                                horizontalDrag(drag.id) { change ->
-                                    tracker.addPosition(change.uptimeMillis, change.position)
-                                    pages.drag(change.positionChange().x)
-                                    change.consume()
-                                }
-                                velocity = tracker.calculateVelocity().x
-                            } finally {
-                                pages.end(velocity)
-                            }
-                            return@awaitEachGesture
-                        }
-                        val moving = side ?: return@awaitEachGesture
-                        horizontalDrag(drag.id) { change ->
-                            tracker.addPosition(change.uptimeMillis, change.position)
-                            progress = (progress + sign * change.positionChange().x / sheetPx).coerceIn(0f, 1f)
-                            moving.drag(progress)
-                            change.consume()
-                        }
-                        val velocity = sign * tracker.calculateVelocity().x
-                        val open = when {
-                            velocity > settlePx -> true
-                            velocity < -settlePx -> false
-                            else -> progress > 0.5f
-                        }
-                        moving.settle(if (open) 1f else 0f, velocity / sheetPx, motion, scope)
-                        if (moving === start) latestStartChange(open) else latestEndChange(open)
-                    }
-                },
+                .swipeSurface(drawerSwipes),
         ) {
             // Page and panel share one horizontal edge at every animation frame.
             Box(Modifier.fillMaxSize().offset { IntOffset(((start.value - end.value) * pageShift).roundToInt(), 0) }
@@ -291,6 +246,42 @@ internal fun SideDrawers(
                 }
             }
         }
+    }
+}
+
+/** One drag of a drawer: the panel follows the finger and the release opens or shuts it by speed, else by position. */
+private class DrawerSwipe(
+    private val side: DrawerProgress,
+    private val sign: Float,
+    private val sheetPx: Float,
+    private val settlePx: Float,
+    private val motion: riffet.ui.theme.RiffetMotion,
+    private val scope: CoroutineScope,
+    private val onSettled: (Boolean) -> Unit,
+) : SwipeDrag {
+    private val wasOpen = if (side.target.isNaN()) side.value >= 0.5f else side.target > 0.5f
+    private var progress = side.value
+
+    override fun drag(delta: Float) {
+        progress = (progress + sign * delta / sheetPx).coerceIn(0f, 1f)
+        side.drag(progress)
+    }
+
+    override fun release(velocity: Float) {
+        val toward = sign * velocity
+        val open = when {
+            toward > settlePx -> true
+            toward < -settlePx -> false
+            else -> progress > 0.5f
+        }
+        settle(open, toward / sheetPx)
+    }
+
+    override fun cancel() = settle(wasOpen, 0f)
+
+    private fun settle(open: Boolean, velocity: Float) {
+        side.settle(if (open) 1f else 0f, velocity, motion, scope)
+        onSettled(open)
     }
 }
 
@@ -391,17 +382,4 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
             }
         }
     }
-}
-
-/**
- * Horizontal swipes between neighbouring pages (the bottom tabs), arbitrated by [SideDrawers] with
- * its own drags so one gesture never moves both. Called on the pointer thread, outside composition.
- */
-internal interface PageSwipe {
-    /** A drag toward the next page ([forward]) or the previous one starts; false leaves it to the drawers. */
-    fun begin(forward: Boolean): Boolean
-    /** The finger moved by [delta] px (positive is rightward). */
-    fun drag(delta: Float)
-    /** The finger lifted at [velocity] px/s (positive is rightward); the pages settle from there. */
-    fun end(velocity: Float)
 }

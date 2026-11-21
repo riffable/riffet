@@ -1,12 +1,12 @@
 package riffet.ui.pickers
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.ChipButton
 import riffet.ui.design.ToggleChip
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.toggleable
@@ -455,7 +455,7 @@ private fun ParamStrip(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .riffetHorizontalScroll(rememberScrollState())
                 .padding(horizontal = SheetInset, vertical = metrics.controlInset / 2),
             horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2),
             verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,6 @@
 package riffet.ui.files
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.graphics.pdf.PdfRenderer
@@ -8,7 +9,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
@@ -181,7 +181,7 @@ private fun PdfPageList(document: PdfPages, modifier: Modifier) {
         val viewWidth = maxWidth
         val renderWidth = with(density) { (viewWidth.toPx() * RENDER_SCALE).toInt() }
         // Zooming widens the pages inside a horizontal scroll; the bitmaps keep their size.
-        Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+        Box(Modifier.fillMaxSize().riffetHorizontalScroll(rememberScrollState())) {
             LazyColumn(Modifier.width(viewWidth * zoom).fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(document.sizes.size, key = { it }) { index ->
                     val (width, height) = document.sizes[index]

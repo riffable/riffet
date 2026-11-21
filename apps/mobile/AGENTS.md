@@ -36,6 +36,7 @@
 - 按一份会整体换新的列表做 `remember` 键去算每一行，流式更新时每帧全部重算：按行键和对象身份记忆。
 
 ## 排查
+- 横向手势只经窗口的横滑仲裁（`ui/gesture/HorizontalSwipes.kt`，规则见 [MOBILE.md](../../docs/MOBILE.md)「手势调度」）：要接横滑的表面加 `swipeSurface`，能横向滚动的子控件用 `riffetHorizontalScroll` / `horizontalSwipeChild`，暂时不接触摸的层用 `swallowTouches`。不自写横向拖动检测，也不从返回目标的类型推断谁能接横滑；新开一个弹窗窗口且里面有滑动返回时，在弹窗根上加 `horizontalSwipeArbiter()`。
 
 - 重建：`adb shell setprop log.tag.RiffetLifecycle DEBUG` 后重启 App，`adb logcat -s RiffetLifecycle` 里同一个标签无故出现 `-` 再 `+`，说明该子树被重新挂载了。
 - 同一开关下出现 `shift <key> 旧高→新高`，说明一行已结束的内容在屏幕上变了高度（读者自己展开的除外），即首帧与稳定帧不一致。

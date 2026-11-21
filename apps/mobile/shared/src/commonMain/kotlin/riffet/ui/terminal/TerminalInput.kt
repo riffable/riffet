@@ -1,5 +1,7 @@
 package riffet.ui.terminal
 
+import riffet.ui.gesture.horizontalSwipeChild
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.surfaces
@@ -9,7 +11,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -316,7 +317,7 @@ internal fun TerminalKeyBar(
                 BarKey("Del") { c.key(KeyHandler.KEYCODE_FORWARD_DEL) },
                 BarKey("|") { c.typed("|") }, BarKey("~") { c.typed("~") }, BarKey("-") { c.typed("-") },
             ) + (1..12).map { n -> BarKey("F$n") { c.key(KeyHandler.KEYCODE_F1 + n - 1) } }
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
+            Row(Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
                 extra.forEach { KeyButton(it, Modifier.widthIn(min = MinKeyWidth), enabled) }
             }
         }
@@ -361,6 +362,8 @@ private fun KeyButton(key: BarKey, modifier: Modifier, enabled: Boolean, inset: 
                     true
                 } else disabled()
             }
+            // A held key repeats from the press: sliding off it is not a page swipe.
+            .horizontalSwipeChild { enabled }
             .pointerInput(key.label, key.repeat, enabled) {
                 if (!enabled) return@pointerInput
                 awaitEachGesture {

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import riffet.shared.PageAnimation
+import riffet.ui.gesture.horizontalSwipeChild
 import riffet.ui.theme.LocalRiffetPageMotion
 import riffet.ui.timeline.rememberReducedMotion
 import kotlin.math.abs
@@ -56,9 +57,9 @@ import kotlin.math.abs
  * @param pageCount how many pages the strip has. Changing it re-creates the pager's state (the
  *   page count is `rememberPagerState`'s key), which is what a panel wants when its tab set changes.
  * @param pagerState optional shared state for a tab indicator that follows the swipe position.
- * @param userScrollEnabled false pins the pager: a nested horizontal gesture (a diff's own
- *   horizontal scroll, a page that is not a page yet) then keeps the drag instead of losing it.
- *   The caller may still drive [pagerState] itself (the bottom tabs do, see `TabSwipe`).
+ * @param userScrollEnabled false pins the pager: it takes no swipe itself, and the caller may drive
+ *   [pagerState] (the bottom tabs do, see `TabSwipe`). True, it keeps the swipes it can page by; past
+ *   its first or last page they go on to the page's swipe back.
  * @param beyondViewportPageCount pages kept composed on each side of the visible one. 0 composes a
  *   neighbour only while it is dragged into view (a panel whose tabs load on demand); the bottom
  *   tabs keep theirs, so a swipe does not compose a whole page in its first frame.
@@ -109,9 +110,14 @@ internal fun RiffetTabPager(
         }
     }
 
+    val scrolls by rememberUpdatedState(userScrollEnabled)
     HorizontalPager(
         state = state,
-        modifier = modifier.fillMaxSize(),
+        // A pager the finger drives keeps the swipes it can still page by; past its first or last page
+        // they reach the page's swipe back. A pinned pager leaves all of them to its driver.
+        modifier = modifier.horizontalSwipeChild { revealsStart ->
+            scrolls && if (revealsStart) state.canScrollBackward else state.canScrollForward
+        }.fillMaxSize(),
         userScrollEnabled = userScrollEnabled,
         flingBehavior = fling,
         // 0 by default: a neighbouring tab must not be composed (and so must not run its own load)

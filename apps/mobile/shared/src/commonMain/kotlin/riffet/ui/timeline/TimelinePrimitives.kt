@@ -1,5 +1,6 @@
 package riffet.ui.timeline
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.theme.LocalRiffetMotion
@@ -9,7 +10,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -424,7 +424,7 @@ internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: T
             style = codeStyle.copy(lineHeight = 20.sp),
             color = colors.fg,
             modifier = Modifier
-                .horizontalScroll(rememberScrollState())
+                .riffetHorizontalScroll(rememberScrollState())
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }

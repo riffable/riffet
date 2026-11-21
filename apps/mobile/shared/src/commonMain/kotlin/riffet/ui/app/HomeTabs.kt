@@ -14,6 +14,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
 import riffet.ui.theme.appearancePageBackground
+import riffet.ui.gesture.SwipeDirection
+import riffet.ui.gesture.SwipeDrag
+import riffet.ui.gesture.SwipeStart
+import riffet.ui.gesture.SwipeSurface
+import riffet.ui.gesture.SwipeVerdict
+import riffet.ui.gesture.blockSwipes
+import riffet.ui.gesture.swallowTouches
 
 import riffet.ui.design.riffetMaterial
 import riffet.ui.design.MaterialRole
@@ -206,8 +213,8 @@ internal class TabBackTarget(private val onBack: () -> Unit) : PageBackTarget {
 /**
  * The bottom tabs as a pager: a horizontal drag on a tab root scrolls [pager] by the finger's
  * pixels, and the release settles on the next or previous tab, so the page and the bar follow the
- * hand exactly. [SideDrawers] hands it the drags (see [PageSwipe]); the first tab has no previous
- * one, so a rightward drag there still opens the drawer.
+ * hand exactly. It is the tabs' [SwipeSurface] (see `riffet.ui.gesture`): a page pushed inside a tab
+ * refuses swipes before they reach it, and the first tab passes a rightward one on to the drawer.
  *
  * Each release commits to a tab at once ([heading]), and a swipe during the settle counts from
  * that tab: quick swipes advance one tab each instead of waiting for the pages to land.
@@ -215,10 +222,9 @@ internal class TabBackTarget(private val onBack: () -> Unit) : PageBackTarget {
 @Stable
 internal class TabSwipe(
     private val pager: PagerState,
-    private val backDispatcher: PageBackDispatcher,
     private val scope: CoroutineScope,
-) : PageSwipe {
-    /** Written after each composition: false on the rail, under a session, or while something is pushed. */
+) : SwipeSurface {
+    /** Written after each composition: false on the rail or under a session. */
     var enabled = false
     /** The settle after a release; null jumps (reduced motion). */
     var settle: AnimationSpec<Float>? = null
@@ -234,34 +240,58 @@ internal class TabSwipe(
     /** The drag in progress; each drag keeps its own distance and release, so a quick next one cannot take them. */
     private var drag: Drag? = null
 
-    private class Drag(val from: Int) {
+    private inner class Drag(val from: Int) : SwipeDrag {
         /** Wakes the scroll session; the distance itself adds up in [pending], so none is lost. */
         val moved = Channel<Unit>(Channel.CONFLATED)
         var pending = 0f
         var travelled = 0f
         var velocity = 0f
+        var cancelled = false
         fun take(): Float = pending.also { pending = 0f }
+
+        override fun drag(delta: Float) {
+            pending += delta
+            travelled += delta
+            moved.trySend(Unit)
+        }
+
+        override fun release(velocity: Float) {
+            this.velocity = velocity
+            finish()
+        }
+
+        /** Cancelled input goes back to the tab the drag started from. */
+        override fun cancel() {
+            cancelled = true
+            finish()
+        }
+
+        private fun finish() {
+            moved.close()
+            if (this@TabSwipe.drag === this) this@TabSwipe.drag = null
+        }
     }
 
-    override fun begin(forward: Boolean): Boolean {
-        if (!enabled) return false
-        // Only a tab root: a pushed page, sheet or menu keeps the drag.
-        val back = backDispatcher.current
-        if (back != null && back !is TabBackTarget && back !is InlineBackTarget) return false
-        val from = heading
-        if (HomeTab.entries.getOrNull(from + if (forward) 1 else -1) == null) return false
-        val current = Drag(from)
+    override fun decide(start: SwipeStart): SwipeVerdict {
+        if (!enabled) return SwipeVerdict.Pass
+        val forward = start.direction == SwipeDirection.LEFT
+        if (HomeTab.entries.getOrNull(heading + if (forward) 1 else -1) == null) return SwipeVerdict.Pass
+        return SwipeVerdict.Take { begin() }
+    }
+
+    private fun begin(): SwipeDrag {
+        val current = Drag(heading)
         drag = current
         // One scroll session per drag: it takes over from the previous settle or a tap's animation,
         // follows every delta, then settles from the release velocity. The pager reports the settled tab.
         scrollSession {
             for (signal in current.moved) scrollBy(-current.take())
             scrollBy(-current.take())
-            val to = target(current)
+            val to = if (current.cancelled) current.from else target(current)
             committed = to
             settleTo(to, -current.velocity)
         }
-        return true
+        return current
     }
 
     /**
@@ -320,20 +350,6 @@ internal class TabSwipe(
             else -> 0
         }
         return (current.from + step).coerceIn(0, HomeTab.entries.size - 1)
-    }
-
-    override fun drag(delta: Float) {
-        val current = drag ?: return
-        current.pending += delta
-        current.travelled += delta
-        current.moved.trySend(Unit)
-    }
-
-    override fun end(velocity: Float) {
-        val current = drag ?: return
-        current.velocity = velocity
-        current.moved.close()
-        drag = null
     }
 }
 
@@ -467,6 +483,8 @@ internal fun HomeShell(
                         // A docked composer sits on the bar's line, so the keyboard lifts it from the first pixel.
                         .consumeWindowInsets(PaddingValues(bottom = if (!barShown) 0.dp else if (dock) metrics.tabDockBottomPadding else barHeight))
                         .keyboardPadding()
+                        // The bar opened over a docked composer is modal: the next touch only folds it.
+                        .blockSwipes { opened.value }
                         .pointerInput(Unit) {
                             awaitPointerEventScope {
                                 while (true) {
@@ -521,11 +539,7 @@ internal fun HomeShell(
 }
 
 /** A bar on its way out: it no longer takes touches or reads to accessibility. */
-private fun Modifier.leaving(): Modifier = clearAndSetSemantics { }.pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-    }
-}
+private fun Modifier.leaving(): Modifier = clearAndSetSemantics { }.swallowTouches { true }
 
 /** A destination's outline glyph, its filled form while selected (Material's bar convention), and its label. */
 private class TabFace(val icon: ImageVector, val selected: ImageVector, val label: String)

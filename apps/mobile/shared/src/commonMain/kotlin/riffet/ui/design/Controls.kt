@@ -1,5 +1,6 @@
 package riffet.ui.design
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.theme.LocalRiffetMotion
 import riffet.ui.icons.Icon
 import riffet.ui.icons.RiffetIcons
@@ -16,7 +17,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.indication
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -289,7 +289,7 @@ internal fun ChipRow(
     val motion = LocalRiffetMotion.current
     if (LocalInterfaceStyle.current.components.controls.chips == ComponentBackend.MATERIAL) {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides metrics.controlHeight) {
-            Row(modifier.horizontalScroll(rememberScrollState()).padding(contentPadding), horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
+            Row(modifier.riffetHorizontalScroll(rememberScrollState()).padding(contentPadding), horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
                 leading?.invoke()
                 items.forEach { item ->
                     FilterChip(selected = selected == item.key, onClick = { onSelect(item.key) }, label = {
@@ -327,7 +327,7 @@ internal fun ChipRow(
             }
         }
     }
-    Box(modifier.horizontalScroll(rememberScrollState()).padding(contentPadding)) {
+    Box(modifier.riffetHorizontalScroll(rememberScrollState()).padding(contentPadding)) {
         if (target != null) {
             Box(
                 Modifier

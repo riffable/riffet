@@ -1,12 +1,12 @@
 package riffet.ui.timeline
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -194,7 +194,7 @@ internal fun DiffBlock(
                         Modifier
                             .heightIn(max = 320.dp)
                             .verticalScroll(rememberScrollState())
-                            .horizontalScroll(rememberScrollState()),
+                            .riffetHorizontalScroll(rememberScrollState()),
                     ) {
                         // The diff lines are one container rather than one per line, so a hunk can be
                         // selected and copied whole. It sits inside the block's scroll boxes and inside
@@ -225,7 +225,7 @@ internal fun DiffBlock(
                             .maxOfOrNull { index -> measurer.measure(highlighted?.get(index) ?: AnnotatedString(diff.lines[index].text), style, softWrap = false, maxLines = 1, density = density).size.width } ?: 0
                     }
                     val rowWidth = LINE_NUMBER_WIDTH * 2 + MARKER_WIDTH + 20.dp + with(density) { textWidth.toDp() }
-                    Box(Modifier.heightIn(max = 320.dp).horizontalScroll(rememberScrollState())) {
+                    Box(Modifier.heightIn(max = 320.dp).riffetHorizontalScroll(rememberScrollState())) {
                         SelectableText {
                             LazyColumn(
                                 modifier = Modifier.width(maxOf(rowWidth, viewport)).heightIn(max = 320.dp),

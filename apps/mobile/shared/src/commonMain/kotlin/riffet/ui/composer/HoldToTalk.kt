@@ -1,5 +1,6 @@
 package riffet.ui.composer
 
+import riffet.ui.gesture.horizontalSwipeChild
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -118,7 +119,8 @@ private const val BUBBLE_BARS = 16
  * above the press point cancels. A gesture the system takes away (a parent scroll, the window losing focus) finishes.
  */
 internal fun Modifier.holdToTalk(enabled: Boolean, onPress: () -> Unit, onZone: (cancelling: Boolean) -> Unit, onEnd: (HoldEnd) -> Unit): Modifier =
-    pointerInput(enabled) {
+    // Recording runs from the press: a sideways wobble while holding is not a tab or page swipe.
+    horizontalSwipeChild { enabled }.pointerInput(enabled) {
         if (!enabled) return@pointerInput
         val cancelPx = DictationGesture.CANCEL_DISTANCE_DP.dp.toPx()
         awaitEachGesture {

@@ -1,5 +1,6 @@
 package riffet.ui.terminal
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.theme.appearancePageBackground
 
 import riffet.ui.design.ConfirmDialog
@@ -33,7 +34,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -343,7 +343,7 @@ internal fun TerminalScreen(
                 val metrics = rememberTerminalCellMetrics(fontSp.sp)
                 val gridWidth = with(LocalDensity.current) { (cols * metrics.width).toDp() }
                 riffet.ui.app.PageBody(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
+                    Box(Modifier.fillMaxSize().riffetHorizontalScroll(rememberScrollState())) {
                         TerminalScrollView(
                             surface = surface,
                             scroll = scroll,

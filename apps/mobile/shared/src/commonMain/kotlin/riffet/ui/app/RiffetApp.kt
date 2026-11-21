@@ -95,6 +95,8 @@ import riffet.ui.home.ProjectHome
 import riffet.ui.home.rememberHomeConfigs
 import riffet.ui.pairing.PairingScreen
 import riffet.ui.session.RenameSessionDialog
+import riffet.ui.gesture.horizontalSwipeArbiter
+import riffet.ui.gesture.swipeSurface
 import riffet.ui.session.SessionDetailController
 import riffet.ui.timeline.prepareTranscriptMarkdown
 import riffet.ui.timeline.TimelinePresenter
@@ -518,7 +520,8 @@ fun RiffetApp(
                     // The keyboard shrinks each page instead of pushing the window up, so the header
                     // stays on screen and the composer sits right above the keyboard. It is applied per
                     // page, not here: the tabs let the keyboard cover their bottom bar (`HomeShell`).
-                    Box(modifier = Modifier.fillMaxSize().padding(insets).consumeWindowInsets(insets)) {
+                    // The window's one horizontal swipe arbiter: pages, tabs, drawers and scrollers enlist under it.
+                    Box(modifier = Modifier.fillMaxSize().horizontalSwipeArbiter().padding(insets).consumeWindowInsets(insets)) {
                         // Keep a stable backdrop under the system bars while page alpha layers clip
                         // their overflow during transitions. This source is a sibling of all surfaces.
                         Box(Modifier.matchParentSize().coverSystemBars().riffetMaterialSource(key = origin)) {
@@ -947,6 +950,8 @@ internal fun Workbench(
                 onBack = navigation::close,
                 mode = if (paned) PageSwipeMode.NONE else PageSwipeMode.FULL,
                 state = sessionPage ?: rememberPageBackState(animateEntrance = !paned),
+                // A leftward swipe in a session opens its details drawer.
+                passLeftward = true,
             ) { back ->
                 SessionScreen(
                     store = store,
@@ -1008,7 +1013,7 @@ internal fun Workbench(
         delay(TABS_WARM_DELAY_MS)
         tabsWarm = true
     }
-    val tabSwipe = remember(tabPager, navigation, tabSwipeScope) { TabSwipe(tabPager, navigation.backDispatcher, tabSwipeScope) }
+    val tabSwipe = remember(tabPager, navigation, tabSwipeScope) { TabSwipe(tabPager, tabSwipeScope) }
     SideEffect {
         tabSwipe.settle = tabSettle
         tabSwipe.minFlingVelocity = tabFlingVelocity
@@ -1040,7 +1045,6 @@ internal fun Workbench(
             endEnabled = active != null,
             startEnabled = !covering && (rail || onFirstTab),
             backSwipe = { navigation.backSwipeFor(drawerBackTarget) },
-            pageSwipe = tabSwipe,
             startDrawer = {
                 WorkbenchDrawer(
                     api = api,
@@ -1120,7 +1124,9 @@ internal fun Workbench(
             Box(Modifier.fillMaxSize()) {
                 // Retain the tabs under a session; covered controls leave the accessibility tree.
                 CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !covering)) {
-                    Box(Modifier.fillMaxSize().then(if (covering) Modifier.clearAndSetSemantics { } else Modifier).coveredBy(sessionPage.takeIf { covering })) {
+                    Box(Modifier.fillMaxSize().then(if (covering) Modifier.clearAndSetSemantics { } else Modifier).coveredBy(sessionPage.takeIf { covering })
+                        // The tabs' swipes, over the pages and the bar alike; the drawers are the surface outside.
+                        .swipeSurface(tabSwipe)) {
                         val tabs = rememberSaveableStateHolder()
                         HomeShell(tab = navigation.tab, onTab = { tabSwipe.select(it.ordinal); navigation.tab = it }, waiting = waiting, rail = rail,
                             dockTab = HomeTab.ASSISTANT.takeIf { !rail && assistantMain != null },
@@ -1135,7 +1141,7 @@ internal fun Workbench(
                                 // Alpha transitions clip to this layer's bounds. Include the system
                                 // bars, then restore the safe area inside each page.
                                 modifier = Modifier.coverSystemBars(tabInsets),
-                                // Drags come through SideDrawers (TabSwipe), which also owns the drawer swipe.
+                                // Drags come through the window's swipe arbiter as [TabSwipe]'s.
                                 userScrollEnabled = false,
                                 pagerState = tabPager,
                                 followFinger = true,

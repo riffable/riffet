@@ -1,12 +1,12 @@
 package riffet.ui.home
 
+import riffet.ui.gesture.riffetHorizontalScroll
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.settings.SettingsNoticeKind
 import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -147,7 +147,7 @@ internal fun DirectoryPickerSheet(
         // shortcut is unconditional: this sheet cannot know whether a `Documents` or `workspace`
         // folder exists on the host, and a button that is guaranteed to fail is worse than none.
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             DirectoryChip(
@@ -185,7 +185,7 @@ internal fun DirectoryPickerSheet(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .riffetHorizontalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

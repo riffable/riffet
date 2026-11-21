@@ -62,6 +62,33 @@ const rules = [
     test: line => /\bSettingsButtonsRow\(/.test(line) && !/fun\s+SettingsButtonsRow/.test(line),
     hint: 'one action per row: SettingsActionRow, with any result in a Snackbar (mobile.md §2.4)',
   },
+  // Horizontal swipes go through the window's arbiter (ui/gesture/HorizontalSwipes.kt). A detector
+  // of its own, or a sideways scroller the arbiter does not know about, is how the tabs once stopped
+  // switching: whoever consumed first won, and a flinging list or a stray back guard took the swipe.
+  {
+    name: 'horizontal drag detector outside the swipe arbiter',
+    files: /^(?!.*\/ui\/gesture\/)/,
+    test: line => /\b(awaitHorizontalTouchSlopOrCancellation|horizontalDrag|detectHorizontalDragGestures)\(/.test(line),
+    hint: 'put a swipeSurface on the surface and return SwipeVerdict.Take (riffet.ui.gesture)',
+  },
+  {
+    name: 'horizontalScroll without a swipe claim',
+    files: /^(?!.*\/ui\/gesture\/)/,
+    test: line => /(^|[^\w])horizontalScroll\(/.test(line),
+    hint: 'use riffetHorizontalScroll: it keeps the swipes it can scroll by and hands the rest to the page, tabs and drawers',
+  },
+  {
+    name: 'sideways list or pager without a swipe claim',
+    test: (line, lines) => /\b(LazyRow|LazyHorizontalGrid|HorizontalPager)\(/.test(line) && !/\bfun\s/.test(line)
+      && !lines.some(other => /horizontalSwipeChild/.test(other)),
+    hint: 'add Modifier.horizontalSwipeChild(state) so the arbiter leaves it the swipes it can scroll by',
+  },
+  {
+    name: 'hand-written touch swallowing',
+    files: /^(?!.*\/ui\/gesture\/)/,
+    test: line => /awaitPointerEvent\(PointerEventPass\.Initial\)\.changes\.forEach\s*\{\s*it\.consume\(\)\s*\}/.test(line),
+    hint: 'use Modifier.swallowTouches { … }: it also stops swipes, which consuming in the Initial pass alone does not',
+  },
   {
     name: 'staticCompositionLocalOf outside the allowlist',
     test: line => {

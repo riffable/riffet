@@ -1,5 +1,7 @@
 package riffet.ui.favorites
 
+import androidx.compose.foundation.lazy.rememberLazyListState
+import riffet.ui.gesture.horizontalSwipeChild
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.lazy.LazyRow
@@ -144,8 +146,10 @@ internal fun FolderFavoriteChips(state: FolderFavoritesState, currentPath: Strin
     var editing by remember { mutableStateOf(false) }
     if (editing && state.favorites.isEmpty()) editing = false
     AnimatedVisibility(visible = state.favorites.isNotEmpty(), enter = motion.expandIn(), exit = motion.collapseOut()) {
+        val row = rememberLazyListState()
         LazyRow(
-            modifier = modifier.fillMaxWidth(),
+            state = row,
+            modifier = modifier.fillMaxWidth().horizontalSwipeChild(row),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
