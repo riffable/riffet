@@ -175,6 +175,9 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
   const printing = useContext(PrintRenderingContext);
   const block = useContext(FenceBlock);
   const open = block.live !== undefined && start !== undefined && end !== undefined && fenceStillOpen(block.live, start, end);
+  // A stray/unclosed fence at the end of a settled reply (for instance from nested ``` fences) has
+  // nothing inside once streaming finishes; drop the empty box while keeping streaming placeholders.
+  const empty = !open && !code.trim();
   // The block, the offset in it and the first line name the fence's remembered toggles; all three hold while it streams, once that line is in.
   const lineEnd = code.indexOf('\n');
   const place = `md-fence:${block.index}.${start ?? ''}:${digest(`${info}\n${code.slice(0, Math.min(200, lineEnd < 0 ? code.length : lineEnd))}`)}`;
@@ -185,21 +188,21 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
   const language = useMemo(() => (cited ? languageForPath(cited.path) : languageForFence(info)), [cited, info]);
   const fenceToken = info.trim().toLowerCase().split(/[\s:,]/, 1)[0] ?? '';
   const mathFence = !cited && /^(?:math|latex|tex)$/i.test(fenceToken);
-  const mathModules = useMath(mathFence);
-  const math = useMemo(() => (mathFence && mathModules ? mathFenceHtml(mathModules.katex, code) : undefined), [mathFence, mathModules, code]);
+  const mathModules = useMath(mathFence && !empty);
+  const math = useMemo(() => (!empty && mathFence && mathModules ? mathFenceHtml(mathModules.katex, code) : undefined), [empty, mathFence, mathModules, code]);
   const diagram = !cited && /^(?:mermaid|mmd|dot|graphviz|gv|plantuml|puml|uml|wsd|d2|vega|vega-lite|vegalite|vl)$/i.test(fenceToken);
   const markup = !cited && /^(?:html?|svg)$/i.test(fenceToken);
   const renderable = diagram || markup || language === 'markdown' || (!cited && /^(?:md|markdown|mdx|mdc)$/i.test(fenceToken));
   const preview = printing ? diagram : previewOverride ?? diagram;
   const previewing = preview && !(open && (diagram || markup));
-  const previewKey = previewing && (diagram || markup) ? `${info}\u0000${code.length}:${digest(code)}` : undefined;
+  const previewKey = !empty && previewing && (diagram || markup) ? `${info}\u0000${code.length}:${digest(code)}` : undefined;
   const inView = printing || observed || (previewKey !== undefined && shownPreviews.has(previewKey));
   useEffect(() => { if (observed && previewKey) rememberPreview(previewKey); }, [observed, previewKey]);
-  const cached = useMemo(() => cachedHighlight(code, language), [code, language]);
+  const cached = useMemo(() => (empty ? undefined : cachedHighlight(code, language)), [empty, code, language]);
   const [rendered, setRendered] = useState<{ code: string; language: string; html: string }>();
 
   useEffect(() => {
-    if (block.frozen || !inView || !language || previewing || open || cached) return;
+    if (empty || block.frozen || !inView || !language || previewing || open || cached) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void highlightCode(code, language).then((html) => {
@@ -213,6 +216,7 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
   const highlighted = useRef(math ?? cached ?? held);
   // A pending highlighter or math module may settle independently of the parent Markdown render.
   if (!block.frozen) highlighted.current = math ?? cached ?? held;
+  if (empty) return null;
   const html = highlighted.current;
   const source = (
     <pre
