@@ -91,6 +91,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Performance
 
 - iPhone is smoother with thousands of conversations and long transcripts: the task list scrolls and opens a conversation without the second-long pause, a long conversation opens and keeps up with a streaming reply without rebuilding everything above it, and typing into a long draft no longer stutters. Opened attachments stay on the phone (up to 256 MB) instead of downloading again after a restart, the image viewer loads a sharper copy for zooming, and formulas draw without a web page each. The first search in Settings no longer freezes the page for over a second, an unreachable server's status page is asked less and less often, and the Git panel reconnects after the network drops.
+- On iPhone, the first switch to Tasks after launch builds the list faster and no longer flashes a “Syncing” label that is gone a moment later.
 
 ## 0.9.0 - 2026-11-19
 

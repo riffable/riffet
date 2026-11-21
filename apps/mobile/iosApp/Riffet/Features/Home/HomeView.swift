@@ -264,6 +264,8 @@ struct SessionHomeView: View {
     @State private var tagging: Session?
     @State private var tags = ""
     @State private var order = SessionOrder()
+    @State private var rowActions = SessionRowActions()
+    @State private var statusShown = false
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private static let topID = "tasks.top"
@@ -311,6 +313,7 @@ struct SessionHomeView: View {
     }
     private var availableTags: [String] { Set(workbench.list.sessions.flatMap(\.tags)).sorted() }
     private var isConnected: Bool { workbench.serverReachable }
+    private var statusPending: Bool { !isConnected && workbench.list.error == nil }
     private var connectionStatus: String {
         workbench.list.error != nil ? String(localized: "待重连", bundle: .riffet) : String(localized: "同步中", bundle: .riffet)
     }
@@ -328,7 +331,8 @@ struct SessionHomeView: View {
                     switch item {
                     case let .header(_, title): groupHeader(title)
                     case let .project(project, count): projectHeader(project, count: count)
-                    case let .session(session): row(session)
+                    case let .session(session):
+                        SessionRow(session: session, workbench: workbench, openSessionID: openSessionID, showsProject: scope == nil, actions: rowActions)
                     }
                 }
                 if visible.isEmpty {
@@ -399,6 +403,10 @@ struct SessionHomeView: View {
             .padding(.horizontal, RiffetMetrics.pageInset)
     }
     var body: some View {
+        // Refreshed each pass on the same object (see `SessionRowActions`).
+        let _ = rowActions.open = { [onOpen] in onOpen.run($0) }
+        let _ = rowActions.rename = { title = $0.title; renaming = $0 }
+        let _ = rowActions.tag = { tags = $0.tags.joined(separator: ", "); tagging = $0 }
         renameAlertHome.alert("编辑标签", isPresented: taggingPresented) { tagActions }
     }
     private var decoratedHome: some View {
@@ -417,7 +425,7 @@ struct SessionHomeView: View {
             .toolbar { homeToolbar }
             // Connection status only shows while the list is not live.
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !isConnected && workbench.list.error == nil {
+                if statusShown && statusPending {
                     HStack(spacing: 6) {
                         RiffetStatusDot(state: .waiting, size: 6)
                         Text(connectionStatus).lineLimit(1)
@@ -428,6 +436,14 @@ struct SessionHomeView: View {
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("\(connectionStatus)，服务器 \(workbench.baseURL.host ?? "Mac")")
                 }
+            }
+            .task(id: statusPending) {
+                statusShown = false
+                guard statusPending else { return }
+                // After launch the device copy shows until the live list arrives, often within a moment:
+                // shown at once, the status would only blink.
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled { statusShown = true }
             }
             .sheet(isPresented: $showingProjects) {
                 ProjectSheet(workbench: workbench, selection: scope, allLabel: String(localized: "全部项目", bundle: .riffet)) { scope = $0?.id }
@@ -580,11 +596,21 @@ struct SessionHomeView: View {
         NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .checkpoints) } label: { Label(gitText("Checkpoints"), systemImage: "clock.arrow.circlepath") }
         NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .worktrees) } label: { Label(gitText("Worktrees"), systemImage: "arrow.triangle.branch") }
     }
-    /// Builds only the row's frame: `List` calls this for every session on every pass over the
-    /// list, so what the row shows is worked out in `SessionRowLabel.body`, for the rows on screen.
-    private func row(_ session: Session) -> some View {
-        Button { onOpen.run(.session(session.id, session.state == .waiting)) } label: {
-            SessionRowLabel(session: session, workbench: workbench, openSessionID: openSessionID, showsProject: scope == nil)
+}
+
+/// One session of the task list. `List` builds this value for every session on every pass over the
+/// list and runs its body only for the rows on screen, so the button, its swipe actions and its menu
+/// are made here rather than in the list's `ForEach` (ios-performance.md §2.4).
+private struct SessionRow: View {
+    let session: Session
+    let workbench: Workbench
+    let openSessionID: String?
+    let showsProject: Bool
+    let actions: SessionRowActions
+
+    var body: some View {
+        Button { actions.open(.session(session.id, session.state == .waiting)) } label: {
+            SessionRowLabel(session: session, workbench: workbench, openSessionID: openSessionID, showsProject: showsProject)
         }
         .buttonStyle(RiffetRowPressStyle(radius: 10))
         .contentShape(.hoverEffect, RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -594,22 +620,49 @@ struct SessionHomeView: View {
         .listRowBackground(Color.clear)
         .accessibilityIdentifier("session.\(session.id)")
         .accessibilityAddTraits(openSessionID == session.id ? .isSelected : [])
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+        // Each in a view of its own: `List` runs this body for every session to count its rows, and the
+        // buttons are only needed for a row on screen or a menu that opens.
+        .swipeActions(edge: .leading, allowsFullSwipe: false) { SessionRowSwipe(session: session, workbench: workbench, edge: .leading) }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) { SessionRowSwipe(session: session, workbench: workbench, edge: .trailing) }
+        .contextMenu { SessionRowMenu(session: session, workbench: workbench, actions: actions) }
+    }
+}
+
+private struct SessionRowSwipe: View {
+    let session: Session
+    let workbench: Workbench
+    let edge: HorizontalEdge
+    @Environment(\.palette) private var palette
+    var body: some View {
+        if edge == .leading {
             Button(session.pinnedAt == nil ? "置顶" : "取消置顶", systemImage: "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }.tint(palette.accent)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+        } else {
             Button(session.archivedAt == nil ? "归档" : "恢复", systemImage: "archivebox") { Task { await workbench.update(session, archived: session.archivedAt == nil) } }.tint(palette.fg3)
         }
-        .contextMenu {
-            Button("重命名", systemImage: "pencil") { title = session.title; renaming = session }
-            Button("编辑标签", systemImage: "tag") { tags = session.tags.joined(separator: ", "); tagging = session }
-            Button(session.pinnedAt == nil ? "置顶" : "取消置顶", systemImage: "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }
-            Button(session.archivedAt == nil ? "归档" : "恢复", systemImage: "archivebox") { Task { await workbench.update(session, archived: session.archivedAt == nil) } }
-            if workbench.list.canDeleteSessions {
-                Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)
-            }
+    }
+}
+
+private struct SessionRowMenu: View {
+    let session: Session
+    let workbench: Workbench
+    let actions: SessionRowActions
+    var body: some View {
+        Button("重命名", systemImage: "pencil") { actions.rename(session) }
+        Button("编辑标签", systemImage: "tag") { actions.tag(session) }
+        Button(session.pinnedAt == nil ? "置顶" : "取消置顶", systemImage: "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }
+        Button(session.archivedAt == nil ? "归档" : "恢复", systemImage: "archivebox") { Task { await workbench.update(session, archived: session.archivedAt == nil) } }
+        if workbench.list.canDeleteSessions {
+            Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)
         }
     }
+}
+
+/// What a row does, handed to every row as one object: closures as row properties would be new on
+/// each pass, so every row on screen would count as changed (ios-performance.md §2.3).
+private final class SessionRowActions {
+    var open: (MobileRoute) -> Void = { _ in }
+    var rename: (Session) -> Void = { _ in }
+    var tag: (Session) -> Void = { _ in }
 }
 
 /// What a task-list row shows. Its body runs only for rows on screen.
