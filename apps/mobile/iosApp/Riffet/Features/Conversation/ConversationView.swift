@@ -62,6 +62,7 @@ struct ConversationView: View {
     @State private var runningProcesses: Set<String> = []
     @State private var disclosureState = ConversationDisclosureState()
     @State private var rowCache = TranscriptRowCache()
+    @State private var presence = PagePresence()
     @State private var selection: ConversationSelection?
     @State private var composerFocus = 0
     @State private var renaming = false
@@ -286,8 +287,13 @@ struct ConversationView: View {
             } else { ProgressView() }
         }
         .modifier(ComposerToastClearance(height: composerHeight))
-        .onAppear { workbench.visibleSessionID = sessionID }
-        .onDisappear { feedback.pause(); if workbench.visibleSessionID == sessionID { workbench.visibleSessionID = nil } }
+        .onAppear {
+            presence.shown = true
+            // When another tab pushes a page, SwiftUI shows this tab's page for an instant and hides it again
+            // in the same update; only a page still shown after that update is the one in front.
+            DispatchQueue.main.async { if presence.shown { workbench.visibleSessionID = sessionID } }
+        }
+        .onDisappear { presence.shown = false; feedback.pause(); if workbench.visibleSessionID == sessionID { workbench.visibleSessionID = nil } }
         .onChange(of: feedbackSource, initial: true) { _, _ in updateFeedback() }
         .onChange(of: feedbackVisible) { _, _ in updateFeedback() }
         .onChange(of: workbench.offline, initial: true) { _, offline in offlineSince = offline ? (offlineSince ?? .now) : nil }
@@ -297,8 +303,16 @@ struct ConversationView: View {
             feedbackRowVisible = false
             updateFeedback()
         }
-        .task(id: sessionID) { await workbench.open(sessionID: sessionID) }
+        .task(id: sessionID) {
+            // The store follows one conversation: a page shown for an instant (see `onAppear`) must not take
+            // it from the one in front, which then waits on a conversation it is not following.
+            await Task.yield()
+            guard !Task.isCancelled, presence.shown else { return }
+            await workbench.open(sessionID: sessionID)
+        }
         .modifier(DismissOnRemoval(workbench: workbench, sessionID: sessionID))
+        // A conversation already loaded is ready before `onAppear` makes this page the visible one.
+        .onChange(of: workbench.visibleSessionID) { _, id in if id == sessionID { restore() } }
         .task(id: catalogKey) { if let session { await loadCatalog(session) } }
     }
 
@@ -852,6 +866,11 @@ private struct DismissOnRemoval: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: workbench.removal) { _, removal in if removal?.ids.contains(sessionID) == true { dismiss() } }
     }
+}
+
+/// Whether the page is on screen, read after the update that showed it. Not observed.
+private final class PagePresence {
+    var shown = false
 }
 
 /// The rows of earlier `transcriptRows` passes, by id. A row kept as it was is not written again; rows
