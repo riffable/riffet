@@ -12,6 +12,26 @@ msgstr ""
 msgid "{0} 的操作"
 msgstr "Actions for {0}"
 
+#: src/app/automations/SendLater.tsx
+msgid "{days} 天 {remHours} 小时后"
+msgstr "In {days}d {remHours}h"
+
+#: src/app/automations/SendLater.tsx
+msgid "{days} 天后"
+msgstr "In {days}d"
+
+#: src/app/automations/SendLater.tsx
+msgid "{hours} 小时 {mins} 分钟后"
+msgstr "In {hours}h {mins}m"
+
+#: src/app/automations/SendLater.tsx
+msgid "{hours} 小时后"
+msgstr "In {hours}h"
+
+#: src/app/automations/SendLater.tsx
+msgid "{totalMinutes} 分钟后"
+msgstr "In {totalMinutes}m"
+
 #: src/app/automations/automation.ts
 msgid "1 小时后"
 msgstr "In 1 hour"
@@ -37,10 +57,22 @@ msgstr "Once"
 msgid "上一轮仍在运行"
 msgstr "Previous run still in progress"
 
+#: src/app/automations/SendLater.tsx
+msgid "上个月"
+msgstr "Previous month"
+
+#: src/app/automations/SendLater.tsx
+msgid "下个月"
+msgstr "Next month"
+
 #. placeholder {0}: formatWhen(next.toISOString())
 #: src/app/automations/AutomationEditor.tsx
 msgid "下次 {0}"
 msgstr "Next run {0}"
+
+#: src/app/automations/SendLater.tsx
+msgid "今天"
+msgstr "Today"
 
 #: src/app/automations/automation.ts
 msgid "今天 {time}"
@@ -62,6 +94,10 @@ msgstr "When"
 msgid "保存"
 msgstr "Save"
 
+#: src/app/automations/SendLater.tsx
+msgid "修改发送时间"
+msgstr "Change send time"
+
 #: src/app/automations/AutomationsPage.tsx
 msgid "最近运行"
 msgstr "Recent runs"
@@ -69,6 +105,10 @@ msgstr "Recent runs"
 #: src/app/automations/AutomationEditor.tsx
 msgid "分 时 日 月 周，本地时间；也可以用 @daily、@hourly"
 msgstr "Minute hour day month weekday, local time; @daily and @hourly also work"
+
+#: src/app/automations/SendLater.tsx
+msgid "分钟"
+msgstr "Minute"
 
 #: src/app/automations/QuickCreate.tsx
 msgid "创建"
@@ -99,6 +139,10 @@ msgctxt "tasks-cancel-action"
 msgid "取消"
 msgstr "Cancel"
 
+#: src/app/automations/SendLater.tsx
+msgid "取消定时"
+msgstr "Clear schedule"
+
 #: src/app/automations/AutomationEditor.tsx
 msgid "名称"
 msgstr "Name"
@@ -114,6 +158,10 @@ msgstr "Weekends at {time}"
 #: src/app/automations/AutomationEditor.tsx
 msgid "在同一会话继续"
 msgstr "Continue in the same conversation"
+
+#: src/app/automations/SendLater.tsx
+msgid "小时"
+msgstr "Hour"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "已暂停"
@@ -171,6 +219,10 @@ msgstr "New automation"
 msgid "无法保存自动化"
 msgstr "Couldn't save the automation"
 
+#: src/app/automations/SendLater.tsx
+msgid "无法修改发送时间"
+msgstr "Couldn't change send time"
+
 #: src/app/automations/QuickCreate.tsx
 msgid "无法创建自动化"
 msgstr "Couldn't create the automation"
@@ -206,6 +258,10 @@ msgstr "Couldn't run the automation"
 #: src/app/automations/AutomationEditor.tsx
 msgid "日期时间"
 msgstr "Date and time"
+
+#: src/app/automations/SendLater.tsx
+msgid "明天"
+msgstr "Tomorrow"
 
 #: src/app/automations/automation.ts
 msgid "明天 {time}"
@@ -292,6 +348,10 @@ msgid "添加计划"
 msgstr "Add schedule"
 
 #: src/app/automations/SendLater.tsx
+msgid "移回输入框编辑"
+msgstr "Move back to the composer to edit"
+
+#: src/app/automations/SendLater.tsx
 msgid "稍后发送"
 msgstr "Send later"
 
@@ -300,6 +360,7 @@ msgid "立即运行"
 msgstr "Run now"
 
 #: src/app/automations/AutomationsPage.tsx
+#: src/app/automations/SendLater.tsx
 msgid "编辑"
 msgstr "Edit"
 
@@ -334,6 +395,10 @@ msgstr "What should the agent do?"
 #: src/app/automations/SendLater.tsx
 msgid "设为发送时间"
 msgstr "Set send time"
+
+#: src/app/automations/SendLater.tsx
+msgid "请选择晚于当前的时间"
+msgstr "Choose a time in the future"
 
 #: src/app/automations/QuickCreate.tsx
 msgid "跑一遍测试并汇报失败"

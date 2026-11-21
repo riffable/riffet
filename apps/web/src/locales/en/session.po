@@ -874,6 +874,19 @@ msgstr "Subagent is starting…"
 msgid "完成"
 msgstr "Done"
 
+#: src/app/session/Composer.tsx
+msgid "定时发送"
+msgstr "Send later"
+
+#. placeholder {0}: formatWhen(scheduledAt.toISOString())
+#: src/app/session/Composer.tsx
+msgid "定时发送 ({0})"
+msgstr "Send later ({0})"
+
+#: src/app/session/Composer.tsx
+msgid "定时发送时间已过，请重新选择"
+msgstr "Scheduled send time has passed; pick a new time"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
 msgstr "Actual size"

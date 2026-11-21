@@ -36,4 +36,28 @@ describe('migrating templates, schedules and wake-ups', () => {
     expect(service.runs('w3')).toEqual([expect.objectContaining({ result: 'failed', error: 'archived' })]);
     for (const key of ['templates', 'schedules', 'wakeups']) expect(store.getSetting(`orchestration:${key}`, null)).toBeNull();
   });
+
+  it('allows rescheduling pending user follow-ups while keeping other follow-up edits read-only', async () => {
+    const store = new Store(':memory:');
+    const project = store.createProject('/tmp', 'proj');
+    const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'claude' });
+    const service = new OrchestrationService({ store, schedulerIntervalMs: 3_600_000 } as unknown as ConstructorParameters<typeof OrchestrationService>[0]);
+    cleanup.push(async () => { await service.close(); store.close(); });
+
+    const firstAt = new Date(Date.now() + 600_000).toISOString();
+    const nextAt = new Date(Date.now() + 1_200_000).toISOString();
+    const created = service.saveAutomation(undefined, {
+      id: 'user-followup-1',
+      prompt: 'ping later',
+      followUp: { sessionId: session.id },
+      triggers: [{ kind: 'once', at: firstAt }],
+    });
+    const updated = service.saveAutomation(created.id, { triggers: [{ kind: 'once', at: nextAt }] });
+    expect(updated.nextRunAt).toBe(nextAt);
+    expect(updated.triggers).toEqual([{ kind: 'once', at: nextAt }]);
+
+    expect(() => service.saveAutomation(created.id, { prompt: 'changed', triggers: [{ kind: 'once', at: nextAt }] })).toThrow(/follow-up cannot be edited/i);
+    const agentWakeup = service.scheduleWakeup(session.id, { dueAt: new Date(Date.now() + 600_000), note: 'agent note' });
+    expect(() => service.saveAutomation(agentWakeup.id, { triggers: [{ kind: 'once', at: nextAt }] })).toThrow(/follow-up cannot be edited/i);
+  });
 });

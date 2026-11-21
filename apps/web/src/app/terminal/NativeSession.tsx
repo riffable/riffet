@@ -3,14 +3,14 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { composerRunningIntent } from '../session/composerRunning';
 import { useComposerQuotes } from '../session/composerQuotes';
 import { IconInfo, IconSquare, IconSquareArrowOutUpRight, IconArrowRightLeft, IconPuzzle, IconBookmarkPlus, IconFileText, IconGitFork, IconMessagesSquare, IconRotateCw, IconSquareTerminal } from '@/components/icons';
-import type { Attachment, AttemptGroup, DiscussionSource, InboxAction, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, SessionControlSnapshot, TerminalInfo, ToolGroupId } from '@contracts';
+import type { Attachment, AttemptGroup, Automation, DiscussionSource, InboxAction, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, SessionControlSnapshot, TerminalInfo, ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { FeedbackNotice, FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
 import { Collapse } from '@/components/ui/collapse';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tip } from '@/components/ui/tooltip';
-import { api, HttpError, restoreContext, type NativeSessionCreateResult, type PromptContextReference } from '@/lib/api';
+import { api, HttpError, isSessionReference, restoreContext, type NativeSessionCreateResult, type PromptContextReference } from '@/lib/api';
 import { workbenchAppearanceConnection } from '@/lib/workbench-appearance';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
@@ -444,7 +444,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const forwardTranscriptWheel = useCallback((deltaY: number, deltaMode: number) => (
     transcriptScrollRef.current?.scrollByReader(deltaY, deltaMode) ?? false
   ), []);
-  const [restoreDraft, setRestoreDraft] = useState<{ text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: import('../session/composerAttachmentIntake').PendingUpload[]; onPersisted?: () => void; nonce: number }>();
+  const [restoreDraft, setRestoreDraft] = useState<{ text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: import('../session/composerAttachmentIntake').PendingUpload[]; scheduledAt?: Date; onPersisted?: () => void; nonce: number }>();
   const [quoted, setQuoted] = useState<{ text: string; nonce: number }>();
   const quote = useCallback((text: string) => setQuoted({ text, nonce: Date.now() }), []);
   // A passage selected in a file preview of the side panel.
@@ -933,7 +933,33 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   /** The queue card is on screen, closing included: the composer card keeps its seam until the card has gone. */
   const [queueShown, setQueueShown] = useState(false);
   const followUps = useSessionFollowUps(session.id);
-  const followUpList = useMemo(() => followUps.items.length ? <FollowUpList items={followUps.items} onCancel={(id) => void followUps.cancel(id)} /> : undefined, [followUps.items, followUps.cancel]);
+  const editFollowUp = useCallback((item: Automation) => {
+    void followUps.cancel(item.id).then(async (cancelled) => {
+      if (!cancelled || !recipientAlive.current) return;
+      const ids = item.input?.attachmentIds ?? [];
+      const checked = await Promise.all(ids.map(async id => {
+        try { return { attachment: await api.attachmentMetadata(id) }; }
+        catch (error) { return { missing: { key: `missing:${id}`, attachmentId: id, name: t`附件`, size: 0, image: false, error: error instanceof HttpError && error.status === 404 ? t`请重新选择文件` : t`无法读取附件` } }; }
+      }));
+      if (!recipientAlive.current) return;
+      const due = item.nextRunAt && Date.parse(item.nextRunAt) > Date.now() ? new Date(item.nextRunAt) : undefined;
+      const context = restoreContext({ context: item.input?.context, references: item.input?.references })?.map((entry) => {
+        if (!isSessionReference(entry)) return entry;
+        const target = findSession?.(entry.sessionId);
+        return target ? { ...entry, title: entry.title ?? target.title, backendId: entry.backendId ?? sessionBackend(target) } : entry;
+      });
+      setRestoreDraft({
+        text: item.prompt,
+        attachments: checked.flatMap(entry => entry.attachment ? [entry.attachment] : []),
+        context,
+        missingAttachments: checked.flatMap(entry => entry.missing ? [entry.missing] : []),
+        ...(due ? { scheduledAt: due } : {}),
+        nonce: Date.now(),
+      });
+    });
+  }, [followUps.cancel, findSession]);
+  const followUpEditable = !archived && !held;
+  const followUpList = useMemo(() => followUps.items.length ? <FollowUpList items={followUps.items} onCancel={(id) => void followUps.cancel(id)} onEdit={followUpEditable ? editFollowUp : undefined} onReschedule={followUpEditable ? followUps.reschedule : undefined} /> : undefined, [followUps.items, followUps.cancel, followUpEditable, editFollowUp, followUps.reschedule]);
   const sendLater = useCallback(async (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => {
     const ok = await scheduleFollowUp(session.id, prompt, attachments, context, at);
     if (ok) void followUps.refresh();
@@ -1279,6 +1305,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           scrollHandleRef={transcriptScrollRef}
           sessionId={session.id}
           onOpenSession={onOpenSession}
+          newTopicDivider={assistantMain}
           timeline={visibleTimeline}
           timelineVersion={native.timelineVersion}
           pendingConfirmationCount={interaction ? 1 : 0}

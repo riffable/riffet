@@ -27,6 +27,7 @@ import { ModelPicker, type ModelProviderChoices } from './ModelPicker';
 import { clipboardFiles, readUploadData, uploadName } from './image-upload';
 import { classifyEnterGesture, isComposingKey, primaryEnterHint, readEnterKeyBehavior, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
 import { ComposerFullscreen } from './ComposerFullscreen';
+import { formatWhen } from '../automations/automation';
 import { SendLaterMenu } from '../automations/SendLater';
 import { useSettings } from '../state/stores';
 import { DictationBar } from './DictationBar';
@@ -367,7 +368,7 @@ export interface ComposerProps {
   /** Background agents still working while the main turn is idle. */
   backgroundCount?: number;
   /** Puts a message (e.g. one taken back from the queue) into the draft; a new `nonce` applies it again. */
-  restoreDraft?: { text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: PendingUpload[]; onPersisted?: () => void; nonce: number };
+  restoreDraft?: { text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: PendingUpload[]; scheduledAt?: Date; onPersisted?: () => void; nonce: number };
   /** Adds a quote taken from the transcript to the draft; a new `nonce` adds it again. */
   quote?: { text: string; nonce: number };
   /** Dock cards rendered directly above the input card (todos, outgoing queue). */
@@ -571,6 +572,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const uploading = pendingUploads.length > 0;
   const draftAtRisk = unsavedDrafts.has(storageKey) && Boolean(text || quotes.length || attachments.length || (persistReferences && references.length));
   const [submitting, setSubmitting] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [highlight, setHighlight] = useState(0);
   /** The project an `@` menu has been stepped into, tied to the `@` it was opened from. */
@@ -749,6 +751,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     for (const item of stored.attachments) if (stored.keys?.[item.id]) attachmentKeysRef.current.set(item.id, stored.keys[item.id]!);
     dismissedTriggerRef.current = null;
     setTrigger(null);
+    setScheduledAt(null);
     const current = referencesRef.current;
     const restored = persistReferences
       ? stored.references.filter(item => isSessionReference(item) || stored.projectId === referenceProjectId).filter((item) => !current.some((other) => sameContextReference(other, item)))
@@ -839,6 +842,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     updateAttachments((existing) => [...restoreDraft.attachments.filter((item) => !existing.some((other) => other.id === item.id)), ...existing]);
     if (restoreDraft.context) updateReferences(mergeRestoredReferences(referencesRef.current, restoreDraft.context));
     if (restoreDraft.missingAttachments) updatePendingUploads(current => [...current, ...restoreDraft.missingAttachments!.filter(item => !current.some(other => other.key === item.key))]);
+    if (restoreDraft.scheduledAt && restoreDraft.scheduledAt.getTime() > Date.now()) {
+      setScheduledAt((existing) => (existing && existing.getTime() > Date.now() ? existing : restoreDraft.scheduledAt!));
+    }
     if (storageKey) {
       saveDraft(storageKey, currentDraft());
       if (!unsavedDrafts.has(storageKey)) restoreDraft.onPersisted?.();
@@ -1356,12 +1362,18 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   }, [disabled, projectId, storageKey, props.windowDrop, props.attachmentsAllowed]);
 
   // Not while dictating: the result still to come rewrites the draft, and would bring back what was just sent.
-  const canSubmit = Boolean(text.trim()) && !disabled && !props.submitDisabled && !submitting && !uploading && !dictating;
+  const sendLaterDisabled = disabled || props.submitDisabled || submitting || uploading || dictating;
+  const canSubmit = Boolean(text.trim()) && !sendLaterDisabled;
   const submit = async (later?: Date) => {
     const body = textRef.current;
     const prompt = joinQuotes(quotesRef.current, body);
+    const targetLater = later ?? scheduledAt ?? undefined;
     if (!body.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0 || dictating) return;
-    if (later && !props.onSendLater) return;
+    if (targetLater && !props.onSendLater) return;
+    if (targetLater && targetLater.getTime() <= Date.now()) {
+      onError(t`定时发送时间已过，请重新选择`);
+      return;
+    }
     const submittedTextRevision = textRevisionRef.current;
     const submittedAttachments = [...attachmentsRef.current];
     const submittedReferences = referencesEnabled ? [...referencesRef.current] : [];
@@ -1373,6 +1385,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     const onStored = () => {
       if (stored) return draftSaved;
       stored = true;
+      if (targetLater) setScheduledAt(null);
       if (textRevisionRef.current === submittedTextRevision) {
         updateText('');
         if (quotesRef.current.length) updateQuotes([]);
@@ -1415,8 +1428,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const ok = later
-        ? await props.onSendLater!(prompt, submittedAttachments, submittedReferences, later)
+      const ok = targetLater
+        ? await props.onSendLater!(prompt, submittedAttachments, submittedReferences, targetLater)
         : await props.onSubmit(prompt, submittedAttachments, submittedReferences, onStored);
       // Hosts without an Outbox retain their existing acknowledgement-after-success behavior.
       if (ok && !stored) onStored();
@@ -1757,7 +1770,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 <IconMic className="size-[18px]" />
               </button>
             </Tip>}
-            {props.onSendLater && !compact && <SendLaterMenu disabled={!canSubmit} onPick={(at) => void submit(at)} />}
+            {props.onSendLater && !compact && (
+              <SendLaterMenu
+                disabled={sendLaterDisabled}
+                scheduledAt={scheduledAt}
+                onClearSchedule={() => setScheduledAt(null)}
+                onPick={(at) => {
+                  if (scheduledAt || !textRef.current.trim()) {
+                    setScheduledAt(at);
+                    return;
+                  }
+                  void submit(at);
+                }}
+              />
+            )}
             <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
               {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
                   model and send controls off the row instead of truncating itself. */}
@@ -1836,12 +1862,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               {!isMobile && props.endPickers && <span className="hidden min-w-0 md:inline-flex">{props.endPickers}</span>}
               {(!compact || showStop) && (
                 <Tip
-                  label={showStop ? props.stopping ? t`正在停止` : running ? t`停止` : t`停止后台任务` : props.submitIntent === 'steer' ? t`补充到当前任务` : running ? t`加入队列` : t`发送`}
+                  label={showStop ? props.stopping ? t`正在停止` : running ? t`停止` : t`停止后台任务` : scheduledAt ? t`定时发送 (${formatWhen(scheduledAt.toISOString())})` : props.submitIntent === 'steer' ? t`补充到当前任务` : running ? t`加入队列` : t`发送`}
                   kbd={showStop ? undefined : primaryEnterHint(enterBehavior)}
                 >
                   <button
                     type="button"
-                    aria-label={showStop ? props.stopping ? t`正在停止` : running ? t`停止` : t`停止后台任务` : props.submitIntent === 'steer' ? t`补充到当前任务` : running ? t`排队发送` : t`发送`}
+                    aria-label={showStop ? props.stopping ? t`正在停止` : running ? t`停止` : t`停止后台任务` : scheduledAt ? t`定时发送` : props.submitIntent === 'steer' ? t`补充到当前任务` : running ? t`排队发送` : t`发送`}
                     aria-busy={showStop && props.stopping || undefined}
                     disabled={showStop ? props.stopping || props.stopDisabled || submitting : !canSubmit}
                     onClick={showStop ? props.onStop : () => void submit()}

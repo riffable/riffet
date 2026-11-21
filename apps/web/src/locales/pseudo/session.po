@@ -874,6 +874,19 @@ msgstr ""
 msgid "完成"
 msgstr ""
 
+#: src/app/session/Composer.tsx
+msgid "定时发送"
+msgstr ""
+
+#. placeholder {0}: formatWhen(scheduledAt.toISOString())
+#: src/app/session/Composer.tsx
+msgid "定时发送 ({0})"
+msgstr ""
+
+#: src/app/session/Composer.tsx
+msgid "定时发送时间已过，请重新选择"
+msgstr ""
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
 msgstr ""

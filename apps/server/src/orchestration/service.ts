@@ -701,7 +701,24 @@ export class OrchestrationService {
       if (triggers.length !== 1 || triggers[0]!.kind !== 'once') throw new AppError('INVALID_INPUT', 'A follow-up has exactly one once trigger');
       return this.insertFollowUp(requireString(raw.sessionId, 'sessionId', 100), 'user', { prompt: requireString(body.prompt, 'prompt', 100_000), triggers, ...(frozen ? { frozen } : {}), ...(body.id !== undefined ? { id: requireString(body.id, 'id', 100) } : {}) });
     }
-    if (current?.followUp) throw new AppError('FOLLOW_UP_READONLY', 'A follow-up cannot be edited; cancel or delete it', 409);
+    if (current?.followUp) {
+      const keys = Object.keys(body).filter(key => body[key] !== undefined);
+      if (current.followUp.by !== 'user' || !this.isPending(current) || keys.length !== 1 || keys[0] !== 'triggers') {
+        throw new AppError('FOLLOW_UP_READONLY', 'A follow-up cannot be edited; cancel or delete it', 409);
+      }
+      const session = this.deps.store.getSession(current.followUp.sessionId);
+      if (session.archivedAt || session.handedOffTo) throw new AppError('SESSION_NOT_ACTIVE', 'This conversation is archived or was handed off', 409);
+      const parsed = parseTriggers(body.triggers);
+      if (parsed.length !== 1 || parsed[0]!.kind !== 'once') throw new AppError('INVALID_INPUT', 'A follow-up has exactly one once trigger');
+      const at = Date.now();
+      const due = Date.parse(parsed[0]!.at);
+      if (!Number.isFinite(due) || due < at - 60_000) throw new AppError('INVALID_WAKEUP_TIME', 'Choose a time from now on');
+      const triggers: AutomationTrigger[] = [{ kind: 'once', at: new Date(Math.max(due, at)).toISOString() }];
+      const next: Automation = { ...current, triggers, nextRunAt: (triggers[0] as { at: string }).at, updatedAt: now() };
+      this.automationStore.put(next);
+      this.armFollowUps();
+      return next;
+    }
     if (!current && this.automationStore.count('other') >= MAX_AUTOMATIONS) throw new AppError('TOO_MANY_AUTOMATIONS', `Keep at most ${MAX_AUTOMATIONS} automations`, 409);
     for (const key of ['isolate', 'enabled'] as const) if (body[key] !== undefined && typeof body[key] !== 'boolean') throw new AppError('INVALID_INPUT', `${key} must be a boolean`);
     const prompt = body.prompt === undefined && current ? current.prompt : requireString(body.prompt, 'prompt', 100_000);

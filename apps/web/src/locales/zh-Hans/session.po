@@ -874,6 +874,19 @@ msgstr "子 Agent 正在启动…"
 msgid "完成"
 msgstr "完成"
 
+#: src/app/session/Composer.tsx
+msgid "定时发送"
+msgstr "定时发送"
+
+#. placeholder {0}: formatWhen(scheduledAt.toISOString())
+#: src/app/session/Composer.tsx
+msgid "定时发送 ({0})"
+msgstr "定时发送 ({0})"
+
+#: src/app/session/Composer.tsx
+msgid "定时发送时间已过，请重新选择"
+msgstr "定时发送时间已过，请重新选择"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
 msgstr "实际大小"
