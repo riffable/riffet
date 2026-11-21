@@ -171,7 +171,7 @@ A host runs on a Mac, a Linux machine, or a cloud VM—started manually, via `la
 ### 04 · Timeline, browser, files, and Git
 
 - **Timeline and selection toolbar.** Tool calls fold into one line, edits open as diffs, subagents have their own transcript, and goals appear across clients. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite diagrams render locally with KaTeX math and selectable code themes. Selecting text opens a floating toolbar to quote into the composer, start a side chat, highlight with a color, export an image, or run plugin actions such as **Translate**.
-- **Views and search.** Sessions switch between the timeline, live terminal, or a canvas laying out each turn with its commands and files *(Canvas: Web, macOS)*. `⌘K` searches across sessions; in-conversation find searches within the active transcript.
+- **Views and search.** Sessions switch between the timeline, live terminal, a canvas laying out each turn with its commands and files *(Canvas: Web, macOS)*, or a trace of the session's journal row by row with tool timings, model requests, and token usage *(Trace: Web)*. `⌘K` searches across sessions; in-conversation find searches within the active transcript.
 - **Managed browser.** The built-in browser plugin (`riffet.browser`) drives Chromium via `playwright-core`, streaming live frames to a side panel where the user and agent operate the page together with explicit handoff for sign-in or payment. *(Web, macOS)*
 - **File preview and Git.** More than 20 file types preview locally (sandboxed HTML, PDF, Office, Jupyter notebooks, SQLite, 3D models). The Git panel supports history, line-level staging, commit, branch switching, pull/push, PR creation via `gh`, per-turn checkpoints to restore or fork from, and diff-line review comments *(Web, macOS, iPhone, Android)*.
 
@@ -191,7 +191,7 @@ A host runs on a Mac, a Linux machine, or a cloud VM—started manually, via `la
 
 ### 06 · Plugins and appearance
 
-- **Plugins.** Built-in plugins (`cursor`, `antigravity`, `canvas`, `browser`, `avatars`, `translate`) run in-process; installed packages run isolated by default ([Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)). Plugins contribute agent backends *(experimental)*, model sources, workbench views, project tasks, message/selection menu commands, share publishers, palettes, icon packs, and fonts. Multiple plugin sources are supported with installs pinned to their source; public packages are indexed in the [plugin market](https://riffable.github.io/riffet/plugins/).
+- **Plugins.** Built-in plugins (`cursor`, `antigravity`, `canvas`, `trace`, `browser`, `avatars`, `translate`) run in-process; installed packages run isolated by default ([Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)). Plugins contribute agent backends *(experimental)*, model sources, workbench views, project tasks, message/selection menu commands, share publishers, palettes, icon packs, and fonts. Multiple plugin sources are supported with installs pinned to their source; public packages are indexed in the [plugin market](https://riffable.github.io/riffet/plugins/).
 
 ```bash
 riffet plugin dev ./my-plugin

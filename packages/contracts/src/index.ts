@@ -45,6 +45,7 @@ export type * from './folder-favorites.js';
 export type * from './service-monitor.js';
 export type * from './storage.js';
 export type * from './marks.js';
+export type * from './trace.js';
 export * from './work-items.js';
 
 export { samePromptText } from './prompt-match';

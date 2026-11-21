@@ -15,6 +15,7 @@ verify:
 - `ingest.ts#TranscriptSource`：后端要实现的转写读取接口。
 - `ingest-contract.ts#runIngestContract`：新后端用自己的夹具跑 G1–G10。
 - `feed.ts#JournalFeed`：把日志读回原生事件，给回执、搜索和统计用。
+- `journal.ts#storedRange`、`storedRow` 与 `trace.ts`：按存储原样读行，给会话追踪（docs/TRACE.md）；索引只读内联列，不读 blob。
 
 ## 不变量
 

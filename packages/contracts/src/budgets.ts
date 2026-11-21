@@ -475,3 +475,33 @@ export const LINK_BUDGET = {
   /** 设置 › 互联 rereads the links this often while it is open, to show a tunnel coming up or dropping. */
   settingsPollMs: 5_000,
 } as const;
+
+/** The session trace view (docs/TRACE.md): journal rows read as an index, and one row's whole payload on demand. */
+export const TRACE_BUDGET = {
+  /** Index rows one request answers by default, and at most. */
+  pageRows: 2_000,
+  maxPageRows: 5_000,
+  /** Characters of the one-line text an index row carries; the rest is read with the row. */
+  previewChars: 160,
+  /** Largest payload one row read answers parsed; past it the payload is the head of its text, marked truncated. */
+  detailBytes: 4 * MIB,
+  /** Model requests the summary lists, newest first past this. */
+  usageSteps: 5_000,
+  /** Index rows a web view keeps for one lane; it stops reading at this and says so. */
+  webRows: 120_000,
+  /** Whole payloads a web view keeps for reopening, by count and by their JSON size. */
+  webDetailEntries: 64,
+  webDetailBytes: 24 * MIB,
+  /** How often a view of a running conversation reads the rows written since its last read. */
+  livePollMs: 2_000,
+  /** Model requests one requests read lists for a lane, the newest kept past it. */
+  requestRecords: 20_000,
+  /** Distinct prompts (system and tools) one requests read keeps, the newest past it. */
+  requestPrompts: 64,
+  /** Characters of one injected message or system block; the rest is cut and marked. */
+  requestTextChars: 256 * 1024,
+  /** Characters of injected messages one requests read carries in all, the newest first; older ones keep their label only. */
+  requestContextChars: 4 * 1024 * 1024,
+  /** Largest stored transcript the requests read parses; a larger one answers `tooLarge`. */
+  requestFileBytes: 1024 * MIB,
+} as const;

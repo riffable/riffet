@@ -10,6 +10,8 @@ import type { WorkspaceService } from '../workspace/index.js';
 import type { SessionLockHandle } from '../agent-host/session-lock.js';
 import type { TerminalBehaviour, TerminalService } from '../terminal/service.js';
 import { prepareSource } from './shared/model-source.js';
+import type { SyncLane } from '../../../../packages/contracts/src/sync.js';
+import type { TraceRequests } from '../../../../packages/contracts/src/trace.js';
 import { modelFamily } from './shared/model-selection.js';
 export { modelFamily } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
@@ -922,6 +924,14 @@ export class NativeBackendService {
     const { driver, profile } = await this.resolve(session);
     if (!driver.stored?.readOnly || !driver.stored?.share) return [];
     return (await driver.stored.share(this.host, session, profile, { messagesOnly: true })).events;
+  }
+
+  /** A lane's request context from the provider's stored transcript (docs/TRACE.md §2.1); `unsupported` when the backend keeps none. */
+  async traceRequests(sessionId: string, lane: SyncLane, agentId: string | undefined, signal: AbortSignal): Promise<TraceRequests> {
+    const session = this.options.store.getSession(sessionId);
+    const { driver, profile } = this.resolveSync(session);
+    if (!driver.stored?.requests) return { lane, status: 'unsupported', backendId: driver.id, prompts: [], requests: [], params: {}, context: {} };
+    return driver.stored.requests(this.host, session, profile, { lane, ...(agentId ? { agentId } : {}), signal });
   }
 
   /** Settled usage from the provider's stored transcript; `null` when the backend cannot backfill. */

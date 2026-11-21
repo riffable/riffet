@@ -35,6 +35,7 @@ import { CodexSkills } from './skills.js';
 import { CodexExtensionDriver } from './extension-driver.js';
 import { listModelsOf, usageOf } from './model-list.js';
 import { readContextTranscript, readShareTranscript, usageTranscript } from './stored-reads.js';
+import { readCodexRequests } from './request-records.js';
 import { resumeCommand, terminalLaunch, type TerminalLaunchContext } from './terminal-launch.js';
 import { parseCodexNativeCommand } from './commands.js';
 import { modelSourceOf, prepareSource, resolveSource } from '../shared/model-source.js';
@@ -87,6 +88,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     usage: (_host, session, profile, known) => usageTranscript(this.flavor, session, profile, known),
     context: (_host, session, profile, options) => readContextTranscript(this.flavor, session, profile, options),
     share: (host, session, profile, options) => readShareTranscript(this.flavor, host, session, profile, options),
+    requests: (_host, session, profile, options) => readCodexRequests(this.flavor.id, session, this.flavor.stateHome(profile.config), options.lane, options.agentId, options.signal),
   };
   readonly id: CodexFlavor['id'];
   readonly label: string;

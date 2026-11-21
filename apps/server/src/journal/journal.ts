@@ -118,6 +118,20 @@ export interface JournalRow {
   payload: unknown;
 }
 
+/** A row as `journal_events` stores it, for readers of the log itself (the trace view): no blob is read. */
+export interface StoredJournalRow {
+  seq: number;
+  kind: string;
+  nativeId: string;
+  rev: number;
+  turnId?: string;
+  at: string;
+  /** The inline column: the whole payload, `'{}'` once emptied, or a spilled payload's preview. */
+  inline: string;
+  blobRef?: string;
+  blobSize?: number;
+}
+
 /** One entity as a transcript shows it: its latest version, placed where its first row sits. */
 export interface JournalEntity extends JournalRow {
   /** Seq of the entity's first row: its stable position, however many versions follow. */
@@ -990,6 +1004,41 @@ export class Journal {
   range(sessionId: string, afterSeq: number, limit: number): JournalRow[] {
     return (this.sql(`SELECT ${SELECT_EVENT_COLS} FROM journal_events e ${EVENT_JOIN} WHERE e.session_id=? AND e.seq>? ORDER BY e.seq LIMIT ?`)
       .all(sessionId, afterSeq, limit) as unknown as RawRow[]).map(row => this.rowOf(row));
+  }
+
+  /**
+   * Rows by seq as they are stored, without reading a blob: `inline` is the whole payload, or for a spilled
+   * row the preview it keeps (`previewOf`), and `blobSize` the spilled payload's size. The trace index reads these.
+   */
+  storedRange(key: string, afterSeq: number, limit: number): StoredJournalRow[] {
+    return (this.sql(`SELECT e.seq,e.kind,e.native_id,e.rev,e.turn_id,e.at,e.payload,e.blob_ref,b.size AS blob_size FROM journal_events e ${EVENT_JOIN}
+      WHERE e.session_id=? AND e.seq>? ORDER BY e.seq LIMIT ?`).all(key, afterSeq, limit) as unknown as Array<RawRow & { blob_size: number | null }>)
+      .map(raw => ({
+        seq: raw.seq, kind: raw.kind, nativeId: raw.native_id, rev: raw.rev, ...(raw.turn_id ? { turnId: raw.turn_id } : {}), at: raw.at, inline: raw.payload,
+        ...(raw.blob_ref ? { blobRef: raw.blob_ref, ...(raw.blob_size !== null ? { blobSize: raw.blob_size } : {}) } : {}),
+      }));
+  }
+
+  /** One row by seq with its payload as JSON text, blob resolved; `undefined` when the log has no such row. */
+  storedRow(key: string, seq: number): (StoredJournalRow & { digest: string; text: string; blobMissing?: true }) | undefined {
+    const raw = this.sql(`SELECT ${SELECT_EVENT_COLS},b.size AS blob_size FROM journal_events e ${EVENT_JOIN} WHERE e.session_id=? AND e.seq=?`)
+      .get(key, seq) as unknown as (RawRow & { blob_size: number | null }) | undefined;
+    if (!raw) return undefined;
+    const blob = raw.blob_ref
+      ? raw.blob_codec !== undefined && raw.blob_codec !== null
+        ? readStoredBlob({ hash: raw.blob_ref, codec: raw.blob_codec, external: raw.blob_external, bytes: raw.blob_bytes }, this.blobsDir)
+        : this.getBlob(raw.blob_ref)
+      : undefined;
+    return {
+      seq: raw.seq, kind: raw.kind, nativeId: raw.native_id, rev: raw.rev, ...(raw.turn_id ? { turnId: raw.turn_id } : {}), at: raw.at, inline: raw.payload,
+      ...(raw.blob_ref ? { blobRef: raw.blob_ref, ...(raw.blob_size !== null ? { blobSize: raw.blob_size } : {}) } : {}),
+      digest: raw.digest, text: blob ? blob.toString('utf8') : raw.payload, ...(raw.blob_ref && !blob ? { blobMissing: true as const } : {}),
+    };
+  }
+
+  /** How many rows a log holds, emptied revisions included. */
+  rowCount(key: string): number {
+    return (this.sql('SELECT COUNT(*) AS n FROM journal_events WHERE session_id=?').get(key) as { n: number }).n;
   }
 
   /** The latest version of an entity, with the seq of its first row. */

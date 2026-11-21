@@ -10,12 +10,14 @@ import { canvas } from './riffet/canvas/index.js';
 import { cursor } from './riffet/cursor/index.js';
 import { feishu } from './riffet/feishu/index.js';
 import { speechLocal } from './riffet/speech-local/index.js';
+import { trace } from './riffet/trace/index.js';
 import { translate } from './riffet/translate/index.js';
 
 export const builtinPlugins: Plugin[] = [
   cursor,
   antigravity,
   canvas,
+  trace,
   browser,
   avatars,
   translate,

@@ -171,7 +171,7 @@ CLI 路径通过环境变量 `RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DSH_CL
 ### 04 · 时间线、托管浏览器、文件与 Git
 
 - **时间线与划选工具栏。** 工具调用折叠为一行，修改展开为 Diff，子 Agent 拥有独立转录，任务目标在各端同步显示。Mermaid、D2、Graphviz、PlantUML、Vega-Lite 与 KaTeX 在本地渲染，代码高亮主题可选择和自定义。在回答或旁白中选中文字会弹出工具栏：引用到输入框、侧边聊天、悬停选色高亮、导出图片以及翻译等插件命令。
-- **多视图与查找。** 会话可在时间线、实时终端与按回合铺开命令与文件的画布间切换 *（画布：Web、macOS）*。`⌘K` 全局搜索，会话内支持原地查找。
+- **多视图与查找。** 会话可在时间线、实时终端、按回合铺开命令与文件的画布，以及逐行查看会话日志、工具耗时、模型请求与 token 用量的追踪之间切换 *（画布：Web、macOS；追踪：Web）*。`⌘K` 全局搜索，会话内支持原地查找。
 - **Riffet 浏览器。** 内置浏览器插件（`riffet.browser`）通过 `playwright-core` 驱动无头 Chromium，在侧边面板实时推流画面并支持人与 Agent 共同操作，遇到登录或付款时交由用户接手。*（Web、macOS）*
 - **文件预览与 Git。** 本地预览 20 多种文件类型（沙箱 HTML、PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型等）。Git 面板支持历史、按行暂存、提交、切分支、拉取推送、经 `gh` 创建 PR、每轮检查点回退或分叉，以及将 Diff 行批注发回给 Agent *（Web、macOS、iPhone、Android）*。
 
@@ -191,7 +191,7 @@ CLI 路径通过环境变量 `RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DSH_CL
 
 ### 06 · 插件与外观
 
-- **插件。** 内置插件（`cursor`、`antigravity`、`canvas`、`browser`、`avatars`、`translate`）在服务进程内运行，安装的插件包默认在隔离进程中运行（见[插件架构](docs/PLUGIN_ARCHITECTURE.md)）。插件可提供 Agent 后端 *（实验性）*、模型源、工作台视图、项目任务、消息与选区菜单命令、分享发布、配色、图标包与字体。支持添加多个插件源并锁定安装来源，公开包索引见[插件市场](https://riffable.github.io/riffet/plugins/)。
+- **插件。** 内置插件（`cursor`、`antigravity`、`canvas`、`trace`、`browser`、`avatars`、`translate`）在服务进程内运行，安装的插件包默认在隔离进程中运行（见[插件架构](docs/PLUGIN_ARCHITECTURE.md)）。插件可提供 Agent 后端 *（实验性）*、模型源、工作台视图、项目任务、消息与选区菜单命令、分享发布、配色、图标包与字体。支持添加多个插件源并锁定安装来源，公开包索引见[插件市场](https://riffable.github.io/riffet/plugins/)。
 
 ```bash
 riffet plugin dev ./my-plugin

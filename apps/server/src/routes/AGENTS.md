@@ -13,6 +13,7 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 - `deps.ts#RouteDeps`：每组路由拿到的服务与共用的请求辅助；新路由从这里取依赖，不自己构造服务。
 - `native.ts`、`sessions.ts`：会话创建、消息、预热与停止。
 - `sync.ts`：同步协议 v3 的 SSE 与按位置、seq、回合读取（docs/SYNC-V3.md）。
+- `trace.ts`：会话追踪的只读接口，按车道读日志原样的行与用量（docs/TRACE.md）。
 - `terminals.ts`：终端 WebSocket 与终端附件。
 - 契约在 `packages/contracts/src/`，类型与校验不在这里重写。
 

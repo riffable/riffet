@@ -121,6 +121,7 @@ import { JournalFeed, latestEvents } from './journal/feed.js';
 import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
+import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
 import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
@@ -556,6 +557,7 @@ export async function createApp(options: AppOptions = {}) {
   registerBrowserDiagnosticsRoutes(app,join(stateDir,'diagnostics','browser'));
   registerNativeRoutes(app,deps);
   registerSyncRoutes(app,{...deps,sync,timeline,turnSummaries,sessionMedia});
+  registerTraceRoutes(app,deps);
   registerTerminalRoutes(app,deps);
   registerWorkspaceRoutes(app,deps);
   registerGitRoutes(app,deps);

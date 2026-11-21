@@ -2,7 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type {
   MetricsWindow, NativeBackendId, StatsAgentKind, StatsAutonomy, StatsBreakdown, StatsBreakdownRow, StatsDashboard, StatsDimension, StatsFilter,
   StatsGranularity, StatsHeatmap, StatsKeyInfo, StatsLatency, StatsLatencyRow, StatsPercentiles, StatsRunRow, StatsRunStates,
-  StatsRunsPage, StatsSeries, StatsSeriesMetric, StatsSplit, StatsStepBucket, StatsSummary, StatsTokens, StatsTotals,
+  StatsRunsPage, StatsSeries, StatsSeriesMetric, StatsSplit, StatsStepBucket, StatsSummary, StatsTokens, StatsTotals, TraceUsageStep,
 } from '../../../../packages/contracts/src/index.js';
 import { isNativeBackendId, isPluginAgentId, normalizeStatsModel, resolveStatsEffort } from '../../../../packages/contracts/src/index.js';
 import { MAX_PLAUSIBLE_TOKENS_PER_SECOND } from '../metrics/turn-metrics.js';
@@ -623,4 +623,37 @@ export class StatsQuery {
     if (!this.memo.has(key)) this.memo.set(key, load());
     return this.memo.get(key) as T;
   }
+}
+
+/**
+ * One conversation's model requests for its trace (docs/TRACE.md), oldest first: the newest `limit` of them,
+ * and whether there were more. Suppressed steps (counted again under another observation) are left out.
+ */
+export function sessionUsageSteps(db: DatabaseSync, sessionId: string, limit: number): { steps: TraceUsageStep[]; truncated: boolean } {
+  const rows = db.prepare(`SELECT * FROM usage_steps WHERE session_id=? AND suppressed_by IS NULL ORDER BY at DESC, step_key DESC LIMIT ?`)
+    .all(sessionId, limit + 1) as unknown as UsageStepRow[];
+  const truncated = rows.length > limit;
+  const kept = (truncated ? rows.slice(0, limit) : rows).reverse();
+  const some = <T>(value: T | null): value is T => value !== null;
+  return {
+    truncated,
+    steps: kept.map((row) => ({
+      key: row.step_key, agent: row.agent_kind, at: row.at, tokens: row.token_source,
+      ...(some(row.run_id) ? { runId: row.run_id } : {}),
+      ...(some(row.model) ? { model: row.model } : {}),
+      ...(some(row.requested_model) ? { requestedModel: row.requested_model } : {}),
+      ...(some(row.subagent_type) ? { subagentType: row.subagent_type } : {}),
+      ...(some(row.parent_step_key) ? { parentKey: row.parent_step_key } : {}),
+      ...(some(row.started_at) ? { startedAt: row.started_at } : {}),
+      ...(some(row.ended_at) ? { endedAt: row.ended_at } : {}),
+      ...(some(row.duration_ms) ? { durationMs: row.duration_ms } : {}),
+      ...(some(row.native_message_id) ? { nativeMessageId: row.native_message_id } : {}),
+      ...(some(row.input_tokens) ? { inputTokens: row.input_tokens } : {}),
+      ...(some(row.cache_read_tokens) ? { cacheReadTokens: row.cache_read_tokens } : {}),
+      ...(some(row.cache_write_tokens) ? { cacheWriteTokens: row.cache_write_tokens } : {}),
+      ...(some(row.output_tokens) ? { outputTokens: row.output_tokens } : {}),
+      ...(some(row.reasoning_tokens) ? { reasoningTokens: row.reasoning_tokens } : {}),
+      ...(some(row.window) ? { window: row.window } : {}),
+    })),
+  };
 }

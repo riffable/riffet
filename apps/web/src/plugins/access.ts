@@ -8,11 +8,15 @@ import type { PluginAccess } from '@riffet/plugin-web';
 
 const BASE = 'http://plugin.invalid';
 
+// A declared prefix as a pattern: `*` stands for exactly one path segment (`/api/sessions/*/trace`), everything else is literal.
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^$()|[\]{}\\]/g, '\\$&');
+const prefixPattern = (prefix: string): RegExp => new RegExp('^' + prefix.split('*').map(escapeRegExp).join('[^/]+'));
+
 /** The path and query to send, or a refusal: it must stay on this server and, once `..` and encoded dots are resolved, under a declared `/api/` prefix. */
 export function allowedRequestPath(path: string, access: PluginAccess | undefined): string {
-  const prefixes = (access?.requests ?? []).filter((prefix) => prefix.startsWith('/api/'));
+  const prefixes = (access?.requests ?? []).filter((prefix) => prefix.startsWith('/api/')).map(prefixPattern);
   const url = path.startsWith('/') ? new URL(path, BASE) : undefined;
-  if (!url || url.origin !== BASE || !prefixes.some((prefix) => url.pathname.startsWith(prefix))) throw new Error(`Plugin request outside its declared access: ${path}`);
+  if (!url || url.origin !== BASE || !prefixes.some((prefix) => prefix.test(url.pathname))) throw new Error(`Plugin request outside its declared access: ${path}`);
   return url.pathname + url.search;
 }
 

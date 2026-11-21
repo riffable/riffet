@@ -38,7 +38,7 @@ riffet plugin unlink example.echo
 | --- | --- | --- |
 | `agentBackends` | `plugins/riffet/cursor`、`plugins/riffet/antigravity`、`examples/plugins/echo` | `echo` 是最小形状；Cursor 是完整驱动 |
 | `modelSources` | `examples/plugins/gateway-models`、`official/litellm` | 样例的 `server/index.mjs`：异步 `prepare()` 配同步 `resolve()`；LiteLLM 是网关适配器（`role: 'adapter'`）和额度（`usage`） |
-| `views` | `plugins/riffet/canvas`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools` | 会话视图、侧栏、隔离视图、声明式渲染器各一个 |
+| `views` | `plugins/riffet/canvas`、`plugins/riffet/trace`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools` | 会话视图、侧栏、隔离视图、声明式渲染器各一个 |
 | `commands` | `plugins/riffet/canvas`、`examples/plugins/declarative-tools` | 命令面板与声明式视图里的命令 |
 | `commands.menus: message` | `plugins/riffet/translate` | `translator.ts`：读 `context.message`，返回 `text` |
 | `commands.menus: selection` | `plugins/riffet/translate` | `translator.ts`：读 `context.selection`，返回 `text` |

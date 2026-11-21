@@ -4,6 +4,8 @@ import type {
   NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, NativeStopRequest, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget,
   NativeSlashItem, Project, Run, RunMetrics, Session, TerminalAppearance, TerminalInfo, ShareSelection, ShareTurn, ShareModelInfo,
 } from '../../../../packages/contracts/src/index.js';
+import type { SyncLane } from '../../../../packages/contracts/src/sync.js';
+import type { TraceRequests } from '../../../../packages/contracts/src/trace.js';
 import type { StatsSink, UsageTranscript } from '../stats/types.js';
 import type { Journal } from '../journal/journal.js';
 import type { LaneWriter, TranscriptSource, TurnEndStatus } from '../journal/ingest.js';
@@ -516,6 +518,12 @@ export interface NativeDriverStored {
   context?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<NativeWorkbenchEvent[]>;
   /** A complete read of the stored transcript; must never launch a process or change live emission state. */
   share?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions): Promise<NativeShareTranscript>;
+  /**
+   * What a lane's model requests were sent with (system prompt, tools, parameters, injected messages), from the
+   * provider's stored transcript, for the trace (docs/TRACE.md §2.1). Reads files only. `agentId` is the child a
+   * subagent lane was bound to in the journal.
+   */
+  requests?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { lane: SyncLane; agentId?: string; signal: AbortSignal }): Promise<TraceRequests>;
 }
 
 /** Management of the CLI on this machine, outside any conversation. */

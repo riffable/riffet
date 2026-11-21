@@ -78,7 +78,8 @@ export interface WebPlugin {
  * not a sandbox.
  */
 export interface PluginAccess {
-  /** Server path prefixes the views may request, each starting with `/api/`, such as `/api/my-plugin/`. */
+  // Server path prefixes the views may request, each starting with `/api/`, such as `/api/my-plugin/`;
+  // `*` is one path segment, as in `/api/sessions/*/trace`.
   readonly requests?: readonly string[];
   /** Keys of `/api/settings` the views may read and write. */
   readonly settings?: readonly string[];
@@ -226,7 +227,7 @@ export type PluginIconName =
   | 'copy' | 'folder' | 'folder-closed' | 'git-branch' | 'git-commit-horizontal' | 'git-compare' | 'git-fork' | 'globe' | 'graph' | 'info'
   | 'list-checks' | 'maximize' | 'message-circle-question' | 'messages-square' | 'minus' | 'paperclip' | 'pause' | 'play' | 'plus' | 'search'
   | 'sparkle' | 'sparkles' | 'square-arrow-out-up-right' | 'square-terminal' | 'target' | 'wrench' | 'x' | 'arrow-right-left'
-  | 'chevron-right' | 'refresh-cw' | 'save';
+  | 'chevron-right' | 'refresh-cw' | 'save' | 'activity';
 
 export type IconComponent = ComponentType<{ className?: string }>;
 

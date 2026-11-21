@@ -16,6 +16,7 @@ verify:
 - `workspace-observer.ts#WorkspaceObserver`：shell 命令改了哪些文件。
 - `command-actions.ts#commandActions`：只读的 shell 命令读了、搜了什么，形状同 Codex 的 `commandActions`；词法在 `shell-words.ts#shellSegments`，与 `readsOnly` 共用。
 - `model-source.ts#prepareSource`：把已存的模型源名称加上配置覆盖解析成启动所需的事实。
+- `trace-requests.ts#TraceRequestsBuilder`：各驱动读请求内容（docs/TRACE.md §2.1）的公共部分：按内容去重、按预算截断、流式只解析含关键字的行。
 - `hook-server.ts`、`turn-tracker.ts`、`deferred-steer.ts` 只是对 `packages/plugin-api/src/kit/` 的再导出，改行为到那里改。
 
 ## 不变量

@@ -30,6 +30,7 @@ import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-so
 import { ClaudeScreenFeed } from './live/feed.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
+import { readClaudeRequests } from './request-records.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability, readClaudeOwnerGateway, STANDING_ISOLATION } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
 import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, ClaudeSessionRuntime } from './runtime.js';
@@ -162,6 +163,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     usage: (host, session, profile, known) => this.usageTranscript(host, session, profile, known),
     context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
     share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+    requests: (_host, session, profile, options) => readClaudeRequests(session, configDirOf(profile), options.lane, options.agentId, options.signal),
   };
   readonly id = backendId;
   readonly label = 'Claude';
