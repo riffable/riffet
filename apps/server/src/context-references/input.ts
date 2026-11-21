@@ -1,10 +1,10 @@
 import type { SessionReferenceInput } from '../../../../packages/contracts/src/index.js';
+import { SESSION_REFERENCE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import { AppError } from '../errors.js';
 
 export const SESSION_REFERENCE_FEATURE = 'session-references-v1';
 export const SESSION_REFERENCE_MIME = 'application/vnd.riffet.session-reference+json';
-export const CONTEXT_LIMITS = { references: 5, messages: 20_000, messageBytes: 1024 * 1024, bytes: 8 * 1024 * 1024,
-  snapshotBytes: 12 * 1024 * 1024, totalBytes: 16 * 1024 * 1024, scanBytes: 64 * 1024 * 1024, scanRows: 100_000, timeoutMs: 10_000, excerptTokens: 600 } as const;
+export const CONTEXT_LIMITS = SESSION_REFERENCE_BUDGET;
 
 /** Parse declarations without touching their sources: an accepted retry must work after deletion. */
 export function sessionReferenceInputs(value: unknown): SessionReferenceInput[] | undefined {

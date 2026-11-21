@@ -3,6 +3,7 @@ import { mkdir, open, readFile, readdir, realpath, rename, rm, stat, writeFile }
 import { dirname, join, resolve } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
+import { SERVER_BUDGET } from '../../../../../packages/contracts/src/budgets.js';
 import { activeTurnOf, initialState, reduce, type BackgroundAgent, type ClaudeSessionState, type ClaudeSignal } from './session-state.js';
 import { ClaudeActivities, outputPreview, readTaskOutputTail, stoppable, type ClaudeTaskKind } from './activity.js';
 import { ActivityLedger, activityEvent, activityId, activityOfEvent, isLiveActivity } from '../../journal/activity.js';
@@ -885,8 +886,6 @@ export async function findClaudeTranscript(configDir: string, nativeSessionId: s
   return undefined;
 }
 
-const MAX_FORK_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
-
 function claudeProjectSlug(cwd: string): string {
   return cwd.replace(/[^A-Za-z0-9-]/g, '-');
 }
@@ -933,7 +932,7 @@ export async function forkClaudeTranscript(
   const sourcePath = await findClaudeTranscript(configDir, sourceNativeSessionId);
   if (!sourcePath) return undefined;
   const info = await stat(sourcePath).catch(() => undefined);
-  if (!info?.isFile() || info.size === 0 || info.size > MAX_FORK_TRANSCRIPT_BYTES) return undefined;
+  if (!info?.isFile() || info.size === 0 || info.size > SERVER_BUDGET.forkTranscriptBytes) return undefined;
   const raw = await readFile(sourcePath, 'utf8');
   const lines = raw.split('\n');
   if (!raw.endsWith('\n')) lines.pop();

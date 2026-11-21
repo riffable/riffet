@@ -352,7 +352,7 @@ export class ClaudeSessionRuntime {
 
   /**
    * A picked setting whose relaunch only background work holds back: the reader is told, and offered to apply it
-   * now. Messages queued meanwhile wait for the relaunch (`lane.ts#admission`), so without this a background
+   * now. Messages queued meanwhile wait for the relaunch (`native/lane.ts#admission`), so without this a background
    * task that never ends (a dev server) would hold them with nothing on screen saying why.
    */
   private relaunchControl(): NativeRuntimeControl | undefined {

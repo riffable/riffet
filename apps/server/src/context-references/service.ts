@@ -19,8 +19,6 @@ const unavailable = () => new AppError('SESSION_REFERENCE_UNAVAILABLE', 'This se
 const tooLarge = () => new AppError('SESSION_REFERENCE_TOO_LARGE', 'The session history is too large; remove this reference to send', 413);
 const MAX_TOOLS_PER_MESSAGE = 16;
 const MAX_TOOL_SUMMARY_CHARS = 120;
-const MAX_TOOL_EVENT_BYTES = 256 * 1024;
-const MAX_TOOL_SCAN_BYTES = 16 * 1024 * 1024;
 const BRIEF_BOILERPLATE_PREFIX = /^(?:以下是另一段对话|以下是对话「|Below is the context of another conversation|Below is the handoff note from)/;
 const BRIEF_DEFAULT_NEXT = /^(?:先用几句话确认你理解的现状|Briefly confirm your understanding of the current state)/;
 const textOf = (event: NativeWorkbenchEvent): string => {
@@ -265,7 +263,7 @@ export class SessionReferenceService {
         const size = row.blob_ref ? (blobSize.get(row.blob_ref) as { size: number } | undefined)?.size : row.size;
         if (size === undefined) { if (isTool) continue; throw unavailable(); }
         if (isTool) {
-          if (size > MAX_TOOL_EVENT_BYTES || toolScannedBytes + size > MAX_TOOL_SCAN_BYTES) continue;
+          if (size > LIMIT.toolEventBytes || toolScannedBytes + size > LIMIT.toolScanBytes) continue;
           toolScannedBytes += size;
           const json = row.blob_ref ? this.store.journal.getBlob(row.blob_ref)?.toString('utf8') : (payload.get(key, first.native_id, head.lastSeq) as { payload: string }).payload;
           if (!json) continue;

@@ -138,6 +138,27 @@ export const ASSISTANT_BUDGET = {
   servedFileBytes: 50 * MIB,
 } as const;
 
+/** What session references (`@` another conversation) capture from their sources (docs/guide/performance.md §2). */
+export const SESSION_REFERENCE_BUDGET = {
+  /** References one message may carry. */
+  references: 5,
+  /** Messages one reference captures, and the largest single one. */
+  messages: 20_000,
+  messageBytes: 1 * MIB,
+  /** Captured text of one reference, its serialized snapshot, and all references of one send together. */
+  bytes: 8 * MIB,
+  snapshotBytes: 12 * MIB,
+  totalBytes: 16 * MIB,
+  /** Journal bytes and rows one capture scans before giving up. */
+  scanBytes: 64 * MIB,
+  scanRows: 100_000,
+  /** Tool-call events: the largest one summarized, and the total scanned per capture. */
+  toolEventBytes: 256 * KIB,
+  toolScanBytes: 16 * MIB,
+  timeoutMs: 10_000,
+  excerptTokens: 600,
+} as const;
+
 /** Workbench query pages and the owner's window to confirm an instance setting proposal. */
 export const ASSISTANT_QUERY_BUDGET = { pageItems: 50, settingConfirmationMs: 5 * 60_000 } as const;
 
@@ -149,6 +170,8 @@ export const SERVER_BUDGET = {
   backgroundReadBytes: 32 * MIB,
   /** Native transcripts kept parsed in memory for reuse, counted by file size. */
   parsedTranscriptBytes: 64 * MIB,
+  /** Largest Claude Code transcript a native fork copies; a larger one is not forked natively. */
+  forkTranscriptBytes: 64 * MIB,
   /** An event-loop block this long is a defect: it is logged and profiled (`loop-health.ts`). */
   loopBlockMs: 200,
 } as const;
