@@ -106,7 +106,7 @@ export class ExecutionAdapter {
     if (initial.stage === 'interrupt_followup') return false;
     if (!initial.input.text || initial.input.text.trimStart().startsWith('/')) return false;
     if (initial.input.attachmentIds.length > 0) return false;
-    if (initial.input.context.length > 0 || initial.input.references?.length) return false;
+    if (initial.input.context.length > 0 || initial.input.references?.length || initial.input.agents?.length) return false;
     if (session.resumePicker) return false;
     // The terminal accepts the same argument it is given here; a longer draft goes through the
     // paste path, which streams through a tmux paste-buffer and has no comparable limit.

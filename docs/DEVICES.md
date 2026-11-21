@@ -25,7 +25,7 @@ Agent 会话除了读写代码，还可以调用 Riffet 自身的能力（定时
 Riffet MCP **只在每次启动 CLI 时注入**，不写入各后端的全局配置文件（`~/.claude.json` 等）。扩展管理（[EXTENSIONS.md](EXTENSIONS.md)）改的是全局配置，会影响所有会话；按次注入才能按会话区分。
 
 - 每个会话签发独立凭据，配一个 stdio shim 转发到服务端受限路由。凭据与 shim 的做法沿用已下线的空间（提交 e1d8578，旧文档 `git show e1d8578^:docs/SPACES.md`）。
-- Claude 经启动覆盖文件注入 `mcpServers`；Codex 经 config override 注入。Cursor、Droid、TRAE、DSH 逐个确认是否支持按次注入；不支持的后端显示该能力不可用，**不回落到写全局配置**。
+- Claude 经启动覆盖文件注入 `mcpServers`；Codex 经 config override 注入；Cursor 经只给 Riffet 启动的插件目录注入（下表）。不支持按次注入的后端显示该能力不可用，**不回落到写全局配置**。
 - 空间当年用 shell CLI，Codex/TRAE 需要打开沙箱网络；MCP server 由 CLI 自己拉起，预计不受命令沙箱限制，需实测确认。
 
 ### 工具组：按对话选择
@@ -109,7 +109,7 @@ Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（
 | TRAE CLI | 同 Codex | 0.213.1：线程内 MCP 启动为 `ready`，未跑完整回合（需登录 TRAE） |
 | Droid | 进程级 `--settings` 文件加 `mcp.mcpServers`（`droid.add_mcp_server` 会写 `~/.factory/mcp.json`，不用） | 0.249.0 `--list-tools` 列出；调用仍走 Droid 自己的工具确认 |
 | Pi | 生成 `-e` 扩展，调用 `pi.registerMcpServer`（只对该进程有效） | 1.4.0 RPC 模式下 MCP 进程被拉起并收到 `tools/list` |
-| Cursor | 不支持：只有共享的 `--plugin-dir`，预热终端启动时还不知道会话；不回落到 `~/.cursor/mcp.json` | — |
+| Cursor | 单独的插件目录（`<state>/cursor-hook/riffet-tools`）以 `--plugin-dir` 传入，会话有 Riffet 工具时（未归档、不是快问）都加上，启动因此多读一个插件目录；目录所有进程共用，`.mcp.json` 用 `env: {"RIFFET_MCP_CREDENTIAL_FILE": "${env:RIFFET_MCP_CREDENTIAL_FILE}"}` 把每个 CLI 自己环境里的凭据文件交给 shim（Cursor 只把 HOME、PATH 等 6 个变量传给 stdio 服务）。预热 CLI 拿临时凭据，认领它的会话 `adopt`，预热键带工具签名。插件里的 MCP 不需批准就加载；调用在「Ask each time」下逐次确认，可在 Cursor 的确认里选 Allowlist，不替用户写全局白名单。记录里工具名为 `riffet · <工具>`。不回落到 `~/.cursor/mcp.json` | 2026.10.01 真实回合：冷启动与预热认领各跑通 `agent_list`、`agent_call` |
 | DSH | 不支持：需要 bridge 在 `agents.create/resume` 的 `setup` 里挂载 `@deepseek-ai/dsh-mcp-client`，本轮未改 bridge | — |
 
 Codex 的两条实测结论：

@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { NativeContext } from '@contracts';
 import { isJobLogPath } from './job-log.js';
+import { RIFFET_TOOLS_PLUGIN } from '../backend/riffet-tools.js';
 import { announcedImagePaths, imagePathFields, isImagePath, parseSteerContexts, toolImageContent } from '@riffet/plugin-api/kit';
 
 /**
@@ -651,9 +652,16 @@ export function userQuery(message: ChatMessage): { text: string; at?: string } |
 
 interface ToolIdentity { name: string; input: Record<string, unknown>; }
 
+/** Cursor names a plugin's MCP server `plugin-<plugin>-<server>`; Riffet's own reads as the server it is elsewhere. */
+const RIFFET_TOOLS_NAMESPACE = `plugin-${RIFFET_TOOLS_PLUGIN}-`;
+
 function unwrap(toolName: string, args: unknown): ToolIdentity {
   const input = isRecord(args) ? args : {};
-  if (toolName === 'CallDynamicTool' && typeof input.toolName === 'string') return { name: input.toolName, input: dynamicArguments(input.arguments) };
+  if (toolName === 'CallDynamicTool' && typeof input.toolName === 'string') {
+    // Riffet's own tools read `riffet · <tool>`, as Codex shows them; Cursor's built-in dynamic tools (Task, TodoWrite…) keep their names.
+    const riffet = typeof input.namespace === 'string' && input.namespace.startsWith(RIFFET_TOOLS_NAMESPACE) ? input.namespace.slice(RIFFET_TOOLS_NAMESPACE.length) : undefined;
+    return { name: riffet ? `${riffet} · ${input.toolName}` : input.toolName, input: dynamicArguments(input.arguments) };
+  }
   return { name: toolName, input };
 }
 

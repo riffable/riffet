@@ -8912,6 +8912,11 @@ msgstr "Who draws"
 msgid "调整{0}的顺序"
 msgstr "Reorder {0}"
 
+#: src/app/settings/TitleRulesSection.tsx
+msgctxt "session-origin"
+msgid "调用"
+msgstr "Call"
+
 #: src/app/design/android/TypeChapter.tsx
 msgid "调用处只写角色，不写 .sp"
 msgstr "Call sites name a role, never .sp"

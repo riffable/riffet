@@ -370,6 +370,31 @@ export const MODEL_PICKER_BUDGET = {
 } as const;
 
 /** Multi-model discussions: stored list cap, input text caps, and per-speech turn limits. */
+/** One conversation's Agent calling another (docs/AGENT-CALLS.md). */
+export const AGENT_CALL_BUDGET = {
+  /** Agents one message may @-mention. */
+  mentions: 3,
+  /** How long `agent_call` and `agent_wait` wait for the turn by default, and at most: under the shim's 330 s and Codex's `tool_timeout_sec`. */
+  waitDefaultSeconds: 60,
+  waitMaxSeconds: 300,
+  /** Calls of one conversation running at once. */
+  activePerCaller: 3,
+  /** Calls and follow-ups one turn of the caller may make. */
+  callsPerCallerTurn: 8,
+  /** Turns one call may take before the caller has to start another. */
+  turnsPerCall: 20,
+  /** Longest request a caller may send. */
+  promptChars: 100_000,
+  /** Longest answer handed back; the rest stays in the called conversation. */
+  answerChars: 24_000,
+  /** How long `agent_list` waits on one provider's model list or quota before leaving it out. */
+  readMs: 5_000,
+  /** The line a call card shows of the work in progress. */
+  latestChars: 240,
+  /** How often a client asks for its calls while one of them is running and shown. */
+  cardPollMs: 2_000,
+} as const;
+
 export const COUNCIL_BUDGET = {
   /** Discussions kept in the store; older ones are pruned on create. */
   keptDiscussions: 100,

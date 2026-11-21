@@ -3,8 +3,12 @@
  * `riffet.core` is the workbench's own (wake-ups, notices, devices); `device:<id>` is reserved for
  * the capabilities a paired device declares.
  */
-/** `device:<id>`, or a plugin's agent tools `<pluginId>/<name>` (`PluginDeclarations.agentTools`, docs/BROWSER.md §2). */
-export type ToolGroupId = 'riffet.core' | `device:${string}` | `${string}.${string}/${string}`;
+/**
+ * `device:<id>`, a plugin's agent tools `<pluginId>/<name>` (`PluginDeclarations.agentTools`, docs/BROWSER.md §2), or
+ * `riffet.agents`: the conversation may call any Agent, not only the ones the owner @-mentioned (docs/AGENT-CALLS.md §3).
+ */
+export type ToolGroupId = 'riffet.core' | typeof AGENT_CALL_TOOL_GROUP | `device:${string}` | `${string}.${string}/${string}`;
+export const AGENT_CALL_TOOL_GROUP = 'riffet.agents';
 export const RIFFET_TOOL_GROUPS = ['riffet.core'] as const satisfies readonly ToolGroupId[];
 /**
  * A one-shot wake-up an agent scheduled for its own conversation (`schedule_wakeup`). It is marked

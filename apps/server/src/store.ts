@@ -5,6 +5,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, SETTING_DEFAULTS, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite, type TitleRule, type TitleRuleContext, matchTitleRule, renderDisplayTitle } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
 import { sessionReferenceInputs } from './context-references/input.js';
+import { agentMentionInputs } from './native/agent-mentions.js';
 import { isNativeBackendId } from './backends/registry.js';
 import { acceptedTitlePatch, firstHumanMessage, isPlaceholderTitle } from './session-title.js';
 import type { IndexedMessage } from './search/messages.js';
@@ -88,8 +89,10 @@ function normalizeNativeInput(input: NativeRunInput): NativeRunInput {
     throw new AppError('INVALID_NATIVE_INPUT', 'Native attachment and context references are invalid');
   }
   const references = sessionReferenceInputs(input.references);
+  const agents = agentMentionInputs(input.agents);
   return {
     ...(references ? { references } : {}),
+    ...(agents ? { agents } : {}),
     text: input.text,
     attachmentIds: [...input.attachmentIds],
     context: input.context.map(({ path, line }) => ({ path, ...(line !== undefined ? { line } : {}) })),
@@ -249,7 +252,13 @@ export class Store {
       CREATE TABLE IF NOT EXISTS folder_favorites (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, path TEXT NOT NULL, json TEXT NOT NULL, UNIQUE(project_id, path));
       -- Multi-model discussions (council). Additive and unversioned.
       CREATE TABLE IF NOT EXISTS council_discussions (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, json TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS council_updated ON council_discussions(updated_at DESC, id);`);
+      CREATE INDEX IF NOT EXISTS council_updated ON council_discussions(updated_at DESC, id);
+      -- One row per turn another conversation's Agent asked of a called one (docs/AGENT-CALLS.md §7). Additive.
+      CREATE TABLE IF NOT EXISTS agent_call_turns (run_id TEXT PRIMARY KEY, call_id TEXT NOT NULL, caller_session_id TEXT NOT NULL, caller_run_id TEXT,
+        prompt TEXT NOT NULL, mode TEXT NOT NULL, background INTEGER NOT NULL DEFAULT 0, delivered_at TEXT, created_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS agent_call_turns_call ON agent_call_turns(call_id, created_at);
+      CREATE INDEX IF NOT EXISTS agent_call_turns_caller ON agent_call_turns(caller_session_id, created_at);
+      CREATE INDEX IF NOT EXISTS agent_call_turns_pending ON agent_call_turns(background) WHERE delivered_at IS NULL;`);
     // L1 journal database (independent write lock + optional Tier-2 external blobs directory).
     this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:', { role: 'journal' });
     this.journal = new Journal(

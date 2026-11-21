@@ -27,6 +27,7 @@ export * from './protocol.js';
 export * from './devices.js';
 export * from './dictation.js';
 export * from './council.js';
+export type * from './agent-calls.js';
 export type * from './session.js';
 export type * from './run.js';
 export * from './terminal.js';

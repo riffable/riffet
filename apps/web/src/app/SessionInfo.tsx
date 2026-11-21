@@ -312,6 +312,29 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
   );
 }
 
+/** The conversations this one's Agent called (docs/AGENT-CALLS.md §6): the sidebar leaves them out while this one is listed. */
+export function SessionCalls({ calls, onOpen }: { calls: readonly Session[]; onOpen: (id: string) => void }) {
+  const { t } = useLingui();
+  const [expanded, setExpanded] = useState(false);
+  if (calls.length === 0) return null;
+  const sorted = [...calls].sort((left, right) => Date.parse(sessionActivityAt(right)) - Date.parse(sessionActivityAt(left)));
+  const shown = expanded ? sorted : sorted.slice(0, 3);
+  return (
+    <InfoSection title={t({ message: '调用', context: 'session-origin' })} summary={calls.length}>
+      <ul>
+        {shown.map((call) => (
+          <li key={call.id}>
+            <ListRow data-closes-overlay onClick={() => onOpen(call.id)} className="text-fg" leading={<AgentLogo backend={sessionBackend(call)} size={14} />} meta={relativeTime(sessionActivityAt(call))}>
+              {call.title}
+            </ListRow>
+          </li>
+        ))}
+      </ul>
+      {sorted.length > shown.length && <InfoMore hidden={sorted.length - shown.length} onClick={() => setExpanded(true)} />}
+    </InfoSection>
+  );
+}
+
 /**
  * The side discussions of this session. They are listed here from the same endpoint the panel
  * uses, fetched when the surface opens, so the header carries no list of its own.

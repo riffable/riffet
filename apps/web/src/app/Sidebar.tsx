@@ -325,8 +325,13 @@ export function Sidebar(props: Props) {
     return next;
   });
 
-  // Quick chats live on their own page; the sidebar lists only the ordinary conversations.
-  const listedSessions = useMemo(() => sessions.filter((session) => sessionBackend(session) !== 'chat'), [sessions]);
+  // Quick chats live on their own page; the sidebar lists only the ordinary conversations. A called Agent's conversation
+  // (docs/AGENT-CALLS.md §6) is reached from its caller while the caller is listed, unless it is the one open.
+  const listedSessions = useMemo(() => {
+    const live = new Set(sessions.filter((session) => !session.archivedAt).map((session) => session.id));
+    return sessions.filter((session) => sessionBackend(session) !== 'chat'
+      && !(session.origin?.kind === 'call' && session.origin.sessionId && live.has(session.origin.sessionId) && session.id !== selectedSessionId));
+  }, [sessions, selectedSessionId]);
   const tags = useMemo(() => [...new Set(listedSessions.filter((session) => !session.archivedAt).flatMap((session) => session.tags ?? []))].sort(), [listedSessions]);
   // The 助理 has its own row above and its conversations are not listed (docs/ASSISTANT.md).
   const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, t`未关联项目`), [projects, showArchived, t]);

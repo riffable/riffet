@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconSquareTerminal, IconTerminal } from '@/components/icons';
-import { PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
 import { RunnerGame } from '@/components/runner/RunnerGame';
@@ -19,6 +19,7 @@ import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
 import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from './session/ToolsPicker';
+import type { AgentMentionSource } from './session/agentMentions';
 import { AgentLogo } from '@/components/AgentLogo';
 import { BackendPicker } from './session/BackendPicker';
 import { useAgentModels } from './session/agentModels';
@@ -165,8 +166,11 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const { phones } = useControllablePhones(NO_TOOL_GROUPS);
   const pluginTools = usePluginToolGroups(NO_TOOL_GROUPS);
   // A remembered phone that is offline now (or a plugin that is off) is left out of this conversation and kept for the next.
-  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id));
-  const toolsOffered = !quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0);
+  // The new conversation's Agent may call other Agents (docs/AGENT-CALLS.md).
+  const callsOffered = !quickChat && offersRiffetTools(capabilities);
+  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || (callsOffered && id === AGENT_CALL_TOOL_GROUP));
+  const toolsOffered = callsOffered || (!quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0));
+  const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: project?.id ?? '', backends } : undefined, [callsOffered, project?.id, backends]);
   const [selection, setSelection] = useState(defaultModel);
   const [selectionEdited, setSelectionEdited] = useState(false);
   /*
@@ -458,6 +462,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         onSlashMenuOpen={quickChat ? undefined : slash.refresh}
         fileMentions={!quickChat && !assistant && Boolean(project)}
         sessionMentions={!quickChat && sessionReferences && capabilities?.supportsSessionReferences === true}
+        agentMentions={agentMentions}
         referenceSessions={referenceSessions}
         referenceProjects={directories}
         onOpenReferenceSession={onOpenReferenceSession}
@@ -478,7 +483,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
             disabled={busy || !capabilities.supportsPermissionSelection}
           />
         ) : undefined}
-        toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} disabled={busy} onError={onError} /> : undefined}
+        toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} disabled={busy} onError={onError} /> : undefined}
         mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
         // The model menu picks the agent too where it has a column for them; a phone keeps its own row.

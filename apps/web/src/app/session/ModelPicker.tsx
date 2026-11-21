@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { ModelStatus, NativeBackendUsage } from '@contracts';
 import { invalidateModelUsage, readLiveUsage, usageRevision, writeLiveUsage } from '@/lib/catalog-cache';
@@ -298,7 +298,7 @@ function PickerScrollSync({ listRef, agentsRef, providersRef, activeOptionId, re
   return null;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, labelClassName, loading = false, refreshing = false, error, onRetry }: {
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, labelClassName, loading = false, refreshing = false, error, onRetry, open: openProp, onOpenChange }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -357,10 +357,18 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   leading?: ReactNode;
   /** The model's name in the trigger, where the trigger is set larger than the composer's (a council seat). */
   labelClassName?: string;
+  /** Opened by its host rather than its trigger (a mention written in the draft); `onOpenChange` hears every change. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { t } = useLingui();
   const shownPlaceholder = placeholder ?? 'Default model';
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openState;
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const setOpen = useCallback((next: boolean) => { if (!controlled) setOpenState(next); onOpenChangeRef.current?.(next); }, [controlled]);
   const [openCycle, setOpenCycle] = useState(0);
   const [query, setQuery] = useState('');
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -458,6 +466,12 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
     const interval = window.setInterval(() => refreshUsageRef.current(), 30_000);
     return () => { controller.abort(); window.clearInterval(interval); };
   }, [open, usageScope, hasUsageLoader]);
+  /** What every opening starts from: no search, the provider in force, the highlight on the current model. */
+  const startOpen = () => { setQuery(''); setPreviewProviderId(activeProviderId); setOpenCycle((cycle) => cycle + 1); };
+  // A host that opens the menu itself starts it the same way.
+  const openedByHost = controlled && openProp;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (openedByHost) startOpen(); }, [openedByHost]);
   // Opening the list, or switching provider for real, starts on the provider in force.
   useEffect(() => {
     if (open) setPreviewProviderId(activeProviderId);
@@ -740,7 +754,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
 
   // A mobile settings dialog isolates scrolling; the portalled model list needs its own scope.
   const picker = (
-    <Popover modal={isMobile} open={open} onOpenChange={(next) => { if (next) { setQuery(''); setPreviewProviderId(activeProviderId); setOpenCycle((cycle) => cycle + 1); } setOpen(next); }}>
+    <Popover modal={isMobile} open={open} onOpenChange={(next) => { if (next) startOpen(); setOpen(next); }}>
       <PopoverTrigger
         data-model-picker
         aria-label={retryOnly ? t`重新加载模型列表` : t({ message: '选择模型', context: 'session-model-picker-label' })}

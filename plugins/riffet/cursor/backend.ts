@@ -19,6 +19,7 @@ import { CursorLiveReceipts } from './backend/live-receipts.js';
 import { CursorProjectConfigs } from './backend/project-configs.js';
 import { readCursorShare } from './backend/share-read.js';
 import { CursorSteerBridge } from './backend/steer.js';
+import { CursorRiffetTools } from './backend/riffet-tools.js';
 import { CursorApiCache } from './backend/api-cache.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
@@ -111,6 +112,8 @@ interface CursorParts {
  * its hooks report turn ends; NativeService keeps its session state, statistics and dialogs.
  */
 export const CURSOR_TRAITS: AgentTraits = {
+  // Riffet's tools reach each CLI through a plugin directory of their own (`backend/riffet-tools.ts`).
+  riffetTools: true,
   settlesSlashOnSubmit: true,
   untaggedEcho: true,
   reportsTurnOutcome: true,
@@ -213,7 +216,7 @@ export class CursorBackend implements AgentBackend {
     const port = cursorPort(host);
     const live = new CursorLive(join(this.options.stateDir, 'cursor-live'));
     const native = new NativeService(port, { configDir: launch.configDir, cliPath: launch.executable, profile: launch, live });
-    const runtime = new NativeRuntimeManager({ port, cliPath: launch.executable, configDir: launch.configDir, profile: launch, live, prepareModel: (model, project) => native.prepareModel(model, project) });
+    const runtime = new NativeRuntimeManager({ port, cliPath: launch.executable, configDir: launch.configDir, profile: launch, live, tools: new CursorRiffetTools(host, this.options.stateDir, () => probeCursorHookSteer(launch)), prepareModel: (model, project) => native.prepareModel(model, project) });
     const steering = new CursorSteerBridge(host, port, native, this.options.stateDir, launch);
     this.usageHost = host;
     this.stopUsageChanges = host.stats.subscribeObservations?.(() => {

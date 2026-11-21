@@ -2289,6 +2289,11 @@ msgstr ""
 msgid "调整面板宽度"
 msgstr ""
 
+#: src/app/SessionInfo.tsx
+msgctxt "session-origin"
+msgid "调用"
+msgstr ""
+
 #: src/plugins/TasksView.tsx
 msgid "警告"
 msgstr ""

@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { Attachment } from '@contracts';
 import { IconFileText, IconImage, IconPaperclip, IconTextQuote, IconX } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
-import { isSessionReference, type PromptContextReference } from '@/lib/api';
+import { isAgentReference, isSessionReference, type PromptContextReference } from '@/lib/api';
 import { AgentLogo } from '@/components/AgentLogo';
 import { basename } from '@/lib/utils';
 import { COMPOSER_IMAGE_TILE, focusIndexAfterRemoval, formatBytes, isImageAttachment, type PendingUpload } from './composerAttachmentIntake';
@@ -169,8 +169,11 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     railRef.current?.querySelectorAll<HTMLElement>(TILE_SELECTOR)[pending.index]?.focus();
   }, [attachments, references, quotes]);
 
-  const referencePositions = references.map((_, index) => references.slice(0, index).reduce((count, item) => count + (isSessionReference(item) && onOpenReferenceSession ? 2 : 1), 0));
-  const referenceTargets = references.reduce((count, item) => count + (isSessionReference(item) && onOpenReferenceSession ? 2 : 1), 0);
+  // Tiles per reference: a session one opens and removes, an Agent mention has none (it is in the text).
+  const tilesOf = (item: PromptContextReference) => isAgentReference(item) ? 0 : isSessionReference(item) && onOpenReferenceSession ? 2 : 1;
+  const referencePositions = references.map((_, index) => references.slice(0, index).reduce((count, item) => count + tilesOf(item), 0));
+  const referenceTargets = references.reduce((count, item) => count + tilesOf(item), 0);
+  const chips = references.filter(item => !isAgentReference(item));
   const total = referenceTargets + quotes.length + attachments.length;
   const removeQuote = (index: number) => {
     pendingFocusRef.current = { index: focusIndexAfterRemoval(referenceTargets + index, total), quotes };
@@ -187,7 +190,7 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     onRemoveAttachment(attachment.id);
   };
 
-  if (!attachments.length && !references.length && !quotes.length && !uploading) return null;
+  if (!attachments.length && !chips.length && !quotes.length && !uploading) return null;
 
   if (variant === 'summary') {
     // Content only: the host keeps the button, its chevron and its `aria-expanded`.
@@ -197,7 +200,7 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
         <span className="min-w-0 flex-1 truncate">
           {[
             attachments.length ? t`${attachments.length} 个附件` : '',
-            references.length + quotes.length ? t`${references.length + quotes.length} 个引用` : '',
+            chips.length + quotes.length ? t`${chips.length + quotes.length} 个引用` : '',
             uploading ? t`上传中` : '',
           ].filter(Boolean).join(' · ')}
         </span>
@@ -209,9 +212,11 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     <div ref={railRef} className="flex flex-col gap-1.5 px-3 pt-3">
       {/* References and attachments stay on separate rows: thumbnails would push a reference chip
           onto the next line anyway, and two stable rows beat one mixed, reflowing one (§5.4). */}
-      {(references.length > 0 || quotes.length > 0) && (
+      {(chips.length > 0 || quotes.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {references.map((reference, index) => {
+            // An Agent mention is written in the text and marked there (agentMentions.tsx), not drawn as a chip.
+            if (isAgentReference(reference)) return null;
             const session = isSessionReference(reference);
             const name = session ? reference.title ?? reference.sessionId : `${basename(reference.path)}${reference.line ? `:${reference.line}` : ''}`;
             return <Chip key={`${session ? reference.sessionId : reference.path}:${index}`} icon={session ? <AgentLogo backend={reference.backendId ?? 'cursor'} size={12} /> : <IconFileText />} title={session ? reference.title ?? reference.sessionId : reference.path} removeLabel={session ? t`移除会话引用` : t`移除 ${name}`} disabled={disabled} onRemove={() => removeReference(index)} onOpen={session && onOpenReferenceSession ? () => onOpenReferenceSession(reference.sessionId) : undefined}>

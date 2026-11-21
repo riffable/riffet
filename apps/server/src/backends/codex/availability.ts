@@ -18,6 +18,8 @@ export async function capabilitiesOf(ctx: AvailabilityContext, profile: NativeBa
   const supportsSteer = supportsSteerVersion((await probeAppServer(executableOf(profile, ctx.flavor))).version, ctx.flavor.id);
   return {
     supportsSessionReferences: true,
+    // Consulted by another Agent (docs/AGENT-CALLS.md §5): the read-only sandbox, asking the owner before any write.
+    consultPermission: 'read-only',
     backendId: ctx.flavor.id,
     label: ctx.flavor.label,
     modes: ctx.flavor.modes,

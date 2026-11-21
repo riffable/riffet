@@ -36,7 +36,8 @@ import { useAnswerShare } from '../marks/ShareImage';
 import { RememberedScope, useRemembered } from './rememberedState';
 import { FailureDetails } from './FailureDetails';
 import { reasoningPreview } from '../../../../../packages/timeline/src/findText';
-import { SessionReferences } from './SessionReferences';
+import { MentionedAgents, SessionReferences } from './SessionReferences';
+import { MessageWithMentions, unwrittenMentions } from './agentMentions';
 import { quoteLabel, splitQuotes } from './quotes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
@@ -211,11 +212,12 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="flex max-w-[min(82%,560px)] items-start gap-1">
-        <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg">{quoted.body}</div>
+        <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg"><MessageWithMentions text={quoted.body} agents={run?.native?.input.agents} /></div>
       </div>
       <MessageQuotes quotes={quoted.quotes} />
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
+      {!resources && <MentionedAgents agents={unwrittenMentions(quoted.body, run?.native?.input.agents)} />}
       {(text || time || delivery) && (
         <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !resources && revealOnOwnHover)}>
           {from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}

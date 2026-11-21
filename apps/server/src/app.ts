@@ -69,7 +69,7 @@ import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
-import { AssistantBoard, Supervision, WorkItemService, assistantProject, type AssistantWork } from './work-items/index.js';
+import { AssistantBoard, Supervision, WorkItemService, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AssistantRuns } from './assistant/runs.js';
@@ -90,6 +90,7 @@ import { registerGitRoutes } from './routes/git.js';
 import { registerOrchestrationRoutes } from './routes/orchestration.js';
 import { OrchestrationService } from './orchestration/service.js';
 import { CONTEXT_LIMITS, sessionReferenceInputs } from './context-references/input.js';
+import { agentMentionInputs } from './native/agent-mentions.js';
 import { SessionReferenceService } from './context-references/service.js';
 import { SessionCommands } from './orchestration/session-commands.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -144,6 +145,8 @@ import type { ChannelProvider } from './channels/types.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
+import { AgentCallService } from './agent-calls/service.js';
+import { registerAgentCallRoutes } from './routes/agent-calls.js';
 import { AgentSeats, councilProject } from './council/seats.js';
 import { registerCouncilRoutes } from './routes/council.js';
 
@@ -231,7 +234,9 @@ export async function createApp(options: AppOptions = {}) {
     if(run.native?.intent==='steer' && run.native.ownerRunId) workbenchAppearance.release(run.native.ownerRunId);
     if(run.state!=='running' && run.state!=='queued') workbenchAppearance.release(run.id);
   });
-  const riffetMcp=new RiffetMcpService({boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
+  // Agent calls (docs/AGENT-CALLS.md) need the orchestration and the timeline made further down; the MCP tools and delivery reach them through this.
+  let agentCallsRef:AgentCallService|undefined;
+  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
     const session=store.getSession(sessionId);
     if(session.archivedAt || session.state==='archived') return undefined;
     const project=store.getProject(session.projectId);
@@ -285,7 +290,7 @@ export async function createApp(options: AppOptions = {}) {
   const nativeBackends:NativeBackendService=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
     profiles:{get:backendId=>settings.getNativeBackendProfiles(backendId),getConfig:(backendId,profileId)=>settings.getNativeBackendProfileConfig(backendId,profileId)},
-    riffetMcp, standing:assistantStanding, prepareContextInput:run=>contextReferences.render(run),
+    riffetMcp, standing:assistantStanding, prepareContextInput:async run=>{const input=await contextReferences.render(run);return agentCallsRef?await agentCallsRef.render(run,input):input;},
   });
   // A plugin's Agent backends are registered while it is enabled and withdrawn when it is not; evaluated by `refreshWithin` below.
   const pluginBackends=new PluginBackends({plugins,registry:backendRegistry,service:nativeBackends,workspaceObserver:workspaceObserver(stateDir)});
@@ -414,7 +419,8 @@ export async function createApp(options: AppOptions = {}) {
     });
     if(body.expectedConfigRevision!==undefined&&(!Number.isSafeInteger(body.expectedConfigRevision)||body.expectedConfigRevision<0))throw new AppError('INVALID_CONFIG_REVISION','Configuration revision must be a non-negative integer');
     const references=sessionReferenceInputs(body.references);
-    return {text,attachmentIds,context,...(references?{references}:{})};
+    const agents=agentMentionInputs(body.agents);
+    return {text,attachmentIds,context,...(references?{references}:{}),...(agents?{agents}:{})};
   };
   const nativeRuns=(id:string)=>[...new Map([...store.listRecentNativeRuns(id).reverse(),...store.listUnfinishedNativeRuns(id)].map(run=>[run.id,run])).values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows in L2 `derived.db`, and each backend's transcript read into L1 `journal.db`.
@@ -545,7 +551,22 @@ export async function createApp(options: AppOptions = {}) {
   registerCouncilRoutes(app,deps);
   const shares=new ShareService(deps);
   registerShareRoutes(app,deps,shares);
-  const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,riffetMcp,planFiles,
+  const agentCalls=new AgentCallService({store,timeline,orchestration,
+    agents:()=>nativeBackends.catalog.listBackends(),
+    capabilities:(backendId,profileId)=>nativeBackends.catalog.capabilitiesFor(backendId,profileId),
+    // What the composer's model menu reads for the same project and provider: its models, and the account's quota.
+    catalog:(backendId,profileId,projectId)=>nativeBackends.catalog.entry(backendId,store.getProject(projectId),profileId),
+    usage:(backendId,profileId,projectId)=>nativeBackends.catalog.usage(backendId,store.getProject(projectId),profileId),
+    worktree:projectId=>orchestration.callWorktree(projectId),
+    cancel:(sessionId,runId)=>{dispatch.cancel(sessionId,runId);},
+    notify:input=>{notices.add({...input,source:'agent'});},
+    label:backendId=>backendRegistry.get(backendId)?.label??backendId,
+    systemCommand:isSystemCommand,
+    log:(message,fields)=>app.log.warn(fields,message)});
+  agentCallsRef=agentCalls;
+  app.addHook('onClose',async()=>agentCalls.close());
+  registerAgentCallRoutes(app,{store,agentCalls});
+  const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,agentCalls,riffetMcp,planFiles,
     onCleanupError:(sessionId,error)=>app.log.warn({err:error,sessionId},'deleted conversation file cleanup failed; retrying on next start')});
   deletionRef=deletion;
   // Seat conversations outlive a restart with their discussion; one whose discussion is gone is removed.

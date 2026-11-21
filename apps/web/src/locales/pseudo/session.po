@@ -12,7 +12,7 @@ msgstr ""
 msgid "、"
 msgstr ""
 
-#. placeholder {0}: references.length + quotes.length
+#. placeholder {0}: chips.length + quotes.length
 #: src/app/session/ComposerAttachments.tsx
 msgid "{0} 个引用"
 msgstr ""
@@ -525,6 +525,11 @@ msgstr ""
 msgid "最多引用 5 个会话"
 msgstr ""
 
+#. placeholder {0}: AGENT_CALL_BUDGET.mentions
+#: src/app/session/Composer.tsx
+msgid "最多提到 {0} 个 Agent"
+msgstr ""
+
 #. placeholder {0}: content.slice(answer + divider.length)
 #. placeholder {0}: excerpt.slice(answerPrefix.length)
 #: src/app/session/SessionReferences.tsx
@@ -973,6 +978,7 @@ msgstr ""
 msgid "已保存"
 msgstr ""
 
+#: src/app/session/agentCalls.tsx
 #: src/app/session/Timeline.tsx
 #: src/app/session/TurnProcess.tsx
 msgid "已停止"
@@ -1119,6 +1125,10 @@ msgstr ""
 
 #: src/app/session/Composer.tsx
 msgid "当前 Agent 无法读取会话引用"
+msgstr ""
+
+#: src/app/session/Composer.tsx
+msgid "当前 Agent 无法调用其他 Agent"
 msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
@@ -1841,6 +1851,10 @@ msgstr ""
 msgid "移除引用"
 msgstr ""
 
+#: src/app/session/agentCalls.tsx
+msgid "等你确认"
+msgstr ""
+
 #: src/app/session/ComposerDock.tsx
 msgid "等待上一条消息确认"
 msgstr ""
@@ -1935,6 +1949,10 @@ msgstr ""
 
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
+msgstr ""
+
+#: src/app/session/agentMentions.tsx
+msgid "自动"
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -2041,6 +2059,14 @@ msgstr ""
 
 #: src/app/session/toolView.ts
 msgid "读取文件"
+msgstr ""
+
+#: src/app/session/agentCalls.tsx
+msgid "调用 Agent"
+msgstr ""
+
+#: src/app/session/ToolsPicker.tsx
+msgid "调用其他 Agent"
 msgstr ""
 
 #: src/app/session/toolView.ts

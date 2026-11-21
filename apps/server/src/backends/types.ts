@@ -234,7 +234,12 @@ export interface NativeStandingHost {
 }
 
 /** A stdio MCP server for one conversation's CLI: the Riffet shim and its credential file. */
-export interface RiffetMcpServerSpec { name: string; command: string; args: string[] }
+/**
+ * How a CLI starts its Riffet MCP shim: `command` with `args` (`<shim> --credential <credentialFile>`). A CLI that cannot
+ * be given its own arguments per process (Cursor's shared plugin directory) runs the shim without `--credential` and
+ * names the file in `RIFFET_MCP_CREDENTIAL_FILE` instead.
+ */
+export interface RiffetMcpServerSpec { name: string; command: string; args: string[]; credentialFile: string }
 
 export interface NativeRiffetMcpHost {
   /**

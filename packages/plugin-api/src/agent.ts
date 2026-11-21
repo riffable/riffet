@@ -835,6 +835,9 @@ export interface AgentInteractionReceipt {
  */
 export type AgentSessionPatch = Partial<Pick<Session, 'model' | 'mode' | 'approval' | 'configPending' | 'terminalId' | 'title' | 'titleSource' | 'nativeSessionId' | 'state' | 'error'>>;
 
+/** How a CLI starts the Riffet MCP shim (`AgentHost.riffetMcp`). */
+export interface AgentRiffetMcpServer { name: string; command: string; args: string[]; credentialFile: string }
+
 /**
  * What the core offers a plugin. A call is asynchronous and made on behalf of the session it names; a
  * session that is not this Agent's is refused. The exceptions are `view`, the reads of code that cannot
@@ -949,8 +952,19 @@ export interface AgentHost {
     get(sessionId: string, requestId: string): Promise<AgentInteractionReceipt | undefined>;
     save(sessionId: string, requestId: string, receipt: AgentInteractionReceipt): Promise<AgentInteractionReceipt>;
   };
-  /** The Riffet MCP server a launch carries (`traits.riffetTools`); undefined for an archived session or a quick chat. */
-  riffetMcp(sessionId: string): Promise<{ name: string; command: string; args: string[] } | undefined>;
+  /**
+   * The Riffet MCP server a launch carries (`traits.riffetTools`); undefined for an archived session or a quick chat.
+   * `args` name `credentialFile`; a CLI that cannot take arguments per process passes the file in `RIFFET_MCP_CREDENTIAL_FILE`.
+   */
+  riffetMcp(sessionId: string): Promise<AgentRiffetMcpServer | undefined>;
+  /**
+   * The server for a CLI started ahead of its session in `projectId` (a warm one). It lists the tools a new session there
+   * has by default and runs none until `adopt` gives it to the session that takes the CLI; `revoke` it when none does.
+   * A session takes the CLI only when its `riffetMcpSignature` equals `signature`.
+   */
+  riffetMcpProvisional?(projectId: string): Promise<{ server: AgentRiffetMcpServer; signature: string; adopt(sessionId: string): void; revoke(): void } | undefined>;
+  /** What decides a session's Riffet tool list, to match it to a warm CLI's; undefined when it gets no server. */
+  riffetMcpSignature?(sessionId: string): Promise<string | undefined>;
   /** Installs a per-call runtime binding check. Once required, calls stay refused across restarts until a validator is registered again. Disposing removes the validator, not the requirement. */
   bindRiffetMcp(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void;
 }

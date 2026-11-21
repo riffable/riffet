@@ -81,12 +81,13 @@ export class RiffetMcpCredentials {
    * nothing until `adopt` gives it to the conversation that takes the CLI, and `revoke(owner)` ends it.
    * Its file stays where the CLI was told, so adopting needs no relaunch.
    */
-  provisional(): { owner: string; command: string; args: string[] } {
+  provisional(): { owner: string; command: string; args: string[]; credentialFile: string } {
     const owner = `${PROVISIONAL}${randomBytes(8).toString('hex')}`;
     const id = randomBytes(8).toString('hex'), secret = randomBytes(32).toString('base64url');
     this.store.setSetting(CREDENTIALS, { ...this.rows(), [id]: { hash: hashSecret(secret), sessionId: owner, createdAt: new Date().toISOString(), folder: owner } });
     this.writeFile(owner, `wkm_${id}_${secret}`, owner);
-    return { owner, command: this.nodePath, args: [riffetMcpShimPath, '--credential', this.credentialFile(owner)] };
+    const credentialFile = this.credentialFile(owner);
+    return { owner, command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile };
   }
 
   /** Gives a provisional credential to `sessionId`, which must hold none of its own. */
@@ -113,8 +114,9 @@ export class RiffetMcpCredentials {
   }
 
   /** The command line a CLI spawns for this conversation's Riffet MCP server. */
-  command(sessionId: string): { command: string; args: string[] } {
-    return { command: this.nodePath, args: [riffetMcpShimPath, '--credential', this.ensure(sessionId)] };
+  command(sessionId: string): { command: string; args: string[]; credentialFile: string } {
+    const credentialFile = this.ensure(sessionId);
+    return { command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile };
   }
 
   /** Revokes the conversation's credential and removes its file; a later launch with tool groups issues a new one. */

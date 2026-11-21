@@ -3956,6 +3956,13 @@
             "sessionId": "text",
             "fromRunId": "text"
           }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
         ]
       },
       "contextSnapshots": [
@@ -4061,6 +4068,13 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text"
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ]
       },
@@ -4168,6 +4182,13 @@
             "sessionId": "text",
             "fromRunId": "text"
           }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
         ]
       },
       "contextSnapshots": [
@@ -4273,6 +4294,13 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text"
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ]
       },
@@ -4380,6 +4408,13 @@
             "sessionId": "text",
             "fromRunId": "text"
           }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
         ]
       },
       "contextSnapshots": [
@@ -4485,6 +4520,13 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text"
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ]
       },
@@ -4598,6 +4640,13 @@
               "kind": "session",
               "sessionId": "text",
               "fromRunId": "text"
+            }
+          ],
+          "agents": [
+            {
+              "backendId": "claude",
+              "backendProfileId": "text",
+              "model": "text"
             }
           ]
         },
@@ -5004,6 +5053,13 @@
                 "sessionId": "text",
                 "fromRunId": "text"
               }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
+              }
             ]
           },
           "contextSnapshots": [
@@ -5185,6 +5241,13 @@
                 "kind": "session",
                 "sessionId": "text",
                 "fromRunId": "text"
+              }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
               }
             ]
           },
@@ -5417,6 +5480,13 @@
             }
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
+        ],
         "pending": "queued"
       }
     ],
@@ -5486,6 +5556,13 @@
               "activeTurnIncomplete": true,
               "reason": "text"
             }
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ],
         "pending": "queued"
@@ -5699,6 +5776,13 @@
                 "sessionId": "text",
                 "fromRunId": "text"
               }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
+              }
             ]
           },
           "contextSnapshots": [
@@ -5808,6 +5892,13 @@
               "kind": "session",
               "sessionId": "text",
               "fromRunId": "text"
+            }
+          ],
+          "agents": [
+            {
+              "backendId": "claude",
+              "backendProfileId": "text",
+              "model": "text"
             }
           ]
         },
@@ -6135,6 +6226,13 @@
                 "sessionId": "text",
                 "fromRunId": "text"
               }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
+              }
             ]
           },
           "contextSnapshots": [
@@ -6358,6 +6456,13 @@
           "activeTurnIncomplete": true,
           "reason": "text"
         }
+      }
+    ],
+    "agents": [
+      {
+        "backendId": "claude",
+        "backendProfileId": "text",
+        "model": "text"
       }
     ],
     "pending": "queued"
@@ -6761,6 +6866,13 @@
             }
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
+        ],
         "pending": "queued"
       }
     ],
@@ -6832,6 +6944,13 @@
               "activeTurnIncomplete": true,
               "reason": "text"
             }
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ],
         "pending": "queued"
@@ -6907,6 +7026,13 @@
               "activeTurnIncomplete": true,
               "reason": "text"
             }
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ],
         "pending": "queued"

@@ -14,6 +14,7 @@ import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
 import { AnswerActions, AssistantMessage, ImageBlock, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
+import { AgentCallRow, agentToolName } from './agentCalls';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
@@ -58,9 +59,9 @@ function isSettledNewTopic(item: TimelineItem): boolean {
  */
 const enter = 'animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]';
 
-/** Delegations stand on their own inside the process rather than joining tools. */
+/** Delegations stand on their own inside the process rather than joining tools; so does a call of another Agent (docs/AGENT-CALLS.md). */
 function isToolRunItem(item: TimelineItem | undefined): item is Extract<TimelineItem, { kind: 'tool' }> {
-  return item?.kind === 'tool' && toolKind(item.event) !== 'agent';
+  return item?.kind === 'tool' && toolKind(item.event) !== 'agent' && agentToolName(item.event.data) !== 'agent_call';
 }
 
 /**
@@ -512,7 +513,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlight
             }
             let inner: ReactNode = null;
             switch (item.kind) {
-              case 'tool': inner = <ToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={context.onExpandRow && truncationOf(item) ? <TruncatedMore item={item} expand={context.onExpandRow} /> : undefined} />; break;
+              case 'tool': inner = agentToolName(item.event.data) === 'agent_call' ? <AgentCallRow item={item} stale={!running} /> : <ToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={context.onExpandRow && truncationOf(item) ? <TruncatedMore item={item} expand={context.onExpandRow} /> : undefined} />; break;
               case 'thought': inner = <ThoughtRow text={item.text} channel={item.channel} running={running && itemIndex === lastOutputIndex} />; break;
               case 'assistant': inner = <AssistantMessage text={item.text} showActions={false} streaming={running && itemIndex === lastOutputIndex} mark={markTargetOf(item, row.runId)} />; break;
               case 'plan': inner = <PlanBlock entries={item.entries} />; break;

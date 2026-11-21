@@ -4,7 +4,7 @@ import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconCompress, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
-import { isNativeBackendId, REMOTE_SPEECH_RECOGNIZER, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
+import { AGENT_CALL_BUDGET, isNativeBackendId, REMOTE_SPEECH_RECOGNIZER, type Attachment, type NativeBackendId, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ToolsPickerInMenu } from './ToolsPicker';
@@ -14,7 +14,8 @@ import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { usePlugins } from '@/lib/plugins';
-import { api, HttpError, isSessionReference, sameContextReference, restoreContext, mergeRestoredReferences, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
+import { agentMentionCandidates, ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, mentionText, referenceLabel, type AgentMentionSource } from './agentMentions';
+import { api, HttpError, isAgentReference, isFileReference, isSessionReference, sameContextReference, restoreContext, mergeRestoredReferences, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
 import { cn, errorMessage } from '@/lib/utils';
 import { AgentLogo } from '@/components/AgentLogo';
 import { backendLabel, sessionBackend } from '@/lib/backends';
@@ -343,6 +344,8 @@ export interface ComposerProps {
   /** Whether `@` opens the file picker; a project-less chat has no files to offer. */
   fileMentions?: boolean;
   sessionMentions?: boolean;
+  /** Agents `@` offers to mention, and their model menus: the conversation's Agent may then call them (docs/AGENT-CALLS.md). */
+  agentMentions?: AgentMentionSource;
   referenceSessions?: Session[];
   referenceProjects?: ProjectRecord[];
   recipientSessionId?: string;
@@ -413,6 +416,7 @@ const isAttachment = (value: unknown): value is Attachment => {
 };
 const isReference = (value: unknown): value is PromptContextReference => {
   const item = value as Partial<PromptContextReference> | null;
+  if (item?.kind === 'agent') return typeof item.backendId === 'string' && isNativeBackendId(item.backendId) && (item.backendProfileId === undefined || typeof item.backendProfileId === 'string') && (item.label === undefined || typeof item.label === 'string');
   return item?.kind === 'session' ? typeof item.sessionId === 'string' && Boolean(item.sessionId) && (item.fromRunId === undefined || typeof item.fromRunId === 'string' && Boolean(item.fromRunId)) && (item.title === undefined || typeof item.title === 'string') && (item.backendId === undefined || isNativeBackendId(item.backendId)) : typeof item?.path === 'string' && (item.line === undefined || typeof item.line === 'number');
 };
 
@@ -426,7 +430,7 @@ function creationDraftRemainder(draft: StoredDraft, body: NativeSessionCreateInp
     text: draft.text.trim() === body.initialMessage.text.trim() ? '' : draft.text,
     attachments: draft.attachments.filter(({ id }) => !submittedIds.has(id)),
     references: body.backendId !== 'chat'
-      ? draft.references.filter(reference => (!isSessionReference(reference) && draft.projectId !== body.projectId) || !submittedReferences.some(item => sameContextReference(item, reference)))
+      ? draft.references.filter(reference => (isFileReference(reference) && draft.projectId !== body.projectId) || !submittedReferences.some(item => sameContextReference(item, reference)))
       : draft.references,
     ...(draft.keys ? { keys: Object.fromEntries(Object.entries(draft.keys).filter(([id]) => !submittedIds.has(id))) } : {}),
   };
@@ -756,7 +760,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     setScheduledAt(null);
     const current = referencesRef.current;
     const restored = persistReferences
-      ? stored.references.filter(item => isSessionReference(item) || stored.projectId === referenceProjectId).filter((item) => !current.some((other) => sameContextReference(other, item)))
+      ? stored.references.filter(item => !isFileReference(item) || stored.projectId === referenceProjectId).filter((item) => !current.some((other) => sameContextReference(other, item)))
       : [];
     if (restored.length) updateReferences([...current, ...restored]);
     if (!stored.attachments.length) return;
@@ -778,7 +782,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   useLayoutEffect(() => {
     if (referenceScope.current !== referenceProjectId) {
       referenceScope.current = referenceProjectId;
-      if (referencesRef.current.some(item => !isSessionReference(item))) updateReferences(referencesRef.current.filter(isSessionReference));
+      if (referencesRef.current.some(isFileReference)) updateReferences(referencesRef.current.filter(item => !isFileReference(item)));
       return;
     }
     if (referencesRef.current === references) return;
@@ -839,10 +843,13 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     if (!restoreDraft) return;
     const current = textRef.current;
     const restored = splitQuotes(restoreDraft.text);
-    updateText(current.trim() ? `${restored.body}\n${current}` : restored.body);
+    const nextText = current.trim() ? `${restored.body}\n${current}` : restored.body;
+    updateText(nextText);
     if (restored.quotes.length) updateQuotes([...restored.quotes, ...quotesRef.current]);
     updateAttachments((existing) => [...restoreDraft.attachments.filter((item) => !existing.some((other) => other.id === item.id)), ...existing]);
-    if (restoreDraft.context) updateReferences(mergeRestoredReferences(referencesRef.current, restoreDraft.context));
+    // An Agent an older message mentioned beside its text has no mark to show here; it is not restored unseen.
+    const context = restoreDraft.context?.filter(item => !isAgentReference(item) || mentionRanges(nextText, [referenceLabel(item)]).length > 0);
+    if (context?.length) updateReferences(mergeRestoredReferences(referencesRef.current, context));
     if (restoreDraft.missingAttachments) updatePendingUploads(current => [...current, ...restoreDraft.missingAttachments!.filter(item => !current.some(other => other.key === item.key))]);
     if (restoreDraft.scheduledAt && restoreDraft.scheduledAt.getTime() > Date.now()) {
       setScheduledAt((existing) => (existing && existing.getTime() > Date.now() ? existing : restoreDraft.scheduledAt!));
@@ -1062,6 +1069,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       || Number(b.session.projectId === projectId) - Number(a.session.projectId === projectId)
       || (b.session.lastActivityAt ?? b.session.updatedAt).localeCompare(a.session.lastActivityAt ?? a.session.updatedAt)).slice(0, browsing ? undefined : 10);
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
+  const agentCandidates = useMemo(() => props.agentMentions ? agentMentionCandidates(props.agentMentions.backends) : [], [props.agentMentions]);
+  const agentRows = useMemo(() => {
+    if (!agentCandidates.length || mentionQuery === undefined || browsing) return [];
+    const query = mentionQuery.toLocaleLowerCase();
+    return agentCandidates.filter(item => !query || item.label.toLocaleLowerCase().includes(query) || item.backendId.toLocaleLowerCase().includes(query));
+  }, [agentCandidates, mentionQuery, browsing]);
   /** Projects with a live session, this one first (its full list is one step in), then most recently active; a query narrows them by name. */
   const projectRows = useMemo(() => {
     if (!sessionMentions || mentionQuery === undefined || browsing) return [];
@@ -1075,8 +1088,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     return (props.referenceProjects ?? []).filter(item => !item.system && latest.has(item.id) && (!query || item.name.toLocaleLowerCase().includes(query)))
       .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId) || latest.get(b.id)!.localeCompare(latest.get(a.id)!)).slice(0, query ? 5 : 50);
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
-  const menuLength = trigger?.type === 'slash' ? slashItems.length + (unknownSlashCommand ? 1 : 0) : files.length + sessionFiles.length + projectRows.length;
-  const highlightScope = `${trigger?.type}|${trigger?.query}|${browsing}|${files.length}|${sessionFiles.length}|${projectRows.length}`;
+  const menuLength = trigger?.type === 'slash' ? slashItems.length + (unknownSlashCommand ? 1 : 0) : files.length + agentRows.length + sessionFiles.length + projectRows.length;
+  const highlightScope = `${trigger?.type}|${trigger?.query}|${browsing}|${files.length}|${agentRows.length}|${sessionFiles.length}|${projectRows.length}`;
   const [highlightedScope, setHighlightedScope] = useState(highlightScope);
   if (highlightedScope !== highlightScope) { setHighlightedScope(highlightScope); setHighlight(0); }
   const menuListRef = useRef<HTMLDivElement>(null);
@@ -1092,7 +1105,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     const dismissed = dismissedTriggerRef.current;
     if (dismissed?.text === value && dismissed.caret === caret) return;
     dismissedTriggerRef.current = null;
-    setTrigger(detectTrigger(value, caret, fileMentions || sessionMentions));
+    setTrigger(detectTrigger(value, caret, fileMentions || sessionMentions || agentCandidates.length > 0));
   };
 
   const replaceRange = (start: number, end: number, insert: string) => {
@@ -1131,10 +1144,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       else if (unknownSlashCommand) { setTrigger(null); void submit(); }
     } else {
       const file = files[index];
-      const selected = sessionFiles[index - files.length]?.session;
-      const project = projectRows[index - files.length - sessionFiles.length];
+      const agent = agentRows[index - files.length];
+      const selected = sessionFiles[index - files.length - agentRows.length]?.session;
+      const project = projectRows[index - files.length - agentRows.length - sessionFiles.length];
       if (project) { browseInto(project.id); return; }
-      if (file) {
+      if (agent) {
+        const reference = { kind: 'agent' as const, backendId: agent.backendId, label: agent.label };
+        if (!referencesRef.current.some(item => sameContextReference(item, reference))) {
+          if (referencesRef.current.filter(isAgentReference).length >= AGENT_CALL_BUDGET.mentions) { onError(t`最多提到 ${AGENT_CALL_BUDGET.mentions} 个 Agent`); return; }
+          updateReferences([...referencesRef.current, reference]);
+        }
+        // The mention is written where the `@` was, so the sentence reads as the request it is.
+        replaceRange(trigger.start, caret, `${mentionText(agent.label)} `);
+        return;
+      } else if (file) {
         const reference = { path: file.path };
         if (!referencesRef.current.some(item => sameContextReference(item, reference))) updateReferences([...referencesRef.current, reference]);
       } else if (selected) {
@@ -1291,6 +1314,15 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     updateReferences(referencesRef.current.filter((_, itemIndex) => itemIndex !== index));
     refocusDraft();
   };
+  const changeReference = (index: number, next: PromptContextReference) => {
+    updateReferences(referencesRef.current.map((item, itemIndex) => itemIndex === index ? next : item));
+  };
+  /** Deleting a written mention takes the mention with it. */
+  const dropUnwrittenMentions = (value: string) => {
+    if (!droppedMentions(value, referencesRef.current)) return;
+    updateReferences(referencesRef.current.filter(item => !isAgentReference(item) || mentionRanges(value, [referenceLabel(item)]).length > 0));
+  };
+  const [mentionMenu, setMentionMenu] = useState<number>();
   const removeQuote = (index: number) => {
     updateQuotes(quotesRef.current.filter((_, itemIndex) => itemIndex !== index));
     refocusDraft();
@@ -1300,8 +1332,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * The rail is memoized, so it gets callbacks that never change and forward to this render's
    * handlers — the ones above close over the host's latest props.
    */
-  const railHandlersRef = useRef({ removeAttachment, removeReference, removeQuote, ingestFiles });
-  railHandlersRef.current = { removeAttachment, removeReference, removeQuote, ingestFiles };
+  const railHandlersRef = useRef({ removeAttachment, removeReference, changeReference, removeQuote, ingestFiles });
+  railHandlersRef.current = { removeAttachment, removeReference, changeReference, removeQuote, ingestFiles };
   const [railHandlers] = useState(() => ({
     onRemoveAttachment: (id: string) => railHandlersRef.current.removeAttachment(id),
     onRemoveReference: (index: number) => railHandlersRef.current.removeReference(index),
@@ -1387,6 +1419,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     const submittedAttachments = [...attachmentsRef.current];
     const submittedReferences = referencesEnabled ? [...referencesRef.current] : [];
     if (submittedReferences.some(isSessionReference) && !sessionMentions) { onError(t`当前 Agent 无法读取会话引用`); return; }
+    if (submittedReferences.some(isAgentReference) && !agentCandidates.length) { onError(t`当前 Agent 无法调用其他 Agent`); return; }
     const submittedReferencesRevision = referencesRevisionRef.current;
     let stored = false;
     let draftSaved = true;
@@ -1463,7 +1496,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const toolsInMenu = !isMobile && Boolean(props.toolsPicker);
   const hasMobileSettings = Boolean(props.toolbar || props.toolsPicker || props.onModelChange || props.startPickers || props.endPickers || props.usage);
   const showStop = Boolean(props.onStop && (props.stopping || (running || props.backgroundCount) && !text.trim()));
-  const referenceCount = visibleReferences.length + quotes.length;
+  // A mention is part of the text, not an attachment.
+  const referenceCount = visibleReferences.filter(item => !isAgentReference(item)).length + quotes.length;
   const attachedSummary = [
     referenceCount ? t`${referenceCount} 个引用` : '',
     attachments.length ? t`${attachments.length} 个附件` : '',
@@ -1539,10 +1573,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     <span className="min-w-0 truncate font-mono text-2xs text-fg-3">{file.path}</span>
                   </button>
                 ))}
+                {trigger.type === 'mention' && agentRows.length > 0 && <div role="group" aria-label="Agent">
+                  <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">Agent</div>
+                  {agentRows.map((item, itemIndex) => {
+                    const index = files.length + itemIndex;
+                    return <button key={item.backendId} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
+                      <AgentLogo backend={item.backendId} size={14} className="shrink-0 text-fg-3" />
+                      <span className="min-w-0 flex-1 truncate text-fg">{item.label}</span>
+                    </button>;
+                  })}
+                </div>}
                 {trigger.type === 'mention' && sessionFiles.length > 0 && <div role="group" aria-label={t`会话`}>
                   <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4"><Trans>会话</Trans></div>
                   {sessionFiles.map(({ session: item, project }, itemIndex) => {
-                    const index = files.length + itemIndex;
+                    const index = files.length + agentRows.length + itemIndex;
                     const selected = references.some(reference => isSessionReference(reference) && reference.sessionId === item.id);
                     const blocked = !selected && references.filter(isSessionReference).length >= 5;
                     return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} disabled={blocked} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm disabled:opacity-50 md:h-8', index === highlight && 'bg-hover')}>
@@ -1555,7 +1599,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 {trigger.type === 'mention' && projectRows.length > 0 && <div role="group" aria-label={t({ message: '项目', context: 'mention-projects' })}>
                   <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">{t({ message: '项目', context: 'mention-projects' })}</div>
                   {projectRows.map((item, itemIndex) => {
-                    const index = files.length + sessionFiles.length + itemIndex;
+                    const index = files.length + agentRows.length + sessionFiles.length + itemIndex;
                     return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} title={item.cwd} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
                       <IconFolder className="size-3.5 shrink-0 text-fg-3" />
                       <span className="min-w-0 flex-1 truncate text-fg">{item.name}</span>
@@ -1563,7 +1607,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     </button>;
                   })}
                 </div>}
-                {trigger.type === 'mention' && !files.length && !sessionFiles.length && !projectRows.length && trigger.query && <div className="px-2 py-3 text-sm text-fg-3">{searching ? t`搜索中…` : browsing ? t`没有匹配的会话` : sessionMentions ? t`没有匹配的会话或文件` : t`没有匹配的文件`}</div>}
+                {trigger.type === 'mention' && !files.length && !agentRows.length && !sessionFiles.length && !projectRows.length && trigger.query && <div className="px-2 py-3 text-sm text-fg-3">{searching ? t`搜索中…` : browsing ? t`没有匹配的会话` : sessionMentions ? t`没有匹配的会话或文件` : t`没有匹配的文件`}</div>}
               </div>
             </div>
           )}
@@ -1629,6 +1673,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 
           </>}
 
+          {props.agentMentions && <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />}
           <textarea
             ref={textareaRef}
             rows={1}
@@ -1645,8 +1690,14 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             aria-controls={menuOpen ? menuId : undefined}
             aria-activedescendant={menuOpen && highlight < menuLength ? optionId(highlight) : undefined}
             placeholder={composerPlaceholder}
-            className={cn('w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1', voice && draftEmpty && 'hidden')}
-            onChange={(event) => { updateText(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
+            className={cn('relative w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1', voice && draftEmpty && 'hidden')}
+            onChange={(event) => { updateText(event.target.value); dropUnwrittenMentions(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
+            onClick={(event) => {
+              const element = event.currentTarget;
+              if (!props.agentMentions || element.selectionStart !== element.selectionEnd) return;
+              const at = mentionAt(element.value, referencesRef.current, element.selectionStart);
+              if (at !== undefined) setMentionMenu(at);
+            }}
             onSelect={(event) => syncTrigger(event.currentTarget.value, event.currentTarget.selectionStart)}
             onFocus={() => { window.clearTimeout(mentionBlurTimerRef.current); if (voice && !dictating) setVoiceMode(false, false); }}
             onBlur={() => { window.clearTimeout(mentionBlurTimerRef.current); mentionBlurTimerRef.current = window.setTimeout(() => setTrigger(null), 120); }}
@@ -1674,8 +1725,32 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               if (browsing && !trigger?.query && (event.key === 'ArrowLeft' || event.key === 'Backspace') && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
                 event.preventDefault(); browseInto(undefined); return;
               }
-              if (projectRows.length && event.key === 'ArrowRight' && highlight >= files.length + sessionFiles.length && highlight < menuLength) {
+              if (projectRows.length && event.key === 'ArrowRight' && highlight >= files.length + agentRows.length + sessionFiles.length && highlight < menuLength) {
                 event.preventDefault(); choose(highlight); return;
+              }
+              // A written mention is deleted whole: a broken `@Claude Co` would read as text that names nothing.
+              if ((event.key === 'Backspace' || event.key === 'Delete') && props.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
+                const element = event.currentTarget;
+                const probe = event.key === 'Backspace' ? element.selectionStart - 1 : element.selectionStart;
+                const at = probe >= 0 ? mentionAt(element.value, referencesRef.current, probe) : undefined;
+                const reference = at === undefined ? undefined : referencesRef.current[at];
+                const range = reference && isAgentReference(reference) ? mentionRanges(element.value, [referenceLabel(reference)]).find(item => probe >= item.start && probe < item.end) : undefined;
+                if (range) {
+                  event.preventDefault();
+                  // Through the browser's own edit, so ⌘Z brings it back.
+                  element.setSelectionRange(range.start, range.end);
+                  if (!document.execCommand('delete')) {
+                    const next = element.value.slice(0, range.start) + element.value.slice(range.end);
+                    updateText(next); dropUnwrittenMentions(next);
+                    requestAnimationFrame(() => element.setSelectionRange(range.start, range.start));
+                  }
+                  return;
+                }
+              }
+              // ↓ with the caret in a written mention opens its model menu, as a click on it does.
+              if (!menuOpen && event.key === 'ArrowDown' && props.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
+                const at = mentionAt(event.currentTarget.value, referencesRef.current, event.currentTarget.selectionStart);
+                if (at !== undefined) { event.preventDefault(); setMentionMenu(at); return; }
               }
               if (menuOpen && menuLength) {
                 if (event.key === 'ArrowDown') { event.preventDefault(); setHighlight((value) => (value + 1) % menuLength); return; }

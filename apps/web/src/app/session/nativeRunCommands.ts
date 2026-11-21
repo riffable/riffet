@@ -47,7 +47,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
     const body: NativeMessageInput = {
       commandId: newId(),
       text: prompt,
-      ...(sourceRun?.native ? { attachments: sourceRun.native.input.attachmentIds.map(id => ({ id })), context: sourceRun.native.input.context, ...(sourceRun.native.input.references ? { references: sourceRun.native.input.references } : {}) } : { ...(attachments.length ? { attachments: attachments.map(({ id }) => ({ id })) } : {}),
+      ...(sourceRun?.native ? { attachments: sourceRun.native.input.attachmentIds.map(id => ({ id })), context: sourceRun.native.input.context, ...(sourceRun.native.input.references ? { references: sourceRun.native.input.references } : {}), ...(sourceRun.native.input.agents ? { agents: sourceRun.native.input.agents } : {}) } : { ...(attachments.length ? { attachments: attachments.map(({ id }) => ({ id })) } : {}),
       ...messageContext(references) }),
       ...(steerTarget ? {} : { expectedConfigRevision: session.configRevision ?? 0 }),
     };
@@ -269,7 +269,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
         }
       }
       if (tracking.sessionId !== session.id) return;
-      return { text: run.native.input.text, attachments, context: restoreContext({ context: run.native.input.context, references: run.native.input.references }, run), onPersisted: () => {
+      return { text: run.native.input.text, attachments, context: restoreContext({ context: run.native.input.context, references: run.native.input.references, agents: run.native.input.agents }, run), onPersisted: () => {
         removeNativeSendRequest(session.id, run.commandId);
         if (tracking.sessionId === session.id && run.native?.fingerprint === 'client-pending') updateRuns(store, tracking, current => current.filter(item => item.id !== run.id));
       } };

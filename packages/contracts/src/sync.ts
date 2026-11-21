@@ -1,5 +1,5 @@
 import type { SessionControlSnapshot } from './control.js';
-import type { CapturedSessionReference, NativeActivity, NativeContext, NativeInteraction, NativeJob, NativeStatus, Run, RunMetrics, Session, StepMetrics } from './index.js';
+import type { AgentMention, CapturedSessionReference, NativeActivity, NativeContext, NativeInteraction, NativeJob, NativeStatus, Run, RunMetrics, Session, StepMetrics } from './index.js';
 
 /*
  * Sync protocol v3 (docs/SYNC-V3.md): the server folds each lane of a conversation into timeline
@@ -30,7 +30,7 @@ export interface RowEvent { type: string; data: Record<string, unknown>; created
 interface RowBase { key: string; pos: number; turn: string; seq: number; rev: number; runId?: string; event: RowEvent; truncated?: { blobRef: string; bytes: number } }
 export type TimelineRow = RowBase & (
   /** `pending`: a Run the transcript has not echoed yet, keyed `user:<commandId>` at {@link PENDING_ROW_POS}. */
-  | { kind: 'user'; text: string; attachments: UserAttachment[]; references?: CapturedSessionReference[]; pending?: 'queued' | 'preparing' | 'unconfirmed' | 'failed' }
+  | { kind: 'user'; text: string; attachments: UserAttachment[]; references?: CapturedSessionReference[]; agents?: AgentMention[]; pending?: 'queued' | 'preparing' | 'unconfirmed' | 'failed' }
   | { kind: 'assistant'; text: string; phase?: 'commentary' | 'final_answer' }
   | { kind: 'thought'; text: string; channel: ReasoningChannel }
   | { kind: 'tool'; job?: NativeJob; activity?: NativeActivity; subagent?: { lane: SyncLane; agentId: string; running: boolean; title?: string; subagentType?: string; model?: string; rows: number; turnId?: string; status?: TurnOutlineV3['status']; startedAt?: string; endedAt?: string; changes?: FileChange[] } }

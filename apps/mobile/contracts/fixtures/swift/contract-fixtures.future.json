@@ -4412,6 +4412,14 @@
             "futureField": 4
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
+            "futureField": 4
+          }
+        ],
         "futureField": 4
       },
       "contextSnapshots": [
@@ -4527,6 +4535,14 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text",
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -4648,6 +4664,14 @@
             "futureField": 4
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
+            "futureField": 4
+          }
+        ],
         "futureField": 4
       },
       "contextSnapshots": [
@@ -4763,6 +4787,14 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text",
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -4884,6 +4916,14 @@
             "futureField": 4
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
+            "futureField": 4
+          }
+        ],
         "futureField": 4
       },
       "contextSnapshots": [
@@ -4999,6 +5039,14 @@
             "kind": "session",
             "sessionId": "text",
             "fromRunId": "text",
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -5124,6 +5172,14 @@
               "kind": "session",
               "sessionId": "text",
               "fromRunId": "text",
+              "futureField": 4
+            }
+          ],
+          "agents": [
+            {
+              "backendId": "claude",
+              "backendProfileId": "text",
+              "model": "text",
               "futureField": 4
             }
           ],
@@ -5578,6 +5634,14 @@
                 "futureField": 4
               }
             ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text",
+                "futureField": 4
+              }
+            ],
             "futureField": 4
           },
           "contextSnapshots": [
@@ -5779,6 +5843,14 @@
                 "kind": "session",
                 "sessionId": "text",
                 "fromRunId": "text",
+                "futureField": 4
+              }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text",
                 "futureField": 4
               }
             ],
@@ -6040,6 +6112,14 @@
             "futureField": 4
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
+            "futureField": 4
+          }
+        ],
         "pending": "queued",
         "futureField": 4
       }
@@ -6115,6 +6195,14 @@
               "reason": "text",
               "futureField": 4
             },
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -6357,6 +6445,14 @@
                 "futureField": 4
               }
             ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text",
+                "futureField": 4
+              }
+            ],
             "futureField": 4
           },
           "contextSnapshots": [
@@ -6477,6 +6573,14 @@
               "kind": "session",
               "sessionId": "text",
               "fromRunId": "text",
+              "futureField": 4
+            }
+          ],
+          "agents": [
+            {
+              "backendId": "claude",
+              "backendProfileId": "text",
+              "model": "text",
               "futureField": 4
             }
           ],
@@ -6846,6 +6950,14 @@
                 "futureField": 4
               }
             ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text",
+                "futureField": 4
+              }
+            ],
             "futureField": 4
           },
           "contextSnapshots": [
@@ -7095,6 +7207,14 @@
           "reason": "text",
           "futureField": 4
         },
+        "futureField": 4
+      }
+    ],
+    "agents": [
+      {
+        "backendId": "claude",
+        "backendProfileId": "text",
+        "model": "text",
         "futureField": 4
       }
     ],
@@ -7543,6 +7663,14 @@
             "futureField": 4
           }
         ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
+            "futureField": 4
+          }
+        ],
         "pending": "queued",
         "futureField": 4
       }
@@ -7620,6 +7748,14 @@
               "reason": "text",
               "futureField": 4
             },
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -7702,6 +7838,14 @@
               "reason": "text",
               "futureField": 4
             },
+            "futureField": 4
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text",
             "futureField": 4
           }
         ],
@@ -9036,6 +9180,13 @@
             "sessionId": "text",
             "fromRunId": "text"
           }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
+          }
         ]
       },
       "contextSnapshots": [
@@ -9142,6 +9293,13 @@
               "kind": "session",
               "sessionId": "text",
               "fromRunId": "text"
+            }
+          ],
+          "agents": [
+            {
+              "backendId": "claude",
+              "backendProfileId": "text",
+              "model": "text"
             }
           ]
         },
@@ -9537,6 +9695,13 @@
                 "sessionId": "text",
                 "fromRunId": "text"
               }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
+              }
             ]
           },
           "contextSnapshots": [
@@ -9718,6 +9883,13 @@
                 "kind": "session",
                 "sessionId": "text",
                 "fromRunId": "text"
+              }
+            ],
+            "agents": [
+              {
+                "backendId": "claude",
+                "backendProfileId": "text",
+                "model": "text"
               }
             ]
           },
@@ -9938,6 +10110,13 @@
         }
       }
     ],
+    "agents": [
+      {
+        "backendId": "claude",
+        "backendProfileId": "text",
+        "model": "text"
+      }
+    ],
     "pending": "future-value"
   },
   "TimelinePage#unknown-enum": {
@@ -10001,6 +10180,13 @@
               "activeTurnIncomplete": true,
               "reason": "text"
             }
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ],
         "pending": "future-value"
@@ -10074,6 +10260,13 @@
               "activeTurnIncomplete": true,
               "reason": "text"
             }
+          }
+        ],
+        "agents": [
+          {
+            "backendId": "claude",
+            "backendProfileId": "text",
+            "model": "text"
           }
         ],
         "pending": "future-value"

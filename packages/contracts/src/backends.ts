@@ -183,6 +183,12 @@ export interface NativeBackendCapabilities {
   /** This backend/profile can read a referenced session's materialized snapshot on the execution host. */
   supportsSessionReferences?: boolean;
   /**
+   * The permission a conversation of this backend runs under when another Agent consults it (docs/AGENT-CALLS.md §5):
+   * it reads freely and asks before anything that writes. Missing means the backend can only be called to work in a
+   * worktree of its own.
+   */
+  consultPermission?: string;
+  /**
    * The gateway protocols this backend's launches can be pointed at. A model source is offered to it when the source's
    * `protocols` intersect these. Missing from a server that predates it: match the source's `backends` then.
    */

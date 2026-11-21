@@ -115,7 +115,8 @@ export function rowContent(item: TimelineItem, { pos, turn }: RowPlace): RowCont
   const runId = item.kind === 'user' ? item.run?.id ?? item.event.runId : item.event.runId;
   const { key, event: _event, kind, run: _run, ...fields } = item as TimelineItem & { run?: unknown };
   const references = item.kind === 'user' ? item.run?.native?.contextSnapshots ?? item.references : undefined;
-  return { key, pos, turn, ...(runId ? { runId } : {}), event: rowEvent(item), kind, ...fields, ...(references?.length ? { references } : {}), ...(pending ? { pending } : {}) } as RowContent;
+  const agents = item.kind === 'user' ? item.run?.native?.input.agents : undefined;
+  return { key, pos, turn, ...(runId ? { runId } : {}), event: rowEvent(item), kind, ...fields, ...(references?.length ? { references } : {}), ...(agents?.length ? { agents } : {}), ...(pending ? { pending } : {}) } as RowContent;
 }
 
 export function timelineRows(items: TimelineItem[], options: RowOptions = {}): RowContent[] {

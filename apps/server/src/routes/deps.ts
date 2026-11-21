@@ -32,7 +32,7 @@ import type { ChannelService } from '../channels/service.js';
 import type { CouncilService } from '../council/service.js';
 import type { AuxiliaryCallRecorder } from '../auxiliary/telemetry.js';
 
-export type NativeMessageBody = { commandId?: string; text: string; attachments?: Array<{id?:string}>; context?: Array<{path?:string;line?:number}>; references?: unknown; expectedConfigRevision?: number };
+export type NativeMessageBody = { commandId?: string; text: string; attachments?: Array<{id?:string}>; context?: Array<{path?:string;line?:number}>; references?: unknown; agents?: unknown; expectedConfigRevision?: number };
 
 /** What `createApp` hands every route group: its services and the request helpers they share. */
 export interface RouteDeps {

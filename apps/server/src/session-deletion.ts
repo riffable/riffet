@@ -34,6 +34,8 @@ export interface SessionDeletionDeps {
   shares: { busy(sessionId: string): boolean };
   orchestration: { schedulesUsing(ids: readonly string[]): number; cancelWakeupsOf(ids: readonly string[]): void; forgetSessions(ids: readonly string[]): void };
   notices: { forget(ids: readonly string[]): void };
+  /** The Agent calls the conversations made or were (docs/AGENT-CALLS.md §7). */
+  agentCalls?: { forget(ids: readonly string[]): void };
   riffetMcp: { revoke(sessionId: string): void };
   planFiles: { remove(sessionId: string): Promise<void> };
   /** A file cleanup that failed; it is retried at the next start. */
@@ -99,6 +101,7 @@ export class SessionDeletion {
           }
           this.deps.orchestration.forgetSessions(ids);
           this.deps.notices.forget(ids);
+          this.deps.agentCalls?.forget(ids);
           // Marks outlive their conversation and now read as orphaned; clients re-read them.
           const marked = store.sessionsWithMarks();
           if (ids.some(id => marked.has(id))) store.marksChanged();

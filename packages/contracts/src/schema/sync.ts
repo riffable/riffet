@@ -8,7 +8,7 @@
  * closed: the frames carry them, and a new strict value would fail decoding.
  */
 import { z } from 'zod/v4';
-import { CapturedSessionReferenceSchema, NativeRunInputSchema, RunMetricsSchema, RunSchema, RunMetricsTokenSourceSchema, StepMetricsSchema, MetricsWindowSchema, TextRefSchema } from './run.js';
+import { AgentMentionSchema, CapturedSessionReferenceSchema, NativeRunInputSchema, RunMetricsSchema, RunSchema, RunMetricsTokenSourceSchema, StepMetricsSchema, MetricsWindowSchema, TextRefSchema } from './run.js';
 import { SessionSchema } from './session.js';
 
 /** `main`, or a subagent's lane keyed by the tool call that started it. */
@@ -213,6 +213,7 @@ export const TimelineRowSchema = z.discriminatedUnion('kind', [
     text: z.string(),
     attachments: z.array(UserAttachmentSchema),
     references: z.array(CapturedSessionReferenceSchema).optional(),
+    agents: z.array(AgentMentionSchema).optional(),
     pending: z.enum(['queued', 'preparing', 'unconfirmed', 'failed']).meta({ open: true }).optional(),
   }),
   RowBaseSchema.extend({

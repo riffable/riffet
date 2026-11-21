@@ -113,7 +113,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const current=store.getSession(session.id);
     if(request.body.expectedConfigRevision!==undefined&&request.body.expectedConfigRevision!==(current.configRevision??0))throw new AppError('NATIVE_CONFIG_CHANGED','The conversation settings changed; submit again',409);
     const prepared=input.references?.length?(await nativeBackends.assertSessionReferences(session),await contextReferences.prepareInterrupt(session.id,commandId,input,request.headers)):[];
-    const replacementFingerprint=createHash('sha256').update(JSON.stringify({input:{text:input.text,attachmentIds:input.attachmentIds,context:input.context.map(({path,line})=>({path,...(line!==undefined?{line}:{})})),...(input.references?.length?{references:input.references}:{})},expectedConfigRevision:request.body.expectedConfigRevision??current.configRevision??0})).digest('hex');
+    const replacementFingerprint=createHash('sha256').update(JSON.stringify({input:{text:input.text,attachmentIds:input.attachmentIds,context:input.context.map(({path,line})=>({path,...(line!==undefined?{line}:{})})),...(input.references?.length?{references:input.references}:{}),...(input.agents?.length?{agents:input.agents}:{})},expectedConfigRevision:request.body.expectedConfigRevision??current.configRevision??0})).digest('hex');
     const result=await dispatch.interruptAndSend(session.id,commandId,()=>{
       if(sessionCommands.isArchiving(session.id))throw new AppError('ARCHIVED_SESSION','This conversation is archived',409);
       const latest=store.getSession(session.id);

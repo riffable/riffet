@@ -219,10 +219,11 @@ export interface ExternalSessionDirectory {
 }
 /**
  * Why a conversation exists. `sessionId`/`runId` name the conversation (and turn) it continues;
- * `groupId` and `automationId` name what launched it.
+ * `groupId` and `automationId` name what launched it. A `call` is another conversation's Agent
+ * calling this one (docs/AGENT-CALLS.md): `sessionId`/`runId` name the caller and its turn.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council' | 'call';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
   sessionId?: string; runId?: string; groupId?: string; automationId?: string;

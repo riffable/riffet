@@ -1226,7 +1226,8 @@
                   "discussion",
                   "channel",
                   "assistant",
-                  "council"
+                  "council",
+                  "call"
                 ],
                 "open": true
               },
@@ -1692,7 +1693,8 @@
                         "discussion",
                         "channel",
                         "assistant",
-                        "council"
+                        "council",
+                        "call"
                       ],
                       "open": true
                     },
@@ -2044,6 +2046,47 @@
                       "required": [
                         "kind",
                         "sessionId"
+                      ]
+                    }
+                  },
+                  "agents": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "backendId": {
+                          "type": "string",
+                          "enum": [
+                            "claude",
+                            "codex",
+                            "antigravity",
+                            "cursor",
+                            "pi",
+                            "traex",
+                            "droid",
+                            "dsh",
+                            "chat"
+                          ],
+                          "negotiated": [
+                            "chat",
+                            "pi",
+                            "antigravity"
+                          ],
+                          "negotiatedPattern": {
+                            "feature": "plugin-agents",
+                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                            "maxLength": 64
+                          }
+                        },
+                        "backendProfileId": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "backendId"
                       ]
                     }
                   }
@@ -2516,6 +2559,47 @@
                           "required": [
                             "kind",
                             "sessionId"
+                          ]
+                        }
+                      },
+                      "agents": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "backendId": {
+                              "type": "string",
+                              "enum": [
+                                "claude",
+                                "codex",
+                                "antigravity",
+                                "cursor",
+                                "pi",
+                                "traex",
+                                "droid",
+                                "dsh",
+                                "chat"
+                              ],
+                              "negotiated": [
+                                "chat",
+                                "pi",
+                                "antigravity"
+                              ],
+                              "negotiatedPattern": {
+                                "feature": "plugin-agents",
+                                "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                "maxLength": 64
+                              }
+                            },
+                            "backendProfileId": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "backendId"
                           ]
                         }
                       }
@@ -3214,7 +3298,8 @@
                           "discussion",
                           "channel",
                           "assistant",
-                          "council"
+                          "council",
+                          "call"
                         ],
                         "open": true
                       },
@@ -4201,6 +4286,47 @@
                                   "sessionId"
                                 ]
                               }
+                            },
+                            "agents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "backendId": {
+                                    "type": "string",
+                                    "enum": [
+                                      "claude",
+                                      "codex",
+                                      "antigravity",
+                                      "cursor",
+                                      "pi",
+                                      "traex",
+                                      "droid",
+                                      "dsh",
+                                      "chat"
+                                    ],
+                                    "negotiated": [
+                                      "chat",
+                                      "pi",
+                                      "antigravity"
+                                    ],
+                                    "negotiatedPattern": {
+                                      "feature": "plugin-agents",
+                                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "backendProfileId": {
+                                    "type": "string"
+                                  },
+                                  "model": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "backendId"
+                                ]
+                              }
                             }
                           },
                           "required": [
@@ -4978,6 +5104,47 @@
                                 "required": [
                                   "kind",
                                   "sessionId"
+                                ]
+                              }
+                            },
+                            "agents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "backendId": {
+                                    "type": "string",
+                                    "enum": [
+                                      "claude",
+                                      "codex",
+                                      "antigravity",
+                                      "cursor",
+                                      "pi",
+                                      "traex",
+                                      "droid",
+                                      "dsh",
+                                      "chat"
+                                    ],
+                                    "negotiated": [
+                                      "chat",
+                                      "pi",
+                                      "antigravity"
+                                    ],
+                                    "negotiatedPattern": {
+                                      "feature": "plugin-agents",
+                                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "backendProfileId": {
+                                    "type": "string"
+                                  },
+                                  "model": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "backendId"
                                 ]
                               }
                             }
@@ -5950,6 +6117,47 @@
                               "snapshotRef",
                               "excerpt",
                               "coverage"
+                            ]
+                          }
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "backendId": {
+                                "type": "string",
+                                "enum": [
+                                  "claude",
+                                  "codex",
+                                  "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
+                                  "chat"
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
+                              },
+                              "backendProfileId": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "backendId"
                             ]
                           }
                         },
@@ -7520,6 +7728,47 @@
                               "snapshotRef",
                               "excerpt",
                               "coverage"
+                            ]
+                          }
+                        },
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "backendId": {
+                                "type": "string",
+                                "enum": [
+                                  "claude",
+                                  "codex",
+                                  "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
+                                  "chat"
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
+                              },
+                              "backendProfileId": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "backendId"
                             ]
                           }
                         },
@@ -9651,6 +9900,47 @@
                                   "sessionId"
                                 ]
                               }
+                            },
+                            "agents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "backendId": {
+                                    "type": "string",
+                                    "enum": [
+                                      "claude",
+                                      "codex",
+                                      "antigravity",
+                                      "cursor",
+                                      "pi",
+                                      "traex",
+                                      "droid",
+                                      "dsh",
+                                      "chat"
+                                    ],
+                                    "negotiated": [
+                                      "chat",
+                                      "pi",
+                                      "antigravity"
+                                    ],
+                                    "negotiatedPattern": {
+                                      "feature": "plugin-agents",
+                                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "backendProfileId": {
+                                    "type": "string"
+                                  },
+                                  "model": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "backendId"
+                                ]
+                              }
                             }
                           },
                           "required": [
@@ -10113,6 +10403,47 @@
                               "required": [
                                 "kind",
                                 "sessionId"
+                              ]
+                            }
+                          },
+                          "agents": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "backendId": {
+                                  "type": "string",
+                                  "enum": [
+                                    "claude",
+                                    "codex",
+                                    "antigravity",
+                                    "cursor",
+                                    "pi",
+                                    "traex",
+                                    "droid",
+                                    "dsh",
+                                    "chat"
+                                  ],
+                                  "negotiated": [
+                                    "chat",
+                                    "pi",
+                                    "antigravity"
+                                  ],
+                                  "negotiatedPattern": {
+                                    "feature": "plugin-agents",
+                                    "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                    "maxLength": 64
+                                  }
+                                },
+                                "backendProfileId": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "backendId"
                               ]
                             }
                           }
@@ -11099,7 +11430,8 @@
                           "discussion",
                           "channel",
                           "assistant",
-                          "council"
+                          "council",
+                          "call"
                         ],
                         "open": true
                       },
@@ -11501,6 +11833,47 @@
                                 "required": [
                                   "kind",
                                   "sessionId"
+                                ]
+                              }
+                            },
+                            "agents": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "backendId": {
+                                    "type": "string",
+                                    "enum": [
+                                      "claude",
+                                      "codex",
+                                      "antigravity",
+                                      "cursor",
+                                      "pi",
+                                      "traex",
+                                      "droid",
+                                      "dsh",
+                                      "chat"
+                                    ],
+                                    "negotiated": [
+                                      "chat",
+                                      "pi",
+                                      "antigravity"
+                                    ],
+                                    "negotiatedPattern": {
+                                      "feature": "plugin-agents",
+                                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                      "maxLength": 64
+                                    }
+                                  },
+                                  "backendProfileId": {
+                                    "type": "string"
+                                  },
+                                  "model": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "backendId"
                                 ]
                               }
                             }
@@ -12452,6 +12825,47 @@
                     "snapshotRef",
                     "excerpt",
                     "coverage"
+                  ]
+                }
+              },
+              "agents": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "backendId": {
+                      "type": "string",
+                      "enum": [
+                        "claude",
+                        "codex",
+                        "antigravity",
+                        "cursor",
+                        "pi",
+                        "traex",
+                        "droid",
+                        "dsh",
+                        "chat"
+                      ],
+                      "negotiated": [
+                        "chat",
+                        "pi",
+                        "antigravity"
+                      ],
+                      "negotiatedPattern": {
+                        "feature": "plugin-agents",
+                        "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                        "maxLength": 64
+                      }
+                    },
+                    "backendProfileId": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "backendId"
                   ]
                 }
               },
@@ -14001,6 +14415,47 @@
                           "snapshotRef",
                           "excerpt",
                           "coverage"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "backendId": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "codex",
+                              "antigravity",
+                              "cursor",
+                              "pi",
+                              "traex",
+                              "droid",
+                              "dsh",
+                              "chat"
+                            ],
+                            "negotiated": [
+                              "chat",
+                              "pi",
+                              "antigravity"
+                            ],
+                            "negotiatedPattern": {
+                              "feature": "plugin-agents",
+                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                              "maxLength": 64
+                            }
+                          },
+                          "backendProfileId": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backendId"
                         ]
                       }
                     },
@@ -15582,6 +16037,47 @@
                           "snapshotRef",
                           "excerpt",
                           "coverage"
+                        ]
+                      }
+                    },
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "backendId": {
+                            "type": "string",
+                            "enum": [
+                              "claude",
+                              "codex",
+                              "antigravity",
+                              "cursor",
+                              "pi",
+                              "traex",
+                              "droid",
+                              "dsh",
+                              "chat"
+                            ],
+                            "negotiated": [
+                              "chat",
+                              "pi",
+                              "antigravity"
+                            ],
+                            "negotiatedPattern": {
+                              "feature": "plugin-agents",
+                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                              "maxLength": 64
+                            }
+                          },
+                          "backendProfileId": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "backendId"
                         ]
                       }
                     },

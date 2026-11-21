@@ -12,7 +12,7 @@ msgstr ""
 msgid "、"
 msgstr ", "
 
-#. placeholder {0}: references.length + quotes.length
+#. placeholder {0}: chips.length + quotes.length
 #: src/app/session/ComposerAttachments.tsx
 msgid "{0} 个引用"
 msgstr "{0} references"
@@ -525,6 +525,11 @@ msgstr "Up to {limit} attachments; this message already has {existing}"
 msgid "最多引用 5 个会话"
 msgstr "Reference up to 5 sessions"
 
+#. placeholder {0}: AGENT_CALL_BUDGET.mentions
+#: src/app/session/Composer.tsx
+msgid "最多提到 {0} 个 Agent"
+msgstr "Mention at most {0} Agents"
+
 #. placeholder {0}: content.slice(answer + divider.length)
 #. placeholder {0}: excerpt.slice(answerPrefix.length)
 #: src/app/session/SessionReferences.tsx
@@ -973,6 +978,7 @@ msgstr "Handed off to {0}"
 msgid "已保存"
 msgstr "Saved"
 
+#: src/app/session/agentCalls.tsx
 #: src/app/session/Timeline.tsx
 #: src/app/session/TurnProcess.tsx
 msgid "已停止"
@@ -1120,6 +1126,10 @@ msgstr "Archive and delete Worktree"
 #: src/app/session/Composer.tsx
 msgid "当前 Agent 无法读取会话引用"
 msgstr "This agent cannot read session references"
+
+#: src/app/session/Composer.tsx
+msgid "当前 Agent 无法调用其他 Agent"
+msgstr "This Agent cannot call other Agents"
 
 #: src/app/session/nativeRunCommands.ts
 msgid "当前任务尚未同步，请检查会话后重试"
@@ -1841,6 +1851,10 @@ msgstr "Remove session reference"
 msgid "移除引用"
 msgstr "Remove quote"
 
+#: src/app/session/agentCalls.tsx
+msgid "等你确认"
+msgstr "Needs you"
+
 #: src/app/session/ComposerDock.tsx
 msgid "等待上一条消息确认"
 msgstr "Waiting for the previous message to be confirmed"
@@ -1936,6 +1950,10 @@ msgstr "Zoom out · {0}scroll"
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
 msgstr "Reads and writes files and runs commands on its own"
+
+#: src/app/session/agentMentions.tsx
+msgid "自动"
+msgstr "Auto"
 
 #: src/app/session/Composer.tsx
 msgid "自动压缩阈值"
@@ -2042,6 +2060,14 @@ msgstr "Couldn't read the image"
 #: src/app/session/toolView.ts
 msgid "读取文件"
 msgstr "Read files"
+
+#: src/app/session/agentCalls.tsx
+msgid "调用 Agent"
+msgstr "Call an Agent"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "调用其他 Agent"
+msgstr "Call other Agents"
 
 #: src/app/session/toolView.ts
 msgid "调用工具"

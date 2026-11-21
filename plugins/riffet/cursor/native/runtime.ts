@@ -7,6 +7,7 @@ import { cursorAgentAdapter } from '../cli-adapter.js';
 import { cursorConfigDirectory, cursorLaunchSpec, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { CursorLive } from './live.js';
+import type { CursorToolsLaunch } from '../backend/riffet-tools.js';
 import { writeChatApproval } from './chat-store.js';
 import { cursorLoginPrompt, parseScreen } from './screen.js';
 
@@ -19,7 +20,19 @@ export interface NativeRuntimeConfig {
   configDir?: string;
   /** Stable non-secret identity for wrapper/account/environment selection. */
   profileKey?: string;
+  /** What decides the CLI's Riffet tool list (`CursorRiffetTools.signature`); a warm CLI is taken only with the same. */
+  tools?: string;
 }
+
+/** Riffet's tools for the CLIs a runtime starts (`backend/riffet-tools.ts`). */
+export interface NativeRuntimeTools {
+  forSession(sessionId: string): Promise<CursorToolsLaunch | undefined>;
+  provisional(projectId: string): Promise<(CursorToolsLaunch & { signature: string; adopt(sessionId: string): void; revoke(): void }) | undefined>;
+  signature(sessionId: string): Promise<string | undefined>;
+}
+
+/** A warm CLI's terminal, and the provisional tools credential it holds until a session adopts it. */
+type CursorWarm = AgentReservation & { tools?: { adopt(sessionId: string): void; revoke(): void } };
 
 export interface NativeRuntimeManagerOptions {
   port: CursorPort;
@@ -27,6 +40,8 @@ export interface NativeRuntimeManagerOptions {
   cliPath: string;
   profile?: CursorLaunchProfile;
   configDir?: string;
+  /** Riffet's tools for each CLI; without it the CLIs get none. */
+  tools?: NativeRuntimeTools;
   profileKey?: string;
   /** Where the CLIs it starts write the step they stream (`live.ts`). */
   live?: CursorLive;
@@ -111,7 +126,7 @@ export class NativeRuntimeManager {
   private readonly now: () => number;
   private readonly statsState: NativeRuntimeStats = emptyRuntimeStats();
   /** The one warm CLI, in a reserved terminal; the pool decides when it starts and ends. */
-  private readonly warm: WarmPool<AgentReservation>;
+  private readonly warm: WarmPool<CursorWarm>;
   private closed = false;
   private launchPlugin?: (session?: AgentSessionView) => Promise<string[]>;
   private readonly port: CursorPort;
@@ -119,9 +134,12 @@ export class NativeRuntimeManager {
   constructor(private readonly options: NativeRuntimeManagerOptions) {
     this.port = options.port;
     this.now = options.now ?? Date.now;
-    this.warm = new WarmPool({
+    const terminalOptions = terminalWarmOptions(this.port.terminals);
+    this.warm = new WarmPool<CursorWarm>({
       label: 'cursor',
-      ...terminalWarmOptions(this.port.terminals),
+      ...terminalOptions,
+      // A warm CLI no session took gives its provisional credential back with its terminal.
+      stop: async reservation => { reservation.tools?.revoke(); await terminalOptions.stop(reservation); },
       ...(options.warmLeaseMs !== undefined ? { leaseMs: options.warmLeaseMs } : {}),
       ...(options.readinessTimeoutMs !== undefined ? { readyTimeoutMs: options.readinessTimeoutMs } : {}),
       ...(options.failureBackoffMs !== undefined ? { failureBackoffMs: options.failureBackoffMs } : {}),
@@ -195,9 +213,11 @@ export class NativeRuntimeManager {
     }
 
     const fresh = !session.resumePicker && !session.nativeSessionId;
-    // The model check and the hook plugin do not depend on each other.
+    // The model check, the hook plugin and Riffet's tools do not depend on each other.
     const pluginTask = this.launchPlugin?.(session) ?? Promise.resolve([]);
     void pluginTask.catch(() => undefined);
+    const toolsTask = this.options.tools?.forSession(session.id) ?? Promise.resolve(undefined);
+    void toolsTask.catch(() => undefined);
     let launchModel = session.model;
     if (!session.resumePicker) {
       const started = this.now();
@@ -210,9 +230,21 @@ export class NativeRuntimeManager {
 
     if (fresh) {
       // By the model as resolved now: one resolved differently at prewarm (a refreshed catalog) runs another model.
-      const resourceKey = this.resourceKey(project, { ...this.sessionConfig(session), model: launchModel });
+      const tools = await this.options.tools?.signature(session.id).catch(() => undefined);
+      const resourceKey = this.resourceKey(project, { ...this.sessionConfig(session), model: launchModel, ...(tools ? { tools } : {}) });
       const sessionId = session.id;
-      const warm = await this.warm.take(resourceKey, reservation => this.port.terminals.claim(reservation.terminal.id, { ownerToken: reservation.ownerToken, resourceKey: reservation.resourceKey, sessionId }));
+      const warm = await this.warm.take(resourceKey, async reservation => {
+        const claimed = await this.port.terminals.claim(reservation.terminal.id, { ownerToken: reservation.ownerToken, resourceKey: reservation.resourceKey, sessionId });
+        // The CLI's tools now act for this conversation; one that gets none leaves the provisional credential unused.
+        try {
+          if (tools) reservation.tools?.adopt(sessionId); else reservation.tools?.revoke();
+        } catch (error) {
+          // Claimed but not adopted: its credential is about to be revoked, so the cold launch must not reuse it.
+          await this.port.terminals.stop(claimed.id).catch(() => {});
+          throw error;
+        }
+        return claimed;
+      });
       if (warm) return { terminal: warm, ...(options.initialPrompt ? { promptPending: true as const } : {}) };
     }
 
@@ -225,7 +257,8 @@ export class NativeRuntimeManager {
     }
 
     const pluginArgs = await pluginTask;
-    const args = [...pluginArgs, ...cursorAgentAdapter.buildArgs({
+    const toolsLaunch = await toolsTask.catch(() => undefined);
+    const args = [...pluginArgs, ...toolsLaunch?.args ?? [], ...cursorAgentAdapter.buildArgs({
       ...(session.resumePicker ? { resumePicker: true } : {}),
       hasStoredSession: Boolean(chatId),
       mode: session.mode,
@@ -237,7 +270,7 @@ export class NativeRuntimeManager {
     writeChatApproval(cursorConfigDirectory(this.options.profile ?? this.options.cliPath), project.cwd, chatId, session.approval);
     const launchStarted = this.now();
     const info = await this.port.terminals.launch(session.id, {
-      ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [...(chatId ? ['--resume', chatId] : []), ...args], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),
+      ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [...(chatId ? ['--resume', chatId] : []), ...args], {}, project.cwd, { paneEnv: { ...this.options.live?.launchEnv(), ...toolsLaunch?.env } }),
       kind: 'cursor',
       reuseLive: true,
     });
@@ -310,15 +343,27 @@ export class NativeRuntimeManager {
    * the key a session matches it by), a chat id of its own, the hook plugin, and a reserved terminal,
    * ready once its prompt bar is drawn. A dialog or the login screen in its place refuses the warmup.
    */
-  private async startWarm(start: WarmStart, project: AgentProjectView, config: NativeRuntimeConfig): Promise<AgentReservation> {
+  private async startWarm(start: WarmStart, project: AgentProjectView, config: NativeRuntimeConfig): Promise<CursorWarm> {
     const modelStarted = this.now();
     const launchModel = await this.options.prepareModel(config.model, project);
     this.recordStage('prepareModel', modelStarted);
-    const resourceKey = this.resourceKey(project, { ...config, model: launchModel });
-    start.alias(resourceKey);
+    const tools = await this.options.tools?.provisional(project.id).catch(() => undefined);
+    try {
+      // Matched by the tools it lists too: a conversation with others (a phone, another Agent) starts its own CLI.
+      const resourceKey = this.resourceKey(project, { ...config, model: launchModel, ...(tools ? { tools: tools.signature } : {}) });
+      start.alias(resourceKey);
+      const reservation = await this.reserveWarm(start, project, config, launchModel, resourceKey, tools);
+      return { ...reservation, ...(tools ? { tools: { adopt: tools.adopt, revoke: tools.revoke } } : {}) };
+    } catch (error) {
+      tools?.revoke();
+      throw error;
+    }
+  }
+
+  private async reserveWarm(start: WarmStart, project: AgentProjectView, config: NativeRuntimeConfig, launchModel: string | undefined, resourceKey: string, tools: CursorToolsLaunch | undefined): Promise<AgentReservation> {
     const nativeSessionId = await this.createChatId(project.cwd);
     if (!nativeSessionId) throw new WarmupRefused('chat-id-unavailable');
-    const args = [...await this.launchPlugin?.() ?? [], ...this.launchArgs({ ...config, model: launchModel })];
+    const args = [...await this.launchPlugin?.() ?? [], ...tools?.args ?? [], ...this.launchArgs({ ...config, model: launchModel })];
     const appearance = resolveTerminalAppearance(config.appearance);
     return reserveWarmTerminal(this.port.terminals, {
       projectId: project.id,
@@ -326,7 +371,7 @@ export class NativeRuntimeManager {
       resourceKey,
       nativeSessionId,
       ...(appearance ? { appearance } : {}),
-      spec: { ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, ['--resume', nativeSessionId, ...args], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }), title: 'Native startup warmup', kind: 'cursor' },
+      spec: { ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, ['--resume', nativeSessionId, ...args], {}, project.cwd, { paneEnv: { ...this.options.live?.launchEnv(), ...tools?.env } }), title: 'Native startup warmup', kind: 'cursor' },
     }, start, screen => {
       const parsed = parseScreen(screen);
       if (parsed.footer && parsed.phase === 'idle') return 'ready';
@@ -352,6 +397,7 @@ export class NativeRuntimeManager {
       mode: config.mode ?? 'agent',
       approval: config.approval ?? 'allowlist',
       appearance: resolveTerminalAppearance(config.appearance),
+      tools: config.tools ?? null,
     };
     return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
   }

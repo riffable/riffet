@@ -51,6 +51,12 @@ export const SessionReferenceInputSchema = z.object({
   fromRunId: z.string().optional(),
 });
 
+export const AgentMentionSchema = z.object({
+  backendId: NativeBackendIdSchema,
+  backendProfileId: z.string().optional(),
+  model: z.string().optional(),
+});
+
 export const CapturedSessionReferenceSchema = z.object({
   sessionId: z.string(),
   title: z.string(),
@@ -76,6 +82,7 @@ export const NativeRunInputSchema = z.object({
   attachmentIds: z.array(z.string()),
   context: z.array(z.object({ path: z.string(), line: z.number().optional() })),
   references: z.array(SessionReferenceInputSchema).optional(),
+  agents: z.array(AgentMentionSchema).optional(),
 });
 
 export const NativeRunConfigSchema = z.object({

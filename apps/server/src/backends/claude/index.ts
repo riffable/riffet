@@ -304,6 +304,9 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   capabilities(): NativeBackendCapabilities {
     return {
       supportsSessionReferences: true,
+      // Consulted by another Agent (docs/AGENT-CALLS.md §5): reads and read-only commands go through; anything that
+      // needs permission is refused rather than asked, since nobody watches a consultation (`ask` stopped it in the probe).
+      consultPermission: 'dontAsk',
       backendId, label: this.label, modes: [], permissions: CLAUDE_PERMISSIONS,
       interactionTransport: 'both', supportsResume: true, supportsInterrupt: true,
       supportsSteer: true, supportsHistory: true, supportsModelSelection: true, supportsModeSelection: false,

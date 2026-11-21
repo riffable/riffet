@@ -385,6 +385,10 @@ msgstr "No running terminals"
 msgid "由 {parentAgentLabel} 交接自"
 msgstr "Handed off from {parentAgentLabel}"
 
+#: src/app/terminal/NativeSession.tsx
+msgid "由 {parentAgentLabel} 调用"
+msgstr "Called by {parentAgentLabel}"
+
 #: src/app/terminal/TerminalView.tsx
 msgid "空格"
 msgstr "Space"

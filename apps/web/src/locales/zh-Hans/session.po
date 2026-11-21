@@ -12,7 +12,7 @@ msgstr ""
 msgid "、"
 msgstr "、"
 
-#. placeholder {0}: references.length + quotes.length
+#. placeholder {0}: chips.length + quotes.length
 #: src/app/session/ComposerAttachments.tsx
 msgid "{0} 个引用"
 msgstr "{0} 个引用"
@@ -525,6 +525,11 @@ msgstr "最多 {limit} 个附件，当前这条已有 {existing} 个"
 msgid "最多引用 5 个会话"
 msgstr "最多引用 5 个会话"
 
+#. placeholder {0}: AGENT_CALL_BUDGET.mentions
+#: src/app/session/Composer.tsx
+msgid "最多提到 {0} 个 Agent"
+msgstr "最多提到 {0} 个 Agent"
+
 #. placeholder {0}: content.slice(answer + divider.length)
 #. placeholder {0}: excerpt.slice(answerPrefix.length)
 #: src/app/session/SessionReferences.tsx
@@ -973,6 +978,7 @@ msgstr "已交接给 {0}"
 msgid "已保存"
 msgstr "已保存"
 
+#: src/app/session/agentCalls.tsx
 #: src/app/session/Timeline.tsx
 #: src/app/session/TurnProcess.tsx
 msgid "已停止"
@@ -1120,6 +1126,10 @@ msgstr "归档并删除 Worktree"
 #: src/app/session/Composer.tsx
 msgid "当前 Agent 无法读取会话引用"
 msgstr "当前 Agent 无法读取会话引用"
+
+#: src/app/session/Composer.tsx
+msgid "当前 Agent 无法调用其他 Agent"
+msgstr "当前 Agent 无法调用其他 Agent"
 
 #: src/app/session/nativeRunCommands.ts
 msgid "当前任务尚未同步，请检查会话后重试"
@@ -1841,6 +1851,10 @@ msgstr "移除会话引用"
 msgid "移除引用"
 msgstr "移除引用"
 
+#: src/app/session/agentCalls.tsx
+msgid "等你确认"
+msgstr "等你确认"
+
 #: src/app/session/ComposerDock.tsx
 msgid "等待上一条消息确认"
 msgstr "等待上一条消息确认"
@@ -1936,6 +1950,10 @@ msgstr "缩小 · {0}滚轮"
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
 msgstr "自主读写文件、执行命令"
+
+#: src/app/session/agentMentions.tsx
+msgid "自动"
+msgstr "自动"
 
 #: src/app/session/Composer.tsx
 msgid "自动压缩阈值"
@@ -2042,6 +2060,14 @@ msgstr "读取图片失败"
 #: src/app/session/toolView.ts
 msgid "读取文件"
 msgstr "读取文件"
+
+#: src/app/session/agentCalls.tsx
+msgid "调用 Agent"
+msgstr "调用 Agent"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "调用其他 Agent"
+msgstr "调用其他 Agent"
 
 #: src/app/session/toolView.ts
 msgid "调用工具"

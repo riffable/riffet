@@ -245,6 +245,11 @@ export class OrchestrationService {
     return this.deps.store.createProject(await realpath(created.path), `${origin.name} · ${branch}`, { originProjectId: origin.id, branch });
   }
 
+  /** A worktree cut from the project's `HEAD` for another Agent called to work (docs/AGENT-CALLS.md §5), as an isolated fork gets. */
+  async callWorktree(projectId: string): Promise<Project> {
+    return await this.worktreeProject(this.deps.store.getProject(projectId), 'HEAD', 'call');
+  }
+
   // ---- Review feedback -------------------------------------------------------------------------
 
   /** A plain message into a conversation, as the owner would send it; `commandId` makes a retry send nothing new. */

@@ -38,7 +38,7 @@ import { SessionAside } from '../session/SessionAside';
 import { ASSEMBLY_MS, ContentColumn, useLingering, useSessionLayout } from '../session/sessionLayout';
 import { ShareDialog } from '../shares/ShareDialog';
 import { SessionWorkActions } from '../session/SessionWorkActions';
-import { SessionDiscussions } from '../SessionInfo';
+import { SessionCalls, SessionDiscussions } from '../SessionInfo';
 import { TabChromeContext } from '../tabs/chrome';
 import { SessionMarksSection, SessionMarksContext, useSessionMarks } from '../session/marks';
 import { SubagentSession } from '../session/SubagentSession';
@@ -60,7 +60,10 @@ import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
 import { shareModelName, ShareSessionContext, type ShareSession } from '../marks/ShareImage';
 import { MessageCommandsContext } from '../session/messageCommands';
-import { useLists, useStores } from '../state/stores';
+import { useCatalog, useLists, useStores } from '../state/stores';
+import { AgentCallsProvider } from '../session/agentCalls';
+import type { AgentMentionSource } from '../session/agentMentions';
+import { AgentLogo } from '@/components/AgentLogo';
 import { ViewDots, useViewShortcut, useViewShortcuts } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
 import type { SessionView } from '../state/navStore';
@@ -367,6 +370,9 @@ function SessionComposerSlot({ autoFocus, className, onSent }: ComposerSlotProps
  * subagent behaves exactly as in a terminal, while the transcript is read back from the CLI's
  * chat store and rendered with the shared conversation timeline.
  */
+/** Same conversations in the same order, as far as a list of them re-renders. */
+const sameIds = (left: readonly Session[], right: readonly Session[]) => left.length === right.length && left.every((item, index) => item === right[index]);
+
 export function NativeSession({ session, initialRun, catalog, continuations, backendCapabilities, catalogLoading, catalogError, onRetryCatalog, terminal, root, reopening, sendingInitial, onReopen, onTerminalChanged, onSessionChanged, onRememberModel, onError, notificationsEnabled, references, sessionReferences, referenceSessions, referenceProjects, onReferencesChange, onOpenPath, onOpenInEditor, renderHeader, focus, enterBehavior, runningBehavior, sendLaterEnabled, onLaunched, backends = [], findSession, onOpenSession, onAttemptAdopted, onOpenAttemptGroup, initialView, onViewChange, quickChat = false }: Props) {
   const { t } = useLingui();
   const mobileViewport = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -620,6 +626,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   timelineRef.current = visibleTimeline;
   const stores = useStores();
   const projectName = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.name);
+  const calledSessions = useLists((state) => state.sessions.filter((item) => item.origin?.kind === 'call' && item.origin.sessionId === session.id && !item.archivedAt), sameIds);
   const shareSession = useMemo<ShareSession>(() => ({
     title: session.title || t`未命名会话`, backendId, ...(projectName ? { projectName } : {}),
     turnBefore: (at) => {
@@ -876,7 +883,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         catch (error) { return { missing: { key: `missing:${id}`, attachmentId: id, name: t`附件`, size: 0, image: false, error: error instanceof HttpError && error.status === 404 ? t`请重新选择文件` : t`无法读取附件` } }; }
       }));
       if (!recipientAlive.current) return;
-      setRestoreDraft({ text: run.native?.input.text ?? run.prompt, attachments: checked.flatMap(item => item.attachment ? [item.attachment] : []), context: restoreContext({ context: run.native?.input.context, references: run.native?.input.references }, run), missingAttachments: checked.flatMap(item => item.missing ? [item.missing] : []), nonce: Date.now() });
+      setRestoreDraft({ text: run.native?.input.text ?? run.prompt, attachments: checked.flatMap(item => item.attachment ? [item.attachment] : []), context: restoreContext({ context: run.native?.input.context, references: run.native?.input.references, agents: run.native?.input.agents }, run), missingAttachments: checked.flatMap(item => item.missing ? [item.missing] : []), nonce: Date.now() });
     });
   }, []);
   const removeQueued = useCallback((runId: string) => {
@@ -1010,9 +1017,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ? { backendId, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}), projectId: session.projectId, toggles: extensionToggles, off: extensionsOffValue, onChange: changeExtensionsOff }
     : undefined), [extensionToggles, backendId, session.backendProfileId, session.projectId, extensionsOffValue, changeExtensionsOff]);
   const extensionsOffered = useExtensionsOffered(quickChat || archived ? undefined : extensionPick);
-  const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered)
-    ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} onError={onError} footnote={t`下次启动时生效`} />
-    : undefined), [quickChat, archived, phonesOffered, extensionsOffered, extensionPick, toolGroupsValue, changeToolGroups, onError, t]);
+  // A called conversation cannot call further (docs/AGENT-CALLS.md §3).
+  const callsOffered = !quickChat && session.origin?.kind !== 'call' && offersRiffetTools(backendCapabilities);
+  const catalogBackends = useCatalog((state) => state.backends);
+  const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: session.projectId, backends: catalogBackends } : undefined, [callsOffered, session.projectId, catalogBackends]);
+  const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered || callsOffered)
+    ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} onError={onError} footnote={t`下次启动时生效`} />
+    : undefined), [quickChat, archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, toolGroupsValue, changeToolGroups, onError, t]);
   const handleSwitchingModel = useCallback((next: boolean) => {
     setSwitchingModel(next);
     if (next) {
@@ -1103,6 +1114,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           <NativeJobStoreContext.Provider value={native.jobs}>
             <ActivityContext.Provider value={activityControls}>
               {discussionAllowed && <SessionDiscussions parentId={session.id} onOpen={openDiscussion} />}
+              {onOpenSession && <SessionCalls calls={calledSessions} onOpen={onOpenSession} />}
               {!quickChat && <SessionWorkActions subagentStore={native.subagents} jobStore={native.jobs} tasks={backgroundActivities} reportedBackground={native.status.activity?.background ?? 0} subagentBriefs={subagentBriefs} onOpenPath={onOpenPath} />}
               <SessionMarksSection sessionId={session.id} />
             </ActivityContext.Provider>
@@ -1158,13 +1170,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // Where this conversation came from reads as its first line, the way a branched chat names its
   // parent, and where it went as its last line: both are part of the transcript, not fixed bars,
   // since a handed-off conversation can still be continued here.
-  const parentId = session.origin?.kind === 'fork' || session.origin?.kind === 'handoff' ? session.origin.sessionId : undefined;
+  const parentId = session.origin?.kind === 'fork' || session.origin?.kind === 'handoff' || session.origin?.kind === 'call' ? session.origin.sessionId : undefined;
   const parent = parentId ? findSession?.(parentId) : undefined;
   const parentAgentLabel = parent ? labelOf(sessionBackend(parent)) : t`其他 Agent`;
   const lineage = parentId ? (
     <div className="mb-6 flex items-center justify-center gap-1.5 text-xs text-fg-3">
-      {session.origin?.kind === 'fork' ? <IconGitFork className="size-3.5" /> : <IconArrowRightLeft className="size-3.5" />}
-      <span>{session.origin?.kind === 'fork' ? <Trans>来源会话</Trans> : <Trans>由 {parentAgentLabel} 交接自</Trans>}</span>
+      {session.origin?.kind === 'fork' ? <IconGitFork className="size-3.5" /> : session.origin?.kind === 'call' && parent ? <AgentLogo backend={sessionBackend(parent)} size={14} /> : <IconArrowRightLeft className="size-3.5" />}
+      <span>{session.origin?.kind === 'fork' ? <Trans>来源会话</Trans> : session.origin?.kind === 'call' ? <Trans>由 {parentAgentLabel} 调用</Trans> : <Trans>由 {parentAgentLabel} 交接自</Trans>}</span>
       {parent && onOpenSession
         ? <button type="button" className="max-w-64 truncate rounded px-0.5 text-fg-2 underline-offset-2 hover:text-fg hover:underline" onClick={() => onOpenSession(parent.id)}>{parent.title}</button>
         : <span className="text-fg-4"><Trans>已删除的会话</Trans></span>}
@@ -1222,6 +1234,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     onSlashMenuOpen: slash.refresh,
     fileMentions: !quickChat && !assistant && Boolean(root),
     sessionMentions: !quickChat && sessionReferences && backendCapabilities?.supportsSessionReferences === true,
+    agentMentions,
     referenceSessions: referenceSessions,
     referenceProjects: referenceProjects,
     recipientSessionId: session.id,
@@ -1282,6 +1295,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       <FileAccessContext.Provider value={fileAccess}>
       <SubagentContext.Provider value={renderer}>
       <SubagentStoreContext.Provider value={native.subagents}>
+      <AgentCallsProvider sessionId={session.id} projectId={session.projectId} onOpenSession={onOpenSession}>
       <NativeJobStoreContext.Provider value={native.jobs}>
         {/*
           Hidden rather than unmounted while a subagent page is open, so returning keeps the place.
@@ -1417,6 +1431,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         />
       )}
       </NativeJobStoreContext.Provider>
+      </AgentCallsProvider>
       </SubagentStoreContext.Provider>
       </SubagentContext.Provider>
       </FileAccessContext.Provider>

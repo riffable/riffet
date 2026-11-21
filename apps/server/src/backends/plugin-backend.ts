@@ -831,6 +831,12 @@ export class PluginBackendDriver implements NativeBackendDriver {
         save: async (id, requestId, receipt) => { own(id); return native.saveInteractionReceipt(id, requestId, receipt); },
       },
       riffetMcp: async id => { own(id); return native.riffetMcp?.server(id); },
+      riffetMcpProvisional: async projectId => {
+        const provisional = native.riffetMcp?.provisional?.(projectId);
+        // The session that takes the warm CLI is this Agent's own; a disabled Agent adopts nothing.
+        return provisional && { ...provisional, adopt: id => { if (this.revoked) throw new AppError('AGENT_HOST_REVOKED', 'Agent is disabled', 409); own(id); provisional.adopt(id); } };
+      },
+      riffetMcpSignature: async id => { own(id); return native.riffetMcp?.signature?.(id); },
       bindRiffetMcp: (id, validate) => { own(id); return native.riffetMcp?.bind?.(id, metadata => { if (this.revoked) throw new AppError('AGENT_HOST_REVOKED', 'Agent is disabled', 409); own(id); return validate(metadata); }) ?? (() => {}); },
     };
   }

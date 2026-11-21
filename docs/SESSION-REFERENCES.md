@@ -4,7 +4,7 @@
 
 用户在当前消息中引用另一会话，Riffet 提供该会话的简短导读和可以继续读取的原文。消息仍发给当前会话的 Agent，引用来源保持原有运行状态。
 
-首版采用“结构化会话引用 + 发送时快照 + 持久 Markdown 文件”。复用现有文件读取工具、Run、session blob 和输入框引用条。已加载 Riffet MCP 的会话可以通过 `read_context` 读取同一快照。`@agent` 留给多 Agent 协作设计，本期不提供 Agent 选择、子 Agent 选择、跨会话发消息或结果回传。
+首版采用“结构化会话引用 + 发送时快照 + 持久 Markdown 文件”。复用现有文件读取工具、Run、session blob 和输入框引用条。已加载 Riffet MCP 的会话可以通过 `read_context` 读取同一快照。`@agent` 见 [Agent 调用](AGENT-CALLS.md)：提到的 Agent 可以被当前会话的 Agent 调用，过程在被调用方自己的会话里。
 
 **产品范围**
 

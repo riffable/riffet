@@ -118,7 +118,7 @@ apps/macos/Riffet/Features/Browser/   Mac 原生面板（按插件启用与否�
 | Mac | 「技能与工具」 | 详情栏，原生 | 是 |
 | iOS / Android | 「技能与工具」（`ToolGroups.picks`、`pluginGroups`，共享在 `apps/mobile/client`） | B3 只读 | 否（收到交接通知后跳到 Web 或 Mac） |
 
-支持的后端就是支持 Riffet MCP 按次注入的那些：Claude、Codex、Droid、Pi。Cursor、DSH 显示该能力不可用。
+支持的后端就是支持 Riffet MCP 按次注入的那些：Claude、Codex、Cursor、Droid、Pi。DSH 显示该能力不可用。
 
 ## 8. 分期
 

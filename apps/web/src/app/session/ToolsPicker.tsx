@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { DeviceInfo, LoadedExtensions, NativeBackendId, ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, type DeviceInfo, type LoadedExtensions, type NativeBackendId, type ToolGroupId } from '@contracts';
 import { IconPuzzle } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
@@ -26,8 +26,8 @@ export const phoneGroups = (groups: readonly string[]): ToolGroupId[] => groups.
 
 /** A plugin's agent tools, `<pluginId>/<name>` (docs/BROWSER.md §2). */
 const isPluginGroup = (id: string) => /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]*$/.test(id);
-/** What a pick may name: phones and plugin tool groups. */
-const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || isPluginGroup(id));
+/** What a pick may name: phones, plugin tool groups, and calling any Agent. */
+const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || isPluginGroup(id) || id === AGENT_CALL_TOOL_GROUP);
 
 /**
  * The tool groups of the plugins that are on, plus any the value already names whose plugin is off now
@@ -207,9 +207,11 @@ export const ToolsPickerInMenu = createContext(false);
  * The plugin tools (the browser) and phones a conversation's agent may use (a phone's consent lives on the
  * phone, never here), and the MCP servers and skills it keeps. Riffet's own tools need no pick.
  */
-export function ToolsPicker({ value, onChange, extensions, disabled, footnote, onError }: {
+export function ToolsPicker({ value, onChange, extensions, agents, disabled, footnote, onError }: {
   value: readonly string[];
   onChange: (next: ToolGroupId[]) => void;
+  /** The conversation's Agent can call other Agents (docs/AGENT-CALLS.md): offers letting it call any of them. */
+  agents?: boolean;
   /** Absent when the backend cannot switch extensions or the conversation has no project to read them from. */
   extensions?: ExtensionPick;
   disabled?: boolean;
@@ -233,7 +235,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
 
   const toggle = (group: ToolGroupId, on: boolean) => {
     // A phone that is gone is dropped with the change; so is a plugin group that is no longer listed.
-    const kept = picked.filter((id) => id !== group && (phones.some((device) => phoneGroup(device.id) === id) || pluginGroups.rows.some((row) => row.id === id)));
+    const kept = picked.filter((id) => id !== group && (id === AGENT_CALL_TOOL_GROUP || phones.some((device) => phoneGroup(device.id) === id) || pluginGroups.rows.some((row) => row.id === id)));
     onChange(on ? [...kept, group] : kept);
   };
 
@@ -252,7 +254,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   // A revoked phone has no row, so it is not counted; until the list arrives, every pick is.
   const phonePicks = phoneGroups(picked);
   const count = (phones.length ? phonePicks.filter((id) => rows.some((row) => row.id === id)).length : phonePicks.length)
-    + picked.filter((id) => pluginGroups.available.includes(id)).length;
+    + picked.filter((id) => pluginGroups.available.includes(id) || (agents && id === AGENT_CALL_TOOL_GROUP)).length;
   const n = offCount;
   // With switches and nothing changed, everything installed is on: 默认, not 未开启.
   const summary = [count ? t`${count} 项` : '', offCount ? t`已关 ${n}` : ''].filter(Boolean).join(' · ') || (extensions ? t`默认` : t`未开启`);
@@ -264,6 +266,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   );
   const items = (
     <>
+      {agents && checkboxRow(AGENT_CALL_TOOL_GROUP, picked.includes(AGENT_CALL_TOOL_GROUP), t`调用其他 Agent`, (on) => toggle(AGENT_CALL_TOOL_GROUP, on))}
       {pluginGroups.rows.map((row) => checkboxRow(
         row.id,
         picked.includes(row.id),

@@ -25,6 +25,8 @@ import type {
   NativeStopRequest,
   NativeRunRecovery,
   SessionReferenceInput,
+  AgentMention,
+  AgentCall,
   NativeSlashCatalog,
   ApprovalMode,
   AppSettings,
@@ -224,29 +226,42 @@ export interface SessionContextReference extends SessionReferenceInput {
   line?: never;
   text?: never;
 }
-export type PromptContextReference = FileContextReference | SessionContextReference;
+/** An @-mentioned Agent the conversation may call (docs/AGENT-CALLS.md); `label` is for the chip only. */
+export interface AgentContextReference extends AgentMention {
+  kind: 'agent';
+  label?: string;
+  path?: never;
+  line?: never;
+  text?: never;
+}
+export type PromptContextReference = FileContextReference | SessionContextReference | AgentContextReference;
 export const isSessionReference = (reference: PromptContextReference): reference is SessionContextReference => reference.kind === 'session';
+export const isAgentReference = (reference: PromptContextReference): reference is AgentContextReference => reference.kind === 'agent';
+export const isFileReference = (reference: PromptContextReference): reference is FileContextReference => reference.kind !== 'session' && reference.kind !== 'agent';
 export const sameContextReference = (left: PromptContextReference, right: PromptContextReference): boolean => isSessionReference(left)
   ? isSessionReference(right) && left.sessionId === right.sessionId
-  : !isSessionReference(right) && left.path === right.path && left.line === right.line;
+  // One mention per Agent: its provider and model are a choice on the chip, not another mention.
+  : isAgentReference(left) ? isAgentReference(right) && left.backendId === right.backendId
+  : isFileReference(right) && left.path === right.path && left.line === right.line;
 export function mergeRestoredReferences(current: PromptContextReference[], restored: PromptContextReference[]): PromptContextReference[] {
   return [...restored, ...current.filter(item => !restored.some(reference => sameContextReference(reference, item)))];
 }
-export function messageContext(references: readonly PromptContextReference[]): Pick<NativeMessageInput, 'context' | 'references'> {
-  const context = references.filter((item): item is FileContextReference => !isSessionReference(item)).map(({ path, line }) => ({ path, ...(line === undefined ? {} : { line }) }));
+export function messageContext(references: readonly PromptContextReference[]): Pick<NativeMessageInput, 'context' | 'references' | 'agents'> {
+  const context = references.filter(isFileReference).map(({ path, line }) => ({ path, ...(line === undefined ? {} : { line }) }));
   const sessions = references.filter(isSessionReference).map(({ sessionId, fromRunId }) => ({ kind: 'session' as const, sessionId, ...(fromRunId ? { fromRunId } : {}) }));
-  return { ...(context.length ? { context } : {}), ...(sessions.length ? { references: sessions } : {}) };
+  const agents = references.filter(isAgentReference).map(({ backendId, backendProfileId, model }) => ({ backendId, ...(backendProfileId ? { backendProfileId } : {}), ...(model ? { model } : {}) }));
+  return { ...(context.length ? { context } : {}), ...(sessions.length ? { references: sessions } : {}), ...(agents.length ? { agents } : {}) };
 }
-export function restoreContext(input: Pick<NativeMessageInput, 'context' | 'references'>, run?: Run): PromptContextReference[] {
+export function restoreContext(input: Pick<NativeMessageInput, 'context' | 'references' | 'agents'>, run?: Run): PromptContextReference[] {
   return [...input.context ?? [], ...input.references?.map(item => {
     const captured = run?.native?.contextSnapshots?.find(snapshot => snapshot.sessionId === item.sessionId);
     // Exact recovery retains the previously chosen version even when this local Run has no receipt yet.
     return { ...item, ...(captured ? { title: captured.title, backendId: captured.backendId, fromRunId: run!.id } : {}) };
-  }) ?? []];
+  }) ?? [], ...input.agents?.map(item => ({ kind: 'agent' as const, ...item })) ?? []];
 }
 
 /** An editable new-recipient draft starts from source identity, never another recipient's Run. */
-export function restoreNewSessionContext(input: Pick<NativeMessageInput, 'context' | 'references'>): PromptContextReference[] {
+export function restoreNewSessionContext(input: Pick<NativeMessageInput, 'context' | 'references' | 'agents'>): PromptContextReference[] {
   return restoreContext(input).map(reference => {
     if (!isSessionReference(reference)) return reference;
     const { fromRunId: _previousRecipient, ...source } = reference;
@@ -260,6 +275,7 @@ export interface NativeMessageInput {
   attachments?: Array<{ id: string }>;
   context?: FileContextReference[];
   references?: SessionReferenceInput[];
+  agents?: AgentMention[];
   expectedConfigRevision?: number;
   stop?: NativeStopRequest;
 }
@@ -333,8 +349,8 @@ export function nativeSteerInput(entry: NativeSendOutboxEntry): NativeSteerInput
   if (entry.invalidReason || entry.version !== 2 || !validSteerTarget(entry.steerTarget) || entry.mode || entry.body.expectedConfigRevision !== undefined || entry.body.stop !== undefined || entry.sourceRunId !== undefined && (typeof entry.sourceRunId !== 'string' || !entry.sourceRunId)) {
     throw new Error(entry.invalidReason ?? i18n._(msg`补充消息的发送记录不完整，请恢复内容后重试`));
   }
-  const { commandId, text, attachments, context, references } = entry.body;
-  return { commandId, text, ...(attachments ? { attachments } : {}), ...(context ? { context } : {}), ...(references ? { references } : {}), target: { nativeSessionId: entry.steerTarget!.nativeSessionId, turnId: entry.steerTarget!.turnId } };
+  const { commandId, text, attachments, context, references, agents } = entry.body;
+  return { commandId, text, ...(attachments ? { attachments } : {}), ...(context ? { context } : {}), ...(references ? { references } : {}), ...(agents ? { agents } : {}), target: { nativeSessionId: entry.steerTarget!.nativeSessionId, turnId: entry.steerTarget!.turnId } };
 }
 
 export function saveNativeSendRequest(entry: NativeSendOutboxEntry): void {
@@ -768,6 +784,8 @@ export const api = {
   /** The checkpoints taken before each turn of this conversation, newest first. */
   sessionCheckpoints: (sessionId: string) => request<Checkpoint[]>(`/api/sessions/${encodeURIComponent(sessionId)}/checkpoints`),
   forkSession: (sessionId: string, body: LaunchIds & { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string }) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/fork`, json('POST', body)),
+  /** The Agent calls a conversation made (docs/AGENT-CALLS.md). */
+  agentCalls: async (sessionId: string, signal?: AbortSignal) => (await request<{ calls: AgentCall[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/calls`, { signal })).calls,
   discussions: async (sessionId: string, signal?: AbortSignal) => (await request<Session[]>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, { signal })).map(withShownTitle),
   discussionModels: (sessionId: string, signal?: AbortSignal) => request<{ model: string; models: import('@contracts').ModelInfo[]; providerName: string }>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions/models`, { signal }),
   createDiscussion: (sessionId: string, body: DiscussionCreateRequest) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, json('POST', body)),

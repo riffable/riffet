@@ -114,6 +114,7 @@ const minHead = (key: string, seq: number) => ({ key, pos: seq, turn: 'turn:t1',
 const rowsMax: Array<Max<TimelineRow>> = [
   {
     ...maxHead('user:cmd-run-q', PENDING_ROW_POS, 1, rowEvent('user_message_chunk', text('然后更新文档'))), kind: 'user', text: '然后更新文档', references: [{ sessionId: 'reference-source', title: 'Earlier discussion', backendId: 'codex', projectName: 'Example', capturedAt: '2026-11-06T00:00:00.000Z', snapshotRef: 'a'.repeat(64), excerpt: 'Earlier context', coverage: { source: 'journal', completeness: 'partial', messages: 2, bytes: 100 } }],
+    agents: [{ backendId: 'codex', backendProfileId: 'work', model: 'gpt-5.5[effort=high]' }],
     attachments: [{ name: 'shot.png', id: 'att-1', path: '/tmp/shot.png', type: 'image', mimeType: 'image/png', size: 2048, width: 640, height: 480 }], pending: 'unconfirmed',
   },
   { ...maxHead('assistant:1', 2, 2, rowEvent('agent_message_chunk', text('锁文件过期了。'))), kind: 'assistant', text: '锁文件过期了。', phase: 'final_answer' },

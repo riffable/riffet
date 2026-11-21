@@ -25,6 +25,7 @@ export function optimisticRun(session: Session, body: NativeMessageInput, at: st
         attachmentIds: body.attachments?.map(({ id }) => id) ?? [],
         context: body.context?.map(({ path, line }) => ({ path, ...(line ===undefined ? {} : { line }) })) ?? [],
         ...(body.references ? { references: body.references } : {}),
+        ...(body.agents ? { agents: body.agents } : {}),
       },
       config: { ...(session.model ? { model: session.model } : {}), mode: session.mode, ...(session.approval ? { approval: session.approval } : {}) },
       fingerprint: 'client-pending',

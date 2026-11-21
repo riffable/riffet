@@ -7,7 +7,15 @@ export interface NativeRunInput {
   attachmentIds: string[];
   context: Array<{ path: string; line?: number }>;
   references?: SessionReferenceInput[];
+  /** Agents the owner @-mentioned: this conversation may call them through Riffet (docs/AGENT-CALLS.md §3). */
+  agents?: AgentMention[];
 }
+/**
+ * An Agent named in a message; the conversation's Agent may call it (docs/AGENT-CALLS.md §3). What the owner picked
+ * for it is binding on the call: the provider, and the model with its parameters (`model[effort=high,fast=true]`).
+ * Left out, the calling Agent chooses.
+ */
+export interface AgentMention { backendId: NativeBackendId; backendProfileId?: string; model?: string; }
 /** A provider turn identity; unlike a display run id it can fence a mid-turn input. */
 export interface NativeTurnTarget { nativeSessionId: string; turnId: string; }
 /** A Stop belongs to the exact state the caller saw; retries preserve this identity. */
