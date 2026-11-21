@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { captureReadingAnchor, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
+import { captureReadingAnchor, readingAnchorTop, TRANSCRIPT_ATTR, type ReadingAnchor } from './readingAnchor';
 import { animationsOf } from '@/lib/motion';
 
 export interface TranscriptScrollHandle {
@@ -129,6 +129,15 @@ export function useTranscriptScroll(options: Options) {
 
   const controller = useMemo(() => {
     const current = () => state.current.active ? latest.current.scrollRef.current : null;
+    const syncFollowing = (element = current()) => {
+      if (!element) return;
+      const next = following.current ? 'true' : 'false';
+      if (element.getAttribute(TRANSCRIPT_ATTR.following) !== next) element.setAttribute(TRANSCRIPT_ATTR.following, next);
+    };
+    const setFollowing = (next: boolean) => {
+      following.current = next;
+      syncFollowing();
+    };
     const spacerHeight = () => {
       const spacer = latest.current.spacerRef.current;
       return spacer ? Number.parseFloat(spacer.style.height) || 0 : 0;
@@ -251,13 +260,13 @@ export function useTranscriptScroll(options: Options) {
       // A downward gesture at the end may produce no scroll event at all.
       if (keepFollowing) {
         clearReader();
-        following.current = true;
+        setFollowing(true);
         anchor.current = null;
         setSpacer(0);
         if (element) reconcile();
         return;
       }
-      following.current = false;
+      setFollowing(false);
       capture();
       state.current.readerUntil = performance.now() + 240;
       deferReaderEnd();
@@ -265,7 +274,7 @@ export function useTranscriptScroll(options: Options) {
     const release = () => {
       cancelPending();
       clearReader();
-      following.current = false;
+      setFollowing(false);
       capture();
       reportBottom();
     };
@@ -319,7 +328,7 @@ export function useTranscriptScroll(options: Options) {
       const element = current();
       dropHold();
       if (!held || !element || !visible(element)) return;
-      if (following.current && (!held.following || latest.current.hasMoreLater || selecting(element) || naturalBottom(element) - element.scrollTop > 2)) following.current = false;
+      if (following.current && (!held.following || latest.current.hasMoreLater || selecting(element) || naturalBottom(element) - element.scrollTop > 2)) setFollowing(false);
       if (following.current) {
         setSpacer(0);
         anchor.current = null;
@@ -366,7 +375,7 @@ export function useTranscriptScroll(options: Options) {
     const followEnd = () => {
       cancelPending();
       clearReader();
-      following.current = !latest.current.hasMoreLater;
+      setFollowing(!latest.current.hasMoreLater);
       anchor.current = null;
       if (following.current) setSpacer(0);
       if (following.current) reconcile(); else capture();
@@ -442,7 +451,7 @@ export function useTranscriptScroll(options: Options) {
         reclaimSpacer(element);
         state.current.owned = undefined;
         if (!latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2) {
-          following.current = true;
+          setFollowing(true);
           anchor.current = null;
         }
         capture();
@@ -472,7 +481,7 @@ export function useTranscriptScroll(options: Options) {
           }
           if (reader && !owned) {
             reclaimSpacer(element);
-            following.current = !latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2;
+            setFollowing(!latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2);
             state.current.owned = undefined;
             if (following.current) anchor.current = null; else capture();
             state.current.readerUntil = performance.now() + 240;
@@ -540,6 +549,7 @@ export function useTranscriptScroll(options: Options) {
           if (!visible(element) || editable(element.ownerDocument.activeElement) || !selecting(element)) return;
           release();
         };
+        syncFollowing(element);
         const observer = new ResizeObserver(reconcile);
         observer.observe(element);
         if (content) observer.observe(content);
@@ -594,7 +604,7 @@ export function useTranscriptScroll(options: Options) {
         state.current.owned = undefined;
         state.current.pointerHeld = false;
         state.current.touchY = undefined;
-        following.current = !latest.current.resources && !latest.current.hasMoreLater;
+        setFollowing(!latest.current.resources && !latest.current.hasMoreLater);
         anchor.current = null;
       },
     };

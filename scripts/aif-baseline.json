@@ -13,6 +13,9 @@
     "apps/server/src/plugins/registry.ts": 1826,
     "apps/server/src/previews/browser-structured.ts": 1714,
     "apps/server/src/store.ts": 1665,
-    "apps/server/src/terminal/service.ts": 1983
+    "apps/server/src/terminal/service.ts": 1983,
+    "apps/web/src/app/session/Composer.tsx": 1918,
+    "apps/web/src/app/session/Timeline.tsx": 1012,
+    "apps/web/src/app/session/TranscriptView.tsx": 1771
   }
 }

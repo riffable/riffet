@@ -20,6 +20,9 @@ interface Props {
   id?: string;
 }
 
+/** DOM attribute marking a `Collapse` region's settled/transitioning state for scroll anchoring. */
+export const COLLAPSE_STATE_ATTR = 'data-collapse-state';
+
 /**
  * Height-animated region.
  *
@@ -131,7 +134,7 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
   return (
     <div
       ref={outer}
-      data-collapse-state={collapseState}
+      {...{ [COLLAPSE_STATE_ATTR]: collapseState }}
       className={cn(
         // The column is pinned to the region's width: with no clip on the settled child, an `auto`
         // track would grow to the child's min-content (a long unbroken line) and push it past the column.

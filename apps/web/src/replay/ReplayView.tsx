@@ -36,6 +36,7 @@ export function ReplayView({ session, transport }: { session: Session; transport
         historyLoad={native.historyLoad}
         running={working}
         activeTurnId={native.status.activeTurnId}
+        turnStatusByTurn={native.turnStatusByTurn}
         onOpenPath={noop}
         hasMoreHistory={Boolean(native.history?.hasMore)}
         historyContextIncomplete={native.history?.contextIncomplete}

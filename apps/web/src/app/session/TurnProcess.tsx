@@ -5,6 +5,7 @@ import { Collapse } from '@/components/ui/collapse';
 import { formatDuration } from '@/lib/format-duration';
 import { useNow } from '@/lib/use-now';
 import { cn, formatDateTime } from '@/lib/utils';
+import { canReleaseDeferredProcessFold, decideProcessFold, TRANSCRIPT_ATTR, type ProcessFoldMetrics } from './readingAnchor';
 import { ASSEMBLY_MS, revealOnOwnHover, useLingering, useRestReveal } from './sessionLayout';
 import { useTranscriptResources } from './transcriptResources';
 
@@ -63,10 +64,17 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const [manualChoice, setManualChoice] = useState<boolean | undefined>(() => (reveal !== undefined ? true : choice));
   const [prevChoice, setPrevChoice] = useState(choice);
   const [prevReveal, setPrevReveal] = useState(reveal);
+  /**
+   * An automatic fold put off while the reader is reading visible prose below this block without
+   * enough scroll room above to absorb the collapse. Does not record a manual choice, so once the
+   * block scrolls off-screen with room above it folds silently in one commit.
+   */
+  const [deferredFold, setDeferredFold] = useState(false);
   /** Folding is allowed only for a normal completion. Callers that omit it keep the historical rule. */
   const autoFold = canAutoFold ?? (!running && !interrupted && issueCount === 0);
   const previousAutoFold = useRef(autoFold);
   const previousRunning = useRef(running);
+  const previousDeferred = useRef(false);
   const section = useRef<HTMLElement>(null);
   const contentsId = useId();
   const onOpenChangeRef = useRef(onOpenChange);
@@ -85,10 +93,17 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   // commit as the transcript update (and its scroll reconciliation), with no multi-commit lag.
   // `running` falling on its own is not a completion: the block stays open until auto-fold is allowed.
   const automaticOpen = Boolean(defaultOpen || detailOpen || running || interrupted || issueCount > 0 || !autoFold);
-  const folding = (!previousAutoFold.current && autoFold) || (autoFold && !running && previousRunning.current);
+  const folding = (!previousAutoFold.current && autoFold)
+    || (autoFold && !running && previousRunning.current)
+    || (previousDeferred.current && !deferredFold && autoFold && manualChoice === undefined);
   const keepForReader = folding && manualChoice === undefined && !automaticOpen && beingRead(section.current);
-  const open = manualChoice ?? (keepForReader || automaticOpen);
-  const instantFold = folding && !open && canInstantFold(section.current);
+  const foldMetrics = folding && manualChoice === undefined && !automaticOpen && !keepForReader
+    ? measureProcessFold(section.current)
+    : undefined;
+  const foldAction = foldMetrics ? decideProcessFold(foldMetrics) : undefined;
+  const deferFold = !deferredFold && foldAction === 'defer';
+  const open = manualChoice ?? (keepForReader || deferredFold || deferFold || automaticOpen);
+  const instantFold = folding && !open && foldAction === 'instant';
 
   /**
    * Contents that have been shown once stay mounted when folded (`Collapse keep`, hidden with
@@ -117,9 +132,43 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
 
   useLayoutEffect(() => {
     if (keepForReader) chooseOpen(true);
+    if (deferFold) setDeferredFold(true);
+    else if (deferredFold && (!autoFold || manualChoice !== undefined)) setDeferredFold(false);
     previousAutoFold.current = autoFold;
     previousRunning.current = running;
-  }, [autoFold, running, keepForReader]);
+    previousDeferred.current = (!autoFold || manualChoice !== undefined) ? false : (deferredFold || deferFold);
+  }, [autoFold, running, keepForReader, deferFold, deferredFold, manualChoice]);
+
+  useEffect(() => {
+    if (!deferredFold) return;
+    const element = section.current;
+    const scroller = element?.closest<HTMLElement>(`[${TRANSCRIPT_ATTR.scroll}]`);
+    if (!element || !scroller) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const canRelease = () => {
+      const metrics = measureProcessFold(section.current);
+      return Boolean(metrics && canReleaseDeferredProcessFold(metrics));
+    };
+    const tryRelease = () => {
+      clearTimeout(timer);
+      timer = undefined;
+      if (!canRelease()) return;
+      setDeferredFold(false);
+    };
+    // Wait until scrolling settles so the synchronous scrollTop adjustment never breaks momentum.
+    const onScroll = () => {
+      clearTimeout(timer);
+      if (!canRelease()) return;
+      timer = setTimeout(tryRelease, 180);
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    scroller.addEventListener('scrollend', tryRelease);
+    return () => {
+      clearTimeout(timer);
+      scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('scrollend', tryRelease);
+    };
+  }, [deferredFold]);
 
   const now = useNow(running);
   const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;
@@ -192,26 +241,33 @@ function beingRead(element: HTMLElement | null): boolean {
   return selection.getRangeAt(0).intersectsNode(element);
 }
 
-/**
- * Whether folding [element] can land in a single synchronous commit without moving visible prose:
- * - below the viewport: invisible to the reader;
- * - header inside the viewport with nothing visible below it (`box.bottom >= view.bottom`):
- *   animate smoothly so the reader sees the fold instead of a snap;
- * - header above the viewport, or visible prose below it (`box.bottom < view.bottom`):
- *   land synchronously whenever `scrollTop` can absorb the lost height without hitting 0,
- *   so `useTranscriptScroll` shifts `scrollTop` before paint and the prose below never moves.
- */
-function canInstantFold(element: HTMLElement | null): boolean {
-  if (!element) return false;
-  const scroller = element.closest<HTMLElement>('[data-transcript-scroll]');
-  if (!scroller) return false;
-  const view = scroller.getBoundingClientRect();
-  const row = element.closest<HTMLElement>('[data-row-key]') ?? element;
-  const box = row.getBoundingClientRect();
-  if (box.top >= view.bottom) return true;
-  if (box.top >= view.top && box.bottom >= view.bottom) return false;
-  const body = element.querySelector<HTMLElement>('[data-process-body]');
+/** Exact height that disappears when [element]'s `Collapse` folds, including body margins. */
+function collapsibleHeight(element: HTMLElement): number {
+  const region = element.querySelector<HTMLElement>(`:scope > [${TRANSCRIPT_ATTR.collapseState}]`);
+  if (region) return region.getBoundingClientRect().height;
+  const body = element.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.processBody}]`);
+  if (body) {
+    const style = getComputedStyle(body);
+    return body.getBoundingClientRect().height + (Number.parseFloat(style.marginTop) || 0) + (Number.parseFloat(style.marginBottom) || 0);
+  }
   const header = element.firstElementChild?.getBoundingClientRect().height ?? 0;
-  const collapsible = body ? body.getBoundingClientRect().height : Math.max(0, box.height - header);
-  return scroller.scrollTop >= collapsible - 1;
+  return Math.max(0, element.getBoundingClientRect().height - header);
+}
+
+function measureProcessFold(element: HTMLElement | null): ProcessFoldMetrics | undefined {
+  if (!element) return undefined;
+  const scroller = element.closest<HTMLElement>(`[${TRANSCRIPT_ATTR.scroll}]`);
+  if (!scroller) return undefined;
+  const view = scroller.getBoundingClientRect();
+  const row = element.closest<HTMLElement>(`[${TRANSCRIPT_ATTR.rowKey}]`) ?? element;
+  const box = row.getBoundingClientRect();
+  return {
+    following: scroller.getAttribute(TRANSCRIPT_ATTR.following) === 'true',
+    scrollTop: scroller.scrollTop,
+    collapsible: collapsibleHeight(element),
+    boxTop: box.top,
+    boxBottom: box.bottom,
+    viewTop: view.top,
+    viewBottom: view.bottom,
+  };
 }

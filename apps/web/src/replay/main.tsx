@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { i18n } from '@lingui/core';
 import { I18nProvider } from '@lingui/react';
 import type { Session } from '@contracts';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { startLocale } from '@/lib/i18n';
 import '@/lib/theme';
 import '@/lib/display-settings';
@@ -49,7 +50,13 @@ window.__replay = async (text, clock) => {
   const ready = new Promise<void>((resolve) => { start = resolve; });
   const { transport, done } = replayTransport(recording.frames, { maxGap: 1500, speed: 1, ...clock }, (index, frame) => watcher?.frame(index, frame.type), ready);
   await startLocale();
-  createRoot(document.getElementById('root')!).render(<I18nProvider i18n={i18n}><ReplayView session={recording.session} transport={transport} /></I18nProvider>);
+  createRoot(document.getElementById('root')!).render(
+    <I18nProvider i18n={i18n}>
+      <TooltipProvider>
+        <ReplayView session={recording.session} transport={transport} />
+      </TooltipProvider>
+    </I18nProvider>,
+  );
   watcher = watchTranscript(await until(() => document.querySelector<HTMLElement>('[data-transcript-scroll]')));
   start();
   const closedAt = await done;

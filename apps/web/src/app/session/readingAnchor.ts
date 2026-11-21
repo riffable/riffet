@@ -1,4 +1,59 @@
+import { COLLAPSE_STATE_ATTR } from '@/components/ui/collapse';
 import { findQuote, QUOTE_CONTEXT, rangeAt } from './textQuote';
+
+/**
+ * Shared DOM contract between `TranscriptView`, `useTranscriptScroll`, `TurnProcess`, `Collapse`,
+ * and `readingAnchor`. Keep these names in one place so a rename or wrapper change fails typecheck
+ * instead of silently breaking scroll anchoring.
+ */
+export const TRANSCRIPT_ATTR = {
+  scroll: 'data-transcript-scroll',
+  following: 'data-transcript-following',
+  content: 'data-content-column',
+  rowKey: 'data-row-key',
+  rowSlot: 'data-row-slot',
+  processOpen: 'data-process-open',
+  processBody: 'data-process-body',
+  collapseState: COLLAPSE_STATE_ATTR,
+} as const;
+
+export interface ProcessFoldMetrics {
+  following: boolean;
+  scrollTop: number;
+  collapsible: number;
+  boxTop: number;
+  boxBottom: number;
+  viewTop: number;
+  viewBottom: number;
+}
+
+export type ProcessFoldAction = 'instant' | 'defer' | 'animate';
+
+/**
+ * Single source of truth for how an automatic `TurnProcess` fold lands:
+ * - `instant`: off-screen below, or `scrollTop` can absorb the full collapsed height in one commit
+ *   so visible prose below moves 0px;
+ * - `defer`: reader is not following, visible prose sits below the process block, and `scrollTop`
+ *   cannot absorb the collapse without hitting 0 — hold until the block scrolls off-screen;
+ * - `animate`: process fills the rest of the viewport (no prose below), or the reader is following
+ *   at the end of a short turn.
+ */
+export function decideProcessFold(metrics: ProcessFoldMetrics): ProcessFoldAction {
+  if (metrics.boxTop >= metrics.viewBottom) return 'instant';
+  if (metrics.boxTop >= metrics.viewTop && metrics.boxBottom >= metrics.viewBottom) return 'animate';
+  if (metrics.scrollTop >= metrics.collapsible) return 'instant';
+  if (!metrics.following && metrics.boxBottom < metrics.viewBottom - 1) return 'defer';
+  return 'animate';
+}
+
+/**
+ * Whether a deferred automatic fold can now land off-screen in one synchronous commit.
+ * Whenever this returns `true`, `decideProcessFold(metrics)` is guaranteed to be `'instant'`.
+ */
+export function canReleaseDeferredProcessFold(metrics: ProcessFoldMetrics): boolean {
+  if (metrics.boxTop >= metrics.viewBottom) return true;
+  return metrics.boxBottom <= metrics.viewTop && metrics.scrollTop >= metrics.collapsible;
+}
 
 /** A visible leaf block inside a row that starts above the viewport. */
 export interface BlockAnchor {
@@ -123,7 +178,7 @@ function closestBlock(node: Node, row: HTMLElement): Element | undefined {
  */
 function reanchorByQuote(row: HTMLElement, saved: ReadingAnchor['rows'][number]): number | undefined {
   const blocks = saved.blocks;
-  if (!blocks?.length || row.querySelector('[data-process-open="false"]')) return undefined;
+  if (!blocks?.length || row.querySelector(`[${TRANSCRIPT_ATTR.processOpen}="false"]`)) return undefined;
   const body = row.querySelector<HTMLElement>('[data-mark-ids], .md') ?? row;
   const bodyText = body.textContent ?? '';
   if (!bodyText) return undefined;
@@ -137,7 +192,7 @@ function reanchorByQuote(row: HTMLElement, saved: ReadingAnchor['rows'][number])
     const range = rangeAt(body, found.start, found.end);
     if (!range) continue;
     const matched = closestBlock(range.startContainer, row);
-    if (matched?.closest('[data-process-open="false"]')) continue;
+    if (matched?.closest(`[${TRANSCRIPT_ATTR.processOpen}="false"]`)) continue;
     const rect = (matched ?? range).getBoundingClientRect();
     if (rect.height === 0) continue;
     return rect.top - candidate.top;
@@ -151,17 +206,17 @@ function reanchorByQuote(row: HTMLElement, saved: ReadingAnchor['rows'][number])
  * bisect them instead of measuring every one from the first.
  */
 function columnChildren(scroller: HTMLElement): HTMLCollection | undefined {
-  return scroller.querySelector(':scope > [data-content-column]')?.children;
+  return scroller.querySelector(`:scope > [${TRANSCRIPT_ATTR.content}]`)?.children;
 }
 
 /** The row with [key], without collecting every row first. */
 export function findRow(scroller: HTMLElement, key: string): HTMLElement | undefined {
-  return scroller.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(key)}"]`) ?? undefined;
+  return scroller.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.rowKey}="${CSS.escape(key)}"]`) ?? undefined;
 }
 
 /** Deterministic turn-slot fallback when a provisional draft row is replaced by its committed row. */
 function findRowBySlot(scroller: HTMLElement, slot: string): HTMLElement | undefined {
-  return scroller.querySelector<HTMLElement>(`[data-row-slot="${CSS.escape(slot)}"]`) ?? undefined;
+  return scroller.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.rowSlot}="${CSS.escape(slot)}"]`) ?? undefined;
 }
 
 function resolveRow(scroller: HTMLElement, saved: Pick<ReadingAnchor['rows'][number], 'key' | 'slot'>): HTMLElement | undefined {
@@ -193,13 +248,13 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
     const rect = row.getBoundingClientRect();
     if (rect.top >= bounds.bottom) break;
     if (rect.height === 0 || !row.dataset.rowKey) continue;
-    const process = row.querySelector<HTMLElement>('[data-process-open]');
-    const processCollapse = process?.querySelector<HTMLElement>(':scope > [data-collapse-state]');
+    const process = row.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.processOpen}]`);
+    const processCollapse = process?.querySelector<HTMLElement>(`:scope > [${TRANSCRIPT_ATTR.collapseState}]`);
     const processOpen = process
-      ? process.getAttribute('data-process-open') === 'true'
-        || (processCollapse !== null && processCollapse !== undefined && processCollapse.dataset.collapseState !== 'closed')
+      ? process.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'true'
+        || (processCollapse !== null && processCollapse !== undefined && processCollapse.getAttribute(TRANSCRIPT_ATTR.collapseState) !== 'closed')
       : undefined;
-    const foldingProcess = rect.top < bounds.top && process?.getAttribute('data-process-open') === 'false';
+    const foldingProcess = rect.top < bounds.top && process?.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'false';
     // Only a row that starts above the view has something above the reader that could grow.
     const blocks = !rows.length && rect.top < bounds.top && !foldingProcess ? captureBlocks(row, bounds.top, bounds.bottom) : undefined;
     const slot = row.dataset.rowSlot;
@@ -227,7 +282,7 @@ export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, l
     // Hot path: keep the exact DOM block while still connected; cold path re-locates by text quote
     // when a draft row is replaced or Markdown re-parses the message, then falls back to the row.
     const primary = saved.blocks?.[0];
-    const connected = primary && primary.element.isConnected && row.contains(primary.element) && !primary.element.closest('[data-process-open="false"]') ? primary : undefined;
+    const connected = primary && primary.element.isConnected && row.contains(primary.element) && !primary.element.closest(`[${TRANSCRIPT_ATTR.processOpen}="false"]`) ? primary : undefined;
     const top = connected
       ? connected.element.getBoundingClientRect().top - connected.top
       : (reanchorByQuote(row, saved) ?? (row.getBoundingClientRect().top - saved.top));
@@ -235,19 +290,17 @@ export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, l
   };
   // When an automatically folding process block sits above visible prose (even if the prompt or
   // process header is still visible near the top of the viewport), prefer anchoring on the prose
-  // row below it whenever there is room above to absorb the collapse.
+  // row below it, clamping to 0 rather than falling back to the folding process header itself.
   for (let index = 0; index + 1 < anchor.rows.length; index += 1) {
     const saved = anchor.rows[index]!;
     if (!saved.processOpen) continue;
     const row = resolveRow(scroller, saved);
-    if (!row?.querySelector('[data-process-open="false"]')) continue;
+    if (!row?.querySelector(`[${TRANSCRIPT_ATTR.processOpen}="false"]`)) continue;
     for (let next = index + 1; next < anchor.rows.length; next += 1) {
       const below = anchor.rows[next]!;
       const belowRow = resolveRow(scroller, below);
       if (!belowRow) continue;
-      const target = targetOf(below, belowRow);
-      if (target >= -0.5) return Math.max(0, target);
-      break;
+      return Math.max(0, targetOf(below, belowRow));
     }
   }
   let foldedTop: number | undefined;
@@ -258,7 +311,7 @@ export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, l
     // A process block that was open (or mid-fold) when captured, whose header is above the viewport
     // and that has now folded away, collapses into that off-screen header; the row below it is what
     // remains stable on screen for the reader.
-    if (saved.top < 0 && saved.processOpen && row.querySelector('[data-process-open="false"]')) {
+    if (saved.top < 0 && saved.processOpen && row.querySelector(`[${TRANSCRIPT_ATTR.processOpen}="false"]`)) {
       foldedTop ??= scroller.scrollTop + row.getBoundingClientRect().top - bounds.top;
       if (index + 1 < anchor.rows.length) continue;
       return foldedTop;
