@@ -3,7 +3,7 @@ import { AppError } from '../../errors.js';
 import { isLiveActivity } from '../../journal/activity.js';
 import { DORMANT_POLL_MS, DormancyClock } from '../shared/dormancy.js';
 import type { NativeBackendHost, NativeControlMessage } from '../types.js';
-import { CLAUDE_CODE_BUSY_PATTERN, claudeAgentRows, claudeComposerText, claudeComposerVisible, claudeFooterFocused, claudeTasksEntryShown, claudeViewsSubagent } from '../../adapters/cli/claude-code.js';
+import { claudeAgentRows, claudeComposerText, claudeComposerVisible, claudeFooterFocused, claudeScreenBusy, claudeTasksEntryShown, claudeViewsSubagent } from '../../adapters/cli/claude-code.js';
 import { ClaudeTranscript } from './history.js';
 import { ClaudeTranscriptSource } from './transcript-source.js';
 import { claudeScreenInteraction, isClaudeScreenInteraction, parseClaudeScreenDialog } from './screen-dialog.js';
@@ -172,7 +172,7 @@ export class ClaudeScreenWatch {
     if (!terminal || terminal.kind !== 'native' || terminal.sessionId !== current.id || terminal.projectId !== current.projectId
       || terminal.state === 'exited') return false;
     const screen = await this.deps.host.terminal.screen(terminalId).catch(() => undefined);
-    if (!screen || CLAUDE_CODE_BUSY_PATTERN.test(screen) || claudeViewsSubagent(screen) || claudeFooterFocused(screen) || claudeTasksEntryShown(screen)
+    if (!screen || claudeScreenBusy(screen) || claudeViewsSubagent(screen) || claudeFooterFocused(screen) || claudeTasksEntryShown(screen)
       || !claudeComposerVisible(screen) || claudeComposerText(screen) !== '') return false;
     const checked = await this.deps.host.terminal.get(terminalId).catch(() => undefined);
     if (!checked || checked.epoch !== terminal.epoch || checked.state === 'exited' || checked.kind !== 'native'
@@ -251,7 +251,7 @@ export class ClaudeScreenWatch {
     const entries = this.deps.state().background.filter(task => task.kind !== 'workflow');
     const queued = this.deps.state().cliQueue.length;
     // A screen showing an agent's view or with the footer focused draws the footer differently; it proves nothing.
-    const idleScreen = claudeComposerVisible(screen) && !CLAUDE_CODE_BUSY_PATTERN.test(screen) && !claudeViewsSubagent(screen) && !claudeFooterFocused(screen);
+    const idleScreen = claudeComposerVisible(screen) && !claudeScreenBusy(screen) && !claudeViewsSubagent(screen) && !claudeFooterFocused(screen);
     const showsBackground = claudeTasksEntryShown(screen) || claudeAgentRows(screen).length > 0;
     const background = !showsBackground ? entries : [];
     // Nothing of the conversation is in motion: what the screen showed can be held against the records.

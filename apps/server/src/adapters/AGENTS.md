@@ -18,7 +18,7 @@ verify:
 
 - 屏幕只用来交叉校验，不决定回合状态：Claude 在回合中输入框仍然画着并可输入，状态来自转写与 hook（`cli/claude-code.ts#CLAUDE_CODE_READY_PATTERN`）。
 - 输入框以顶部的横线为准，不以 `❯` 为准：空输入框里有灰色的建议文字，与已输入的文本无法区分（`cli/claude-code.ts#claudeComposerBounds`）。
-- 忙碌只认中断提示，「thinking」「working」会出现在回答和页脚路径里（`cli/claude-code.ts#CLAUDE_CODE_BUSY_PATTERN`）。
+- 忙碌检测由 `cli/claude-code.ts#claudeScreenBusy` 负责：兼容老版本的中断提示（`CLAUDE_CODE_BUSY_PATTERN`），并在 2.1.302/2.1.322+ 上识别输入框上方的实时 spinner 行（`[·✢✳✶✻✽] …`）、工具运行态（`Running…`/`Waiting…`/`Initializing…`）以及尚未出现 `✻ … for …`/`Interrupted` 结束行的流式 `⏺` 块；仍然不匹配散落文本里的「thinking」「working」，且必须通过 `apps/server/src/backends/claude/screen-fixtures.test.ts` 对每版真实录屏校验。
 - 粘贴的长文本在输入框里显示为占位符，比较输入框内容时要先处理它（`cli/claude-code.ts#CLAUDE_CODE_PASTE_PLACEHOLDER_PATTERN`）。
 - 宽字符按单元格宽度计算，不按字符数（`cli/claude-code.ts#cellWidth`）。
 

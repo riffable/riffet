@@ -15,10 +15,70 @@ import type { TuiScreenMarkers } from './types.js';
  */
 
 /**
- * Claude Code's explicit interrupt hint — the only busy marker safe to match anywhere on screen.
+ * Claude Code's legacy interrupt hint — kept for older CLIs. Since 2.1.302 Claude no longer draws this
+ * hint and instead renders a live spinner above the composer (`✽ Noodling… (6m 22s · ↓ 21.2k tokens)`).
  * Bare words such as "thinking" or "working" also appear in replies and in the footer's cwd.
  */
 export const CLAUDE_CODE_BUSY_PATTERN = /esc(?:ape)?\s+to\s+interrupt|ctrl\+c\s+to\s+interrupt/i;
+
+/**
+ * Live spinner line drawn directly above the composer (2.1.302 / 2.1.322+): a spinner glyph at column 0
+ * followed by status text carrying an ellipsis (`✽ Noodling… (3s · ↓ 9 tokens)`, `✶ Recombobulating…`,
+ * `✽ Compacting conversation… (0s)`). Finished turn summaries (`✻ Worked for 17s · done 11:25 PM`,
+ * `✻ Waiting for 1 background agent to finish`) have no ellipsis and do not match.
+ */
+const CLAUDE_SPINNER_LINE_PATTERN = /^[·✢✳✶✻✽]\s+\S[^\n]*…(?:\s*\([^\n]*\))?\s*$/;
+
+/** Tool execution status hanging directly above the composer (`  ⎿  Running… (10s)`, `Waiting…`, `Initializing…`). */
+const CLAUDE_TOOL_BUSY_LINE_PATTERN = /^ {2}⎿\s+(?:Running|Waiting|Initializing)…/;
+
+/** Explicit interruption line that ends a turn without a `✻ Worked for …` summary. */
+const CLAUDE_INTERRUPTED_LINE_PATTERN = /^ {2}⎿\s+Interrupted\b/;
+
+/** Trailing TUI chrome that may sit between an active spinner/answer and the composer's top rule. */
+const CLAUDE_TIP_LINE_PATTERN = /^ {2}⎿\s+Tip:/;
+const CLAUDE_TIP_CONTINUATION_PATTERN = /^ {5}\S/;
+const CLAUDE_TMUX_NOTICE_PATTERN = /^ {2}tmux\s+/;
+const CLAUDE_EFFORT_BADGE_PATTERN = /^\s+[◉●]\s+.*\/effort\s*$/;
+
+/**
+ * Whether the captured Claude Code screen shows active turn work: the legacy interrupt hint, a live
+ * spinner or running tool line directly above the composer, or an open `⏺` block streaming without a
+ * closing `✻ … for …` / `Interrupted` line.
+ */
+export function claudeScreenBusy(screen: string): boolean {
+  if (CLAUDE_CODE_BUSY_PATTERN.test(screen)) return true;
+  const lines = screen.split(/\r?\n/);
+  const bounds = claudeComposerBounds(lines);
+  if (!bounds) return false;
+  let end = bounds.top - 1;
+  while (end >= 0) {
+    const line = lines[end]!;
+    if (!line.trim() || CLAUDE_TMUX_NOTICE_PATTERN.test(line) || CLAUDE_EFFORT_BADGE_PATTERN.test(line) || CLAUDE_TIP_LINE_PATTERN.test(line)) {
+      end -= 1;
+      continue;
+    }
+    if (CLAUDE_TIP_CONTINUATION_PATTERN.test(line)) {
+      let probe = end - 1;
+      while (probe >= 0 && CLAUDE_TIP_CONTINUATION_PATTERN.test(lines[probe]!)) probe -= 1;
+      if (probe >= 0 && CLAUDE_TIP_LINE_PATTERN.test(lines[probe]!)) {
+        end = probe - 1;
+        continue;
+      }
+    }
+    break;
+  }
+  if (end < 0) return false;
+  const last = lines[end]!;
+  if (CLAUDE_SPINNER_LINE_PATTERN.test(last) || CLAUDE_TOOL_BUSY_LINE_PATTERN.test(last)) return true;
+  if (CLAUDE_INTERRUPTED_LINE_PATTERN.test(last)) return false;
+  for (let index = end; index >= 0; index -= 1) {
+    const line = lines[index]!;
+    if (!line.trim()) continue;
+    if (/^\S/.test(line)) return /^⏺(?: |$)/.test(line);
+  }
+  return false;
+}
 
 /**
  * The composer: a `❯` (or `>` on terminals without the powerline glyph) opening the input box.

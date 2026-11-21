@@ -125,12 +125,14 @@ export function recordingVocabulary(recording: ClaudeRecording): Set<string> {
 
 export interface ReplayResult {
   rows: JournalRow[]; /** The rows of each subagent lane the main lane names, by lane. */ lanes: Record<string, JournalRow[]>; phases: string[]; stops?: string[];
+  /** Keys sent via `terminal.sendKeys` during replay (e.g. `['C-c']` on stop). */
+  sentKeys?: string[][];
   /** The session id the conversation ends on, and how many times the CLI was launched. */
   nativeSessionId?: string; launches?: number;
 }
 
 /** What a scenario has to have produced, from the journal rows of its replay and the phases seen. */
-export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops' | 'nativeSessionId' | 'launches'> & { responded?: number; stopped?: boolean }): string[] {
+export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops' | 'sentKeys' | 'nativeSessionId' | 'launches'> & { responded?: number; stopped?: boolean }): string[] {
   const { rows, phases } = result;
   const problems: string[] = [];
   const count = (kind: string) => rows.filter(row => row.kind === kind).length;
@@ -153,6 +155,9 @@ export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayRe
   if (scenario.approve && !phases.includes('attention')) problems.push('no permission card (phase attention) was shown');
   if (scenario.approve && !result.responded) problems.push('the permission card was not answered');
   for (const stop of result.stops ?? []) if (stop !== 'ok') problems.push(`the stop was refused: ${stop}`);
+  if (scenario.interrupt && result.sentKeys !== undefined && !result.sentKeys.some(keys => keys.includes('C-c'))) {
+    problems.push('the stop sent no C-c key to the CLI');
+  }
   if (scenario.restartBefore) {
     if ((result.launches ?? 0) < 2) problems.push(`${result.launches ?? 0} CLI launches, expected a second one after the restart`);
     if (result.nativeSessionId !== RECORDED_SESSION_ID) problems.push(`the conversation ends on session ${result.nativeSessionId}, expected the same one`);
@@ -250,6 +255,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
   const profile: NativeBackendProfileConfig = { id: 'local', backendId: 'claude', name: 'Claude Code CLI', config: { executable, configDir } };
   const terminals = new FakeTerminals();
   const launches: NativePtyLaunchSpec[] = [];
+  const sentKeys: string[][] = [];
   const receipts = new Map<string, NativeInteractionReceipt>();
   const host = {
     getSession: () => structuredClone(session),
@@ -276,7 +282,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
       get: async () => terminals.get(),
       screen: async () => terminals.shown(),
       paste: async () => undefined,
-      sendKeys: async () => undefined,
+      sendKeys: async (_terminalId: string, pressed: string[]) => { sentKeys.push(pressed); },
       stop: async () => undefined,
       observe: (_terminalId: string, callback: never) => { terminals.observers.add(callback); return () => terminals.observers.delete(callback); },
       subscribe: () => () => undefined,
@@ -418,7 +424,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
     if (typeof lane === 'string' && lane.startsWith('sub:')) lanes[lane] = rowsOf(journal, laneKey(id, lane as `sub:${string}`));
   }
   return {
-    rows, lanes, phases, responded, stops, nativeSessionId: session.nativeSessionId, launches: launches.length,
+    rows, lanes, phases, responded, stops, sentKeys, nativeSessionId: session.nativeSessionId, launches: launches.length,
     dispose: async () => { release(); ingest.close(); await adapter.close().catch(() => undefined); await rm(root, { recursive: true, force: true }).catch(() => undefined); },
   };
 }

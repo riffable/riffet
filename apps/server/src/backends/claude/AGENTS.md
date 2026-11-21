@@ -34,7 +34,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。唯一的例外是以 failed 结束的回合：草稿按原 id 转正为这一回合的正文（`live/drafts.ts#plan`），之后转写里又写出同一段时收回转正的那份。转正的正文只在 journal 里，车道按转写重建后就没有了。
 - 自动压缩的 PreCompact hook 可能先于该 prompt 的转写行到达，要按 hook 的 `prompt_id` 压住，等 prompt 行读到后并入同一回合，否则会写成上一回合的尾巴并开出第二个压缩。
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
-- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并检查结果。
+- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。实时在本进程开启的回合绝不因屏幕看似空闲（`alreadyIdle`）而跳过发送 `C-c`，只有冷重启回放且屏幕确认非忙碌（`claudeScreenBusy` 为假）的回合才跳过 `C-c`；停止未确认失败且原回合仍在跑时必须恢复已撤下的 `activeTurn` 以便重试。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并校验实际发出了 `C-c`。
 - 30 秒内连续退出两次，下一次启动去掉 `--resume` 新开会话（`launch-guard.ts#QUICK_EXIT_LIMIT`）；计数存在会话上，重启服务不清零。
 - 发布新的会话 id（`setNativeSessionId`）会同步重绑服务端已有的监听，所以 `index.ts#ClaudeBackendAdapter` 先登记本次启动的运行时再发布 id，否则监听会另起一个 CLI；启动失败且终端没换时撤回这个 id，重试才不会去 `--resume` 一个从未写下的对话。
 - 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`binding.ts#refreshTerminalStatus` 用启动计数 `launches` 丢弃启动之前开始的检查，修复 1a06647）。

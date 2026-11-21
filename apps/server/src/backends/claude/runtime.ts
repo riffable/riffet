@@ -76,6 +76,8 @@ export class ClaudeSessionRuntime {
   private readonly statusWaiters = new Set<() => void>();
   /** Hooks can prove execution before the CLI flushes its assistant/tool rows. */
   private outputPromptId?: string;
+  /** True only when `state.mainTurn` was opened by a cold transcript replay rather than live signals in this runtime. */
+  private replayedTurn = false;
   /** Counts the turns that have started, so a stop can tell "my turn ended" from "another began". */
   private turnSeq = 0;
   /** Last sign of life from the CLI (a hook, transcript growth), for the long-silence notice. */
@@ -192,6 +194,7 @@ export class ClaudeSessionRuntime {
       lastActivityAt: () => this.lastActivityAt,
       nativeTurn: () => this.nativeTurn,
       outputPromptId: () => this.outputPromptId,
+      replayedTurn: () => this.replayedTurn,
       screenAttention: () => this.screenAttention,
       session: () => this.session,
       state: () => this.state,
@@ -203,6 +206,7 @@ export class ClaudeSessionRuntime {
       publishActivity: (...args) => this.reads.publishActivity(...args),
       refreshTerminalStatus: (...args) => this.binding.refreshTerminalStatus(...args),
       refreshTranscript: (...args) => this.reads.refreshTranscript(...args),
+      restorePublishedTurn: target => this.restorePublishedTurn(target),
       setStatus: (...args) => this.setStatus(...args),
       untestedVersion: (...args) => this.untestedVersion(...args),
       waitUntil: (...args) => this.waitUntil(...args),
@@ -491,7 +495,11 @@ export class ClaudeSessionRuntime {
         if (this.state !== previous) state = replay(this.state, lifecycle.signals);
         if (idle && activeTurnOf(state.mainTurn)?.promptId === promptId) state = reduce(state, { type: 'turn_end', source: 'hook', reason: 'interrupted', promptId }).state;
       }
+      const liveBefore = activeTurnOf(this.state.mainTurn);
       this.state = state;
+      const replayed = activeTurnOf(state.mainTurn);
+      const wasLive = !this.replayedTurn && liveBefore !== undefined && liveBefore.promptId === replayed?.promptId;
+      this.replayedTurn = replayed !== undefined && !wasLive;
       if (this.nativeTurn && this.nativeTurn.turnId !== activeTurnOf(state.mainTurn)?.promptId) {
         this.nativeTurn = undefined;
         this.steerTools.clear();
@@ -520,6 +528,11 @@ export class ClaudeSessionRuntime {
     return target;
   }
 
+  /** Restores a withdrawn turn target when a stop fails while that exact turn is still running. */
+  private restorePublishedTurn(target: NativeTurnTarget & { ownerRunId?: string }): void {
+    if (!this.nativeTurn) this.nativeTurn = target;
+  }
+
   /** Names the run the published turn belongs to, when it is the turn `promptId` names (or no prompt is named). */
   private ownPublishedTurn(promptId: string | undefined, runId: string): void {
     if (this.nativeTurn && (!promptId || this.nativeTurn.turnId === promptId)) this.nativeTurn = { ...this.nativeTurn, ownerRunId: runId };
@@ -528,6 +541,7 @@ export class ClaudeSessionRuntime {
   private onTurnStarted(started: NonNullable<Transition['started']>): void {
     this.noteActivity();
     this.outputPromptId = undefined;
+    this.replayedTurn = false;
     this.turnSeq += 1;
     if (started.source === 'hook' && started.promptId && this.state.process !== 'exited') {
       this.nativeTurn = { nativeSessionId: this.nativeSessionId, turnId: started.promptId, ...(this.sends.activeWebTurn ? { ownerRunId: this.sends.activeWebTurn.runId } : {}) };
@@ -544,6 +558,7 @@ export class ClaudeSessionRuntime {
   /** Whatever ended the turn closes everything that hung on it, now, without asking the screen. */
   private onTurnEnded(ended: NonNullable<Transition['ended']>): void {
     this.noteActivity();
+    this.replayedTurn = false;
     // A compaction that ends any way but its boundary did not finish; the rows may say so later, the hook says so now.
     if (ended.compact && (ended.reason === 'stop_failure' || ended.reason === 'interrupted')) this.reads.settleCompactions(ended.reason === 'interrupted' ? 'stopped' : 'failed');
     const target = this.nativeTurn;

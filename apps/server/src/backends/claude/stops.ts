@@ -4,7 +4,7 @@ import { isLiveActivity, type ActivityLedger } from '../../journal/activity.js';
 import { stoppable } from './activity.js';
 import { DeferredSteerInputs } from '../shared/deferred-steer.js';
 import type { NativeBackendHost } from '../types.js';
-import { CLAUDE_CODE_BUSY_PATTERN, claudeComposer } from '../../adapters/cli/claude-code.js';
+import { claudeComposer, claudeScreenBusy } from '../../adapters/cli/claude-code.js';
 import { waitFor } from '../shared/wait-for.js';
 import { ClaudeTranscript } from './history.js';
 import { ClaudeTranscriptSource } from './transcript-source.js';
@@ -44,6 +44,7 @@ export interface ClaudeStopsDeps {
   lastActivityAt(): number;
   nativeTurn(): NativeTurnTarget & { ownerRunId?: string } | undefined;
   outputPromptId(): string | undefined;
+  replayedTurn(): boolean;
   screenAttention(): boolean;
   session(): Session;
   state(): ClaudeSessionState;
@@ -55,6 +56,7 @@ export interface ClaudeStopsDeps {
   publishActivity(activity: NativeActivity, options?: { restored?: boolean }): void;
   refreshTerminalStatus(force?: boolean): Promise<void>;
   refreshTranscript(follow?: boolean): Promise<void>;
+  restorePublishedTurn(target: NativeTurnTarget & { ownerRunId?: string }): void;
   setStatus(requested: Omit<NativeStatus, 'phase'>): void;
   untestedVersion(): Promise<string | undefined>;
   waitUntil(done: () => boolean, timeoutMs: number, probe?: () => Promise<boolean>): Promise<boolean>;
@@ -95,7 +97,7 @@ export class ClaudeStops {
       if (this.deps.outputPromptId() === promptId || this.deps.transcript.hasTurnOutput(promptId)) return 'running';
       const terminalId = this.deps.terminalId();
       const screen = terminalId ? await this.deps.host.terminal.screen(terminalId).catch(() => undefined) : undefined;
-      return screen !== undefined && CLAUDE_CODE_BUSY_PATTERN.test(screen) ? 'running' : undefined;
+      return screen !== undefined && claudeScreenBusy(screen) ? 'running' : undefined;
     }, { timeoutMs: LATE_STOP_WAIT_MS, intervalMs: 250, wake: notify => { this.deps.statusWaiters.add(notify); return () => { this.deps.statusWaiters.delete(notify); }; } });
     if (shown === 'over') return;
     const failed = (reason: string) => {
@@ -191,12 +193,15 @@ export class ClaudeStops {
     this.deps.steering.reject('Claude was interrupted before receiving further guidance.');
     this.deps.setStatus(this.deps.status());
     let failure: unknown;
+    let succeeded = false;
     try {
-      // After a server restart the JSONL can still name a turn the CLI silently dropped. Do not
-      // press Ctrl-C into its already-idle prompt: on Claude that asks the process to exit.
+      // After a server restart a cold replay of the JSONL can still name a turn the CLI silently
+      // dropped. Only for that replayed turn may an idle screen skip Ctrl-C (on Claude, pressing
+      // Ctrl-C twice into an idle prompt quits it); a live turn observed by this runtime always
+      // receives Ctrl-C so a screen-format change can never silently skip interrupting it.
       const promptId = activeTurnOf(this.deps.state().mainTurn)?.promptId;
       const hasOutput = () => Boolean(promptId && this.deps.outputPromptId() === promptId) || this.deps.transcript.hasTurnOutput(promptId);
-      let alreadyIdle = !hasOutput() && await this.stopIdleScreen(terminalId);
+      let alreadyIdle = !hasOutput() && this.deps.replayedTurn() && await this.stopIdleScreen(terminalId);
       if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
       if (!alreadyIdle) {
         if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
@@ -207,8 +212,9 @@ export class ClaudeStops {
       let idleSince: number | undefined;
       let idleActivity: number | undefined;
       let journaled = false;
+      let aborted = false;
       // The turn we stopped is over when nothing runs, or when the CLI has moved on to another turn.
-      const over = () => this.deps.state().mainTurn.kind === 'idle' || this.deps.turnSeq() !== pressedTurn || this.deps.terminalExited();
+      const over = () => aborted || this.deps.state().mainTurn.kind === 'idle' || this.deps.turnSeq() !== pressedTurn || this.deps.terminalExited();
       // A recordless stop is confirmed only by stable native idle frames, with no hook/transcript
       // progress between them. A composer alone is insufficient: it remains drawn while Claude works.
       const dropped = async () => {
@@ -217,9 +223,14 @@ export class ClaudeStops {
           idleSince = undefined;
           if (alreadyIdle && !over()) {
             alreadyIdle = false;
-            if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
-            await this.deps.host.terminal.sendKeys(terminalId, ['C-c']);
-            pressedAt = Date.now();
+            try {
+              if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
+              await this.deps.host.terminal.sendKeys(terminalId, ['C-c']);
+              pressedAt = Date.now();
+            } catch (error) {
+              failure = error;
+              if (error instanceof AppError && error.code === 'NATIVE_STOP_TARGET_CHANGED') aborted = true;
+            }
           }
           return false;
         }
@@ -232,7 +243,11 @@ export class ClaudeStops {
         try {
           if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, true, target);
           await this.deps.sends.clearOwnInput(terminalId, true, expectedStop);
-        } catch (error) { failure = error; return false; }
+        } catch (error) {
+          failure = error;
+          if (error instanceof AppError && error.code === 'NATIVE_STOP_TARGET_CHANGED') aborted = true;
+          return false;
+        }
         if (idleActivity !== this.deps.lastActivityAt()) { idleSince = undefined; return false; }
         if (!over()) {
           try { if (promptId) await this.endJournalTurn('cancelled', promptId); }
@@ -243,11 +258,18 @@ export class ClaudeStops {
         return true;
       };
       const stopped = await this.deps.waitUntil(over, STOP_CONFIRM_MS, dropped);
-      if (!stopped) throw failure ?? new AppError('NATIVE_INTERRUPT_UNCONFIRMED', 'Claude Code did not confirm that the current turn stopped', 409);
+      if (!stopped || aborted) throw failure ?? new AppError('NATIVE_INTERRUPT_UNCONFIRMED', 'Claude Code did not confirm that the current turn stopped', 409);
       // A Stop hook may have ended the in-memory turn without leaving an end row either.
       if (!journaled && promptId && !this.deps.terminalExited() && this.deps.turnSeq() === pressedTurn) await this.endJournalTurn('cancelled', promptId);
       if (target) this.deps.steering.finish(target, { type: 'run_cancelled', reason: 'Claude confirmed that the turn was interrupted.' });
-    } finally { this.interrupting = false; }
+      succeeded = true;
+    } finally {
+      this.interrupting = false;
+      if (!succeeded && target && !this.deps.terminalExited() && activeTurnOf(this.deps.state().mainTurn)?.promptId === target.turnId) {
+        this.deps.restorePublishedTurn(target);
+        this.deps.setStatus(this.deps.status());
+      }
+    }
   }
 
   /** Used only for an explicitly stopped/persistently ended turn, never to infer ordinary live turn state. */
@@ -258,7 +280,7 @@ export class ClaudeStops {
     if (!terminal || terminal.state !== 'running' || terminal.kind !== 'native' || terminal.sessionId !== session.id
       || terminal.projectId !== session.projectId || session.terminalId !== terminalId) return false;
     const screen = await this.deps.host.terminal.screen(terminalId).catch(() => undefined);
-    return screen !== undefined && claudeComposer(screen) !== undefined && !CLAUDE_CODE_BUSY_PATTERN.test(screen)
+    return screen !== undefined && claudeComposer(screen) !== undefined && !claudeScreenBusy(screen)
       && !claudeScreenInteraction(screen, terminal) && !parseDialog(screen, terminal);
   }
 

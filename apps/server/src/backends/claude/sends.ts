@@ -3,7 +3,7 @@ import type { NativeInteraction, NativeStatus, NativeStopRequest, NativeTurnTarg
 import { AppError } from '../../errors.js';
 import { materializeNativeInput } from '../attachments.js';
 import type { NativeBackendHost, NativeBackendSendRequest } from '../types.js';
-import { CLAUDE_CODE_BUSY_PATTERN, claudeComposer, claudeComposerHoldsPrompt, claudeComposerVisible, claudeFooterFocused, claudeTasksEntryFocused, claudeTasksEntryShown, claudeViewsSubagent } from '../../adapters/cli/claude-code.js';
+import { claudeComposer, claudeComposerHoldsPrompt, claudeComposerVisible, claudeFooterFocused, claudeScreenBusy, claudeTasksEntryFocused, claudeTasksEntryShown, claudeViewsSubagent } from '../../adapters/cli/claude-code.js';
 import type { TerminalInteractionControl } from '../../terminal/service.js';
 import { ClaudeTranscript } from './history.js';
 import { claudePromptKey } from './rows.js';
@@ -459,7 +459,7 @@ export class ClaudeSends {
     if (!this.recentSends.length && !boxRequired) return;
     const cleared = await this.deps.composer.interact(terminalId, async control => {
       const screen = await control.screen();
-      if (boxRequired && (screen === undefined || claudeComposer(screen) === undefined || CLAUDE_CODE_BUSY_PATTERN.test(screen))) {
+      if (boxRequired && (screen === undefined || claudeComposer(screen) === undefined || claudeScreenBusy(screen))) {
         throw new AppError('NATIVE_INTERRUPT_UNCONFIRMED', 'Claude Code input box could not be read', 409);
       }
       if (screen === undefined) return [];

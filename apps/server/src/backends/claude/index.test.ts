@@ -2223,6 +2223,40 @@ describe('Claude sending while background work is tracked', () => {
     expect(lane()).toEqual(['running', 'stopping', 'stopped']);
   });
 
+  // Stopped before the model produced anything on 2.1.322 (no `esc to interrupt` hint, live spinner above the box):
+  // stop must send Ctrl-C rather than treating the turn as already idle, and must not fabricate a cancellation while
+  // the spinner remains on screen.
+  it('sends C-c and refuses to fake cancellation for a live turn before first output while Claude 2.1.322 is spinning', async () => {
+    const h = await makeHarness();
+    await h.open();
+    await h.deliverSessionStart('default');
+    await waitFor(() => (h.adapter.status(h.host, h.getSession()).phase === 'idle' ? true : undefined));
+    const prompt = 'adjust the video script';
+    const spinning = [
+      `❯ ${prompt}`, '', '✽ Noodling… (2s · ↓ 0 tokens)', '  ⎿ \u00a0Tip: Use /btw', '',
+      '─'.repeat(60), '❯ ', '─'.repeat(60), '    Fable 5.2 · /tmp/project', '  ⏵⏵ auto mode on',
+    ].join('\n');
+    const sending = h.adapter.send(h.host, request(h, prompt)).catch(() => undefined);
+    await waitFor(() => (h.control.pastes.length > 0 ? true : undefined));
+    await h.deliver({ hook_event_name: 'UserPromptSubmit', session_id: h.getSession().nativeSessionId, prompt, prompt_id: 'p-spin', permission_mode: 'default' });
+    await appendRows(h, humanRow('p-spin', prompt), { type: 'api-request', timestamp: new Date().toISOString() });
+    await sending;
+
+    h.terminals.screens.set(h.getSession().terminalId!, spinning);
+    const keys: string[][] = [];
+    h.host.terminal.sendKeys = async (_id, pressed) => { keys.push(pressed); };
+    let settled = false;
+    const stopping = h.adapter.interrupt(h.host, h.getSession(), h.profile).then(() => { settled = true; });
+    await waitFor(() => keys.length ? true : undefined);
+    expect(keys).toEqual([['C-c']]);
+    await new Promise(resolve => setTimeout(resolve, 1_100));
+    expect(settled).toBe(false);
+    expect(h.adapter.status(h.host, h.getSession()).phase).toBe('busy');
+    await appendRows(h, { type: 'user', promptId: 'p-spin', message: { role: 'user', content: '[Request interrupted by user]' } });
+    await stopping;
+    expect(h.adapter.status(h.host, h.getSession()).phase).toBe('idle');
+  });
+
   // Stopped before the model produced anything, the CLI writes no end record: it drops the turn and takes the
   // message back. Nothing answered and nothing recorded, so the stop is complete once the message is out of
   // the box (confirmed against it) — it must not stay there to be submitted later.
@@ -2734,7 +2768,7 @@ describe('Claude prompt claiming and late confirmation', () => {
     h.host.terminal.sendKeys = async () => { writes += 1; };
     h.host.terminal.screen = async id => {
       const value = await screen(id);
-      if (++reads === 2) {
+      if (++reads === 1) {
         if (changed === 'turn') await h.deliver({ hook_event_name: 'UserPromptSubmit', session_id: session.nativeSessionId, prompt_id: 'new-stop-turn', prompt: 'new task' });
         else {
           const get = h.host.terminal.get;

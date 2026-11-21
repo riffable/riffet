@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLAUDE_CODE_BUSY_PATTERN, CLAUDE_CODE_READY_PATTERN, claudeComposer, claudeComposerHoldsPrompt, claudeFooterFocused, claudeViewsSubagent } from './claude-code.js';
+import { CLAUDE_CODE_BUSY_PATTERN, CLAUDE_CODE_READY_PATTERN, claudeComposer, claudeComposerHoldsPrompt, claudeFooterFocused, claudeScreenBusy, claudeViewsSubagent } from './claude-code.js';
 
 const rule = '─'.repeat(100);
 
@@ -21,8 +21,16 @@ describe('claude code screen markers', () => {
   });
 
   it('reads a composer as busy while a turn runs', () => {
-    // The box stays drawn during a turn; only the footer says the turn is still going.
+    // The box stays drawn during a turn; older CLIs show an interrupt hint in the footer.
     expect(idle(pane('❯ ', 'esc to interrupt'))).toBe(false);
+    expect(claudeScreenBusy(pane('❯ ', 'esc to interrupt'))).toBe(true);
+    // Since 2.1.302 the footer no longer prints `esc to interrupt`; busy turns draw a spinner above the box.
+    const withSpinner = (above: string[]) => [...above, '', rule, '❯ ', rule, '  ⏵⏵ auto mode on'].join('\n');
+    expect(claudeScreenBusy(withSpinner(['✽ Noodling… (6m 22s · ↓ 21.2k tokens)', '  ⎿ \u00a0Tip: Use /btw']))).toBe(true);
+    expect(claudeScreenBusy(withSpinner(['✶ Recombobulating…']))).toBe(true);
+    expect(claudeScreenBusy(withSpinner(['⏺ Streaming answer line']))).toBe(true);
+    expect(claudeScreenBusy(withSpinner(['⏺ Done.', '', '✻ Worked for 17s · done 11:25 PM']))).toBe(false);
+    expect(claudeScreenBusy(withSpinner(['⏺ Bash(sleep 120)', '  ⎿ \u00a0Interrupted · What should Claude do instead?']))).toBe(false);
   });
 
   it('does not mistake a quoted prompt character in transcript text for the composer', () => {

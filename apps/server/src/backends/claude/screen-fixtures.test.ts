@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   claudeAgentRows, claudeBackgroundScreen, claudeComposerHoldsPrompt, claudeComposerText, claudeComposerVisible, claudeFooterFocused,
-  claudeTasksEntryShown, claudeViewsSubagent,
+  claudeScreenBusy, claudeTasksEntryShown, claudeViewsSubagent,
 } from '../../adapters/cli/claude-code.js';
 import { parseDialog } from '../../agent-host/interaction-screen.js';
 import { localRedactions } from '../../../../../scripts/terminal-fixture-guards.js';
@@ -36,9 +36,10 @@ const atComposer = (screen: string) => {
   expect(parseDialog(screen, terminal)).toBeUndefined();
 };
 
-const expectations: Record<string, (screen: string) => void> = {
+const expectations: Record<string, (screen: string, version: string) => void> = {
   'composer-idle': screen => {
     atComposer(screen);
+    expect(claudeScreenBusy(screen)).toBe(false);
     expect(claudeComposerText(screen)).toBe('');
     expect(claudeComposerHoldsPrompt(screen, 'anything typed')).toBe(false);
     expect(claudeFooterFocused(screen)).toBe(false);
@@ -46,10 +47,13 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   'composer-paste': screen => {
     atComposer(screen);
+    expect(claudeScreenBusy(screen)).toBe(false);
     expect(claudeComposerHoldsPrompt(screen, 'line one\nline two')).toBe(true);
   },
-  'agent-list': screen => {
+  'agent-list': (screen, version) => {
     atComposer(screen);
+    // 2.1.302 capture was taken mid-Stop-hooks (`· Processing…`); 2.1.322 capture is idle waiting on a background agent.
+    expect(claudeScreenBusy(screen)).toBe(version === '2.1.302');
     const [main, ...agents] = claudeAgentRows(screen);
     expect(main).toMatchObject({ name: 'main', focused: true });
     expect(agents.length).toBeGreaterThan(0);
@@ -60,6 +64,7 @@ const expectations: Record<string, (screen: string) => void> = {
   // The input box with background shells running: the footer's entry into the "Background" list.
   'composer-tasks': screen => {
     atComposer(screen);
+    expect(claudeScreenBusy(screen)).toBe(false);
     expect(claudeTasksEntryShown(screen)).toBe(true);
     expect(claudeFooterFocused(screen)).toBe(false);
   },
@@ -75,6 +80,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   'agent-view': screen => {
     atComposer(screen);
+    expect(claudeScreenBusy(screen)).toBe(true);
     expect(claudeViewsSubagent(screen)).toBe(true);
     expect(claudeAgentRows(screen).find(row => row.name === 'main')?.focused).toBe(false);
   },
@@ -105,6 +111,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   // A tool running under the spinner: nothing to draft.
   'live-tool-running': screen => {
+    expect(claudeScreenBusy(screen)).toBe(true);
     const turn = live(screen);
     expect(turn.prompt).toMatch(/^First run the shell command ls -la with the Bash tool\. .* some inline code\.$/);
     expect(turn.kinds).toEqual(['tool', 'other']);
@@ -112,6 +119,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   // Prose, a heading and a list item cut mid-stream, under a folded tool group.
   'live-text': screen => {
+    expect(claudeScreenBusy(screen)).toBe(true);
     const turn = live(screen);
     expect(turn.kinds).toEqual(['other', 'text']);
     expect(turn.draft).toMatch(/^The directory contains only a \.git folder — an empty repo\.\n\nWhat a Resilient Job Queue Needs\n\nA job queue is easy to write and hard to make trustworthy\. The naive version — push a job ID into Redis, pop it/);
@@ -120,6 +128,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   // A repaint left a copy of the conversation above; the second text block streams after a tool. Code keeps its lines.
   'live-after-tool': screen => {
+    expect(claudeScreenBusy(screen)).toBe(true);
     const turn = live(screen);
     expect(turn.kinds).toEqual(['other', 'text', 'tool', 'text']);
     expect(screenMarkdown(turn.blocks[1]!.lines, 98)).toContain('\n\n```\ntype Job<T> = { id: string; payload: T; attempts: number };\n\nasync function process<T>(job: Job<T>, run: (p: T) => Promise<void>) {\n  if (job.attempts >= 5)');
@@ -127,6 +136,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   // Wide characters wrap between characters, and at a space before a Latin word.
   'live-cjk': screen => {
+    expect(claudeScreenBusy(screen)).toBe(true);
     const turn = live(screen);
     expect(turn.kinds).toEqual(['text']);
     expect(turn.draft).toContain('所以设计的起点不是"怎么派发"');
@@ -136,6 +146,7 @@ const expectations: Record<string, (screen: string) => void> = {
   },
   // A finished answer: the repaint's copy of two code lines is dropped, the box table read back as Markdown.
   'live-seam': screen => {
+    expect(claudeScreenBusy(screen)).toBe(false);
     const turn = live(screen);
     expect(turn.kinds).toEqual(['text', 'other']);
     const text = screenMarkdown(turn.blocks[0]!.lines, 98);
@@ -161,7 +172,7 @@ describe.each(versions)('Claude Code %s screens', version => {
     // Committed with the source: no machine path or model route, nor a name from the local redactions file.
     expect(screen).not.toMatch(/\/Users\/|\/home\/|\/var\/folders\/|deepseek/i);
     for (const [from] of localRedactions) expect(screen.toLowerCase()).not.toContain(from.toLowerCase());
-    expectations[name]!(screen);
+    expectations[name]!(screen, version);
   });
 });
 
