@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import type { NativeInteraction, Run, SessionControlSnapshot, SyncFrame, TimelinePage, TimelineRow } from '@contracts';
 import { transformSync } from 'esbuild';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { OutboxHandoff } from '@/app/session/nativeOutbox';
 import { NativeJobStore, SubagentStore, type SubagentTranscript } from '@/app/session/subagents';
 import { TurnCompletionNotifications } from '@/app/session/turnCompletionNotifications';
 import { SyncCache, type CacheBackend, type CachedLane } from './cache';
@@ -978,6 +979,19 @@ describe('sync v3 subagent store', () => {
 });
 
 describe('sync v3 outbox', () => {
+  const nativeRun = (id: string, commandId: string, state: Run['state'], native: Partial<NonNullable<Run['native']>> = {}): Run => ({
+    id, sessionId: 's1', commandId, prompt: 'hello', state, createdAt: '2026-10-25T00:00:01Z', updatedAt: '2026-10-25T00:00:01Z',
+    native: {
+      input: { text: 'hello', attachmentIds: [], context: [] },
+      config: { mode: 'agent' },
+      fingerprint: 'server',
+      delivery: 'queued',
+      attempt: 1,
+      configRevision: 1,
+      ...native,
+    },
+  });
+
   it('shows a local send under the key the server will use and drops it when the server row arrives', () => {
     const local: Run = { id: 'cmd1', sessionId: 's1', commandId: 'cmd1', prompt: 'hello', state: 'queued', createdAt: '2026-10-25T00:00:01Z', updatedAt: '2026-10-25T00:00:01Z' };
     const rows = [row('a', 1024, 1)];
@@ -986,8 +1000,67 @@ describe('sync v3 outbox', () => {
     expect(withLocalOutbox(rows, [local])).toEqual(withLocal);
     const items = timelineItems(withLocal, 's1', [local]);
     expect(items[1]).toMatchObject({ kind: 'user', key: 'user:cmd1', text: 'hello', run: local });
+    // A non-user row carrying the same runId must not hide the user placeholder.
+    const statusForRun: TimelineRow[] = [...rows, { ...row('status:1', 2048, 2), kind: 'status', tone: 'danger', text: 'boom', runId: 'cmd1' } as TimelineRow];
+    expect(withLocalOutbox(statusForRun, [local]).map((item) => item.key)).toEqual(['a', 'status:1', 'user:cmd1']);
     const server = [...rows, { ...row('user:cmd1', 2 ** 52, 2), kind: 'user', text: 'hello', attachments: [], runId: 'cmd1', pending: 'queued' } as TimelineRow];
     expect(withLocalOutbox(server, [local]).map((item) => item.key)).toEqual(['a', 'user:cmd1']);
     expect(withLocalOutbox(server, [local])).toBe(server);
+  });
+
+  it('keeps a local send through fast control transitions until the server user row lands, then retires it permanently', () => {
+    const handoff = new OutboxHandoff();
+    const baseRows = [row('a', 1024, 1)];
+    const local = nativeRun('cmd1', 'cmd1', 'queued', { fingerprint: 'client-pending', delivery: 'queued', stage: 'http_pending' });
+    expect(withLocalOutbox(baseRows, handoff.reconcile([local], baseRows, { hasAfter: false, generation: 'g1' })).map((item) => item.key)).toEqual(['a', 'user:cmd1']);
+
+    // Control plane races ahead of timeline folding: input_sent -> observed -> completed.
+    for (const advanced of [
+      nativeRun('r1', 'cmd1', 'running', { delivery: 'input_sent' }),
+      nativeRun('r1', 'cmd1', 'running', { delivery: 'observed', nativeMessageId: 'native-u1' }),
+      nativeRun('r1', 'cmd1', 'completed', { delivery: 'observed', nativeMessageId: 'native-u1' }),
+    ]) {
+      const outbox = handoff.reconcile([advanced], baseRows, { hasAfter: false, generation: 'g1' });
+      expect(withLocalOutbox(baseRows, outbox).map((item) => item.key)).toEqual(['a', 'user:cmd1']);
+      // Idempotent under StrictMode double-invocation.
+      expect(handoff.reconcile([advanced], baseRows, { hasAfter: false, generation: 'g1' })).toEqual(outbox);
+    }
+
+    // Server user row finally arrives -> handoff completes.
+    const completed = nativeRun('r1', 'cmd1', 'completed', { delivery: 'observed', nativeMessageId: 'native-u1' });
+    const withServerUser: TimelineRow[] = [...baseRows, { ...row('user:cmd1', 2048, 2), kind: 'user', text: 'hello', attachments: [], runId: 'r1' } as TimelineRow];
+    expect(handoff.reconcile([completed], withServerUser, { hasAfter: false, generation: 'g1' })).toEqual([]);
+
+    // Later the old row scrolls out of the top of the sliding window: must not be re-appended.
+    const newerWindow = [row('later', 4096, 3)];
+    expect(handoff.reconcile([completed], newerWindow, { hasAfter: false, generation: 'g1' })).toEqual([]);
+  });
+
+  it('drops a tracked handoff on cancellation, confirmed generation change, or when scrolled off the top', () => {
+    const handoff = new OutboxHandoff();
+    const baseRows = [row('a', 1024, 1)];
+    const local1 = nativeRun('cmd1', 'cmd1', 'queued', { fingerprint: 'client-pending', stage: 'http_pending' });
+    const local2 = nativeRun('cmd2', 'cmd2', 'queued', { fingerprint: 'client-pending', stage: 'http_pending' });
+    const local3 = nativeRun('cmd3', 'cmd3', 'queued', { fingerprint: 'client-pending', stage: 'http_pending' });
+    expect(handoff.reconcile([local1, local2, local3], baseRows, { hasAfter: false, generation: 'g1' }).map((run) => run.commandId)).toEqual(['cmd1', 'cmd2', 'cmd3']);
+
+    const cancelled = nativeRun('r1', 'cmd1', 'cancelled', { delivery: 'cancelled' });
+    const stillRunning = nativeRun('r2', 'cmd2', 'running', { delivery: 'observed', nativeMessageId: 'm2' });
+    const scrolledOld = nativeRun('r3', 'cmd3', 'completed', { delivery: 'observed', nativeMessageId: 'm3' });
+    expect(handoff.reconcile([cancelled, stillRunning, scrolledOld], baseRows, { hasAfter: false, generation: 'g1' }).map((run) => run.commandId)).toEqual(['cmd2', 'cmd3']);
+
+    // While a reset snapshot is still pending (`windowReady: false`), a new generation does not retire runs early.
+    expect(handoff.reconcile([cancelled, stillRunning, scrolledOld], baseRows, { hasAfter: false, generation: 'g2', windowReady: false }).map((run) => run.commandId)).toEqual(['cmd2', 'cmd3']);
+
+    // Once the new generation's snapshot lands (`windowReady: true`), a run that settles later still retires against its origin generation.
+    expect(handoff.reconcile([cancelled, stillRunning], baseRows, { hasAfter: false, generation: 'g2', windowReady: true }).map((run) => run.commandId)).toEqual(['cmd2']);
+    const settledLater = nativeRun('r2', 'cmd2', 'completed', { delivery: 'observed', nativeMessageId: 'm2' });
+    expect(handoff.reconcile([cancelled, settledLater], baseRows, { hasAfter: false, generation: 'g2', windowReady: true })).toEqual([]);
+
+    // Same generation, but the window moved past a terminal run's timestamp (`hasBefore: true`): retires instead of pinning at the foot.
+    const handoff2 = new OutboxHandoff();
+    expect(handoff2.reconcile([local3], baseRows, { hasAfter: false, generation: 'g1' }).map((run) => run.commandId)).toEqual(['cmd3']);
+    const newerPlaced: TimelineRow[] = [{ ...row('later', 4096, 3), event: { ...row('later', 4096, 3).event, createdAt: '2026-10-25T00:05:00Z' } }];
+    expect(handoff2.reconcile([scrolledOld], newerPlaced, { hasBefore: true, hasAfter: false, generation: 'g1' })).toEqual([]);
   });
 });

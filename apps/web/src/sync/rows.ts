@@ -103,8 +103,12 @@ const outboxRows = new WeakMap<Run, TimelineRow>();
  */
 export function withLocalOutbox(rows: readonly TimelineRow[], locals: readonly Run[]): readonly TimelineRow[] {
   if (!locals.length) return rows;
-  const keys = new Set(rows.map((row) => row.key));
-  const runIds = new Set(rows.flatMap((row) => (row.runId ? [row.runId] : [])));
+  const keys = new Set<string>();
+  const runIds = new Set<string>();
+  for (const row of rows) {
+    keys.add(row.key);
+    if (row.kind === 'user' && row.runId) runIds.add(row.runId);
+  }
   const extra: TimelineRow[] = [];
   for (const run of locals) {
     if (keys.has(`user:${run.commandId}`) || runIds.has(run.id)) continue;

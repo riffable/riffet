@@ -1,6 +1,5 @@
-import type { Run, Session } from '@contracts';
+import { PENDING_ROW_POS, type Run, type Session, type TimelineRow } from '@contracts';
 import { HttpError, listNativeSendRequests, removeNativeSendRequest, type NativeMessageInput, type NativeSendOutboxEntry } from '@/lib/api';
-import { sendPhase } from './delivery';
 import { updateRuns, type NativeSessionStore, type NativeSessionTracking } from './nativeSessionStore';
 
 /*
@@ -45,16 +44,100 @@ export function isLocalCopy(run: Run): boolean {
   return run.native?.fingerprint === 'client-pending' && run.native.intent !== 'steer' && (run.native.delivery === 'queued' || run.native.delivery === 'uncertain' || run.native.stage === 'outbox_failure');
 }
 
+const TERMINAL_RUN_STATES: ReadonlySet<Run['state']> = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
+// perf-rules: allow empty shared readonly array sentinel, never mutated
+const EMPTY_RUNS: readonly Run[] = [];
+
+/** Earliest placed (non-pending) row timestamp in the window, used to retire settled runs scrolled off the top. */
+function oldestPlacedAt(rows: readonly TimelineRow[]): number {
+  for (const row of rows) {
+    if (row.pos >= PENDING_ROW_POS) continue;
+    const at = Date.parse(row.event.createdAt);
+    if (Number.isFinite(at)) return at;
+  }
+  return Number.NEGATIVE_INFINITY;
+}
+
 /**
- * A send the server has accepted but not yet handed to the CLI. The server's pending row for it
- * (`user:<commandId>`) comes over the stream a moment after the POST's answer replaces the local
- * copy; until it lands, the tab keeps drawing the row it drew while it waited, so the message does
- * not blink out of the transcript in between. The server's row takes its place by key.
+ * Tracks sends this tab drew locally until the server's own `user` row lands in the timeline.
+ *
+ * Control frames (`run`, `status`, POST receipts) deliberately race ahead of timeline folding, so
+ * a Run can reach `input_sent`, `observed`, or even `completed` before its `user:<commandId>` row
+ * arrives over the stream. Each tracked send records the generation it started under and stays
+ * until the data plane actually covers it (a `user` row matching `user:<commandId>` or `run.id`),
+ * or until it is definitively gone (`cancelled`, removed from `runs`, or a terminal run that was
+ * superseded by a new confirmed generation or scrolled off the top of the window).
  */
-export function awaitsServerRow(run: Run): boolean {
-  if (run.native?.intent === 'steer') return false;
-  const phase = sendPhase(run);
-  return phase === 'queued' || phase === 'starting';
+export class OutboxHandoff {
+  private readonly pending = new Map<string, string | undefined>();
+
+  constructor(seedCommandId?: string) {
+    if (seedCommandId) this.pending.set(seedCommandId, undefined);
+  }
+
+  reconcile(
+    runs: readonly Run[],
+    rows: readonly TimelineRow[],
+    { hasBefore = false, hasAfter, generation, windowReady = true, seed }: {
+      hasBefore?: boolean;
+      hasAfter: boolean;
+      generation?: string;
+      windowReady?: boolean;
+      seed?: Run;
+    },
+  ): readonly Run[] {
+    const confirmedGeneration = windowReady ? generation : undefined;
+    let hasLocal = false;
+    for (const run of runs) {
+      if (isLocalCopy(run)) {
+        if (!this.pending.has(run.commandId)) this.pending.set(run.commandId, confirmedGeneration);
+        hasLocal = true;
+      }
+    }
+    if (!this.pending.size && !hasLocal) return EMPTY_RUNS;
+    const coveredKeys = new Set<string>();
+    const coveredRunIds = new Set<string>();
+    for (const row of rows) {
+      if (row.kind !== 'user') continue;
+      coveredKeys.add(row.key);
+      if (row.runId) coveredRunIds.add(row.runId);
+    }
+    const byCommand = new Map<string, Run>();
+    for (const run of runs) {
+      const prior = byCommand.get(run.commandId);
+      if (!prior || isLocalCopy(prior)) byCommand.set(run.commandId, run);
+    }
+    if (seed && !byCommand.has(seed.commandId)) byCommand.set(seed.commandId, seed);
+    const oldestAt = hasBefore && !hasAfter ? oldestPlacedAt(rows) : Number.NEGATIVE_INFINITY;
+    for (const [commandId, originGeneration] of [...this.pending]) {
+      const run = byCommand.get(commandId);
+      if (!run || coveredKeys.has(`user:${commandId}`) || coveredRunIds.has(run.id)) {
+        this.pending.delete(commandId);
+        continue;
+      }
+      if (originGeneration === undefined && confirmedGeneration) {
+        this.pending.set(commandId, confirmedGeneration);
+      }
+      if (isLocalCopy(run)) continue;
+      if (run.native?.intent === 'steer' || run.state === 'cancelled') {
+        this.pending.delete(commandId);
+        continue;
+      }
+      const isTerminal = TERMINAL_RUN_STATES.has(run.state);
+      if (!isTerminal) continue;
+      const supersededGeneration = Boolean(originGeneration && confirmedGeneration && originGeneration !== confirmedGeneration);
+      const runAt = Date.parse(run.createdAt);
+      const scrolledAboveWindow = Number.isFinite(oldestAt) && Number.isFinite(runAt) && runAt < oldestAt;
+      if (supersededGeneration || scrolledAboveWindow) {
+        this.pending.delete(commandId);
+      }
+    }
+    const outbox = runs.filter((run) => isLocalCopy(run) || (!hasAfter && this.pending.has(run.commandId)));
+    if (seed && !hasAfter && this.pending.has(seed.commandId) && !outbox.some((run) => run.commandId === seed.commandId)) {
+      outbox.push(seed);
+    }
+    return outbox.length ? outbox : EMPTY_RUNS;
+  }
 }
 
 export function mergeRun(current: Run[], incoming: Run): Run[] {

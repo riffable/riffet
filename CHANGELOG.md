@@ -55,6 +55,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Claude Code shell commands that only read, search, or list files show what they read, like Codex's: `Read MarkLayer.tsx, textQuote.ts` or `Search quoteOf in src` with the read or search icon, instead of the whole command line. Other commands still show their description or command, and the full command stays in the expanded row.
 - On Android, tapping a session's composer no longer stutters as the keyboard opens: the composer unfolds as part of the keyboard's own motion, and folds back with it when the keyboard is put away. A bottom sheet opened while the keyboard is up rises from the bottom edge instead of first appearing above the keyboard.
 - The Android Git panel shows only "Not a Git repository" for a project that is not one, without a read-failure error above it.
+- Sending a message no longer flashes (briefly disappearing and fading back in) when a fast Agent accepts or finishes it before the timeline row arrives.
 
 ## 0.9.0 - 2026-11-19
 

@@ -491,8 +491,10 @@ internal class SessionSync(
     private suspend fun publish(token: Int, lane: MainLane) {
         lock.withLock {
             if (core.value.dial != token || main !== lane) return
-            val runs = core.value.runs
-            val built = withContext(background) { traced("riffet.sync.build") { lane.build(runs) } }
+            val state = core.value
+            val runs = state.runs
+            val receiptKey = state.createdReceipts[lane.sessionId]?.let(::userRowKey)
+            val built = withContext(background) { traced("riffet.sync.build") { lane.build(runs, receiptKey) } }
             if (_truncated.value != built.truncated) _truncated.value = built.truncated
             _head.value = lane.rows.applied?.seq ?: 0L
             core.reduceDial(token) { state ->
@@ -904,8 +906,15 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
     val expanded = HashMap<String, TimelineRow>()
     private var items = HashMap<String, CachedItem>()
     private var subagents: List<StoredSubagent> = emptyList()
+    /**
+     * Local non-steer sends (and a newly created session's opening receipt) drawn before the
+     * server's `user` row landed. Each key records the generation it started under and stays pinned
+     * until the data plane covers it (`covered`), rather than guessing from `Run` delivery / `nativeMessageId`.
+     */
+    private val handoffGenerations = HashMap<String, String?>()
+    private var seededReceiptKey: String? = null
 
-    fun build(runs: List<Run>): LaneBuild {
+    fun build(runs: List<Run>, receiptKey: String? = null): LaneBuild {
         val byId = runs.associateBy { it.id }
         val byCommand = runs.filter { it.commandId.isNotEmpty() }.associateBy { it.commandId }
         val window = rows.window
@@ -971,12 +980,58 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             }
         }
         expanded.keys.retainAll { key -> window.row(key)?.let { expanded[key]?.seq == it.seq } == true }
+        val generation = window.generation
+        if (receiptKey != null && receiptKey != seededReceiptKey) {
+            seededReceiptKey = receiptKey
+            if (receiptKey !in handoffGenerations) handoffGenerations[receiptKey] = generation
+        }
+        for (run in runs) {
+            if (run.native?.fingerprint == "client-pending" && run.native?.intent != "steer") {
+                val key = userRowKey(run)
+                if (key !in handoffGenerations) handoffGenerations[key] = generation
+            }
+        }
+        if (handoffGenerations.isNotEmpty()) {
+            val byKey = HashMap<String, Run>(runs.size)
+            for (run in runs) {
+                val key = userRowKey(run)
+                val prior = byKey[key]
+                if (prior == null || prior.native?.fingerprint == "client-pending") byKey[key] = run
+            }
+            val oldestPlacedAt = if (window.hasBefore && !window.hasAfter) {
+                window.list.firstOrNull { it.pos < PENDING_ROW_POS }?.let { instantMillis(it.event.createdAt) }
+            } else null
+            val iterator = handoffGenerations.entries.iterator()
+            while (iterator.hasNext()) {
+                val entry = iterator.next()
+                val key = entry.key
+                val run = byKey[key]
+                if (run == null || key in covered || run.id in covered) {
+                    iterator.remove()
+                    continue
+                }
+                if (entry.value == null && generation != null) entry.setValue(generation)
+                if (run.native?.fingerprint == "client-pending") continue
+                if (run.native?.intent == "steer" || run.state == RunState.CANCELLED) {
+                    iterator.remove()
+                    continue
+                }
+                val terminal = run.settled() || (run.state == RunState.INTERRUPTED && run.native?.delivery != NativeDeliveryState.UNCERTAIN)
+                if (!terminal) continue
+                val superseded = entry.value != null && generation != null && entry.value != generation
+                val runAt = instantMillis(run.createdAt)
+                val scrolledAboveWindow = oldestPlacedAt != null && runAt != null && runAt < oldestPlacedAt
+                if (superseded || scrolledAboveWindow) iterator.remove()
+            }
+        }
         // Locate each missing send against the same server page, before adding any local rows.
         val insertions = mutableMapOf<Int, MutableList<TimelineItem>>()
         for (run in runs) {
             val key = userRowKey(run)
-            if (key in covered || run.id in covered || !needsLocalRow(run)) continue
-            val index = localRowIndex(run, timeline, window) ?: continue
+            if (key in covered || run.id in covered) continue
+            val awaitingHandoff = key in handoffGenerations && !window.hasAfter
+            if (!awaitingHandoff && !needsLocalRow(run)) continue
+            val index = localRowIndex(run, timeline, window, awaitingHandoff) ?: continue
             val previous = items[key]
             val shown = failureShown(run)
             val item = if (previous != null && previous.row == null && previous.run == run &&
@@ -992,7 +1047,6 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
         }
         items = cached
         if (children != subagents) subagents = children
-        val generation = window.generation
         val history = generation?.let {
             NativeHistoryState(it, cursor = window.firstPos?.takeIf { window.hasBefore }?.let { pos -> "pos:$pos" }, hasMore = window.hasBefore)
         }
@@ -1285,8 +1339,8 @@ private fun needsLocalRow(run: Run): Boolean {
 }
 
 /** Server positions order the page. A provisional send can only choose a gap between those rows. */
-private fun localRowIndex(run: Run, page: List<TimelineItem>, window: RowWindow): Int? {
-    val queued = run.native?.intent != "steer" && (run.state == RunState.QUEUED || run.state == RunState.RUNNING)
+private fun localRowIndex(run: Run, page: List<TimelineItem>, window: RowWindow, awaitingHandoff: Boolean = false): Int? {
+    val queued = run.native?.intent != "steer" && (run.state == RunState.QUEUED || run.state == RunState.RUNNING || (awaitingHandoff && run.native?.fingerprint != "client-pending"))
     if (queued && window.hasAfter) return null
     val at = instantMillis(run.createdAt) ?: return page.size.takeUnless { window.hasAfter }
     // In-flight prompts wait behind the current turn, including output written after they were sent.
@@ -1294,9 +1348,8 @@ private fun localRowIndex(run: Run, page: List<TimelineItem>, window: RowWindow)
     val index = (start until page.size).firstOrNull { i ->
         (instantMillis(timelineItemTime(page[i])) ?: Long.MIN_VALUE) > at
     } ?: page.size
-    // A device-only outbox entry has no server row to page back to. Its retry/restore action
-    // must also be reachable on the latest page, even when another device advanced the session.
-    if (!window.hasAfter && run.native?.fingerprint == "client-pending") return index
+    // A device-only outbox entry or one awaiting its server row has no server row to page back to.
+    if (!window.hasAfter && (awaitingHandoff || run.native?.fingerprint == "client-pending")) return index
     if (!queued && index == 0 && window.hasBefore) {
         val first = instantMillis(page.firstOrNull()?.event?.createdAt)
         if (first == null || at < first) return null

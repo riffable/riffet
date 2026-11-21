@@ -36,6 +36,7 @@ import riffet.contracts.NativeInteractionOption
 import riffet.contracts.NativeInteractionResponse
 import riffet.contracts.NativeInteractionResultStatus
 import riffet.contracts.NativeStatusPhase
+import riffet.contracts.RunState
 import riffet.contracts.Session
 import riffet.contracts.TimelineRow
 import riffet.contracts.RiffetJson
@@ -576,6 +577,71 @@ class SessionSyncTest {
                     store.clear()
                 }
             }
+        }
+    }
+
+    @Test
+    fun aLocalSendStaysDrawnAcrossFastObservedAndCompletedControlFramesUntilServerRowLands(): Unit = runBlocking {
+        val outbox = InMemoryOutboxStore().apply {
+            save(OutboxEntry("s1", NativeMessageInput("fast-cmd", "hi fast"), "2026-10-25T00:00:05Z"))
+        }
+        val observedRun = """{"id":"r-fast","sessionId":"s1","commandId":"fast-cmd","prompt":"hi fast","state":"completed","createdAt":"2026-10-25T00:00:05Z","updatedAt":"2026-10-25T00:00:06Z","native":{"input":{"text":"hi fast","attachmentIds":[],"context":[]},"config":{"mode":"agent"},"fingerprint":"f","delivery":"observed","nativeMessageId":"native-u-fast","attempt":1,"configRevision":1}}"""
+        val server = serve { request ->
+            when (request.path) {
+                "/api/v3/sessions/s1/sync" -> sseOpen(
+                    hello("g1"),
+                    snapshot("g1", 1, row("a1", 1, 1, "earlier")),
+                    "run" to """{"type":"run","run":$observedRun}""",
+                    ping,
+                )
+                else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
+            }
+        }
+        val store = store(server, outbox = outbox)
+        try {
+            store.select(session)
+            withTimeout(5_000) {
+                store.runs.first { list -> list.any { it.id == "r-fast" && it.state == RunState.COMPLETED } }
+            }
+            val settledWithoutRow = withTimeout(5_000) {
+                store.timeline.first { items ->
+                    val user = items.lastOrNull() as? TimelineItem.User
+                    user?.key == "user:fast-cmd" && user.run?.id == "r-fast" && user.run?.state == RunState.COMPLETED
+                }
+            }
+            assertEquals(listOf("a1", "user:fast-cmd"), settledWithoutRow.map { it.key })
+        } finally {
+            store.clear()
+        }
+
+        // Once the server user row lands, it replaces the local placeholder in place with no duplicates.
+        val outbox2 = InMemoryOutboxStore().apply {
+            save(OutboxEntry("s1", NativeMessageInput("fast-cmd", "hi fast"), "2026-10-25T00:00:05Z"))
+        }
+        val landedServer = serve { request ->
+            when (request.path) {
+                "/api/v3/sessions/s1/sync" -> sseOpen(
+                    hello("g1"),
+                    snapshot("g1", 1, row("a1", 1, 1, "earlier")),
+                    "run" to """{"type":"run","run":$observedRun}""",
+                    rows("g1", 2, 2, userRow("user:fast-cmd", 2, 2, "hi fast", runId = "r-fast")),
+                    ping,
+                )
+                else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
+            }
+        }
+        val store2 = store(landedServer, outbox = outbox2)
+        try {
+            store2.select(session)
+            val landed = withTimeout(5_000) {
+                store2.timeline.first { items ->
+                    val user = items.lastOrNull() as? TimelineItem.User
+                    user?.key == "user:fast-cmd" && user.event.projectionKey == "user:fast-cmd"
+                }
+            }
+            assertEquals(listOf("a1", "user:fast-cmd"), landed.map { it.key })
+        } finally {
+            store2.clear()
         }
     }
 

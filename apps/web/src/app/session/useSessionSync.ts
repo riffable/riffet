@@ -12,7 +12,7 @@ import { timelineItems, withLocalOutbox } from '@/sync/rows';
 import { SessionSync, type SessionSyncState } from '@/sync/session';
 import type { TimelineItem } from './model';
 import type { Turn } from './TurnRail';
-import { awaitsServerRow, isLocalCopy, keepsInlineReceipt, mergeRun, settleLocalCopies, snapshotWithLocalOutbox } from './nativeOutbox';
+import { isLocalCopy, keepsInlineReceipt, mergeRun, OutboxHandoff, settleLocalCopies, snapshotWithLocalOutbox } from './nativeOutbox';
 import { useNativeRunCommands } from './nativeRunCommands';
 import { absorbRunMetrics, blankNativeSession, createNativeSessionStore, recordRunMetrics, updateRuns, type NativeSessionLatest, type NativeSessionTracking } from './nativeSessionStore';
 import { NativeJobStore, SubagentStore } from './subagents';
@@ -52,8 +52,8 @@ export interface SyncExtras {
 }
 
 /** What the transcript reads of the engine, published at most once per frame. */
-interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; generation?: string; control?: SessionControlSnapshot }
-const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] }, control: undefined });
+interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasBefore: boolean; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; generation?: string; resumable: boolean; control?: SessionControlSnapshot }
+const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasBefore: false, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] }, resumable: false, control: undefined });
 
 /** Where an outline turn the rows do not hold stands in the turn list, until its rows are loaded. */
 const OUTLINE_TURN = 'outline-turn:';
@@ -337,6 +337,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
         const title = latest.current.title;
         notify(t`「${title}」已完成`);
       }
+      const priorPhase = store.get().status.phase;
       switch (frame.type) {
         case 'hello': {
           const status = statusWith(frame.status, frame.interaction ?? null);
@@ -372,8 +373,13 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
         case 'session': latest.current.onSessionChanged(frame.session); break;
       }
       // The engine has already dropped a control frame whose revision went backwards. Read that, not the frame.
-      // Publish `outline` on the same tick as `status`/`runs`/`control` so turn completion lands in one commit.
-      if (frame.type === 'hello') view.set({ control: sync.store.get().control, outline: sync.store.get().outline });
+      // When visible and a turn/handoff state change arrives alongside already-landed rows, flush
+      // them in the same commit instead of tearing across frames; keep high-frequency frames coalesced.
+      const phaseChanged = frame.type === 'status' && store.get().status.phase !== priorPhase;
+      const syncFlush = document.visibilityState === 'visible'
+        && (frame.type === 'hello' || frame.type === 'runs' || frame.type === 'run' || frame.type === 'control' || frame.type === 'outline' || phaseChanged);
+      if (syncFlush && sync.rows() !== view.get().rows) publish.flush();
+      else if (frame.type === 'hello') view.set({ control: sync.store.get().control, outline: sync.store.get().outline });
       else if (frame.type === 'control') view.set({ control: sync.store.get().control });
       else if (frame.type === 'outline') view.set({ outline: sync.store.get().outline });
     };
@@ -406,9 +412,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
       view.set((previous) => {
         const activities = liveTasks(current.activities);
         return {
-          rows: sync.rows(), resetVersion: current.resetVersion, hasAfter: current.hasAfter, loadingAfter: current.loadingAfter,
+          rows: sync.rows(), resetVersion: current.resetVersion, hasBefore: current.hasBefore, hasAfter: current.hasAfter, loadingAfter: current.loadingAfter,
           activities: sameActivities(activities, previous.activities) ? previous.activities : activities,
           outline: current.outline, ...(current.generation ? { generation: current.generation } : {}),
+          resumable: sync.main.resumable,
           control: current.control,
         };
       });
@@ -518,25 +525,28 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
     syncToolSummaries.current?.();
   }, [nativeSessionId, subagents, jobs]);
 
-  /** Sends this tab drew a local row for. Only those keep it until the server's row lands; another device's send never gets one. */
-  const ownSends = useRef(new Set<string>());
-  const localRuns = useMemo(() => {
-    for (const run of runs) if (isLocalCopy(run)) ownSends.current.add(run.commandId);
-    // A window that has given up its tail (the reader scrolled back) shows no pending row at its foot.
-    return runs.filter((run) => isLocalCopy(run) || (!synced.hasAfter && ownSends.current.has(run.commandId) && awaitsServerRow(run)));
-  }, [runs, synced.hasAfter]);
-  // A created session's first run arrives as a server receipt. Until the server's own `user:` row
-  // lands, the receipt supplies the transcript row, so the prompt appears where it was sent instead
-  // of waiting in the dock like a follow-up queued behind a turn.
+  // A created session's first run arrives as a server receipt rather than a `client-pending` copy.
+  // Keep exposing it as `inlineRun` so the composer dock does not pull the opening prompt out of
+  // the transcript while it starts, and seed the handoff tracker with it on frame 0.
+  const seed = seedFor(session.id);
+  const handoff = useMemo(() => new OutboxHandoff(seed?.commandId), [session.id]);
   const inlineRun = useMemo(() => {
-    const created = tracking.initialRun;
+    const created = tracking.initialRun?.sessionId === session.id ? tracking.initialRun : seed;
     if (!created) return undefined;
     const current = runs.find((run) => run.commandId === created.commandId) ?? created;
     return keepsInlineReceipt(current) ? current : undefined;
-  }, [runs, tracking]);
-  const outboxRuns = useMemo(() => (inlineRun && !localRuns.some((run) => run.commandId === inlineRun.commandId)
-    ? [...localRuns, inlineRun]
-    : localRuns), [inlineRun, localRuns]);
+  }, [runs, seed, session.id, tracking]);
+  const outboxRuns = useMemo(() => handoff.reconcile(runs, synced.rows, {
+    hasBefore: synced.hasBefore,
+    hasAfter: synced.hasAfter,
+    generation: synced.generation,
+    windowReady: synced.resumable,
+    seed: inlineRun,
+  }), [handoff, inlineRun, runs, synced.rows, synced.hasBefore, synced.hasAfter, synced.generation, synced.resumable]);
+  const httpPendingKey = useMemo(() => runs
+    .filter((run) => run.native?.stage === 'http_pending' && isLocalCopy(run))
+    .map((run) => run.commandId)
+    .join(','), [runs]);
   const rows = useMemo(() => withLocalOutbox(synced.rows, outboxRuns), [synced.rows, outboxRuns]);
   /** The adapted rows and their turns, each with a version that moves only when it changed. */
   const derived = useRef({ timeline: [] as TimelineItem[], timelineVersion: 0, turns: [] as Turn[], turnsVersion: 0 });
@@ -577,10 +587,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   }, [synced.outline]);
 
   useEffect(() => {
-    if (!localRuns.length) return;
+    if (!httpPendingKey) return;
     // The server's own row (`user:<commandId>`) or Run settles a local copy; this only reports one it never claimed.
     return settleLocalCopies(store, tracking);
-  }, [localRuns, store, tracking]);
+  }, [httpPendingKey, store, tracking]);
 
   const hasUnknownSubmission = runs.some((run) => run.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown');
   // The server says whether an unconfirmed delivery still holds the conversation (a steer whose turn is over does not); an older server leaves it to the runs.
@@ -650,7 +660,6 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   // A conversation just created here has nothing before its first prompt, which this tab already
   // holds: it is whole from the first frame rather than loading until the stream's hello, so the
   // prompt is not joined by a spinner and does not fade in again once the server confirms it.
-  const seed = seedFor(session.id);
   const loaded = state.loaded || Boolean(seed && keepsInlineReceipt(seed) && !syncedSeeds.has(seed));
   return {
     ...state, control: synced.control, loaded, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion, turnStatusByTurn,
