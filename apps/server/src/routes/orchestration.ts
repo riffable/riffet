@@ -18,7 +18,7 @@ const mergeOptions=(body:Body)=>{
 
 /** Review feedback, turn checkpoints, forks, handoffs, parallel attempts and automations (docs/ORCHESTRATION.md). */
 export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const {store,git,settings,orchestration,readNativeInput,contextReferences,nativeBackends}=deps;
+  const {store,git,settings,orchestration,readNativeInput,contextReferences,nativeBackends,workItems}=deps;
   const visibleTarget = (request: { headers: import('node:http').IncomingHttpHeaders }, target: { backendId?: string }) => backendVisibleToClient(request.headers, target.backendId);
   const visibleGroup = <T extends { attempts: Array<{ target: { backendId?: string } }> }>(request: { headers: import('node:http').IncomingHttpHeaders }, group: T): T =>
     ({ ...group, attempts: group.attempts.filter(attempt => visibleTarget(request, attempt.target)) });
@@ -39,7 +39,9 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const requested=body.target===undefined?undefined:visibleLaunchTargetForClient(request.headers,launchTarget(body.target));
     const target=requested?{...requested,backendId:requested.backendId??fallbackTarget(request)}:undefined;
     return orchestration.fork(request.params.id,{...ids(body),...(optionalText(body.runId,'runId',100)?{runId:body.runId as string}:{}),
-      ...(target?{target}:{}),isolate:body.isolate===true,...(optionalText(body.note,'note',20_000)?{note:body.note as string}:{})});
+      ...(target?{target}:{}),isolate:body.isolate===true,...(optionalText(body.note,'note',20_000)?{note:body.note as string}:{}),
+      // A fork of a task's conversation is a task of its own, so their statuses move apart.
+      attach:(session,source)=>{if(!source.workItemId)return;const project=store.getProject(session.projectId);workItems.createFromSession(session,project.system?undefined:project.id);}});
   });
   /** Can take a model's full answer; a reader who closes the dialog stops it. */
   app.post<{Params:{id:string};Body:Body}>('/api/sessions/:id/handoff/draft',async(request,reply)=>{

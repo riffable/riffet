@@ -1145,8 +1145,9 @@ export class Store {
       } else {
         this.getProject(normalized.projectId);
         const stamp = now();
-        // A fork or handoff stays on the task of the conversation it came from; not part of the creation identity.
-        const originId = normalized.origin?.kind === 'fork' || normalized.origin?.kind === 'handoff' ? normalized.origin.sessionId : undefined;
+        // A handoff carries on the same work, so it stays on its source's task; not part of the creation identity.
+        // A fork branches off: it gets a task of its own from whoever forks it (docs/TASK-BOARD.md §4.2).
+        const originId = normalized.origin?.kind === 'handoff' ? normalized.origin.sessionId : undefined;
         const inherited = !normalized.workItemId && originId ? this.get<Session>('sessions', originId)?.workItemId : undefined;
         session = {
           ...normalized,

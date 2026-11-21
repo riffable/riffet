@@ -201,10 +201,19 @@ export class OrchestrationService {
     return { session, run };
   }
 
-  /** Opens a conversation with its first message, resolving the backend as the composer would. */
-  private launch(input: NativeSessionInput, text: string | NativeRunInput, origin: SessionOrigin, ids: Ids = {}): { session: Session; run: Run } {
+  /**
+   * Opens a conversation with its first message, resolving the backend as the composer would.
+   * [attach] runs in the creation's transaction, before anything else sees the new conversation.
+   */
+  private launch(input: NativeSessionInput, text: string | NativeRunInput, origin: SessionOrigin, ids: Ids = {}, attach?: (session: Session) => void): { session: Session; run: Run } {
     if (this.closed) throw new AppError('SERVICE_CLOSED', 'The workbench is shutting down', 503);
-    const result = this.deps.store.createNativeSubmission(ids.sessionId ?? randomUUID(), { ...input, origin }, ids.commandId ?? randomUUID(), typeof text === 'string' ? textInput(text) : text);
+    const { store } = this.deps;
+    const result = store.transaction(() => {
+      const created = store.createNativeSubmission(ids.sessionId ?? randomUUID(), { ...input, origin }, ids.commandId ?? randomUUID(), typeof text === 'string' ? textInput(text) : text);
+      if (!attach) return created;
+      attach(created.session);
+      return { ...created, session: store.getSession(created.session.id) };
+    });
     this.deps.dispatch.kick();
     return result;
   }
@@ -335,9 +344,10 @@ export class OrchestrationService {
   /**
    * Continues a conversation in a new one, optionally from an earlier turn, on another backend, or
    * in a fresh worktree. Code is not rewound in place: an isolated fork from an earlier turn starts
-   * from that turn's checkpoint when one exists, and otherwise from `HEAD`.
+   * from that turn's checkpoint when one exists, and otherwise from `HEAD`. [attach] puts the new
+   * conversation on its own task in the same write.
    */
-  async fork(sessionId: string, options: { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string } & Ids): Promise<{ session: Session; run: Run }> {
+  async fork(sessionId: string, options: { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string; attach?: (session: Session, source: Session) => void } & Ids): Promise<{ session: Session; run: Run }> {
     return this.withOperation(`launch:${options.sessionId ?? randomUUID()}`, async () => {
       const { store } = this.deps;
       const provenance: SessionOrigin = { kind: 'fork', sessionId, ...(options.runId ? { runId: options.runId } : {}) };
@@ -393,7 +403,7 @@ export class OrchestrationService {
           ...(nativeFork ? { nativeSessionId: nativeFork.nativeSessionId } : {}),
           ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}),
           ...sameLaunchExtensions(source, input),
-        }, text, provenance, options);
+        }, text, provenance, options, options.attach && (session => options.attach!(session, source)));
       } catch (error) {
         await nativeFork?.cleanup?.().catch(() => undefined);
         if (options.isolate && project.id !== origin.id) {
