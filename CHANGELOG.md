@@ -90,6 +90,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - On iPhone, the first hold to talk after launch in a conversation where you had sent a message no longer crashes the app.
 - On iPhone, conversations no longer stay on “Starting” after switching tabs: a page shown for an instant while another tab opened a conversation no longer takes the live updates from the one in front.
 - On iPhone, the Waiting to send card above the composer is only as tall as its messages, and while open its title shows the count instead of repeating the first message.
+- On iPhone, hold to talk on the assistant page and in conversations responds as soon as you press, instead of after almost a second, and short presses are no longer missed.
 
 ### Performance
 

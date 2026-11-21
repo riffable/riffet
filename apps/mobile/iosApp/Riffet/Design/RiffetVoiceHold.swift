@@ -42,7 +42,7 @@ struct RiffetHoldToTalkBar: View {
     let ended: () -> Void
     let activate: () -> Void
     @State private var pressed = false
-    @GestureState private var tracking = false
+    @Environment(\.isEnabled) private var isEnabled
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -53,25 +53,65 @@ struct RiffetHoldToTalkBar: View {
             .frame(maxWidth: .infinity, minHeight: height)
             .background(pressed ? palette.press : palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.controlRadius, style: .continuous))
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                    .updating($tracking) { _, state, _ in state = true }
-                    .onChanged { value in
-                        if !pressed { guard !finishing else { return }; pressed = true; began() }
-                        moved(-value.translation.height)
-                    }
-                    .onEnded { _ in
-                        guard pressed else { return }
-                        pressed = false; ended()
-                    }
-            )
-            // A touch the system takes away (a call, a permission alert) never reaches `onEnded`.
-            .onChange(of: tracking) { _, now in
-                if !now, pressed { pressed = false; ended() }
-            }
+            // A SwiftUI gesture hears a press near the bottom edge only once the system has ruled out a home swipe,
+            // about 0.8 s on a device, and a shorter press not at all. A UIKit recognizer hears it at once.
+            .gesture(RiffetHoldPress { phase, rise in
+                switch phase {
+                case .began: guard isEnabled, !finishing else { return }; pressed = true; began()
+                case .changed: if pressed { moved(rise) }
+                default: if pressed { pressed = false; ended() }
+                }
+            })
             .accessibilityElement().accessibilityLabel(String(localized: "按住 说话", bundle: .riffet))
             .accessibilityAddTraits(.isButton).accessibilityAction(.default) { if !finishing { activate() } }
             .accessibilityIdentifier("dictationHold")
+    }
+}
+
+/// A press on the hold bar: begins with the touch, follows the finger, and ends with its lift or cancellation.
+private struct RiffetHoldPress: UIGestureRecognizerRepresentable {
+    /// The phase, and how far the finger is above where it came down.
+    let changed: (UIGestureRecognizer.State, CGFloat) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> Recognizer { Recognizer() }
+
+    func handleUIGestureRecognizerAction(_ recognizer: Recognizer, context: Context) {
+        changed(recognizer.state, recognizer.rise)
+    }
+
+    final class Recognizer: UIGestureRecognizer {
+        private var touch: UITouch?
+        private var start: CGFloat = 0
+        private(set) var rise: CGFloat = 0
+
+        override init(target: Any?, action: Selector?) {
+            super.init(target: target, action: action)
+            delaysTouchesBegan = false
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard touch == nil, let first = touches.first else { return }
+            touch = first; start = first.location(in: nil).y; rise = 0
+            state = .began
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let touch, touches.contains(touch) else { return }
+            rise = start - touch.location(in: nil).y
+            state = .changed
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let touch, touches.contains(touch) else { return }
+            state = .ended
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard let touch, touches.contains(touch) else { return }
+            state = .cancelled
+        }
+
+        override func reset() { touch = nil; rise = 0 }
     }
 }
 

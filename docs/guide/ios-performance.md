@@ -152,6 +152,14 @@ pnpm perf:ios sample 8 ConversationView                               # 采样�
 - `open` 和 `type` 同样经 `PerfProbe` 在 App 里完成。不要用 `simctl openurl` 打开 `riffet://` 链接：模拟器会弹出系统确认框，App 停在后面，量到的是空闲。`launch --open` 量到的包含启动本身，比较打开会话时用 `open`。
 - 看到某个函数占比高，用 `sample` 的完整输出（`sample <pid> 8 1 -file <文件>`）看它的调用方和子调用。
 
+### 2.14 音频会话和录音引擎不在主线程上启停
+
+`AVAudioSession` 的 `setCategory`、`setActive` 和 `AVAudioEngine` 的 `start` 是同步调用，在真机上要 130–240 ms，蓝牙耳机切到通话模式时更久。放在主线程上，按下后要等它们返回浮层才出现。启停放进同一个串行队列（`Platform/DictationMicrophone.swift` 的 `audio`），停止的关闭排在下一次开始的激活前面；回调里只用加锁的状态和线程安全的接收方。
+
+### 2.15 屏幕底部的按压不用 SwiftUI 手势
+
+靠近屏幕底边时，系统要先排除上滑回主屏，才把触摸交给 SwiftUI 手势：真机上按下约 0.8 s 后 `DragGesture` 才开始，更短的按压收不到；模拟器的触摸不经过这一步，测不出来。挂在视图上的 UIKit 手势识别器不受影响，按下 20–30 ms 内就收到。贴底的按住类控件（按住说话）用 `UIGestureRecognizerRepresentable` 接一个自己的识别器（`Design/RiffetVoiceHold.swift` 的 `RiffetHoldPress`）；`defersSystemGestures(on: .bottom)` 只能让部分按压提前，而且改了回主屏的手势，不用。
+
 ## 4. 场景回归清单
 
 改动涉及下列任一页面时，跑对应场景，结果写进 PR 描述。
@@ -164,6 +172,7 @@ pnpm perf:ios sample 8 ConversationView                               # 采样�
 | 大编辑与长输出 | 展开大编辑、6000 行输出 | 单次展开 ≤ 50 ms；块内滑动符合预算 |
 | 图片 | 展开成组截图，打开查看器，缩放，平移，保存 | 解码不在主线程 |
 | 输入与附件 | `type 150,60`，空草稿和 1000 字的草稿各一次；输入 `@` 和 `/`；添加 3 张照片 | 每次按键 ≤ 16 ms，不随草稿长度变慢；上传中可继续输入 |
+| 语音输入 | 真机上，冷启动后在发过消息的会话里第一次按住说话；在助理页和会话页（输入框贴底）快按、长按各三次 | 按下当帧出现浮层，松开即转写；不闪退 |
 | 进行中的会话 | 每 0.5 秒追加一轮，持续 10 秒 | 单段 ≤ 50 ms；没变的行不重建 |
 | 发送 | 用真实 Agent 新建任务，再在会话里连发两条，等流式回复结束 | 发出后立刻出现待发送的行；流式期间单段 ≤ 50 ms |
 | 终端、文件、Git | 打开 shell，输出 20 万行；打开文件、改动 | 按键行不被遮挡；单段 ≤ 50 ms |
