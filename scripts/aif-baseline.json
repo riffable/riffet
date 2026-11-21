@@ -1,14 +1,8 @@
 {
   "lines": {
-    "apps/server/src/auxiliary/gateway.ts": 803,
-    "apps/server/src/backends/claude/activity.ts": 833,
-    "apps/server/src/backends/claude/history.ts": 886,
-    "apps/server/src/backends/codex/index.ts": 832,
-    "apps/server/src/backends/droid/runtime.ts": 1805,
-    "apps/server/src/backends/dsh/bridge-runtime/index.mjs": 981,
-    "apps/server/src/backends/dsh/runtime.ts": 1493,
-    "apps/server/src/backends/pi/runtime.ts": 1406,
-    "apps/server/src/backends/plugin-backend.ts": 837,
+    "apps/server/src/backends/droid/runtime.ts": 1770,
+    "apps/server/src/backends/dsh/runtime.ts": 1489,
+    "apps/server/src/backends/pi/runtime.ts": 1397,
     "apps/server/src/backends/service.ts": 1449,
     "apps/server/src/channels/service.ts": 1286,
     "apps/server/src/extensions/discovery.ts": 1051,
@@ -19,9 +13,6 @@
     "apps/server/src/plugins/registry.ts": 1826,
     "apps/server/src/previews/browser-structured.ts": 1714,
     "apps/server/src/store.ts": 1665,
-    "apps/server/src/terminal/service.ts": 1983,
-    "apps/server/src/timeline/fold.ts": 981,
-    "apps/server/src/timeline/service.ts": 866,
-    "apps/server/src/workspace/code-nav.ts": 842
+    "apps/server/src/terminal/service.ts": 1983
   }
 }
