@@ -117,7 +117,7 @@ export interface VoiceInputSettingsUpdate {
  */
 export const SIDEBAR_DESTINATIONS = ['assistant', 'tasks', 'automations', 'council', 'marks', 'plugins', 'extensions', 'stats', 'activity'] as const;
 export type SidebarDestination = typeof SIDEBAR_DESTINATIONS[number];
-export const DEFAULT_SIDEBAR_PINNED: readonly SidebarDestination[] = ['assistant', 'tasks', 'automations'];
+export const DEFAULT_SIDEBAR_PINNED: readonly SidebarDestination[] = ['assistant', 'tasks', 'plugins'];
 /** The most ids `sidebarPinned` holds; past it the server refuses the list. */
 export const SIDEBAR_PINNED_MAX = 32;
 /**
@@ -236,6 +236,25 @@ export const DEFAULT_QUICK_CHAT_PRESETS: readonly QuickChatPreset[] = [
   { id: 'explain', name: '解释', prompt: '用用户的语言简明解释用户发来的内容：先说它是什么，再说最要紧的一两点。不要开场白。' },
   { id: 'polish', name: '润色', prompt: '改写用户发来的文字，使其清楚自然，保持原有语言、意思和语气。只回复改写后的文字。' },
 ];
+/**
+ * What an unset setting means, in one place for every client and the server. A key absent from the saved
+ * record reads as the value here; the doc comment on each field says the same in words.
+ */
+export const SETTING_DEFAULTS = {
+  composerEnterBehavior: 'newline',
+  composerRunningBehavior: 'queue',
+  composerSendLater: false,
+  sidebarPinned: DEFAULT_SIDEBAR_PINNED,
+  assistant: { supervision: false, consolidation: true, dispatch: 'edits' },
+  quickChat: { retentionDays: DEFAULT_QUICK_CHAT_RETENTION_DAYS, openMode: 'sheet' },
+} as const satisfies {
+  composerEnterBehavior: NonNullable<AppSettings['composerEnterBehavior']>;
+  composerRunningBehavior: NonNullable<AppSettings['composerRunningBehavior']>;
+  composerSendLater: boolean;
+  sidebarPinned: readonly SidebarDestination[];
+  assistant: Required<Pick<AssistantSettings, 'supervision' | 'consolidation' | 'dispatch'>>;
+  quickChat: Required<Pick<QuickChatSettings, 'retentionDays' | 'openMode'>>;
+};
 /** How an auxiliary model is invoked: directly over HTTP, or by spawning a CLI child process. */
 export type AuxiliaryModelTransport = 'http' | 'cli-process';
 /** A model behind one backend profile's gateway, as `AppSettings.auxiliaryModels` stores it. */

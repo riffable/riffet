@@ -477,7 +477,7 @@ private struct IOSTerminalSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> RemoteTerminalContainer {
         let container = RemoteTerminalContainer(frame: .zero)
         let view = container.terminal
-        view.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        view.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
         view.changeScrollback(Int(BudgetsKt.TERMINAL_KEPT_ROWS_PHONE))
         view.terminalDelegate = context.coordinator
         view.accessibilityLabel = String(localized: "远程终端", bundle: .riffet)

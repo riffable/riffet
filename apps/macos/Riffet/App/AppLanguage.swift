@@ -1,6 +1,7 @@
 import AppKit
 
-/// The interface language (docs/MACOS.md, 界面语言). Chinese unless the reader picked another one,
+/// The interface language (docs/MACOS.md, 界面语言). The first Chinese or English entry of the
+/// system's language list, Chinese when it has neither, unless the reader picked one
 /// in 外观与显示 or in System Settings → General → Language & Region → Applications: both write
 /// this app's own `AppleLanguages`, which the bundle reads once at launch. A change therefore
 /// applies after the app restarts; the server is its own LaunchAgent and keeps running.
@@ -20,16 +21,23 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     private static let key = "AppleLanguages"
 
-    /// Writes Chinese when nothing chose a language yet, so a Mac set to English still opens in
-    /// Chinese. Call before anything resolves a string.
+    /// Leaves the language to the system while nothing chose one, so a later change of the system's
+    /// language is followed too. Writes Chinese when the system's first Chinese or English entry is
+    /// Traditional Chinese (the bundle has only Simplified, and would fall through to English), or when
+    /// it lists neither. Call before anything resolves a string.
     static func applyDefault() {
         guard ownChoice == nil else { return }
-        UserDefaults.standard.set([chinese.rawValue], forKey: key)
+        let first = Locale.preferredLanguages.lazy.map { Locale.Language(identifier: $0) }
+            .first { $0.languageCode == .chinese || $0.languageCode == .english }
+        guard let first else { UserDefaults.standard.set([chinese.rawValue], forKey: key); return }
+        let traditional = first.languageCode == .chinese && first.script != .hanSimplified
+            && (first.script == .hanTraditional || ["TW", "HK", "MO"].contains(first.region?.identifier ?? ""))
+        if traditional { UserDefaults.standard.set([chinese.rawValue], forKey: key) }
     }
 
     /// The language the next launch uses.
     static var chosen: AppLanguage {
-        get { matching(ownChoice?.first) }
+        get { ownChoice.map { matching($0.first) } ?? running }
         set { UserDefaults.standard.set([newValue.rawValue], forKey: key) }
     }
 

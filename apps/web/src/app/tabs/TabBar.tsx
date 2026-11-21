@@ -12,7 +12,7 @@ import { agentMarkStyle, sessionBackend } from '@/lib/backends';
 import { cn } from '@/lib/utils';
 import { useGitStatus } from '../state/gitStatusStore';
 import { useLists, useStores } from '../state/stores';
-import { altShortcut } from './keys';
+import { useShortcutHint } from '../shortcuts';
 import { tabZones, type TabEntry } from './tabsStore';
 import { useTabs } from './useTabs';
 import { useZoneDrag } from './useZoneDrag';
@@ -279,6 +279,8 @@ interface TabBarProps {
 }
 
 export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed, onExpandSidebar, onNewSession, actionsRef }: TabBarProps) {
+  const newHint = useShortcutHint('newSession');
+  const closeHint = useShortcutHint('tabClose');
   const { t } = useLingui();
   const { tabs: store, handlers } = useStores();
   const entries = useTabs((state) => state.tabs);
@@ -446,7 +448,7 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
         <Zone name="tabs" variant={variant} onReorder={reorderNormal} onOverflow={setNormalOverflow} onDragBegin={hideCard} className="shrink">
           {normal}
         </Zone>
-        <Tip label={t`新会话`} kbd={altShortcut('T')}>
+        <Tip label={t`新会话`} kbd={newHint}>
           <Button size="icon-sm" variant="quiet" className={cn('shrink-0', buttonShift)} aria-label={t`新会话`} onClick={onNewSession}><IconPlus /></Button>
         </Tip>
         {normalOverflow && (
@@ -489,7 +491,7 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
             )}
             {menuSession && <DropdownMenuItem onSelect={() => handlers.sessionAction(menuSession, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => store.close(menu.id)}><Trans>关闭</Trans><span className="ml-auto pl-4 text-xs text-fg-4">{altShortcut('W')}</span></DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => store.close(menu.id)}><Trans>关闭</Trans><span className="ml-auto pl-4 text-xs text-fg-4">{closeHint}</span></DropdownMenuItem>
             <DropdownMenuItem disabled={othersToClose === 0} onSelect={() => store.closeOthers(menu.id)}><Trans>关闭其他标签</Trans></DropdownMenuItem>
             <DropdownMenuItem disabled={rightToClose === 0} onSelect={() => store.closeRight(menu.id)}><Trans>关闭右侧标签</Trans></DropdownMenuItem>
           </DropdownMenuContent>

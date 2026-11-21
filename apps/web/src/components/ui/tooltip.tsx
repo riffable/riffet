@@ -8,7 +8,7 @@ function focusVisible(element: Element): boolean {
   try { return element.matches(':focus-visible'); } catch { return true; }
 }
 
-export function Tip({ label, kbd, side = 'bottom', children, disabled }: { label: ReactNode; kbd?: string; side?: 'top' | 'bottom' | 'left' | 'right'; children: ReactNode; disabled?: boolean }) {
+export function Tip({ label, kbd, side = 'bottom', children, disabled }: { label: ReactNode; kbd?: string | undefined; side?: 'top' | 'bottom' | 'left' | 'right'; children: ReactNode; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
   /**
    * Radix opens on any focus it did not see a press for, a script's included: a page that hands

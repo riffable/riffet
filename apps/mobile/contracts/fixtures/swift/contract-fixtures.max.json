@@ -1615,7 +1615,7 @@
     "state": "idle",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -1725,7 +1725,7 @@
     "state": "starting",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -1835,7 +1835,7 @@
     "state": "running",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -1945,7 +1945,7 @@
     "state": "waiting",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2055,7 +2055,7 @@
     "state": "cancelling",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2165,7 +2165,7 @@
     "state": "interrupted",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2275,7 +2275,7 @@
     "state": "failed",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2385,7 +2385,7 @@
     "state": "archived",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2495,7 +2495,7 @@
     "state": "idle",
     "titleSource": "provider",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2605,7 +2605,7 @@
     "state": "idle",
     "titleSource": "agent",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2715,7 +2715,7 @@
     "state": "idle",
     "titleSource": "generated",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -2825,7 +2825,7 @@
     "state": "idle",
     "titleSource": "user",
     "displayTitle": "text",
-    "backendId": "cursor",
+    "backendId": "claude",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -3034,7 +3034,7 @@
     "createdAt": "text",
     "updatedAt": "text"
   },
-  "Session#$.backendId=claude": {
+  "Session#$.backendId=antigravity": {
     "id": "text",
     "projectId": "text",
     "kind": "native",
@@ -3045,7 +3045,7 @@
     "state": "idle",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "claude",
+    "backendId": "antigravity",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -3144,7 +3144,7 @@
     "createdAt": "text",
     "updatedAt": "text"
   },
-  "Session#$.backendId=dsh": {
+  "Session#$.backendId=cursor": {
     "id": "text",
     "projectId": "text",
     "kind": "native",
@@ -3155,227 +3155,7 @@
     "state": "idle",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "dsh",
-    "backendProfileId": "text",
-    "nativeSessionId": "text",
-    "previousNativeSessionIds": [
-      "text"
-    ],
-    "quickExitCount": 1,
-    "nativeRuntime": {
-      "address": "text",
-      "fingerprint": "text",
-      "scopeFingerprint": "text",
-      "profileId": "text",
-      "attachment": {
-        "hook": "text",
-        "id": "text"
-      }
-    },
-    "cursorSessionId": "text",
-    "terminalId": "text",
-    "terminalAppearance": {
-      "foreground": "text",
-      "background": "text"
-    },
-    "resumePicker": true,
-    "model": "text",
-    "mode": "text",
-    "approval": "text",
-    "archivedAt": "text",
-    "error": "text",
-    "configRevision": 1,
-    "configPending": true,
-    "creationFingerprint": "text",
-    "lastActivityAt": "text",
-    "seenActivityAt": "text",
-    "activeSince": "text",
-    "pinnedAt": "text",
-    "pinRank": 1,
-    "origin": {
-      "kind": "fork",
-      "sessionId": "text",
-      "runId": "text",
-      "groupId": "text",
-      "automationId": "text",
-      "templateId": "text",
-      "scheduleId": "text",
-      "channel": {
-        "kind": "text",
-        "account": "text",
-        "chatId": "text"
-      },
-      "job": "supervise",
-      "assistantRunId": "text",
-      "discussion": {
-        "anchor": {
-          "messageId": "text",
-          "aliases": [
-            "text"
-          ],
-          "runId": "text",
-          "nativeTurnId": "text",
-          "sequence": 1,
-          "generation": "text"
-        },
-        "quote": {
-          "exact": "text",
-          "prefix": "text",
-          "suffix": "text",
-          "start": 1,
-          "end": 1
-        },
-        "capturedAt": "text",
-        "contextRef": "text",
-        "requestFingerprint": "text"
-      }
-    },
-    "handedOffTo": "text",
-    "toolGroups": [
-      "text"
-    ],
-    "extensionsOff": [
-      "text"
-    ],
-    "terminalHold": {
-      "since": "text",
-      "pid": 1
-    },
-    "goal": {
-      "objective": "text",
-      "status": "active",
-      "reason": "text",
-      "tokensUsed": 1,
-      "tokenBudget": 1,
-      "seconds": 1,
-      "updatedAt": "text"
-    },
-    "workItemId": "text",
-    "createdAt": "text",
-    "updatedAt": "text"
-  },
-  "Session#$.backendId=droid": {
-    "id": "text",
-    "projectId": "text",
-    "kind": "native",
-    "title": "text",
-    "tags": [
-      "text"
-    ],
-    "state": "idle",
-    "titleSource": "prompt",
-    "displayTitle": "text",
-    "backendId": "droid",
-    "backendProfileId": "text",
-    "nativeSessionId": "text",
-    "previousNativeSessionIds": [
-      "text"
-    ],
-    "quickExitCount": 1,
-    "nativeRuntime": {
-      "address": "text",
-      "fingerprint": "text",
-      "scopeFingerprint": "text",
-      "profileId": "text",
-      "attachment": {
-        "hook": "text",
-        "id": "text"
-      }
-    },
-    "cursorSessionId": "text",
-    "terminalId": "text",
-    "terminalAppearance": {
-      "foreground": "text",
-      "background": "text"
-    },
-    "resumePicker": true,
-    "model": "text",
-    "mode": "text",
-    "approval": "text",
-    "archivedAt": "text",
-    "error": "text",
-    "configRevision": 1,
-    "configPending": true,
-    "creationFingerprint": "text",
-    "lastActivityAt": "text",
-    "seenActivityAt": "text",
-    "activeSince": "text",
-    "pinnedAt": "text",
-    "pinRank": 1,
-    "origin": {
-      "kind": "fork",
-      "sessionId": "text",
-      "runId": "text",
-      "groupId": "text",
-      "automationId": "text",
-      "templateId": "text",
-      "scheduleId": "text",
-      "channel": {
-        "kind": "text",
-        "account": "text",
-        "chatId": "text"
-      },
-      "job": "supervise",
-      "assistantRunId": "text",
-      "discussion": {
-        "anchor": {
-          "messageId": "text",
-          "aliases": [
-            "text"
-          ],
-          "runId": "text",
-          "nativeTurnId": "text",
-          "sequence": 1,
-          "generation": "text"
-        },
-        "quote": {
-          "exact": "text",
-          "prefix": "text",
-          "suffix": "text",
-          "start": 1,
-          "end": 1
-        },
-        "capturedAt": "text",
-        "contextRef": "text",
-        "requestFingerprint": "text"
-      }
-    },
-    "handedOffTo": "text",
-    "toolGroups": [
-      "text"
-    ],
-    "extensionsOff": [
-      "text"
-    ],
-    "terminalHold": {
-      "since": "text",
-      "pid": 1
-    },
-    "goal": {
-      "objective": "text",
-      "status": "active",
-      "reason": "text",
-      "tokensUsed": 1,
-      "tokenBudget": 1,
-      "seconds": 1,
-      "updatedAt": "text"
-    },
-    "workItemId": "text",
-    "createdAt": "text",
-    "updatedAt": "text"
-  },
-  "Session#$.backendId=traex": {
-    "id": "text",
-    "projectId": "text",
-    "kind": "native",
-    "title": "text",
-    "tags": [
-      "text"
-    ],
-    "state": "idle",
-    "titleSource": "prompt",
-    "displayTitle": "text",
-    "backendId": "traex",
+    "backendId": "cursor",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -3584,7 +3364,7 @@
     "createdAt": "text",
     "updatedAt": "text"
   },
-  "Session#$.backendId=antigravity": {
+  "Session#$.backendId=traex": {
     "id": "text",
     "projectId": "text",
     "kind": "native",
@@ -3595,7 +3375,227 @@
     "state": "idle",
     "titleSource": "prompt",
     "displayTitle": "text",
-    "backendId": "antigravity",
+    "backendId": "traex",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "profileId": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "seenActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "automationId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "job": "supervise",
+      "assistantRunId": "text",
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
+    },
+    "workItemId": "text",
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=droid": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "displayTitle": "text",
+    "backendId": "droid",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "profileId": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "seenActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "automationId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "job": "supervise",
+      "assistantRunId": "text",
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
+    },
+    "workItemId": "text",
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=dsh": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "displayTitle": "text",
+    "backendId": "dsh",
     "backendProfileId": "text",
     "nativeSessionId": "text",
     "previousNativeSessionIds": [
@@ -3819,7 +3819,7 @@
         "state": "idle",
         "titleSource": "prompt",
         "displayTitle": "text",
-        "backendId": "cursor",
+        "backendId": "claude",
         "backendProfileId": "text",
         "nativeSessionId": "text",
         "previousNativeSessionIds": [
@@ -3962,7 +3962,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4000,7 +4000,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4068,7 +4068,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4106,7 +4106,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4174,7 +4174,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4212,7 +4212,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4280,7 +4280,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4318,7 +4318,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4386,7 +4386,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4424,7 +4424,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4492,7 +4492,7 @@
         {
           "sessionId": "text",
           "title": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "projectName": "text",
           "capturedAt": "text",
           "snapshotRef": "text",
@@ -4530,7 +4530,7 @@
       "terminalId": "text",
       "terminalEpoch": 1,
       "nativeSessionId": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "cursorSessionId": "text",
       "nativeMessageId": "text",
       "stage": "text",
@@ -4605,7 +4605,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -4643,7 +4643,7 @@
         "terminalId": "text",
         "terminalEpoch": 1,
         "nativeSessionId": "text",
-        "backendId": "cursor",
+        "backendId": "claude",
         "cursorSessionId": "text",
         "nativeMessageId": "text",
         "stage": "text",
@@ -4714,7 +4714,7 @@
       "state": "idle",
       "titleSource": "prompt",
       "displayTitle": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "backendProfileId": "text",
       "nativeSessionId": "text",
       "previousNativeSessionIds": [
@@ -5010,7 +5010,7 @@
             {
               "sessionId": "text",
               "title": "text",
-              "backendId": "cursor",
+              "backendId": "claude",
               "projectName": "text",
               "capturedAt": "text",
               "snapshotRef": "text",
@@ -5048,7 +5048,7 @@
           "terminalId": "text",
           "terminalEpoch": 1,
           "nativeSessionId": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "cursorSessionId": "text",
           "nativeMessageId": "text",
           "stage": "text",
@@ -5192,7 +5192,7 @@
             {
               "sessionId": "text",
               "title": "text",
-              "backendId": "cursor",
+              "backendId": "claude",
               "projectName": "text",
               "capturedAt": "text",
               "snapshotRef": "text",
@@ -5400,7 +5400,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -5471,7 +5471,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -5705,7 +5705,7 @@
             {
               "sessionId": "text",
               "title": "text",
-              "backendId": "cursor",
+              "backendId": "claude",
               "projectName": "text",
               "capturedAt": "text",
               "snapshotRef": "text",
@@ -5743,7 +5743,7 @@
           "terminalId": "text",
           "terminalEpoch": 1,
           "nativeSessionId": "text",
-          "backendId": "cursor",
+          "backendId": "claude",
           "cursorSessionId": "text",
           "nativeMessageId": "text",
           "stage": "text",
@@ -5815,7 +5815,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -5853,7 +5853,7 @@
         "terminalId": "text",
         "terminalEpoch": 1,
         "nativeSessionId": "text",
-        "backendId": "cursor",
+        "backendId": "claude",
         "cursorSessionId": "text",
         "nativeMessageId": "text",
         "stage": "text",
@@ -5996,7 +5996,7 @@
       "state": "idle",
       "titleSource": "prompt",
       "displayTitle": "text",
-      "backendId": "cursor",
+      "backendId": "claude",
       "backendProfileId": "text",
       "nativeSessionId": "text",
       "previousNativeSessionIds": [
@@ -6141,7 +6141,7 @@
             {
               "sessionId": "text",
               "title": "text",
-              "backendId": "cursor",
+              "backendId": "claude",
               "projectName": "text",
               "capturedAt": "text",
               "snapshotRef": "text",
@@ -6343,7 +6343,7 @@
       {
         "sessionId": "text",
         "title": "text",
-        "backendId": "cursor",
+        "backendId": "claude",
         "projectName": "text",
         "capturedAt": "text",
         "snapshotRef": "text",
@@ -6744,7 +6744,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -6817,7 +6817,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",
@@ -6892,7 +6892,7 @@
           {
             "sessionId": "text",
             "title": "text",
-            "backendId": "cursor",
+            "backendId": "claude",
             "projectName": "text",
             "capturedAt": "text",
             "snapshotRef": "text",

@@ -43,6 +43,7 @@ async function boot(savedSettings?: Record<string, unknown>) {
   const settings = new SettingsService({ stateDir, cliPath: '/nonexistent/cursor-agent' });
   const nativeBackends = {
     offeredBackendIds: () => ['cursor', 'pi', 'antigravity', 'chat'],
+    availableBackendIds: async function (this: { offeredBackendIds(): string[] }) { return this.offeredBackendIds(); },
     catalog: {
       listBackends: async () => ['cursor', 'pi', 'antigravity', 'chat'].map(backendId => ({ backendId, label: backendId, available: true, profiles: [profile], capabilities, models: [] })),
       validateProfile: (_backendId: string, profileId?: string) => profileId && profileId !== 'default' ? undefined : profile,
@@ -77,7 +78,7 @@ async function boot(savedSettings?: Record<string, unknown>) {
       attempts: [],
     }),
   };
-  const effectiveSettings = (headers?: import('node:http').IncomingHttpHeaders) => ({ ...effectiveSettingsForClient(headers, settings.getSettings(), nativeBackends.offeredBackendIds()), allowOutsideRead: true });
+  const effectiveSettings = async (headers?: import('node:http').IncomingHttpHeaders) => ({ ...await effectiveSettingsForClient(headers, settings.getSettings(), nativeBackends), allowOutsideRead: true });
   const deps = {
     stateDir, store, settings, nativeBackends, orchestration, effectiveSettings, workItems: new WorkItemService(store),
     titles: { backfill: async () => undefined },

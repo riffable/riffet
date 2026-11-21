@@ -6,7 +6,7 @@ import { Input, Spinner } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
-import { isApplePlatform } from '@/lib/platform';
+import { matches } from '../shortcuts';
 import { cn, scrollBehavior, str } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
 import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics, type TurnOutlineV3 } from '@contracts';
@@ -1527,8 +1527,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         closeFindRef.current();
         return;
       }
-      const mod = isApplePlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-      if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f' || event.defaultPrevented || isComposingKey(event)) return;
+      if (event.defaultPrevented || !matches(event, 'find')) return;
       const scroller = scrollRef.current;
       // Only the conversation on screen: not one hidden behind a subagent page, behind the
       // fullscreen composer or under a dialog, and not while the keyboard is in a side panel or a

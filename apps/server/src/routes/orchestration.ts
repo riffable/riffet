@@ -3,7 +3,6 @@ import { AppError, requireString } from '../errors.js';
 import { launchTarget, reviewComments } from '../orchestration/service.js';
 import { backendVisibleToClient, defaultBackendForClient, projectVisibleToClient, requireProjectVisibleToClient, requireSessionVisibleToClient, sessionVisibleToClient, visibleLaunchTargetForClient } from '../native/client-features.js';
 import type { Automation } from '../../../../packages/contracts/src/index.js';
-import { savedDefaultBackendId } from '../session-identity.js';
 import type { RouteDeps } from './deps.js';
 
 type Body = Record<string, unknown>;
@@ -22,7 +21,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
   const visibleTarget = (request: { headers: import('node:http').IncomingHttpHeaders }, target: { backendId?: string }) => backendVisibleToClient(request.headers, target.backendId);
   const visibleGroup = <T extends { attempts: Array<{ target: { backendId?: string } }> }>(request: { headers: import('node:http').IncomingHttpHeaders }, group: T): T =>
     ({ ...group, attempts: group.attempts.filter(attempt => visibleTarget(request, attempt.target)) });
-  const fallbackTarget = (request: { headers: import('node:http').IncomingHttpHeaders }) => defaultBackendForClient(request.headers, savedDefaultBackendId(settings.getSettings()), deps.nativeBackends.offeredBackendIds());
+  const fallbackTarget = (request: { headers: import('node:http').IncomingHttpHeaders }) => defaultBackendForClient(request.headers, settings.getSettings().defaultBackendId, deps.nativeBackends);
   app.post<{Params:{id:string};Body:Body}>('/api/sessions/:id/review',async(request,reply)=>{
     const body=request.body??{};
     reply.code(202);return orchestration.review(request.params.id,requireString(body.commandId,'commandId',100),reviewComments(body.comments),optionalText(body.note,'note',5_000));
@@ -37,7 +36,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     reply.code(202);
     // A target that names no backend falls back here, before the service reads the saved default.
     const requested=body.target===undefined?undefined:visibleLaunchTargetForClient(request.headers,launchTarget(body.target));
-    const target=requested?{...requested,backendId:requested.backendId??fallbackTarget(request)}:undefined;
+    const target=requested?{...requested,backendId:requested.backendId??await fallbackTarget(request)}:undefined;
     return orchestration.fork(request.params.id,{...ids(body),...(optionalText(body.runId,'runId',100)?{runId:body.runId as string}:{}),
       ...(target?{target}:{}),isolate:body.isolate===true,...(optionalText(body.note,'note',20_000)?{note:body.note as string}:{}),
       // A fork of a task's conversation is a task of its own, so their statuses move apart.
@@ -70,7 +69,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     reply.code(202);
     // An old client reads an unset target through its own enum, so the saved default falls back here
     // before the orchestration service resolves it without request headers.
-    const targets=body.targets.map(launchTarget).map(target=>visibleLaunchTargetForClient(request.headers,target)).map(target=>({...target,backendId:target.backendId??fallbackTarget(request)}));
+    const targets=await Promise.all(body.targets.map(launchTarget).map(target=>visibleLaunchTargetForClient(request.headers,target)).map(async target=>({...target,backendId:target.backendId??await fallbackTarget(request)})));
     // The prompt arrives as a full composer input, so attachments and file references ride along.
     const runInput=await readNativeInput({text:body.prompt as string,attachments:body.attachments as Array<{id:string}>|undefined,context:body.context as Array<{path:string;line?:number}>|undefined});
     const created=await orchestration.createAttempts(request.params.id,{prompt:runInput.text,targets,runInput,
@@ -87,7 +86,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const body=request.body??{};
     reply.code(202);
     const target=visibleLaunchTargetForClient(request.headers,launchTarget(body.target));
-    const created=await orchestration.addAttempt(request.params.id,{...target,backendId:target.backendId??fallbackTarget(request)});
+    const created=await orchestration.addAttempt(request.params.id,{...target,backendId:target.backendId??await fallbackTarget(request)});
     return {...created,group:visibleGroup(request,created.group)};
   });
   app.post<{Params:{id:string};Body:Body}>('/api/attempts/:id/discard',async(request)=>{
@@ -177,7 +176,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const projectId = optionalText(body.projectId, 'projectId', 100);
     if (projectId) requireProjectVisibleToClient(request.headers, store.getProject(projectId));
     // An unset backend would resolve the saved default inside the service; an old client gets the compatible default instead of a conversation it cannot decode.
-    const target = !item.followUp && item.backendId === undefined ? { backendId: fallbackTarget(request) } : undefined;
+    const target = !item.followUp && item.backendId === undefined ? { backendId: await fallbackTarget(request) } : undefined;
     const sessionId = optionalText(body.clientSessionId, 'clientSessionId', 100), commandId = optionalText(body.commandId, 'commandId', 100);
     reply.code(202);
     return withoutHiddenSession(request, await orchestration.fire(item.id, {

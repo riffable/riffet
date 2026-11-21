@@ -770,7 +770,7 @@ describe('app route surface after ACP removal', () => {
     const { stateDir, call } = await boot({ defaultBackend: 'native', defaultModel: 'legacy-model' });
     const bootstrap = await call('GET', '/api/bootstrap');
     expect(bootstrap.statusCode).toBe(200);
-    expect(bootstrap.json().settings).toEqual({ defaultModel: 'legacy-model', allowOutsideRead: true, quickChat: { presets: DEFAULT_QUICK_CHAT_PRESETS } });
+    expect(bootstrap.json().settings).toEqual({ defaultModel: 'legacy-model', defaultBackendId: 'claude', allowOutsideRead: true, quickChat: { presets: DEFAULT_QUICK_CHAT_PRESETS } });
     const saved = await call('PATCH', '/api/settings', { defaultBackendId: 'codex', notifications: true });
     expect(saved.statusCode).toBe(200);
     expect(saved.json()).toMatchObject({ defaultBackendId: 'codex', defaultModel: 'legacy-model', notifications: true });
@@ -1501,11 +1501,11 @@ describe('pi compatibility for clients that did not negotiate pi-agent', () => {
 
     const bootstrap = await ask('GET', '/api/bootstrap');
     expect(bootstrap.json().sessions.map((item: { id: string }) => item.id)).not.toContain(session.id);
-    expect(bootstrap.json().settings.defaultBackendId).toBe('cursor');
+    expect(bootstrap.json().settings.defaultBackendId).toBe('claude');
     expect(bootstrap.json().settings).not.toHaveProperty('nativeBackendDefaults');
     expect((await ask('GET', '/api/sessions')).json().map((item: { id: string }) => item.id)).not.toContain(session.id);
     expect((await ask('GET', '/api/backends')).json().some((item: { backendId: string }) => item.backendId === 'pi')).toBe(false);
-    expect((await ask('GET', '/api/settings')).json()).toMatchObject({ defaultBackendId: 'cursor' });
+    expect((await ask('GET', '/api/settings')).json()).toMatchObject({ defaultBackendId: 'claude' });
     expect((await ask('GET', '/api/settings')).json()).not.toHaveProperty('nativeBackendDefaults');
     expect((await ask('GET', `/api/sessions/${session.id}/events`)).statusCode).toBe(404);
     expect((await ask('GET', `/api/v3/sessions/${session.id}/timeline/changes`)).statusCode).toBe(404);
@@ -1527,7 +1527,7 @@ describe('pi compatibility for clients that did not negotiate pi-agent', () => {
 
     const created = await ask('POST', '/api/sessions', input);
     expect(created.statusCode).toBe(200);
-    expect(created.json().backendId).toBe('cursor');
+    expect(created.json().backendId).toBe('claude');
     const rejected = await ask('POST', '/api/sessions', { ...input, backendId: 'pi' });
     expect(rejected.statusCode).toBe(400);
     expect(rejected.json().error.code).toBe('INVALID_BACKEND');
@@ -1548,15 +1548,16 @@ describe('pi compatibility for clients that did not negotiate pi-agent', () => {
     const internal = await resolveNativeSessionInput(deps, { projectId: project.id });
     expect(internal.backendId).toBe('pi');
     const request = await resolveNativeSessionInput(deps, { projectId: project.id }, {});
-    expect(request.backendId).toBe('cursor');
+    expect(request.backendId).toBe('claude');
     await expect(resolveNativeSessionInput(deps, { projectId: project.id, backendId: 'pi' }, {})).rejects.toMatchObject({ code: 'INVALID_BACKEND' });
   });
 
   it('preserves hidden pi defaults when an older client saves visible settings', async () => {
     const { call, stateDir, settings } = await boot({ defaultBackendId: 'pi', nativeBackendDefaults: { pi: { model: 'pi-model', approval: 'read-only' }, cursor: { model: 'cursor-model' } } });
-    const savedDefault = await call('PATCH', '/api/settings', { defaultBackendId: 'cursor' });
+    // The older client read the fallback (Claude here, no CLI is installed) and saves it back.
+    const savedDefault = await call('PATCH', '/api/settings', { defaultBackendId: 'claude' });
     expect(savedDefault.statusCode).toBe(200);
-    expect(savedDefault.json().defaultBackendId).toBe('cursor');
+    expect(savedDefault.json().defaultBackendId).toBe('claude');
     expect(settings.getSettings().defaultBackendId).toBe('pi');
     expect(JSON.parse(await readFile(join(stateDir, 'settings.json'), 'utf8')).defaultBackendId).toBe('pi');
 
@@ -2128,7 +2129,7 @@ describe('Riffet MCP tools', () => {
   });
 
   it('gives every conversation the base tools and scopes each credential to its own conversation', async () => {
-    const { app, cookie, csrf, projectDir, store, dispatch, riffetMcp, call } = await boot({}, undefined, undefined, true);
+    const { app, cookie, csrf, projectDir, store, dispatch, riffetMcp, call } = await boot({ defaultBackendId: 'cursor' }, undefined, undefined, true);
     await dispatch.close();
     const project = store.createProject(projectDir, 'tools');
     const create = (id: string, toolGroups?: string[]) => app.inject({ method: 'POST', url: '/api/sessions', headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf },
@@ -2350,7 +2351,7 @@ describe('reading files outside the project', () => {
 
 describe('conversation search', () => {
   it('answers an empty query with nothing, and reports how much is still to index', async () => {
-    const { call, projectDir } = await boot();
+    const { call, projectDir } = await boot({ defaultBackendId: 'cursor' });
     const origin = (await call('POST', '/api/projects', { cwd: projectDir })).json() as { id: string };
     await call('POST', '/api/sessions', { projectId: origin.id, kind: 'native', title: 'Build failing' });
 
@@ -2457,7 +2458,7 @@ describe('session list push', () => {
 
 describe('native startup workspace reservations', () => {
   it('serializes configuration changes while excluding project restores, and fences prewarm in both directions', async () => {
-    const { store, projectDir, call, dispatch, nativeBackends } = await boot();
+    const { store, projectDir, call, dispatch, nativeBackends } = await boot({ defaultBackendId: 'cursor' });
     const project = store.createProject(projectDir, 'startup fence');
     const session = store.createSession({ projectId: project.id, kind: 'native' });
     const deferred = () => {

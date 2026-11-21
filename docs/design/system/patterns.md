@@ -360,15 +360,21 @@
 
 ### 10.1 快捷键
 
-| 范围 | 键 | 来源 |
+快捷键只有一张表：`packages/contracts/src/shortcuts.ts`（`SHORTCUTS`，Web 与 Mac 共用，每项按端写默认键）。处理、菜单、设置列表、`Tip` 与键帽、命令面板、插件禁用表和冲突检查都读它，任何一端不在表外另写键位。Web 侧的解析在 `app/shortcuts/`，名称与分组在 `app/hostShortcuts.ts`。
+
+| 范围 | 键（Web 默认） | 处理 |
 |---|---|---|
-| 工作台 | ⌘K 搜索会话 · ⌘⇧P 命令面板 · ⌘B 侧栏 · Ctrl+\` 终端 | `app/use-global-shortcuts.ts` |
-| 会话标签页 | ⌥1–8 · ⌥9 · ⌥[ · ⌥] · ⌥W · ⌥⇧T · ⌥T · ⌥I · ⌥⇧1–3 | `app/tabs/keys.ts`（显示）、`use-global-shortcuts.ts`（实现） |
+| 工作台 | ⌘K 搜索会话 · ⌘⇧P 命令面板 · ⌘B 侧栏 · Ctrl+\` 终端 · ⌥T 新会话 | `app/use-global-shortcuts.ts` |
+| 会话标签页 | ⌥1–8 · ⌥9 · ⌥[ · ⌥] · ⌥W · ⌥⇧T | `use-global-shortcuts.ts` |
+| 会话 | ⌥I 会话信息 · ⌥⇧1–3 切换视图 · ⌘F 查找 | `use-global-shortcuts.ts`、`session/ViewDots.tsx`、`session/TranscriptView.tsx` |
+| 文件 | ⌘P 搜索文件 | `panels/FilesPanel.tsx` |
 | 输入框 | 发送 ⌘↵ 或 ↵（随「回车键行为」）· ⇧↵ 换行 · Esc 关闭菜单 | `session/composerKeyboard.ts` |
 
-- Mac 的命令键是 ⌘，其他平台是 Ctrl。Mac 上 Ctrl+K、Ctrl+B 是文本框自己的编辑键，只有 ⌘ 能触发工作台快捷键。标签页用 ⌥（Alt），因为浏览器占着 ⌘/Ctrl 加 T、W、数字；终端内的 ⌥ 留给终端。
-- 快捷键按物理键（`event.code`）匹配，使用 ⌥ 输入字符的键盘布局仍然有效。输入法组词期间一律不触发。
-- **显示**：纯图标按钮的 `Tip` 带 `kbd`；列表中的快捷键用 `Kbd`；行文里用 `shortcutLabel`（Mac「⌘K」，其他「Ctrl+K」）。
+- Mac 的命令键是 ⌘，其他平台是 Ctrl（表里写 `Mod`）。匹配要求修饰键完全一致，所以 Mac 上 Ctrl+K、Ctrl+B 这类文本框自己的编辑键不会触发 ⌘ 的快捷键。标签页用 ⌥（Alt），因为浏览器占着 ⌘/Ctrl 加 T、W、数字。
+- 处理一律问 `matches(event, id)`（标签与视图这类整组键用 `matchIndex`），不在组件里写 `event.key`、`event.code` 或修饰键判断。按物理键（`event.code`）匹配，使用 ⌥ 输入字符的键盘布局仍然有效。
+- **输入法与焦点**：输入法组词期间一律不触发（`isComposingKey`，包括 Mod+Enter 这类提交键）。终端（`.xterm`）里 ⌥ 和带 Ctrl 的快捷键留给终端（shell 的 Ctrl+K、tmux 前缀 Ctrl+B），只有打开终端的 Ctrl+\` 例外。Mac 文本框里，⌥ 组出的字符（德语、北欧布局的 ⌥5–9）和死键（⌥I 的 ˆ）归文本框。
+- **显示**：键位随用户设置变化，所以不手写：纯图标按钮的 `Tip kbd` 用 `shortcutHint(id)`，列表里的 `Kbd` 用 `shortcutCaps(id)`；关闭的快捷键不显示键位。`shortcutLabel`（`lib/platform.ts`）只用于不在表里的固定键。
+- **用户改键**：设置「行为」分组里单独的「快捷键」页（排在「输入」之后，Mac 同）列出表里的快捷键，每行可录入新组合、恢复默认或停用，列表头可全部恢复（`app/settings/ShortcutSettings.tsx`，录入控件见 [ShortcutRecorder](components/inputs.md)）。覆盖存在这个浏览器的 `localStorage`（`riffet.shortcuts.v1`，偏好类，不同步，不进服务器）。整组键（标签 1–9、视图 1–3）只读。录入时必须含 Ctrl、Alt 或 ⌘；录入期间其他快捷键暂停；Esc 取消。冲突：与另一个快捷键相同时就地显示它的名称，可替换（对方失去该组合）；浏览器占用的组合（表里的 `RESERVED_CHORDS.web`）直接拒绝并说明；插件命令的同一组合以宿主为准，插件那条不注册。
 
 ### 10.2 焦点与 Escape
 
@@ -379,10 +385,9 @@
 
 ### 10.3 插件快捷键
 
-- 插件命令只声明默认组合（`Mod+Shift+K` 的写法，`Mod` 即 ⌘ 或 Ctrl），必须含 Ctrl、Alt 或 ⌘ 之一。工作台已占用的组合（上表，加浏览器的 ⌘/Ctrl 加 T、W、N、Q、R、L 与数字）和先注册的命令占用的组合会被拒绝并记录原因（`app/pluginKeybindings.ts` 的 `registerKeybindings`）；插件不能覆盖工作台的键。
+- 插件命令只声明默认组合（`Mod+Shift+K` 的写法，`Mod` 即 ⌘ 或 Ctrl），必须含 Ctrl、Alt 或 ⌘ 之一。工作台当前生效的键位（含用户改过的）、表里的 `RESERVED_CHORDS.web`（浏览器的 ⌘/Ctrl 加 T、W、N、Q、R、L 与数字，⌥⇧4–9）和先注册的命令占用的组合会被拒绝并记录原因（`app/pluginKeybindings.ts` 的 `registerKeybindings`）；插件不能覆盖工作台的键，用户改键后插件的那条随之重新判断。
 
 **现状**：
 
 - 输入框的键（`composerKeyboard.ts`）不在登记表里，随「回车键行为」设置变化。
-- 登记表（`app/hostShortcuts.ts`）只记键位，处理仍分在 `use-global-shortcuts.ts` 与 `session/ViewDots.tsx`（⌥⇧1–3）；新增工作台快捷键要在两处同时加。
 

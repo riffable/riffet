@@ -92,7 +92,29 @@ export async function activateLocale(locale: CatalogLocale): Promise<void> {
 }
 
 function preferredLocale(): CatalogLocale {
-  return parseLocale(readStored(KEY)) ?? SOURCE_LOCALE;
+  const stored = parseLocale(readStored(KEY));
+  if (stored) return stored;
+  // Before the language followed the browser it was always Chinese: a browser that already used the workbench keeps
+  // that, and only a first visit follows the browser.
+  if (usedBefore()) { writeStored(KEY, SOURCE_LOCALE); return SOURCE_LOCALE; }
+  return systemLocale();
+}
+
+function usedBefore(): boolean {
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) if (localStorage.key(index)?.startsWith('riffet.')) return true;
+  } catch { /* storage unavailable: a first visit */ }
+  return false;
+}
+
+/** The first of the browser's languages this UI has a catalog for; the source language when none. */
+function systemLocale(): AppLocale {
+  for (const tag of typeof navigator === 'undefined' ? [] : navigator.languages ?? [navigator.language]) {
+    const language = tag?.toLowerCase().split('-')[0];
+    if (language === 'zh') return 'zh-Hans';
+    if (language === 'en') return 'en';
+  }
+  return SOURCE_LOCALE;
 }
 
 /**

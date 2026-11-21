@@ -127,14 +127,14 @@ fun metricLabel(metric: StatsSeriesMetric): String = when (metric) {
 
 /** The built-in agents, used before the dashboard has reported its own option list. */
 fun defaultAgentOptions(): List<StatsKeyInfo> = listOf(
-    StatsKeyInfo("cursor", "Cursor", NativeBackendId.CURSOR),
-    StatsKeyInfo("codex", "Codex", NativeBackendId.CODEX),
     StatsKeyInfo("claude", "Claude", NativeBackendId.CLAUDE),
-    StatsKeyInfo("dsh", "DeepSeek", NativeBackendId.DSH),
-    StatsKeyInfo("droid", "Droid", NativeBackendId.DROID),
-    StatsKeyInfo("traex", "TRAE", NativeBackendId.TRAEX),
-    StatsKeyInfo("pi", "pi", NativeBackendId.PI),
+    StatsKeyInfo("codex", "Codex", NativeBackendId.CODEX),
     StatsKeyInfo("antigravity", "Antigravity", NativeBackendId.ANTIGRAVITY),
+    StatsKeyInfo("cursor", "Cursor", NativeBackendId.CURSOR),
+    StatsKeyInfo("pi", "pi", NativeBackendId.PI),
+    StatsKeyInfo("traex", "TRAE", NativeBackendId.TRAEX),
+    StatsKeyInfo("droid", "Droid", NativeBackendId.DROID),
+    StatsKeyInfo("dsh", "DeepSeek", NativeBackendId.DSH),
 )
 
 /**

@@ -65,7 +65,7 @@
 - 新建会话时：临时标签 / 直接加入；标签样式为关闭或打开会话时为直接加入时不可选。
 - 视图切换：底部圆点 / 标题栏图标。
 - 显示的视图：视图目录里当前可用的会话视图（对话、终端，以及已启用插件的视图，如画布），按当前顺序排列，每行有上移、下移和显示开关；对话的开关锁定为开。顺序和隐藏按视图 ID 存储，停用插件的视图不显示，但它的位置保留，重新启用后回到原位（见 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)）。
-- 快捷键：只读列表，与下表一致，用 `Kbd` 键帽显示，Apple 平台为 ⌥，其他平台为 Alt。表定义在 `app/tabs/keys.ts`（`tabShortcuts`），设置页从它渲染；按键处理在 `use-global-shortcuts.ts`。
+- 快捷键：见下表，Apple 平台为 ⌥，其他平台为 Alt。表是 `packages/contracts/src/shortcuts.ts`，改键在设置「行为 › 快捷键」（标签 1–9 的整组键只读）；按键处理在 `use-global-shortcuts.ts`。
 
 ## 快捷键
 

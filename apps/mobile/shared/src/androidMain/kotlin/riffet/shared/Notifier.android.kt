@@ -9,8 +9,7 @@ private const val CHANNEL_ID = "riffet.connection"
 private const val NOTIFICATION_ID = 1
 
 /**
- * Posts a local notification. Requires `POST_NOTIFICATIONS` on Android 13+; the host requests it,
- * this class only checks whether the channel exists.
+ * Posts a local notification. Requires `POST_NOTIFICATIONS` on Android 13+; only the onboarding page and the settings toggle ask for it; without it the system drops the post.
  */
 private class AndroidNotifier(private val context: Context) : Notifier {
     override fun notify(title: String, body: String) {

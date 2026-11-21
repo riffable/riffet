@@ -60,11 +60,15 @@ final class NotificationCenterBridge: NSObject, UNUserNotificationCenterDelegate
         FocusFilter.sync()
         let reply = UNTextInputNotificationAction(identifier: Self.replyAction, title: String(localized: "回复"), options: [], textInputButtonTitle: String(localized: "发送"), textInputPlaceholder: String(localized: "继续对话…"))
         register(UNNotificationCategory(identifier: Self.finishedCategory, actions: [reply], intentIdentifiers: []))
-        guard !authorized else { return }
-        Task {
-            authorized = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
-            MacDeviceService.shared.permissionsChanged()
-        }
+        // Only reads the permission: asking is the guide's notification page and 通知 in settings.
+        Task { _ = await authorizationGranted() }
+    }
+
+    /// Shows the system's permission prompt (it appears once; later calls only report the answer).
+    func requestAuthorization() async -> Bool {
+        authorized = (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        MacDeviceService.shared.permissionsChanged()
+        return authorized
     }
 
     /// Whether the system lets Riffet post now, read from the system rather than from the first request's answer.

@@ -4,7 +4,7 @@ import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeBackendService } from '../backends/service.js';
 import { AppError, requireString } from '../errors.js';
 import { defaultBackendForClient, requireBackendVisibleToClient } from './client-features.js';
-import { legacyDefaults, requestedNativeSessionId, savedDefaultBackendId, type RequestedNativeSession } from '../session-identity.js';
+import { legacyDefaults, requestedNativeSessionId, type RequestedNativeSession } from '../session-identity.js';
 import type { SettingsService } from '../settings/index.js';
 import type { Store } from '../store.js';
 import { readTerminalAppearance, resolveTerminalAppearance } from '../terminal/appearance.js';
@@ -38,7 +38,7 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   // An older client reads the saved default through its own enum. A default it cannot decode, or whose
   // plugin is off, falls back here, before the profile and defaults of that backend are read. No headers
   // means an internal caller, which sees every backend.
-  const defaultBackendId=quickChat?'chat':defaultBackendForClient(headers,savedDefaultBackendId(savedSettings),nativeBackends.offeredBackendIds());
+  const defaultBackendId=quickChat?'chat':await defaultBackendForClient(headers,savedSettings.defaultBackendId,nativeBackends);
   const backendId:NativeBackendId=body.backendId===undefined?defaultBackendId as NativeBackendId:isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
   if(quickChat!==(backendId==='chat'))throw new AppError('INVALID_BACKEND',quickChat?'Only a quick chat runs here':'A quick chat has no project');
   // The 助理 runs only where it is isolated (docs/ASSISTANT.md §4); on another agent it would have the owner's configuration.

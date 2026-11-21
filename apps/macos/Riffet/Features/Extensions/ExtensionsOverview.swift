@@ -9,7 +9,8 @@ struct ExtensionsOverview: View {
     let onBrowse: (_ kind: String?, _ backend: NativeBackendId?, _ status: ExtensionStatusFilter) -> Void
     @Environment(\.palette) private var palette
 
-    private static let backendOrder = NativeBackendId.allCases.filter { $0 != .chat }
+    private static let backendOrder: [NativeBackendId] = AgentDirectory.builtinOrder
+        .compactMap { id in NativeBackendId.allCases.first { backendWire($0) == id } }
 
     var body: some View {
         let stats = store.stats

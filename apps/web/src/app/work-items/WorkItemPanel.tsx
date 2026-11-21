@@ -18,6 +18,7 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { useStores } from '../state/stores';
 import { Markdown } from '../session/Markdown';
+import { isComposingKey } from '../session/composerKeyboard';
 import { liveOf, type WorkItemView } from './model';
 import { assigneeChoices, assigneeValue } from './NewWorkItemDialog';
 import { AssigneeMark, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useLiveLabel, useStatusLabel, WorkItemNumber } from './parts';
@@ -343,7 +344,7 @@ function WatchSection({ item, watchDue, onSaveWatch, onAccepted }: {
         onChange={(event) => setNote(event.target.value)}
         onBlur={() => { if (note.trim() !== (item.watch?.note ?? '')) commitWatch({ note }); }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return;
+          if (isComposingKey(event.nativeEvent)) return;
           if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
           if (event.key === 'Escape') { event.stopPropagation(); setNote(item.watch?.note ?? ''); requestAnimationFrame(() => event.currentTarget?.blur()); }
         }}
@@ -445,7 +446,7 @@ function EditableTitle({ value, onSave }: { value: string; onSave: (value: strin
       onChange={(event) => setText(event.target.value.replace(/\n/g, ' '))}
       onBlur={save}
       onKeyDown={(event) => {
-        if (event.nativeEvent.isComposing) return;
+        if (isComposingKey(event.nativeEvent)) return;
         if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); }
         if (event.key === 'Escape') { event.stopPropagation(); setText(value); requestAnimationFrame(() => event.currentTarget?.blur()); }
       }}
@@ -527,7 +528,7 @@ function Question({ item, question, onOpenSession }: { item: WorkItem; question:
           value={text}
           maxLength={WORK_ITEM_LIMITS.comment}
           onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void send(text); } }}
+          onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !isComposingKey(event.nativeEvent)) { event.preventDefault(); void send(text); } }}
           className="block field-sizing-content max-h-30 min-h-9 min-w-0 flex-1 resize-none rounded-lg bg-bg px-2.5 py-2 text-sm text-fg outline-none shadow-[inset_0_0_0_1px_var(--line)] placeholder:text-fg-4 focus:shadow-[inset_0_0_0_1px_var(--line-strong)]"
         />
         <Button size="icon-sm" variant="primary" className="rounded-full" aria-label={t`发送回答`} disabled={!text.trim()} busy={Boolean(sending) && sending === text.trim()} onClick={() => void send(text)}><IconArrowUp /></Button>
@@ -570,7 +571,7 @@ function Criteria({ criteria, submission, onSave }: { criteria: string[]; submis
                 onChange={(event) => setLines(lines.map((entry, at) => at === index ? event.target.value : entry))}
                 onBlur={() => commit(lines)}
                 onKeyDown={(event) => {
-                  if (event.nativeEvent.isComposing) return;
+                  if (isComposingKey(event.nativeEvent)) return;
                   if (event.key === 'Enter') { event.preventDefault(); if (lines.length < WORK_ITEM_LIMITS.criteria) add(); else event.currentTarget.blur(); }
                   if (event.key === 'Escape') { event.stopPropagation(); setLines(criteria); event.currentTarget.blur(); }
                 }}
@@ -730,7 +731,7 @@ function Activity({ item, views }: { item: WorkItem; views: WorkItemView[] }) {
           value={text}
           maxLength={WORK_ITEM_LIMITS.comment}
           onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }}
+          onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !isComposingKey(event.nativeEvent)) { event.preventDefault(); void send(); } }}
           className="block field-sizing-content max-h-30 min-h-13 w-full resize-none bg-transparent px-3 pb-1 pt-2.5 text-base text-fg outline-none placeholder:text-fg-4"
         />
         <div className="flex justify-end px-2 pb-2">

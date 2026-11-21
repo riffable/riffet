@@ -9,7 +9,6 @@ import { NativeRuntimeActionRequestSchema } from '../../../../packages/contracts
 import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeStopRequest, NativeTurnTarget, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { defaultBackendForClient, requireBackendVisibleToClient } from '../native/client-features.js';
-import { savedDefaultBackendId } from '../session-identity.js';
 import { configureNative as configureNativeSession, type NativeConfigurePatch } from '../native/configure.js';
 import type { RouteDeps, NativeMessageBody } from './deps.js';
 import { memoryPressure, type MemoryPressure } from '../native/agent-processes.js';
@@ -181,7 +180,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const body=request.body;
     const project=store.getProject(requireString(body?.projectId,'projectId',100));
     if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);
-    const backendId=body.backendId===undefined?defaultBackendForClient(request.headers,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
+    const backendId=body.backendId===undefined?await defaultBackendForClient(request.headers,settings.getSettings().defaultBackendId,nativeBackends):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
     // A backend that is off, keeps no warm process or has no such profile answers before the workspace is looked at.
     const skipped=nativeBackends.catalog.prewarmSkip(backendId,body.backendProfileId);
     if(skipped)return skipped;
@@ -210,7 +209,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const body=request.body;
     const claimId=requireString(body?.claimId,'claimId',100);
     if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);
-    const backendId=body.backendId===undefined?defaultBackendForClient(request.headers,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
+    const backendId=body.backendId===undefined?await defaultBackendForClient(request.headers,settings.getSettings().defaultBackendId,nativeBackends):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
     await nativeBackends.catalog.releasePrewarm(backendId,claimId);
     reply.code(204);
   });

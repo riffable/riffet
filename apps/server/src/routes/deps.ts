@@ -86,7 +86,7 @@ export interface RouteDeps {
   sessionCommands: SessionCommands;
   /** [headers] are the request's: one relayed by a proxy came from another machine. */
   allowOutsideRead(headers?: IncomingHttpHeaders): boolean;
-  effectiveSettings(headers?: IncomingHttpHeaders): AppSettings;
+  effectiveSettings(headers?: IncomingHttpHeaders): Promise<AppSettings>;
   renameNative(session: Session): void;
   readNativeInput(body: NativeMessageBody, options?: { validateAttachments?: boolean }): Promise<NativeRunInput>;
   nativeRuns(id: string): Run[];

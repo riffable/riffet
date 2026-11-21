@@ -169,6 +169,35 @@ Radix `role="switch"`，`aria-checked`；Space 切换。名称来自 `aria-label
 - `CommandPalette.tsx`、`SessionSearchDialog.tsx`、`ImportSessionDialog.tsx` 用 `QuickInput`（`SessionSearchDialog.tsx:29`）：组合框与列表框键盘模型、无边框的整行外观、Escape 属于浮层，不并入 `SearchField`。
 - `Sidebar.tsx:445` 是打开搜索浮层的按钮，不是输入框。
 
+## ShortcutRecorder
+
+### 用途
+
+设置里改一个快捷键：显示当前键帽，激活后录入下一组按键。`components/ui/shortcut-recorder.tsx`。它只管录入状态与键盘处理，组合的含义（冲突、保存）由调用方判断。不用于输入文字，也不用于只读的快捷键列表（那里直接用 `Kbd`）。
+
+### 状态
+
+| 状态 | 外观 | 触发 |
+|---|---|---|
+| 默认 | 右对齐的 `Kbd` 键帽，高 28，无边框；悬停 `bg-hover` | |
+| 录入中 | 强调色边框加 3px 15% 光晕（同 `Input` 聚焦），显示「按下组合键」 | 点击或 Enter、Space |
+| 已停用 | `fg-4` 的「未设置」 | 键位为空 |
+| 键盘焦点 | 焦点环 | Tab |
+
+### 键盘与无障碍
+
+- 录入中，按键只属于它：阻止默认并不再向上传递，工作台与插件的快捷键在这段时间暂停（`suspendShortcuts`）。只按修饰键时继续等待；组合必须含 Ctrl、Alt 或 ⌘（Mac 的 ⌘、其他平台的 Ctrl 记作 `Mod`）。
+- Esc 取消；Tab 离开（失焦即结束录入）；按下可用的组合即结束。
+- `aria-label` 是快捷键的名称，`aria-pressed` 表示录入中。触屏 `no-hover` 下最小高 44。
+
+### 文案
+
+只有两句：「按下组合键」「未设置」。冲突、重置、停用由所在的设置行处理：与另一个快捷键相同时在行下显示「键帽 已用于「名称」」与「取消」「替换」（对方失去该组合；整组只读的键没有「替换」），浏览器占用的组合显示「这个组合归浏览器所有」与「取消」。行右侧有「恢复默认」（仅已改动时）与「停用」两个 `icon-xs` 静默按钮；列表头的「全部恢复默认」仅在有改动时出现。
+
+### 不要
+
+- 在业务代码里自己监听按键来录入；也不在这里写键位，键位只在快捷键表（patterns §10）。
+
 ## Checkbox
 
 ### 用途

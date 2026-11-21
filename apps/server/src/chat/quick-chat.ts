@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import type { FastifyRequest } from 'fastify';
-import { CLIENT_FEATURES_HEADER, DEFAULT_QUICK_CHAT_RETENTION_DAYS, type AppSettings, type Project, type Session } from '../../../../packages/contracts/src/index.js';
+import { CLIENT_FEATURES_HEADER, SETTING_DEFAULTS, type AppSettings, type Project, type Session } from '../../../../packages/contracts/src/index.js';
 import type { Store } from '../store.js';
 import { chatProjectCwd } from '../backends/chat/index.js';
 
@@ -92,7 +92,7 @@ export class QuickChatSweeper {
       else if (before !== undefined) kept[session.id] = before;
     }
     store.setSetting(KEPT_KEY, kept);
-    const days = this.deps.settings().quickChat?.retentionDays ?? DEFAULT_QUICK_CHAT_RETENTION_DAYS;
+    const days = this.deps.settings().quickChat?.retentionDays ?? SETTING_DEFAULTS.quickChat.retentionDays;
     if (days <= 0) return [];
     const cutoff = now - days * DAY_MS;
     const due = chats.filter(session => kept[session.id] !== 'kept' && !['starting', 'running', 'waiting', 'cancelling'].includes(session.state)

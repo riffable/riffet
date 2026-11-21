@@ -8,8 +8,8 @@ import { defineRead, defineSettingCommand, type SettingCommandTurn } from '../as
 import type { BackendCatalog } from '../backends/catalog.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { AppError } from '../errors.js';
-import { defaultBackendForClient } from '../native/client-features.js';
-import { legacyDefaults, savedDefaultBackendId } from '../session-identity.js';
+import { defaultBackendForClient, type DefaultBackendSource } from '../native/client-features.js';
+import { legacyDefaults } from '../session-identity.js';
 import { validateBackendDefaults } from './backend-defaults.js';
 import type { SettingsService } from './index.js';
 
@@ -64,13 +64,13 @@ function effectiveModel(catalog: Catalog, saved: AppSettings, backendId: NativeB
   return raw ? catalog.normalizeModel(backendId, profile.id, raw) : null;
 }
 
-export function agentDefaultsRead(service: Settings, catalog: Catalog, offeredIds: () => readonly NativeBackendId[]) {
+export function agentDefaultsRead(service: Settings, catalog: Catalog, source: DefaultBackendSource) {
   return defineRead('settings.agent_defaults', 'Read the Riffet instance’s default Agent and configured provider/model selections. Supply a backendId and optionally profileId to list that provider’s models.',
     ['default agent', 'default model', 'provider', 'backend', 'profile', 'model', 'billing', '默认', '模型', '提供商', '后端', '费用'],
     readArgs, async (_id, { backendId, profileId, afterProfileId, afterModelId, limit }) => {
       if (!backendId && (profileId || afterProfileId || afterModelId)) throw new AppError('INVALID_ARGUMENT', 'Select a backendId before requesting its providers or models.');
       const saved = service.getSettings();
-      const offered = offeredIds();
+      const offered = source.offeredBackendIds();
       const entries = (await catalog.listBackends()).filter(entry => entry.backendId !== 'chat');
       const backends = entries.map(entry => {
         const id = entry.backendId;
@@ -86,7 +86,7 @@ export function agentDefaultsRead(service: Settings, catalog: Catalog, offeredId
       });
       const instance = {
         configuredBackendId: saved.defaultBackendId ?? null,
-        effectiveBackendId: defaultBackendForClient(undefined, savedDefaultBackendId(saved), offered),
+        effectiveBackendId: await defaultBackendForClient(undefined, saved.defaultBackendId, source),
         backends, scope, action: 'agent_defaults_set',
       };
       if (!backendId) return instance;
@@ -104,7 +104,8 @@ export function agentDefaultsRead(service: Settings, catalog: Catalog, offeredId
     });
 }
 
-function settingSnapshot(service: Settings, catalog: Catalog, change: Change) {
+/** `effectiveDefaultId`: the Agent a new conversation starts on now (`defaultBackendForClient`). */
+function settingSnapshot(service: Settings, catalog: Catalog, change: Change, effectiveDefaultId: NativeBackendId) {
   const saved = service.getSettings();
   const { backendId, model, makeDefaultAgent } = change;
   const current = saved.nativeBackendDefaults?.[backendId];
@@ -119,16 +120,19 @@ function settingSnapshot(service: Settings, catalog: Catalog, change: Change) {
   if (model !== undefined) entry.model = model;
   const next = updateBackend ? rememberProfileModel(current, entry, MODEL_PICKER_BUDGET.rememberedProviders) : current;
   const before = {
-    defaultAgentId: savedDefaultBackendId(saved), backendId, profileId: beforeProfileId,
+    defaultAgentId: effectiveDefaultId, backendId, profileId: beforeProfileId,
     configuredModel: current?.model ?? null, effectiveModel: oldProfile ? effectiveModel(catalog, saved, backendId, oldProfile, current) : null,
   };
   const after = {
     defaultAgentId: makeDefaultAgent ? backendId : before.defaultAgentId, backendId, profileId: profile.id,
     configuredModel: next?.model ?? null, effectiveModel: effectiveModel(catalog, saved, backendId, profile, next),
   };
-  const revision = createHash('sha256').update(JSON.stringify([saved.defaultBackendId, before, after, current, oldProfile?.config, profile.config])).digest('hex');
+  // The derived default follows which CLIs are installed, so it is shown but not part of the revision: a probe that
+  // flips between propose and apply is not a conflict.
+  const revision = createHash('sha256').update(JSON.stringify([saved.defaultBackendId, { ...before, defaultAgentId: null }, { ...after, defaultAgentId: makeDefaultAgent ? backendId : null }, current, oldProfile?.config, profile.config])).digest('hex');
   const backendChanged = updateBackend && (before.profileId !== after.profileId || before.configuredModel !== after.configuredModel);
-  const agentChanged = before.defaultAgentId !== after.defaultAgentId;
+  // Compared with what is saved: making the derived default the default pins it, so it stops following the CLIs.
+  const agentChanged = makeDefaultAgent && saved.defaultBackendId !== backendId;
   const patch = {
     ...(agentChanged ? { defaultBackendId: backendId } : {}),
     ...(backendChanged ? { nativeBackendDefaults: { ...saved.nativeBackendDefaults, [backendId]: entry } } : {}),
@@ -166,7 +170,9 @@ type Proposal = {
 const expired = () => new AppError('SETTING_CONFIRMATION_EXPIRED', 'Ask for a fresh default Agent or model proposal.', 409);
 const conflict = () => new AppError('SETTINGS_CONFLICT', 'Agent defaults or provider settings changed. Read settings.agent_defaults and show a new proposal for confirmation.', 409);
 
-export function agentDefaultsCommand(service: Settings, catalog: Catalog, offeredIds: () => readonly NativeBackendId[]) {
+export function agentDefaultsCommand(service: Settings, catalog: Catalog, backends: DefaultBackendSource) {
+  const offeredIds = () => backends.offeredBackendIds();
+  const effectiveDefault = () => defaultBackendForClient(undefined, service.getSettings().defaultBackendId, backends);
   // The instance has one main assistant and only its most recent proposal is actionable. Restart loses it.
   let pending: Proposal | undefined;
   const show = (proposal: Proposal) => ({
@@ -187,14 +193,14 @@ export function agentDefaultsCommand(service: Settings, catalog: Catalog, offere
     if (proposal.appliedRunId === turn.runId) return applied(proposal, false);
     if (proposal.appliedRunId) throw expired();
     optionBackendId(proposal.change.backendId, offeredIds());
-    const current = settingSnapshot(service, catalog, proposal.change);
+    const current = settingSnapshot(service, catalog, proposal.change, await effectiveDefault());
     if (current.revision !== proposal.revision) throw conflict();
     await validateChoice(catalog, proposal.change, proposal.after.profileId, proposal.after.configuredModel);
     turn.assertCurrent();
     if (pending !== proposal || proposal.expiresAt <= Date.now()) throw expired();
     if (proposal.appliedRunId === turn.runId) return applied(proposal, false);
     if (proposal.appliedRunId) throw expired();
-    const latest = settingSnapshot(service, catalog, proposal.change);
+    const latest = settingSnapshot(service, catalog, proposal.change, await effectiveDefault());
     if (latest.revision !== proposal.revision) throw conflict();
     service.setSettings(latest.patch);
     proposal.appliedRunId = turn.runId;
@@ -210,11 +216,11 @@ export function agentDefaultsCommand(service: Settings, catalog: Catalog, offere
       }
       if (!profileId && !model && !makeDefaultAgent) throw new AppError('INVALID_ARGUMENT', 'Choose a provider or model, or set makeDefaultAgent to true.');
       const change = { backendId: optionBackendId(backendId, offeredIds()), profileId, model, makeDefaultAgent: makeDefaultAgent === true };
-      const first = settingSnapshot(service, catalog, change);
+      const first = settingSnapshot(service, catalog, change, await effectiveDefault());
       if (!first.changed) return { status: 'unchanged', changed: false, ...first.after, scope };
       await validateChoice(catalog, change, first.after.profileId, first.after.configuredModel);
       turn.assertCurrent();
-      const latest = settingSnapshot(service, catalog, change);
+      const latest = settingSnapshot(service, catalog, change, await effectiveDefault());
       if (latest.revision !== first.revision) throw conflict();
       if (pending?.sessionId === turn.sessionId && pending.runId === turn.runId && pending.expiresAt > Date.now() &&
         pending.revision === first.revision && JSON.stringify(pending.change) === JSON.stringify(change)) return show(pending);

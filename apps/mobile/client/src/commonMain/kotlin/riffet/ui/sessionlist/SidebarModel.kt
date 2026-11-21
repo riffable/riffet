@@ -33,7 +33,7 @@ sealed interface SessionAction {
 
 /**
  * How the sidebar lays its conversations out: the web's `Sidebar.tsx` `SidebarLayout`. Project
- * groups (the default, and what this screen shipped with) or one flat list cut into time bands.
+ * groups or one flat list cut into time bands (the default, as on iOS).
  */
 enum class SidebarLayout { PROJECT, TIME }
 
@@ -42,7 +42,7 @@ enum class SidebarLayout { PROJECT, TIME }
  * saved slot — falls back to the web's default rather than failing to open the drawer.
  */
 fun sidebarLayout(raw: String?): SidebarLayout =
-    if (raw == SidebarLayout.TIME.name) SidebarLayout.TIME else SidebarLayout.PROJECT
+    if (raw == SidebarLayout.PROJECT.name) SidebarLayout.PROJECT else SidebarLayout.TIME
 
 /** One project and the sessions the current query and archive filter leave visible in it. */
 data class ProjectGroup(

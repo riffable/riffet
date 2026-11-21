@@ -1746,29 +1746,27 @@ struct RiffetCommands: Commands {
         // the appearance and the text size.
         CommandGroup(after: .toolbar) {
             Divider()
-            Button("显示/隐藏侧栏") { actions?.toggleSidebar() }.keyboardShortcut("b")
-            Button("显示/隐藏检查器") { actions?.toggleInspector() }.keyboardShortcut("i", modifiers: [.command, .option])
-            Button("变更") { actions?.showInspector(.changes) }.keyboardShortcut("1", modifiers: [.command, .option])
-            Button("文件") { actions?.showInspector(.files) }.keyboardShortcut("2", modifiers: [.command, .option])
-            Button("检查器全屏") { actions?.toggleInspectorMaximized() }.keyboardShortcut("f", modifiers: [.command, .option])
+            Button("显示/隐藏侧栏") { actions?.toggleSidebar() }.shortcut(.toggleSidebar)
+            Button("显示/隐藏检查器") { actions?.toggleInspector() }.shortcut(.toggleInspector)
+            Button("变更") { actions?.showInspector(.changes) }.shortcut(.showChanges)
+            Button("文件") { actions?.showInspector(.files) }.shortcut(.showFiles)
+            Button("检查器全屏") { actions?.toggleInspectorMaximized() }.shortcut(.inspectorFullscreen)
             Divider()
-            Button("显示/隐藏终端") { actions?.toggleTerminal() }.keyboardShortcut("`", modifiers: [.control])
-            // ⇧⌘T reopens a closed tab while the tab bar is on.
-            Button("切换对话/终端视图") { actions?.toggleTerminalView() }
-                .keyboardShortcut(actions?.tabs == nil ? KeyboardShortcut("t", modifiers: [.command, .shift]) : nil)
+            Button("显示/隐藏终端") { actions?.toggleTerminal() }.shortcut(.toggleTerminal)
+            Button("切换对话/终端视图") { actions?.toggleTerminalView() }.shortcut(.toggleChatTerminal)
             Divider()
-            Button("刷新") { actions?.refresh() }.keyboardShortcut("r")
+            Button("刷新") { actions?.refresh() }.shortcut(.refresh)
             Divider()
             Menu("外观") { AppearanceMenuItems() }
             Divider()
             Button("放大") { DisplayPreferences.shared.stepTextScale(1) }
-                .keyboardShortcut("+")
+                .shortcut(.textBigger)
                 .disabled(DisplayPreferences.shared.textScale >= DisplayPreferences.textScales.last ?? 1.2)
             Button("缩小") { DisplayPreferences.shared.stepTextScale(-1) }
-                .keyboardShortcut("-")
+                .shortcut(.textSmaller)
                 .disabled(DisplayPreferences.shared.textScale <= DisplayPreferences.textScales.first ?? 0.9)
             Button("实际大小") { DisplayPreferences.shared.textScale = 1.0 }
-                .keyboardShortcut("0")
+                .shortcut(.textReset)
                 .disabled(DisplayPreferences.shared.textScale == 1.0)
         }
         // AppKit repopulates the Services submenu, reading every installed service's strings from
@@ -1776,7 +1774,7 @@ struct RiffetCommands: Commands {
         CommandGroup(replacing: .systemServices) {}
         CommandGroup(replacing: .newItem) {
             Button("新会话") { WindowRouter.shared.showMain(); actions?.newSession() }
-                .keyboardShortcut("n")
+                .shortcut(.newSession)
         }
         // ⌘W closes the tab on screen, else the window.
         CommandGroup(replacing: .saveItem) {
@@ -1785,30 +1783,30 @@ struct RiffetCommands: Commands {
                 let sheet = NSApp.keyWindow?.attachedSheet != nil
                 if sheet || actions?.tabs?.closeCurrent() != true { NSApp.keyWindow?.performClose(nil) }
             }
-            .keyboardShortcut("w")
+            .shortcut(.tabClose)
         }
         // 前往: the palette, the pages, and moving between conversations.
         CommandMenu("前往") {
-            Button("搜索…") { actions?.search() }.keyboardShortcut("k")
-            Button("搜索内容…") { actions?.searchContent() }.keyboardShortcut("f", modifiers: [.command, .shift])
-            Button("在会话中查找") { actions?.find() }.keyboardShortcut("f")
-            Button("下一个") { actions?.findNext() }.keyboardShortcut("g")
-            Button("上一个") { actions?.findPrevious() }.keyboardShortcut("g", modifiers: [.command, .shift])
-            Button("命令…") { actions?.openPalette() }.keyboardShortcut("p", modifiers: [.command, .shift])
-            Button("快速打开…") { actions?.quickOpen() }.keyboardShortcut("p")
+            Button("搜索…") { actions?.search() }.shortcut(.search)
+            Button("搜索内容…") { actions?.searchContent() }.shortcut(.searchContent)
+            Button("在会话中查找") { actions?.find() }.shortcut(.find)
+            Button("下一个") { actions?.findNext() }.shortcut(.findNext)
+            Button("上一个") { actions?.findPrevious() }.shortcut(.findPrevious)
+            Button("命令…") { actions?.openPalette() }.shortcut(.commandPalette)
+            Button("快速打开…") { actions?.quickOpen() }.shortcut(.quickOpen)
             Divider()
-            Button(WorkbenchPage.marks.title) { actions?.openPage(.marks) }.keyboardShortcut("l", modifiers: [.command, .shift])
-            Button(WorkbenchPage.tasks.title) { actions?.openPage(.tasks) }.keyboardShortcut("j", modifiers: [.command, .shift])
-            Button(WorkbenchPage.extensions.title) { actions?.openPage(.extensions) }.keyboardShortcut("e", modifiers: [.command, .shift])
-            Button(WorkbenchPage.stats.title) { actions?.openPage(.stats) }.keyboardShortcut("u", modifiers: [.command, .shift])
+            Button(WorkbenchPage.marks.title) { actions?.openPage(.marks) }.shortcut(.openMarks)
+            Button(WorkbenchPage.tasks.title) { actions?.openPage(.tasks) }.shortcut(.openTasks)
+            Button(WorkbenchPage.extensions.title) { actions?.openPage(.extensions) }.shortcut(.openExtensions)
+            Button(WorkbenchPage.stats.title) { actions?.openPage(.stats) }.shortcut(.openStats)
             Button(WorkbenchPage.activity.title) { actions?.openPage(.activity) }
             Divider()
-            Button("上一个会话") { actions?.previousSession() }.keyboardShortcut("[", modifiers: [.command, .shift])
-            Button("下一个会话") { actions?.nextSession() }.keyboardShortcut("]", modifiers: [.command, .shift])
+            Button("上一个会话") { actions?.previousSession() }.shortcut(.previousSession)
+            Button("下一个会话") { actions?.nextSession() }.shortcut(.nextSession)
             if let tabs = actions?.tabs {
-                Button("下一个标签") { tabs.step(1) }.keyboardShortcut(.tab, modifiers: .control)
-                Button("上一个标签") { tabs.step(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
-                Button("重新打开关闭的标签") { tabs.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift])
+                Button("下一个标签") { tabs.step(1) }.shortcut(.tabNext)
+                Button("上一个标签") { tabs.step(-1) }.shortcut(.tabPrevious)
+                Button("重新打开关闭的标签") { tabs.reopen() }.shortcut(.tabReopen)
             }
             Menu(actions?.tabs == nil ? "侧栏会话" : "标签页") {
                 ForEach(1...9, id: \.self) { number in
@@ -1822,10 +1820,10 @@ struct RiffetCommands: Commands {
         PluginKeybindingMenu(run: actions?.pluginCommands)
         // 会话: actions on the open conversation only.
         CommandMenu("会话") {
-            Button("中断") { actions?.interrupt() }.keyboardShortcut(".")
+            Button("中断") { actions?.interrupt() }.shortcut(.interrupt)
             Divider()
             Button("在新窗口中打开") { actions?.openInWindow?() }
-                .keyboardShortcut("o", modifiers: [.command, .option])
+                .shortcut(.openInNewWindow)
                 .disabled(actions?.openInWindow == nil)
         }
     }

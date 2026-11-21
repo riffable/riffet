@@ -1070,14 +1070,14 @@
           "backendId": {
             "type": "string",
             "enum": [
-              "cursor",
-              "codex",
               "claude",
-              "dsh",
-              "droid",
-              "traex",
-              "pi",
+              "codex",
               "antigravity",
+              "cursor",
+              "pi",
+              "traex",
+              "droid",
+              "dsh",
               "chat"
             ],
             "negotiated": [
@@ -1536,14 +1536,14 @@
                 "backendId": {
                   "type": "string",
                   "enum": [
-                    "cursor",
-                    "codex",
                     "claude",
-                    "dsh",
-                    "droid",
-                    "traex",
-                    "pi",
+                    "codex",
                     "antigravity",
+                    "cursor",
+                    "pi",
+                    "traex",
+                    "droid",
+                    "dsh",
                     "chat"
                   ],
                   "negotiated": [
@@ -2068,14 +2068,14 @@
                     "backendId": {
                       "type": "string",
                       "enum": [
-                        "cursor",
-                        "codex",
                         "claude",
-                        "dsh",
-                        "droid",
-                        "traex",
-                        "pi",
+                        "codex",
                         "antigravity",
+                        "cursor",
+                        "pi",
+                        "traex",
+                        "droid",
+                        "dsh",
                         "chat"
                       ],
                       "negotiated": [
@@ -2240,14 +2240,14 @@
               "backendId": {
                 "type": "string",
                 "enum": [
-                  "cursor",
-                  "codex",
                   "claude",
-                  "dsh",
-                  "droid",
-                  "traex",
-                  "pi",
+                  "codex",
                   "antigravity",
+                  "cursor",
+                  "pi",
+                  "traex",
+                  "droid",
+                  "dsh",
                   "chat"
                 ],
                 "negotiated": [
@@ -2540,14 +2540,14 @@
                         "backendId": {
                           "type": "string",
                           "enum": [
-                            "cursor",
-                            "codex",
                             "claude",
-                            "dsh",
-                            "droid",
-                            "traex",
-                            "pi",
+                            "codex",
                             "antigravity",
+                            "cursor",
+                            "pi",
+                            "traex",
+                            "droid",
+                            "dsh",
                             "chat"
                           ],
                           "negotiated": [
@@ -2712,14 +2712,14 @@
                   "backendId": {
                     "type": "string",
                     "enum": [
-                      "cursor",
-                      "codex",
                       "claude",
-                      "dsh",
-                      "droid",
-                      "traex",
-                      "pi",
+                      "codex",
                       "antigravity",
+                      "cursor",
+                      "pi",
+                      "traex",
+                      "droid",
+                      "dsh",
                       "chat"
                     ],
                     "negotiated": [
@@ -3058,14 +3058,14 @@
                   "backendId": {
                     "type": "string",
                     "enum": [
-                      "cursor",
-                      "codex",
                       "claude",
-                      "dsh",
-                      "droid",
-                      "traex",
-                      "pi",
+                      "codex",
                       "antigravity",
+                      "cursor",
+                      "pi",
+                      "traex",
+                      "droid",
+                      "dsh",
                       "chat"
                     ],
                     "negotiated": [
@@ -4223,14 +4223,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -4395,14 +4395,14 @@
                         "backendId": {
                           "type": "string",
                           "enum": [
-                            "cursor",
-                            "codex",
                             "claude",
-                            "dsh",
-                            "droid",
-                            "traex",
-                            "pi",
+                            "codex",
                             "antigravity",
+                            "cursor",
+                            "pi",
+                            "traex",
+                            "droid",
+                            "dsh",
                             "chat"
                           ],
                           "negotiated": [
@@ -5002,14 +5002,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -5862,14 +5862,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -7432,14 +7432,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -9673,14 +9673,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -9845,14 +9845,14 @@
                         "backendId": {
                           "type": "string",
                           "enum": [
-                            "cursor",
-                            "codex",
                             "claude",
-                            "dsh",
-                            "droid",
-                            "traex",
-                            "pi",
+                            "codex",
                             "antigravity",
+                            "cursor",
+                            "pi",
+                            "traex",
+                            "droid",
+                            "dsh",
                             "chat"
                           ],
                           "negotiated": [
@@ -10137,14 +10137,14 @@
                             "backendId": {
                               "type": "string",
                               "enum": [
-                                "cursor",
-                                "codex",
                                 "claude",
-                                "dsh",
-                                "droid",
-                                "traex",
-                                "pi",
+                                "codex",
                                 "antigravity",
+                                "cursor",
+                                "pi",
+                                "traex",
+                                "droid",
+                                "dsh",
                                 "chat"
                               ],
                               "negotiated": [
@@ -10309,14 +10309,14 @@
                       "backendId": {
                         "type": "string",
                         "enum": [
-                          "cursor",
-                          "codex",
                           "claude",
-                          "dsh",
-                          "droid",
-                          "traex",
-                          "pi",
+                          "codex",
                           "antigravity",
+                          "cursor",
+                          "pi",
+                          "traex",
+                          "droid",
+                          "dsh",
                           "chat"
                         ],
                         "negotiated": [
@@ -10943,14 +10943,14 @@
                   "backendId": {
                     "type": "string",
                     "enum": [
-                      "cursor",
-                      "codex",
                       "claude",
-                      "dsh",
-                      "droid",
-                      "traex",
-                      "pi",
+                      "codex",
                       "antigravity",
+                      "cursor",
+                      "pi",
+                      "traex",
+                      "droid",
+                      "dsh",
                       "chat"
                     ],
                     "negotiated": [
@@ -11525,14 +11525,14 @@
                               "backendId": {
                                 "type": "string",
                                 "enum": [
-                                  "cursor",
-                                  "codex",
                                   "claude",
-                                  "dsh",
-                                  "droid",
-                                  "traex",
-                                  "pi",
+                                  "codex",
                                   "antigravity",
+                                  "cursor",
+                                  "pi",
+                                  "traex",
+                                  "droid",
+                                  "dsh",
                                   "chat"
                                 ],
                                 "negotiated": [
@@ -12364,14 +12364,14 @@
                     "backendId": {
                       "type": "string",
                       "enum": [
-                        "cursor",
-                        "codex",
                         "claude",
-                        "dsh",
-                        "droid",
-                        "traex",
-                        "pi",
+                        "codex",
                         "antigravity",
+                        "cursor",
+                        "pi",
+                        "traex",
+                        "droid",
+                        "dsh",
                         "chat"
                       ],
                       "negotiated": [
@@ -13913,14 +13913,14 @@
                           "backendId": {
                             "type": "string",
                             "enum": [
-                              "cursor",
-                              "codex",
                               "claude",
-                              "dsh",
-                              "droid",
-                              "traex",
-                              "pi",
+                              "codex",
                               "antigravity",
+                              "cursor",
+                              "pi",
+                              "traex",
+                              "droid",
+                              "dsh",
                               "chat"
                             ],
                             "negotiated": [
@@ -15494,14 +15494,14 @@
                           "backendId": {
                             "type": "string",
                             "enum": [
-                              "cursor",
-                              "codex",
                               "claude",
-                              "dsh",
-                              "droid",
-                              "traex",
-                              "pi",
+                              "codex",
                               "antigravity",
+                              "cursor",
+                              "pi",
+                              "traex",
+                              "droid",
+                              "dsh",
                               "chat"
                             ],
                             "negotiated": [

@@ -10,6 +10,7 @@ import { useDiscardGuard } from '@/lib/dialogs';
 import { useSettings, useStores } from '../state/stores';
 import { useAgentModelChoice } from '../session/agentModelChoice';
 import { ModelPicker } from '../session/ModelPicker';
+import { isComposingKey } from '../session/composerKeyboard';
 import type { WorkItemView } from './model';
 
 export interface NewWorkItemDraft { projectId?: string; parentId?: string }
@@ -101,7 +102,7 @@ export function NewWorkItemDialog({ draft, projects, backends, parents, onClose,
           <DialogBody className="flex flex-col gap-4">
             <Textarea autoFocus rows={5} aria-label={t`要做什么`} placeholder={t`要做什么`} value={text}
               onChange={(event) => setText(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+              onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && !isComposingKey(event.nativeEvent)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
             {criteriaOpen ? <div className="flex flex-col gap-1.5">
               <Textarea autoFocus rows={3} aria-label={t`完成标准`} placeholder={t`完成标准，一条一行`} value={criteria} onChange={(event) => setCriteria(event.target.value)} />
               <p className="text-xs text-fg-3"><Trans>Agent 交付时逐条说明，由你验收</Trans></p>

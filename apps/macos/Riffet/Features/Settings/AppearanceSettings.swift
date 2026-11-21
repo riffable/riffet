@@ -369,7 +369,7 @@ struct TerminalSettings: View {
         Form {
             Section {
                 SettingsRow("字号") {
-                    SettingsNumberSlider(value: $prefs.terminalFontSize, range: 11...16, step: 1, suffix: " pt", defaultValue: 12)
+                    SettingsNumberSlider(value: $prefs.terminalFontSize, range: 11...16, step: 0.5, suffix: " pt", defaultValue: 12.5)
                 }
 
                 SettingsRow("水平边距") {
@@ -465,7 +465,7 @@ private struct SettingsNumberSlider: View {
         HStack(spacing: Space.sm) {
             Slider(value: $value, in: range, step: step)
                 .frame(minWidth: 150)
-            Text(verbatim: "\(Int(value.rounded()))\(suffix)")
+            Text(verbatim: "\(value.formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US"))))\(suffix)")
                 .font(.riffet(size: S(12)))
                 .foregroundStyle(palette.fg2)
                 .monospacedDigit()

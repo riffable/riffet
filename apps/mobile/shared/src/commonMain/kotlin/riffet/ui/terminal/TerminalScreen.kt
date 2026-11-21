@@ -88,8 +88,8 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.shared.interruptTerminal
 import riffet_mobile.shared.generated.resources.*
 
-/** The terminal's default size: about 54 columns on a 392dp-wide phone. */
-private const val BASE_FONT_SP = 12f
+/** The terminal's default size: about 52 columns on a 392dp-wide phone. */
+private const val BASE_FONT_SP = 12.5f
 /** A viewer squeezes a wider pane into the screen down to this size, then scrolls sideways. */
 private const val MIN_FONT_SP = 8f
 

@@ -3,11 +3,11 @@ import RiffetKit
 
 enum MobileRoute: Hashable { case session(String, Bool) }
 
-/// The tabs, in the bar's order. A launch opens the one chosen in 设置 → 交互与输入; 助理 until then.
+/// The tabs, in the bar's order. A launch opens the one chosen in 设置 → 交互与输入; 新会话 until then.
 enum RootTab: String, CaseIterable {
     case newTask, assistant, tasks, settings
     static let launchKey = "riffet.ios.launch-tab"
-    static var launch: RootTab { RootTab(rawValue: UserDefaults.standard.string(forKey: launchKey) ?? "") ?? .assistant }
+    static var launch: RootTab { RootTab(rawValue: UserDefaults.standard.string(forKey: launchKey) ?? "") ?? .newTask }
     var title: String {
         switch self {
         case .newTask: String(localized: "新会话", bundle: .riffet)
@@ -37,7 +37,7 @@ struct RiffetRootView: View {
     @State private var tasksScrollTop = 0
     @State private var deletionShown = false
     @State private var deletionConfirmed = false
-    private var currentTab: RootTab { RootTab(rawValue: tabRaw) ?? .assistant }
+    private var currentTab: RootTab { RootTab(rawValue: tabRaw) ?? .newTask }
     private var tabSelection: Binding<RootTab> {
         Binding(get: { currentTab }, set: { value in
             if value == currentTab, value == .tasks { tasksScrollTop += 1 }

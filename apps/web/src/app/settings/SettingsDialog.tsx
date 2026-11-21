@@ -23,6 +23,8 @@ import { SharesSection } from '../shares/SharesSection';
 import { ChannelsSection } from './ChannelsSection';
 import { DevicesSection } from './DevicesSection';
 import { TabsSection } from './TabsSection';
+import { ShortcutSettings } from './ShortcutSettings';
+import { shortcutsSuspended } from '../shortcuts';
 import { ViewsSection } from './ViewsSection';
 import { SidebarSection } from './SidebarSection';
 import { SETTINGS_DIALOG_CLASS, settingsGroupTitle, settingsNavigationSections, settingsSections, type SettingsSection, type SettingsSectionGroup } from './settingsSections';
@@ -185,7 +187,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
       {/* During a section's View Transition the pseudo-element tree covers the page and a click
           resolves to <html>, which Radix reads as outside the dialog. A real outside click lands on
           the overlay, never on <html>, so only that target is ignored. */}
-      <DialogContent size="workspace" mobileFullscreen onEscapeKeyDown={(event) => { if (canGoBack()) { event.preventDefault(); goBack(); } }} onInteractOutside={(event) => { if (event.target === document.documentElement) event.preventDefault(); }} overlayClassName={cn(framed && open && 'animate-none!')} className={cn(SETTINGS_DIALOG_CLASS, 'md:flex-row', framed && open && 'animate-none!')}>
+      <DialogContent size="workspace" mobileFullscreen onEscapeKeyDown={(event) => { if (shortcutsSuspended()) event.preventDefault(); else if (canGoBack()) { event.preventDefault(); goBack(); } }} onInteractOutside={(event) => { if (event.target === document.documentElement) event.preventDefault(); }} overlayClassName={cn(framed && open && 'animate-none!')} className={cn(SETTINGS_DIALOG_CLASS, 'md:flex-row', framed && open && 'animate-none!')}>
         <DialogTitle className="sr-only"><Trans>设置</Trans></DialogTitle>
         <nav aria-label={t`设置分区`} className="hidden w-52 shrink-0 flex-col gap-px overflow-y-auto edge-r bg-sidebar p-2 md:flex">
           <h2 className="px-2.5 pb-3 pt-2 text-base font-semibold"><Trans>设置</Trans></h2>
@@ -229,6 +231,10 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'typography' && <TypographySection />}
             {section === 'sidebar' && <SidebarSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
             {section === 'tabs' && <TabsSection />}
+            {section === 'shortcuts' && <div className="flex flex-col gap-6">
+              <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
+              <ShortcutSettings />
+            </div>}
             {section === 'views' && <ViewsSection />}
             {section === 'terminal' && <TerminalSettingsSection />}
             {section === 'appicon' && <AppIconSection />}

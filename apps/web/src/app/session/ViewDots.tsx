@@ -1,32 +1,27 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { Tip } from '@/components/ui/tooltip';
-import { isApplePlatform } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import type { ViewEntry } from '@/plugins/catalog';
-import { isComposingKey } from './composerKeyboard';
+import { matchIndex, shortcutHint, useShortcutOverrides } from '../shortcuts';
 import type { SessionView } from '../state/navStore';
 
-/** `⌥⇧1` on Apple platforms, `Alt+Shift+1` elsewhere; the n-th visible view. */
-export const viewShortcut = (index: number): string => isApplePlatform ? `⌥⇧${index + 1}` : `Alt+Shift+${index + 1}`;
+/** `⌥⇧1` on Apple platforms, `Alt+Shift+1` elsewhere; the n-th visible view. Renders again when the keys are rebound. */
+export function useViewShortcut(): (index: number) => string | undefined {
+  const overrides = useShortcutOverrides();
+  return (index) => shortcutHint('switchView', index, overrides);
+}
 
-const editable = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
-
-/** ⌥⇧1–3 pick the 1st–3rd visible view, by physical key so the layout's ⌥⇧ characters do not matter. */
+/** The view keys (1st–3rd visible view, by physical key so the layout's ⌥⇧ characters do not matter) pick a view. */
 export function useViewShortcuts(views: SessionView[], onSelect: (view: SessionView) => void, enabled: boolean) {
   const latest = useRef({ views, onSelect });
   latest.current = { views, onSelect };
   useEffect(() => {
     if (!enabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!event.altKey || !event.shiftKey || event.metaKey || event.ctrlKey || isComposingKey(event)) return;
-      const digit = /^Digit([1-3])$/.exec(event.code);
-      if (!digit) return;
-      // The terminal keeps ⌥ for itself.
-      if ((event.target as Element | null)?.closest?.('.xterm')) return;
-      // In a text field a Mac layout that types with ⌥ keeps its characters.
-      if (isApplePlatform && /^[\x20-\x7e]$/.test(event.key) && editable(event.target)) return;
-      const view = latest.current.views[Number(digit[1]) - 1];
+      const index = matchIndex(event, 'switchView');
+      if (index < 0) return;
+      const view = latest.current.views[index];
       if (!view) return;
       event.preventDefault();
       if (!event.repeat) latest.current.onSelect(view);
@@ -43,6 +38,7 @@ export function useViewShortcuts(views: SessionView[], onSelect: (view: SessionV
  */
 export function ViewDots({ views, value, onChange, className }: { views: ViewEntry[]; value: SessionView; onChange: (view: SessionView) => void; className?: string }) {
   const { t } = useLingui();
+  const viewShortcut = useViewShortcut();
   const [open, setOpen] = useState(false);
   const groupRef = useRef<HTMLDivElement>(null);
 

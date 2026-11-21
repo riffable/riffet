@@ -20,7 +20,7 @@ final class WorkbenchSidebar {
     private(set) var groups: [ProjectGroup] = []
     private(set) var buckets: [TimeBucket] = []
     /// How the reader arranged the native list and the project tree (`PROJECT` or `TIME`).
-    var preferredLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "PROJECT" {
+    var preferredLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "TIME" {
         didSet { UserDefaults.standard.set(preferredLayout, forKey: "riffet.sidebar-layout"); rebuild() }
     }
     /// How the reader arranged the time-grouped sidebar: by time, as it opens, or by project.

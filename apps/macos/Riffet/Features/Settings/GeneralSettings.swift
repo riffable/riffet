@@ -80,11 +80,7 @@ struct GeneralSettings: View {
             return
         }
         do {
-            if enabled {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
+            try LoginItem.set(enabled)
             loginEnabled = enabled
             LoginItemStatus.known = enabled
             loginError = nil
@@ -206,9 +202,8 @@ struct NotificationSettings: View {
     }
 
     private func requestPermission() async {
-        let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
+        let granted = await NotificationCenterBridge.shared.requestAuthorization()
         await refreshPermission()
-        MacDeviceService.shared.permissionsChanged()
         if !granted { openNotificationSettings() }
     }
 
@@ -232,6 +227,17 @@ struct NotificationSettings: View {
             self.error = error.riffetMessage
         }
         serverBusy = false
+    }
+}
+
+/// Registers or removes Riffet's own login item; the settings toggle and the guide's last page share it.
+enum LoginItem {
+    static func set(_ enabled: Bool) throws {
+        if enabled {
+            try SMAppService.mainApp.register()
+        } else {
+            try SMAppService.mainApp.unregister()
+        }
     }
 }
 

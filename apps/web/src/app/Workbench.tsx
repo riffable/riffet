@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeBackendId, Session, StatsRunRow, Task, WorkItem } from '@contracts';
+import { SETTING_DEFAULTS, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
@@ -627,7 +627,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           notificationsEnabled={settings.notifications === true}
           enterBehavior={settings.composerEnterBehavior}
           runningBehavior={settings.composerRunningBehavior}
-          sendLaterEnabled={settings.composerSendLater === true}
+          sendLaterEnabled={settings.composerSendLater ?? SETTING_DEFAULTS.composerSendLater}
           sessionReferences={sessionReferences}
           referenceSessions={sessions}
           referenceProjects={projects}

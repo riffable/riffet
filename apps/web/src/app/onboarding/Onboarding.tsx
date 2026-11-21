@@ -14,10 +14,11 @@ import { regularProjects } from '@/lib/project-family';
 import { hostInfo } from '@/lib/platform';
 import { cn, errorMessage, tildePath } from '@/lib/utils';
 import { DirectoryPicker } from '../DirectoryPicker';
+import { canAskNotifications, saveNotifications } from '../settings/notifications';
 import { useCatalog, useLists, useNav, useSettings, useStores } from '../state/stores';
 
-type Page = 'welcome' | 'agent' | 'project' | 'phone';
-const ORDER: Page[] = ['welcome', 'agent', 'project', 'phone'];
+type Page = 'welcome' | 'agent' | 'project' | 'notify' | 'phone';
+const ORDER: Page[] = ['welcome', 'agent', 'project', 'notify', 'phone'];
 
 /** The Agents with a stable one-line install; the server says whether an Agent runs, not how to get it. */
 const INSTALLS: Array<{ id: NativeBackendId; command: string }> = [
@@ -32,7 +33,7 @@ interface Pairing { code: string; expiresAt: number; qr: string }
 
 /**
  * The first-run guide on the web: the whole window, one decision per page (patterns §1.5). The page
- * comes from the server, so there is no server to pick: welcome, Agent, project, phone. A page is
+ * comes from the server, so there is no server to pick: welcome, Agent, project, notifications, phone. A page is
  * there only while it asks for something; finishing or skipping lands on the new-session page with
  * whatever was decided.
  */
@@ -91,7 +92,20 @@ export function Onboarding({ loadBootstrap, onSelectProject, onSelectNoProject, 
   }, []);
   useEffect(() => { void preparePairing(); }, [preparePairing]);
 
-  const needed = (candidate: Page) => candidate === 'agent' ? agentNeeded : candidate === 'phone' ? phoneNeeded : true;
+  // Notifications: a page only while this browser can still be asked; read once so asking does not remove the page.
+  const [notifyNeeded] = useState(canAskNotifications);
+  const [asking, setAsking] = useState(false);
+  const allowNotifications = async () => {
+    if (asking) return;
+    setAsking(true);
+    try {
+      const saved = await saveNotifications(true);
+      settingsStore.applySaved(saved.settings, saved.patch);
+    } catch { /* Refused or unsaved: the settings page says why and can try again. */ }
+    finally { setAsking(false); advance('notify'); }
+  };
+
+  const needed = (candidate: Page) => candidate === 'agent' ? agentNeeded : candidate === 'notify' ? notifyNeeded : candidate === 'phone' ? phoneNeeded : true;
   // The page in view stays in the list, so deciding something on it never moves the reader.
   const pages = ORDER.filter((candidate) => candidate === page || needed(candidate));
   const index = Math.max(0, pages.indexOf(page));
@@ -198,6 +212,10 @@ export function Onboarding({ loadBootstrap, onSelectProject, onSelectNoProject, 
           <ProjectPage path={directory?.cwd} opening={opening} error={projectError} onChoose={() => void chooseDirectory()} onSkip={skipProject} onContinue={continueProject} />
           <DirectoryPicker open={browsing} onOpenChange={setBrowsing} initialPath={directory?.cwd} onPick={(path) => void openDirectory(path)} onError={setProjectError} />
         </>;
+      }
+      case 'notify': {
+        primary.current = () => void allowNotifications();
+        return <NotifyPage asking={asking} onAllow={() => void allowNotifications()} onLater={() => advance('notify')} />;
       }
       case 'phone': {
         primary.current = paired ? onFinish : undefined;
@@ -351,6 +369,19 @@ export function ProjectPage({ path, opening, error, onChoose, onSkip, onContinue
           : <span className="min-w-0 flex-1 truncate text-sm text-fg-3"><Trans>选择目录…</Trans></span>}
       </button>
       {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+    </OnboardingColumn>
+  );
+}
+
+export function NotifyPage({ asking, onAllow, onLater }: { asking: boolean; onAllow: () => void; onLater: () => void }) {
+  const { t } = useLingui();
+  return (
+    <OnboardingColumn title={t`需要你时通知你`} subtitle={t`Agent 等待审批、提问或完成时`}
+      foot={<>
+        <Button variant="ghost" size="lg" className="h-10 rounded-xl" disabled={asking} onClick={onLater}><Trans>以后再说</Trans></Button>
+        <PrimaryAction busy={asking} onClick={onAllow}><Trans>允许通知</Trans></PrimaryAction>
+      </>}>
+      {null}
     </OnboardingColumn>
   );
 }

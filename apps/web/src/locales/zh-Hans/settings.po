@@ -932,6 +932,7 @@ msgid "两种读法：A 是「做出来的东西」，E 是「判断它好不好
 msgstr "两种读法：A 是「做出来的东西」，E 是「判断它好不好」。下一轮请各自回应对方的框架。"
 
 #: src/app/settings/settingsSections.ts
+#: src/app/settings/TitleRulesSection.tsx
 msgid "个人助理"
 msgstr "个人助理"
 
@@ -1160,6 +1161,7 @@ msgid "仅保存在这台服务器"
 msgstr "仅保存在这台服务器"
 
 #: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/SettingsDialog.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -1344,7 +1346,6 @@ msgstr "会话暂时无法读取，请重试"
 msgid "会话标签栏"
 msgstr "会话标签栏"
 
-#: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "会话标签页"
 msgstr "会话标签页"
@@ -1353,6 +1354,7 @@ msgstr "会话标签页"
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
+#: src/app/settings/settingsSections.ts
 msgid "会话标题"
 msgstr "会话标题"
 
@@ -1521,12 +1523,14 @@ msgstr "侧边面板"
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "保存"
 msgstr "保存"
 
@@ -1550,7 +1554,6 @@ msgstr "保存后清除已存 Key"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "保存后读取额度"
 msgstr "保存后读取额度"
-#: src/app/design/surfaces/PanelsChapter.tsx
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "保存在服务器，所有设备生效。"
@@ -1631,6 +1634,10 @@ msgstr "停止记录"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "停止进行中的回合"
 msgstr "停止进行中的回合"
+
+#: src/app/settings/ShortcutSettings.tsx
+msgid "停用快捷键"
+msgstr "停用快捷键"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "停靠"
@@ -1760,6 +1767,10 @@ msgstr "全部 {0} 个"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "全部后端"
 msgstr "全部后端"
+
+#: src/app/settings/ShortcutSettings.tsx
+msgid "全部恢复默认"
+msgstr "全部恢复默认"
 
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -2013,6 +2024,10 @@ msgstr "写法"
 msgid "写进 patterns.md"
 msgstr "写进 patterns.md"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "冲突"
+msgstr "函数"
+
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "减少动态效果"
 msgstr "减少动态效果"
@@ -2047,10 +2062,6 @@ msgstr "出错了"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "函数"
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "冲突"
-msgstr "冲突"
-
 msgstr "函数"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -2267,6 +2278,10 @@ msgstr "删除主题？"
 msgid "删除会话"
 msgstr "删除会话"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "删除后可撤销"
+msgstr "删除后可撤销"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "删除后无法恢复"
 msgstr "删除后无法恢复"
@@ -2309,9 +2324,6 @@ msgstr "刷新额度"
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "前一个命令已占用"
 msgstr "前一个命令已占用"
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "删除后可撤销"
-msgstr "删除后可撤销"
 
 #. placeholder {0}: formatNumber(status.quota.remaining)
 #. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
@@ -2651,6 +2663,7 @@ msgstr "取得一个值的控件。字段共用 fieldClass 的外观，聚焦时
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "取消"
 msgstr "取消"
@@ -2744,6 +2757,7 @@ msgid "只用于二到三个短选项"
 msgstr "只用于二到三个短选项"
 
 #: src/app/design/foundations/IconChapter.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "只读"
 msgstr "只读"
@@ -2784,6 +2798,10 @@ msgstr "可用"
 msgid "可用的取值"
 msgstr "可用的取值"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "可编辑"
+msgstr "可编辑"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
 msgstr "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
@@ -2804,7 +2822,6 @@ msgstr "可重建缓存"
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
 msgid "右侧栏：会话详情，宽 {0}"
-#: src/app/design/surfaces/PanelsChapter.tsx
 msgstr "右侧栏：会话详情，宽 {0}"
 
 #: src/app/design/mac/notes.ts
@@ -2844,10 +2861,6 @@ msgstr "右键菜单用系统菜单"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "各栏独立"
 msgstr "各栏独立"
-
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "可编辑"
-msgstr "可编辑"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "各端的宿主组件"
@@ -3862,7 +3875,6 @@ msgid "工作区"
 msgstr "工作区"
 
 #: src/app/design/mac/WindowChapter.tsx
-#: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "工作台"
 msgstr "工作台"
@@ -4127,6 +4139,10 @@ msgstr "已有会话保持原配置。"
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "已注册"
 msgstr "已注册"
+
+#: src/app/settings/ShortcutSettings.tsx
+msgid "已用于「{holderName}」"
+msgstr "已用于「{holderName}」"
 
 #: src/app/settings/ProviderUsage.tsx
 msgid "已用尽"
@@ -4482,6 +4498,10 @@ msgstr "当前版本较新"
 msgid "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
 msgstr "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
 
+#: src/app/design/patterns/KeyboardChapter.tsx
+msgid "录入中"
+msgstr "录入中"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "录音会发送到这个地址"
 msgstr "录音会发送到这个地址"
@@ -4546,13 +4566,18 @@ msgstr "快捷入口"
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
-#: src/app/settings/TabsSection.tsx
+#: src/app/settings/settingsSections.ts
+#: src/app/settings/ShortcutSettings.tsx
 msgid "快捷键"
 msgstr "快捷键"
 
 #: src/app/design/catalog.tsx
 msgid "快捷键、焦点顺序"
 msgstr "快捷键、焦点顺序"
+
+#: src/app/design/patterns/KeyboardChapter.tsx
+msgid "快捷键录入"
+msgstr "快捷键录入"
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/settingsSections.ts
@@ -4603,6 +4628,7 @@ msgid "恢复跟随主题"
 msgstr "恢复跟随主题"
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ShortcutSettings.tsx
 msgid "恢复默认"
 msgstr "恢复默认"
 
@@ -4927,6 +4953,11 @@ msgstr "按下时的不透明度"
 msgid "按下是表面高亮，没有 ripple"
 msgstr "按下是表面高亮，没有 ripple"
 
+#: src/app/design/patterns/KeyboardChapter.tsx
+#: src/app/settings/ShortcutSettings.tsx
+msgid "按下组合键"
+msgstr "按下组合键"
+
 #: src/app/design/android/notes.ts
 msgid "按下降低不透明度，没有 ripple"
 msgstr "按下降低不透明度，没有 ripple"
@@ -5211,6 +5242,7 @@ msgid "搜索与筛选"
 msgstr "搜索与筛选"
 
 #: src/app/design/components/InputsChapter.tsx
+#: src/app/design/patterns/KeyboardChapter.tsx
 msgid "搜索会话"
 msgstr "搜索会话"
 
@@ -5269,6 +5301,7 @@ msgstr "撑满设置行，再加一项就放不下。"
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "撤销"
 msgstr "撤销"
 
@@ -5443,6 +5476,10 @@ msgstr "文件"
 msgid "文件与编辑器"
 msgstr "文件与编辑器"
 
+#: src/app/design/engineering/PluginsChapter.tsx
+msgid "文件的其他看法"
+msgstr "文件的其他看法"
+
 #: src/app/design/mac/notes.ts
 msgid "文件行"
 msgstr "文件行"
@@ -5460,10 +5497,6 @@ msgstr "文字"
 #: src/app/settings/PreferencesSections.tsx
 msgid "文字大小"
 msgstr "文字大小"
-#: src/app/design/engineering/PluginsChapter.tsx
-msgid "文件的其他看法"
-msgstr "文件的其他看法"
-
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "文字缩放"
@@ -5928,6 +5961,7 @@ msgid "时长与曲线的档位"
 msgstr "时长与曲线的档位"
 
 #: src/app/design/foundations/MotionChapter.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "时间"
 msgstr "时间"
 
@@ -6031,6 +6065,8 @@ msgstr "更多"
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/foundations/SpaceChapter.tsx
 #: src/app/design/patterns/ListsChapter.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "更多操作"
 msgstr "更多操作"
 
@@ -6059,6 +6095,10 @@ msgstr "更新于 {0}"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "更新失败，显示的是上一次的数据"
 msgstr "更新失败，显示的是上一次的数据"
+
+#: src/app/settings/ShortcutSettings.tsx
+msgid "替换"
+msgstr "替换"
 
 #: src/app/design/overview/Opening.tsx
 msgid "替换了一处手写数值，其余调用点保持原样。"
@@ -6140,8 +6180,11 @@ msgstr "服务管理"
 msgid "未下载模型"
 msgstr "未下载模型"
 
-#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
+msgid "未保存的文件"
+msgstr "未保存的文件"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "未关思考"
@@ -6179,7 +6222,7 @@ msgstr "未找到可执行文件"
 msgid "未找到可用的 VS Code 语法配色字段"
 msgstr "未找到可用的 VS Code 语法配色字段"
 
-#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/notifications.ts
 msgid "未授予通知权限。"
 msgstr "未授予通知权限。"
 
@@ -6191,7 +6234,10 @@ msgstr "未检测到"
 msgid "未登录"
 msgstr "未登录"
 
+#: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/ShortcutSettings.tsx
 msgid "未设置"
 msgstr "未设置"
 
@@ -6245,15 +6291,13 @@ msgstr "术语"
 
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/settingsSections.ts
+#: src/app/settings/TitleRulesSection.tsx
 msgid "机器人"
 msgstr "机器人"
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "权限、文件选择与分享"
 msgstr "权限、文件选择与分享"
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "未保存的文件"
-msgstr "未保存的文件"
 
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -6266,6 +6310,7 @@ msgid "权限图标风格"
 msgstr "权限图标风格"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "来源"
 msgstr "来源"
 
@@ -6674,7 +6719,7 @@ msgstr "正文排版"
 msgid "正文行高"
 msgstr "正文行高"
 
-#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/notifications.ts
 msgid "此浏览器不支持通知。"
 msgstr "此浏览器不支持通知。"
 
@@ -6758,6 +6803,10 @@ msgstr "每类组件的形态"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "比例"
 msgstr "比例"
+
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "比较"
+msgstr "比较"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "毫秒；弹簧为阻尼比与刚度"
@@ -6877,15 +6926,11 @@ msgstr "浏览…"
 msgid "浏览器"
 msgstr "浏览器"
 
-#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/notifications.ts
 msgid "浏览器已拒绝通知，请在网站设置中允许后重试。"
 msgstr "浏览器已拒绝通知，请在网站设置中允许后重试。"
 
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "比较"
-msgstr "比较"
-
-#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/notifications.ts
 msgid "浏览器拒绝了通知权限。"
 msgstr "浏览器拒绝了通知权限。"
 
@@ -6989,6 +7034,7 @@ msgstr "混排、标点、截断、换行"
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/ChannelsSection.tsx
 #: src/app/settings/ProviderModelList.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "添加"
 msgstr "添加"
 
@@ -7071,6 +7117,10 @@ msgstr "点击区与控件高"
 #: src/app/design/android/PlatformChapter.tsx
 msgid "点击区至少 48"
 msgstr "点击区至少 48"
+
+#: src/app/design/patterns/KeyboardChapter.tsx
+msgid "点击后录入下一组按键，Esc 取消；停用后显示「未设置」。"
+msgstr "点击后录入下一组按键，Esc 取消；停用后显示「未设置」。"
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "点击翻译回答或选区时生成"
@@ -7221,6 +7271,10 @@ msgstr "用户离线编辑多久之后再同步？"
 msgid "用时"
 msgstr "用时"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "用磁盘上的版本"
+msgstr "用磁盘上的版本"
+
 #: src/app/design/catalog.tsx
 msgid "用词、语气、术语与格式"
 msgstr "用词、语气、术语与格式"
@@ -7364,10 +7418,6 @@ msgid "看板概览"
 msgstr "看板概览"
 
 #: src/app/design/patterns/PagesChapter.tsx
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "用磁盘上的版本"
-msgstr "用磁盘上的版本"
-
 msgid "看板页"
 msgstr "看板页"
 
@@ -7838,8 +7888,8 @@ msgid "纯图标按钮的名称和快捷键"
 msgstr "纯图标按钮的名称和快捷键"
 
 #: src/app/design/patterns/KeyboardChapter.tsx
-msgid "纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutLabel。"
-msgstr "纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutLabel。"
+msgid "纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutHint；键位读自快捷键表，用户改键后一起变。"
+msgstr "纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutHint；键位读自快捷键表，用户改键后一起变。"
 
 #: src/app/design/mac/notes.ts
 msgid "纵向堆叠"
@@ -8027,10 +8077,18 @@ msgstr "缓存"
 msgid "缓慢淡入淡出"
 msgstr "缓慢淡入淡出"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "编辑"
+msgstr "编辑"
+
 #. placeholder {0}: theme.name
 #: src/app/settings/PreferencesSections.tsx
 msgid "编辑“{0}”"
 msgstr "编辑“{0}”"
+
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "编辑中，有未保存的修改"
+msgstr "编辑中，有未保存的修改"
 
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -8151,6 +8209,7 @@ msgstr "自动"
 #: src/app/design/mac/WindowChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "自动化"
 msgstr "自动化"
 
@@ -8166,9 +8225,6 @@ msgstr "自动增高上限"
 #: src/app/settings/PreferencesSections.tsx
 msgid "自动审查"
 msgstr "自动审查"
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "编辑"
-msgstr "编辑"
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
@@ -8177,10 +8233,6 @@ msgstr "自动归档"
 #: src/app/settings/TitleRulesSection.tsx
 msgid "自动标题"
 msgstr "自动标题"
-
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "编辑中，有未保存的修改"
-msgstr "编辑中，有未保存的修改"
 
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "自动消失，时长 2.8 · 3.5 · 6.5 秒；带操作的至少 6 秒。"
@@ -8372,6 +8424,10 @@ msgstr "表面与控件"
 msgid "表面高亮"
 msgstr "表面高亮"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "覆盖保存"
+msgstr "覆盖保存"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "见声明式页面"
 msgstr "见声明式页面"
@@ -8516,10 +8572,6 @@ msgid "设置窗口"
 msgstr "设置窗口"
 
 #: src/app/design/catalog.tsx
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "覆盖保存"
-msgstr "覆盖保存"
-
 msgid "设置行、校验、保存"
 msgstr "设置行、校验、保存"
 
@@ -9079,6 +9131,7 @@ msgid "近 {0} 天 {1} 次 · {2} tokens"
 msgstr "近 {0} 天 {1} 次 · {2} tokens"
 
 #: src/app/design/android/PagesChapter.tsx
+#: src/app/design/surfaces/PanelsChapter.tsx
 msgid "返回"
 msgstr "返回"
 
@@ -9153,9 +9206,17 @@ msgstr "这个地址没有返回任何模型，可以在下方手动填写模型
 msgid "这个开关用来控制是否显示行号"
 msgstr "这个开关用来控制是否显示行号"
 
+#: src/app/design/surfaces/PanelsChapter.tsx
+msgid "这个文件在你编辑时被改过"
+msgstr "这个文件在你编辑时被改过"
+
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "这个文件无法先备份，丢弃后不能恢复。"
 msgstr "这个文件无法先备份，丢弃后不能恢复。"
+
+#: src/app/settings/ShortcutSettings.tsx
+msgid "这个组合归浏览器所有"
+msgstr "这个组合归浏览器所有"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "这个聊天里的会话绑定一并忘记"
@@ -9227,7 +9288,6 @@ msgstr "进行中"
 
 #. placeholder {0}: requests.inFlight
 #: src/app/settings/ServiceStatusSection.tsx
-#: src/app/design/surfaces/PanelsChapter.tsx
 msgid "进行中 {0}"
 msgstr "进行中 {0}"
 
@@ -9310,10 +9370,6 @@ msgid "选中项在行尾打勾"
 msgstr "选中项在行尾打勾"
 
 #: src/app/design/android/notes.ts
-#: src/app/design/surfaces/PanelsChapter.tsx
-msgid "这个文件在你编辑时被改过"
-msgstr "这个文件在你编辑时被改过"
-
 msgid "选中项在行尾打勾，分组标题用次级墨色"
 msgstr "选中项在行尾打勾，分组标题用次级墨色"
 
@@ -9728,6 +9784,10 @@ msgstr "随主题与字号推送"
 msgid "随会话删除"
 msgstr "随会话删除"
 
+#: src/app/design/engineering/PluginsChapter.tsx
+msgid "随文件视图"
+msgstr "随文件视图"
+
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "随机头像"
 msgstr "随机头像"
@@ -9762,10 +9822,6 @@ msgstr "需要"
 
 #. placeholder {0}: cliVersion.minimum ?? ''
 #: src/app/settings/AgentSettingsSection.tsx
-#: src/app/design/engineering/PluginsChapter.tsx
-msgid "随文件视图"
-msgstr "随文件视图"
-
 msgid "需要 {0} 或更高"
 msgstr "需要 {0} 或更高"
 
@@ -9777,7 +9833,7 @@ msgstr "需要并排比较各对象的状态"
 msgid "需要看描述或预览才能选"
 msgstr "需要看描述或预览才能选"
 
-#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/notifications.ts
 msgid "需要通过 localhost 或 HTTPS 访问才能启用通知。"
 msgstr "需要通过 localhost 或 HTTPS 访问才能启用通知。"
 
@@ -9958,6 +10014,7 @@ msgstr "顶栏、单一滚动区、转场后淡入的正文"
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/StorageSection.tsx
 #: src/app/settings/ThemeEditor.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "项目"
 msgstr "项目"
 
@@ -9995,6 +10052,7 @@ msgid "预测式返回时页面缩到 {0} 并带圆角"
 msgstr "预测式返回时页面缩到 {0} 并带圆角"
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "预览"
 msgstr "预览"
 

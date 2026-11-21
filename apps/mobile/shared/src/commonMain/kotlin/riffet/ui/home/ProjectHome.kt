@@ -989,7 +989,7 @@ internal class HomeConfig(
     }
 
     var backends by mutableStateOf<List<NativeBackendCatalogEntry>>(emptyList())
-    var backendId by mutableStateOf(NativeBackendId.CURSOR)
+    var backendId by mutableStateOf(NativeBackendId.CLAUDE)
     var catalog by mutableStateOf<List<ModelInfo>>(emptyList())
     var capabilities by mutableStateOf<NativeBackendCapabilities?>(null)
     var catalogLoading by mutableStateOf(false)
@@ -1229,7 +1229,7 @@ internal class HomeConfig(
         val api = api ?: return
         if (defaultBackendId != settings?.defaultBackendId) userChoseBackend = false
         defaultBackendId = settings?.defaultBackendId
-        if (!userChoseBackend) backendId = settings?.defaultBackendId ?: NativeBackendId.CURSOR
+        if (!userChoseBackend) backendId = settings?.defaultBackendId ?: backends.firstOrNull { it.available }?.backendId ?: NativeBackendId.CLAUDE
         // Another backend has other providers, models and permissions: its picks start over.
         if (backendId != picksBackend) {
             picks = NewSessionDraft()

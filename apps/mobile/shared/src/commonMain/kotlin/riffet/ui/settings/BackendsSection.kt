@@ -38,14 +38,14 @@ import kotlin.random.Random
  */
 
 private val backendOrder = listOf(
-    NativeBackendId.CURSOR,
-    NativeBackendId.CODEX,
     NativeBackendId.CLAUDE,
-    NativeBackendId.DSH,
-    NativeBackendId.DROID,
-    NativeBackendId.TRAEX,
-    NativeBackendId.PI,
+    NativeBackendId.CODEX,
     NativeBackendId.ANTIGRAVITY,
+    NativeBackendId.CURSOR,
+    NativeBackendId.PI,
+    NativeBackendId.TRAEX,
+    NativeBackendId.DROID,
+    NativeBackendId.DSH,
 )
 
 internal fun backendLabel(id: NativeBackendId): String = when (id) {
@@ -133,7 +133,7 @@ internal fun BackendProfilesPage(controller: SettingsController, backend: Native
         },
     ) {
         if (agentSettings && settings != null) SettingsGroup("") {
-            SettingsChoiceRow(stringResource(Res.string.settings_default_agent), backendOrder.map { it.name to backendLabel(it) }, (settings.defaultBackendId ?: NativeBackendId.CURSOR).name, enabled = !state.saving) { next ->
+            SettingsChoiceRow(stringResource(Res.string.settings_default_agent), backendOrder.map { it.name to backendLabel(it) }, (settings.defaultBackendId ?: backendOrder.first()).name, enabled = !state.saving) { next ->
                 controller.saveSettings(AppSettingsUpdate(defaultBackendId = NativeBackendId.valueOf(next)), setDefaultMessage)
             }
         }
@@ -178,12 +178,12 @@ internal fun BackendProfilesPage(controller: SettingsController, backend: Native
 @Composable
 internal fun BackendSettingsPage(controller: SettingsController, onBack: () -> Unit, agentSettings: Boolean, onEdit: (NativeBackendId, String) -> Unit, onAdd: (NativeBackendId) -> Unit) {
     val state by controller.state.collectAsState()
-    var backendName by rememberSaveable(controller) { mutableStateOf((state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: NativeBackendId.CURSOR).name) }
+    var backendName by rememberSaveable(controller) { mutableStateOf((state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: backendOrder.first()).name) }
     var backendChosen by rememberSaveable(controller) { mutableStateOf(state.settings != null) }
     val backend = NativeBackendId.valueOf(backendName)
     LaunchedEffect(state.settings?.defaultBackendId) {
         if (!backendChosen && state.settings != null) {
-            backendName = (state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: NativeBackendId.CURSOR).name
+            backendName = (state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: backendOrder.first()).name
             backendChosen = true
         }
     }

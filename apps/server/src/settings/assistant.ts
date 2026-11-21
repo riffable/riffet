@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { AppSettings } from '../../../../packages/contracts/src/settings.js';
+import { SETTING_DEFAULTS, type AppSettings } from '../../../../packages/contracts/src/settings.js';
 import { defineRead, defineSettingCommand } from '../assistant-capability.js';
 import { AppError } from '../errors.js';
 import type { SettingsService } from './index.js';
@@ -30,9 +30,9 @@ function settingSummary(id: keyof AppSettings, saved: AppSettings): Record<strin
 
 // These setters already validate and persist through SettingsService. Other settings retain their domain-specific UI.
 const writable = {
-  composerEnterBehavior: { options: ['newline', 'send'], initial: 'newline' },
-  composerRunningBehavior: { options: ['queue', 'steer'], initial: 'queue' },
-  composerSendLater: { options: [false, true], initial: false },
+  composerEnterBehavior: { options: ['newline', 'send'], initial: SETTING_DEFAULTS.composerEnterBehavior },
+  composerRunningBehavior: { options: ['queue', 'steer'], initial: SETTING_DEFAULTS.composerRunningBehavior },
+  composerSendLater: { options: [false, true], initial: SETTING_DEFAULTS.composerSendLater },
 } as const;
 const writableId = z.string().min(1).max(100).describe('A writable setting ID from settings.catalog.');
 const primitive = z.union([z.string().max(100), z.boolean()]);

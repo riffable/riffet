@@ -159,7 +159,9 @@ Kotlin 接口要桥接完成回调，`DeviceTokenStore` 因此由 Kotlin 的 `Se
 主窗口在任何一种现场下都是真正的工作台（`AppModel.shell`），服务器的有无只决定它里面的内容：没有服务器时侧栏、新会话页、设置照常显示，
 新会话页在输入框的位置放设置卡片（`SetupCard`：服务器、Agent、项目），其余需要服务器的页面显示 `NeedsServerView`。
 上表里的「提示」「引导」都由设置卡片承担；只有这台 Mac 从未走过引导、没有保存的服务器、也没有在用的本机服务时，才先出现全屏引导
-（`OnboardingView`，本机记一项 `riffet.onboarding.completed`，不写进服务器设置）。
+（`OnboardingView`，本机记一项 `riffet.onboarding.completed`，不写进服务器设置）。引导最后一页同时问通知权限
+（「允许通知」或「以后再说」，系统授权弹窗只在这里和设置 → 通知的按钮里出现）并带「登录时打开 Riffet」开关（默认勾选，只在这一页
+结束时生效，跳过引导不会开启）。
 
 **同一个状态目录只能有一个托管方。** 两个 `KeepAlive` 的 LaunchAgent 抢同一把 `server.lock`，结果是一个不停被
 launchd 拉起又退出。「改由 App 托管」先做 `riffet service uninstall` 的等价动作（`bootout` 加删 plist），再注册
@@ -245,7 +247,7 @@ App 内置的服务端版本是确定的；接管的外部服务可能更旧或�
   窗口一旦不是不透明，系统会给工具栏单独垫一层标题栏底色，和主区之间出现一条色带；非不透明时隐藏 `.windowToolbar` 背景，
   让画布一直铺到顶部。
   玻璃的 `.clear` 风格铺满整窗时几乎不模糊，背后窗口的文字会透进正文，所以只用 `.regular`。
-- 快捷键：⌘N 新会话，⌘Enter 发送（Enter 行为跟随服务端的「Enter 键」账号设置），⌃\` 切换终端（与 web 相同），
+- 快捷键：键位的唯一来源是 `packages/contracts/src/shortcuts.ts`（`scripts/gen-shortcuts.ts` 生成 `Services/Shortcuts.generated.swift`），菜单、设置页、插件占用表都读它；下面是默认值，用户可在设置「快捷键」里录制改键（见「快捷键」一节）。⌘N 新会话，⌘Enter 发送（Enter 行为跟随服务端的「Enter 键」账号设置），⌃\` 切换终端（与 web 相同），
   ⌘1…⌘9 按侧栏当前显示的顺序打开会话（收起的项目和未展开的历史不计），⌘. 打断，⇧⌘F 聚焦侧栏搜索（会话与全部消息；
   侧栏隐藏时先显示，会话窗口里回到主窗口搜索）。
 
@@ -313,7 +315,7 @@ App 内置的服务端版本是确定的；接管的外部服务可能更旧或�
   「⋯ → 打开终端」、首页 Shell 卡片、命令面板和 ⌃\` 都进入这个底部分栏，顶部工具栏不增加终端按钮。
 - 标题栏左侧用「终端名称 ···」打开管理菜单，右侧下箭头收起面板，X 关闭当前 Shell（沿用关闭确认）；Agent 终端只显示收起。
   收起只断开显示连接，关闭 Shell 才调用关闭接口。新建、历史输出、控制权和中断保留在菜单中。
-  各项目记住终端选择，重复打开优先复用原 Shell。Agent 的整页终端视图仍由 ⇧⌘T 切换，
+  各项目记住终端选择，重复打开优先复用原 Shell。Agent 的整页终端视图由 ⌥⌘T 切换，
   自动等待操作提示不能替换用户手动打开的 Shell。
 - 管理菜单展开后保持连接状态和选项快照，关闭菜单后再切换终端、呈现确认框或执行控制操作；控制操作执行前重新核对连接状态。
 - `SwiftTerm.TerminalView`（不是自带进程的 `LocalProcessTerminalView`）接到 `:client` 的 `TerminalConnection`：
@@ -380,9 +382,10 @@ App 内置的服务端版本是确定的；接管的外部服务可能更旧或�
 String Catalog，源语言 `zh-Hans`，键就是中文原文。每个 target 一份 `Localizable.xcstrings`（App 在 `Riffet/Resources/`，
 小组件、共享扩展各在自己的目录）；`InfoPlist.xcstrings`（权限说明、显示名）与 `ServicesMenu.xcstrings`（服务菜单项）手动维护。
 
-- 默认中文：`RiffetApp.init` 最先调用 `AppLanguage.applyDefault()`，App 自己的 defaults 域里没有 `AppleLanguages` 时写入
-  `["zh-Hans"]`。设置 → 外观与显示 →「语言」与系统设置「语言与地区 → 应用」写同一个键，两边一致；在系统设置里选「系统默认」
-  等于删掉它，下次启动回到中文。
+- 默认跟随系统：`RiffetApp.init` 最先调用 `AppLanguage.applyDefault()`。App 自己的 defaults 域里没有 `AppleLanguages` 时
+  不写入，由系统语言列表决定（之后系统改语言也跟着变）；列表里第一个中文或英文是繁体中文（bundle 只有简体，会落到英文），或者既没有中文也没有英文时，写入 `["zh-Hans"]`（开发语言）。
+  设置 → 外观与显示 →「语言」与系统设置「语言与地区 → 应用」写同一个键，两边一致；在系统设置里选「系统默认」
+  等于删掉它，回到跟随系统。
 - 切换在 App 重启后生效：bundle 只在启动时选一次语言。「重启 Riffet」在 `applicationWillTerminate` 里留一个等待进程，App
   退出后重新打开同一个 bundle；服务端是独立的 LaunchAgent，不受影响。小组件与共享扩展是独立进程，跟随系统语言。
 - 写法：`Text`、`Button`、`Label`、`Toggle`、`.help` 等 SwiftUI API 收到的字面量自动提取；`String` 类型的 API 用
@@ -410,7 +413,7 @@ String Catalog，源语言 `zh-Hans`，键就是中文原文。每个 target 一
 | 应用图标颜色 | `NSApp.applicationIconImage` | 设置 → 外观里 6 选 1，只在运行时生效；退出后 Dock、Finder 与启动台显示 bundle 自带的蓝色图标 |
 | 可操作通知 | `UNNotificationCategory`、`UNNotificationAction`、`UNTextInputNotificationAction` | 完成 / 失败 / 中断 / 等待确认，规则与 Android 相同；确认通知带审批按钮或单选项（权限类在开启 Touch ID 时先验证，失败另发一条说明），完成通知带回复框，回复走同一条 outbox；会话离开 `waiting` 时撤回并移除它的 category；正在看的会话不发通知 |
 | 专注模式 | `SetFocusFilterIntent` | 专注过滤器「提醒范围」：全部提醒 / 只提醒等待确认 / 静音完成通知；Dock 角标不受影响 |
-| 全局快捷提问 | `KeyboardShortcuts` 3.1.0 | 任意应用里打开主 App 的快速对话页（默认 ⌃⌥Space，避开 Finder 的 ⌥⌘Space）；已有自定义快捷键保持不变 |
+| 全局快捷提问 | `KeyboardShortcuts` 3.1.0 | 任意应用里打开主 App 的快速对话页（默认 ⌥Space，避开输入法切换的 ⌃Space、⌃⌥Space 和 Finder 的 ⌥⌘Space）；旧版默认的 ⌃⌥Space 会迁成 ⌥Space（`QuickPromptShortcutMigration`，只跑一次），其他自定义键保持不变 |
 | 快捷指令 | App Intents | 「新建 Riffet 会话」（项目为 `ProjectEntity`，带建议与搜索）、「打开 Riffet 会话」（`SessionEntity`）、「列出运行中的会话」；App 刚被拉起时等待连接就绪（15 秒）；审批不暴露给快捷指令 |
 | 系统搜索 | Core Spotlight | 索引会话标题、项目、标签与模型（会话列表不带首条提问）；忘记或更换服务器时清空 |
 | URL scheme | `riffet://` | `session/<id>`、`new?project=…&prompt=…`；命令行与其他应用可直接拉起；冷启动时排队到连接就绪（`AppModel.whenReady`），`panel=` 直接写入该会话的面板状态 |
@@ -422,6 +425,8 @@ String Catalog，源语言 `zh-Hans`，键就是中文原文。每个 target 一
 | 设备能力（T0） | `ScreenCaptureKit`、`NSPasteboard`、`NSWorkspace`、`UNUserNotificationCenter` | 开关「允许 Agent 操作这台 Mac」开启后，Agent 可列出并截取窗口（不激活）、读写剪贴板文本、打开 http(s) 链接、发通知；连接期间始终服务，只剩菜单栏时也在线；见 [DEVICES.md](DEVICES.md)「实现（Mac，T0）」 |
 | 令牌存储 | Keychain / 0600 文件 | 每个服务端一个设备令牌。带 Team ID 签名的构建用钥匙串；ad-hoc 构建的签名每次构建都变，钥匙串会反复询问授权，改存 `~/Library/Application Support/Riffet/secrets.json`（0600），与服务端保护 `access-token` 的方式相同 |
 | 自动更新 | Sparkle 2 | 见「签名、公证与分发」 |
+
+**快捷键改键。** 应用内快捷键由 `ShortcutStore`（UserDefaults 键 `riffet.shortcuts.v1`，`ShortcutOverrides` 的 JSON，只存在这台 Mac）在默认键上叠加个人设置，菜单命令按 id 取键，改键即时生效。设置「快捷键」按范围列出所有可改的项，点击后按下带 ⌘、⌃ 或 ⌥ 的组合录入，Esc 取消；每行可恢复默认或关闭，底部可全部恢复。键位已被另一项占用时提示是哪一项并可替换（被替换的一项关闭）；`RESERVED_CHORDS.mac` 里的系统与标准菜单键不可用。⌘1–9 属于不可改键的一族，输入框的 ⌘↩、⇧⌘↩ 只读列出。全局快速对话键仍用 `KeyboardShortcuts.Recorder`（系统级热键）。
 
 通知的来源与 Android 相同：`:client` 轮询 `/api/sessions` 并比较 `Session.state`。Mac 不受后台挂起限制，
 所以不需要前台服务，菜单栏常驻期间始终有效；界面上仍按实际情况说明「App 退出后没有通知」。
@@ -1007,7 +1012,7 @@ CSV / JSON 导出；页面可见时订阅
 
 | 阶段 | 功能 | Web 位置 | Mac 现状 | 做法 |
 | --- | --- | --- | --- | --- |
-| 进行中 | 会话标签页：临时标签、置顶分区、右键菜单、关闭其他 / 右侧、重新打开、溢出菜单、未读点；设置「标签样式」「打开会话时」与快捷键 | `tabs/*`、`settings/TabsSection.tsx` | 仅 Riffet 风格，最多 12 个，只能点击与关闭 | 标签状态移出视图，按服务器存在本机；快捷键用 Mac 惯例：⌘1–9、⌃Tab / ⇧⌘[ ]、⌘W、⇧⌘T。不做「独立一行」 |
+| 进行中 | 会话标签页：临时标签、置顶分区、右键菜单、关闭其他 / 右侧、重新打开、溢出菜单、未读点；设置「标签样式」「打开会话时」，改键在「快捷键」页 | `tabs/*`、`settings/TabsSection.tsx` | 仅 Riffet 风格，最多 12 个，只能点击与关闭 | 标签状态移出视图，按服务器存在本机；快捷键用 Mac 惯例：⌘1–9、⌃Tab / ⇧⌘[ ]、⌘W、⇧⌘T（均可改键）。不做「独立一行」 |
 | 一 | 会话概览栏：计划、章节导航、子 Agent 与后台任务、产出文件 | `session/SessionAside.tsx` | 无；计划在输入框上方 | Riffet 风格配方 `rightPanel: outline` 的落地：正文右侧 248pt 一栏；设置「会话右侧：概览 / 仅导航条」，只在 Riffet 风格出现，默认概览；宽度不够或检查器放不下时退回导航条，空栏也保留；显示时隐藏输入框上方计划与右侧刻线；`sessionOutputs` 移到 `apps/mobile/core` 共用 |
 | 一 | 技能与工具选择器：手机控制、MCP、Skill 按会话开关 | `session/ToolsPicker.tsx` | `toolGroups` / `extensionsOff` 固定传 nil | 新会话页输入框左侧工具按钮；已有会话走 `SessionUpdate` |
 | 一 | 插件快捷键生效 | `app/pluginKeybindings.ts` | 只显示文字 | 注册为菜单命令，与 App 快捷键冲突时 App 优先，插件页标出冲突；在标签页之后做 |
@@ -1023,10 +1028,10 @@ CSV / JSON 导出；页面可见时订阅
 
 2026-11-12 以上全部实现（未经人工界面验收）。与表中做法不同或暂缓的：
 
-- 标签页：不做拖拽排序、标签悬停卡片和「独立一行」；⇧⌘T 在标签栏开启时改为重新打开标签，「切换对话/终端视图」此时没有快捷键；⌘W 替换系统「关闭」，没有当前标签时关闭窗口。
+- 标签页：不做拖拽排序、标签悬停卡片和「独立一行」；⇧⌘T 重新打开标签，「切换对话/终端视图」独立为 ⌥⌘T，不随标签栏开关换键；⌘W 替换系统「关闭」，没有当前标签时关闭窗口。
 - 会话概览：导航区是回合列表（Web 的 `TurnOutline`），回答内章节仍由章节导航负责；计划折叠后不单列「已完成 N 项」。
 - 技能与工具：已有会话改动后下次启动生效，保存失败时静默回退，没有错误提示。
-- 插件快捷键：App 占用的组合是 `PluginKeybindings.swift` 里的手写表，新增 App 快捷键时同步更新。
+- 插件快捷键：App 占用的组合取自 `ShortcutStore.hostChords`（共享表中全部快捷键的当前键位加 `RESERVED_CHORDS.mac`），没有手写表；新增 App 快捷键只改共享表。
 - 代码导航：不做 Web 的跳转返回历史，最近查看标签代替。
 - 侧栏浮出：不做悬停「显示侧栏」按钮触发。
 - 机器人：RiffetKit 还没有 `/api/channels`，暂由 `Services/ServerJSON.swift` 直连，之后移入 Kotlin 客户端供手机端复用；不做斜杠命令说明、卡片实时预览和 `channels` 推送（操作后与添加期间轮询）。

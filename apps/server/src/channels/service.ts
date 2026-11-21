@@ -12,7 +12,6 @@ import { configureNative } from '../native/configure.js';
 import { defaultBackendForClient } from '../native/client-features.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
 import { NEW_TOPIC, claimMainConversation } from '../assistant/standing.js';
-import { savedDefaultBackendId } from '../session-identity.js';
 import type { OwnerService } from '../owner/index.js';
 import type { SessionCommands } from '../orchestration/session-commands.js';
 import { atomicWritePrivateFile, readPrivateSettingsFile } from '../settings/private-file.js';
@@ -687,7 +686,7 @@ export class ChannelService {
   }
 
   /** What a `/model` card currently edits, read fresh: the session's own selection, or the chat's defaults for new ones. */
-  private modelTarget(entry: ModelRef): { backendId: string; profileId?: string; project?: Project; session?: Session; selection: string } | undefined {
+  private async modelTarget(entry: ModelRef): Promise<{ backendId: string; profileId?: string; project?: Project; session?: Session; selection: string } | undefined> {
     if (entry.scope === 'session') {
       let session: Session;
       try { session = this.deps.store.getSession(entry.sessionId!); } catch { return undefined; }
@@ -698,12 +697,12 @@ export class ChannelService {
     if (!chat) return undefined;
     const defaults = this.bindings.chatModel(chat.key);
     // The backend a new conversation would start on, resolved as `resolveNativeSessionInput` does.
-    const backendId = defaults.backendId ?? defaultBackendForClient(undefined, savedDefaultBackendId(this.deps.settings.getSettings()), this.deps.nativeBackends.offeredBackendIds());
+    const backendId = defaults.backendId ?? await defaultBackendForClient(undefined, this.deps.settings.getSettings().defaultBackendId, this.deps.nativeBackends);
     return { backendId, project: chat.projectId ? this.projectOf(chat.projectId) : undefined, selection: defaults.model ?? '' };
   }
 
   private async modelView(entry: ModelRef, ref: string, options: { selection?: string; error?: string; stale?: boolean } = {}): Promise<ModelPickerView> {
-    const target = this.modelTarget(entry);
+    const target = await this.modelTarget(entry);
     if (!target) throw new AppError('SESSION_NOT_FOUND', 'The conversation no longer exists', 404);
     const stale = options.stale ?? false;
     // A chat can still switch away from an agent that has no model list; a session has nothing else to show.
@@ -757,7 +756,7 @@ export class ChannelService {
 
   private async settleModelPress(a: InboundAction, ref: string, entry: ModelRef): Promise<ActionReply> {
     const value = a.selectedIds?.[0];
-    const target = this.modelTarget(entry);
+    const target = await this.modelTarget(entry);
     if (!target) return { toast: { tone: 'info', text: REPLY.cardExpired } };
     if (!value) return {};
     try {

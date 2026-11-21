@@ -61,7 +61,7 @@ import { AttemptStrip } from '../session/Attempts';
 import { shareModelName, ShareSessionContext, type ShareSession } from '../marks/ShareImage';
 import { MessageCommandsContext } from '../session/messageCommands';
 import { useLists, useStores } from '../state/stores';
-import { ViewDots, useViewShortcuts, viewShortcut } from '../session/ViewDots';
+import { ViewDots, useViewShortcut, useViewShortcuts } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
 import type { SessionView } from '../state/navStore';
 import type { ViewEntry } from '@/plugins/catalog';
@@ -321,6 +321,7 @@ const AUTO_OPEN_TERMINAL_DELAY_MS = 700;
  */
 function ViewSwitch({ views, value, onChange }: { views: ViewEntry[]; value: SessionView; onChange: (view: SessionView) => void }) {
   const { t } = useLingui();
+  const viewShortcut = useViewShortcut();
   return (
     <div role="tablist" aria-label={t`会话视图`} className="flex items-center gap-0.5">
       {views.map((view, index) => {

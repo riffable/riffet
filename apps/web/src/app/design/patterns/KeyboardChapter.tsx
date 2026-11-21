@@ -4,11 +4,12 @@ import { IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input, Kbd } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
-import { isApplePlatform, shortcutLabel } from '@/lib/platform';
+import { isApplePlatform } from '@/lib/platform';
 import { primaryEnterHint } from '../../session/composerKeyboard';
 import { keybindingCaps, registerKeybindings } from '../../pluginKeybindings';
-import { hostShortcuts, type HostShortcut } from '../../hostShortcuts';
-import { shortcutCaps } from '../../tabs/keys';
+import { hostShortcuts, shortcutGroups, type ShortcutGroup } from '../../hostShortcuts';
+import { familyCaps, shortcutCaps, shortcutHint, useShortcutOverrides } from '../../shortcuts';
+import { ShortcutRecorder } from '@/components/ui/shortcut-recorder';
 import { Chapter, Frame, Plate } from '../specimen';
 import { Mark } from './parts';
 
@@ -30,15 +31,14 @@ function Group({ title, rows }: { title: string; rows: Array<[string, React.Reac
 
 function ShortcutMap() {
   const { t } = useLingui();
-  const mod = isApplePlatform ? '⌘' : 'Ctrl';
-  const rows = (group: HostShortcut['group']) => hostShortcuts.filter((shortcut) => shortcut.group === group).map((shortcut): [string, React.ReactNode] => [
+  useShortcutOverrides();
+  const rows = (group: ShortcutGroup) => hostShortcuts.filter((shortcut) => shortcut.group === group).map((shortcut): [string, React.ReactNode] => [
     i18n._(shortcut.label),
-    caps(group === 'tabs' ? shortcutCaps(shortcut.keys) : shortcut.keys.map((key) => key === 'Mod' ? mod : key)),
+    caps(shortcut.customizable ? shortcutCaps(shortcut.id) : familyCaps(shortcut.id)),
   ]);
   return (
     <Frame className="grid gap-x-10 gap-y-8 p-8 md:grid-cols-2 xl:grid-cols-3 max-md:p-4">
-      <Group title={t`工作台`} rows={rows('workbench')} />
-      <Group title={t`会话标签页`} rows={rows('tabs')} />
+      {shortcutGroups.map(({ group, title }) => <Group key={group} title={i18n._(title)} rows={rows(group)} />)}
       <Group title={t`输入框`} rows={[
         [t`发送`, caps([primaryEnterHint('newline')])],
         [t`换行`, caps([isApplePlatform ? '⇧' : 'Shift', '↵'])],
@@ -50,19 +50,42 @@ function ShortcutMap() {
 
 function Shown() {
   const { t } = useLingui();
+  useShortcutOverrides();
   return (
     <Frame className="grid grid-cols-3 gap-6 p-8 max-md:grid-cols-1 max-md:p-4">
       <div className="flex flex-col items-start gap-3">
-        <Tip label={t`搜索`} kbd={shortcutLabel('K')}><Button size="icon" variant="secondary" aria-label={t`搜索`}><IconSearch /></Button></Tip>
+        <Tip label={t`搜索`} kbd={shortcutHint('search')}><Button size="icon" variant="secondary" aria-label={t`搜索`}><IconSearch /></Button></Tip>
         <Mark>{'Tip kbd'}</Mark>
       </div>
       <div className="flex flex-col items-start gap-3">
-        {caps([isApplePlatform ? '⌘' : 'Ctrl', 'K'])}
+        {caps(shortcutCaps('search'))}
         <Mark>Kbd</Mark>
       </div>
       <div className="flex flex-col items-start gap-3">
-        <span className="font-mono text-sm text-fg">{shortcutLabel('K')}</span>
-        <Mark>shortcutLabel</Mark>
+        <span className="font-mono text-sm text-fg">{shortcutHint('search')}</span>
+        <Mark>shortcutHint</Mark>
+      </div>
+    </Frame>
+  );
+}
+
+function Recorder() {
+  const { t } = useLingui();
+  useShortcutOverrides();
+  const none = () => false;
+  return (
+    <Frame className="grid grid-cols-3 gap-6 p-8 max-md:grid-cols-1 max-md:p-4">
+      <div className="flex flex-col items-start gap-3">
+        <ShortcutRecorder caps={shortcutCaps('search')} off={t`未设置`} prompt={t`按下组合键`} label={t`搜索会话`} onCapture={none} />
+        <Mark>ShortcutRecorder</Mark>
+      </div>
+      <div className="flex flex-col items-start gap-3">
+        <ShortcutRecorder caps={[]} off={t`未设置`} prompt={t`按下组合键`} label={t`搜索会话`} onCapture={none} initialActive />
+        <Mark>{t`录入中`}</Mark>
+      </div>
+      <div className="flex flex-col items-start gap-3">
+        <ShortcutRecorder caps={[]} off={t`未设置`} prompt={t`按下组合键`} label={t`搜索会话`} onCapture={none} />
+        <Mark>{t`未设置`}</Mark>
       </div>
     </Frame>
   );
@@ -113,13 +136,16 @@ export function KeyboardChapter() {
       <Plate number={1} title={t`快捷键`} note={t`工作台与标签页两栏读自 hostShortcuts.ts，输入框的发送键随「回车键行为」设置变化。`}>
         <ShortcutMap />
       </Plate>
-      <Plate number={2} title={t`显示`} note={t`纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutLabel。`}>
+      <Plate number={2} title={t`显示`} note={t`纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutHint；键位读自快捷键表，用户改键后一起变。`}>
         <Shown />
       </Plate>
-      <Plate number={3} title={t`焦点与 Escape`} note={t`键盘焦点显示 2px 的焦点环，输入框改用强调色边框；浮层关闭后焦点回到打开前输入的位置。`}>
+      <Plate number={3} title={t`快捷键录入`} note={t`点击后录入下一组按键，Esc 取消；停用后显示「未设置」。`}>
+        <Recorder />
+      </Plate>
+      <Plate number={4} title={t`焦点与 Escape`} note={t`键盘焦点显示 2px 的焦点环，输入框改用强调色边框；浮层关闭后焦点回到打开前输入的位置。`}>
         <Focus />
       </Plate>
-      <Plate number={4} title={t`插件快捷键`} note={t`插件只能声明默认值；与工作台或先注册的命令冲突时被拒绝。`}>
+      <Plate number={5} title={t`插件快捷键`} note={t`插件只能声明默认值；与工作台或先注册的命令冲突时被拒绝。`}>
         <Plugins />
       </Plate>
     </Chapter>

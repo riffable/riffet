@@ -15,6 +15,7 @@ import { useViewCatalog } from '@/plugins/registry';
 import type { PaletteAction } from './CommandPalette';
 import { PluginCommandForm, type CommandArgs } from './PluginCommandForm';
 import { registerKeybindings, chordOf } from './pluginKeybindings';
+import { shortcutsSuspended, useShortcutOverrides } from './shortcuts';
 import { isComposingKey } from './session/composerKeyboard';
 import { useHasGit } from './state/gitStatusStore';
 import { useStores } from './state/stores';
@@ -124,7 +125,8 @@ export function usePluginCommands({ project, sessionId, openSession }: {
   }));
 
   // Default shortcuts: judged over every enabled command, so a binding does not start or stop working with the context; it runs only while its command is offered.
-  const keys = useMemo(() => registerKeybindings(all, isApplePlatform), [all]);
+  const shortcutOverrides = useShortcutOverrides();
+  const keys = useMemo(() => registerKeybindings(all, isApplePlatform, shortcutOverrides), [all, shortcutOverrides]);
   const rejectedKeybindings = useMemo(() => new Set(keys.rejected.map((item) => item.id)), [keys]);
   useEffect(() => {
     for (const { id, keybinding, reason } of keys.rejected) console.warn(`[riffet] the shortcut ${keybinding} of ${id} ${REJECTION[reason]}, so it is not registered`);
@@ -132,7 +134,7 @@ export function usePluginCommands({ project, sessionId, openSession }: {
   useEffect(() => {
     if (!keys.chords.size) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || isComposingKey(event)) return;
+      if (event.repeat || isComposingKey(event) || shortcutsSuspended()) return;
       const id = keys.chords.get(chordOf(event));
       const command = id ? offered.find((item) => item.id === id) : undefined;
       if (!command) return;

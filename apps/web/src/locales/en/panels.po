@@ -1089,10 +1089,9 @@ msgstr "Current"
 msgid "悬浮"
 msgstr "Float"
 
-#. placeholder {0}: shortcutLabel('P')
 #: src/app/panels/FilesPanel.tsx
-msgid "按 {0} 搜索文件"
-msgstr "Press {0} to search files"
+msgid "按 {quickOpenHint} 搜索文件"
+msgstr "Press {quickOpenHint} to search files"
 
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/QuickOpen.tsx

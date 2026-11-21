@@ -77,6 +77,7 @@ struct OnboardingView: View {
         case .agent: AgentPage(flow: flow)
         case .project: ProjectPage(flow: flow)
         case .phone: PhonePage(flow: flow)
+        case .notify: NotifyPage(flow: flow)
         }
     }
 }
@@ -322,7 +323,7 @@ private struct PhonePage: View {
             .frame(maxWidth: .infinity)
         } foot: {
             if flow.pairedDevice == nil {
-                Button("以后再说") { model.finishOnboarding() }.buttonStyle(OnboardingButtonStyle(kind: .ghost))
+                Button("以后再说") { flow.advance(from: .phone, model: model) }.buttonStyle(OnboardingButtonStyle(kind: .ghost))
                 if flow.needsNetworkAccess && flow.pairing == nil {
                     OnboardingPrimaryButton(title: "允许同一网络的设备连接", busy: flow.openingNetwork) {
                         Task { await flow.allowNetworkAccess(model: model) }
@@ -330,9 +331,43 @@ private struct PhonePage: View {
                     .disabled(!flow.openingNetwork && (model.server.restartBlockers != nil || model.server.maintenance?.running == true))
                 }
             } else {
-                OnboardingPrimaryButton(title: "完成") { model.finishOnboarding() }
+                OnboardingPrimaryButton(title: "继续") { flow.advance(from: .phone, model: model) }
             }
         }
         .task { await flow.watchDevices(model: model) }
+    }
+}
+
+// MARK: - Notifications and login
+
+private struct NotifyPage: View {
+    let flow: OnboardingFlow
+    @Environment(AppModel.self) private var model
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        @Bindable var flow = flow
+        OnboardingColumn(title: "需要你时通知你", subtitle: "Agent 等待审批、提问或完成时") {
+            Toggle("登录时打开 Riffet", isOn: $flow.launchAtLogin)
+                .toggleStyle(.switch)
+                .font(RiffetFont.label)
+                .foregroundStyle(palette.fg)
+                .padding(.horizontal, Space.md)
+                .frame(height: 48)
+                .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
+        } foot: {
+            if flow.asksNotifications {
+                Button("以后再说") { Task { await flow.finish(askNotifications: false, model: model) } }
+                    .buttonStyle(OnboardingButtonStyle(kind: .ghost))
+                    .disabled(flow.finishing)
+                OnboardingPrimaryButton(title: "允许通知", busy: flow.finishing) {
+                    Task { await flow.finish(askNotifications: true, model: model) }
+                }
+            } else {
+                OnboardingPrimaryButton(title: "完成", busy: flow.finishing) {
+                    Task { await flow.finish(askNotifications: false, model: model) }
+                }
+            }
+        }
     }
 }

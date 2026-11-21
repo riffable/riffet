@@ -108,7 +108,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const projects=store.listProjects();
     const projectsById=new Map(projects.map(project=>[project.id,project]));
     const workItemSummaries=deps.workItems.list().filter(item=>{const project=item.projectId?projectsById.get(item.projectId):undefined;return !project||projectVisibleToClient(request.headers,project);}).map(summarizeWorkItem);
-    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(projects,request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),workItemSummaries,revisions:{sessions:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,workItems:store.workItemsRevision},settings:effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
+    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(projects,request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),workItemSummaries,revisions:{sessions:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,workItems:store.workItemsRevision},settings:await effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
   });
 }
 /**

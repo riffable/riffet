@@ -1089,9 +1089,8 @@ msgstr ""
 msgid "悬浮"
 msgstr ""
 
-#. placeholder {0}: shortcutLabel('P')
 #: src/app/panels/FilesPanel.tsx
-msgid "按 {0} 搜索文件"
+msgid "按 {quickOpenHint} 搜索文件"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx

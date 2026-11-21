@@ -7,7 +7,7 @@
 ## 1. 决策
 
 **iPhone 用 SwiftUI / UIKit 原生界面，业务与状态继续共享 KMP；界面的结构、密度、字号层级和组件形态与 Android 的 iOS 配方对齐。**
-2026-11 起，iPhone 不再单独设计信息架构和版式：三个 Tab、会话列表行、时间线、输入栏和设置分组都以 Android（`shared/…/ui/design/ThemePresets.kt` 的 `IosPreset` 及各页面实现）为准，两端一起演进。iOS 保留的是平台层：系统 TabView / NavigationStack / sheet / Menu、返回手势、Dynamic Type、VoiceOver，以及系统材质——Android 用手绘磨砂模仿的悬浮层，在 iPhone 上直接用 Liquid Glass。设计 token 与共享组件在 `iosApp/Riffet/Design/RiffetDesign.swift`；其中的字号、尺寸、动效由 `pnpm gen:tokens` 从 `packages/contracts/src/mobile-styles.ts` 的 ios 风格生成，iPhone 自己的差异写在同一文件的 `IOS_NATIVE_OVERRIDES`。
+2026-11 起，iPhone 不再单独设计信息架构和版式：四个 Tab、会话列表行、时间线、输入栏和设置分组都以 Android（`shared/…/ui/design/ThemePresets.kt` 的 `IosPreset` 及各页面实现）为准，两端一起演进。iOS 保留的是平台层：系统 TabView / NavigationStack / sheet / Menu、返回手势、Dynamic Type、VoiceOver，以及系统材质——Android 用手绘磨砂模仿的悬浮层，在 iPhone 上直接用 Liquid Glass。设计 token 与共享组件在 `iosApp/Riffet/Design/RiffetDesign.swift`；其中的字号、尺寸、动效由 `pnpm gen:tokens` 从 `packages/contracts/src/mobile-styles.ts` 的 ios 风格生成，iPhone 自己的差异写在同一文件的 `IOS_NATIVE_OVERRIDES`。
 
 正式客户端与第一、二版 Demo 均最低 iOS 18.0。iOS 26 上悬浮层（底栏、输入栏、回到最新、顶栏按钮）用 Liquid Glass，顶栏下用系统软滚动边缘；iOS 18 回退到系统材质。导航栏和 Tab 栏不设自定义背景，否则会盖掉这两种效果。不维护手绘的仿 Liquid Glass 控件。
 
@@ -69,7 +69,7 @@ NavigationStack
 终端：显式入口打开独立全屏页面
 ```
 
-> 2026-11 更新：上图的单栈结构已被替换。现在与 Android 一致，底部三个只有图标的 Tab：**新会话 / 任务 / 设置**，默认停在任务，待处理数挂在任务上；推入会话等页面时底栏随系统收起。新会话 Tab 的根页面就是任务编辑页（大输入框 + 项目切换 + 文件/变更/终端），发出后在同一栈内推入会话。下文第一、二版的评审记录保留作历史。
+> 2026-11 更新：上图的单栈结构已被替换。现在与 Android 一致，底部四个只有图标的 Tab：**新会话 / 助理 / 任务 / 设置**，默认停在新会话（可在 设置 → 交互与输入 改），待处理数挂在任务上；推入会话等页面时底栏随系统收起。新会话 Tab 的根页面就是任务编辑页（大输入框 + 项目切换 + 文件/变更/终端），发出后在同一栈内推入会话。下文第一、二版的评审记录保留作历史。
 
 > 宽窗口（2026-11）：同时支持 iPhone 与 iPad（`TARGETED_DEVICE_FAMILY 1,2`，iPad 四个方向都支持，以便参与分屏和台前调度）。布局只看窗口的尺寸类别，不看设备：水平和垂直都是 regular 时（iPad、展开的 iPhone Duo）「任务」改为列表在左、会话在右，列表宽 32%，限 320～420pt；compact（iPhone、Duo 外屏、窄分屏、手机横屏）保持单栈。两种宽度共用同一个 `NavigationStack(path:)`，列表只是挪到栈的旁边，所以折叠、展开或调整窗口时，打开的会话不会被重新挂载。宽窗口下会话页不隐藏 Tab 栏；正文与输入框限宽 `RiffetMetrics.readingWidth`（760pt）居中，窗口宽于此时调整大小不需要重新测量各行。硬件键盘：⌘N 新会话，⌘↩ 发送；两个输入框都能接收从其他 App 拖入的文件和图片。
 >

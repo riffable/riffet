@@ -46,7 +46,7 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
     // not re-validated against a backend the client cannot name.
     const stored=settings.getSettings();
     const patch=request.body??{};
-    const body=preserveInvisibleSettingsForClient(request.headers,stored,patch,nativeBackends.offeredBackendIds());
+    const body=await preserveInvisibleSettingsForClient(request.headers,stored,patch,nativeBackends);
     if(Object.prototype.hasOwnProperty.call(patch,'taskWorkspaceRoot'))body.taskWorkspaceRoot=(await deps.taskWorkspaces.validateRoot(patch.taskWorkspaceRoot))??null;
     const rawDefaults=patch.nativeBackendDefaults;
     // A backend that is off (its plugin) has no capabilities to check a value against. A client saves the whole
@@ -89,7 +89,7 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
   });
   app.get('/api/auxiliary-models',async(request)=>({models:visibleBackendsForClient(request.headers,await listAuxiliaryModels(backendId=>nativeBackends.catalog.gatewayProfiles(backendId)))}));
   app.get('/api/auxiliary-models/inspect',async(request)=>{
-    const currentSettings=effectiveSettings(request.headers);
+    const currentSettings=await effectiveSettings(request.headers);
     const aux=currentSettings.auxiliaryModels;
     const formatRef=(ref:import('../../../../packages/contracts/src/index.js').AuxiliaryModelRef|undefined)=>{
       if(!ref)return undefined;

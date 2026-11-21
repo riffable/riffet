@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import type { IncomingHttpHeaders } from 'node:http';
 import { CLIENT_FEATURES_HEADER, isPluginAgentId, type AppSettings, type NativeBackendId, type Project } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { LEGACY_DEFAULT_BACKEND_ID, savedDefaultBackendId } from '../session-identity.js';
 import type { Store } from '../store.js';
 import type { TimelineRow } from '../../../../packages/contracts/src/sync.js';
 
@@ -23,8 +22,8 @@ export const PI_BACKEND_ID = 'pi';
 export const ANTIGRAVITY_AGENT_FEATURE = 'antigravity-agent';
 export const ANTIGRAVITY_BACKEND_ID = 'antigravity';
 export const PLUGIN_AGENTS_FEATURE = 'plugin-agents';
-/** What an old client gets when the saved default is a backend it cannot decode. */
-export const COMPATIBLE_DEFAULT_BACKEND_ID = LEGACY_DEFAULT_BACKEND_ID;
+/** What a new conversation falls back to when no Agent is installed. */
+export const FALLBACK_DEFAULT_BACKEND_ID = 'claude' as const satisfies NativeBackendId;
 
 function featureNames(headers?: IncomingHttpHeaders): Set<string> {
   const raw = headers?.[CLIENT_FEATURES_HEADER];
@@ -111,29 +110,33 @@ export function visibleBackendsForClient<T extends { backendId: string }>(header
   return items.filter(item => backendVisibleToClient(headers, item.backendId));
 }
 
+/** What {@link defaultBackendForClient} reads: the registered backends and which of them have an installed CLI, both in the canonical Agent order. */
+export interface DefaultBackendSource {
+  offeredBackendIds(): readonly NativeBackendId[];
+  availableBackendIds(): Promise<readonly NativeBackendId[]>;
+}
+
 /**
- * The backend a new conversation starts on when none was chosen. The saved default is used while it is
- * offered (`offered`: the backends registered now, in registry order; omit to skip that check) and this
- * client can decode it. Otherwise Cursor, the default of every client before this setting existed, while
- * that is usable, else the first offered backend this client can decode: a plugin may be off, and an older
- * client must not be handed an id it cannot name.
+ * The backend a new conversation starts on when none was chosen: the saved default while it is offered
+ * and this client can decode it, else the first installed Agent in the canonical order that this client
+ * can decode (an older client must not be handed an id it cannot name), else Claude. Availability is
+ * only probed when the saved default does not decide.
  */
-export function defaultBackendForClient(headers: IncomingHttpHeaders | undefined, backendId: NativeBackendId, offered?: readonly NativeBackendId[]): NativeBackendId {
-  const usable = (id: NativeBackendId) => backendVisibleToClient(headers, id) && (offered === undefined || offered.includes(id));
-  if (usable(backendId)) return backendId;
-  if (usable(COMPATIBLE_DEFAULT_BACKEND_ID)) return COMPATIBLE_DEFAULT_BACKEND_ID;
-  return offered?.find(id => id !== 'chat' && usable(id)) ?? COMPATIBLE_DEFAULT_BACKEND_ID;
+export async function defaultBackendForClient(headers: IncomingHttpHeaders | undefined, saved: NativeBackendId | undefined, backends: DefaultBackendSource): Promise<NativeBackendId> {
+  const offered = backends.offeredBackendIds();
+  const usable = (id: NativeBackendId) => backendVisibleToClient(headers, id) && offered.includes(id);
+  if (saved !== undefined && usable(saved)) return saved;
+  return (await backends.availableBackendIds()).find(id => id !== 'chat' && usable(id)) ?? FALLBACK_DEFAULT_BACKEND_ID;
 }
 
 /**
  * What a client is shown of the settings record; the stored record itself is untouched. `defaultBackendId`
  * is the effective one, as {@link defaultBackendForClient} resolves it.
  */
-export function effectiveSettingsForClient(headers: IncomingHttpHeaders | undefined, settings: AppSettings, offered?: readonly NativeBackendId[]): AppSettings {
+export async function effectiveSettingsForClient(headers: IncomingHttpHeaders | undefined, settings: AppSettings, backends: DefaultBackendSource): Promise<AppSettings> {
   const result = structuredClone(settings);
   if (!clientSupportsFeature(headers, 'projectless-tasks')) delete result.taskWorkspaceRoot;
-  const effective = defaultBackendForClient(headers, savedDefaultBackendId(settings), offered);
-  if (settings.defaultBackendId !== undefined || effective !== COMPATIBLE_DEFAULT_BACKEND_ID) result.defaultBackendId = effective;
+  result.defaultBackendId = await defaultBackendForClient(headers, settings.defaultBackendId, backends);
   const hidden = (id: unknown) => typeof id === 'string' && !backendVisibleToClient(headers, id);
   if (result.nativeBackendDefaults) {
     const defaults = Object.fromEntries(Object.entries(result.nativeBackendDefaults).filter(([id]) => !hidden(id)));
@@ -154,14 +157,14 @@ export function effectiveSettingsForClient(headers: IncomingHttpHeaders | undefi
  * must not replace the hidden default. An explicit hidden key is a request for a backend the
  * client cannot decode and is refused.
  */
-export function preserveInvisibleSettingsForClient(headers: IncomingHttpHeaders | undefined, stored: AppSettings, patch: Record<string, unknown>, offered?: readonly NativeBackendId[]): Record<string, unknown> {
+export async function preserveInvisibleSettingsForClient(headers: IncomingHttpHeaders | undefined, stored: AppSettings, patch: Record<string, unknown>, backends: DefaultBackendSource): Promise<Record<string, unknown>> {
   if (!clientSupportsFeature(headers, 'projectless-tasks') && Object.prototype.hasOwnProperty.call(patch, 'taskWorkspaceRoot')) throw new AppError('FEATURE_REQUIRED', 'Update the client to change the task workspace location', 409);
   if (!hiddenBackendIds(headers).length && !hidesPluginAgents(headers)) return patch;
   const hidden = (id: unknown) => typeof id === 'string' && !backendVisibleToClient(headers, id);
   const refuse = () => new AppError('INVALID_BACKEND', 'Choose a supported native backend');
   const next = { ...patch };
   if (hidden(next.defaultBackendId)) throw refuse();
-  if (stored.defaultBackendId !== undefined && hidden(stored.defaultBackendId) && next.defaultBackendId === defaultBackendForClient(headers, stored.defaultBackendId, offered)) next.defaultBackendId = stored.defaultBackendId;
+  if (stored.defaultBackendId !== undefined && hidden(stored.defaultBackendId) && next.defaultBackendId === await defaultBackendForClient(headers, stored.defaultBackendId, backends)) next.defaultBackendId = stored.defaultBackendId;
   if (next.nativeBackendDefaults !== undefined) {
     // `null` would replace the record wholesale in `setSettings`; an older client cannot see the
     // hidden defaults it would erase, so it must not be able to clear them.

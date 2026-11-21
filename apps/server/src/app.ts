@@ -78,7 +78,6 @@ import { createAssistantWorkbenchQueries, workbenchReads } from './assistant/wor
 import { Consolidation } from './assistant/consolidation.js';
 import { nextCronTime, parseCron } from './orchestration/cron.js';
 import { assistantSearch } from './search/assistant-search.js';
-import { savedDefaultBackendId } from './session-identity.js';
 import { registerShareRoutes } from './routes/shares.js';
 import { ShareService } from './shares/service.js';
 import { SessionDeletion } from './session-deletion.js';
@@ -123,7 +122,7 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -342,7 +341,7 @@ export async function createApp(options: AppOptions = {}) {
   // including through `tailscale serve` or a reverse proxy, which reach a loopback binding too.
   const loopbackBinding=['127.0.0.1','localhost','::1'].includes((options.host??'127.0.0.1').replace(/^\[|\]$/g,'').toLowerCase());
   const allowOutsideRead=(headers?:import('node:http').IncomingHttpHeaders)=>settings.getSettings().allowOutsideRead??(loopbackBinding&&!proxiedRequest(headers));
-  const effectiveSettings=(headers?:import('node:http').IncomingHttpHeaders)=>({...effectiveSettingsForClient(headers,settings.getSettings(),backendRegistry.list().map(driver=>driver.id)),allowOutsideRead:allowOutsideRead(headers)});
+  const effectiveSettings=async(headers?:import('node:http').IncomingHttpHeaders)=>({...await effectiveSettingsForClient(headers,settings.getSettings(),nativeBackends),allowOutsideRead:allowOutsideRead(headers)});
   const monitor=new ServiceMonitor({store,terminal,streams,agentProcesses:()=>reclaimerRef?.report()});
   monitor.observe(app);
   app.addHook('onRequest',async(request,reply)=>{
@@ -444,12 +443,12 @@ export async function createApp(options: AppOptions = {}) {
     },
   }));
   workItemsRef=workItems;
-  assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:savedDefaultBackendId(saved)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
+  assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:await defaultBackendForClient(undefined,saved.defaultBackendId,nativeBackends)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,settings.getSettings().defaultBackendId,nativeBackends),
     search:assistantSearch,transcript:id=>nativeBackends.contextTranscript(id,CONTEXT_LIMITS.bytes,AbortSignal.timeout(CONTEXT_LIMITS.timeoutMs)),
     runtimeSessionIds:()=>nativeBackends.runtimeSessionIds(),runtimeStatus:id=>nativeBackends.hasRuntime(id)?nativeBackends.status(id):undefined,backends:onAvailability=>nativeBackends.catalog.listBackends(onAvailability),automations:()=>{
       if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
       return orchestrationRef.automations();
-    },work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
+    },work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??SETTING_DEFAULTS.assistant.dispatch});
   const workbenchQueries=createAssistantWorkbenchQueries({
     store,ownerName:()=>owner.get().name,timeZone:()=>settings.getSettings().assistant?.timeZone,
     nativeStatus:id=>nativeBackends.status(id),pluginSettings:(id,offset,limit)=>plugins.workbenchSettingFields(id,offset,limit),pluginInventory:()=>plugins.workbenchInventory(),
@@ -457,8 +456,8 @@ export async function createApp(options: AppOptions = {}) {
   });
   riffetMcp.registerCapabilities(new CapabilityCatalog(
     [...workbenchReads(workbenchQueries), attentionRead(assistantRef), instanceSettingsRead(settings), webThemeRead(themes,()=>appearance.catalog()), sharedThemeRead(themes),
-      agentDefaultsRead(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
-    [instanceSettingCommand(settings), sharedThemeCommand(themes), agentDefaultsCommand(settings,nativeBackends.catalog,()=>nativeBackends.offeredBackendIds())],
+      agentDefaultsRead(settings,nativeBackends.catalog,nativeBackends)],
+    [instanceSettingCommand(settings), sharedThemeCommand(themes), agentDefaultsCommand(settings,nativeBackends.catalog,nativeBackends)],
   ));
   // Seats are Agent conversations; deleting one goes through the same path as a reader's delete, set up below.
   let deletionRef:SessionDeletion|undefined;
@@ -602,7 +601,7 @@ export async function createApp(options: AppOptions = {}) {
     wanted:run=>{
       const assistant=settings.getSettings().assistant;
       if(run.job==='supervise')return Boolean(run.subject&&supervision?.wanted(run.subject,run.key));
-      if(run.job==='consolidate')return assistant?.consolidation!==false;
+      if(run.job==='consolidate')return assistant?.consolidation??SETTING_DEFAULTS.assistant.consolidation;
       try{return Boolean(run.subject&&assistantDelegationsRef?.wantsRun(run.subject,run.key));}catch{return false;}
     }});
   runs.mainSession=assistantMain;
@@ -627,7 +626,7 @@ export async function createApp(options: AppOptions = {}) {
     changed:()=>store.workItemsChanged()});
   assistantDelegationsRef=delegations;
   consolidation=new Consolidation({store,cwd:()=>assistantProject(store,stateDir).cwd,mainSessionId:assistantMain,timeZone:ownerZone,
-    enabled:()=>settings.getSettings().assistant?.consolidation!==false,
+    enabled:()=>settings.getSettings().assistant?.consolidation??SETTING_DEFAULTS.assistant.consolidation,
     enqueue:(key,brief)=>queue('consolidate',key,brief),has:key=>runs.has(key),
     keepAlive:async sessionId=>{
       const session=store.getSession(sessionId);
@@ -639,7 +638,7 @@ export async function createApp(options: AppOptions = {}) {
         if(path)await utimes(path,at,at);
       }
     }});
-  supervision=new Supervision({store,workItems,enabled:()=>settings.getSettings().assistant?.supervision===true,
+  supervision=new Supervision({store,workItems,enabled:()=>settings.getSettings().assistant?.supervision??SETTING_DEFAULTS.assistant.supervision,
     enqueue:(key,brief,workItemId)=>{queue('supervise',key,brief,workItemId);},pending:workItemId=>runs.pending('supervise',workItemId),
     agentLabel:backendId=>(backendId&&isNativeBackendId(backendId)?backendRegistry.get(backendId)?.label:undefined)??backendId??'Agent'});
   assistantWork={

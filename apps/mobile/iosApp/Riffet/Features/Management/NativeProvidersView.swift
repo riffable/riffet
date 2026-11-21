@@ -47,7 +47,7 @@ struct NativeProvidersView: View {
         RiffetList {
             if agentSettings {
                 Section {
-                    RiffetPickerRow(title: String(localized: "默认 Agent", bundle: .riffet), options: managementBackends.map { .init(id: $0, title: managementBackendName($0, workbench)) }, selection: Binding(get: { workbench.settings?.defaultBackendId ?? .cursor }, set: { next in Task { await saveDefaultAgent(next) } }))
+                    RiffetPickerRow(title: String(localized: "默认 Agent", bundle: .riffet), options: managementBackends.map { .init(id: $0, title: managementBackendName($0, workbench)) }, selection: Binding(get: { workbench.settings?.defaultBackendId ?? managementBackends[0] }, set: { next in Task { await saveDefaultAgent(next) } }))
                 }
             }
             RiffetViewTabs(items: managementBackends.map { .init(value: $0, title: managementBackendName($0, workbench)) }, selection: $backend)

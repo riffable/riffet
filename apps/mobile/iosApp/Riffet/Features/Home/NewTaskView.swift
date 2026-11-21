@@ -62,7 +62,7 @@ struct NewTaskView: View {
     private var backend: NativeBackendId {
         if chat { return .chat }
         // The assistant runs only on the agents that isolate it; a draft's other agent gives way to its own.
-        return workbench.backends.first { $0.backendId.name == draft.backendName && (assistant == nil || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? .cursor
+        return workbench.backends.first { $0.backendId.name == draft.backendName && (assistant == nil || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? workbench.backends.first(where: { $0.available })?.backendId ?? .claude
     }
     private var project: Project? {
         assistant != nil ? workbench.assistantProject : workbench.projects.first { $0.id == draft.projectID }

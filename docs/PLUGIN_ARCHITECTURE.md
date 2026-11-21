@@ -120,7 +120,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 模型源：`AgentHost.modelSources.resolve(profileId, protocol)` 返回档案（只限本 Agent 自己的，别家的 403 `AGENT_PROFILE_FOREIGN`）所选模型源在该协议下的 `{ baseUrl, headers?, credential? }`（`sourceEndpoint` 的映射）；档案没有选源、源不可用或不提供该协议时为 `undefined`，源的凭据是命令时只给地址，不交出密钥（命令在 Riffet 之外执行）。`AgentHost.modelSources.models(profileId, protocol)` 返回同一档案在该协议下的模型目录：选了源时是源的 `catalog`，填了 `apiEndpoint` 时由宿主读该协议的标准目录，两者都没有时为 `undefined`。
 - 协商：协议特性 `plugin-agents`（`ProtocolFeature`、`PROTOCOL_INFO`）。客户端在 `X-Riffet-Features` 声明后，才会收到带插件 Agent ID 的会话、运行、目录条目、事件、统计行、搜索命中，以及设置里的 `defaultBackendId`、`nativeBackendDefaults`、`auxiliaryModels` 引用；未声明的客户端（移动端从不声明）看到的与以前一样，其中被隐藏的默认值换成可见的后端。规则与 `pi-agent` 共用 `native/client-features.ts`，按形式（带点）判断，不枚举 ID。契约快照里 `NativeBackendIdSchema` 仍是枚举，`negotiatedPattern` 记录可能额外出现的字符串，兼容检查不视为破坏。
-- 默认后端：`AppSettings.defaultBackendId`（缺省为 Cursor）保存用户的选择；服务端返回的是生效值：保存的后端当前未注册（插件关闭）或客户端不能解码时，依次回退到 Cursor（可用时）和注册顺序中第一个可用的后端，保存的值不变，插件回来后恢复。新会话没指定后端时用同一个值。后端不可用时保存设置不校验它的默认值（原样保留的通过，修改则 503）。
+- 默认后端：`AppSettings.defaultBackendId` 保存用户的选择，没选过时不存；服务端返回的是生效值（`native/client-features.ts#defaultBackendForClient`）：保存的后端已注册且客户端能解码就用它，否则取标准 Agent 顺序（`NATIVE_BACKEND_IDS`：claude、codex、antigravity、cursor、pi、traex、droid、dsh，其后是插件 Agent，`chat` 最后；`NativeBackendRegistry.list()` 与后端目录都按此顺序）中第一个已安装（`BackendCatalog.availableBackendIds`，复用 30 秒的可用性缓存）且客户端能解码的，都没有时用 Claude；保存的值不变，插件回来后恢复。新会话没指定后端时用同一个值。后端不可用时保存设置不校验它的默认值（原样保留的通过，修改则 503）。
 - 名称与图标：客户端从 `GET /api/backends`（已启用）或插件描述的 `declared.agentBackends`（启用与否）取名称；`icon.svg`（包内路径，至多 64 KB）由 `GET /api/agent-icons/<ID>`（`AGENT_ICON_ROUTE`）按 Agent ID 提供，不论插件是否启用，只提供声明的那个文件，带 `ETag` 与限制脚本的 CSP，客户端只能当图片画；`icon.sfSymbol` 给 Mac。内置 ID 保持 `gen:marks` 生成的图标，未知 ID 用通用图标和中性色。
 
 ## 插件详情

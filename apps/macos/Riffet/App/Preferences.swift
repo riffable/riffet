@@ -313,7 +313,7 @@ final class DisplayPreferences {
         appearance = defaults.string(forKey: PreferenceKey.appearance) ?? "system"
         textScale = defaults.object(forKey: PreferenceKey.textScale) as? Double ?? 1.0
         density = defaults.object(forKey: PreferenceKey.density) as? Double ?? 1.0
-        terminalFontSize = defaults.object(forKey: PreferenceKey.terminalFontSize) as? Double ?? 12
+        terminalFontSize = defaults.object(forKey: PreferenceKey.terminalFontSize) as? Double ?? 12.5
         terminalHorizontalPadding = Self.terminalPadding(
             defaults.object(forKey: PreferenceKey.terminalHorizontalPadding),
             defaultValue: Self.defaultTerminalHorizontalPadding, in: 0...48

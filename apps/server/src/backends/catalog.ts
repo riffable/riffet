@@ -151,6 +151,7 @@ export class BackendCatalog {
   private readonly loadedListings = new Map<string, { at: number; value?: LoadedExtensions; request?: Promise<LoadedExtensions> }>();
   private readonly usageReads = new Map<string, { freshUntil: number; value?: NativeBackendUsage; request?: Promise<NativeBackendUsage | undefined> }>();
   private readonly availability = new Map<string, AvailabilityEntry>();
+  private readonly availabilityProbes = new Map<string, Promise<AvailabilityEntry>>();
 
   constructor(
     private readonly registry: NativeBackendRegistry,
@@ -380,22 +381,50 @@ export class BackendCatalog {
    * is why a backend whose executable could not be found still showed up as healthy until a
    * conversation tried to start it.
    */
-  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<AvailabilityEntry> {
+  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig, options: { staleOk?: boolean } = {}): Promise<AvailabilityEntry> {
     const key = `${driver.id}:${profile.id}`;
     const cached = this.availability.get(key);
     if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached;
-    // A source in its own process answers `resolve` only from a finished `prepare`; without one the probe would
-    // read (and cache) "not ready" for a source that is fine.
-    await prepareSource(profile.config).catch(() => undefined);
-    const result = await driver.available(this.host, profile)
-      .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
-    const entry = { result, checkedAt: Date.now() };
-    this.availability.set(key, entry);
-    for (const oldest of this.availability.keys()) {
-      if (this.availability.size <= MAX_AVAILABILITY_ENTRIES) break;
-      this.availability.delete(oldest);
-    }
-    return entry;
+    // A caller that only picks a default takes the last answer and lets the refresh run behind it.
+    if (cached && options.staleOk) { void this.probeAvailability(key, driver, profile); return cached; }
+    return this.probeAvailability(key, driver, profile);
+  }
+
+  /** One probe per backend profile at a time: callers that arrive while it runs share its answer. */
+  private probeAvailability(key: string, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<AvailabilityEntry> {
+    const running = this.availabilityProbes.get(key);
+    if (running) return running;
+    const probe = (async () => {
+      // A source in its own process answers `resolve` only from a finished `prepare`; without one the probe would
+      // read (and cache) "not ready" for a source that is fine.
+      await prepareSource(profile.config).catch(() => undefined);
+      const result = await driver.available(this.host, profile)
+        .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
+      const entry = { result, checkedAt: Date.now() };
+      this.availability.set(key, entry);
+      for (const oldest of this.availability.keys()) {
+        if (this.availability.size <= MAX_AVAILABILITY_ENTRIES) break;
+        this.availability.delete(oldest);
+      }
+      return entry;
+    })().finally(() => this.availabilityProbes.delete(key));
+    this.availabilityProbes.set(key, probe);
+    return probe;
+  }
+
+  /**
+   * The offered backends whose CLI is installed and usable (default provider), in the canonical Agent order.
+   * Probes run side by side and share {@link backendAvailability}'s cache; once a backend has been probed,
+   * its last answer is used at once and a stale one is refreshed behind it, so a settings read waits on a
+   * CLI only the first time.
+   */
+  async availableBackendIds(): Promise<NativeBackendId[]> {
+    const checked = await Promise.all(this.registry.list().map(async (driver) => {
+      const profiles = this.profiles(driver);
+      const profile = profiles.find(item => item.isDefault) ?? profiles[0];
+      return profile && (await this.backendAvailability(driver, profile, { staleOk: true })).result.available ? driver.id : undefined;
+    }));
+    return checked.filter((id): id is NativeBackendId => id !== undefined);
   }
 
   async listBackends(onAvailability?: (id: NativeBackendId, checkedAt: number) => void): Promise<NativeBackendCatalogEntry[]> {

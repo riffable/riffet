@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import RiffetKit
 
 /// The first-launch guide's state: which page, what has been decided, and the work each page starts.
@@ -6,7 +7,7 @@ import RiffetKit
 @MainActor
 @Observable
 final class OnboardingFlow {
-    enum Page: Equatable { case welcome, server, agent, project, phone }
+    enum Page: Equatable { case welcome, server, agent, project, phone, notify }
     enum ServerChoice { case mac, remote }
     enum AgentMode { case missing, many }
 
@@ -44,9 +45,15 @@ final class OnboardingFlow {
     private(set) var networkError: String?
     @ObservationIgnored private var baseline: Set<String> = []
 
+    // Notifications and login
+    /// False once the system has answered the permission prompt (either way): the page then has nothing to ask.
+    private(set) var asksNotifications = true
+    private(set) var finishing = false
+    var launchAtLogin = true
+
     /// The full order. A page is skipped when it is not needed, but the current one always stays in the
     /// list, so deciding something on it (one Agent found, no phone pairing) never moves the reader.
-    private static let order: [Page] = [.welcome, .server, .agent, .project, .phone]
+    private static let order: [Page] = [.welcome, .server, .agent, .project, .phone, .notify]
 
     private func needed(_ candidate: Page) -> Bool {
         switch candidate {
@@ -54,6 +61,7 @@ final class OnboardingFlow {
         case .agent: agentMode != nil
         case .project: needsProject
         case .phone: phoneAvailable
+        case .notify: true
         }
     }
 
@@ -87,7 +95,14 @@ final class OnboardingFlow {
             Task {
                 await preparePairing(model: model)
                 // Nothing to scan on this server: the page would only spin.
-                if !phoneAvailable { model.finishOnboarding() }
+                if !phoneAvailable { advance(from: .phone, model: model) }
+            }
+        }
+        if next == .notify {
+            Task {
+                let granted = await NotificationCenterBridge.shared.authorizationGranted()
+                let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                asksNotifications = !granted && status == .notDetermined
             }
         }
     }
@@ -213,6 +228,18 @@ final class OnboardingFlow {
     func skipProject(_ workbench: Workbench, model: AppModel) {
         if workbench.supportsProjectlessTasks { workbench.selectHomeProject(nil) }
         advance(from: .project, model: model)
+    }
+
+    // MARK: Notifications and login
+
+    /// Ends the guide from its last page. The login item follows the toggle only here: skipping the guide enables nothing.
+    func finish(askNotifications: Bool, model: AppModel) async {
+        guard !finishing else { return }
+        finishing = true
+        if askNotifications { _ = await NotificationCenterBridge.shared.requestAuthorization() }
+        try? LoginItem.set(launchAtLogin)
+        finishing = false
+        model.finishOnboarding()
     }
 
     // MARK: Phone

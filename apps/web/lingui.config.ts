@@ -10,7 +10,7 @@ import { formatter } from '@lingui/format-po';
  */
 export const areas: Record<string, string[]> = {
   common: ['src/components', 'src/lib'],
-  workbench: ['src/app/plugins', 'src/app/onboarding', 'src/*.{ts,tsx}', 'src/app/*.{ts,tsx}', 'src/app/state', 'src/app/tabs', 'src/plugins'],
+  workbench: ['src/app/plugins', 'src/app/onboarding', 'src/*.{ts,tsx}', 'src/app/*.{ts,tsx}', 'src/app/state', 'src/app/tabs', 'src/app/shortcuts', 'src/plugins'],
   extensions: ['src/app/extensions'],
   marks: ['src/app/marks'],
   panels: ['src/app/panels'],

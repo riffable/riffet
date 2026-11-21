@@ -3,7 +3,6 @@ package riffet.android
 import android.Manifest
 import android.content.Intent
 import android.content.res.Configuration
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -30,8 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.decodeFromString
 import riffet.shared.AppLog
 import riffet.shared.AppLanguages
@@ -42,7 +39,6 @@ import riffet.shared.registerDownloadDeletion
 import riffet.ui.app.RiffetApp
 import riffet.ui.icons.LiveBrandMark
 import riffet.ui.icons.LiveBrandStyle
-import riffet.ui.state.RiffetConnectionState
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.RiffetTheme
 
@@ -108,12 +104,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
                 val restoring by RiffetHost.restoring.collectAsState()
                 val navigation = RiffetHost.navigation
 
-                // The keep-alive notification is the first thing this app posts, so ask when it starts.
-                val keepAlive by remember(store) {
-                    store?.connection?.map { it != RiffetConnectionState.Idle } ?: flowOf(false)
-                }.collectAsState(false)
-                LaunchedEffect(keepAlive) { if (keepAlive) requestNotificationsOnce() }
-
                 // The deepest visible page owns back. Open sheets/drawers take precedence; title-bar,
                 // app swipe and system back all use the same target and unsaved/in-flight guard.
                 PredictiveBackHandler(enabled = navigation.canGoBack) { swipes ->
@@ -158,7 +148,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
                                 hasSavedPairing = RiffetHost.hasSavedPairing,
                                 deviceAppearance = RiffetDevice.appearance,
                                 requestNotifications = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { answered ->
-                                    notificationsAsked = true
                                     notificationAnswered = answered
                                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 } else null,
@@ -235,14 +224,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
         super.onStop()
     }
 
-    private fun requestNotificationsOnce() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || notificationsAsked) return
-        notificationsAsked = true
-        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     companion object {
         /** Optional `--es riffet.server <baseUrl>` override, debug builds only; see the class comment. */
         const val EXTRA_SERVER_URL: String = "riffet.server"
@@ -257,9 +238,6 @@ class RiffetActivity : RiffetLocalizedActivity() {
         private const val SLOW_RESTORE_MILLIS = 400L
 
         private const val DEEP_LINK_SCHEME = "riffet"
-
-        /** Once per process: a refusal is respected until the next launch. */
-        private var notificationsAsked = false
     }
 }
 

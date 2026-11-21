@@ -23,7 +23,7 @@ import { AssistantInstructions, useAssistantSetup } from './work-items/Assistant
 import { useCatalog } from './state/stores';
 import type { ContextUsage } from './session/model';
 import { TabChromeContext } from './tabs/chrome';
-import { altShortcut } from './tabs/keys';
+import { useShortcutHint } from './shortcuts';
 import { ExpandSidebarButton } from './ExpandSidebarButton';
 import { useSwitchedIn } from './session/sessionFrame';
 
@@ -106,6 +106,7 @@ function ActionMenuItem({ action, onSelect }: { action: HeaderAction; onSelect: 
 
 export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
   const { t } = useLingui();
+  const infoHint = useShortcutHint('sessionInfo');
   const label = useBackendLabel();
   const stateMeta: Partial<Record<Session['state'], { label: string; tone: 'accent' | 'warning' | 'danger' | 'idle'; pulse?: boolean }>> = {
     starting: { label: t`连接中`, tone: 'accent', pulse: true },
@@ -203,7 +204,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       {alerts && <HeaderAlerts key={alertsKey}>{alerts}</HeaderAlerts>}
       {session && (
         <Popover open={infoOpen} onOpenChange={onInfoOpenChange}>
-          <Tip label={t`会话信息`} kbd={altShortcut('I')} disabled={infoOpen}>
+          <Tip label={t`会话信息`} kbd={infoHint} disabled={infoOpen}>
             <PopoverTrigger asChild>
               <Button size="icon-sm" variant="quiet" aria-label={t`会话信息`} aria-pressed={infoOpen} className={cn('relative size-7', infoOpen && 'bg-active text-fg')}>
                 <IconInfoOutline />

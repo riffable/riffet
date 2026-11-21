@@ -67,10 +67,10 @@ describe('the core without the Cursor plugin', () => {
       const refused = await call(method, url, payload);
       expect([url, refused.statusCode, refused.json().error.code, refused.json().error.details]).toEqual([url, 503, unavailable.error.code, unavailable.error.details]);
     }
-    // The default is the user's saved choice only while it is offered: with Cursor off a new session starts on the first backend that is, and the setting says so.
-    expect((await call('GET', '/api/settings')).json().defaultBackendId).toBe('codex');
+    // The default is the user's saved choice only while it is offered: with Cursor off a new session starts on the first installed backend (Claude when none is) and the setting says so.
+    expect((await call('GET', '/api/settings')).json().defaultBackendId).toBe('claude');
     const fallback = await call('POST', '/api/sessions', { projectId: project.id, kind: 'native' });
-    expect([fallback.statusCode, fallback.json().backendId]).toEqual([200, 'codex']);
+    expect([fallback.statusCode, fallback.json().backendId]).toEqual([200, 'claude']);
     // Refused before it is queued: no run is left behind, and the conversation stays as it was.
     expect(store.findRunByCommand(legacy.id, 'c1')).toBeUndefined();
     expect(store.getSession(legacy.id).state).toBe('idle');

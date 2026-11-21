@@ -6,10 +6,14 @@ import RiffetKit
 // earlier plugin holds it. A binding is `[Mod|Ctrl|Alt|Shift|Cmd+]<key>` and needs ⌃, ⌥ or ⌘.
 enum PluginKeybindings {
     /// A shortcut that can be compared: the key and the modifiers.
-    private struct Chord: Hashable {
+    struct Chord: Hashable {
         let key: Character
         let modifiers: Int
         init(_ shortcut: KeyboardShortcut) { key = shortcut.key.character; modifiers = shortcut.modifiers.rawValue }
+        init?(_ text: String) {
+            guard let shortcut = PluginKeybindings.parse(text) else { return nil }
+            self.init(shortcut)
+        }
     }
 
     private static let functionKeys: [Character] = (0..<12).map { Character(UnicodeScalar(0xF704 + $0)!) }
@@ -51,17 +55,10 @@ enum PluginKeybindings {
         return KeyboardShortcut(equivalent, modifiers: modifiers)
     }
 
-    /// What the app itself answers: its menu commands (`RiffetCommands`) and the system's. Keep it in step with them.
-    private static let hostChords: Set<Chord> = {
-        var keys = [
-            "Mod+B", "Alt+Mod+I", "Alt+Mod+1", "Alt+Mod+2", "Alt+Mod+F", "Ctrl+`", "Shift+Mod+T", "Mod+R", "Mod+=", "Mod+-", "Mod+0",
-            "Mod+N", "Mod+W", "Mod+K", "Shift+Mod+F", "Mod+F", "Mod+G", "Shift+Mod+G", "Shift+Mod+P", "Shift+Mod+L", "Shift+Mod+J",
-            "Shift+Mod+E", "Shift+Mod+U", "Shift+Mod+[", "Shift+Mod+]", "Ctrl+Tab", "Ctrl+Shift+Tab", "Mod+.", "Alt+Mod+O",
-            "Mod+Q", "Mod+H", "Alt+Mod+H", "Mod+M", "Mod+,", "Mod+A", "Mod+C", "Mod+V", "Mod+X", "Mod+Z", "Shift+Mod+Z", "Ctrl+Mod+F", "Mod+P", "Mod+S", "Mod+O",
-        ]
-        keys += (1...9).map { "Mod+\($0)" }
-        return Set(keys.compactMap { parse($0).map(Chord.init) })
-    }()
+    /// What the app itself answers: its shortcuts as the user has them and the reserved ones (`ShortcutStore`).
+    @MainActor private static func hostChords() -> Set<Chord> {
+        Set(ShortcutStore.shared.hostChords.compactMap { Chord($0) })
+    }
 
     struct Resolution {
         /// The shortcut each registered command runs on.
@@ -71,9 +68,9 @@ enum PluginKeybindings {
     }
 
     /// Enabled plugins in order; a disabled plugin's binding is only checked against the app's.
-    static func resolve(_ plugins: [PluginDescriptor]) -> Resolution {
+    @MainActor static func resolve(_ plugins: [PluginDescriptor]) -> Resolution {
         var result = Resolution()
-        var taken = hostChords
+        var taken = hostChords()
         for plugin in plugins.filter(\.enabled) + plugins.filter({ !$0.enabled }) {
             for command in plugin.declared?.commands ?? [] {
                 guard let binding = command.keybinding, (command.menus ?? []).isEmpty else { continue }

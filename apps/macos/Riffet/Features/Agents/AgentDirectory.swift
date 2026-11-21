@@ -19,18 +19,27 @@ final class AgentDirectory {
     /// The `/api/backends` labels of the Agents that are on.
     private(set) var catalogLabels: [String: String] = [:]
 
+    /// The Agent ids in the order the server lists them (its canonical order).
+    private var catalogOrder: [String] = []
+
     private init() {}
 
     func update(backends: [NativeBackendCatalogEntry]) {
         let labels = Dictionary(backends.map { ($0.agent, $0.label) }, uniquingKeysWith: { first, _ in first })
         if labels != catalogLabels { catalogLabels = labels }
+        let order = backends.map(\.agent)
+        if order != catalogOrder { catalogOrder = order }
     }
 
-    /// The Agents the server offers, by name.
+    /// The Agents the server offers, in the server's order.
     var pickable: [(id: String, label: String)] {
-        catalogLabels.filter { $0.key != Self.quickChat }.map { (id: $0.key, label: $0.value) }
-            .sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
+        catalogOrder.compactMap { id in
+            id == Self.quickChat ? nil : catalogLabels[id].map { (id: id, label: $0) }
+        }
     }
+
+    /// The built-in Agents in the server's canonical order, for lists drawn before the catalog is read.
+    nonisolated static let builtinOrder = ["claude", "codex", "antigravity", "cursor", "pi", "traex", "droid", "dsh"]
 
     /// The Agent's long name, such as `Claude Code`.
     func label(_ id: String) -> String {

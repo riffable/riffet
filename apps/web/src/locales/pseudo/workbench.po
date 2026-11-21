@@ -54,7 +54,7 @@ msgstr ""
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
 msgstr ""
 
-#. placeholder {0}: item.title
+#. placeholder {0}: item.displayTitle ?? item.title
 #: src/app/state/listsStore.ts
 msgid "「{0}」{body}"
 msgstr ""
@@ -65,6 +65,10 @@ msgstr ""
 
 #: src/app/onboarding/Onboarding.tsx
 msgid "Agent 会在所选目录里读写文件"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "Agent 等待审批、提问或完成时"
 msgstr ""
 
 #: src/app/plugins/PluginAgentBackendsBlock.tsx
@@ -222,6 +226,10 @@ msgstr ""
 msgid "任务看板"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
+msgid "会话"
+msgstr ""
+
 #: src/app/CommandPalette.tsx
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-noun"
@@ -241,12 +249,20 @@ msgstr ""
 msgid "会话信息与操作"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
+msgid "会话内查找"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "会话操作"
 msgstr ""
 
 #: src/app/use-session-actions.ts
 msgid "会话标签"
+msgstr ""
+
+#: src/app/hostShortcuts.ts
+msgid "会话标签页"
 msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -303,6 +319,10 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "允许通知"
 msgstr ""
 
 #: src/app/onboarding/Onboarding.tsx
@@ -816,6 +836,7 @@ msgstr ""
 msgid "工作区导航"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
 #: src/app/plugins/PluginMark.tsx
 msgid "工作台"
 msgstr ""
@@ -1191,6 +1212,10 @@ msgstr ""
 msgid "搜索插件"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
+msgid "搜索文件"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 msgid "搜索目录"
 msgstr ""
@@ -1292,6 +1317,7 @@ msgstr ""
 msgid "数据统计"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx
 msgid "文件"
 msgstr ""
@@ -2510,6 +2536,10 @@ msgstr ""
 
 #: src/app/Workbench.tsx
 msgid "隐藏终端"
+msgstr ""
+
+#: src/app/onboarding/Onboarding.tsx
+msgid "需要你时通知你"
 msgstr ""
 
 #: src/app/state/listsStore.ts

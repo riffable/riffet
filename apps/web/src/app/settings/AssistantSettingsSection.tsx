@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { ASSISTANT_BUDGET, assistantChoice, isAssistantBackend, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
+import { ASSISTANT_BUDGET, SETTING_DEFAULTS, assistantChoice, isAssistantBackend, type AssistantDelegation, type AssistantJob, type AssistantPack, type AssistantRunUsage } from '@contracts';
 import { Segmented, Select, Switch } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -84,10 +84,10 @@ export function AssistantSettingsSection() {
     </SettingsGroup>}
     <SettingsGroup title={t`后台运行`} note={t`用个人助理的模型，按用量计费`}>
       <SettingsRow title={t`跟进任务`} description={spent('supervise') ?? t`任务的会话停下、你不在时，核对交付或推动它`}>
-        <Switch aria-label={t`跟进任务`} checked={assistant?.supervision === true} onCheckedChange={(value) => settings.rememberAssistant({ supervision: value })} />
+        <Switch aria-label={t`跟进任务`} checked={assistant?.supervision ?? SETTING_DEFAULTS.assistant.supervision} onCheckedChange={(value) => settings.rememberAssistant({ supervision: value })} />
       </SettingsRow>
       <SettingsRow title={t`记忆整理`} description={spent('consolidate') ?? t`每晚，以及主对话压缩前`}>
-        <Switch aria-label={t`记忆整理`} checked={assistant?.consolidation !== false} onCheckedChange={(value) => settings.rememberAssistant({ consolidation: value })} />
+        <Switch aria-label={t`记忆整理`} checked={assistant?.consolidation ?? SETTING_DEFAULTS.assistant.consolidation} onCheckedChange={(value) => settings.rememberAssistant({ consolidation: value })} />
       </SettingsRow>
       <SettingsLinkRow title={<span className="flex items-center justify-between gap-3">
         <Trans>委托</Trans>
@@ -101,7 +101,7 @@ export function AssistantSettingsSection() {
     </SettingsGroup>
     <SettingsGroup title={t`任务`}>
       <SettingsRow title={t`开始任务前`}>
-        <Segmented<'edits' | 'all'> size="xs" value={assistant?.dispatch ?? 'edits'} ariaLabel={t`开始任务前`} onChange={(value) => settings.rememberAssistant({ dispatch: value })}
+        <Segmented<'edits' | 'all'> size="xs" value={assistant?.dispatch ?? SETTING_DEFAULTS.assistant.dispatch} ariaLabel={t`开始任务前`} onChange={(value) => settings.rememberAssistant({ dispatch: value })}
           options={[{ value: 'edits', label: t`改代码的先问我` }, { value: 'all', label: t`都先问我` }]} />
       </SettingsRow>
     </SettingsGroup>

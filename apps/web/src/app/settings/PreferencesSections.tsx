@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
+import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, SETTING_DEFAULTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
 import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
@@ -25,6 +25,7 @@ import { type ThemeDefinition } from '@/lib/themes';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
 import { textOf } from '@/lib/errors';
+import { notificationBlocker, saveNotifications } from './notifications';
 import { readEnterKeyBehavior, type EnterKeyBehavior } from '../session/composerKeyboard';
 import { readComposerRunningBehavior, type ComposerRunningBehavior } from '../session/composerRunning';
 import { PermissionGlyph, setPermissionIconStyle, usePermissionIconStyle, type PermissionIconStyle, type PermissionTier } from '../session/ApprovalPicker';
@@ -357,13 +358,6 @@ export function AppIconSection() {
   </div>;
 }
 
-function notificationBlocker(): string | undefined {
-  if (!window.isSecureContext) return i18n._(msg`需要通过 localhost 或 HTTPS 访问才能启用通知。`);
-  if (!('Notification' in window)) return i18n._(msg`此浏览器不支持通知。`);
-  if (Notification.permission === 'denied') return i18n._(msg`浏览器已拒绝通知，请在网站设置中允许后重试。`);
-  return undefined;
-}
-
 /** 通用设置: the language this browser shows. */
 export function GeneralSection() {
   const { t } = useLingui();
@@ -391,16 +385,10 @@ export function NotificationsSection({ settings, onSaved, onError }: ServerSetti
     if (busy) return;
     setBusy(true);
     try {
-      if (enabled) {
-        if (blocker) { onError(blocker); return; }
-        const result = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
-        refreshPermission((value) => value + 1);
-        if (result !== 'granted') { onError(result === 'denied' ? t`浏览器拒绝了通知权限。` : t`未授予通知权限。`); return; }
-      }
-      const patch = { notifications: enabled };
-      onSaved(await api.updateSettings(patch), patch);
+      const saved = await saveNotifications(enabled);
+      onSaved(saved.settings, saved.patch);
     } catch (error) { onError(errorMessage(error, t`无法保存通知设置`)); }
-    finally { setBusy(false); }
+    finally { refreshPermission((value) => value + 1); setBusy(false); }
   };
   return <Group>
     <Row title={t`会话提醒`} description={t`保存在服务器；每个浏览器需单独允许通知。页面打开并连接服务器时才会通知；关闭标签页或断开后不推送。`}>
@@ -437,7 +425,7 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
       </div>
     </Row>
     <Row title={t`展示稍后发送按钮`}>
-      <Switch aria-label={t`展示稍后发送按钮`} checked={settings.composerSendLater === true} disabled={busy} onCheckedChange={(value) => void persist({ composerSendLater: value })} />
+      <Switch aria-label={t`展示稍后发送按钮`} checked={settings.composerSendLater ?? SETTING_DEFAULTS.composerSendLater} disabled={busy} onCheckedChange={(value) => void persist({ composerSendLater: value })} />
     </Row>
   </Group>;
 }

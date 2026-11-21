@@ -1030,10 +1030,13 @@ export class NativeBackendService {
     return driver.external?.follow?.(this.host, session, profile) ?? (() => undefined);
   }
 
-  /** The backends a request can reach now (enabled plugins' included), in registry order. */
+  /** The backends a request can reach now (enabled plugins' included), in the canonical Agent order. */
   offeredBackendIds(): NativeBackendId[] {
     return this.registry.list().map((driver) => driver.id);
   }
+
+  /** The offered backends whose CLI is installed, in registry order; availability is cached briefly. */
+  availableBackendIds(): Promise<NativeBackendId[]> { return this.catalog.availableBackendIds(); }
 
   /** Providers whose transcripts may be read speculatively, for the index to fill in the background. */
   readOnlyTranscriptBackendIds(): NativeBackendId[] {

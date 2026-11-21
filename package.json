@@ -63,6 +63,8 @@
     "gen:timeline-fixtures": "tsx scripts/gen-timeline-fixtures.ts",
     "gen:timeline-fixtures:check": "tsx scripts/gen-timeline-fixtures.ts --check",
     "gen:budgets": "tsx scripts/gen-budgets.ts",
+    "gen:shortcuts": "tsx scripts/gen-shortcuts.ts",
+    "gen:shortcuts:check": "tsx scripts/gen-shortcuts.ts --check",
     "gen:budgets:check": "tsx scripts/gen-budgets.ts --check",
     "gen:contracts": "tsx scripts/gen-contracts.ts",
     "gen:contracts:check": "tsx scripts/gen-contracts.ts --check",

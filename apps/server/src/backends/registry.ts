@@ -1,4 +1,4 @@
-import { isNativeBackendId, type NativeBackendId } from '../../../../packages/contracts/src/index.js';
+import { compareAgentOrder, isNativeBackendId, type NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { NativeBackendDriver } from './types.js';
 import { AppError } from '../errors.js';
 
@@ -66,7 +66,8 @@ export class NativeBackendRegistry {
     return driver;
   }
 
-  list(): NativeBackendDriver[] { return [...this.drivers.values()]; }
+  /** In the canonical Agent order, plugin Agents in registration order after the built-in ones. */
+  list(): NativeBackendDriver[] { return [...this.drivers.values()].sort((a, b) => compareAgentOrder(a.id, b.id)); }
 }
 
 /** A built-in id or a well-formed plugin Agent id. Whether anything provides it is `NativeBackendRegistry.require`'s question. */

@@ -15,7 +15,7 @@ import type { NativeBackendId, NativeRunDetails, Run, Session, AppSettings } fro
  * API and wire payloads, which older Android, iOS and macOS builds decode, are unchanged.
  */
 
-/** The backend of every row and request that names none. */
+/** The backend of every stored row and legacy request that names none. This is identity, not the default of a new conversation (`defaultBackendForClient`). */
 export const LEGACY_DEFAULT_BACKEND_ID = 'cursor' as const satisfies NativeBackendId;
 
 interface IdentityFields { backendId?: NativeBackendId; nativeSessionId?: string; cursorSessionId?: string }
@@ -125,11 +125,6 @@ export function legacyDefaults(backendId: string, settings: Pick<AppSettings, 'd
  */
 export function startsWithBareTerminal(backendId: string): boolean {
   return backendId === LEGACY_DEFAULT_BACKEND_ID;
-}
-
-/** The backend a new conversation starts on when nothing was chosen: the saved default, else Cursor. */
-export function savedDefaultBackendId(settings: Pick<AppSettings, 'defaultBackendId'>): NativeBackendId {
-  return settings.defaultBackendId ?? LEGACY_DEFAULT_BACKEND_ID;
 }
 
 /**

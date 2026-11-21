@@ -157,7 +157,7 @@ export class AssistantBoard {
     store: Store;
     workItems: WorkItemService;
     /** The agent a task gets when the 助理 names none: the owner's default. */
-    defaultBackend(): NativeBackendId;
+    defaultBackend(): NativeBackendId | Promise<NativeBackendId>;
     /** Who a new task goes to by the owner's settings (`workItemAgentChoice`); with `named`, only that agent's saved provider and model. */
     workItemChoice?(named?: string): Promise<AssistantChoice | undefined>;
     /** A bounded read of a stored provider transcript, without starting its CLI. */
@@ -489,7 +489,7 @@ export class AssistantBoard {
         // No agent named: the board's saved choice (agent, provider, model). The saved agent named again keeps its provider and model.
         const named = optionalText(args, 'agent');
         const saved = this.deps.workItemChoice ? await this.deps.workItemChoice(named) : undefined;
-        const agent = named ?? saved?.backendId ?? this.deps.defaultBackend();
+        const agent = named ?? saved?.backendId ?? await this.deps.defaultBackend();
         const use = saved && saved.backendId === agent ? saved : undefined;
         const item = this.deps.workItems.create({
           title: args.title as string,

@@ -62,11 +62,11 @@
 
 ### 文案
 
-按平台符号（⌘ ⇧ ⌥ Esc）；Tip 内的快捷键用 `Tip kbd`，不嵌 `Kbd`。
+按平台符号（⌘ ⇧ ⌥ Esc）；Tip 内的快捷键用 `Tip kbd`，不嵌 `Kbd`。键位读自快捷键表（`shortcutCaps`、`shortcutHint`），不手写。
 
 ### 现状
 
-- `lib/platform.ts:9` 的 `shortcutLabel` 生成字符串，`Kbd` 本身不拆分组合键；没有快捷键注册表（见 patterns 的键盘一节）。
+- `Kbd` 本身不拆分组合键，调用方传入 `shortcutCaps` 给出的键帽数组；`lib/platform.ts` 的 `shortcutLabel` 只用于不在快捷键表里的固定键（⌘S、缩放滚轮）。
 
 ## AgentMark · AgentLogo
 

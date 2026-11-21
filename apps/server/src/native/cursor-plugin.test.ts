@@ -50,6 +50,9 @@ async function boot(cli?: string, options: { directory?: string; chats?: boolean
   const stateDir = join(directory, 'state');
   const configDir = join(directory, 'cursor-home');
   if (options.chats) { await mkdir(stateDir, { recursive: true }); writeFileSync(join(stateDir, 'cursor-cli.json'), JSON.stringify({ configDir }), { mode: 0o600 }); }
+  // These conversations start on the default Agent; the test's own Cursor is the one to use, not whichever CLI this machine has.
+  await mkdir(stateDir, { recursive: true });
+  if (!existsSync(join(stateDir, 'settings.json'))) writeFileSync(join(stateDir, 'settings.json'), JSON.stringify({ defaultBackendId: 'cursor' }), { mode: 0o600 });
   const services = await createApp({ stateDir, auth: false, cliPath: executable, ...(options.plugins ? { plugins: options.plugins } : {}) });
   cleanups.push(async () => {
     // The panes outlive the server by design; a test must not leave its CLI and tmux server behind.

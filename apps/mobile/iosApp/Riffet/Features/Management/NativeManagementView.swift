@@ -1,7 +1,7 @@
 import SwiftUI
 import RiffetKit
 
-let managementBackends: [NativeBackendId] = [.cursor, .codex, .claude, .dsh, .droid, .traex, .pi, .antigravity]
+let managementBackends: [NativeBackendId] = [.claude, .codex, .antigravity, .cursor, .pi, .traex, .droid, .dsh]
 
 func managementSettingsPatch(defaultBackend: NativeBackendId? = nil, defaults: [NativeBackendId: NativeBackendDefaults]? = nil,
                              cursor: CursorCliSettingsUpdate? = nil, defaultModel: String? = nil,

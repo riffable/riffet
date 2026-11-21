@@ -4,10 +4,12 @@
 // plugin is gone stays readable.
 
 /**
- * Built-in native runtimes supported by the workbench. Legacy sessions without an id are Cursor sessions.
+ * Built-in native runtimes supported by the workbench, in the canonical Agent order: every list of Agents
+ * and every "first usable Agent" choice follows it ({@link compareAgentOrder}). Legacy sessions without an
+ * id are Cursor sessions, whatever their place here.
  * `chat` is the workbench's own quick chat: no CLI, a model gateway called directly (docs/QUICK-CHAT.md).
  */
-export const NATIVE_BACKEND_IDS = ['cursor', 'codex', 'claude', 'dsh', 'droid', 'traex', 'pi', 'antigravity', 'chat'] as const;
+export const NATIVE_BACKEND_IDS = ['claude', 'codex', 'antigravity', 'cursor', 'pi', 'traex', 'droid', 'dsh', 'chat'] as const;
 export type BuiltinBackendId = typeof NATIVE_BACKEND_IDS[number];
 
 /** `<pluginId>` or `<pluginId>.<name>`: lowercase, dotted, at most {@link PLUGIN_AGENT_ID_MAX} characters. */
@@ -37,4 +39,16 @@ export function isNativeBackendId(value: unknown): value is NativeBackendId {
 /** Whether the plugin `pluginId` may provide the plugin Agent id `id`: it is the plugin's id or lies under it. */
 export function isAgentOfPlugin(pluginId: string, id: unknown): id is PluginAgentId {
   return isPluginAgentId(id) && (id === pluginId || id.startsWith(`${pluginId}.`));
+}
+
+/** Plugin Agents sort after the built-in ones and keep their registration order among themselves (`Array.sort` is stable). */
+function agentRank(id: string): number {
+  const index = (NATIVE_BACKEND_IDS as readonly string[]).indexOf(id);
+  if (id === 'chat') return Number.MAX_SAFE_INTEGER;
+  return index < 0 ? NATIVE_BACKEND_IDS.length : index;
+}
+
+/** The canonical Agent order: built-in ids as in {@link NATIVE_BACKEND_IDS}, then plugin Agents, then quick chat. */
+export function compareAgentOrder(a: string, b: string): number {
+  return agentRank(a) - agentRank(b);
 }

@@ -21,7 +21,7 @@ import { isActiveSession, sessionActivityAt, sortSessionsByActivity } from '@/li
 import { isAssistantProject, sidebarProjectMap } from '@/lib/project-family';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { useLocale } from '@/lib/i18n';
-import { shortcutLabel } from '@/lib/platform';
+import { useShortcutHint } from './shortcuts';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
@@ -281,7 +281,7 @@ export function Sidebar(props: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [filterTag, setFilterTag] = useState('');
-  const [layout, setLayoutState] = useState<SidebarLayout>(() => readStored(LAYOUT_KEY) === 'time' ? 'time' : 'project');
+  const [layout, setLayoutState] = useState<SidebarLayout>(() => readStored(LAYOUT_KEY) === 'project' ? 'project' : 'time');
   const setLayout = (value: string) => {
     const next: SidebarLayout = value === 'time' ? 'time' : 'project';
     writeStored(LAYOUT_KEY, next);
@@ -289,6 +289,8 @@ export function Sidebar(props: Props) {
   };
   const tabStyle = useTabs((state) => state.style);
   const [storedSort, setStoredSort] = useState<SidebarSort>(() => readStored(SORT_KEY) === 'tabs' ? 'tabs' : 'activity');
+  const sidebarHint = useShortcutHint('toggleSidebar');
+  const searchHint = useShortcutHint('search');
   const setSort = (value: string) => {
     const next: SidebarSort = value === 'tabs' ? 'tabs' : 'activity';
     writeStored(SORT_KEY, next === 'tabs' ? next : undefined);
@@ -402,8 +404,8 @@ export function Sidebar(props: Props) {
         <BrandMark className="size-5 shrink-0 text-fg" />
         <span className="text-base font-semibold tracking-tight text-fg">Riffet</span>
         <div className="ml-auto flex items-center">
-          {props.onCollapse && <Tip label={t`收起侧边栏`} kbd={shortcutLabel('B')}><Button size="icon-sm" variant="quiet" aria-label={t`收起侧边栏`} onClick={props.onCollapse}><IconPanelLeft /></Button></Tip>}
-          {props.onPin && <Tip label={t`固定侧边栏`} kbd={shortcutLabel('B')}><Button size="icon-sm" variant="quiet" aria-label={t`固定侧边栏`} onClick={props.onPin}><IconPanelLeft /></Button></Tip>}
+          {props.onCollapse && <Tip label={t`收起侧边栏`} kbd={sidebarHint}><Button size="icon-sm" variant="quiet" aria-label={t`收起侧边栏`} onClick={props.onCollapse}><IconPanelLeft /></Button></Tip>}
+          {props.onPin && <Tip label={t`固定侧边栏`} kbd={sidebarHint}><Button size="icon-sm" variant="quiet" aria-label={t`固定侧边栏`} onClick={props.onPin}><IconPanelLeft /></Button></Tip>}
           {props.onClose && <Button size="icon-sm" variant="quiet" aria-label={t`关闭侧边栏`} onClick={props.onClose}><IconX /></Button>}
         </div>
       </div>
@@ -424,7 +426,7 @@ export function Sidebar(props: Props) {
         <button type="button" data-touch-row onClick={props.onOpenSearch} className={mobile ? mobileNavRow : navRow}>
           <IconSearch className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />
           <span><Trans>搜索内容</Trans></span>
-          <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{shortcutLabel('K')}</span>
+          <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{searchHint}</span>
         </button>
         {pinned.map((id) => {
           const { icon: Icon, label } = SIDEBAR_DESTINATION_META[id];

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconSearch } from '@/components/icons';
 import { Kbd, Segmented, UnderlineTabs } from '@/components/ui/controls';
-import { shortcutLabel } from '@/lib/platform';
+import { shortcutHint, useShortcutOverrides } from '../../shortcuts';
 import { cn } from '@/lib/utils';
 import { pageAddressUrl, readPageAddress } from '../../state/page-url';
 import { Chapter, Frame, Matrix, Plate } from '../specimen';
@@ -99,9 +99,10 @@ function ViewLevels() {
 /** The two entries to the one search surface, with the scope each opens in. */
 function SearchEntries() {
   const { t } = useLingui();
+  useShortcutOverrides();
   const rows: Array<[string, string, string]> = [
-    [shortcutLabel('K'), t`会话`, t`按标题或内容找会话`],
-    [shortcutLabel('⇧P'), t`命令`, t`命令、会话与项目，排在一个列表里`],
+    [shortcutHint('search') ?? '', t`会话`, t`按标题或内容找会话`],
+    [shortcutHint('commandPalette') ?? '', t`命令`, t`命令、会话与项目，排在一个列表里`],
   ];
   return (
     <Frame className="flex flex-col gap-3 p-8 max-md:p-4">

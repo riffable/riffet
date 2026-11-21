@@ -1,50 +1,46 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
+import { webShortcuts, type WebShortcut, type WebShortcutId } from './shortcuts';
 
 /*
- * The one list of the keys the workbench itself answers. Three things read it: the shortcut map of the
- * design page and settings (labels and key caps), and `pluginKeybindings.ts`, which refuses a plugin
- * command bound to any of these chords. The handlers stay where they act: `use-global-shortcuts.ts`
- * (every entry but the view keys) and `session/ViewDots.tsx` (⌥⇧1–3). Add a workbench shortcut here and in
- * its handler together.
+ * Names and grouping of the shortcuts of the table (`packages/contracts/src/shortcuts.ts`). The keys are
+ * not here: settings, the design page, tooltips and the plugin deny-list read the chords in force from
+ * `shortcuts/`, so a rebinding shows up everywhere. Add an action to the table, then name it here.
  */
 
-export interface HostShortcut {
-  /** Where the map lists it: the workbench's own keys, or the ⌥ (Alt) keys of session tabs. */
-  group: 'workbench' | 'tabs';
+export type ShortcutGroup = 'workbench' | 'tabs' | 'session' | 'files';
+
+const labels: Record<WebShortcutId, MessageDescriptor> = {
+  search: msg`搜索会话`,
+  commandPalette: msg`命令面板`,
+  toggleSidebar: msg`侧栏`,
+  toggleTerminal: msg`终端`,
+  newSession: msg`新会话`,
+  tabGoTo: msg`切换到第 1–8 个标签`,
+  tabLast: msg`最后一个标签`,
+  tabPrevious: msg`上一个标签`,
+  tabNext: msg`下一个标签`,
+  tabClose: msg`关闭标签`,
+  tabReopen: msg`重新打开关闭的标签`,
+  sessionInfo: msg`会话信息`,
+  switchView: msg`切换视图`,
+  find: msg`会话内查找`,
+  quickOpen: msg`搜索文件`,
+};
+
+export interface HostShortcut extends WebShortcut {
+  group: ShortcutGroup;
   label: MessageDescriptor;
-  /** Key caps. `Mod` stands for ⌘ on Apple platforms and Ctrl elsewhere; tab entries leave out the leading ⌥ (Alt). */
-  keys: readonly string[];
-  /** The chords it takes, as a plugin would write them (`Mod+K`), one per key it answers. */
-  chords: readonly string[];
 }
 
-const digits = (modifiers: string, from: number, to: number): string[] => Array.from({ length: to - from + 1 }, (_, index) => `${modifiers}+${from + index}`);
+export const hostShortcuts: readonly HostShortcut[] = webShortcuts.map((shortcut) => ({ ...shortcut, group: shortcut.scope as ShortcutGroup, label: labels[shortcut.id] }));
 
-export const hostShortcuts: readonly HostShortcut[] = [
-  { group: 'workbench', label: msg`搜索会话`, keys: ['Mod', 'K'], chords: ['Mod+K'] },
-  { group: 'workbench', label: msg`命令面板`, keys: ['Mod', '⇧', 'P'], chords: ['Mod+Shift+P'] },
-  { group: 'workbench', label: msg`侧栏`, keys: ['Mod', 'B'], chords: ['Mod+B'] },
-  { group: 'workbench', label: msg`终端`, keys: ['Ctrl', '`'], chords: ['Ctrl+`'] },
-  { group: 'tabs', label: msg`切换到第 1–8 个标签`, keys: ['1–8'], chords: digits('Alt', 1, 8) },
-  { group: 'tabs', label: msg`最后一个标签`, keys: ['9'], chords: ['Alt+9'] },
-  { group: 'tabs', label: msg`上一个标签`, keys: ['['], chords: ['Alt+['] },
-  { group: 'tabs', label: msg`下一个标签`, keys: [']'], chords: ['Alt+]'] },
-  { group: 'tabs', label: msg`关闭标签`, keys: ['W'], chords: ['Alt+W'] },
-  { group: 'tabs', label: msg`重新打开关闭的标签`, keys: ['⇧', 'T'], chords: ['Alt+Shift+T'] },
-  { group: 'tabs', label: msg`新会话`, keys: ['T'], chords: ['Alt+T'] },
-  { group: 'tabs', label: msg`会话信息`, keys: ['I'], chords: ['Alt+I'] },
-  // Handled by `session/ViewDots.tsx`, which listens for the three keys itself.
-  { group: 'tabs', label: msg`切换视图`, keys: ['⇧', '1–3'], chords: digits('Alt+Shift', 1, 3) },
+/** The groups in the order a list shows them, with their titles. */
+export const shortcutGroups: readonly { group: ShortcutGroup; title: MessageDescriptor }[] = [
+  { group: 'workbench', title: msg`工作台` },
+  { group: 'tabs', title: msg`会话标签页` },
+  { group: 'session', title: msg`会话` },
+  { group: 'files', title: msg`文件` },
 ];
 
-/**
- * Chords the workbench keeps without answering them: the browser's ⌘/Ctrl keys for tabs and windows
- * (digits, T, W, N, Q, R, L), and ⌥⇧4–9, left free for more views.
- */
-export const reservedChords: readonly string[] = [
-  ...digits('Mod', 1, 9), ...[...'TWNQRL'].map((letter) => `Mod+${letter}`), ...digits('Alt+Shift', 4, 9),
-];
-
-/** Every chord a plugin command may not take, in the form `parseKeybinding` reads. */
-export const hostChordBindings: readonly string[] = [...hostShortcuts.flatMap((shortcut) => shortcut.chords), ...reservedChords];
+export const shortcutName = (id: WebShortcutId): MessageDescriptor => labels[id];

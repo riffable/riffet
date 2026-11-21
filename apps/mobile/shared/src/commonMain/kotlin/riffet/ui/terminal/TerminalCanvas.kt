@@ -180,7 +180,7 @@ class CellMetrics internal constructor(val width: Float, val height: Float, inte
 /** The cell geometry [TerminalCanvas] uses for these font settings; callers size the grid with it. */
 @Composable
 fun rememberTerminalCellMetrics(
-    fontSize: TextUnit = 13.sp,
+    fontSize: TextUnit = 12.5.sp,
     fontFamily: FontFamily = appearanceTerminalFontFamily(),
     lineHeight: Float = 1.2f,
 ): CellMetrics {
@@ -199,7 +199,7 @@ fun TerminalCanvas(
     state: TerminalSurfaceState,
     palette: TerminalPalette,
     modifier: Modifier = Modifier,
-    fontSize: TextUnit = 13.sp,
+    fontSize: TextUnit = 12.5.sp,
     fontFamily: FontFamily = appearanceTerminalFontFamily(),
     lineHeight: Float = 1.2f,
 ) {

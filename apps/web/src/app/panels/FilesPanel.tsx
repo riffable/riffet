@@ -12,6 +12,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, withClientFeatures, type ProjectRecord, type PromptContextReference } from '@/lib/api';
 import { textOf } from '@/lib/errors';
 import { hostInfo, isApplePlatform, shortcutLabel } from '@/lib/platform';
+import { matches, useShortcutHint } from '../shortcuts';
 import { absolutePath, copyWithToast, downloadProjectFile, downloadProjectFolder, openProjectFile, projectFileUrl } from '@/lib/files';
 import { HtmlPagePreview } from './HtmlPagePreview';
 import { toast } from '@/lib/toast';
@@ -463,6 +464,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     void api.openInEditor(project.id, filePath, line).catch((error) => onError(errorMessage(error, t({ message: '无法在编辑器中打开', context: 'panels-open-in-editor-failed' }))));
   };
 
+  const quickOpenHint = useShortcutHint('quickOpen');
   const localMac = hostInfo().local && isApplePlatform;
   const [finder, setFinder] = useState<{ projectId: string; supported: boolean }>();
   useEffect(() => {
@@ -531,11 +533,11 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runSearch reads the same query and mode.
   }, [query, searchMode, searchOpen]);
 
-  // ⌘P (Ctrl+P) goes to a file while the wide layout shows, as in VS Code; the browser's print stays elsewhere.
+  // Quick open (⌘P, Ctrl+P by default) goes to a file while the wide layout shows, as in VS Code; the browser's print stays elsewhere.
   useEffect(() => {
     if (!wide || !shown || !panelOpen) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if (!modifier(event) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'p' || event.defaultPrevented || event.isComposing) return;
+      if (event.defaultPrevented || !matches(event, 'quickOpen')) return;
       // Another dialog keeps its keys; Quick Open over it would open behind its focus trap.
       if (document.activeElement?.closest('[role="dialog"]')) return;
       event.preventDefault();
@@ -942,7 +944,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     <OverlayScopeContext.Provider value={overlay.scope}>
       {headerSlot && shown && createPortal(
         <>
-        {wide && <Tip label={t`搜索文件`} kbd={shortcutLabel('P')}><Button size="icon-xs" variant="quiet" aria-label={t`搜索文件`} onClick={() => setQuickOpen('name')}><IconSearch /></Button></Tip>}
+        {wide && <Tip label={t`搜索文件`} kbd={quickOpenHint}><Button size="icon-xs" variant="quiet" aria-label={t`搜索文件`} onClick={() => setQuickOpen('name')}><IconSearch /></Button></Tip>}
         {!wide && previewPath === undefined && <Tip label={searchOpen ? t`返回文件列表` : t`搜索文件`}><Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', searchOpen && 'bg-active text-fg')} aria-label={searchOpen ? t`返回文件列表` : t`搜索文件`} onClick={() => { if (searchOpen) goBack(); else openSearch(); }}>{searchOpen ? <IconArrowLeft /> : <IconSearch />}</Button></Tip>}
         {!wide && previewPath === undefined && !searchOpen && !usages && newMenu(path)}
         {!wide && previewPath === undefined && !searchOpen && !usages && <Tip label={path ? t`下载此文件夹（ZIP）` : t`下载整个项目（ZIP）`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`下载文件夹`} onClick={() => void downloadProjectFolder(project.id, path)}><IconDownload /></Button></Tip>}
@@ -963,7 +965,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
             {recent.files.length > 0 && <EditorTabs files={recent.files.map((file) => file.path)} active={previewFilePath} onOpen={(file) => void openPreview(file)} onClose={(file) => void closeTab(file)} dirty={drafts} />}
-            {previewPage || <div className="m-auto text-sm text-fg-4"><Trans>按 {shortcutLabel('P')} 搜索文件</Trans></div>}
+            {previewPage || (quickOpenHint && <div className="m-auto text-sm text-fg-4"><Trans>按 {quickOpenHint} 搜索文件</Trans></div>)}
           </div>
         </div>
       ) : narrowPage)}

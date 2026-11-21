@@ -184,8 +184,8 @@ Android 的会话列表是底栏「任务」页的全屏列表（`riffet.ui.sess
 迁来），对齐 iPhone 的 `SessionHomeView`。顶栏右侧的筛选菜单（`Sliders` 图标）里的排列方式是 web 的两套规则
 （`Sidebar.tsx` 的 `groups` 与 `timeline` 两个 memo），手机必须给出同样的选择，否则手机上永远只有项目分组这一种看法：
 
-- **按项目分组**（默认）：项目可折叠，搜索命中项目名或 cwd 时该项目展开并显示其**全部**会话。
-- **按时间平铺**：没有项目行，一条扁平列表按 `进行中 / 今天 / 昨天 / 近 7 天 / 近 30 天 / 更早`
+- **按项目分组**：项目可折叠，搜索命中项目名或 cwd 时该项目展开并显示其**全部**会话。
+- **按时间平铺**（默认，与 iPhone 一致）：没有项目行，一条扁平列表按 `进行中 / 今天 / 昨天 / 近 7 天 / 近 30 天 / 更早`
   切成连续的时间带。
 
 两种排布之上，列表页多了三层（`SessionListModel.kt` 的 `sessionListContent`，只在 `visibleGroups` /
@@ -659,7 +659,7 @@ POST 到 `/api/client-logs`，服务端存进状态目录下的 `client-logs/`�
 Riffet 的选择：**前台服务常驻 SSE 连接 + 本地通知**，不引入公网推送中继。
 
 - 无云端依赖，符合 local-first 定位。Tailscale 是稳定的私有网络，比公网可靠。
-- 代价：耗电，且需要 `FOREGROUND_SERVICE_SPECIAL_USE`（Android 14+）与 `POST_NOTIFICATIONS`（Android 13+）。
+- 代价：耗电，且需要 `FOREGROUND_SERVICE_SPECIAL_USE`（Android 14+）与 `POST_NOTIFICATIONS`（Android 13+）；通知权限只在首次引导的通知页和设置里的开关处申请，连接时不自动弹，未授权时保活和提醒静默降级。
 - **界面上必须诚实标注「常驻连接期间才有通知」**，不能描述成后台推送。这与 Riffet 既有的「精确与估算分得清」「读不到存储会明说」是同一条原则。
 
 FCM 中转被明确排除：它需要一个公网可达的中继服务和 Google 服务，与本地优先的定位冲突。

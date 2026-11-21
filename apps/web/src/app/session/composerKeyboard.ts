@@ -14,17 +14,18 @@
  * - Enter held with Alt, AltGr, Ctrl+Cmd, Shift+Cmd or Shift+Ctrl is somebody else's shortcut.
  *   Those fall through (`accelerated`) instead of being swallowed.
  */
+import { SETTING_DEFAULTS } from '@contracts';
 import { isApplePlatform } from '@/lib/platform';
 
 /** What Enter does in the composer. Account-level (`AppSettings.composerEnterBehavior`). */
 export type EnterKeyBehavior = 'newline' | 'send';
 
 /** The default, and the answer for a value the server never stored or a build that predates it. */
-export const DEFAULT_ENTER_KEY_BEHAVIOR: EnterKeyBehavior = 'newline';
+export const DEFAULT_ENTER_KEY_BEHAVIOR: EnterKeyBehavior = SETTING_DEFAULTS.composerEnterBehavior;
 
-/** Read an untrusted setting value: anything that is not exactly `'send'` means `'newline'`. */
+/** Read an untrusted setting value: anything that is not a known behaviour means the default. */
 export function readEnterKeyBehavior(value: unknown): EnterKeyBehavior {
-  return value === 'send' ? 'send' : DEFAULT_ENTER_KEY_BEHAVIOR;
+  return value === 'send' || value === 'newline' ? value : DEFAULT_ENTER_KEY_BEHAVIOR;
 }
 
 /**

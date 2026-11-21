@@ -2,7 +2,7 @@ import { DatabaseSync, backup, type StatementSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite, type TitleRule, type TitleRuleContext, matchTitleRule, renderDisplayTitle } from '../../../packages/contracts/src/index.js';
+import { STORAGE_BUDGET, MESSAGE_SEARCH_BUDGET, SETTING_DEFAULTS, type Project, type Session, type Run, type RunMetrics, type NativeBackendId, type NativeDeliveryState, type NativeRunConfig, type NativeRunDetails, type NativeRunInput, type CapturedSessionReference, type NativeSessionInput, type NativeContext, type NativeInteractionResult, type NativeTurnTarget, type TerminalInfo, type WorkbenchEvent, type AppSettings, type FolderFavorite, type TitleRule, type TitleRuleContext, matchTitleRule, renderDisplayTitle } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
 import { sessionReferenceInputs } from './context-references/input.js';
 import { isNativeBackendId } from './backends/registry.js';
@@ -917,7 +917,7 @@ export class Store {
     if (!session || typeof session.archivedAt === 'string' || ACTIVE_SESSION_STATES.has(session.state)) return undefined;
     let beforeAt = new Date(nowMs - STORAGE_BUDGET.assistantTrimDays * 86_400_000).toISOString();
     const settings = this.getSettings();
-    if (settings.assistant?.consolidation !== false) {
+    if (settings.assistant?.consolidation ?? SETTING_DEFAULTS.assistant.consolidation) {
       const consolidatedThrough = this.getSetting<string | undefined>('assistant-consolidated-through', undefined);
       if (consolidatedThrough && consolidatedThrough < beforeAt) beforeAt = consolidatedThrough;
     }

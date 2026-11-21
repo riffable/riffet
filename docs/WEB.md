@@ -12,7 +12,7 @@
 ### 2026-11-19 首次打开的引导
 
 - **做法**：规则见[模式](design/system/patterns.md) §1.5，决定见 DECISIONS.md 2026-11-19「Web 首次打开也走引导」。实现在 `app/onboarding/`：`useFirstRun` 在服务器第一次回答列表后判断一次，`Onboarding` 在打开期间代替整个工作台（`Workbench.tsx`）。页面组件同时用作设计规范页「模式 · 页面」的样张。
-- **默认 Agent**：没有人选过 Agent 时，`catalogStore` 的 `offeredHome` 让新会话页从第一个可用的 Agent 开始；引导里只有一个可用 Agent 时，把它写成服务器的 `defaultBackendId`。
+- **默认 Agent**：没有人选过 Agent 时，服务器在 `defaultBackendId` 里给出按 Agent 顺序（Claude Code、Codex、Antigravity、Cursor、Pi、TRAE、Droid，再到插件提供的 Agent）第一个已安装的，都没装时是 Claude Code；各端新会话页都从它开始。引导里只有一个可用 Agent 时，把它写成服务器的 `defaultBackendId`。
 - **多服务器**：「走过引导」是 C 类，记在浏览器里，不进服务器设置；默认 Agent 和项目是 B、A 类，只写入口服务器，经链接的对端不受影响。没有新路由，请求都经 `api`；配对码只为入口服务器生成，不经链接（配对路由是 `deny`）。
 - **未做**：跳过引导后没有设置卡片；服务器只听本机时没有手机页，网页里不能开放局域网。
 
@@ -333,6 +333,7 @@ Web 的分享预览和 PDF 预览都在预览上方右侧提供「导出为 PDF�
 - **网络**：状态类 GET（authStatus、projects、sessions、terminals 轮询）15 秒超时，bootstrap 30 秒；超时按不可达处理。Service Worker 导航 3 秒没有响应就返回缓存外壳；安装时哈希资源先从旧缓存复制；`inter` / `jetbrains-mono` 的 latin-ext 不再在安装时下载。`/api/lists/stream` 的 `changed` 帧新增 `favorites` 修订号，收藏目录写入不再推进 `listRevision`，web 只在修订号变化时重读。
 - **面板与终端**：git 状态由 `state/gitStatusStore.ts` 按项目共享，同一项目的请求合并；面板关闭或页面隐藏时不读 git 状态、分支、PR 检查与文件列表。Git 审阅意见与提交说明按项目存进模块级 store 与 sessionStorage。终端历史用 `mode=tail` 增量拉取，拼接处补 `\x1b[0m`（tail 从默认样式开始），按 200 行分块解析与 memo，列宽变化时回到全量；页面隐藏时只标脏。version 只是行数，认不出 `clear`：重新挂载或页面隐藏后的第一次读取、以及距上次全量超过 30 秒的读取都按全量读（未变化时服务端只回 version），一次清屏后在刷新间隔内重新长过原行数的错位最多停留 30 秒。
 - **包体积**：入口 chunk 222KB → 177KB（gzip 67 → 58KB），图标拆成 `icons-base.tsx`（入口用的 11 个）与其余；`Workbench` chunk 在 App 模块顶层就开始下载。设置弹窗的服务状态、Agent 与模型分区与主题编辑器按需加载，`SettingsDialog` chunk 134KB → 46KB。
+- **快捷键**：一张表 `packages/contracts/src/shortcuts.ts`（Web、Mac 共用，`web.apple` / `web.other` 两套默认），Web 侧的生效键位 = 用户覆盖 ?? 默认，由 `app/shortcuts/` 解析与匹配（按 `event.code`），处理、`Tip` 与键帽、命令面板、设置页、设计规范页和插件快捷键的禁用表都读它，改键后一起变。用户改键在设置「行为 › 快捷键」页录入，存 `localStorage` 的 `riffet.shortcuts.v1`，只在这个浏览器，不同步（偏好，C 类）。冲突：与另一个快捷键相同时就地显示并可替换（对方失去它），浏览器占用的组合（`RESERVED_CHORDS.web`）直接拒绝，插件命令的同一组合由宿主优先。输入法组词期间一律不触发；终端里 ⌥ 和带 Ctrl 的快捷键（除打开终端的 Ctrl+`）留给终端；Mac 文本框里 ⌥ 组出的字符和死键（⌥I 的 ˆ）不被抢走。
 - **交互细节**：运行中有草稿时使用发送操作，空草稿时使用停止操作（2026-10-27 收敛到同一个按钮位）；Apple 平台的工作台快捷键只认 ⌘；下拉、Popover 与图片预览用鼠标关闭后，桌面端焦点回到打开前的文本框（`components/ui/focus-return.ts`）；审批卡只有键盘进入时 Esc 才拒绝；全屏编辑、并行尝试页接入覆盖层返回栈；编辑弹窗统一用 `lib/dialogs.ts` 的 `useDiscardGuard`。
 
 ### 2026-10-22 结构整理（行为不变）
