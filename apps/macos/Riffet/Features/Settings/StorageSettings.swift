@@ -192,7 +192,7 @@ struct StorageSettings: View {
 
     @ViewBuilder
     private func maintenanceRow(_ report: StorageReport) -> some View {
-        SettingsRow("在线整理", detail: String(localized: "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务")) {
+        SettingsRow("在线整理", detail: "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务") {
             HStack(spacing: Space.sm) {
                 if maintaining { Spinner(size: .small) }
                 SettingsActionButton("立即整理") { Task { await runMaintenance() } }
@@ -220,7 +220,7 @@ struct StorageSettings: View {
         let short = report.disk.freeBytes < compaction.requiredBytes
         let server = model.server
         let hosted = model.workbench?.local == true && server.state.running != nil
-        SettingsRow("释放空间", detail: compactionDetail(report, short: short)) {
+        SettingsRow(String(localized: "释放空间"), detail: compactionDetail(report, short: short)) {
             HStack(spacing: Space.sm) {
                 if busy || server.restartBlockers != nil { Spinner(size: .small) }
                 if compaction.scheduledAt != nil {

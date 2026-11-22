@@ -1303,16 +1303,6 @@
           }
         }
       },
-      "%@ 启动设置": {
-        "localizations": {
-          "en": {
-            "stringUnit": {
-              "state": "translated",
-              "value": "%@ launch settings"
-            }
-          }
-        }
-      },
       "额度": {
         "localizations": {
           "en": {
@@ -2574,16 +2564,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enter manually"
-          }
-        }
-      }
-    },
-    "手机": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Phones"
           }
         }
       }
@@ -4582,16 +4562,6 @@
         }
       }
     },
-    "%@（新会话默认）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (default for new sessions)"
-          }
-        }
-      }
-    },
     "%@，%@": {
       "localizations": {
         "en": {
@@ -4720,28 +4690,6 @@
           "stringUnit": {
             "state": "new",
             "value": "%1$lld / %2$lld"
-          }
-        }
-      }
-    },
-    "%lld 个": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld Agent"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld Agents"
-                }
-              }
-            }
           }
         }
       }
@@ -6848,16 +6796,6 @@
         }
       }
     },
-    "仅整条回复可用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Only available for whole replies"
-          }
-        }
-      }
-    },
     "今天": {
       "localizations": {
         "en": {
@@ -6946,16 +6884,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Task"
-          }
-        }
-      }
-    },
-    "任务文件位置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Task file location"
           }
         }
       }
@@ -7133,16 +7061,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Session title"
-          }
-        }
-      }
-    },
-    "会话标题、Agent、项目与日期": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Session title, Agent, project and date"
           }
         }
       }
@@ -12776,16 +12694,6 @@
         }
       }
     },
-    "找不到对应的提问": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't find the matching question"
-          }
-        }
-      }
-    },
     "技能开关写入当前 Agent 配置，其他项目也可能受影响。": {
       "localizations": {
         "en": {
@@ -13512,16 +13420,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Favorite folder"
-          }
-        }
-      }
-    },
-    "收藏时写的备注": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Note added when saved"
           }
         }
       }
@@ -14936,36 +14834,6 @@
         }
       }
     },
-    "显示批注": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show annotations"
-          }
-        }
-      }
-    },
-    "显示提问": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show question"
-          }
-        }
-      }
-    },
-    "显示来源": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show source"
-          }
-        }
-      }
-    },
     "显示源码": {
       "localizations": {
         "en": {
@@ -16346,16 +16214,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preparing attachments…"
-          }
-        }
-      }
-    },
-    "正在查找对应的提问…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Looking for the matching prompt…"
           }
         }
       }
@@ -20163,26 +20021,6 @@
         }
       }
     },
-    "这条回复对应的用户提问": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The user question for this reply"
-          }
-        }
-      }
-    },
-    "这条收藏没有备注": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This favorite has no note"
-          }
-        }
-      }
-    },
     "这条收藏的原文已找不到，已打开所在会话。": {
       "localizations": {
         "en": {
@@ -21489,16 +21327,6 @@
         }
       }
     },
-    "高级": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Advanced"
-          }
-        }
-      }
-    },
     "黄": {
       "localizations": {
         "en": {
@@ -21699,16 +21527,6 @@
         }
       }
     },
-    "%@ 默认模型": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ default model"
-          }
-        }
-      }
-    },
     "%@（已不可用）": {
       "localizations": {
         "en": {
@@ -21725,16 +21543,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld sessions will stop accepting messages; you can still view or hand them off."
-          }
-        }
-      }
-    },
-    "Agent、提供商与新会话默认": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agents, providers and new-session defaults"
           }
         }
       }
@@ -21812,16 +21620,6 @@
         }
       }
     },
-    "不支持": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not supported"
-          }
-        }
-      }
-    },
     "仅保存在这台 Mac": {
       "localizations": {
         "en": {
@@ -21848,16 +21646,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Restore from a backup"
-          }
-        }
-      }
-    },
-    "任务文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Task files"
           }
         }
       }
@@ -22023,16 +21811,6 @@
         }
       }
     },
-    "在设置的「模型设置」中配置 Agent 后查看扩展。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Set up an Agent in Settings › Model settings to see its extensions."
-          }
-        }
-      }
-    },
     "在运行服务器的电脑上执行 riffet restore。": {
       "localizations": {
         "en": {
@@ -22164,16 +21942,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Configured"
-          }
-        }
-      }
-    },
-    "应用内快捷键": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In-app shortcuts"
           }
         }
       }
@@ -22329,27 +22097,6 @@
         }
       }
     },
-    "模型 提供商 网关 api key 审批 provider backend agent cursor cli 项目配置 rules skills commands": {
-      "comment": "Search terms, space-separated",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "model provider gateway api key approval backend agent cursor cli project configuration rules skills commands"
-          }
-        }
-      }
-    },
-    "模型设置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Model settings"
-          }
-        }
-      }
-    },
     "水平边距": {
       "localizations": {
         "en": {
@@ -22497,16 +22244,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Editor"
-          }
-        }
-      }
-    },
-    "编辑器、任务文件与文件访问": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editor, task files and file access"
           }
         }
       }
@@ -22770,16 +22507,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Spacing"
-          }
-        }
-      }
-    },
-    "需先在「模型设置」添加带网关的提供商。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a provider with a gateway in Model settings first."
           }
         }
       }
@@ -23320,16 +23047,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "The server version is incompatible"
-          }
-        }
-      }
-    },
-    "模型与 Agent": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Models and agents"
           }
         }
       }
@@ -24851,6 +24568,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voice input"
+          }
+        }
+      }
+    },
+    "GitHub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub"
+          }
+        }
+      }
+    },
+    "riffable/riffet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "riffable/riffet"
+          }
+        }
+      }
+    },
+    " ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " "
+          }
+        }
+      }
+    },
+    "代码高亮 · %@ · %@：必须是 #rrggbb 或 #rrggbbaa。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Syntax highlighting · %1$@ · %2$@: Enter a #rrggbb or #rrggbbaa value."
           }
         }
       }

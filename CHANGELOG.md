@@ -54,6 +54,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On Mac, storage maintenance labels and the list of conversations blocking a server restart follow the selected language.
 - The queued-message bar above the iPhone composer now matches Android and the web: a single queued message sits on one compact row with no "Waiting to send" header, and multiple queued messages collapse by default to one "N queued messages" row.
 - Scrolling up through a long conversation on iPhone no longer jumps upward toward the top when a new swipe starts while older history is loading.
 - Codex conversations with parallel or long-running tool calls no longer flash blank and progressively redraw their history during a turn.

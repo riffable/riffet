@@ -466,7 +466,7 @@ final class ServerHost {
                     if restartBlockers?.isEmpty != false, let problem = restartProblem {
                         throw HostError.command(String(localized: "未重启。\(problem)"))
                     }
-                    let names = (restartBlockers ?? []).map { $0.title.isEmpty ? $0.sessionId : $0.title }.joined(separator: "、")
+                    let names = (restartBlockers ?? []).map { $0.title.isEmpty ? $0.sessionId : $0.title }.joined(separator: String(localized: "、"))
                     throw HostError.command(String(localized: "仍有会话在运行，未重启：\(names)"))
                 }
                 nextPoll = ContinuousClock.now + .seconds(2)
