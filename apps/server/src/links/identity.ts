@@ -58,7 +58,8 @@ const COMMON_NAME = Buffer.from([0x06, 0x03, 0x55, 0x04, 0x03]);
 
 function selfSignedCertificate(name: string, privateKey: KeyObject, publicKey: KeyObject, now: Date): string {
   const serial = randomBytes(16);
-  serial[0] = serial[0]! & 0x7f; // A positive INTEGER without a leading zero byte.
+  // Start with 01xxxxxx: a positive 16-byte DER INTEGER needs neither a sign byte nor trimming.
+  serial[0] = (serial[0]! & 0x3f) | 0x40;
   const subject = der(0x30, der(0x31, der(0x30, COMMON_NAME, der(0x0c, Buffer.from(name.slice(0, 64) || 'Riffet', 'utf8')))));
   const notBefore = new Date(now.getTime() - 24 * 3600_000);
   const tbs = der(0x30,

@@ -163,7 +163,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
       <DialogHeader><DialogTitle><Trans>邀请另一台服务器</Trans></DialogTitle></DialogHeader>
       <DialogBody className="flex flex-col gap-4">
         {!invite && <Field label={t`另一台服务器连到这里用的地址`}>
-          <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="http://192.168.1.20:4337" className="font-mono" autoFocus />
+          <Input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="http://192.0.2.20:4337" className="font-mono" autoFocus />
         </Field>}
         {!invite && <InboundChoice inbound={inbound} onChange={setInbound} />}
         {invite && <Field label={t`链接串`} hint={t`在另一台服务器的「设置 › 互联」粘贴。5 分钟内有效，只能用一次`}>
