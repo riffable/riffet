@@ -4,6 +4,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Fixes
+
+- On Android, banners and interaction cards sliding in above the composer ignore touches until the opening animation settles, preventing accidental taps on newly arrived controls.
+
 ## 0.10.0 - 2026-11-22
 
 ### Workbench

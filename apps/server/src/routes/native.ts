@@ -2,7 +2,7 @@ import { recordTerminalAppearance } from '../terminal/appearance.js';
 import { createHash } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AppError, parseInput, requireString } from '../errors.js';
 import { NativeStopRequestSchema } from '../../../../packages/contracts/src/schema/run.js';
 import { NativeRuntimeActionRequestSchema } from '../../../../packages/contracts/src/schema/sync.js';
@@ -26,6 +26,23 @@ const BLOB_RESPONSE_LIMIT=16*1024*1024;
 function steerTarget(value: unknown): NativeTurnTarget {
   const target = value as Partial<NativeTurnTarget> | undefined;
   return { nativeSessionId: requireString(target?.nativeSessionId, 'target.nativeSessionId', 500), turnId: requireString(target?.turnId, 'target.turnId', 500) };
+}
+
+function interactionCaller(auth: RouteDeps['auth'] | undefined, request: FastifyRequest): Record<string, string> {
+  if (!auth) return {};
+  try {
+    const context = auth.authenticate(request);
+    const device = context.deviceId ? auth.device(context.deviceId) : undefined;
+    return {
+      source: context.kind,
+      ...(context.deviceId ? { deviceId: context.deviceId } : {}),
+      ...(device?.name ? { deviceName: device.name } : {}),
+      ...(device?.platform ? { platform: device.platform } : {}),
+      ...(context.linkServerId ? { linkServerId: context.linkServerId } : {}),
+    };
+  } catch {
+    return {};
+  }
 }
 
 export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): void {
@@ -225,7 +242,22 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     return nativeBackends.catalog.entry(session.backendId,store.getProject(session.projectId),session.backendProfileId,session);
   });
   app.post<{Params:{id:string};Body:import('../../../../packages/contracts/src/index.js').NativeInteractionResponse}>('/api/sessions/:id/native/interaction',async(request)=>{
-    return sessionLock.withSession(request.params.id,()=>nativeBackends.respondInteraction(store.getSession(request.params.id),request.body));
+    const caller=interactionCaller(deps.auth,request);
+    const body=request.body as Partial<import('../../../../packages/contracts/src/index.js').NativeInteractionResponse> | null | undefined;
+    const fields={
+      sessionId:request.params.id,
+      ...(typeof body?.interactionId==='string'?{interactionId:body.interactionId.slice(0,120)}:{}),
+      ...(typeof body?.action==='string'?{action:body.action.slice(0,40)}:{}),
+      ...caller,
+    };
+    try{
+      const result=await sessionLock.withSession(request.params.id,()=>nativeBackends.respondInteraction(store.getSession(request.params.id),request.body));
+      console.info('[riffet] native interaction',{...fields,status:result.status});
+      return result;
+    }catch(error){
+      console.warn('[riffet] native interaction failed',{...fields,error:error instanceof Error?error.message:String(error)});
+      throw error;
+    }
   });
   app.post<{Params:{id:string};Body:{interactionId:unknown}}>('/api/sessions/:id/native/interaction/extend',async(request)=>{
     const interactionId=request.body?.interactionId;

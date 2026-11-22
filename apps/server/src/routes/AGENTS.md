@@ -43,4 +43,5 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 - 文件面板的 HTML 预览里样式、脚本或链接返回 401：令牌已过期（约 13 小时，页面导航时面板会自动换新）或签发它的登录已退出，重新打开文件即重新签发（`apps/server/src/auth.ts#issueFileSite`）；返回 404 先看路径是否以 `.` 开头或跳出了页面所在文件夹（`apps/server/src/workspace/index.ts#siteFile`）。
 - 自动化页「最近运行」出现找不到名字的记录：`/api/automation-runs` 与 `/api/automations` 共用 `orchestration.ts` 里的 `listedAutomations` 过滤；已执行的唤醒和稍后发送不在列表里，它们的运行记录也不能返回。
 - 浏览器崩溃报告：服务日志 `[riffet] browser crash report received`（`browser-diagnostics.ts`）。
+- 终端交互归因：服务日志 `[riffet] native interaction` / `[riffet] native interaction failed` 记录会话、交互 id、动作、来源与设备（`native.ts`）。
 - 列表更新滞后：`sessions.ts` 里 SSE 与 WebSocket 两条通道发同一组 revision，先确认客户端协商了哪条。

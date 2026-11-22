@@ -16,8 +16,10 @@ import riffet.ui.theme.LocalRiffetMotion
 /**
  * A block that opens in place while [value] is non-null and closes when it goes null, instead of
  * mounting and unmounting in one frame. The last non-null value is kept for the closing animation,
- * so the block shrinks with its content rather than emptying first. While it closes it is inert:
- * it swallows touches and is hidden from accessibility, since its values and callbacks are stale.
+ * so the block shrinks with its content rather than emptying first. Touches are swallowed until
+ * the opening animation settles and again while closing, so an arriving block cannot catch stray
+ * taps mid-expansion; while closing it is also hidden from accessibility, since its values and
+ * callbacks are stale.
  */
 @Composable
 internal fun <T : Any> Reveal(value: T?, modifier: Modifier = Modifier, onEnteredChanged: ((Boolean) -> Unit)? = null, content: @Composable (T) -> Unit) {
@@ -29,15 +31,12 @@ internal fun <T : Any> Reveal(value: T?, modifier: Modifier = Modifier, onEntere
     transition.targetState = !closing
     val notifyEntered by rememberUpdatedState(onEnteredChanged)
     val entered = transition.isIdle && transition.currentState && !closing
+    val enteredState = rememberUpdatedState(entered)
     LaunchedEffect(entered) { notifyEntered?.invoke(entered) }
     AnimatedVisibility(visibleState = transition, modifier = modifier, enter = motion.expandIn(), exit = motion.collapseOut()) {
-        val inert = if (closing) {
-            Modifier
-                .swallowTouches { true }
-                .clearAndSetSemantics {}
-        } else {
-            Modifier
-        }
+        val inert = Modifier
+            .swallowTouches { !enteredState.value }
+            .then(if (closing) Modifier.clearAndSetSemantics {} else Modifier)
         Box(inert) {
             @Suppress("UNCHECKED_CAST")
             (last[0] as T?)?.let { content(it) }
