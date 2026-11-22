@@ -368,11 +368,20 @@ data class CapturedSessionReference(
 }
 
 @Serializable
+data class AgentMention(
+    // Keep plugin Agent IDs even when this client cannot start the Agent itself.
+    val backendId: String,
+    val backendProfileId: String? = null,
+    val model: String? = null,
+)
+
+@Serializable
 data class NativeRunInput(
     val text: String,
     val attachmentIds: List<String>,
     val context: List<NativeRunContextReference>,
     val references: List<SessionReferenceInput>? = null,
+    val agents: List<AgentMention>? = null,
 )
 
 @Serializable

@@ -54,6 +54,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The shared mobile client preserves the selected Agent, profile and model when it syncs a message that mentions another Agent.
 - The plugin marketplace keeps older package versions available for pinned installs when the Android Build and Paper plugins update.
 - Starting a server with a fresh data directory reliably creates its link certificate, including when the random serial number starts with zeros.
 - Codex conversations on a model that is not OpenAI’s behind a custom endpoint (such as DeepSeek) fold the model’s thinking into the thinking row instead of showing it as prose between tool calls.

@@ -81,7 +81,7 @@ struct PluginViewActivation: View {
         Group {
             if let failure { Text(failure).font(.callout).foregroundStyle(.secondary) }
             else if ready { content }
-            else { ProgressView().controlSize(.small) }
+            else { Spinner(size: .small) }
         }.task(id: lifecycle) {
             guard visible else { return }
             failure = nil

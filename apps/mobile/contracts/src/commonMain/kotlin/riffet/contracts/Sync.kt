@@ -67,7 +67,13 @@ data class TimelineRow(
 
     sealed interface Body {
         @Serializable
-        data class User(val text: String, val attachments: List<UserAttachment>, val pending: Pending? = null, val references: List<CapturedSessionReference>? = null) : Body
+        data class User(
+            val text: String,
+            val attachments: List<UserAttachment>,
+            val pending: Pending? = null,
+            val references: List<CapturedSessionReference>? = null,
+            val agents: List<AgentMention>? = null,
+        ) : Body
 
         @Serializable
         data class Assistant(val text: String, val phase: Phase? = null) : Body
