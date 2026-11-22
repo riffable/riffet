@@ -92,11 +92,16 @@ struct DisclosureSpec {
         let color: NSColor
         /// The first this many UTF-16 units draw in [quietColor]: a path's directory before its file.
         var quiet = 0
+        /// From this UTF-16 offset to the end draws in [quietColor]: primary-first path directory or trailing scope.
+        var quietFrom: Int? = nil
         var quietColor: NSColor?
 
         var attributed: NSAttributedString {
             let value = NSMutableAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
             if quiet > 0, let quietColor { value.addAttribute(.foregroundColor, value: quietColor, range: NSRange(location: 0, length: min(quiet, value.length))) }
+            if let quietFrom, quietFrom < value.length, let quietColor {
+                value.addAttribute(.foregroundColor, value: quietColor, range: NSRange(location: max(0, quietFrom), length: value.length - max(0, quietFrom)))
+            }
             return value
         }
     }
@@ -104,6 +109,8 @@ struct DisclosureSpec {
     var icon: Icon
     var title: String
     var titleFont: NSFont
+    /// Minimum width for a fixed verb column (`Read`, `Run`, `Think`, ...) so object columns align vertically.
+    var titleMinWidth: CGFloat = 0
     /// Red instead of the quiet disclosure colour.
     var danger = false
     var detail: Piece?

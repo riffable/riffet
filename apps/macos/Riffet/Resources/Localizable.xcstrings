@@ -4636,28 +4636,6 @@
         }
       }
     },
-    "%d 个文件": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%d file"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%d files"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%d 核": {
       "localizations": {
         "en": {
@@ -7325,16 +7303,6 @@
         }
       }
     },
-    "修改文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit files"
-          }
-        }
-      }
-    },
     "修改颜色": {
       "localizations": {
         "en": {
@@ -8045,16 +8013,6 @@
         }
       }
     },
-    "切换模式": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switch modes"
-          }
-        }
-      }
-    },
     "切换画布视图": {
       "localizations": {
         "en": {
@@ -8245,16 +8203,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete mark"
-          }
-        }
-      }
-    },
-    "删除文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete files"
           }
         }
       }
@@ -10242,16 +10190,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "OK"
-          }
-        }
-      }
-    },
-    "委派任务": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delegate tasks"
           }
         }
       }
@@ -15024,16 +14962,6 @@
         }
       }
     },
-    "更新计划": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Update plan"
-          }
-        }
-      }
-    },
     "更早": {
       "localizations": {
         "en": {
@@ -17620,16 +17548,6 @@
         }
       }
     },
-    "移动文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Move files"
-          }
-        }
-      }
-    },
     "移回输入框编辑": {
       "localizations": {
         "en": {
@@ -18843,16 +18761,6 @@
         }
       }
     },
-    "访问网页": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Browse the web"
-          }
-        }
-      }
-    },
     "评论整个文件": {
       "localizations": {
         "en": {
@@ -18889,16 +18797,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Try"
-          }
-        }
-      }
-    },
-    "询问用户": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ask the user"
           }
         }
       }
@@ -19119,26 +19017,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Read failed; retry"
-          }
-        }
-      }
-    },
-    "读取文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Read files"
-          }
-        }
-      }
-    },
-    "调用工具": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Use tools"
           }
         }
       }
@@ -19495,16 +19373,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Running sessions"
-          }
-        }
-      }
-    },
-    "运行命令": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run command"
           }
         }
       }
@@ -24608,6 +24476,160 @@
           "stringUnit": {
             "state": "translated",
             "value": "Syntax highlighting · %1$@ · %2$@: Enter a #rrggbb or #rrggbbaa value."
+          }
+        }
+      }
+    },
+    "%lld 行": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld line"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld lines"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "搜索 %lld 次": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld search"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld searches"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "编辑 %lld 个文件": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Edited %lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Edited %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "获取 %lld 次": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fetch"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fetches"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "读取 %lld 个文件": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Read %lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Read %lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "调用 %lld 个工具": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld tool call"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld tool calls"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "运行 %lld 条命令": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ran %lld command"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ran %lld commands"
+                }
+              }
+            }
           }
         }
       }

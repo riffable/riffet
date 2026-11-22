@@ -451,7 +451,7 @@ struct ConversationView: View {
         // native once rather than compared slowly for every entry.
         let speeds = (presentation?.speeds ?? [:]).reduce(into: [String: SpeedTag]()) { $0[ConversationRenderPlan.nativeKey($1.key)] = $1.value }
         let entries = ConversationRenderPlan.entries(rows: rows, compactAbove: compactAbove, expanded: effectiveProcessExpansion(), focusedRow: focusedRow,
-                                                     scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom, disclosureState: disclosureState)
+                                                     scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom, disclosureState: disclosureState, root: workbench.projectRoot(session.projectId))
         var result: [ConversationTranscriptList.Row] = []
         let find = findHighlight
         // A row whose revision and spacing are unchanged keeps the view built for it last pass: the list

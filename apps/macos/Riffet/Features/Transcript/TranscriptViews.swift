@@ -391,7 +391,9 @@ final class DisclosureView: FragmentView, HoverTarget {
     func configure(_ spec: DisclosureSpec) {
         var spec = spec
         spec.title = Self.oneLine(spec.title)
-        if let detail = spec.detail { spec.detail = .init(text: Self.oneLine(detail.text), font: detail.font, color: detail.color, quiet: detail.quiet, quietColor: detail.quietColor) }
+        if let detail = spec.detail {
+            spec.detail = .init(text: Self.oneLine(detail.text), font: detail.font, color: detail.color, quiet: detail.quiet, quietFrom: detail.quietFrom, quietColor: detail.quietColor)
+        }
         if let current = self.spec, current.looksLike(spec) {
             // Same header: keep the drawing, take the new action and clock.
             self.spec = spec
@@ -421,7 +423,10 @@ final class DisclosureView: FragmentView, HoverTarget {
             spinner?.isHidden = true
         }
         tick()
-        setAccessibilityLabel(spec.title)
+        var labelParts = [spec.title]
+        if let detail = spec.detail?.text, !detail.isEmpty { labelParts.append(detail) }
+        for piece in spec.inline where !piece.text.isEmpty { labelParts.append(piece.text) }
+        setAccessibilityLabel(labelParts.filter { !$0.isEmpty }.joined(separator: " "))
         needsLayout = true
         needsDisplay = true
     }
@@ -533,13 +538,15 @@ final class DisclosureView: FragmentView, HoverTarget {
         let titleWidth = ceil(NSAttributedString(string: spec.title, attributes: [.font: spec.titleFont]).lineWidth)
         if let detail = spec.detail {
             let detailWidth = ceil(NSAttributedString(string: detail.text, attributes: [.font: detail.font]).lineWidth)
-            let titleShown = min(titleWidth, max(available * 0.6, available - detailWidth - 8))
+            let titleShown = spec.titleMinWidth > 0
+                ? min(max(titleWidth, spec.titleMinWidth), available)
+                : min(titleWidth, max(available * 0.6, available - detailWidth - 8))
             result.title = NSRect(x: x, y: 0, width: titleShown, height: h)
             x += titleShown + 8
             result.detail = NSRect(x: x, y: 0, width: max(0, min(detailWidth, available - titleShown - 8)), height: h)
             x += result.detail.width
         } else {
-            let titleShown = min(titleWidth, available)
+            let titleShown = min(max(titleWidth, spec.titleMinWidth), available)
             result.title = NSRect(x: x, y: 0, width: titleShown, height: h)
             x += titleShown
         }
@@ -678,9 +685,9 @@ extension DisclosureSpec.Variant {
 extension DisclosureSpec {
     /// Draws the same: everything but the action and the clock's source.
     func looksLike(_ other: DisclosureSpec) -> Bool {
-        guard variant == other.variant, title == other.title, danger == other.danger, shimmer == other.shimmer, truncateMiddle == other.truncateMiddle,
+        guard variant == other.variant, title == other.title, titleMinWidth == other.titleMinWidth, danger == other.danger, shimmer == other.shimmer, truncateMiddle == other.truncateMiddle,
               titleFont == other.titleFont, help == other.help, dot === other.dot,
-              detail?.text == other.detail?.text, detail?.color === other.detail?.color, detail?.quiet == other.detail?.quiet,
+              detail?.text == other.detail?.text, detail?.color === other.detail?.color, detail?.quiet == other.detail?.quiet, detail?.quietFrom == other.detail?.quietFrom,
               inline.map(\.text) == other.inline.map(\.text), zip(inline, other.inline).allSatisfy({ $0.color === $1.color }),
               trailing.map(\.text) == other.trailing.map(\.text), zip(trailing, other.trailing).allSatisfy({ $0.color === $1.color }) else { return false }
         switch (icon, other.icon) {

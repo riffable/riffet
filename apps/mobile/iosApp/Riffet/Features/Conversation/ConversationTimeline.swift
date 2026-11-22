@@ -64,7 +64,7 @@ private struct ConversationQuoteKey: EnvironmentKey { static let defaultValue: (
         case let .thought(thought): return flags["reasoning." + thought.key] == true
         case let .tool(tool):
             if let job = tool.job, flags["job." + job.toolCallId] == true { return true }
-            return flags["tool.\(tool.key).expanded"] == true
+            return flags["tool.\(tool.key).expanded"] == true || flags["merged.\(tool.key).expanded"] == true
         case let .status(status): return flags["status." + status.key] == true
         case let .taskNotification(notice): return flags["notice." + notice.key] == true
         case let .activity(activity): return flags["activity." + activity.key] == true
@@ -361,7 +361,7 @@ struct ConversationTimelineItem: View {
         case let .tool(tool):
             VStack(alignment: .leading, spacing: 8) {
                 ConversationTool(item: tool, workbench: workbench, projectID: projectID, active: active, parentItems: parentItems)
-                if let job = tool.job { ConversationJob(job: job) }
+                if let job = tool.job { ConversationJob(job: job, root: workbench.projectRoot(projectID)) }
             }
         case let .plan(plan): ConversationTodoList(entries: todoEntries(plan: plan))
         case let .image(image): ConversationImage(workbench: workbench, projectID: projectID, source: image.src)
@@ -421,7 +421,12 @@ private struct ConversationThought: View {
                 Button { readAction(); isExpanded.toggle() } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "brain").font(.system(size: 12)).foregroundStyle(palette.fg4).frame(width: 16)
-                        Text(preview.isEmpty ? String(localized: "思考", bundle: .riffet) : preview).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        Text(verbatim: "Think").riffetFont(.monoSmall, weight: .medium).foregroundStyle(palette.fg3).lineLimit(1).fixedSize().frame(minWidth: 48, alignment: .leading)
+                        if !isExpanded, !preview.isEmpty {
+                            Text(preview).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Spacer(minLength: 0)
+                        }
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
                             .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
                     }.frame(maxWidth: .infinity, minHeight: 34, alignment: .leading).contentShape(Rectangle())
@@ -602,6 +607,7 @@ private struct ConversationTaskNotice: View {
 
 private struct ConversationJob: View {
     let job: NativeJob
+    let root: String?
     @State private var expanded = false
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
@@ -614,14 +620,16 @@ private struct ConversationJob: View {
         }
     }
     var body: some View {
+        let row = jobRowPresentation(job: job, root: root)
         VStack(alignment: .leading, spacing: 8) {
             Button { readAction(); isExpanded.toggle() } label: {
-                HStack(spacing: 8) {
-                    Label(job.title, systemImage: "terminal").riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(job.status == .running ? "运行中" : job.status == .failed ? "失败" : job.status == .unknown ? "状态未知" : "完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize()
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
-                }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).contentShape(Rectangle())
+                ConversationToolRowHeader(
+                    row: row,
+                    running: job.status == .running,
+                    failed: job.status == .failed,
+                    dangling: job.status == .unknown,
+                    chevronExpanded: isExpanded
+                )
             }.buttonStyle(RiffetDimPressStyle()).accessibilityValue(isExpanded ? "已展开" : "已折叠")
             if isExpanded {
                 if job.title.trimmingCharacters(in: .whitespacesAndNewlines) != job.command.trimmingCharacters(in: .whitespacesAndNewlines) { Text(job.title).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }

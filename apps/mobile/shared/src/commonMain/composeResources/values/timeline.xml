@@ -63,6 +63,7 @@
     <string name="timeline_output_truncated">输出过大，只显示末尾</string>
     <string name="timeline_view_full_log">查看完整日志</string>
     <string name="timeline_file_count">%1$d 个文件</string>
+    <string name="timeline_tool_lines">%1$d 行</string>
     <string name="timeline_image_with_caption">图片 · %1$s</string>
     <string name="timeline_no_more_details">没有更多详情</string>
     <string name="timeline_options">选项：%1$s</string>
@@ -71,20 +72,18 @@
     <string name="timeline_terminal_output">终端输出 · %1$s</string>
 
     <!-- Tool runs -->
-    <string name="timeline_tool_run_read">读取文件</string>
-    <string name="timeline_tool_run_search">搜索内容</string>
-    <string name="timeline_tool_run_execute">运行命令</string>
-    <string name="timeline_tool_run_edit">修改文件</string>
-    <string name="timeline_tool_run_delete">删除文件</string>
-    <string name="timeline_tool_run_move">移动文件</string>
-    <string name="timeline_tool_run_fetch">访问网页</string>
-    <string name="timeline_tool_run_agent">委派任务</string>
-    <string name="timeline_tool_run_message">发送消息</string>
-    <string name="timeline_tool_run_think">思考</string>
-    <string name="timeline_tool_run_switch_mode">切换模式</string>
-    <string name="timeline_tool_run_question">询问用户</string>
-    <string name="timeline_tool_run_plan">更新计划</string>
-    <string name="timeline_tool_run_other">调用工具</string>
+    <string name="timeline_tool_run_count_read">读取 %1$d 个文件</string>
+    <string name="timeline_tool_run_count_read_one">读取 1 个文件</string>
+    <string name="timeline_tool_run_count_edit">编辑 %1$d 个文件</string>
+    <string name="timeline_tool_run_count_edit_one">编辑 1 个文件</string>
+    <string name="timeline_tool_run_count_search">搜索 %1$d 次</string>
+    <string name="timeline_tool_run_count_search_one">搜索 1 次</string>
+    <string name="timeline_tool_run_count_execute">运行 %1$d 条命令</string>
+    <string name="timeline_tool_run_count_execute_one">运行 1 条命令</string>
+    <string name="timeline_tool_run_count_fetch">获取 %1$d 次</string>
+    <string name="timeline_tool_run_count_fetch_one">获取 1 次</string>
+    <string name="timeline_tool_run_count_other">调用 %1$d 个工具</string>
+    <string name="timeline_tool_run_count_other_one">调用 1 个工具</string>
     <string name="timeline_tool_run_pair">%1$s、%2$s</string>
     <string name="timeline_tool_run_more">%1$s等</string>
 

@@ -2,8 +2,9 @@ import type { TimelineRow } from '../../contracts/src/index.js';
 import type { TimelineItem } from './model.js';
 import { relaxUnderscoreEmphasis } from './cjkEmphasis.js';
 import { visibleText } from './markdownSource.js';
-import { commandHeadline, diffTargetSummary, stripRoot, toolDataKind, toolTitleOf } from './toolTitle.js';
-import { isRecord, records, str } from './values.js';
+import { commandHeadline, diffTargetSummary, toolDataKind, toolTitleOf } from './toolTitle.js';
+import { describeJobRow, describeToolRow, formatToolPresentationText } from './toolPresentation.js';
+import { isRecord, str } from './values.js';
 
 /*
  * 会话内查找: what a row offers to a find, shared by the web (which counts the rows it holds) and the
@@ -74,15 +75,16 @@ export function findableText(item: TimelineItem | TimelineRow, root?: string): s
     case 'thought': parts = [item.channel === 'narration' ? markdownShown(item.text) : reasoningPreview(item.text)]; break;
     case 'tool': {
       const { job } = item;
-      if (job) { parts = [job.title, job.title.trim() === job.command.trim() ? undefined : job.command]; break; }
+      if (job) { parts = [formatToolPresentationText(describeJobRow(job.title, job.command, root))]; break; }
       const data = isRecord(item.event.data) ? item.event.data : {};
-      const { title, command } = toolTitleOf(data, '', root);
       const subagent = toolDataKind(data) === 'agent' && isRecord(data.subagent) ? data.subagent : undefined;
-      const input = data.rawInput ?? data.input;
-      const actions = isRecord(input) ? records(input.commandActions) : [];
-      const locations = records(data.locations);
-      const location = locations.length === 1 && actions.length <= 1 ? str(locations[0]?.path) : undefined;
-      parts = [title, subagent ? str(subagent.type) : toolFoldedDetail(title, command, location && stripRoot(location, root), records(data.content), root)];
+      if (subagent) {
+        const { title } = toolTitleOf(data, '', root);
+        parts = [title, str(subagent.type)];
+      } else {
+        const presentation = describeToolRow(data, '', root);
+        parts = [formatToolPresentationText(presentation)];
+      }
       break;
     }
     case 'plan': parts = item.entries.map((entry) => String(entry.content ?? entry.title ?? '')); break;

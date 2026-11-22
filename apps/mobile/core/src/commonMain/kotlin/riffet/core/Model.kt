@@ -670,7 +670,7 @@ fun stripRoot(text: String, root: String?): String {
     return result
 }
 
-private val CD_PREFIX = Regex("^cd \\.? ?&& ")
+private val CD_PREFIX = Regex("^cd\\s+\\.?\\s*(?:&&|;)\\s*")
 private val LINE_CONTINUATION = Regex("\\\\\\r?\\n[ \\t]*")
 private val PATH_SLASHER = Regex("[\\\\/]")
 private val BARE_TOOL_TITLES = Regex("^(?:bash|shell|sh|zsh|script|terminal|run command|command|execute)$", RegexOption.IGNORE_CASE)
@@ -684,7 +684,14 @@ fun commandHeadline(command: String): String {
 fun isCommandTitle(title: String, command: String?): Boolean {
     if (command == null) return false
     val normalized = cleanLabel(title.replace(CD_PREFIX, ""))
-    return normalized == cleanLabel(command) || normalized == commandHeadline(command)
+    val full = cleanLabel(command)
+    val headline = commandHeadline(command)
+    if (normalized == full || normalized == headline) return true
+    if (normalized.endsWith("…") || normalized.endsWith("...")) {
+        val prefix = normalized.removeSuffix("…").removeSuffix("...").trimEnd()
+        if (prefix.length >= 4 && (full.startsWith(prefix) || headline.startsWith(prefix))) return true
+    }
+    return false
 }
 
 fun toolFoldedDetail(view: ToolView, root: String? = null): String? {

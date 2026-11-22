@@ -5,5 +5,6 @@ export * from './buildTimeline.js';
 export * from './timelineTurns.js';
 export * from './rows.js';
 export * from './toolTitle.js';
+export * from './toolPresentation.js';
 export * from './lineDiff.js';
 export * from './findText.js';

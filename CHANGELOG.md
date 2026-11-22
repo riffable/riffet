@@ -4,6 +4,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Workbench
+
+- Tool call rows across Web, Mac, iOS, and Android now share one aligned four-slot format across all agents (icon, fixed-width verb column, core target, and compact metadata): file rows show the filename with the full path in hover/details, shell commands summarize the main action and fold chained steps (`+N`), search rows tighten patterns and paths, inline Python/Node scripts surface edited files or referenced paths, failures are signaled quietly by a danger-tinted icon, adjacent identical-target calls merge into one `×N` row (expanding to every full command and diff), raw thinking aligns on the `Think` verb column, and tool-run headers show action counts and total diff lines.
+
 ### Fixes
 
 - Question prompts and plan review tools now stay outside the folded process block across Web, Mac, iOS, Android, and shared exports, so long responses written before an `AskQuestion` or plan review are no longer hidden inside "Processed", and pre-question process blocks finish cleanly instead of staying "Working" alongside post-answer work.

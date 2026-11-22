@@ -8,12 +8,17 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import riffet.contracts.NativeActivity
+import riffet.contracts.NativeActivityKind
 import riffet.contracts.NativeActivityStatus
+import riffet.contracts.NativeJob
 import riffet.contracts.TurnOutlineV3
 import riffet.core.LineDiff
 import riffet.core.TimelineItem
 import riffet.core.ToolLocation
+import riffet.core.ToolRowPresentation
 import riffet.core.activeToolStates
+import riffet.core.describeJobRow
+import riffet.core.describeToolRow
 import riffet.core.isCommandTitle
 import riffet.core.lineDiff
 import riffet.i18n.L10n
@@ -121,10 +126,16 @@ data class ToolPresentation(
     val images: List<ToolImage>,
     /** A Task row: a conversation of its own that a host opens as a page. */
     val opensSubagent: Boolean,
+    /** Unified 4-slot presentation shared across Web, Mac, iOS, and Android. */
+    val row: ToolRowPresentation,
 ) {
     val showsDiffStats: Boolean get() = !failed && !dangling && (added > 0 || removed > 0 || files > 1)
     val hasDetails: Boolean get() = command != null || locations.isNotEmpty() || blocks.isNotEmpty()
 }
+
+/** Unified 4-slot presentation for a background shell job. */
+fun jobRowPresentation(job: NativeJob, root: String?): ToolRowPresentation =
+    describeJobRow(job.title, job.command, root)
 
 private fun text(element: JsonElement?): String? = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
 
@@ -247,6 +258,15 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
     val images = if (failed) emptyList() else view.contents.mapNotNull { entry ->
         (entry["content"] as? JsonObject)?.takeIf { text(it["type"]) == "image" }?.let { toolImage(it, root) }
     }
+    val row = if (activity?.kind == NativeActivityKind.BACKGROUND_TASK) {
+        describeJobRow(
+            title = if (isCommand) activity.title else title,
+            command = view.command ?: activity.task?.command,
+            root = root,
+        )
+    } else {
+        describeToolRow(item.event.data, L10n.uiText("core.tool.call"), root)
+    }
     return ToolPresentation(
         id = view.id,
         title = title,
@@ -264,6 +284,7 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
         blocks = view.contents.mapNotNull { toolBlock(it, root) },
         images = images,
         opensSubagent = view.kind == "agent",
+        row = row,
     )
 }
 
@@ -287,37 +308,213 @@ fun processHeaderLabel(row: TimelineRow.Process, nowMillis: Long): String {
     }
 }
 
-/** `1 tool` / `3 tools`, or null for a block with no tool calls. */
-private val toolRunCategories = setOf(
-    "read", "search", "execute", "edit", "delete", "move", "fetch", "agent", "message", "think", "switch_mode", "question", "plan",
+data class ToolRunCount(val bucket: String, val count: Int)
+
+data class ToolRunSummary(
+    val counts: List<ToolRunCount>,
+    val primaryIcon: String,
+    val totalAdded: Int,
+    val totalRemoved: Int,
 )
 
+private fun bucketForRow(row: ToolRowPresentation): String = when {
+    row.verb == "List" -> "search"
+    row.icon == "read" -> "read"
+    row.icon == "edit" || row.icon == "delete" || row.icon == "move" -> "edit"
+    row.icon == "search" -> "search"
+    row.icon == "fetch" -> "fetch"
+    row.icon == "execute" || row.icon == "git" -> "execute"
+    else -> "other"
+}
+
 /**
- * The action categories in a run of tool calls, first seen first, for the folded run's label (the
- * web's `toolRunSummary`). Only provider-supplied categories count, never ones guessed from shell
- * text: a Codex call lists its reads, searches and commands in `commandActions`, and reports `other`
- * as its own kind; other calls report one `kind`. Anything unknown is `other`.
+ * Counts, deduplicated file totals, and aggregate diff lines for a `ToolRun` header
+ * (matching the web's `toolRunSummary`). Passing precomputed [presentations] avoids redoing JSON/diffs.
  */
-fun toolRunKinds(items: List<TimelineItem.Tool>): List<String> {
-    val kinds = LinkedHashSet<String>()
-    for (item in items) {
-        val data = item.event.data
-        val input = (data["rawInput"] ?: data["input"]) as? JsonObject
-        val actions = (input?.get("commandActions") as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
-        val reported = if (actions.isNotEmpty()) {
-            actions.map {
-                when (text(it["type"])) {
-                    "read" -> "read"
-                    "search", "listFiles" -> "search"
-                    else -> "execute"
+fun toolRunSummary(
+    items: List<TimelineItem.Tool>,
+    root: String?,
+    stale: Boolean = false,
+    presentations: List<ToolPresentation>? = null,
+): ToolRunSummary {
+    val counts = LinkedHashMap<String, Int>()
+    val readFiles = LinkedHashSet<String>()
+    val editedFiles = LinkedHashSet<String>()
+    var unkeyedReads = 0
+    var unkeyedEdits = 0
+    var totalAdded = 0
+    var totalRemoved = 0
+    for (index in items.indices) {
+        val item = items[index]
+        val pres = presentations?.getOrNull(index)
+        val row = pres?.row ?: item.job?.let { jobRowPresentation(it, root) } ?: describeToolRow(item.event.data, L10n.uiText("core.tool.call"), root)
+        val bucket = bucketForRow(row)
+        val view = if (pres == null) toolView(item.event.base, root) else null
+        if (pres != null) {
+            totalAdded += pres.added
+            totalRemoved += pres.removed
+        } else if (view != null) {
+            val stats = toolDiffStats(view)
+            if (stats != null) {
+                totalAdded += stats.added
+                totalRemoved += stats.removed
+            }
+        }
+        when (bucket) {
+            "edit" -> {
+                val diffPaths = if (pres != null) {
+                    pres.blocks.filterIsInstance<ToolBlock.Diff>().mapNotNull { it.path }
+                } else {
+                    view!!.contents.mapNotNull { entry ->
+                        if (text(entry["type"]) == "diff") text(entry["path"])?.let { stripRoot(it, root) } else null
+                    }
+                }
+                val locPaths = pres?.locations?.map { it.path } ?: view!!.locations.map { it.path }
+                val targets = when {
+                    diffPaths.isNotEmpty() -> diffPaths
+                    locPaths.isNotEmpty() -> locPaths
+                    row.primaryKind == "path" -> listOf(row.primary)
+                    else -> emptyList()
+                }
+                if (targets.isNotEmpty()) editedFiles.addAll(targets) else unkeyedEdits += 1
+            }
+            "read" -> {
+                val locPaths = pres?.locations?.map { it.path } ?: view!!.locations.map { it.path }
+                val targets = when {
+                    locPaths.isNotEmpty() -> locPaths
+                    row.primaryKind == "path" -> listOf(row.primary)
+                    else -> emptyList()
+                }
+                if (targets.isNotEmpty()) readFiles.addAll(targets) else unkeyedReads += 1
+            }
+            else -> counts[bucket] = (counts[bucket] ?: 0) + 1
+        }
+    }
+    val editTotal = editedFiles.size + unkeyedEdits
+    val readTotal = readFiles.size + unkeyedReads
+    if (editTotal > 0) counts["edit"] = editTotal
+    if (readTotal > 0) counts["read"] = readTotal
+    val ordered = counts.entries.sortedByDescending { it.value }.map { ToolRunCount(it.key, it.value) }
+    val primaryIcon = ordered.firstOrNull()?.bucket ?: "other"
+    return ToolRunSummary(
+        counts = ordered,
+        primaryIcon = primaryIcon,
+        totalAdded = totalAdded,
+        totalRemoved = totalRemoved,
+    )
+}
+
+/** One entry in a `ToolRun` after collapsing adjacent completed calls that share a `mergeKey`. */
+sealed interface ToolRunGroupEntry {
+    data class Single(val item: TimelineItem, val index: Int) : ToolRunGroupEntry
+
+    data class Merged(
+        val key: String,
+        val items: List<TimelineItem.Tool>,
+        val presentation: ToolRowPresentation,
+        val added: Int,
+        val removed: Int,
+        val files: Int,
+        val failed: Boolean,
+    ) : ToolRunGroupEntry {
+        val showsDiffStats: Boolean get() = !failed && (added > 0 || removed > 0 || files > 1)
+    }
+}
+
+private fun mergeableRow(
+    item: TimelineItem,
+    root: String?,
+    presentationsByKey: Map<String, ToolPresentation>?,
+): ToolRowPresentation? {
+    if (item !is TimelineItem.Tool || item.job != null) return null
+    val activity = currentToolActivity(item)
+    if (activity?.kind == NativeActivityKind.BACKGROUND_TASK) return null
+    if (toolKind(item.event.base) == "agent") return null
+    val rawStatus = text(item.event.data["status"]) ?: text(item.event.data["state"]) ?: "completed"
+    if (rawStatus in activeToolStates) return null
+    val row = presentationsByKey?.get(item.key)?.row ?: describeToolRow(item.event.data, L10n.uiText("core.tool.call"), root)
+    return row.takeUnless { it.mergeKey.isNullOrEmpty() }
+}
+
+/**
+ * Collapse adjacent completed tool calls inside a `ToolRun` that share the same `mergeKey`
+ * (matching the web's `groupAdjacentToolRunEntries`). Never merges across thoughts, jobs, or running/dangling calls.
+ */
+fun groupAdjacentToolRunEntries(
+    entries: List<TimelineItem>,
+    root: String?,
+    stale: Boolean = false,
+    presentationsByKey: Map<String, ToolPresentation>? = null,
+): List<ToolRunGroupEntry> {
+    val out = ArrayList<ToolRunGroupEntry>(entries.size)
+    var index = 0
+    while (index < entries.size) {
+        val entry = entries[index]
+        val row = mergeableRow(entry, root, presentationsByKey)
+        if (row == null || entry !is TimelineItem.Tool) {
+            out += ToolRunGroupEntry.Single(entry, index)
+            index += 1
+            continue
+        }
+        val group = ArrayList<TimelineItem.Tool>()
+        group += entry
+        var next = index + 1
+        while (next < entries.size) {
+            val candidate = entries[next]
+            val nextRow = mergeableRow(candidate, root, presentationsByKey)
+            if (candidate !is TimelineItem.Tool || nextRow == null || nextRow.mergeKey != row.mergeKey) break
+            group += candidate
+            next += 1
+        }
+        if (group.size == 1) {
+            out += ToolRunGroupEntry.Single(entry, index)
+        } else {
+            var added = 0
+            var removed = 0
+            val diffFilePaths = LinkedHashSet<String>()
+            var unkeyedDiffs = 0
+            var failed = false
+            for (sub in group) {
+                val pres = presentationsByKey?.get(sub.key)
+                if (pres != null) {
+                    if (pres.failed) failed = true
+                    added += pres.added
+                    removed += pres.removed
+                    for (block in pres.blocks) {
+                        if (block is ToolBlock.Diff) {
+                            val path = block.path
+                            if (path != null) diffFilePaths += path else unkeyedDiffs += 1
+                        }
+                    }
+                } else {
+                    val view = toolView(sub.event.base, root)
+                    if (view.status == "failed" && view.status !in activeToolStates) failed = true
+                    val stats = toolDiffStats(view)
+                    if (stats != null) {
+                        added += stats.added
+                        removed += stats.removed
+                        for (content in view.contents) {
+                            if (text(content["type"]) == "diff") {
+                                val path = text(content["path"])
+                                if (path != null) diffFilePaths += stripRoot(path, root) else unkeyedDiffs += 1
+                            }
+                        }
+                    }
                 }
             }
-        } else {
-            listOf(text(data["kind"]) ?: "other")
+            out += ToolRunGroupEntry.Merged(
+                key = entry.key,
+                items = group,
+                presentation = row,
+                added = added,
+                removed = removed,
+                files = diffFilePaths.size + unkeyedDiffs,
+                failed = failed,
+            )
         }
-        for (kind in reported) kinds += if (kind in toolRunCategories) kind else "other"
+        index = next
     }
-    return kinds.toList()
+    return out
 }
 
 fun processToolCount(row: TimelineRow.Process): String? =

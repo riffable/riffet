@@ -681,6 +681,7 @@ private fun TimelineEntryView(
             turnActive = entry.row.turnActive,
             root = root,
             reveal = revealed,
+            onOpenFile = onOpenFile,
         ) { item ->
             ProcessItem(item, running = entry.row.turnActive, root = root, onOpenFile = onOpenFile)
         }

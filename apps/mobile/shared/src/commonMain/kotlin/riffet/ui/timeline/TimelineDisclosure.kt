@@ -111,7 +111,7 @@ internal fun TimelineDisclosure(
                 // Inline counts are measured first and never wrap (mobile.md §1.1): the title
                 // shrinks to its text and truncates instead, and the counts sit right after it.
                 inline != null -> Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f, fill = false).widthIn(max = 200.dp)) { title() }
+                    Box(Modifier.weight(1f, fill = false)) { title() }
                     trail()
                 }
                 else -> {

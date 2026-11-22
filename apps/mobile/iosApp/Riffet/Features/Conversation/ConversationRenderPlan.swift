@@ -64,7 +64,7 @@ enum ConversationRenderPlan {
         /// Where the reader's fold choice is kept (`ConversationToolRunChoices`).
         let choiceKey: String
         let items: [any TimelineItem]
-        let kinds: [String]
+        let summary: ToolRunSummary
         let open: Bool
     }
 
@@ -74,6 +74,8 @@ enum ConversationRenderPlan {
         case toolRun(ToolRun)
         /// `nested`: a member of an open tool run, drawn under its hairline.
         case item(any TimelineItem, process: TimelineRowProcess, nested: Bool)
+        /// Adjacent completed tool calls sharing a `mergeKey` inside an open tool run.
+        case mergedTools(ToolRunGroupEntryMerged, process: TimelineRowProcess, nested: Bool)
         case footer(TimelineRowProcess)
     }
 
@@ -92,7 +94,7 @@ enum ConversationRenderPlan {
     /// `scope` names the transcript (server and session) for tool-run fold choices; `readingAbove`: the
     /// reader is not at the bottom.
     static func entries(rows: [any TimelineRow], compactAbove: [Bool], expanded: [String: Bool], focusedRow: String?,
-                        scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState? = nil) -> [Entry] {
+                        scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState? = nil, root: String? = nil) -> [Entry] {
         var result: [Entry] = []
         result.reserveCapacity(rows.count)
         for (index, row) in rows.enumerated() {
@@ -102,7 +104,7 @@ enum ConversationRenderPlan {
                 let key = nativeKey(process.key)
                 let open = expanded[key] ?? (focusedRow == key || process.running || process.issueCount > 0)
                 result.append(Entry(id: key, rowKey: key, topSpacing: spacing, isLastInRow: false, content: .processHeader(process, open: open)))
-                if open { appendChildren(of: process, key: key, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, to: &result) }
+                if open { appendChildren(of: process, key: key, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, root: root, to: &result) }
                 if process.settled, process.endsTurn, let answer = process.answerText, !answer.isEmpty {
                     result.append(Entry(id: childID(role: "footer", row: key), rowKey: key, topSpacing: 4, isLastInRow: false, content: .footer(process)))
                 }
@@ -116,7 +118,7 @@ enum ConversationRenderPlan {
     }
 
     @MainActor
-    private static func appendChildren(of process: TimelineRowProcess, key: String, scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState?, to result: inout [Entry]) {
+    private static func appendChildren(of process: TimelineRowProcess, key: String, scope: String, readingAbove: Bool, disclosureState: ConversationDisclosureState?, root: String?, to result: inout [Entry]) {
         let items = Array(process.items)
         var previous: (any TimelineItem)?
         var index = 0
@@ -129,13 +131,25 @@ enum ConversationRenderPlan {
                 let members = Array(items[index..<end])
                 let id = "toolrun:" + members[0].key
                 let followed = !process.endsTurn || end < items.count
-                let kinds = toolRunKinds(items: members.compactMap { $0 as? TimelineItemTool })
+                let stale = !process.turnActive
+                let tools = members.compactMap { $0 as? TimelineItemTool }
+                let presentations = tools.map { ConversationToolPresentations.value(item: $0, root: root, stale: stale) }
+                let summary = toolRunSummary(items: tools, root: root, stale: stale, presentations: presentations)
                 let choiceKey = scope + "|" + id
                 let choices = ConversationToolRunChoices.shared
                 let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, process: process, followed: followed, disclosureState: disclosureState), readingAbove: readingAbove)
-                result.append(Entry(id: id, rowKey: key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, kinds: kinds, open: open))))
+                result.append(Entry(id: id, rowKey: key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, summary: summary, open: open))))
                 if open {
-                    for member in members { child(member, id: childID(role: "item", row: key, item: member.key), nested: true, spacing: 0) }
+                    let presentationsByKey = Dictionary(zip(tools, presentations).map { ($0.key, $1) }, uniquingKeysWith: { first, _ in first })
+                    let grouped = groupAdjacentToolRunEntries(entries: members, root: root, stale: stale, presentationsByKey: presentationsByKey)
+                    for entry in grouped {
+                        switch onEnum(of: entry) {
+                        case let .single(single):
+                            child(single.item, id: childID(role: "item", row: key, item: single.item.key), nested: true, spacing: 0)
+                        case let .merged(merged):
+                            result.append(Entry(id: childID(role: "merged", row: key, item: merged.key), rowKey: key, topSpacing: 0, isLastInRow: false, content: .mergedTools(merged, process: process, nested: true)))
+                        }
+                    }
                 }
                 previous = members.last
                 index = end
@@ -212,6 +226,7 @@ extension ConversationRenderPlan.Entry {
         switch content {
         case let .row(row): (row as? TimelineRowTrigger)?.notices.map(\.key) ?? [row.key]
         case let .item(item, _, _): [item.key]
+        case let .mergedTools(group, _, _): group.items.map(\.key)
         case let .toolRun(run): run.open ? [] : run.items.map(\.key)
         case .processHeader, .footer: []
         }
@@ -251,6 +266,7 @@ extension ConversationRenderPlan {
         case let .processHeader(process, open): hasher.combine(ObjectIdentifier(process)); hasher.combine(open)
         case let .toolRun(run): hasher.combine(run.open); for item in run.items { hasher.combine(ObjectIdentifier(item as AnyObject)) }
         case let .item(item, process, nested): hasher.combine(ObjectIdentifier(item as AnyObject)); hasher.combine(process.turnActive); hasher.combine(nested)
+        case let .mergedTools(group, _, nested): hasher.combine(group.key); hasher.combine(group.items.count); hasher.combine(group.failed); hasher.combine(nested); for item in group.items { hasher.combine(ObjectIdentifier(item as AnyObject)) }
         case let .footer(process): hasher.combine(ObjectIdentifier(process)); hasher.combine(speed?.label ?? ""); hasher.combine(speed?.estimated ?? false)
         }
         return hasher.finalize()
@@ -278,26 +294,35 @@ struct ConversationEntryView: View {
             ConversationToolRunHeader(run: run)
         case let .item(item, process, nested):
             let content = ConversationTimelineItem(item: item, workbench: workbench, projectID: projectID, active: process.turnActive, parentItems: parentItems, showsFooter: false)
-            if nested {
-                // The calls hang off a hairline under the run's icon: x = 7, content 16 further in.
-                content.padding(.leading, 24)
-                    .background(alignment: .leading) { Rectangle().fill(palette.line).frame(width: 1).padding(.leading, 7) }
-            } else { content }
+            nestedRow(content, nested: nested)
+        case let .mergedTools(group, _, nested):
+            nestedRow(ConversationMergedTool(group: group, workbench: workbench, projectID: projectID), nested: nested)
         case let .footer(process):
             if let answer = process.answerText { ConversationCopyActions(text: answer, endedAt: ServerTime.date(process.endedAt), speed: speed) }
         }
     }
+
+    @ViewBuilder
+    private func nestedRow<V: View>(_ content: V, nested: Bool) -> some View {
+        if nested {
+            // The calls hang off a hairline under the run's icon: x = 7, content 16 further in.
+            content.padding(.leading, 24)
+                .background(alignment: .leading) { Rectangle().fill(palette.line).frame(width: 1).padding(.leading, 7) }
+        } else {
+            content
+        }
+    }
 }
 
-/// One line naming what a run of calls did ("读取文件、运行命令"); the calls themselves open beneath it.
+/// One line naming what a run of calls did ("读取 3 个文件、运行 2 条命令 +12 −4"); the calls themselves open beneath it.
 struct ConversationToolRunHeader: View {
     let run: ConversationRenderPlan.ToolRun
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var title: String {
-        let names = run.kinds.prefix(2).map(Self.label).joined(separator: String(localized: "、", bundle: .riffet))
-        return run.kinds.count > 2 ? String(localized: "\(names)等", bundle: .riffet) : names
+        let names = run.summary.counts.prefix(2).map(Self.countLabel).joined(separator: String(localized: "、", bundle: .riffet))
+        return run.summary.counts.count > 2 ? String(localized: "\(names)等", bundle: .riffet) : names
     }
     var body: some View {
         Button {
@@ -305,9 +330,17 @@ struct ConversationToolRunHeader: View {
             withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { ConversationToolRunChoices.shared[run.choiceKey] = !run.open }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: ConversationToolHeader.symbol(kind: run.kinds.first ?? "other"))
-                    .font(.system(size: 12)).foregroundStyle(palette.fg4).frame(width: 16)
+                Image(systemName: ConversationToolHeader.symbol(kind: run.summary.primaryIcon))
+                    .font(.system(size: 12))
+                    .foregroundStyle(palette.fg4)
+                    .frame(width: 16)
                 Text(title).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1)
+                if run.summary.totalAdded > 0 {
+                    Text("+\(run.summary.totalAdded)").riffetFont(.monoSmall).foregroundStyle(palette.success).fixedSize()
+                }
+                if run.summary.totalRemoved > 0 {
+                    Text("−\(run.summary.totalRemoved)").riffetFont(.monoSmall).foregroundStyle(palette.danger).fixedSize()
+                }
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                     .rotationEffect(.degrees(run.open ? 90 : 0))
                     .riffetAnimation(RiffetMotion.chevron, value: run.open)
@@ -318,22 +351,15 @@ struct ConversationToolRunHeader: View {
         .buttonStyle(RiffetDimPressStyle())
         .accessibilityValue(run.open ? String(localized: "已展开", bundle: .riffet) : String(localized: "已折叠", bundle: .riffet))
     }
-    private static func label(_ kind: String) -> String {
-        switch kind {
-        case "read": String(localized: "读取文件", bundle: .riffet)
-        case "search": String(localized: "搜索内容", bundle: .riffet)
-        case "execute": String(localized: "运行命令", bundle: .riffet)
-        case "edit": String(localized: "修改文件", bundle: .riffet)
-        case "delete": String(localized: "删除文件", bundle: .riffet)
-        case "move": String(localized: "移动文件", bundle: .riffet)
-        case "fetch": String(localized: "访问网页", bundle: .riffet)
-        case "agent": String(localized: "委派任务", bundle: .riffet)
-        case "think": String(localized: "思考", bundle: .riffet)
-        case "switch_mode": String(localized: "切换模式", bundle: .riffet)
-        case "message": String(localized: "发送消息", bundle: .riffet)
-        case "question": String(localized: "询问用户", bundle: .riffet)
-        case "plan": String(localized: "更新计划", bundle: .riffet)
-        default: String(localized: "调用工具", bundle: .riffet)
+    private static func countLabel(_ entry: ToolRunCount) -> String {
+        let count = Int(entry.count)
+        switch entry.bucket {
+        case "read": return String(localized: "读取 \(count) 个文件", bundle: .riffet)
+        case "edit": return String(localized: "编辑 \(count) 个文件", bundle: .riffet)
+        case "search": return String(localized: "搜索 \(count) 次", bundle: .riffet)
+        case "execute": return String(localized: "运行 \(count) 条命令", bundle: .riffet)
+        case "fetch": return String(localized: "获取 \(count) 次", bundle: .riffet)
+        default: return String(localized: "调用 \(count) 个工具", bundle: .riffet)
         }
     }
 }

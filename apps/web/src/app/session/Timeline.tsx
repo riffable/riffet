@@ -1,5 +1,5 @@
-import { IconCopy, IconCornerUpRight, IconEllipsis, IconGitFork, IconImageDown, IconRotateCcw, IconTextQuote } from '@/components/icons';
-import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { IconCopy, IconCornerUpRight, IconEllipsis, IconGitBranch, IconGitFork, IconImageDown, IconRotateCcw, IconTextQuote } from '@/components/icons';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -25,12 +25,12 @@ import { Markdown } from './Markdown';
 import { alignmentCached, lineDiff } from './lineDiff';
 import { nativeDeliveryStatus, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
-import { activeToolStates, currentToolActivity, isCommandTitle, stripRoot, taskLabel, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
+import { activeToolStates, currentToolActivity, describeJobRow, isCommandTitle, stripRoot, taskLabel, toolDiffStats, toolRowPresentation, toolView, type ToolRowPresentation, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
 import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
 import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, tokensPerSecond } from './speed';
 import { MessageAttachments } from './MessageAttachments';
-import { MarkedIndicator, MarkMenuItem, markBodies, type MarkTarget } from './marks';
+import { MarkedIndicator, MarkMenuItem, MarkSourceContext, markBodies, type MarkTarget } from './marks';
 import { commandIcon, MessageCommandResults, useMessageCommandItems } from './messageCommands';
 import { useAnswerShare } from '../marks/ShareImage';
 import { RememberedScope, useRemembered } from './rememberedState';
@@ -40,10 +40,11 @@ import { MentionedAgents, SessionReferences } from './SessionReferences';
 import { MessageWithMentions, unwrittenMentions } from './agentMentions';
 import { quoteLabel, splitQuotes } from './quotes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tip } from '@/components/ui/tooltip';
 
 export const toolIcons: Record<string, typeof IconWrench> = {
   read: IconFileText, edit: IconFilePenLine, delete: IconTrash2, move: IconArrowRightLeft, search: IconSearch,
-  execute: IconSquareTerminal, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, agent: IconBot, message: IconSend, question: IconMessageCircleQuestion,
+  execute: IconSquareTerminal, git: IconGitBranch, mcp: IconWrench, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, agent: IconBot, message: IconSend, question: IconMessageCircleQuestion,
   plan: IconListChecks,
 };
 
@@ -305,11 +306,13 @@ export function MessageFooter({ text, showActions, time, modelLabel, footerPinne
   </div>;
 }
 
-export function Disclosure({ icon, title, detail, inline, status, open, onToggle, children, expandable = true, tone, opensPage, touchCompact = false }: {
+export function Disclosure({ icon, title, detail, inline, status, open, onToggle, children, expandable = true, tone, failed = false, opensPage, touchCompact = false }: {
   icon: ReactNode; title: ReactNode; detail?: ReactNode;
   /** Content that belongs with the title (a tool's diff counts): after the detail, ahead of the chevron. The row's state stays in `status`, at the right edge. */
   inline?: ReactNode;
   status?: ReactNode; open: boolean; onToggle: () => void; children?: ReactNode; expandable?: boolean; tone?: 'danger';
+  /** Quiet failure state (icon-only tint): keeps the hover/open chevron tinted and exposes an accessible label. */
+  failed?: boolean;
   /** The row leads to its own page (a subagent's transcript) instead of folding out. */
   opensPage?: boolean;
   touchCompact?: boolean;
@@ -323,10 +326,13 @@ export function Disclosure({ icon, title, detail, inline, status, open, onToggle
         className={cn('group/row flex min-h-[calc(24px*var(--text-scale))] w-full min-w-0 items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors hover:text-fg-2', touchCompact ? 'no-hover:min-h-9' : 'no-hover:min-h-11', tone === 'danger' && 'text-danger hover:text-danger')}
       >
         <span className="grid size-4 shrink-0 place-items-center text-fg-4 [&_svg]:size-[15px]">{icon}</span>
+        {failed && <span className="sr-only"><Trans>失败</Trans></span>}
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn('min-w-0 truncate', detail && 'max-w-[70%] shrink-0')}>{title}</span>
-            {detail && <span className="min-w-0 truncate font-mono text-xs text-fg-3">{detail}</span>}
+            {detail && (typeof detail === 'string'
+              ? <span className="min-w-0 truncate font-mono text-xs text-fg-3">{detail}</span>
+              : <span className="flex min-w-0 items-center gap-1.5 overflow-hidden font-mono text-xs text-fg-2">{detail}</span>)}
           </span>
           {inline}
           <IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-[opacity,transform] duration-[var(--duration-base)] can-hover:opacity-0 can-hover:group-hover/row:translate-x-0.5 can-hover:group-hover/row:opacity-100" />
@@ -341,7 +347,7 @@ export function Disclosure({ icon, title, detail, inline, status, open, onToggle
       <Header
         {...(expandable ? { type: 'button' as const, 'aria-expanded': open, onClick: onToggle } : {})}
         data-slot="disclosure"
-        className={cn('group/row flex min-h-[calc(24px*var(--text-scale))] min-w-0 items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors', touchCompact ? 'no-hover:min-h-9' : 'no-hover:min-h-11', expandable && 'hover:text-fg-2', tone === 'danger' && 'text-danger hover:text-danger')}
+        className={cn('group/row flex min-h-[calc(24px*var(--text-scale))] w-full min-w-0 items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors', touchCompact ? 'no-hover:min-h-9' : 'no-hover:min-h-11', expandable && 'hover:text-fg-2', tone === 'danger' && 'text-danger hover:text-danger')}
       >
         {/* On a pointer device the leading icon swaps to the chevron on hover, which keeps an idle
             row down to one glyph. A touch screen never reaches that state, so there the chevron is
@@ -350,14 +356,17 @@ export function Disclosure({ icon, title, detail, inline, status, open, onToggle
             state in `status` keeps the right edge. */}
         <span className="relative grid size-4 shrink-0 place-items-center [&_svg]:size-[15px]">
           <span className={cn('grid place-items-center text-fg-4 transition-opacity', expandable && 'can-hover:group-hover/row:opacity-0', open && expandable && 'can-hover:opacity-0')}>{icon}</span>
-          {expandable && <IconChevronRight className={cn('absolute hidden opacity-0 transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft can-hover:block group-hover/row:opacity-100', open && 'rotate-90 opacity-100')} />}
+          {expandable && <IconChevronRight className={cn('absolute hidden opacity-0 transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft can-hover:block group-hover/row:opacity-100', open && 'rotate-90 opacity-100', failed && 'text-danger')} />}
         </span>
+        {failed && <span className="sr-only"><Trans>失败</Trans></span>}
         {/* Budget text after the fixed icon and status, then share that space with the chevron.
             A title's 70% cap must use this remainder, not the width of the whole row. */}
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <span className="flex min-w-0 items-center gap-2">
             <span className={cn('min-w-0 truncate', detail && 'max-w-[70%] shrink-0')}>{title}</span>
-            {detail && <span className="min-w-0 truncate font-mono text-xs text-fg-3">{detail}</span>}
+            {detail && (typeof detail === 'string'
+              ? <span className="min-w-0 truncate font-mono text-xs text-fg-3">{detail}</span>
+              : <span className="flex min-w-0 items-center gap-1.5 overflow-hidden font-mono text-xs text-fg-2">{detail}</span>)}
           </span>
           {inline}
           {expandable && <IconChevronRight className={cn('hidden size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-out-soft no-hover:block', open && 'rotate-90')} />}
@@ -387,10 +396,16 @@ export const ThoughtRow = memo(function ThoughtRow({ text, channel, running }: {
   // `data-narration` lets the selection toolbar act on it (MarkLayer); it has no anchor for highlights.
   if (channel === 'narration') return <div data-narration className="min-w-0"><Markdown text={text} className="md-muted" streaming={running} /></div>;
   return (
-    // The brain icon already says what this row is, so the preview itself is the title — and it
-    // reads as prose rather than as the bold label the other collapsed rows use for a tool name.
-    // Folded, the preview is one line; opened, the body says it in full under a plain title.
-    <Disclosure icon={<IconBrain />} title={open ? <Trans>思考</Trans> : <span className={cn(running && 'text-shimmer')}>{reasoningPreview(text, running)}</span>} open={open} onToggle={() => setOpen(!open)}>
+    // Uses the same fixed-width verb column (`Think`) and `text-xs` height as tool rows so
+    // thought rows inside a `ToolRun` or `TurnProcess` share one visual rhythm with actions.
+    <Disclosure
+      touchCompact
+      icon={<IconBrain />}
+      title={<ToolVerbLabel verb="Think" />}
+      detail={open ? undefined : <span className={cn('min-w-0 truncate font-sans text-xs text-fg-3', running && 'text-shimmer')}>{reasoningPreview(text, running)}</span>}
+      open={open}
+      onToggle={() => setOpen(!open)}
+    >
       <Markdown text={text} className="md-muted md-thought" streaming={running} />
     </Disclosure>
   );
@@ -532,6 +547,17 @@ function PathText({ path }: { path: string }) {
 }
 
 /**
+ * Filename-only path display for tool rows (hover tooltip & expanded details carry the full path),
+ * keeping dense read/edit streaks scannable without a wall of repeated directory prefixes.
+ */
+function ToolPathText({ path }: { path: string }) {
+  const clean = path.replace(/\/+$/, '');
+  const slash = clean.lastIndexOf('/');
+  const name = slash <= 0 ? (clean || path) : clean.slice(slash + 1);
+  return <Tip label={path}><span className="min-w-0 truncate text-fg-2">{name}</span></Tip>;
+}
+
+/**
  * A path in a tool row. In a project it links to the file itself, so a plain click previews it on the
  * right and a modified or middle click opens it in a tab; a shared transcript keeps a plain button.
  */
@@ -670,9 +696,10 @@ function toolContents(view: ToolView, listSeparator: string, root?: string, onOp
   const diffPaths = new Set(view.contents.flatMap(item => item.type === 'diff' && str(item.path) ? [stripRoot(str(item.path)!, root)] : []));
   const locations = view.locations.filter(location => !diffPaths.has(stripRoot(location.path, root)));
   if (!blocks.length && !view.command && !locations.length) return null;
+  const hasDiff = diffPaths.size > 0 || view.contents.some(item => item.type === 'diff');
   return (
     <>
-      {view.command && <CodeBlock className="text-fg" copy={view.command} remember="command"><span className="select-none text-fg-4">$ </span>{view.command}</CodeBlock>}
+      {view.command && <CodeBlock className="text-fg" maxHeight={hasDiff ? 'max-h-40' : 'max-h-72'} copy={view.command} remember="command"><span className="select-none text-fg-4">$ </span>{view.command}</CodeBlock>}
       {locations.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {locations.map((location, index) => (
@@ -691,7 +718,7 @@ function toolContents(view: ToolView, listSeparator: string, root?: string, onOp
  * it keeps ticking after the turn that started it, and it is the same one row whether or not the
  * agent ever awaited it.
  */
-export function JobRow({ job, onOpenPath, more }: { job: NativeJob; onOpenPath?: (path: string, line?: number) => void; more?: ReactNode }) {
+export function JobRow({ job, onOpenPath, root, more }: { job: NativeJob; onOpenPath?: (path: string, line?: number) => void; root?: string; more?: ReactNode }) {
   const { t } = useLingui();
   const [open, setOpen] = useRemembered('job', false);
   const resources = useTranscriptResources();
@@ -702,12 +729,16 @@ export function JobRow({ job, onOpenPath, more }: { job: NativeJob; onOpenPath?:
   const startedAt = job.startedAt ? Date.parse(job.startedAt) : Number.NaN;
   const elapsedMs = Math.max(job.runningMs ?? 0, Number.isFinite(startedAt) && running ? now - startedAt : 0);
   const elapsed = elapsedMs < 1000 ? undefined : formatDuration(elapsedMs);
+  const presentation = useMemo(() => describeJobRow(job.title, job.command, root), [job.title, job.command, root]);
+  const Icon = toolIcons[presentation.icon] ?? IconSquareTerminal;
   return (
     <Disclosure
       touchCompact
-      icon={running ? <Spinner className="size-3.5" /> : <IconSquareTerminal />}
-      title={<span className="truncate">{job.title}</span>}
-      inline={failed ? <RowOutcome failed /> : unknown ? <RowOutcome /> : undefined}
+      failed={failed}
+      icon={running ? <Spinner className="size-3.5" /> : <Icon className={cn(failed && 'text-danger')} />}
+      title={<ToolVerbLabel verb={presentation.verb} />}
+      detail={<ToolTargetSlot presentation={presentation} />}
+      inline={<ToolMetaSlot presentation={presentation} failed={failed} dangling={unknown} />}
       open={open}
       onToggle={() => setOpen(!open)}
     >
@@ -732,9 +763,127 @@ export const ToolRow = memo(function ToolRow({ item, onOpenPath, onOpenInEditor,
   const toolCallId = typeof item.event.data.toolCallId === 'string' ? item.event.data.toolCallId : '';
   const liveJob = useNativeJob(toolCallId);
   const job = liveJob ?? item.job;
-  if (job) return <JobRow job={job} onOpenPath={onOpenPath} more={more} />;
+  if (job) return <JobRow job={job} onOpenPath={onOpenPath} root={root} more={more} />;
   return <RegularToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={stale} more={more} />;
 });
+
+/** Fixed-width monospace verb column (`Read`, `Edit`, `Search`, `Git`, `Run`, `Think`, …). */
+export function ToolVerbLabel({ verb }: { verb: string }) {
+  return <span className="inline-block min-w-12 font-mono text-xs font-medium text-fg-3">{verb}</span>;
+}
+
+/** Core object slot: left-dark primary (`fg-2`) + right-muted context/dir/arg (`fg-4`). */
+export function ToolTargetSlot({ presentation, merged = false }: { presentation: ToolRowPresentation; merged?: boolean }) {
+  const secondary = merged ? (presentation.mergedSecondary ?? presentation.secondary) : presentation.secondary;
+  return (
+    <>
+      <span className={cn('flex min-w-0 items-center gap-1.5', secondary && 'max-w-full shrink-0')}>
+        {presentation.prefix && <span className="shrink-0 font-mono text-xs text-fg-2">{presentation.prefix}</span>}
+        {presentation.primaryKind === 'path' ? (
+          <span className="flex min-w-0 font-mono text-xs text-fg-2"><ToolPathText path={presentation.primary} /></span>
+        ) : presentation.primaryKind === 'prose' ? (
+          <span className="min-w-0 truncate font-sans text-xs text-fg-2">{presentation.primary}</span>
+        ) : (
+          <span className="min-w-0 truncate font-mono text-xs text-fg-2">{presentation.primary}</span>
+        )}
+      </span>
+      {secondary && <span className="min-w-0 truncate font-mono text-xs text-fg-4">{secondary}</span>}
+    </>
+  );
+}
+
+/** Lightweight metadata slot: line range/count, chained count, merged count, diff stats, or incomplete state. */
+export function ToolMetaSlot({ presentation, stats, mergedCount, failed, dangling, outcome }: {
+  presentation: ToolRowPresentation;
+  stats?: ReturnType<typeof toolDiffStats>;
+  mergedCount?: number;
+  failed?: boolean;
+  dangling?: boolean;
+  outcome?: ReactNode;
+}) {
+  const isMerged = mergedCount !== undefined && mergedCount > 1;
+  const lineRange = isMerged ? undefined : presentation.lineRange;
+  const lineCount = isMerged ? undefined : presentation.lineCount;
+  const hasStats = Boolean(!failed && stats && (stats.added > 0 || stats.removed > 0 || stats.files > 1));
+  const showFileCount = Boolean(hasStats && stats && stats.files > 1 && !presentation.extraFiles);
+  if (!lineRange && lineCount === undefined && !presentation.extraFiles && !presentation.extraCommands && !isMerged && !hasStats && !dangling && !outcome) {
+    return undefined;
+  }
+  return (
+    <span className="flex max-w-[50%] shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums">
+      {lineRange && <span className="shrink-0 text-2xs text-fg-4">{lineRange}</span>}
+      {lineCount !== undefined && <span className="shrink-0 text-2xs text-fg-4"><Trans>{lineCount} 行</Trans></span>}
+      {presentation.extraFiles !== undefined && <span className="shrink-0 rounded-sm bg-subtle px-1.5 text-2xs text-fg-3">+{presentation.extraFiles}</span>}
+      {presentation.extraCommands !== undefined && <span className="shrink-0 rounded-sm bg-subtle px-1.5 text-2xs text-fg-3">+{presentation.extraCommands}</span>}
+      {isMerged && <span className="shrink-0 rounded-sm bg-subtle px-1.5 text-2xs text-fg-3">×{mergedCount}</span>}
+      {hasStats && stats && (
+        <span className="flex shrink-0 items-center gap-1.5">
+          {showFileCount && <span className="font-sans text-xs text-fg-4"><Trans>{stats.files} 个文件</Trans></span>}
+          {stats.added > 0 && <span className="text-[var(--diff-add-marker)]">+{stats.added}</span>}
+          {stats.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{stats.removed}</span>}
+        </span>
+      )}
+      {outcome ?? (dangling ? <RowOutcome /> : null)}
+    </span>
+  );
+}
+
+/** Combine diff stats across multiple tool views without blocking the frame when uncached. */
+function aggregateViewsDiffStats(views: readonly ToolView[]): ReturnType<typeof toolDiffStats> {
+  let added = 0;
+  let removed = 0;
+  let unkeyedFiles = 0;
+  const keyedFiles = new Set<string>();
+  let any = false;
+  for (const view of views) {
+    const diffs = view.contents.filter(entry => entry.type === 'diff');
+    if (!diffs.length) continue;
+    const one = toolDiffStats(view);
+    if (!one) continue;
+    any = true;
+    added += one.added;
+    removed += one.removed;
+    for (const diff of diffs) {
+      const path = str(diff.path);
+      if (path) keyedFiles.add(path);
+      else unkeyedFiles += 1;
+    }
+  }
+  return any ? { added, removed, files: keyedFiles.size + unkeyedFiles } : undefined;
+}
+
+/**
+ * The +N −M across a list of tool views (a single row, a merged row, or a whole `ToolRun`).
+ * Computes immediately when every diff alignment is already cached or one-sided, else in idle time.
+ */
+function useViewsDiffStats(views: readonly ToolView[]): ReturnType<typeof toolDiffStats> {
+  const cheap = useMemo(() => {
+    let hasDiff = false;
+    for (const view of views) {
+      for (const entry of view.contents) {
+        if (entry.type !== 'diff') continue;
+        hasDiff = true;
+        if (entry.oldText && entry.newText && !alignmentCached(String(entry.oldText), String(entry.newText))) return null;
+      }
+    }
+    return hasDiff ? aggregateViewsDiffStats(views) : undefined;
+  }, [views]);
+  const [late, setLate] = useState<ReturnType<typeof toolDiffStats>>();
+  useEffect(() => {
+    if (cheap !== null) return;
+    const compute = () => setLate(aggregateViewsDiffStats(views));
+    if (typeof requestIdleCallback !== 'function') { const timer = window.setTimeout(compute, 50); return () => window.clearTimeout(timer); }
+    const handle = requestIdleCallback(compute, { timeout: 1_000 });
+    return () => cancelIdleCallback(handle);
+  }, [cheap, views]);
+  return cheap !== null ? cheap : late;
+}
+
+/** Aggregate +N −M across a `ToolRun`'s items for its group header. */
+export function useItemsDiffStats(items: readonly Extract<TimelineItem, { kind: 'tool' }>[], root?: string): ReturnType<typeof toolDiffStats> {
+  const views = useMemo(() => items.map(item => toolView(item.event, root)), [items, root]);
+  return useViewsDiffStats(views);
+}
 
 /**
  * The +N −M of a call's diffs. Aligning an edit is O(n·m), and every tool row asks, folded or not,
@@ -742,25 +891,14 @@ export const ToolRow = memo(function ToolRow({ item, onOpenPath, onOpenInEditor,
  * has one side empty and is counted at once. The previous counts stay until the new ones arrive.
  */
 function useDiffStats(view: ToolView): ReturnType<typeof toolDiffStats> {
-  const cheap = useMemo(() => {
-    const diffs = view.contents.filter((entry) => entry.type === 'diff');
-    // A row that scrolls back into the window finds its alignment cached: counted at once, no flicker.
-    return diffs.every((entry) => !entry.oldText || !entry.newText || alignmentCached(String(entry.oldText), String(entry.newText))) ? toolDiffStats(view) : null;
-  }, [view]);
-  const [late, setLate] = useState<ReturnType<typeof toolDiffStats>>();
-  useEffect(() => {
-    if (cheap !== null) return;
-    const compute = () => setLate(toolDiffStats(view));
-    if (typeof requestIdleCallback !== 'function') { const timer = window.setTimeout(compute, 50); return () => window.clearTimeout(timer); }
-    const handle = requestIdleCallback(compute, { timeout: 1_000 });
-    return () => cancelIdleCallback(handle);
-  }, [cheap, view]);
-  return cheap !== null ? cheap : late;
+  const views = useMemo(() => [view], [view]);
+  return useViewsDiffStats(views);
 }
 
 const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenInEditor, root, stale, more }: { item: Extract<TimelineItem, { kind: 'tool' }>; onOpenPath?: (path: string, line?: number) => void; onOpenInEditor?: (path: string, line?: number) => void; root?: string; stale?: boolean; more?: ReactNode }) {
   const { t } = useLingui();
   const view = useMemo(() => toolView(item.event, root), [item.event, root]);
+  const presentation = useMemo(() => toolRowPresentation(item.event, root), [item.event, root]);
   const subagent = view.kind === 'agent' && isRecord(item.event.data.subagent) ? item.event.data.subagent : undefined;
   // Every agent call can have a transcript: some backends send no `subagent` record, and a Task
   // whose description was generic still has its own first prompt to be named by.
@@ -777,14 +915,15 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   // finish, so say so instead of spinning forever.
   const running = progress?.running ?? subagentRunning ?? (active && !stale);
   const dangling = active && Boolean(stale) && !running && !progress?.status;
-  const failed = progress?.status ? progress.status === 'failed' : !running && view.status === 'failed';
+  const activity = currentToolActivity(item);
+  const activityFailed = activity?.status === 'failed'
+    || (activity?.status === 'completed' && activity.task?.exitCode != null && activity.task.exitCode !== 0);
+  const failed = (progress?.status ? progress.status === 'failed' : !running && view.status === 'failed') || activityFailed;
   const [open, setOpen] = useRemembered('tool', false);
   const subagents = useContext(SubagentContext);
-  const Icon = toolIcons[view.kind] ?? IconWrench;
-  // Compare whitespace-normalized: a multi-line command's title is collapsed, so an exact string
-  // compare would leave the collapsed title AND the raw command in the row — the same text twice.
+  const controls = useContext(ActivityContext);
+  const backgroundTask = activity?.kind === 'background_task';
   const isCommand = isCommandTitle(view.title, view.command);
-  const detail = agentCall ? specificSubagentLabel(str(subagent?.type) ?? subagentTranscript?.subagentType) : toolDetail(view, root);
   const title = agentCall
     ? specificSubagentLabel(str(subagent?.description))
       || specificSubagentLabel(progress?.title)
@@ -794,14 +933,16 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
       || specificSubagentLabel(view.title)
       || t`子 Agent`
     : view.title;
-  const controls = useContext(ActivityContext);
-  const activity = currentToolActivity(item);
-  const backgroundTask = activity?.kind === 'background_task';
   const taskView = backgroundTask && !view.command && activity.task?.command ? { ...view, command: activity.task.command } : view;
   // The call's own description, else its command; the activity's title is only a clipped copy of either.
   const taskName = backgroundTask ? taskLabel(isCommand ? activity.title : title, taskView.command, root) : undefined;
   const taskTitle = taskName?.text ?? title;
   const taskIsCommand = backgroundTask ? taskName?.mono ?? isCommandTitle(taskTitle, taskView.command) : isCommand;
+  const effectivePresentation = useMemo(
+    () => backgroundTask ? describeJobRow(isCommand ? activity.title : title, taskView.command, root) : presentation,
+    [backgroundTask, isCommand, activity?.title, title, taskView.command, root, presentation],
+  );
+  const Icon = toolIcons[agentCall ? view.kind : effectivePresentation.icon] ?? IconWrench;
   const activityStopping = activity?.status === 'stopping' || Boolean(activity && controls?.stopping.has(activity.id));
   const stats = useDiffStats(view);
   const images = failed ? [] : view.contents.flatMap(entry => isRecord(entry.content) && entry.content.type === 'image' ? [entry.content] : []);
@@ -810,25 +951,23 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   const opensPage = Boolean(subagents && agentCall);
   const contents = toolContents(taskView, t`、`, root, onOpenPath, onOpenInEditor);
   const expandable = Boolean(contents || backgroundTask || more);
-  // A call reads in one type, whatever its title: a command, `Read` and its path, a compound title.
-  // Only a path's directory steps back, so the file it names stands out.
-  const action = agentCall || backgroundTask || taskIsCommand ? undefined : toolAction(view);
-  const mono = !agentCall && (!backgroundTask || taskIsCommand);
+  const rowTitle = agentCall ? title : <ToolVerbLabel verb={effectivePresentation.verb} />;
+  const rowDetail = agentCall
+    ? specificSubagentLabel(str(subagent?.type) ?? subagentTranscript?.subagentType)
+    : <ToolTargetSlot presentation={effectivePresentation} />;
+  const rowInline = agentCall
+    ? (activity?.status === 'unknown' ? <BackgroundTaskOutcome activity={activity} /> : dangling ? <RowOutcome /> : undefined)
+    : <ToolMetaSlot presentation={effectivePresentation} stats={backgroundTask ? undefined : stats} failed={failed} dangling={dangling} outcome={activity?.status === 'unknown' ? <BackgroundTaskOutcome activity={activity} /> : undefined} />;
   const row = (
     <Disclosure
       touchCompact
       opensPage={opensPage}
       expandable={expandable}
-      icon={running ? <Spinner className="size-3.5" /> : <Icon />}
-      title={mono ? <span className="font-mono text-xs">{action ? action.verb : taskTitle}</span> : taskTitle}
-      detail={backgroundTask ? undefined : action ? action.path ? <span className="flex min-w-0"><PathText path={action.object} /></span> : action.object : detail}
-      inline={activity ? <BackgroundTaskOutcome activity={activity} /> : failed ? <RowOutcome failed /> : dangling ? <RowOutcome /> : !backgroundTask && !failed && stats ? (
-        <span className="flex max-w-[50%] shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-xs tabular-nums [overflow-wrap:anywhere]">
-          {stats.files > 1 && <span className="font-sans text-fg-3"><Trans>{stats.files} 个文件</Trans></span>}
-          {stats.added > 0 && <span className="text-[var(--diff-add-marker)]">+{stats.added}</span>}
-          {stats.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{stats.removed}</span>}
-        </span>
-      ) : undefined}
+      failed={failed}
+      icon={running ? <Spinner className="size-3.5" /> : <Icon className={cn(failed && 'text-danger')} />}
+      title={rowTitle}
+      detail={rowDetail}
+      inline={rowInline}
       status={activity ? <BackgroundTaskStatus activity={activity} /> : undefined}
       open={open}
       onToggle={() => opensPage ? subagents!.open({ toolCallId: view.id, running, event: item.event }) : setOpen(!open)}
@@ -852,6 +991,77 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
         {images.map((content, index) => <ToolImage key={index} content={content} root={root} maxHeight={192} />)}
       </div>
     </div>
+  );
+});
+
+function MergedToolBody({ items, views, onOpenPath, onOpenInEditor, root, moreOf }: {
+  items: Extract<TimelineItem, { kind: 'tool' }>[];
+  views: readonly ToolView[];
+  onOpenPath?: (path: string, line?: number) => void;
+  onOpenInEditor?: (path: string, line?: number) => void;
+  root?: string;
+  moreOf?: (item: Extract<TimelineItem, { kind: 'tool' }>) => ReactNode;
+}) {
+  const { t } = useLingui();
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      {items.map((subItem, idx) => {
+        const subView = views[idx]!;
+        const subFailed = !activeToolStates.has(subView.status) && subView.status === 'failed';
+        const body = toolContents(subView, t`、`, root, onOpenPath, onOpenInEditor);
+        const subMore = moreOf?.(subItem);
+        return (
+          <RememberedScope.Provider key={subItem.key} value={subItem.key}>
+            <MarkSourceContext.Provider value={subItem.event}>
+              <div data-item-key={subItem.key} className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex items-center gap-2 font-mono text-2xs tabular-nums text-fg-4">
+                  <span>#{idx + 1}</span>
+                  {subFailed && <RowOutcome failed />}
+                </div>
+                {body}
+                {subMore}
+              </div>
+            </MarkSourceContext.Provider>
+          </RememberedScope.Provider>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Adjacent completed tool calls that targeted the same resource or polling endpoint, collapsed to
+ * one scannable row with `×N`. Expanding reveals every individual call's command, diffs, and output.
+ */
+export const MergedToolRow = memo(function MergedToolRow({ items, presentation, onOpenPath, onOpenInEditor, root, moreOf, reveal }: {
+  items: Extract<TimelineItem, { kind: 'tool' }>[];
+  presentation: ToolRowPresentation;
+  onOpenPath?: (path: string, line?: number) => void;
+  onOpenInEditor?: (path: string, line?: number) => void;
+  root?: string;
+  moreOf?: (item: Extract<TimelineItem, { kind: 'tool' }>) => ReactNode;
+  reveal?: number;
+}) {
+  const views = useMemo(() => items.map(item => toolView(item.event, root)), [items, root]);
+  const stats = useViewsDiffStats(views);
+  const failed = views.some(view => !activeToolStates.has(view.status) && view.status === 'failed');
+  const [open, setOpen] = useRemembered('tool', false);
+  useLayoutEffect(() => { if (reveal !== undefined) setOpen(true); }, [reveal, setOpen]);
+  const Icon = toolIcons[presentation.icon] ?? IconWrench;
+  return (
+    <Disclosure
+      touchCompact
+      expandable
+      failed={failed}
+      icon={<Icon className={cn(failed && 'text-danger')} />}
+      title={<ToolVerbLabel verb={presentation.verb} />}
+      detail={<ToolTargetSlot presentation={presentation} merged />}
+      inline={<ToolMetaSlot presentation={presentation} stats={stats} mergedCount={items.length} failed={failed} />}
+      open={open}
+      onToggle={() => setOpen(!open)}
+    >
+      <MergedToolBody items={items} views={views} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} moreOf={moreOf} />
+    </Disclosure>
   );
 });
 

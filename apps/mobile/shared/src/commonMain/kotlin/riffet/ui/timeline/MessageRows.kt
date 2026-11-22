@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import riffet.ui.focus.SelectableText
@@ -357,13 +358,29 @@ internal fun ThoughtRow(item: TimelineItem.Thought, streaming: Boolean = false) 
         onToggle = { open = !open },
         leading = { ToolIcon(RiffetIcons.Brain) },
         title = {
-            Text(
-                text = preview.ifEmpty { stringResource(Res.string.timeline_thinking) },
-                style = type.bodySmall,
-                color = colors.fg3,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Think",
+                    style = type.codeSmall.copy(fontWeight = FontWeight.Medium),
+                    color = colors.fg3,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.widthIn(min = 48.dp),
+                )
+                if (!open && preview.isNotEmpty()) {
+                    Text(
+                        text = preview,
+                        style = type.bodySmall,
+                        color = colors.fg3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
         },
     ) {
         PlainText(

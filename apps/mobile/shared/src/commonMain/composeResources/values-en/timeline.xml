@@ -63,6 +63,7 @@
     <string name="timeline_output_truncated">Output too large; showing the end</string>
     <string name="timeline_view_full_log">View full log</string>
     <string name="timeline_file_count">%1$d files</string>
+    <string name="timeline_tool_lines">%1$d lines</string>
     <string name="timeline_image_with_caption">Image · %1$s</string>
     <string name="timeline_no_more_details">No more details</string>
     <string name="timeline_options">Options: %1$s</string>
@@ -71,20 +72,18 @@
     <string name="timeline_terminal_output">Terminal output · %1$s</string>
 
     <!-- Tool runs -->
-    <string name="timeline_tool_run_read">Read files</string>
-    <string name="timeline_tool_run_search">Search</string>
-    <string name="timeline_tool_run_execute">Run commands</string>
-    <string name="timeline_tool_run_edit">Edit files</string>
-    <string name="timeline_tool_run_delete">Delete files</string>
-    <string name="timeline_tool_run_move">Move files</string>
-    <string name="timeline_tool_run_fetch">Browse the web</string>
-    <string name="timeline_tool_run_agent">Delegate tasks</string>
-    <string name="timeline_tool_run_message">Send messages</string>
-    <string name="timeline_tool_run_think">Thinking</string>
-    <string name="timeline_tool_run_switch_mode">Switch modes</string>
-    <string name="timeline_tool_run_question">Ask the user</string>
-    <string name="timeline_tool_run_plan">Update plan</string>
-    <string name="timeline_tool_run_other">Use tools</string>
+    <string name="timeline_tool_run_count_read">Read %1$d files</string>
+    <string name="timeline_tool_run_count_read_one">Read 1 file</string>
+    <string name="timeline_tool_run_count_edit">Edited %1$d files</string>
+    <string name="timeline_tool_run_count_edit_one">Edited 1 file</string>
+    <string name="timeline_tool_run_count_search">%1$d searches</string>
+    <string name="timeline_tool_run_count_search_one">1 search</string>
+    <string name="timeline_tool_run_count_execute">Ran %1$d commands</string>
+    <string name="timeline_tool_run_count_execute_one">Ran 1 command</string>
+    <string name="timeline_tool_run_count_fetch">%1$d fetches</string>
+    <string name="timeline_tool_run_count_fetch_one">1 fetch</string>
+    <string name="timeline_tool_run_count_other">%1$d tool calls</string>
+    <string name="timeline_tool_run_count_other_one">1 tool call</string>
     <string name="timeline_tool_run_pair">%1$s, %2$s</string>
     <string name="timeline_tool_run_more">%1$s, and more</string>
 

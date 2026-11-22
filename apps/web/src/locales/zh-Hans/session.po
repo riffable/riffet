@@ -8,7 +8,6 @@ msgstr ""
 "Language: zh-Hans\n"
 
 #: src/app/session/Timeline.tsx
-#: src/app/session/toolView.ts
 msgid "、"
 msgstr "、"
 
@@ -92,6 +91,10 @@ msgstr "{language} 图表"
 #: src/app/session/ContentFence.tsx
 msgid "{language} 预览"
 msgstr "{language} 预览"
+
+#: src/app/session/Timeline.tsx
+msgid "{lineCount} 行"
+msgstr "{lineCount} 行"
 
 #: src/app/session/MessageAttachments.tsx
 msgid "{name} · 附件不可用"
@@ -400,8 +403,8 @@ msgid "保留"
 msgstr "保留"
 
 #: src/app/session/toolView.ts
-msgid "修改文件"
-msgstr "修改文件"
+msgid "修改 {count} 个文件"
+msgstr "修改 {count} 个文件"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
@@ -536,10 +539,6 @@ msgstr "最多提到 {0} 个 Agent"
 msgid "最近回复节选：{0}"
 msgstr "最近回复节选：{0}"
 
-#: src/app/session/toolView.ts
-msgid "切换模式"
-msgstr "切换模式"
-
 #: src/app/session/MarkLayer.tsx
 msgctxt "session-delete-action"
 msgid "删除"
@@ -548,10 +547,6 @@ msgstr "删除"
 #: src/app/session/SideDiscussion.tsx
 msgid "删除…"
 msgstr "删除…"
-
-#: src/app/session/toolView.ts
-msgid "删除文件"
-msgstr "删除文件"
 
 #: src/app/session/Composer.tsx
 msgid "加入队列"
@@ -613,10 +608,6 @@ msgstr "发送失败"
 #: src/app/session/nativeRunCommands.ts
 msgid "发送失败，可恢复内容后重试"
 msgstr "发送失败，可恢复内容后重试"
-
-#: src/app/session/toolView.ts
-msgid "发送消息"
-msgstr "发送消息"
 
 #: src/app/session/nativeRunCommands.ts
 msgid "发送记录缺失，无法重试"
@@ -852,12 +843,9 @@ msgstr "复制路径"
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
+#: src/app/session/Timeline.tsx
 msgid "失败"
 msgstr "失败"
-
-#: src/app/session/toolView.ts
-msgid "委派任务"
-msgstr "委派任务"
 
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SessionWorkActions.tsx
@@ -1153,11 +1141,6 @@ msgstr "待办"
 msgid "待处理"
 msgstr "待处理"
 
-#: src/app/session/Timeline.tsx
-#: src/app/session/toolView.ts
-msgid "思考"
-msgstr "思考"
-
 #: src/app/session/Composer.tsx
 msgid "思考输出"
 msgstr "思考输出"
@@ -1251,13 +1234,13 @@ msgstr "提问节选：{0}"
 msgid "提问节选：{content}"
 msgstr "提问节选：{content}"
 
+#: src/app/session/toolView.ts
+msgid "搜索 {count} 次"
+msgstr "搜索 {count} 次"
+
 #: src/app/session/Composer.tsx
 msgid "搜索中…"
 msgstr "搜索中…"
-
-#: src/app/session/toolView.ts
-msgid "搜索内容"
-msgstr "搜索内容"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "摘要模型不可用，已改用对话记录：{reason}"
@@ -1535,10 +1518,6 @@ msgstr "更多"
 msgid "更多操作"
 msgstr "更多操作"
 
-#: src/app/session/toolView.ts
-msgid "更新计划"
-msgstr "更新计划"
-
 #: src/app/session/Attempts.tsx
 msgid "有未提交改动时保留其项目。"
 msgstr "有未提交改动时保留其项目。"
@@ -1815,10 +1794,6 @@ msgstr "离线"
 msgid "移出队列"
 msgstr "移出队列"
 
-#: src/app/session/toolView.ts
-msgid "移动文件"
-msgstr "移动文件"
-
 #: src/app/session/ComposerDock.tsx
 msgid "移回输入框编辑"
 msgstr "移回输入框编辑"
@@ -2012,8 +1987,8 @@ msgid "计划"
 msgstr "计划"
 
 #: src/app/session/toolView.ts
-msgid "访问网页"
-msgstr "访问网页"
+msgid "访问 {count} 个页面"
+msgstr "访问 {count} 个页面"
 
 #: src/app/session/DictationBar.tsx
 msgid "识别失败：{message}"
@@ -2022,10 +1997,6 @@ msgstr "识别失败：{message}"
 #: src/app/session/Timeline.tsx
 msgid "诊断信息"
 msgstr "诊断信息"
-
-#: src/app/session/toolView.ts
-msgid "询问用户"
-msgstr "询问用户"
 
 #: src/app/session/FailureDetails.tsx
 msgid "详情"
@@ -2053,13 +2024,17 @@ msgstr "请求未完成"
 msgid "请重新选择文件"
 msgstr "请重新选择文件"
 
+#: src/app/session/toolView.ts
+msgid "读取 {count} 个文件"
+msgstr "读取 {count} 个文件"
+
 #: src/app/session/marks.tsx
 msgid "读取图片失败"
 msgstr "读取图片失败"
 
 #: src/app/session/toolView.ts
-msgid "读取文件"
-msgstr "读取文件"
+msgid "调用 {count} 次工具"
+msgstr "调用 {count} 次工具"
 
 #: src/app/session/agentCalls.tsx
 msgid "调用 Agent"
@@ -2125,15 +2100,14 @@ msgstr "输出 token 数"
 msgid "输出过大，只显示末尾"
 msgstr "输出过大，只显示末尾"
 
+#: src/app/session/toolView.ts
+msgid "运行 {count} 条命令"
+msgstr "运行 {count} 条命令"
+
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
 msgstr "运行中"
-
-#: src/app/session/toolView.ts
-msgctxt "tool-action"
-msgid "运行命令"
-msgstr "运行命令"
 
 #. placeholder {0}: sample.windowSeconds
 #. placeholder {1}: sample.windowSeconds

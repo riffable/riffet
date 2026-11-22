@@ -49,7 +49,7 @@ struct ConversationTool: View {
         let activity = currentToolActivity(item: item)
         let stats: String?
         if let activity, activity.kind == .backgroundTask, let activityState {
-            stats = conversationActivityStatus(activity, view: activityState)
+            stats = activity.status == .failed ? nil : conversationActivityStatus(activity, view: activityState)
         } else {
             stats = activityState?.stats
         }
@@ -70,6 +70,21 @@ struct ConversationTool: View {
         }
     }
     private func details(_ tool: ToolPresentation) -> some View {
+        ConversationToolDetails(item: item, tool: tool, workbench: workbench, projectID: projectID)
+    }
+    @ViewBuilder private func imageView(_ image: ToolImage) -> some View {
+        if let src = image.path ?? image.dataUrl { ConversationImage(workbench: workbench, projectID: projectID, source: src, label: image.caption, pixelSize: conversationPixelSize(image.width?.doubleValue, image.height?.doubleValue)) }
+        else if image.omitted { Label(image.placeholder, systemImage: "photo").riffetFont(.caption).foregroundStyle(palette.fg4) }
+    }
+}
+
+private struct ConversationToolDetails: View {
+    let item: TimelineItemTool
+    let tool: ToolPresentation
+    let workbench: Workbench
+    let projectID: String
+    @Environment(\.palette) private var palette
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let activity = currentToolActivity(item: item), activity.kind == .backgroundTask {
                 if activity.status.active {
@@ -112,10 +127,66 @@ struct ConversationTool: View {
     }
 }
 
+/// Adjacent completed tool calls sharing the same `mergeKey`, collapsed into one `×N` row.
+struct ConversationMergedTool: View {
+    let group: ToolRunGroupEntryMerged
+    let workbench: Workbench
+    let projectID: String
+    @State private var expanded = false
+    @Environment(\.palette) private var palette
+    @Environment(\.conversationReadAction) private var readAction
+    @Environment(\.conversationDisclosureState) private var disclosureState
+    private var isExpanded: Bool {
+        get { disclosureState?["merged.\(group.key).expanded"] ?? expanded }
+        nonmutating set {
+            if let disclosureState { disclosureState["merged.\(group.key).expanded"] = newValue }
+            else { expanded = newValue }
+        }
+    }
+    private static let detailIndent: CGFloat = 24
+    private static let detailBottomGap: CGFloat = 6
+
+    var body: some View {
+        let root = workbench.projectRoot(projectID)
+        VStack(alignment: .leading, spacing: 6) {
+            Button { readAction(); isExpanded.toggle() } label: {
+                ConversationToolRowHeader(
+                    row: group.presentation,
+                    secondaryOverride: group.presentation.mergedSecondary ?? group.presentation.secondary,
+                    failed: group.failed,
+                    mergedCount: group.items.count,
+                    showsDiffStats: group.showsDiffStats,
+                    added: group.added,
+                    removed: group.removed,
+                    files: group.files,
+                    chevronExpanded: isExpanded
+                )
+                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityValue(isExpanded ? "已展开" : "已折叠").accessibilityIdentifier("mergedTool.\(group.key)")
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(group.items.enumerated()), id: \.offset) { index, sub in
+                        if index > 0 { Divider().overlay(palette.line) }
+                        Text("#\(index + 1)").riffetFont(.monoSmall).foregroundStyle(palette.fg4)
+                        ConversationToolDetails(
+                            item: sub,
+                            tool: ConversationToolPresentations.value(item: sub, root: root, stale: true),
+                            workbench: workbench,
+                            projectID: projectID
+                        )
+                    }
+                }
+                .padding(.leading, Self.detailIndent).padding(.bottom, Self.detailBottomGap)
+                .transition(.asymmetric(insertion: .opacity.animation(RiffetMotion.release), removal: .identity))
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
+    }
+}
+
 /// ToolPresentation parses JSON and eagerly computes lineDiff for every diff block. Keep it once
 /// per immutable timeline item rather than repeating that work for scrolling/expansion/footer ticks.
 @MainActor
-private enum ConversationToolPresentations {
+enum ConversationToolPresentations {
     private final class Entry {
         let item: TimelineItemTool // Retain identity while its cache key exists.
         let value: ToolPresentation
@@ -141,35 +212,47 @@ private enum ConversationToolPresentations {
     }
 }
 
-/// The symbol is a faint 12pt hint in a 16pt slot even at accessibility text sizes.
-/// Only the title and its detail truncate. The diff counts, the row's state（失败/未完成）and the
-/// chevron are a trailing column that keeps its own size, in the same quiet colours as the rest.
-/// Expansion exposes the complete originals.
-struct ConversationToolHeader: View {
-    let tool: ToolPresentation
-    /// Non-nil for a folding row: the chevron at the trailing edge, rotated while expanded.
-    var chevronExpanded: Bool? = nil
+/// Unified 4-slot tool row header shared by regular tool calls, background jobs, and merged repeats.
+struct ConversationToolRowHeader: View {
+    let row: ToolRowPresentation
+    var secondaryOverride: String? = nil
+    var running: Bool = false
+    var failed: Bool = false
+    var dangling: Bool = false
+    var mergedCount: Int = 1
+    var showsDiffStats: Bool = false
+    var added: Int32 = 0
+    var removed: Int32 = 0
+    var files: Int32 = 0
     var activityStats: String? = nil
+    var chevronExpanded: Bool? = nil
     @Environment(\.palette) private var palette
-    // Text runs are concatenated, so the scale's sizes are applied here as fonts (label 15 Medium, caption and mono 13).
+    // Text runs are concatenated in `objectText`, so the scale's sizes are applied here as fonts (label 15 Regular, monoSmall 13).
     @ScaledMetric(relativeTo: .subheadline) private var labelSize = 15.0
     @ScaledMetric(relativeTo: .footnote) private var smallSize = 13.0
-    private var labelFont: Font { .system(size: labelSize, weight: .medium) }
-    private var captionFont: Font { .system(size: smallSize) }
+    private var proseFont: Font { .system(size: labelSize, weight: .regular) }
     private var monoFont: Font { .system(size: smallSize, design: .monospaced) }
+
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             Group {
-                if tool.running { ProgressView().controlSize(.mini) }
-                else { Image(systemName: tool.failed ? "exclamationmark.circle" : Self.symbol(tool)).font(.system(size: 12)) }
-            }.foregroundStyle(tool.failed ? palette.fg3 : palette.fg4).frame(width: 16, height: 16)
-            // Only the title truncates; the figures and the row's state are a trailing column of their own size.
-            summary.lineLimit(1).truncationMode(.tail)
+                if running { ProgressView().controlSize(.mini) }
+                else { Image(systemName: ConversationToolHeader.symbol(kind: row.icon)).font(.system(size: 12)) }
+            }.foregroundStyle(failed ? palette.danger : palette.fg4).frame(width: 16, height: 16)
+            Text(row.verb)
+                .riffetFont(.monoSmall, weight: .medium)
+                .foregroundStyle(palette.fg3)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(minWidth: 48, alignment: .leading)
+            objectText.lineLimit(1).truncationMode(.tail)
             Spacer(minLength: 0)
-            if let activityStats { Text(activityStats).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4).lineLimit(1).fixedSize().layoutPriority(1) }
-            else if tool.failed { Text("失败").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1) }
-            else if tool.dangling { Text("未完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1) }
-            if let figures { figures.lineLimit(1).fixedSize().layoutPriority(1) }
+            if hasMeta { metaBadges.fixedSize().layoutPriority(1) }
+            if let activityStats {
+                Text(activityStats).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4).lineLimit(1).fixedSize().layoutPriority(1)
+            } else if dangling {
+                Text("未完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1)
+            }
             if let chevronExpanded {
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                     .rotationEffect(.degrees(chevronExpanded ? 90 : 0)).fixedSize()
@@ -177,9 +260,81 @@ struct ConversationToolHeader: View {
             }
         }.frame(maxWidth: .infinity, minHeight: 34, alignment: .leading).contentShape(Rectangle())
     }
-    /// The same per-kind icons as the web and Android, falling back to the wrench.
-    private static func symbol(_ tool: ToolPresentation) -> String {
-        tool.isCommand ? "terminal" : symbol(kind: tool.kind)
+
+    private var objectText: Text {
+        let secondary = secondaryOverride ?? row.secondary
+        var result = Text("")
+        if let prefix = row.prefix, !prefix.isEmpty {
+            result = result + Text(prefix + " ").font(monoFont).foregroundColor(palette.fg4)
+        }
+        switch row.primaryKind {
+        case "path":
+            let parts = splitToolPath(path: row.primary)
+            result = result + Text(parts.name).font(monoFont).foregroundColor(palette.fg2)
+        case "prose":
+            result = result + Text(row.primary).font(proseFont).foregroundColor(palette.fg2)
+        default:
+            result = result + Text(row.primary).font(monoFont).foregroundColor(palette.fg2)
+        }
+        if let secondary, !secondary.isEmpty {
+            result = result + Text("  " + secondary).font(monoFont).foregroundColor(palette.fg4)
+        }
+        return result
+    }
+
+    private var hasMeta: Bool {
+        let isMerged = mergedCount > 1
+        return (!isMerged && (row.lineRange != nil || row.lineCount != nil)) ||
+            (row.extraFiles?.intValue ?? 0) > 0 ||
+            (row.extraCommands?.intValue ?? 0) > 0 ||
+            isMerged ||
+            (showsDiffStats && (added > 0 || removed > 0 || (files > 1 && row.extraFiles == nil)))
+    }
+
+    private var metaBadges: some View {
+        let isMerged = mergedCount > 1
+        return HStack(spacing: 6) {
+            if !isMerged {
+                if let range = row.lineRange { Text(range).riffetFont(.monoSmall).foregroundStyle(palette.fg4) }
+                if let count = row.lineCount { Text(String(localized: "\(count.intValue) 行", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg4) }
+            }
+            if let extraFiles = row.extraFiles, extraFiles.intValue > 0 { Text("+\(extraFiles.intValue)").riffetFont(.monoSmall).foregroundStyle(palette.fg4) }
+            if let extraCommands = row.extraCommands, extraCommands.intValue > 0 { Text("+\(extraCommands.intValue)").riffetFont(.monoSmall).foregroundStyle(palette.fg4) }
+            if isMerged { Text("×\(mergedCount)").riffetFont(.monoSmall, weight: .medium).foregroundStyle(palette.fg3) }
+            if showsDiffStats {
+                if files > 1, row.extraFiles == nil { Text(String(localized: "\(Int(files)) 个文件", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg4) }
+                if added > 0 { Text("+\(added)").riffetFont(.monoSmall).foregroundStyle(palette.success) }
+                if removed > 0 { Text("−\(removed)").riffetFont(.monoSmall).foregroundStyle(palette.danger) }
+            }
+        }.lineLimit(1)
+    }
+}
+
+/// The symbol is a faint 12pt hint in a 16pt slot even at accessibility text sizes.
+/// Only the object slot truncates. The metadata, diff counts, row state and chevron keep their size.
+struct ConversationToolHeader: View {
+    let tool: ToolPresentation
+    /// Non-nil for a folding row: the chevron at the trailing edge, rotated while expanded.
+    var chevronExpanded: Bool? = nil
+    var activityStats: String? = nil
+    var body: some View {
+        let row: ToolRowPresentation = if tool.opensSubagent {
+            ToolRowPresentation(icon: "agent", verb: "Agent", prefix: nil, primary: tool.title, primaryKind: "prose", secondary: tool.detail, lineRange: nil, lineCount: nil, extraCommands: nil, extraFiles: nil, mergeKey: nil, mergedSecondary: nil)
+        } else {
+            tool.row
+        }
+        ConversationToolRowHeader(
+            row: row,
+            running: tool.running,
+            failed: tool.failed,
+            dangling: tool.dangling,
+            showsDiffStats: tool.showsDiffStats,
+            added: tool.added,
+            removed: tool.removed,
+            files: tool.files,
+            activityStats: activityStats,
+            chevronExpanded: chevronExpanded
+        )
     }
     static func symbol(kind: String) -> String {
         switch kind {
@@ -189,6 +344,7 @@ struct ConversationToolHeader: View {
         case "move": return "arrow.left.arrow.right"
         case "search": return "magnifyingglass"
         case "execute": return "terminal"
+        case "git": return "arrow.triangle.branch"
         case "think": return "brain"
         case "fetch": return "globe"
         case "switch_mode": return "arrow.2.squarepath"
@@ -196,23 +352,9 @@ struct ConversationToolHeader: View {
         case "message": return "paperplane"
         case "question": return "questionmark.bubble"
         case "goal": return "target"
+        case "plan": return "checklist"
         default: return "wrench.and.screwdriver"
         }
-    }
-    private var summary: Text {
-        // Muted like reasoning: the work is context, the answer is what reads at full strength.
-        Text(tool.title).font(tool.isCommand ? monoFont : labelFont).foregroundColor(palette.fg3)
-        + Text(tool.detail.map { "  " + $0 } ?? "").font(captionFont).foregroundColor(palette.fg4)
-    }
-    /// The edit's file count and `+3 −1`; never cut, whatever the title's width.
-    private var figures: Text? {
-        guard tool.showsDiffStats else { return nil }
-        var result = Text("")
-        var any = false
-        if tool.files > 1 { result = result + Text("  \(tool.files) 个文件").font(captionFont).foregroundColor(palette.fg4); any = true }
-        if tool.added > 0 { result = result + Text("  +\(tool.added)").font(monoFont).foregroundColor(palette.success); any = true }
-        if tool.removed > 0 { result = result + Text(" −\(tool.removed)").font(monoFont).foregroundColor(palette.danger); any = true }
-        return any ? result : nil
     }
 }
 
@@ -361,7 +503,7 @@ struct ConversationSubagentPage: View {
                 .buttonStyle(.plain).foregroundStyle(palette.fg3).frame(maxWidth: .infinity))
         }
         let entries = ConversationRenderPlan.entries(rows: current?.grouping.rows ?? [], compactAbove: [], expanded: processExpansion, focusedRow: nil,
-                                                     scope: workbench.baseURL.absoluteString + "|subagent:" + toolCallID, readingAbove: false)
+                                                     scope: workbench.baseURL.absoluteString + "|subagent:" + toolCallID, readingAbove: false, root: workbench.projectRoot(projectID))
         for entry in entries {
             append(entry.id, revision: ConversationRenderPlan.revision(entry, speed: nil), top: entry.topSpacing,
                    ConversationEntryView(entry: entry, workbench: workbench, projectID: projectID, backend: backend, parentItems: items) { process, open in

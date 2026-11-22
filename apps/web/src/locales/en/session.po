@@ -8,7 +8,6 @@ msgstr ""
 "Language: en\n"
 
 #: src/app/session/Timeline.tsx
-#: src/app/session/toolView.ts
 msgid "、"
 msgstr ", "
 
@@ -92,6 +91,10 @@ msgstr "{language} diagram"
 #: src/app/session/ContentFence.tsx
 msgid "{language} 预览"
 msgstr "{language} preview"
+
+#: src/app/session/Timeline.tsx
+msgid "{lineCount} 行"
+msgstr "{lineCount, plural, one {# line} other {# lines}}"
 
 #: src/app/session/MessageAttachments.tsx
 msgid "{name} · 附件不可用"
@@ -400,8 +403,8 @@ msgid "保留"
 msgstr "Keep"
 
 #: src/app/session/toolView.ts
-msgid "修改文件"
-msgstr "Edit files"
+msgid "修改 {count} 个文件"
+msgstr "{count, plural, one {# file edited} other {# files edited}}"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
@@ -536,10 +539,6 @@ msgstr "Mention at most {0} Agents"
 msgid "最近回复节选：{0}"
 msgstr "Recent answer excerpt: {0}"
 
-#: src/app/session/toolView.ts
-msgid "切换模式"
-msgstr "Switch modes"
-
 #: src/app/session/MarkLayer.tsx
 msgctxt "session-delete-action"
 msgid "删除"
@@ -548,10 +547,6 @@ msgstr "Delete"
 #: src/app/session/SideDiscussion.tsx
 msgid "删除…"
 msgstr "Delete…"
-
-#: src/app/session/toolView.ts
-msgid "删除文件"
-msgstr "Delete files"
 
 #: src/app/session/Composer.tsx
 msgid "加入队列"
@@ -613,10 +608,6 @@ msgstr "Send failed"
 #: src/app/session/nativeRunCommands.ts
 msgid "发送失败，可恢复内容后重试"
 msgstr "Send failed. Restore the content and try again."
-
-#: src/app/session/toolView.ts
-msgid "发送消息"
-msgstr "Send messages"
 
 #: src/app/session/nativeRunCommands.ts
 msgid "发送记录缺失，无法重试"
@@ -852,12 +843,9 @@ msgstr "Copy path"
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
+#: src/app/session/Timeline.tsx
 msgid "失败"
 msgstr "Failed"
-
-#: src/app/session/toolView.ts
-msgid "委派任务"
-msgstr "Delegate tasks"
 
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SessionWorkActions.tsx
@@ -1153,11 +1141,6 @@ msgstr "To do"
 msgid "待处理"
 msgstr "Pending"
 
-#: src/app/session/Timeline.tsx
-#: src/app/session/toolView.ts
-msgid "思考"
-msgstr "Think"
-
 #: src/app/session/Composer.tsx
 msgid "思考输出"
 msgstr "Reasoning output"
@@ -1251,13 +1234,13 @@ msgstr "Request excerpt: {0}"
 msgid "提问节选：{content}"
 msgstr "Request excerpt: {content}"
 
+#: src/app/session/toolView.ts
+msgid "搜索 {count} 次"
+msgstr "{count, plural, one {# search} other {# searches}}"
+
 #: src/app/session/Composer.tsx
 msgid "搜索中…"
 msgstr "Searching…"
-
-#: src/app/session/toolView.ts
-msgid "搜索内容"
-msgstr "Search"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "摘要模型不可用，已改用对话记录：{reason}"
@@ -1535,10 +1518,6 @@ msgstr "More"
 msgid "更多操作"
 msgstr "More actions"
 
-#: src/app/session/toolView.ts
-msgid "更新计划"
-msgstr "Update plan"
-
 #: src/app/session/Attempts.tsx
 msgid "有未提交改动时保留其项目。"
 msgstr "Its project is kept if there are uncommitted changes."
@@ -1815,10 +1794,6 @@ msgstr "Offline"
 msgid "移出队列"
 msgstr "Remove from queue"
 
-#: src/app/session/toolView.ts
-msgid "移动文件"
-msgstr "Move files"
-
 #: src/app/session/ComposerDock.tsx
 msgid "移回输入框编辑"
 msgstr "Move back to the composer to edit"
@@ -2012,8 +1987,8 @@ msgid "计划"
 msgstr "Plan"
 
 #: src/app/session/toolView.ts
-msgid "访问网页"
-msgstr "Browse the web"
+msgid "访问 {count} 个页面"
+msgstr "{count, plural, one {# page fetched} other {# pages fetched}}"
 
 #: src/app/session/DictationBar.tsx
 msgid "识别失败：{message}"
@@ -2022,10 +1997,6 @@ msgstr "Couldn't transcribe: {message}"
 #: src/app/session/Timeline.tsx
 msgid "诊断信息"
 msgstr "Diagnostics"
-
-#: src/app/session/toolView.ts
-msgid "询问用户"
-msgstr "Ask the user"
 
 #: src/app/session/FailureDetails.tsx
 msgid "详情"
@@ -2053,13 +2024,17 @@ msgstr "Request didn't complete"
 msgid "请重新选择文件"
 msgstr "Select the file again"
 
+#: src/app/session/toolView.ts
+msgid "读取 {count} 个文件"
+msgstr "{count, plural, one {# file read} other {# files read}}"
+
 #: src/app/session/marks.tsx
 msgid "读取图片失败"
 msgstr "Couldn't read the image"
 
 #: src/app/session/toolView.ts
-msgid "读取文件"
-msgstr "Read files"
+msgid "调用 {count} 次工具"
+msgstr "{count, plural, one {# tool call} other {# tool calls}}"
 
 #: src/app/session/agentCalls.tsx
 msgid "调用 Agent"
@@ -2125,15 +2100,14 @@ msgstr "Output token count"
 msgid "输出过大，只显示末尾"
 msgstr "Output is too large; showing the end only"
 
+#: src/app/session/toolView.ts
+msgid "运行 {count} 条命令"
+msgstr "{count, plural, one {# command} other {# commands}}"
+
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
 msgstr "Running"
-
-#: src/app/session/toolView.ts
-msgctxt "tool-action"
-msgid "运行命令"
-msgstr "Run commands"
 
 #. placeholder {0}: sample.windowSeconds
 #. placeholder {1}: sample.windowSeconds

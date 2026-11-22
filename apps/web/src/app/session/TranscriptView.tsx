@@ -13,7 +13,7 @@ import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecover
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
-import { AnswerActions, AssistantMessage, ImageBlock, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
+import { AnswerActions, AssistantMessage, ImageBlock, MergedToolRow, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, useItemsDiffStats, UserMessage, type TurnAction } from './Timeline';
 import { AgentCallRow, agentToolName } from './agentCalls';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { ActivityRow, showsRunningCompaction } from './Activities';
@@ -33,7 +33,7 @@ import { MarkLayer } from './MarkLayer';
 import { shareModelKey, shareModelLabel, useTranscriptResources } from './transcriptResources';
 import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
-import { toolKind, toolRunSummary } from './toolView';
+import { groupAdjacentToolRunEntries, toolKind, toolRunSummary } from './toolView';
 import { NativeJobStoreContext } from './subagents';
 import { isComposingKey } from './composerKeyboard';
 import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
@@ -111,7 +111,7 @@ function hasOpenProcessDetail(remembered: ReadonlyMap<string, unknown> | undefin
 }
 
 /** A run of ordinary tool calls within the open process. */
-function ToolRun({ items, entries, followedByContent, stale, latestTurn, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; stale: boolean; latestTurn: boolean; children: ReactNode; reveal?: number }) {
+function ToolRun({ items, entries, followedByContent, stale, latestTurn, root, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; stale: boolean; latestTurn: boolean; root?: string; children: ReactNode; reveal?: number }) {
   const jobs = useContext(NativeJobStoreContext);
   const resources = useTranscriptResources();
   const remembered = useContext(RememberedValues);
@@ -138,7 +138,8 @@ function ToolRun({ items, entries, followedByContent, stale, latestTurn, childre
   const state = useSyncExternalStore(subscribe, snapshot, snapshot);
   const active = state % 2 === 1;
   const incomplete = (state & 2) !== 0;
-  const summary = toolRunSummary(items);
+  const summary = useMemo(() => toolRunSummary(items, root), [items, root]);
+  const diffStats = useItemsDiffStats(items, root);
   const Icon = toolIcons[summary.kind] ?? IconWrench;
   const [choice, setChoice] = useRemembered<boolean | undefined>('tool-run-choice', undefined);
   const { catchingUp, quiet } = useContext(TranscriptCatchUp);
@@ -159,6 +160,12 @@ function ToolRun({ items, entries, followedByContent, stale, latestTurn, childre
         className="group/tool-run flex min-h-[calc(24px*var(--text-scale))] w-fit max-w-full items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors hover:text-fg-2 no-hover:min-h-9">
         <span className="grid size-4 shrink-0 place-items-center text-fg-4 [&_svg]:size-[15px]"><Icon /></span>
         <span className="min-w-0 truncate">{summary.label}</span>
+        {diffStats && (diffStats.added > 0 || diffStats.removed > 0) && (
+          <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums">
+            {diffStats.added > 0 && <span className="text-[var(--diff-add-marker)]">+{diffStats.added}</span>}
+            {diffStats.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{diffStats.removed}</span>}
+          </span>
+        )}
         {/* Like a tool row's: the chevron shows under the pointer or while open, and always on touch. */}
         <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft', open ? 'rotate-90' : 'can-hover:opacity-0 can-hover:group-hover/tool-run:opacity-100')} />
       </button>
@@ -434,6 +441,73 @@ function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef
   );
 }
 
+function revealInRange(items: readonly TimelineItem[], start: number, end: number, reveal?: { item: string; version: number }): { item: string; version: number } | undefined {
+  if (!reveal) return undefined;
+  for (let i = start; i < end; i += 1) {
+    if (items[i]!.key === reveal.item) return reveal;
+  }
+  return undefined;
+}
+
+const ToolRunBlock = memo(function ToolRunBlock({ items, start, end, lastOutputIndex, rowKey, gap, running, latestTurn, followedByContent, reveal, fresh, root, onOpenPath, onOpenInEditor, onExpandRow }: {
+  items: readonly TimelineItem[];
+  start: number;
+  end: number;
+  lastOutputIndex: number;
+  rowKey: string;
+  gap?: string;
+  running: boolean;
+  latestTurn: boolean;
+  followedByContent: boolean;
+  reveal?: { item: string; version: number };
+  fresh?: ReadonlyMap<string, Fresh>;
+  root?: string;
+  onOpenPath?: (path: string, line?: number) => void;
+  onOpenInEditor?: (path: string, line?: number) => void;
+  onExpandRow?: RowContext['onExpandRow'];
+}) {
+  const run = useMemo(() => items.slice(start, end), [items, start, end]);
+  const tools = useMemo(() => run.filter(isToolRunItem), [run]);
+  const grouped = useMemo(() => groupAdjacentToolRunEntries(run, root), [run, root]);
+  const moreOf = useCallback(
+    (entry: Extract<TimelineItem, { kind: 'tool' }>) =>
+      onExpandRow && truncationOf(entry) ? <TruncatedMore item={entry} expand={onExpandRow} /> : undefined,
+    [onExpandRow],
+  );
+  const firstKey = items[start]!.key;
+  return (
+    <RememberedScope.Provider value={firstKey}>
+      <div className={cn('min-w-0', gap, isFresh(fresh, firstKey, rowKey) && enter)}>
+        <ToolRun items={tools} entries={run} stale={!running} latestTurn={latestTurn} root={root} followedByContent={followedByContent} reveal={reveal?.version}>
+          {grouped.map((entry) => entry.kind === 'single' ? (
+            <div key={entry.item.key} data-item-key={entry.item.key} className={cn('min-w-0', isFresh(fresh, entry.item.key, rowKey) && enter)}>
+              <RememberedScope.Provider value={entry.item.key}><MarkSourceContext.Provider value={entry.item.event}>
+                {entry.item.kind === 'tool'
+                  ? <ToolRow item={entry.item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={moreOf(entry.item)} />
+                  : entry.item.kind === 'thought' ? <ThoughtRow text={entry.item.text} channel={entry.item.channel} running={running && start + entry.index === lastOutputIndex} /> : null}
+              </MarkSourceContext.Provider></RememberedScope.Provider>
+            </div>
+          ) : (
+            <div key={entry.key} className={cn('min-w-0', isFresh(fresh, entry.key, rowKey) && enter)}>
+              <RememberedScope.Provider value={entry.key}>
+                <MergedToolRow
+                  items={entry.items}
+                  presentation={entry.presentation}
+                  onOpenPath={onOpenPath}
+                  onOpenInEditor={onOpenInEditor}
+                  root={root}
+                  moreOf={moreOf}
+                  reveal={reveal && entry.items.some(sub => reveal.item === sub.key) ? reveal.version : undefined}
+                />
+              </RememberedScope.Provider>
+            </div>
+          ))}
+        </ToolRun>
+      </div>
+    </RememberedScope.Provider>
+  );
+});
+
 /**
  * `actionPending` is the row's own answer to `runActionPending`, asked by the list: a send or an
  * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
@@ -491,25 +565,26 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlight
             if (runCovered.has(itemIndex)) return null;
             const end = runs.get(itemIndex);
             if (end !== undefined) {
-              const run = items.slice(itemIndex, end);
-              const tools = run.filter(isToolRunItem);
-              const showItem = (entry: TimelineItem, index: number) => (
-                <div key={entry.key} data-item-key={entry.key} className={cn('min-w-0', isFresh(fresh, entry.key, row.key) && enter)}>
-                  <RememberedScope.Provider value={entry.key}><MarkSourceContext.Provider value={entry.event}>
-                    {entry.kind === 'tool'
-                      ? <ToolRow item={entry} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={context.onExpandRow && truncationOf(entry) ? <TruncatedMore item={entry} expand={context.onExpandRow} /> : undefined} />
-                      : entry.kind === 'thought' ? <ThoughtRow text={entry.text} channel={entry.channel} running={running && itemIndex + index === lastOutputIndex} /> : null}
-                  </MarkSourceContext.Provider></RememberedScope.Provider>
-                </div>
+              return (
+                <ToolRunBlock
+                  key={item.key}
+                  items={items}
+                  start={itemIndex}
+                  end={end}
+                  lastOutputIndex={lastOutputIndex}
+                  rowKey={row.key}
+                  gap={gaps[itemIndex]}
+                  running={running}
+                  latestTurn={latestTurn}
+                  followedByContent={(!row.interrupted && row.followedByAnswer) || end < items.length}
+                  reveal={revealInRange(items, itemIndex, end, reveal)}
+                  fresh={fresh}
+                  root={root}
+                  onOpenPath={onOpenPath}
+                  onOpenInEditor={onOpenInEditor}
+                  onExpandRow={context.onExpandRow}
+                />
               );
-              return <RememberedScope.Provider key={item.key} value={item.key}>
-                <div className={cn('min-w-0', gaps[itemIndex], isFresh(fresh, item.key, row.key) && enter)}>
-                  <ToolRun items={tools} entries={run} stale={!running} latestTurn={latestTurn} followedByContent={(!row.interrupted && row.followedByAnswer) || end < items.length}
-                    reveal={run.some(entry => reveal?.item === entry.key) ? reveal?.version : undefined}>
-                    {run.map(showItem)}
-                  </ToolRun>
-                </div>
-              </RememberedScope.Provider>;
             }
             let inner: ReactNode = null;
             switch (item.kind) {

@@ -1,17 +1,17 @@
 import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { Run } from '@contracts';
-import { IconFileText, IconGitBranch, IconSquareTerminal } from '@/components/icons';
+import { IconFilePenLine, IconFileText, IconGitBranch, IconSearch, IconSquareTerminal } from '@/components/icons';
 import { Kbd, Spinner } from '@/components/ui/controls';
 import { Button } from '@/components/ui/button';
-import { RowOutcome } from '@/app/session/Activities';
 import { MIN_CONTENT_WIDTH, MAX_CONTENT_WIDTH, DEFAULT_CONTENT_WIDTH } from '@/lib/content-width';
 import { COLUMN_GUTTER_TOTAL, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from '@/app/session/ContentWidthHandle';
 import { Markdown } from '@/app/session/Markdown';
 import { SESSION_ASIDE_MIN_WIDTH } from '@/app/session/sessionLayout';
 import { MessageCommandBlock } from '@/app/session/messageCommands';
 import { joinQuotes } from '@/app/session/quotes';
-import { AssistantMessage, BackgroundWorkIndicator, CodeBlock, DiffView, Disclosure, MessageFooter, StatusRow, ThoughtRow, UserMessage, WorkingIndicator } from '@/app/session/Timeline';
+import { AssistantMessage, BackgroundWorkIndicator, CodeBlock, DiffView, Disclosure, MessageFooter, StatusRow, ThoughtRow, ToolMetaSlot, ToolTargetSlot, ToolVerbLabel, UserMessage, WorkingIndicator } from '@/app/session/Timeline';
+import type { ToolRowPresentation } from '@/app/session/toolView';
 import { TurnProcess } from '@/app/session/TurnProcess';
 import { cn } from '@/lib/utils';
 import { Chapter, Frame, Matrix, PaintRevision, Plate, Specimen, useRootValue, Value } from '../specimen';
@@ -237,22 +237,35 @@ function Tools() {
   const { t } = useLingui();
   const [started] = useState(() => Date.now() - 12_000);
   const cell = (node: ReactNode) => <div className="w-full min-w-0 max-w-xl">{node}</div>;
+  const readPres: ToolRowPresentation = { icon: 'read', verb: 'Read', primary: 'apps/web/src/app/session/Timeline.tsx', primaryKind: 'path', lineRange: 'L155–194' };
+  const searchPres: ToolRowPresentation = { icon: 'search', verb: 'Search', primary: 'additive|latest…', primaryKind: 'code', secondary: 'gen-contracts.ts', extraCommands: 2 };
+  const gitPres: ToolRowPresentation = { icon: 'git', verb: 'Git', primary: 'merge', primaryKind: 'code', secondary: 'main' };
+  const runPres: ToolRowPresentation = { icon: 'execute', verb: 'Run', primary: 'pnpm vitest run', primaryKind: 'code', secondary: 'settings' };
+  const buildPres: ToolRowPresentation = { icon: 'execute', verb: 'Run', primary: 'pnpm build', primaryKind: 'code' };
+  const editPres: ToolRowPresentation = { icon: 'edit', verb: 'Edit', primary: 'apps/web/src/components/ui/Dialog.tsx', primaryKind: 'path' };
+  const mergedPres: ToolRowPresentation = { icon: 'execute', verb: 'Run', primary: 'gh api', primaryKind: 'code', secondary: 'actions/runs/…/jobs' };
+  const failPres: ToolRowPresentation = { icon: 'git', verb: 'Git', primary: 'diff', primaryKind: 'code', secondary: 'HEAD == main', extraCommands: 2 };
+  const danglingPres: ToolRowPresentation = { icon: 'execute', verb: 'Run', primary: 'pnpm test', primaryKind: 'code' };
   const inner = (
     <>
-      <Row touchCompact icon={<IconFileText />} title={<span className="font-mono text-xs">Read</span>} detail="apps/web/src/app/session/Timeline.tsx" />
-      <Row touchCompact icon={<IconSquareTerminal />} title={<span className="font-mono text-xs">pnpm vitest run settings</span>}>{null}</Row>
+      <Row touchCompact icon={<IconFileText />} title={<ToolVerbLabel verb={readPres.verb} />} detail={<ToolTargetSlot presentation={readPres} />} inline={<ToolMetaSlot presentation={readPres} />} />
+      <Row touchCompact icon={<IconSearch />} title={<ToolVerbLabel verb={searchPres.verb} />} detail={<ToolTargetSlot presentation={searchPres} />} inline={<ToolMetaSlot presentation={searchPres} />} />
+      <Row touchCompact icon={<IconGitBranch />} title={<ToolVerbLabel verb={gitPres.verb} />} detail={<ToolTargetSlot presentation={gitPres} />} inline={<ToolMetaSlot presentation={gitPres} stats={{ added: 450, removed: 293, files: 10 }} />} />
+      <Row touchCompact icon={<IconSquareTerminal />} title={<ToolVerbLabel verb={runPres.verb} />} detail={<ToolTargetSlot presentation={runPres} />}>{null}</Row>
     </>
   );
   return (
     <div className="flex flex-col gap-10">
       <Frame className="p-8 max-md:p-5">
         <Matrix rows={[
-          { label: t`折叠`, cells: [cell(<Row touchCompact icon={<IconFileText />} title={<span className="font-mono text-xs">Read</span>} detail="apps/web/src/app/session/Timeline.tsx" />)] },
-          { label: t`展开`, cells: [cell(<Row open touchCompact icon={<IconSquareTerminal />} title={<span className="font-mono text-xs">pnpm vitest run settings</span>}><CodeBlock className="text-fg" copy="pnpm vitest run settings"><span className="select-none text-fg-4">$ </span>pnpm vitest run settings</CodeBlock><CodeBlock copy="12 passed">{'✓ settings/focus.test.ts (12)\nTest Files  1 passed'}</CodeBlock></Row>)] },
-          { label: t`进行中`, cells: [cell(<Row touchCompact icon={<Spinner className="size-3.5" />} title={<span className="font-mono text-xs">pnpm build</span>} expandable={false} />)] },
-          { label: t`带改动统计`, cells: [cell(<Row touchCompact icon={<IconGitBranch />} title={<span className="font-mono text-xs">Edit</span>} detail="Dialog.tsx" inline={<span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums"><span className="text-[var(--diff-add-marker)]">+12</span><span className="text-[var(--diff-del-marker)]">−3</span></span>} />)] },
-          { label: t`失败`, cells: [cell(<Row touchCompact icon={<IconSquareTerminal />} title={<span className="font-mono text-xs">pnpm lint</span>} inline={<RowOutcome failed />} />)] },
-          { label: t`未完成`, cells: [cell(<Row touchCompact icon={<IconSquareTerminal />} title={<span className="font-mono text-xs">pnpm test</span>} inline={<RowOutcome />} />)] },
+          { label: t`读取`, cells: [cell(<Row touchCompact icon={<IconFileText />} title={<ToolVerbLabel verb={readPres.verb} />} detail={<ToolTargetSlot presentation={readPres} />} inline={<ToolMetaSlot presentation={readPres} />} />)] },
+          { label: t`搜索`, cells: [cell(<Row touchCompact icon={<IconSearch />} title={<ToolVerbLabel verb={searchPres.verb} />} detail={<ToolTargetSlot presentation={searchPres} />} inline={<ToolMetaSlot presentation={searchPres} />} />)] },
+          { label: t`展开`, cells: [cell(<Row open touchCompact icon={<IconSquareTerminal />} title={<ToolVerbLabel verb={runPres.verb} />} detail={<ToolTargetSlot presentation={runPres} />}><CodeBlock className="text-fg" copy="pnpm vitest run settings"><span className="select-none text-fg-4">$ </span>pnpm vitest run settings</CodeBlock><CodeBlock copy="12 passed">{'✓ settings/focus.test.ts (12)\nTest Files  1 passed'}</CodeBlock></Row>)] },
+          { label: t`进行中`, cells: [cell(<Row touchCompact icon={<Spinner className="size-3.5" />} title={<ToolVerbLabel verb={buildPres.verb} />} detail={<ToolTargetSlot presentation={buildPres} />} expandable={false} />)] },
+          { label: t`带改动统计`, cells: [cell(<Row touchCompact icon={<IconFilePenLine />} title={<ToolVerbLabel verb={editPres.verb} />} detail={<ToolTargetSlot presentation={editPres} />} inline={<ToolMetaSlot presentation={editPres} stats={{ added: 12, removed: 3, files: 1 }} />} />)] },
+          { label: t`连续合并`, cells: [cell(<Row touchCompact icon={<IconSquareTerminal />} title={<ToolVerbLabel verb={mergedPres.verb} />} detail={<ToolTargetSlot presentation={mergedPres} />} inline={<ToolMetaSlot presentation={mergedPres} mergedCount={2} />} />)] },
+          { label: t`失败`, cells: [cell(<Row touchCompact icon={<IconGitBranch className="text-danger" />} title={<ToolVerbLabel verb={failPres.verb} />} detail={<ToolTargetSlot presentation={failPres} />} inline={<ToolMetaSlot presentation={failPres} failed />} />)] },
+          { label: t`未完成`, cells: [cell(<Row touchCompact icon={<IconSquareTerminal />} title={<ToolVerbLabel verb={danglingPres.verb} />} detail={<ToolTargetSlot presentation={danglingPres} />} inline={<ToolMetaSlot presentation={danglingPres} dangling />} />)] },
           { label: t`思考`, cells: [cell(<ThoughtRow channel="thinking" text={t`先确认焦点是在关闭时丢失，还是在打开时没有记录触发元素。`} />)] },
           { label: t`旁白`, cells: [cell(<ThoughtRow channel="narration" text={t`先看关闭弹窗时焦点去了哪里。`} />)] },
         ]} />

@@ -745,38 +745,59 @@ struct RowBuilder {
             default: nil
             }
         }
-        let childOpen = disclosures.contains { ui.isOpen($0) }
-        let open = ui.toolRunChoice(id) ?? (active || incomplete || !followedByContent || childOpen)
-        ui.noteToolRun(id, items: run.map(\.key), disclosures: disclosures)
-        let kinds = toolRunKinds(items: tools)
-        let names = kinds.prefix(2).map(Self.toolRunLabel).joined(separator: String(localized: "、"))
-        let title = kinds.count > 2 ? String(localized: "\(names)等") : names
+        let presentationsByKey = Dictionary(zip(tools, presentations).map { ($0.key, $1) }, uniquingKeysWith: { first, _ in first })
+        let grouped = groupAdjacentToolRunEntries(entries: run, root: root, stale: !turnActive, presentationsByKey: presentationsByKey)
+        let mergedDisclosures: [String] = grouped.compactMap { entry in
+            switch onEnum(of: entry) {
+            case let .merged(merged): "merged:\(merged.key)"
+            default: nil
+            }
+        }
+        let allDisclosures = disclosures + mergedDisclosures
+        let effectiveOpen = ui.toolRunChoice(id) ?? (active || incomplete || !followedByContent || allDisclosures.contains { ui.isOpen($0) })
+        ui.noteToolRun(id, items: run.map(\.key), disclosures: allDisclosures)
+        let summary = toolRunSummary(items: tools, root: root, stale: !turnActive, presentations: presentations)
+        let names = summary.counts.prefix(2).map { Self.toolRunCountLabel($0) }.joined(separator: String(localized: "、"))
+        let title = summary.counts.count > 2 ? String(localized: "\(names)等") : names
+        var runInline: [DisclosureSpec.Piece] = []
+        if summary.totalAdded > 0 { runInline.append(.init(text: "+\(summary.totalAdded)", font: style.mono(12), color: style.color(\.success))) }
+        if summary.totalRemoved > 0 { runInline.append(.init(text: "−\(summary.totalRemoved)", font: style.mono(12), color: style.color(\.danger))) }
         let list = style.toolRun == .list
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(DisclosureSpec(
-            icon: .symbol(ToolSymbols.symbol(kinds.first ?? "other"), size: 12, color: style.color(\.fg4)),
+            icon: .symbol(ToolSymbols.symbol(summary.primaryIcon), size: 12, color: style.color(\.fg4)),
             title: title,
             titleFont: list ? style.font(14) : style.font(13),
-            chevron: list ? .always(open: open) : .hover(open: open),
-            action: .toggleToolRun(id: id, open: open),
+            inline: runInline,
+            chevron: list ? .always(open: effectiveOpen) : .hover(open: effectiveOpen),
+            action: .toggleToolRun(id: id, open: effectiveOpen),
             variant: list ? .listSummary : .plain
         ))))
-        guard open else { return style.row }
+        guard effectiveOpen else { return style.row }
         if list {
             // The calls sit in bordered lists under the line; reasoning between them stands on its own row.
             var cursor = y + style.row + 10
             var index = 0
-            while index < run.count {
+            while index < grouped.count {
                 var end = index
-                while end < run.count, run[end] is TimelineItemTool { end += 1 }
+                while end < grouped.count {
+                    let isToolEntry: Bool = switch onEnum(of: grouped[end]) {
+                    case .merged: true
+                    case let .single(single): single.item is TimelineItemTool
+                    }
+                    if !isToolEntry { break }
+                    end += 1
+                }
                 if end > index {
                     if index > 0 { cursor += Self.listGap }
-                    cursor += toolBox(run[index..<end].compactMap { $0 as? TimelineItemTool }, turnActive: turnActive, x: x, y: cursor, width: width)
-                    if end < run.count { cursor += Self.listGap }
+                    cursor += toolBoxEntries(Array(grouped[index..<end]), turnActive: turnActive, x: x, y: cursor, width: width)
+                    if end < grouped.count { cursor += Self.listGap }
                     index = end
                 } else {
-                    let start = fragments.count
-                    cursor += processItem(run[index], running: running, turnActive: turnActive, x: x, y: cursor, width: width)
-                    noteItem(run[index], from: start)
+                    if case let .single(single) = onEnum(of: grouped[index]) {
+                        let start = fragments.count
+                        cursor += processItem(single.item, running: running, turnActive: turnActive, x: x, y: cursor, width: width)
+                        noteItem(single.item, from: start)
+                    }
                     index += 1
                 }
             }
@@ -787,10 +808,17 @@ struct RowBuilder {
         let indent: CGFloat = 16
         let edge = fragments.count
         fragments.append(Fragment(frame: .zero, kind: .box(BoxSpec(fill: style.color(\.line)))))
-        for item in run {
-            let start = fragments.count
-            cursor += processItem(item, running: running, turnActive: turnActive, x: x + indent, y: cursor, width: width - indent)
-            noteItem(item, from: start)
+        for entry in grouped {
+            switch onEnum(of: entry) {
+            case let .single(single):
+                let start = fragments.count
+                cursor += processItem(single.item, running: running, turnActive: turnActive, x: x + indent, y: cursor, width: width - indent)
+                noteItem(single.item, from: start)
+            case let .merged(merged):
+                let start = fragments.count
+                cursor += mergedTools(merged, x: x + indent, y: cursor, width: width - indent)
+                if let first = merged.items.first { noteItem(first, from: start) }
+            }
         }
         fragments[edge].frame = CGRect(x: x + 6, y: y + style.row + 2, width: 1, height: cursor - (y + style.row + 2))
         return cursor + 4 - y
@@ -802,19 +830,33 @@ struct RowBuilder {
     /// Calls in one bordered list (the Claude style): a row each, a hairline between them. The rows
     /// are inset by the border, so their hover wash and the box share the corners.
     private mutating func toolBox(_ tools: [TimelineItemTool], turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+        toolBoxEntries(tools.enumerated().map { ToolRunGroupEntrySingle(item: $0.element, index: Int32($0.offset)) }, turnActive: turnActive, x: x, y: y, width: width)
+    }
+
+    private mutating func toolBoxEntries(_ entries: [any ToolRunGroupEntry], turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let box = fragments.count
         fragments.append(Fragment(frame: .zero, kind: .box(BoxSpec(stroke: style.color(\.lineStrong), radius: style.radii.card))))
         var cursor = y + 1
-        for (index, tool) in tools.enumerated() {
+        for (index, entry) in entries.enumerated() {
             if index > 0 {
                 fragments.append(Fragment(frame: CGRect(x: x + 1, y: cursor, width: width - 2, height: 1), kind: .box(BoxSpec(fill: style.color(\.line)))))
                 cursor += 1
             }
             let start = fragments.count
-            listPlace = tools.count == 1 ? .only : index == 0 ? .first : index == tools.count - 1 ? .last : .middle
-            cursor += toolCall(tool, turnActive: turnActive, x: x + 1, y: cursor, width: width - 2)
+            listPlace = entries.count == 1 ? .only : index == 0 ? .first : index == entries.count - 1 ? .last : .middle
+            switch onEnum(of: entry) {
+            case let .single(single):
+                if let tool = single.item as? TimelineItemTool {
+                    cursor += toolCall(tool, turnActive: turnActive, x: x + 1, y: cursor, width: width - 2)
+                    items.append(RowLayout.ItemSpan(item: tool, fragments: start..<fragments.count))
+                }
+            case let .merged(merged):
+                cursor += mergedTools(merged, x: x + 1, y: cursor, width: width - 2)
+                if let first = merged.items.first {
+                    items.append(RowLayout.ItemSpan(item: first, fragments: start..<fragments.count))
+                }
+            }
             listPlace = nil
-            items.append(RowLayout.ItemSpan(item: tool, fragments: start..<fragments.count))
         }
         cursor += 1
         fragments[box].frame = CGRect(x: x, y: y, width: width, height: cursor - y)
@@ -834,44 +876,65 @@ struct RowBuilder {
         return .listRow(place == .only || place == .first ? .first : .middle)
     }
 
-    private static let actionTitle = try! NSRegularExpression(pattern: "^(Read|Search|List files|Edit|Write|MultiEdit|NotebookEdit)\\s+(.+)$")
-    private static let pathActions: Set<String> = ["Read", "List files", "Edit", "Write", "MultiEdit", "NotebookEdit"]
-
-    /// A one-action title split into its verb and its object (the web's `toolAction`). A title naming
-    /// the file by basename takes the location's path, which says where it lives; a compound title
-    /// (`Read a · Search b`) is one call doing several things and stays whole.
-    static func toolAction(_ presentation: ToolPresentation) -> (verb: String, object: String, path: Bool)? {
-        let title = presentation.title
-        guard !title.contains(" · "),
-              let match = actionTitle.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
-              let verbRange = Range(match.range(at: 1), in: title), let objectRange = Range(match.range(at: 2), in: title) else { return nil }
-        let verb = String(title[verbRange])
-        let named = String(title[objectRange])
-        let path = pathActions.contains(verb) && !named.contains(", ")
-        if path, presentation.locations.count == 1, let location = presentation.locations.first?.path, location.split(separator: "/").last.map(String.init) == named {
-            return (verb, location, path)
+    /// The web's `toolRunSummary` wording with counts, one category at a time.
+    private static func toolRunCountLabel(_ entry: ToolRunCount) -> String {
+        let count = Int(entry.count)
+        switch entry.bucket {
+        case "read": return String(localized: "读取 \(count) 个文件")
+        case "edit": return String(localized: "编辑 \(count) 个文件")
+        case "search": return String(localized: "搜索 \(count) 次")
+        case "execute": return String(localized: "运行 \(count) 条命令")
+        case "fetch": return String(localized: "获取 \(count) 次")
+        default: return String(localized: "调用 \(count) 个工具")
         }
-        return (verb, named, path)
     }
 
-    /// The web's `toolRunSummary` wording, one category at a time.
-    private static func toolRunLabel(_ kind: String) -> String {
-        switch kind {
-        case "read": String(localized: "读取文件")
-        case "search": String(localized: "搜索内容")
-        case "execute": String(localized: "运行命令")
-        case "edit": String(localized: "修改文件")
-        case "delete": String(localized: "删除文件")
-        case "move": String(localized: "移动文件")
-        case "fetch": String(localized: "访问网页")
-        case "agent": String(localized: "委派任务")
-        case "think": String(localized: "思考")
-        case "message": String(localized: "发送消息")
-        case "switch_mode": String(localized: "切换模式")
-        case "question": String(localized: "询问用户")
-        case "plan": String(localized: "更新计划")
-        default: String(localized: "调用工具")
+    /// Left-dark / right-muted core object piece for a unified 4-slot tool row.
+    private func toolDetailPiece(_ row: ToolRowPresentation, secondaryOverride: String? = nil, list: Bool) -> DisclosureSpec.Piece {
+        let secondary = secondaryOverride ?? row.secondary
+        let primaryColor = list ? style.color(\.fg) : style.color(\.fg2)
+        let quietColor = style.color(\.fg4)
+        let prefixLead = row.prefix.flatMap { $0.isEmpty ? nil : "\($0) " } ?? ""
+        let quietPrefix = prefixLead.utf16.count
+        switch row.primaryKind {
+        case "path":
+            let parts = splitToolPath(path: row.primary)
+            let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
+            let full = prefixLead + parts.name + tail
+            let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + parts.name.utf16.count)
+            let font = list ? style.font(14) : style.mono(12)
+            return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
+        case "prose":
+            let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
+            let full = prefixLead + row.primary + tail
+            let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + row.primary.utf16.count)
+            let font = list ? style.font(14) : style.font(13)
+            return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
+        default:
+            let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
+            let full = prefixLead + row.primary + tail
+            let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + row.primary.utf16.count)
+            let font = list ? style.mono(13) : style.mono(12)
+            return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
         }
+    }
+
+    private func toolMetaPieces(_ row: ToolRowPresentation, mergedCount: Int = 1, showDiffStats: Bool = false, added: Int32 = 0, removed: Int32 = 0, files: Int32 = 0) -> [DisclosureSpec.Piece] {
+        var pieces: [DisclosureSpec.Piece] = []
+        let isMerged = mergedCount > 1
+        if !isMerged {
+            if let lineRange = row.lineRange { pieces.append(.init(text: lineRange, font: style.mono(11.5), color: style.color(\.fg4))) }
+            if let lineCount = row.lineCount { pieces.append(.init(text: String(localized: "\(lineCount.intValue) 行"), font: style.font(12), color: style.color(\.fg4))) }
+        }
+        if let extraFiles = row.extraFiles, extraFiles.intValue > 0 { pieces.append(.init(text: "+\(extraFiles.intValue)", font: style.mono(11.5), color: style.color(\.fg4))) }
+        if let extraCommands = row.extraCommands, extraCommands.intValue > 0 { pieces.append(.init(text: "+\(extraCommands.intValue)", font: style.mono(11.5), color: style.color(\.fg4))) }
+        if isMerged { pieces.append(.init(text: "×\(mergedCount)", font: style.mono(11.5, .medium), color: style.color(\.fg3))) }
+        if showDiffStats {
+            if files > 1, row.extraFiles == nil { pieces.append(.init(text: String(localized: "\(Int(files)) 个文件"), font: style.font(12), color: style.color(\.fg4))) }
+            if added > 0 { pieces.append(.init(text: "+\(added)", font: style.mono(12), color: style.color(\.success))) }
+            if removed > 0 { pieces.append(.init(text: "−\(removed)", font: style.mono(12), color: style.color(\.danger))) }
+        }
+        return pieces
     }
 
     private mutating func processItem(_ item: any TimelineItem, running: Bool, turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
@@ -932,11 +995,14 @@ struct RowBuilder {
         }
         let id = "thought:\(item.key)"
         let open = ui.isOpen(id)
-        // Folded, the preview is one line; opened, the body says it in full under a plain title.
+        let preview = open ? "" : reasoningPreview(source, running: running)
+        // Aligned with tool rows via a fixed-width `Think` verb column; opening keeps `Think` without jumping.
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(DisclosureSpec(
             icon: .symbol("brain", size: 12, color: style.color(\.fg4)),
-            title: open ? String(localized: "思考") : reasoningPreview(source, running: running),
-            titleFont: style.font(13),
+            title: "Think",
+            titleFont: style.mono(12, .medium),
+            titleMinWidth: style.s(48),
+            detail: preview.isEmpty ? nil : .init(text: preview, font: style.font(13), color: style.color(\.fg3)),
             chevron: .hover(open: open),
             action: .toggle(id)
         ))))
@@ -965,57 +1031,32 @@ struct RowBuilder {
         let reserve = stopSize.map { $0.width + 6 + tail } ?? 0
         let headerWidth = list ? width : width - reserve
         if activityState?.running == true { ticking = true }
+        let row: ToolRowPresentation = if presentation.opensSubagent {
+            ToolRowPresentation(icon: "agent", verb: "Agent", prefix: nil, primary: presentation.title, primaryKind: "prose", secondary: presentation.detail, lineRange: nil, lineCount: nil, extraCommands: nil, extraFiles: nil, mergeKey: nil, mergedSecondary: nil)
+        } else {
+            presentation.row
+        }
         var trailing: [DisclosureSpec.Piece] = []
-        var inline: [DisclosureSpec.Piece] = []
         if let activity, let stoppingLabel = stoppingPiece(activity, stopping: stopping) {
             trailing.append(stoppingLabel)
         }
-        if let activity, let outcome = outcomePiece(activity) {
+        var inline = toolMetaPieces(row, showDiffStats: presentation.showsDiffStats, added: presentation.added, removed: presentation.removed, files: presentation.files)
+        if let activity, activity.status != .failed, let outcome = outcomePiece(activity) {
             inline.append(outcome)
         } else if presentation.dangling {
             inline.append(outcomePiece(failed: false))
-        } else if presentation.failed, presentation.opensSubagent {
-            inline.append(outcomePiece(failed: true))
-        } else if presentation.showsDiffStats {
-            // The counts describe this edit, so they travel with the title.
-            if presentation.files > 1 { inline.append(.init(text: String(localized: "\(presentation.files) 个文件"), font: style.font(12), color: style.color(\.fg4))) }
-            if presentation.added > 0 { inline.append(.init(text: "+\(presentation.added)", font: style.mono(12), color: style.color(\.success))) }
-            if presentation.removed > 0 { inline.append(.init(text: "−\(presentation.removed)", font: style.mono(12), color: style.color(\.danger))) }
         }
-        // A call reads in one type, whatever its title: a command, `Read` and its path, a compound
-        // title. Only a path's directory steps back, so the file it names stands out.
-        let action = presentation.isCommand || presentation.opensSubagent || background ? nil : Self.toolAction(presentation)
-        let mono = !presentation.opensSubagent && (!background || presentation.isCommand)
-        let detail: DisclosureSpec.Piece? = if list {
-            // A path shows the file it names; the rest reads in mono.
-            if let action, action.path {
-                .init(text: action.object.split(separator: "/").last.map(String.init) ?? action.object, font: style.font(14), color: style.color(\.fg))
-            } else if let action {
-                .init(text: action.object, font: style.mono(13), color: style.color(\.fg))
-            } else {
-                presentation.detail.map { .init(text: $0, font: style.mono(13), color: style.color(\.fg)) }
-            }
-        } else if let action {
-            .init(text: action.object, font: style.mono(12), color: style.color(\.fg3),
-                  quiet: action.path ? (action.object.lastIndex(of: "/").map { action.object[...$0].utf16.count } ?? 0) : 0,
-                  quietColor: style.color(\.fg4))
-        } else {
-            presentation.detail.map { .init(text: $0, font: style.mono(12), color: style.color(\.fg3)) }
-        }
-        // Labelled, only a command reads in code type: a verb (`Read`) is a name, a description is prose.
-        let titleFont = list ? style.font(14)
-            : style.toolRun == .labelled ? (presentation.isCommand ? style.mono(12) : style.font(13, action == nil ? .regular : .medium))
-            : mono ? style.mono(12) : style.font(13)
         let header = DisclosureSpec(
-            icon: presentation.running ? .spinner : .symbol(ToolSymbols.symbol(presentation.kind), size: 12, color: style.color(\.fg4)),
-            title: action?.verb ?? presentation.title,
-            titleFont: titleFont,
-            detail: background ? nil : detail,
+            icon: presentation.running ? .spinner : .symbol(ToolSymbols.symbol(row.icon), size: 12, color: presentation.failed ? style.color(\.danger) : style.color(\.fg4)),
+            title: row.verb,
+            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleMinWidth: style.s(48),
+            detail: toolDetailPiece(row, list: list),
             inline: inline,
             trailing: trailing,
             chevron: presentation.opensSubagent ? .arrow : list ? .always(open: open) : .hover(open: open),
             action: presentation.opensSubagent ? .openSubagent(id: presentation.id, title: presentation.title) : .toggle(id),
-            help: list ? action.flatMap { $0.path ? $0.object : nil } : nil,
+            help: row.primaryKind == "path" ? row.primary : nil,
             variant: callVariant(extended: open || !presentation.images.isEmpty),
             reserve: list ? reserve : 0
         )
@@ -1045,6 +1086,44 @@ struct RowBuilder {
             cursor += 8
         }
         return cursor - y
+    }
+
+    private mutating func mergedTools(_ group: ToolRunGroupEntryMerged, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+        let id = "merged:\(group.key)"
+        let list = style.toolRun == .list
+        let rowH = callRow
+        let lead: CGFloat = list ? 15 : 24
+        let tail: CGFloat = list ? 15 : 0
+        let open = ui.isOpen(id)
+        let row = group.presentation
+        let secondary = row.mergedSecondary ?? row.secondary
+        let inline = toolMetaPieces(row, mergedCount: group.items.count, showDiffStats: group.showsDiffStats, added: group.added, removed: group.removed, files: group.files)
+        let header = DisclosureSpec(
+            icon: .symbol(ToolSymbols.symbol(row.icon), size: 12, color: group.failed ? style.color(\.danger) : style.color(\.fg4)),
+            title: row.verb,
+            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleMinWidth: style.s(48),
+            detail: toolDetailPiece(row, secondaryOverride: secondary, list: list),
+            inline: inline,
+            chevron: list ? .always(open: open) : .hover(open: open),
+            action: .toggle(id),
+            help: row.primaryKind == "path" ? row.primary : nil,
+            variant: callVariant(extended: open)
+        )
+        fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: rowH), kind: .disclosure(header)))
+        guard open else { return rowH }
+        var cursor = y + rowH + 4
+        for (index, sub) in group.items.enumerated() {
+            if index > 0 {
+                cursor += 6
+                fragments.append(Fragment(frame: CGRect(x: x + lead, y: cursor, width: width - lead - tail, height: 1), kind: .box(BoxSpec(fill: style.color(\.line)))))
+                cursor += 7
+            }
+            cursor += textBlock(text.plain("#\(index + 1)", size: 11, color: style.color(\.fg4), mono: true), x: x + lead, y: cursor, width: width - lead - tail, selectable: false) + 4
+            let pres = toolPresentation(item: sub, root: root, stale: true)
+            cursor += toolDetails(pres, x: x + lead, y: cursor, width: width - lead - tail)
+        }
+        return cursor + 8 - y
     }
 
     private mutating func toolDetails(_ presentation: ToolPresentation, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
@@ -1130,12 +1209,18 @@ struct RowBuilder {
         let tail: CGFloat = list ? 15 : 0
         let open = ui.isOpen(id)
         let running = job.status == .running
+        let failed = job.status == .failed
         if running { ticking = true }
+        let row = jobRowPresentation(job: job, root: root)
+        var inline = toolMetaPieces(row)
+        if job.status == .unknown { inline.append(outcomePiece(failed: false)) }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: rowH), kind: .disclosure(DisclosureSpec(
-            icon: running ? .spinner : .symbol("apple.terminal", size: 12, color: style.color(\.fg4)),
-            title: job.title,
-            titleFont: list ? style.font(14) : style.font(13),
-            inline: job.status == .failed ? [outcomePiece(failed: true)] : job.status == .unknown ? [outcomePiece(failed: false)] : [],
+            icon: running ? .spinner : .symbol(ToolSymbols.symbol(row.icon), size: 12, color: failed ? style.color(\.danger) : style.color(\.fg4)),
+            title: row.verb,
+            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleMinWidth: style.s(48),
+            detail: toolDetailPiece(row, list: list),
+            inline: inline,
             chevron: list ? .always(open: open) : .hover(open: open),
             action: .toggle(id),
             variant: callVariant(extended: open)
@@ -1846,6 +1931,7 @@ enum ToolSymbols {
         case "move": "arrow.left.arrow.right"
         case "search": "magnifyingglass"
         case "execute": "apple.terminal"
+        case "git": "arrow.triangle.branch"
         case "think": "brain"
         case "fetch": "globe"
         case "switch_mode": "repeat"
@@ -1853,6 +1939,7 @@ enum ToolSymbols {
         case "message": "paperplane"
         case "question": "questionmark.bubble"
         case "goal": "target"
+        case "plan": "checklist"
         default: "wrench.and.screwdriver"
         }
     }
