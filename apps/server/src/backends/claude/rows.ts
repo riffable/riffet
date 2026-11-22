@@ -48,6 +48,20 @@ export function claudeApiFailure(row: ClaudeRow): string | undefined {
   return claudeFailureText(rowText(record(row.message)?.content));
 }
 
+/**
+ * A non-error synthetic assistant row Claude Code writes to close an unanswered or interrupted user
+ * turn in its history (e.g. on `--resume`: `model: "<synthetic>"`, `isApiErrorMessage: false`,
+ * text `"No response requested."`). Neither the user nor the model produced it, so it must not open
+ * a turn, render as an answer, or count as a metered model step.
+ */
+export function isClaudeSyntheticPlaceholder(row: ClaudeRow): boolean {
+  if (row.type !== 'assistant' || row.isApiErrorMessage === true) return false;
+  const message = record(row.message);
+  if (string(message?.model) !== '<synthetic>') return false;
+  const content = message?.content;
+  return !(Array.isArray(content) && content.some(part => record(part)?.type === 'tool_use'));
+}
+
 /** A turn has exactly one end; the hook and the file record are two reports of the same one. */
 export const isTerminalType = (type: string): boolean => type === 'run_completed' || type === 'run_failed' || type === 'run_cancelled';
 
@@ -133,7 +147,7 @@ export function subagentWake(row: ClaudeRow): boolean {
  * that delivers that answer), or says nothing either way.
  */
 export function subagentSettles(row: ClaudeRow): boolean | undefined {
-  if (row.type !== 'assistant') return undefined;
+  if (row.type !== 'assistant' || isClaudeSyntheticPlaceholder(row)) return undefined;
   const message = record(row.message);
   if (FINAL_STOP_REASONS.has(string(message?.stop_reason) ?? '')) return true;
   const calls = Array.isArray(message?.content) ? message.content.map(record).filter(part => part?.type === 'tool_use') : [];
@@ -147,7 +161,7 @@ export function subagentSettles(row: ClaudeRow): boolean | undefined {
  */
 export function claudeRowOwesStep(row: ClaudeRow): boolean | undefined {
   const message = record(row.message);
-  if (row.type === 'assistant') return !FINAL_STOP_REASONS.has(string(message?.stop_reason) ?? '');
+  if (row.type === 'assistant') return isClaudeSyntheticPlaceholder(row) ? undefined : !FINAL_STOP_REASONS.has(string(message?.stop_reason) ?? '');
   if (row.type !== 'user') return undefined;
   const content = message?.content;
   const text = typeof content === 'string' ? content

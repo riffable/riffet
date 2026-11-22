@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
 import { ClaudeActivities } from './activity.js';
-import { MAX_TRANSCRIPT_BYTES, record, string, readableThinking, type ClaudeRow, isTranscriptOnly, hiddenTurnPrompt, parseRow } from './rows.js';
+import { MAX_TRANSCRIPT_BYTES, record, string, readableThinking, isClaudeSyntheticPlaceholder, type ClaudeRow, isTranscriptOnly, hiddenTurnPrompt, parseRow } from './rows.js';
 import { type MapperState, type ClaudeTranscriptHooks, mapRow } from './row-mapper.js';
 
 /** One assistant response of a Claude turn, measured from the transcript's own records. */
@@ -102,7 +102,7 @@ export class ClaudeStepMeter {
   private cache?: ClaudeStepMeasurement[];
 
   add(row: ClaudeRow, events: ReadonlyArray<Omit<NativeWorkbenchEvent, 'sequence'>>): void {
-    if (row.isSidechain === true) return;
+    if (row.isSidechain === true || isClaudeSyntheticPlaceholder(row)) return;
     const at = row.timestamp ? Date.parse(row.timestamp) : Number.NaN;
     const stamp = Number.isFinite(at) ? at : undefined;
     const hiddenPromptId = hiddenTurnPrompt(row);

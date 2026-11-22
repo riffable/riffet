@@ -4,7 +4,7 @@ import { describeCommandActions } from '../../../../../packages/timeline/src/too
 import { commandActions } from '../shared/command-actions.js';
 import { isImagePath, toolImageContent } from '../shared/tool-images.js';
 import { ClaudeActivities, commandNameOf, localCommandOutput, noticeRowKind, shellInputOf, shellOutputOf, taskNotification, type ClaudeActivityHooks } from './activity.js';
-import { clip, record, string, INTERRUPTED_MARKER, claudeApiFailure, readableThinking, isNarration, type ClaudeRow, isTranscriptOnly, promptIdOf, hiddenTurnPrompt, subagentWake, rowText, stripPastedContent, commandPrompt } from './rows.js';
+import { clip, record, string, INTERRUPTED_MARKER, claudeApiFailure, isClaudeSyntheticPlaceholder, readableThinking, isNarration, type ClaudeRow, isTranscriptOnly, promptIdOf, hiddenTurnPrompt, subagentWake, rowText, stripPastedContent, commandPrompt } from './rows.js';
 
 /** Edits are whole-file sized: `Write` sends the file's full text. Matches the other backends' limit. */
 export const EDIT_LIMIT = 256 * 1024;
@@ -436,6 +436,9 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
   if (type !== 'assistant') return [];
   // The run's failure carries the text (`claudeRowSignals`).
   if (claudeApiFailure(row)) return [];
+  // Claude Code writes a non-error synthetic placeholder ("No response requested.") to close an
+  // unanswered or interrupted user turn in its history; it is neither model output nor a turn.
+  if (isClaudeSyntheticPlaceholder(row)) return [];
   const model = string(message.model);
   if (model && model !== '<synthetic>') hooks.onModel?.(model);
   if (!state.turnId) {

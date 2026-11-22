@@ -57,6 +57,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 子 agent 的后台任务（例如 Bash 超时后被转入后台）完成时，CLI 也会在主转写里写一条 `queue-operation` enqueue/remove，`<tool-use-id>` 指向子 agent 的调用，随后由子 agent 取走。主会话既没发起也没挂着这个调用的报告不建活动（`activity.ts#notified`），否则它会作为孤立的一行出现在主时间线末尾。
 - CLI 重启后会补报上一进程遗留的后台任务：先写 `queue-operation` enqueue/dequeue，再写一条 `queueTranscriptOnly: true` 的 task-notification 行，这一行不开回合。回执扫描（`transcript-source.ts#suffixPrompts`）照样要让它消耗队列里取出的那一项，而且通知只配对通知、消息只配对消息；否则紧跟其后发出的消息会被配给这条通知，回执永远找不到，run 一直停在「等待上一条消息确认」。
 - 转写 JSONL 里的异步辅助行（`attachment`、`queue-operation`、`file-history-delta` 等）可能乱序写入、时间戳早于或晚于紧邻的 `assistant` 行；`step-meter.ts#ClaudeStepMeter` 测速时只认 `api-request`、`user`、`assistant` 三类对话边界且优先取紧邻的 `api-request`，忽略辅助行，避免耗时归零、倒挂或虚高。
+- 回合在模型输出前被手动中断后，Claude Code 恢复会话时会在转写里补写一条非 API 错误的合成 `assistant` 占位行（`model: "<synthetic>"`、`isApiErrorMessage: false`、正文 `No response requested.`、`usage` 全为 0）来闭合未答复的 `user` 行；`rows.ts#isClaudeSyntheticPlaceholder` 将其跳过，避免在「已停止」下方多出一条孤立回复或计入测速。
 - 转写里的 `api-request-shape` / `api-request` / `api-request-blob` 是 Claude Code 的私有记录（2.1.322 起见到），没有文档承诺；`api-request` 的消息是上一请求的前 `keep` 条加 `tail` 哈希，`tail` 里只有非对话消息有 blob。格式变了追踪显示 `unrecognized`，改 `request-records.ts` 并补 `../shared/trace-requests.test.ts`。
 
 ## 排障

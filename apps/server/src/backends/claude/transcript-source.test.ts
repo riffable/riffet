@@ -888,4 +888,30 @@ describe('Claude transcript source', () => {
     await importAll(source(), fresh);
     expect(visibleLanes(journal, 'wb')).toEqual(visibleLanes(fresh, 'wb'));
   });
+
+  it('ignores non-error synthetic placeholder rows written on resume after an interrupted turn', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-synthetic-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('interrupted');
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = await importAll(source(), journal);
+    // Simulate a manual stop that closed the turn without a transcript interruption marker,
+    // followed by Claude Code writing its synthetic placeholder on resume before the next prompt.
+    await source().endTurn(writer, 'cancelled', '2026-11-22T10:14:32.000Z', 'p-interrupted');
+    file.write({
+      type: 'assistant', uuid: 'synthetic-placeholder', isApiErrorMessage: false,
+      message: {
+        id: 'm-synthetic', role: 'assistant', model: '<synthetic>', stop_reason: 'stop_sequence', stop_sequence: '',
+        usage: { input_tokens: 0, output_tokens: 0 },
+        content: [{ type: 'text', text: 'No response requested.' }],
+      },
+    });
+    file.turn('next');
+    await importAll(source(), journal);
+
+    const mainRows = rowsOf(journal, 'wb');
+    expect(mainRows.filter(row => JSON.stringify(row.payload).includes('No response requested.'))).toEqual([]);
+    expect(mainRows.filter(row => row.kind === 'meta.turn_started').map(row => row.turnId)).toEqual(['p-interrupted', 'p-next']);
+  });
 });
