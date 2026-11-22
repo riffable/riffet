@@ -23,6 +23,9 @@ struct ConversationView: View {
     @State private var nearBottom = true
     @State private var atBottom = false
     @State private var nearTop = false
+    /// First timeline row key when `nearTop` was last reported by a settled layout; changing the first
+    /// row via `loadOlder()` pauses further paging until UIKit has applied and restored the anchor.
+    @State private var nearTopFirstKey: String?
     @State private var followsTail = true
     @State private var unread = false
     @State private var approvalVisible = false
@@ -326,8 +329,10 @@ struct ConversationView: View {
                     currentApprovalID: nil,
                     bottomInset: composerHeight,
                     topInset: topInset,
-                    onPosition: { near, at, approval, top in
+                    topKey: rows.first?.key,
+                    onPosition: { near, at, approval, top, topKey in
                         nearBottom = near; atBottom = at; approvalVisible = approval; nearTop = top
+                        nearTopFirstKey = topKey
                         if near { unread = false }
                     },
                     onBeginDragging: { userScrolled = true; followsTail = false },
@@ -604,7 +609,7 @@ struct ConversationView: View {
         composerFocus += 1
     }
     /// `nearTop` is false for a long transcript read at its bottom; a short one keeps paging until it fills the screen.
-    private var wantsOlder: Bool { ready && nearTop && workbench.history?.hasMore == true && !workbench.loadingHistory && workbench.historyError == nil }
+    private var wantsOlder: Bool { ready && nearTop && nearTopFirstKey == rows.first?.key && workbench.history?.hasMore == true && !workbench.loadingHistory && workbench.historyError == nil }
     @ViewBuilder private func interactionRecord(_ record: ConversationInteractionLedger.Record, session: Session) -> some View {
         if record.waiting, workbench.interaction?.id == record.id || InteractionDrafts.shared.hasPendingSubmission(for: "\(workbench.baseURL.absoluteString):\(sessionID):\(record.id)") {
             InteractionCardView(workbench: workbench, interaction: record.interaction, sessionID: sessionID,

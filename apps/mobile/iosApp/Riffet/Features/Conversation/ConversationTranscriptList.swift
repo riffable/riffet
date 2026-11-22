@@ -77,8 +77,10 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
     var bottomInset = ConversationComposerHeight()
     /// What floats under the top bar (the find bar): rows rest below it, and still scroll beneath it.
     var topInset: CGFloat = 0
-    /// near bottom, at bottom, approval visible, within about two screens of the oldest loaded row.
-    let onPosition: (Bool, Bool, Bool, Bool) -> Void
+    /// Key of the oldest loaded timeline row for `rows`; echoed back by `onPosition` once that page has settled.
+    var topKey: String? = nil
+    /// near bottom, at bottom, approval visible, within about two screens of the oldest loaded row, and the settled `topKey`.
+    let onPosition: (Bool, Bool, Bool, Bool, String?) -> Void
     let onBeginDragging: () -> Void
     let onEndDragging: (Bool) -> Void
     let onReady: () -> Void
@@ -96,6 +98,10 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             let atBottom: Bool
             let approvalVisible: Bool
             let nearTop: Bool
+            let topKey: String?
+            /// Advances on each settled membership change while near the top, so a short transcript
+            /// that remains near the top after prepending still notifies the caller to page again.
+            let topGeneration: Int
         }
         private struct Alignment { let target: String?; let anchor: Anchor }
         private struct ReadingAnchor { let id: String; let distanceFromTop: CGFloat }
@@ -121,6 +127,8 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private var collection: TranscriptCollectionView!
         private var applyingSnapshot = false
         private var needsSnapshot = false
+        private var appliedMembershipGeneration = 0
+        private var appliedTopKey: String?
         private var pendingRequest: Request?
         private var lastRequestID: UUID?
         private var pendingAlignment: Alignment?
@@ -486,21 +494,24 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 guard let applied = appliedRevisions[row.id] else { continue }
                 if environmentChanged || applied != row.revision || (!viewportChanged.isEmpty && viewportChanged.contains(row.id)) { changedExisting.append(row.id) }
             }
+            let topKey = configuration.topKey
             if !identifiersChanged && changedExisting.isEmpty {
                 appliedRevisions = rowsByID.mapValues(\.revision)
                 appliedEnvironmentRevision = environmentRevision
+                appliedTopKey = topKey
                 return
             }
             if identifiersChanged {
                 // A held row is the anchor itself.
                 if heldRow == nil && !shouldFollow && pendingRequest == nil && pendingAlignment == nil,
-                   let anchor = captureReadingAnchor(), rowsByID[anchor.id] != nil {
+                   let anchor = captureReadingAnchor() {
                     // Older history is read while the reader scrolls, so the anchor is kept during a
                     // drag too. A fling cannot be adjusted without stopping it: rows landing above the
                     // reader then wait for the scroll to rest.
                     if collection.isDecelerating && !collection.isTracking,
                        let before = previousIDs.firstIndex(of: anchor.id), let after = orderedIDs.firstIndex(of: anchor.id), after > before {
                         deferredRows = true
+                        queuePosition()
                         return
                     }
                     // History inserts between fixed metadata rows, not necessarily at index zero.
@@ -520,12 +531,15 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             let token = lifetime
             viewportChanged.removeAll()
             applyingSnapshot = true
+            if identifiersChanged { queuePosition() }
             dataSource.apply(snapshot, animatingDifferences: identifiersChanged && animatesReaderChange) { [weak self] in
                 guard let self, self.active, self.lifetime == token else { return }
                 self.appliedRevisions = revisions
                 self.appliedEnvironmentRevision = environment
+                self.appliedTopKey = topKey
+                if identifiersChanged { self.appliedMembershipGeneration &+= 1 }
                 self.applyingSnapshot = false
-                if self.needsSnapshot { self.needsSnapshot = false; self.applyLatestRows() }
+                if self.needsSnapshot && self.readingAnchor == nil { self.needsSnapshot = false; self.applyLatestRows() }
                 self.adoptReportedHeights()
                 self.collection.setNeedsLayout()
             }
@@ -563,8 +577,11 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             let visibleTop = collection.contentOffset.y + collection.adjustedContentInset.top
             let attributes = collection.indexPathsForVisibleItems.compactMap { collection.layoutAttributesForItem(at: $0) }
                 .filter { $0.frame.maxY > visibleTop }.sorted { $0.frame.minY < $1.frame.minY }
-            guard let first = attributes.first, let id = dataSource.itemIdentifier(for: first.indexPath) else { return nil }
-            return ReadingAnchor(id: id, distanceFromTop: first.frame.minY - collection.contentOffset.y)
+            for attr in attributes {
+                guard let id = dataSource.itemIdentifier(for: attr.indexPath), rowsByID[id] != nil else { continue }
+                return ReadingAnchor(id: id, distanceFromTop: attr.frame.minY - collection.contentOffset.y)
+            }
+            return nil
         }
 
         /// Runs only after native layout. Requests have a two-stage native scroll then exact
@@ -580,39 +597,59 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 lastSettledWidth = column
                 if hadWidth { environmentRevision &+= 1; scheduleEnvironmentRefresh() }
             }
-            positioning = true
-            defer { positioning = false }
-            if isInteracting, let anchor = readingAnchor {
-                readingAnchor = nil
-                restore(anchor)
-            }
-            if !isInteracting {
-                if let alignment = pendingAlignment {
-                    pendingAlignment = nil
-                    align(alignment)
-                } else if let request = pendingRequest {
-                    if request.target.map({ dataSource.indexPath(for: $0) != nil }) ?? true {
-                        pendingRequest = nil
+            var restoredAnchor = false
+            do {
+                positioning = true
+                defer { positioning = false }
+                if isInteracting, let anchor = readingAnchor {
+                    readingAnchor = nil
+                    restoredAnchor = restore(anchor)
+                }
+                if !isInteracting {
+                    if let alignment = pendingAlignment {
+                        pendingAlignment = nil
+                        align(alignment)
+                    } else if let request = pendingRequest {
+                        if request.target.map({ dataSource.indexPath(for: $0) != nil }) ?? true {
+                            pendingRequest = nil
+                            initiallyPositioned = true
+                            startAlignment(Alignment(target: request.target, anchor: request.anchor))
+                        }
+                    } else if let held = heldRow {
+                        // Restored on every pass, not only after a snapshot: a row above settling to its
+                        // height, or one crossing the top edge, would otherwise move what was tapped.
+                        readingAnchor = nil
+                        if !restore(held) { heldRow = nil }
+                    } else if let anchor = readingAnchor {
+                        readingAnchor = nil
+                        restoredAnchor = restore(anchor)
+                    } else if !initiallyPositioned {
                         initiallyPositioned = true
-                        startAlignment(Alignment(target: request.target, anchor: request.anchor))
+                        if shouldFollow { startAlignment(Alignment(target: nil, anchor: .bottom)) }
+                    } else if shouldFollow {
+                        setOffset(maximumOffset)
+                    } else {
+                        // A shrinking viewport or snapshot must not leave a resting offset outside
+                        // native content bounds. Active drag/deceleration keeps normal UIKit bounce.
+                        setOffset(collection.contentOffset.y)
                     }
-                } else if let held = heldRow {
-                    // Restored on every pass, not only after a snapshot: a row above settling to its
-                    // height, or one crossing the top edge, would otherwise move what was tapped.
-                    readingAnchor = nil
-                    if !restore(held) { heldRow = nil }
-                } else if let anchor = readingAnchor {
-                    readingAnchor = nil
-                    restore(anchor)
-                } else if !initiallyPositioned {
-                    initiallyPositioned = true
-                    if shouldFollow { startAlignment(Alignment(target: nil, anchor: .bottom)) }
-                } else if shouldFollow {
-                    setOffset(maximumOffset)
+                }
+            }
+            if needsSnapshot && !applyingSnapshot {
+                // Wait one turn after restoring an anchor so `indexPathsForVisibleItems` reflects the
+                // restored viewport before the queued snapshot captures a new anchor; scheduling on the
+                // main queue also ensures `needsSnapshot` flushes even if `setOffset` was a no-op.
+                if restoredAnchor {
+                    collection.setNeedsLayout()
+                    let token = lifetime
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.active, self.lifetime == token, self.needsSnapshot, !self.applyingSnapshot else { return }
+                        self.needsSnapshot = false
+                        self.applyLatestRows()
+                    }
                 } else {
-                    // A shrinking viewport or snapshot must not leave a resting offset outside
-                    // native content bounds. Active drag/deceleration keeps normal UIKit bounce.
-                    setOffset(collection.contentOffset.y)
+                    needsSnapshot = false
+                    applyLatestRows()
                 }
             }
             if pendingAlignment == nil && !readyDelivered { readyPending = true }
@@ -704,7 +741,16 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private func setOffset(_ proposed: CGFloat) {
             guard proposed.isFinite else { return }
             let target = min(maximumOffset, max(minimumOffset, proposed))
-            if abs(collection.contentOffset.y - target) > 0.5 { collection.setContentOffset(CGPoint(x: collection.contentOffset.x, y: target), animated: false) }
+            if abs(collection.contentOffset.y - target) > 0.5 {
+                let wasDecelerating = waitingForDeceleration
+                collection.setContentOffset(CGPoint(x: collection.contentOffset.x, y: target), animated: false)
+                // `setContentOffset(_:animated: false)` cancels deceleration without calling
+                // `scrollViewDidEndDecelerating`; release interaction state if it stopped the fling.
+                if wasDecelerating && !collection.isTracking && !collection.isDragging && !collection.isDecelerating {
+                    waitingForDeceleration = false
+                    finishDragging()
+                }
+            }
         }
 
         private func position() -> Position {
@@ -718,13 +764,14 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             }
             let insets = collection.adjustedContentInset
             let viewport = max(0, collection.bounds.height - insets.top - insets.bottom)
-            // Not before the first positioning: the list is laid out from the top before it jumps to the end.
-            let settled = initiallyPositioned && pendingRequest == nil && pendingAlignment == nil && viewport > 0
+            // Not before the first positioning or while a prepended page is still awaiting anchor restoration.
+            let settled = initiallyPositioned && pendingRequest == nil && pendingAlignment == nil
+                && !applyingSnapshot && readingAnchor == nil && !deferredRows && !needsSnapshot && viewport > 0
             let nearTop = settled && collection.contentOffset.y + insets.top <= Self.olderPrefetchScreens * viewport
             // Until then it reads as the bottom, where it starts: reporting the top first flipped the page
             // into history and back, which changed every process row's revision on open.
             let positioned = initiallyPositioned && viewport > 0
-            return Position(nearBottom: !positioned || remaining < 80, atBottom: !positioned || remaining <= 2, approvalVisible: approvalVisible, nearTop: nearTop)
+            return Position(nearBottom: !positioned || remaining < 80, atBottom: !positioned || remaining <= 2, approvalVisible: approvalVisible, nearTop: nearTop, topKey: nearTop ? appliedTopKey : nil, topGeneration: nearTop ? appliedMembershipGeneration : 0)
         }
 
         private func queuePosition() {
@@ -749,7 +796,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                     self.pendingPosition = nil
                     if position != self.deliveredPosition {
                         self.deliveredPosition = position
-                        self.configuration.onPosition(position.nearBottom, position.atBottom, position.approvalVisible, position.nearTop)
+                        self.configuration.onPosition(position.nearBottom, position.atBottom, position.approvalVisible, position.nearTop, position.topKey)
                     }
                 }
                 if self.configuration.onFeedbackVisibility != nil {
@@ -775,10 +822,12 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) { if !applyingSnapshot { queuePosition() } }
-        func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool { heldRow = nil; findCell = nil; return true }
+        func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool { readingAnchor = nil; heldRow = nil; findCell = nil; return true }
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             detachedByUser = true
-            pendingRequest = nil; pendingAlignment = nil; readingAnchor = nil; heldRow = nil; findCell = nil
+            // Keep any pending `readingAnchor`: it compensates for a snapshot already in flight or
+            // awaiting `layoutDidSettle()`, and clearing it drops the offset shift for prepended rows.
+            pendingRequest = nil; pendingAlignment = nil; heldRow = nil; findCell = nil
             initiallyPositioned = true
             waitingForDeceleration = false
             interactionEvents.append(.began); scheduleCallbacks()

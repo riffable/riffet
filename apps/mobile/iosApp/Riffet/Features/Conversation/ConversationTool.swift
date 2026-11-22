@@ -280,6 +280,7 @@ struct ConversationSubagentPage: View {
     @State private var page: SubagentPresentation?
     @State private var processExpansion: [String: Bool] = [:]
     @State private var nearTop = false
+    @State private var nearTopFirstKey: String?
     @State private var followsTail = false
     @State private var disclosureState = ConversationDisclosureState()
     @State private var selection: ConversationSelection?
@@ -293,7 +294,7 @@ struct ConversationSubagentPage: View {
     private var running: Bool { transcript?.running?.boolValue == true }
     private var backend: NativeBackendId { workbench.selected?.backendId ?? .cursor }
     private var items: [any TimelineItem] { current?.items ?? [] }
-    private var wantsOlder: Bool { nearTop && current?.hasBefore == true && workbench.loadingSubagent == nil && workbench.subagentError == nil }
+    private var wantsOlder: Bool { nearTop && nearTopFirstKey == current?.grouping.rows.first?.key && current?.hasBefore == true && workbench.loadingSubagent == nil && workbench.subagentError == nil }
     private var subtitle: String {
         [current?.info?.type, current?.info?.model, running ? String(localized: "运行中", bundle: .riffet) : String(localized: "已结束", bundle: .riffet)].compactMap { $0 }.joined(separator: " · ")
     }
@@ -303,7 +304,8 @@ struct ConversationSubagentPage: View {
             if transcript != nil {
                 ConversationTranscriptList(
                     rows: rows, request: nil, followsTail: followsTail, accessibilityValue: subtitle, currentApprovalID: nil,
-                    onPosition: { _, _, _, top in nearTop = top },
+                    topKey: current?.grouping.rows.first?.key,
+                    onPosition: { _, _, _, top, topKey in nearTop = top; nearTopFirstKey = topKey },
                     onBeginDragging: { followsTail = false },
                     onEndDragging: { followsTail = $0 },
                     onReady: {}
