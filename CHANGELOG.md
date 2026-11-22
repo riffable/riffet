@@ -4,6 +4,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+## 0.10.0 - 2026-11-22
+
 ### Workbench
 
 - Web plugins can add a page to the More menu. You can pin it to the sidebar, open it by its address, and see its data refresh when the plugin reports a change.
