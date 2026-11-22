@@ -152,6 +152,19 @@ Riffet 随服务器提供自己的 Skills（`apps/server/src/prompts/`），不�
 - 更新：随服务器版本变化，不能在此编辑；统计按 Skills 类型计入，与其他来源一致。
 - 隔离启动的目录范围：个人助理在 Claude Code 上启动时不读用户配置目录（[ASSISTANT.md](ASSISTANT.md) §4）。这个上下文的目录只保留 `riffet` 作用域和位于项目目录里的条目（项目目录里链接进来的 skill 作用域是 `managed`，同样保留），新建位置只保留项目级的；条目、详情和文档按同一条件过滤，被隐藏条目的 ID 在这个上下文里读不到、写不了，也不能对它执行操作；原生命令报告的已安装插件同样过滤。判断在 `extensions/riffet-skills.ts` 的 `scopeInEffect` 和 `discovery.ts` 末尾。在助理目录的 `.claude/settings.json` 里启用的插件目前不作为条目列出，它提供的 skill 仍计入助理页的「能力」数量。
 
+## Riffet 内置能力与配置总览（2026-11-22）
+
+扩展管理顶栏的来源选择器按标准 Agent 顺序（`claude`、`codex`、`antigravity`、`cursor`、`pi`、`traex`、`droid`、`dsh`，其后是插件 Agent）排列，末尾增加独立来源「Riffet」，本地记住上次打开的来源，用于只读查阅当前本机服务器提供的全部内置能力与非敏感运行配置，每项以胶囊标明生效方式（自动生效、按对话开启、仅个人助理、仅任务会话、需启用能力包、实时只读）：
+
+- **接口**：`GET /api/extensions/riffet`、`GET /api/extensions/riffet/:itemId`、`GET /api/extensions/riffet/documents/:documentId`（`apps/server/src/extensions/riffet-catalog.ts`），复用 `ExtensionItem` / `ExtensionDetail` / `ExtensionDocument` 契约，全部条目只读（`scope: 'riffet'`、`editable: false`、`actions: []`）。
+- **分类内容**：
+  - `MCP`：按注入条件列出 Riffet 内置 MCP（`riffet`）全部工具组（`riffet:core`、`riffet:agents`、`riffet:remote`、`riffet:devices`、`riffet:task`、`riffet:assistant` 含工作台只读能力目录）以及已声明的插件工具组（含当前启停状态、工具说明与参数表）。
+  - `Skills`：列出 Riffet 随服务端提供的全部内置 Skills（个人助理与内置能力包模版），点开可只读预览全文与关联记忆模版。
+  - `Rules`：列出个人助理默认规则、系统提示词、快速对话提示词、任务核验规范及手机屏幕操作四份规范。
+  - `配置文件`：实时汇总非敏感运行配置（版本、默认会话与助理后台配置、Agent 扩展能力兼容矩阵、插件扩展点、互联服务器与已配对设备状态），严禁包含凭据或密钥。
+- **多服务器**：B 类（本机服务器配置与说明），`/api/extensions/*` 在链接策略表登记为 `deny`，只在各服务器自己的 Web 中查看。
+- **Mac**：M 类（管理与总览页，原 Mac 扩展页已冻结），通过 Web 访问。
+
 ## 验证与限制
 
 服务端测试覆盖 profile/session 隔离、路径越界与 symlink、密钥与 Claude 投影、同 hash 并发保存、插件归属、原生模板、命令参数/作用域、MCP 分页、原生客户端清理、DSH 迁移与单 profile 运行锁。Kotlin 客户端测试覆盖 query 和 expectedHash 协议、扩展字段兼容。构建检查包括 TypeScript、Web/server、Kotlin JVM 和 macOS。

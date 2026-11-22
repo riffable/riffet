@@ -2,11 +2,33 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type { ExtensionAction, ExtensionContext, ExtensionCreateTarget, ExtensionInventory, ExtensionItem, ExtensionManagementCapabilities, ExtensionRuntimeEntry, ExtensionRuntimeReport } from '@contracts';
 
+export const RIFFET_SOURCE_ID = 'riffet' as const;
+export type RiffetSourceContext = { backendId: typeof RIFFET_SOURCE_ID; profileId: typeof RIFFET_SOURCE_ID; projectId?: undefined };
+export type ExtensionSourceContext = ExtensionContext | RiffetSourceContext;
+export type RiffetActivation = 'auto' | 'opt-in' | 'assistant' | 'task' | 'pack' | 'readonly';
+export type CatalogExtensionItem = ExtensionItem & { activation?: RiffetActivation };
+
+export function isRiffetSource(context: ExtensionSourceContext): context is RiffetSourceContext {
+  return context.backendId === RIFFET_SOURCE_ID;
+}
+
+export function riffetActivationBadge(activation?: RiffetActivation): { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' } | undefined {
+  switch (activation) {
+    case 'auto': return { label: i18n._(msg`自动生效`), tone: 'success' };
+    case 'opt-in': return { label: i18n._(msg`按对话开启`), tone: 'accent' };
+    case 'assistant': return { label: i18n._(msg`仅个人助理`), tone: 'neutral' };
+    case 'task': return { label: i18n._(msg`仅任务会话`), tone: 'neutral' };
+    case 'pack': return { label: i18n._(msg`需启用能力包`), tone: 'warning' };
+    case 'readonly': return { label: i18n._(msg`实时只读`), tone: 'neutral' };
+    default: return undefined;
+  }
+}
+
 export interface ExtensionSource {
   key: string;
-  context: ExtensionContext;
+  context: ExtensionSourceContext;
   profileName: string;
-  inventory?: ExtensionInventory;
+  inventory?: { items: CatalogExtensionItem[]; diagnostics: string[]; checkedAt: string; createTargets?: ExtensionCreateTarget[] };
   capabilities?: ExtensionManagementCapabilities;
   capabilityError?: string;
   error?: string;
@@ -15,9 +37,9 @@ export interface ExtensionSource {
 
 export interface ExtensionEntry {
   key: string;
-  context: ExtensionContext;
+  context: ExtensionSourceContext;
   profileName: string;
-  item: ExtensionItem;
+  item: CatalogExtensionItem;
   sourceLabel: string;
   ownerKey?: string;
   capabilities?: ExtensionManagementCapabilities;
@@ -32,11 +54,11 @@ export interface ExtensionCreation {
   targets: ExtensionCreateTarget[];
 }
 
-export function extensionContextKey(context: ExtensionContext): string {
+export function extensionContextKey(context: ExtensionSourceContext): string {
   return JSON.stringify([context.backendId, context.profileId, context.projectId ?? '']);
 }
 
-export function extensionEntryKey(context: ExtensionContext, id: string): string {
+export function extensionEntryKey(context: ExtensionSourceContext, id: string): string {
   return JSON.stringify([extensionContextKey(context), id]);
 }
 

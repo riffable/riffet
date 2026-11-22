@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { ExtensionContext, ExtensionManagementCapabilities, NativeBackendCatalogEntry } from '@contracts';
 import { api } from '@/lib/api';
-import { extensionContextKey, type ExtensionSource } from './model';
+import { extensionContextKey, isRiffetSource, RIFFET_SOURCE_ID, type ExtensionSource, type ExtensionSourceContext } from './model';
 
 interface CachedSource {
   source: ExtensionSource;
@@ -13,7 +13,7 @@ interface CachedSource {
 
 interface SourceDescriptor {
   key: string;
-  context: ExtensionContext;
+  context: ExtensionSourceContext;
   profileName: string;
 }
 
@@ -28,7 +28,7 @@ export function useExtensionSources({ backends, projectId, active }: {
   sources: ExtensionSource[];
   loading: boolean;
   refresh(): Promise<void>;
-  ensureCapabilities(context: ExtensionContext): Promise<ExtensionManagementCapabilities | undefined>;
+  ensureCapabilities(context: ExtensionSourceContext): Promise<ExtensionManagementCapabilities | undefined>;
 } {
   const { t } = useLingui();
   const cache = useRef(new Map<string, CachedSource>());
@@ -38,10 +38,14 @@ export function useExtensionSources({ backends, projectId, active }: {
 
   // Catalog objects change during polling. Only actual context membership restarts discovery;
   // names are projected separately so renaming a profile never restarts an in-flight scan.
-  const serializedDescriptors = JSON.stringify(backends.flatMap(backend => backend.profiles.map(profile => {
-    const context: ExtensionContext = { backendId: backend.backendId, profileId: profile.id, ...(projectId ? { projectId } : {}) };
-    return { key: extensionContextKey(context), context, profileName: profile.name };
-  })));
+  const riffetContext: ExtensionSourceContext = { backendId: RIFFET_SOURCE_ID, profileId: RIFFET_SOURCE_ID };
+  const serializedDescriptors = JSON.stringify([
+    { key: extensionContextKey(riffetContext), context: riffetContext, profileName: 'Riffet' },
+    ...backends.flatMap(backend => backend.profiles.map(profile => {
+      const context: ExtensionContext = { backendId: backend.backendId, profileId: profile.id, ...(projectId ? { projectId } : {}) };
+      return { key: extensionContextKey(context), context, profileName: profile.name };
+    })),
+  ]);
   const descriptors = useMemo(() => JSON.parse(serializedDescriptors) as SourceDescriptor[], [serializedDescriptors]);
   const contextSignature = JSON.stringify(descriptors.map(source => source.key).sort());
 
@@ -71,7 +75,9 @@ export function useExtensionSources({ backends, projectId, active }: {
         const controller = new AbortController();
         controllers.current.add(controller);
         try {
-          const inventory = await api.extensions(cached.source.context, controller.signal);
+          const inventory = isRiffetSource(cached.source.context)
+            ? await api.riffetExtensions(controller.signal)
+            : await api.extensions(cached.source.context, controller.signal);
           if (!controller.signal.aborted && isCurrent()) {
             cached.source = { ...cached.source, inventory, error: undefined };
             cached.fetchedAt = Date.now();
@@ -109,10 +115,12 @@ export function useExtensionSources({ backends, projectId, active }: {
         }
         continue;
       }
-      const [backendId, profileId, sourceProjectId] = JSON.parse(key) as [ExtensionContext['backendId'], string, string];
-      const context: ExtensionContext = { backendId, profileId, ...(sourceProjectId ? { projectId: sourceProjectId } : {}) };
+      const [backendId, profileId, sourceProjectId] = JSON.parse(key) as [ExtensionSourceContext['backendId'], string, string];
+      const context: ExtensionSourceContext = backendId === RIFFET_SOURCE_ID
+        ? { backendId: RIFFET_SOURCE_ID, profileId: RIFFET_SOURCE_ID }
+        : { backendId, profileId, ...(sourceProjectId ? { projectId: sourceProjectId } : {}) };
       cache.current.set(key, {
-        source: { key, context, profileName: profileId, loading: false },
+        source: { key, context, profileName: backendId === RIFFET_SOURCE_ID ? 'Riffet' : profileId, loading: false },
         fetchedAt: 0,
         capabilityCheckedAt: 0,
       });
@@ -138,7 +146,8 @@ export function useExtensionSources({ backends, projectId, active }: {
     await loadInventories(true);
   }, [cancelPending, loadInventories]);
 
-  const ensureCapabilities = useCallback((context: ExtensionContext): Promise<ExtensionManagementCapabilities | undefined> => {
+  const ensureCapabilities = useCallback((context: ExtensionSourceContext): Promise<ExtensionManagementCapabilities | undefined> => {
+    if (isRiffetSource(context)) return Promise.resolve(undefined);
     const cached = cache.current.get(extensionContextKey(context));
     if (!lifecycle.current.active || !cached) return Promise.resolve(undefined);
     if (cached.capabilityRequest) return cached.capabilityRequest;
@@ -152,6 +161,7 @@ export function useExtensionSources({ backends, projectId, active }: {
     const isCurrent = () => !controller.signal.aborted && lifecycle.current.active && lifecycle.current.epoch === epoch;
     const request = (async () => {
       try {
+        if (isRiffetSource(cached.source.context)) return undefined;
         const capabilities = await api.extensionCapabilities(cached.source.context, controller.signal);
         if (!isCurrent()) return undefined;
         cached.source = { ...cached.source, capabilities, capabilityError: undefined };

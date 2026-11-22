@@ -3,8 +3,10 @@ import { AppError, requireString } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { ExtensionService } from '../extensions/service.js';
 import { ExtensionManagement } from '../extensions/management.js';
+import { buildRiffetExtensions, requireRiffetDetail, requireRiffetDocument } from '../extensions/riffet-catalog.js';
 import { scopeInEffect } from '../extensions/riffet-skills.js';
-import { requireBackendVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
+import { requireBackendVisibleToClient, requireSessionVisibleToClient, visibleBackendsForClient } from '../native/client-features.js';
+import { SERVER_VERSION } from '../version.js';
 import type { ExtensionActionRequest, ExtensionItem, ExtensionRuntimeReport } from '../../../../packages/contracts/src/index.js';
 import type { RouteDeps } from './deps.js';
 
@@ -46,6 +48,27 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
       return { item, files: [] };
     }
   };
+  const riffetSnapshot = async (headers: import('node:http').IncomingHttpHeaders) => {
+    const [allBackends, plugins] = await Promise.all([
+      deps.nativeBackends.catalog.listBackends(),
+      deps.plugins.descriptors(),
+    ]);
+    const backends = visibleBackendsForClient(headers, allBackends).filter(entry => entry.backendId !== 'chat');
+    const linksService = deps.links?.();
+    return buildRiffetExtensions({
+      version: SERVER_VERSION,
+      selfName: linksService?.selfInfo().name ?? 'Riffet',
+      mcp: deps.riffetMcp.describeCatalog(),
+      backends,
+      plugins,
+      devices: deps.devices.list(),
+      links: linksService?.list() ?? [],
+      settings: deps.settings.getSettings(),
+    });
+  };
+  app.get('/api/extensions/riffet', async request => (await riffetSnapshot(request.headers)).inventory);
+  app.get<{ Params: { itemId: string } }>('/api/extensions/riffet/:itemId', async request => requireRiffetDetail(await riffetSnapshot(request.headers), request.params.itemId));
+  app.get<{ Params: { documentId: string } }>('/api/extensions/riffet/documents/:documentId', async request => requireRiffetDocument(await riffetSnapshot(request.headers), request.params.documentId));
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/extensions', async request => {
     const ctx = context(request.params.id, request.query, request.headers);
     const [inventory, installed] = await Promise.all([service.list(ctx), management.installedPlugins(ctx)]);

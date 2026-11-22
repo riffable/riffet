@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { api, HttpError } from '@/lib/api';
 import { useBackendLabel } from '@/lib/backends';
 import { confirmDialog } from '@/lib/dialogs';
-import { extensionNewPath, extensionScopes, extensionTemplate } from '@/lib/extensions';
+import { extensionKinds, extensionNewPath, extensionScopes, extensionTemplate } from '@/lib/extensions';
 import { formatClock } from '@/lib/i18n/format';
 import { errorMessage } from '@/lib/utils';
 import { Markdown } from '../session/Markdown';
@@ -21,8 +21,8 @@ import { ZoomableImage } from '../session/ImageViewer';
 import { localImagePath } from '../session/imageSource';
 import { invalidateSlashCatalogs } from '../session/useSlashCatalog';
 import {
-  extensionActions, extensionContextKey, extensionRuntimeEntries,
-  type ExtensionCreation, type ExtensionEntry,
+  extensionActions, extensionContextKey, extensionRuntimeEntries, isRiffetSource, riffetActivationBadge,
+  type ExtensionCreation, type ExtensionEntry, type ExtensionSourceContext,
 } from './model';
 
 const ExtensionEditor = lazy(() => import('./ExtensionEditor'));
@@ -57,7 +57,7 @@ interface Props {
   onOpen(key: string): void;
   onDirtyChange(dirty: boolean): void;
   onBusyChange(busy: boolean): void;
-  onChanged(context: ExtensionContext): Promise<void>;
+  onChanged(context?: ExtensionSourceContext): Promise<void>;
   onAction(entry: ExtensionEntry, action: ExtensionAction, target?: string): Promise<void>;
   onCheckRuntime(context: ExtensionContext): Promise<void>;
 }
@@ -79,7 +79,7 @@ export function ExtensionInspector(props: Props) {
 function InspectorContent({
   active, entry, creation, runtime, disabled, onClose, onOpen, onDirtyChange,
   onBusyChange, onChanged, onAction, onCheckRuntime, context: initialContext,
-}: Props & { context: ExtensionContext }) {
+}: Props & { context: ExtensionSourceContext }) {
   const { t } = useLingui();
   const label = useBackendLabel();
   const actionLabels: Record<ExtensionAction, string> = {
@@ -88,6 +88,8 @@ function InspectorContent({
   };
   const stateLabels = { unknown: t`未确认`, loaded: t`已加载`, error: t`异常`, pending: t`等待加载` };
   const context = useRef(initialContext).current;
+  const riffetOnly = isRiffetSource(context);
+  const sourceTitle = riffetOnly ? 'Riffet' : label(context.backendId);
   const [detail, setDetail] = useState<ExtensionDetail>();
   const [document, setDocument] = useState<ExtensionDocument>();
   const [tab, setTab] = useState<'content' | 'files' | 'runtime'>('content');
@@ -128,13 +130,14 @@ function InspectorContent({
   const managementActions = canToggle ? actions.filter(action => action !== 'enable' && action !== 'disable') : actions;
   const secondaryActions = managementActions.filter(action => action === 'update' || action === 'uninstall');
   const matchingRuntime = effectiveEntry ? extensionRuntimeEntries(effectiveEntry, runtime) : [];
-  const profileRuntime = !matchingRuntime.length && (item?.kind === 'hook' || item?.kind === 'mcp' && entry?.ambiguousNativeId
+  const profileRuntime = !riffetOnly && !matchingRuntime.length && (item?.kind === 'hook' || item?.kind === 'mcp' && entry?.ambiguousNativeId
     || ['codex', 'traex'].includes(context.backendId) && Boolean(item?.sourcePath?.endsWith('.toml')));
   const runtimeEntries = profileRuntime ? runtime?.entries ?? [] : matchingRuntime;
   const KindIcon = item ? kindIcons[item.kind] : IconFileText;
   const selectionRef = useRef({ fileId, primaryId: detail?.item.documentId, dirty });
   selectionRef.current = { fileId, primaryId: detail?.item.documentId, dirty };
   const title = creating ? t`新建扩展` : item?.name ?? document?.path.split('/').at(-1) ?? t`扩展文件`;
+  const activation = riffetOnly ? riffetActivationBadge(entry?.item.activation) : undefined;
   const toggleLabel = item?.enabled ? t`停用` : t`启用`;
 
   useEffect(() => {
@@ -165,7 +168,9 @@ function InspectorContent({
     if (!keepDraft) { setDocument(undefined); setText(''); setEditing(false); setShowSource(false); }
     setReading(true); setError(''); setMessage('');
     try {
-      const value = await api.extensionDocument(context, id, controller.signal);
+      const value = riffetOnly
+        ? await api.riffetExtensionDocument(id, controller.signal)
+        : await api.extensionDocument(context, id, controller.signal);
       if (!alive.current || controller.signal.aborted || generation !== readGeneration.current) return;
       setDocument(value);
       if (!keepDraft) setText(value.content);
@@ -185,7 +190,9 @@ function InspectorContent({
     const controller = new AbortController();
     setDetailLoading(true);
     setError('');
-    void api.extension(context, entry.item.id, controller.signal).then(value => {
+    void (riffetOnly
+      ? api.riffetExtension(entry.item.id, controller.signal)
+      : api.extension(context, entry.item.id, controller.signal)).then(value => {
       if (!alive.current || controller.signal.aborted) return;
       const current = selectionRef.current;
       // Follow a renamed primary document, while preserving an explicitly selected related file.
@@ -265,6 +272,7 @@ function InspectorContent({
     saveLock.current = true;
     setSaving(true); onBusyChange(true); setError(''); setMessage('');
     try {
+      if (isRiffetSource(context)) return;
       const value = creating
         ? await api.createExtensionDocument(context, { targetId, path: newPath, content: text })
         : await api.saveExtensionDocument(context, document!.id, text, document!.hash);
@@ -293,7 +301,7 @@ function InspectorContent({
         await onAction(effectiveEntry, action, runtimeTarget);
         if (alive.current) setDetailVersion(value => value + 1);
       }
-      else await onCheckRuntime(context);
+      else if (!isRiffetSource(context)) await onCheckRuntime(context);
     } catch (reason) {
       if (alive.current) setError(errorMessage(reason, action ? t({ message: '操作失败', context: 'extensions-action-failed' }) : t`无法读取运行状态`));
     } finally {
@@ -306,7 +314,7 @@ function InspectorContent({
     {item.readOnlyReason && <p className="break-words leading-5">{item.readOnlyReason}</p>}
     {entry?.ownerKey && <Button size="xs" variant="quiet" disabled={blocked || dirty} onClick={() => onOpen(entry.ownerKey!)}><IconLayers />{entry.sourceLabel}</Button>}
     {item.sourcePath && <details><summary className="cursor-pointer"><Trans>来源</Trans></summary>
-      <dl className="mt-2"><DetailRow label="Agent">{label(context.backendId)}</DetailRow><DetailRow label={t`作用域`}>{extensionScopes[item.scope]}</DetailRow>
+      <dl className="mt-2"><DetailRow label={riffetOnly ? t`来源` : 'Agent'}>{sourceTitle}</DetailRow><DetailRow label={t`作用域`}>{extensionScopes[item.scope]}</DetailRow>
         <DetailRow label={t`路径`}><span className="break-all font-mono text-2xs">{item.sourcePath}</span></DetailRow>
         {item.nativeId && <DetailRow label={t`原生标识`}><span className="break-all font-mono text-2xs">{item.nativeId}</span></DetailRow>}
       </dl>
@@ -326,25 +334,28 @@ function InspectorContent({
       <KindIcon className="mt-1 size-5 shrink-0 text-fg-3" />
       <div className="min-w-0 flex-1">
         <h2 className="break-words text-lg font-semibold text-fg">{title}</h2>
-        <p className="mt-1 text-xs leading-5 text-fg-3">{[label(context.backendId), item && extensionScopes[item.scope]].filter(Boolean).join(' · ')}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <p className="text-xs leading-5 text-fg-3">{(riffetOnly ? [sourceTitle, item && extensionKinds[item.kind]] : [sourceTitle, item && extensionScopes[item.scope]]).filter(Boolean).join(' · ')}</p>
+          {activation && <Badge tone={activation.tone} className="rounded-full font-normal">{activation.label}</Badge>}
+        </div>
       </div>
       <Button variant="quiet" size="icon-sm" disabled={blocked} onClick={onClose} aria-label={t`关闭详情`}><IconX /></Button>
     </div>
-    <div className="flex flex-wrap items-center gap-2 px-6 pb-5 pt-4">
+    {(!riffetOnly || item?.enabled === false) && <div className="flex flex-wrap items-center gap-2 px-6 pb-5 pt-4">
       {item && <span className="mr-1 inline-flex items-center gap-2 text-xs text-fg-2">
-        {typeof item.enabled === 'boolean' && <Switch checked={item.enabled} aria-label={t`${toggleLabel} ${item.name}`} disabled={!canToggle || blocked || readBusy || dirty} onCheckedChange={() => void run(item.enabled ? 'disable' : 'enable')} />}
+        {!riffetOnly && typeof item.enabled === 'boolean' && <Switch checked={item.enabled} aria-label={t`${toggleLabel} ${item.name}`} disabled={!canToggle || blocked || readBusy || dirty} onCheckedChange={() => void run(item.enabled ? 'disable' : 'enable')} />}
         {item.enabled === undefined ? t`已发现` : item.enabled ? t`已启用` : t`已停用`}
       </span>}
       {managementActions.filter(action => action !== 'update' && action !== 'uninstall').map(action => <Button key={action} size="xs" variant="secondary" disabled={blocked || readBusy || dirty} onClick={() => void run(action)}>{actionLabels[action]}</Button>)}
       <span className="flex-1" />
       {!creating && !editing && document?.editable && <Button size="sm" variant="secondary" disabled={blocked || readBusy} onClick={() => { setTab('content'); setEditing(true); setPreview(false); }}><IconPencilLine /><Trans>编辑</Trans></Button>}
       {secondaryActions.length > 0 && <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`} disabled={blocked || readBusy || dirty}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">{secondaryActions.map(action => <DropdownMenuItem key={action} variant={action === 'uninstall' ? 'danger' : undefined} onSelect={() => void run(action)}>{item?.kind === 'skill' && action === 'uninstall' ? t`删除 Skill` : actionLabels[action]}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}
-    </div>
-    {!creating && entry && <div className="h-10 shrink-0 border-b border-line px-3">
+    </div>}
+    {!creating && entry && <div className={riffetOnly && item?.enabled !== false ? 'mt-4 h-10 shrink-0 border-b border-line px-3' : 'h-10 shrink-0 border-b border-line px-3'}>
       <UnderlineTabs value={tab} onChange={setTab} ariaLabel={t`扩展详情`} options={[
         { value: 'content', label: <span className="inline-flex items-center gap-1.5"><Trans>内容</Trans>{dirty && <span className="size-1.5 rounded-full bg-warning" aria-label={t`未保存`} />}</span>, disabled: blocked },
         { value: 'files', label: detail ? t`文件 · ${detail.files.length}` : t({ message: '文件', context: 'extensions-files-tab' }), disabled: blocked },
-        { value: 'runtime', label: t`运行状态`, disabled: blocked },
+        ...(riffetOnly ? [] : [{ value: 'runtime' as const, label: t`运行状态`, disabled: blocked }]),
       ]} />
     </div>}
     <div className="extensions-inspector-body flex min-h-0 flex-1 flex-col gap-5 p-6">

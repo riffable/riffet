@@ -89,6 +89,7 @@ const RULES: readonly Rule[] = [
 
   // Everything else on this server is configured in its own web app, or belongs to whoever uses the entry server.
   { path: '/api/backends', prefix: true, policy: 'deny' },
+  { path: '/api/extensions', prefix: true, policy: 'deny' },
   { path: '/api/cursor', prefix: true, policy: 'deny' },
   { path: '/api/settings', prefix: true, policy: 'deny' },
   { path: '/api/integrations', prefix: true, policy: 'deny' },

@@ -301,6 +301,21 @@ export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; agen
 
 const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...AGENT_TOOLS, ...WORKBENCH_TOOLS, ...discoveryTools, deviceAppearanceTool].map(tool => tool.name).concat([...REMOTE_NAMES]));
 
+/** Read-only snapshot of every tool group Riffet MCP can expose, for inspection in Extensions. */
+export interface RiffetMcpCatalogSnapshot {
+  serverName: string;
+  core: readonly ToolDefinition[];
+  agents: readonly ToolDefinition[];
+  task: readonly ToolDefinition[];
+  remote: readonly ToolDefinition[];
+  device: readonly ToolDefinition[];
+  screen: readonly ToolDefinition[];
+  window: readonly ToolDefinition[];
+  assistant: readonly ToolDefinition[];
+  capabilities: ReadonlyArray<{ id: string; domain: string; description: string; inputSchema?: Record<string, unknown> }>;
+  plugins: ReadonlyArray<{ id: string; owner: string; toolPrefix: string; enabled: boolean; tools: readonly ToolDefinition[] }>;
+}
+
 /**
  * The Riffet MCP server behind each conversation's stdio shim (docs/DEVICES.md §2). A request is
  * authenticated by the conversation's own credential and can only act on that conversation; the
@@ -320,6 +335,74 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       if (reserved.has(name)) throw new Error(`Duplicate Riffet tool: ${name}`);
     }
     this.catalog = catalog;
+  }
+
+  /** Static and currently registered Riffet MCP tools, grouped by how a conversation receives them. */
+  describeCatalog(): RiffetMcpCatalogSnapshot {
+    const deviceDef = (tool: DeviceTool): ToolDefinition => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: object({
+        ...tool.properties,
+        device: { type: 'string', description: 'Target paired device id (optional when only one device is granted).' },
+        timeoutSeconds: { type: 'number', description: 'How long to wait for the device, in seconds.' },
+      }, tool.required ?? []),
+    });
+    const remote: ToolDefinition[] = [
+      {
+        name: 'remote_list',
+        description: 'List the linked servers explicitly granted to this conversation, including their alias, display name, online/permission status, platform, note, and registered project directories.',
+        inputSchema: object({}),
+      },
+      {
+        name: 'remote_exec',
+        description: 'Run a non-interactive shell command on one of the linked servers granted to this conversation over its Riffet tunnel. Output and wall-clock time are bounded.',
+        inputSchema: object({
+          server: { type: 'string', description: 'Target linked server alias or id (optional when only one server is granted).' },
+          command: { type: 'string', description: 'Shell command to run on the target server.' },
+          cwd: { type: 'string', description: 'Working directory on the target server (~ expands to its home directory).' },
+          timeoutSeconds: { type: 'number', description: `Wall-clock timeout in seconds (1-${Math.floor(LINK_BUDGET.execTimeoutMaxMs / 1000)}, default ${Math.floor(LINK_BUDGET.execTimeoutDefaultMs / 1000)}).` },
+        }, ['command']),
+      },
+    ];
+    const activeById = new Map((this.deps.plugins?.()?.agentToolGroups() ?? []).map(item => [item.declaration.id, item]));
+    const plugins = (this.deps.plugins?.()?.declaredAgentTools() ?? []).map(({ owner, declaration }) => {
+      const active = activeById.get(declaration.id);
+      return {
+        id: declaration.id,
+        owner,
+        toolPrefix: declaration.toolPrefix,
+        enabled: Boolean(active),
+        tools: active
+          ? active.group.tools.filter(tool => !this.reserved(tool.name)).map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema }))
+          : [],
+      };
+    });
+    const assistantTools: ToolDefinition[] = [
+      ...Array.from(this.deps.assistant?.()?.tools.values() ?? [], tool => tool.definition),
+      ...WORKBENCH_TOOLS,
+      deviceAppearanceTool,
+      ...(this.catalog ? discoveryTools : []),
+      ...Array.from(this.catalog?.commands.values() ?? [], command => command.definition),
+    ];
+    return {
+      serverName: RIFFET_MCP_NAME,
+      core: TOOLS,
+      agents: AGENT_TOOLS,
+      task: TASK_TOOLS,
+      remote,
+      device: [...DEVICE_TOOLS.map(deviceDef), deviceAppearanceTool],
+      screen: [...SCREEN_TOOLS.map(deviceDef), SCREEN_HELP_TOOL],
+      window: WINDOW_TOOLS.map(deviceDef),
+      assistant: assistantTools,
+      capabilities: this.catalog?.entries().map(entry => ({
+        id: entry.id,
+        domain: entry.domain,
+        description: entry.description,
+        ...(entry.inputSchema ? { inputSchema: entry.inputSchema } : {}),
+      })) ?? [],
+      plugins,
+    };
   }
 
   bind(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void {

@@ -60,6 +60,38 @@ export function riffetSkills(scenario: SkillScenario): RiffetSkill[] {
   });
 }
 
+/** Raw Markdown template bundled with Riffet, for read-only inspection in Extensions. */
+export function rawPromptSource(name: PromptName): string {
+  return `${PROMPT_SOURCES[name]}\n`;
+}
+
+export interface RiffetPackSkill {
+  id: string;
+  name: string;
+  description: string;
+  skillText: string;
+  memoryText?: string;
+}
+
+/** Built-in capability pack skills bundled with Riffet (`pack.<id>.skill.md` + optional `pack.<id>.memory.md`). */
+export function riffetPackSkills(): RiffetPackSkill[] {
+  const keys = (Object.keys(PROMPT_SOURCES) as PromptName[]).filter(key => /^pack\.[^.]+\.skill$/.test(key)).sort();
+  return keys.map(key => {
+    const id = key.slice('pack.'.length, -'.skill'.length);
+    const text = PROMPT_SOURCES[key];
+    const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
+    const field = (name: string) => new RegExp(`^${name}:\\s*(.+)$`, 'm').exec(front)?.[1]?.trim() ?? '';
+    const memoryKey = `pack.${id}.memory` as PromptName;
+    return {
+      id,
+      name: field('name') || id,
+      description: field('description'),
+      skillText: `${text}\n`,
+      ...(Object.hasOwn(PROMPT_SOURCES, memoryKey) ? { memoryText: `${PROMPT_SOURCES[memoryKey]}\n` } : {}),
+    };
+  });
+}
+
 export type BriefLanguage = 'zh' | 'en';
 export type BriefPart = 'head' | 'turn' | 'continues' | 'actions' | 'replies' | 'earlier' | 'changed' | 'transcript' | 'transcriptOmitted' | 'empty';
 

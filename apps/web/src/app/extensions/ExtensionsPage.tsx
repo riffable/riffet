@@ -1,6 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { ExtensionAction, ExtensionActionRequest, ExtensionActionResult, ExtensionContext, ExtensionKind, ExtensionRuntimeReport, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
+import { NATIVE_BACKEND_IDS, type ExtensionAction, type ExtensionActionRequest, type ExtensionActionResult, type ExtensionContext, type ExtensionKind, type ExtensionRuntimeReport, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
 import { IconDownload, IconEllipsis, IconPlus, IconRefreshCw, IconSettings2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { SearchField } from '@/components/ui/search-field';
@@ -22,7 +22,7 @@ import { invalidateSlashCatalogs } from '../session/useSlashCatalog';
 import { useStores } from '../state/stores';
 import { ExtensionCatalog } from './ExtensionCatalog';
 import { ExtensionInspector } from './ExtensionInspector';
-import { extensionActions, extensionContextKey, extensionEntryKey, extensionStatus, type ExtensionCreation, type ExtensionEntry } from './model';
+import { extensionActions, extensionContextKey, extensionEntryKey, extensionStatus, isRiffetSource, RIFFET_SOURCE_ID, riffetActivationBadge, type ExtensionCreation, type ExtensionEntry, type ExtensionSourceContext } from './model';
 import { useExtensionSources } from './useExtensionSources';
 import './extensions.css';
 import { PageHeader } from '../PageScaffold';
@@ -44,8 +44,27 @@ interface Props {
 
 const pageSize = 20;
 const kinds: ExtensionKind[] = ['skill', 'mcp', 'plugin', 'hook', 'rule', 'command', 'config'];
+const riffetKinds: ExtensionKind[] = ['mcp', 'skill', 'rule', 'config'];
+const LAST_SOURCE_KEY = 'riffet.extensions.lastSource';
+type SourceId = NativeBackendId | typeof RIFFET_SOURCE_ID;
 type Status = 'all' | 'attention' | 'enabled' | 'disabled' | 'unknown';
 type Picker = 'install' | 'runtime';
+
+function readRememberedSource(): SourceId | undefined {
+  try {
+    const value = window.localStorage.getItem(LAST_SOURCE_KEY)?.trim();
+    return value ? value as SourceId : undefined;
+  } catch { return undefined; }
+}
+
+function writeRememberedSource(value: SourceId): void {
+  try { window.localStorage.setItem(LAST_SOURCE_KEY, value); } catch { /* Storage may be unavailable. */ }
+}
+
+function backendRank(id: NativeBackendId): number {
+  const index = (NATIVE_BACKEND_IDS as readonly string[]).indexOf(id);
+  return index >= 0 ? index : NATIVE_BACKEND_IDS.length;
+}
 
 function authorizationLink(value?: string): string | undefined {
   try { const url = new URL(value ?? ''); return ['https:', 'http:'].includes(url.protocol) ? url.href : undefined; }
@@ -59,17 +78,27 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
   const actionLabels: Record<ExtensionAction, string> = { enable: t`启用`, disable: t`停用`, install: t`安装插件`, uninstall: t`卸载`, update: t`更新`, reload: t`重载 MCP`, login: t`认证` };
   const [projectId, setProjectId] = useState('');
   // Extensions belong to the Agent's native configuration, not the conversation's LLM provider.
-  const agentOptions = useMemo(() => backends.flatMap(agent => {
-    const profile = agent.profiles.find(value => value.id === 'local')
-      ?? agent.profiles.find(value => value.isDefault) ?? agent.profiles[0];
-    return profile ? [{ ...agent, profiles: [profile] }] : [];
-  }), [backends]);
+  // Keep standard Agent order (claude, codex, antigravity, cursor, pi, traex, droid, dsh, then plugins).
+  const agentOptions = useMemo(() => [...backends]
+    .sort((a, b) => backendRank(a.backendId) - backendRank(b.backendId))
+    .flatMap(agent => {
+      const profile = agent.profiles.find(value => value.id === 'local')
+        ?? agent.profiles.find(value => value.isDefault) ?? agent.profiles[0];
+      return profile ? [{ ...agent, profiles: [profile] }] : [];
+    }), [backends]);
   const { sources, loading, refresh, ensureCapabilities } = useExtensionSources({ backends: agentOptions, projectId: projectId || undefined, active });
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [backend, setBackend] = useState<NativeBackendId | ''>(() => agentOptions.find(agent => agent.backendId === initialBackend)?.backendId ?? agentOptions[0]?.backendId ?? '');
-  const currentAgent = agentOptions.find(agent => agent.backendId === backend);
-  const [profileId, setProfileId] = useState(() => currentAgent?.profiles[0]?.id ?? '');
-  const [kind, setKind] = useState<ExtensionKind>('skill');
+  const [backend, setBackend] = useState<SourceId | ''>(() => {
+    const remembered = readRememberedSource();
+    if (remembered === RIFFET_SOURCE_ID) return RIFFET_SOURCE_ID;
+    if (remembered && agentOptions.some(agent => agent.backendId === remembered)) return remembered;
+    return agentOptions.find(agent => agent.backendId === initialBackend)?.backendId ?? agentOptions[0]?.backendId ?? RIFFET_SOURCE_ID;
+  });
+  const isRiffet = backend === RIFFET_SOURCE_ID;
+  const currentAgent = isRiffet ? undefined : agentOptions.find(agent => agent.backendId === backend);
+  const [profileId, setProfileId] = useState(() => isRiffet ? RIFFET_SOURCE_ID : currentAgent?.profiles[0]?.id ?? RIFFET_SOURCE_ID);
+  const visibleKinds = isRiffet ? riffetKinds : kinds;
+  const [kind, setKind] = useState<ExtensionKind>(() => isRiffet ? 'mcp' : 'skill');
   const [scope, setScope] = useState('all');
   const [origin, setOrigin] = useState('all');
   const [status, setStatus] = useState<Status>('all');
@@ -101,7 +130,8 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
   const busy = editorBusy || operationBusy;
   const currentSource = sources.find(source => source.context.backendId === backend && source.context.profileId === profileId);
   const selectedSource = sources.find(source => source.key === pickerKey);
-  const createTargets = currentSource?.inventory?.createTargets.filter(value => value.kind === kind) ?? [];
+  const createTargets = currentSource?.inventory?.createTargets?.filter(value => value.kind === kind) ?? [];
+  const sourceLabelFor = useCallback((id: SourceId | '') => (id === RIFFET_SOURCE_ID ? 'Riffet' : id ? agentLabel(id) : 'Agent'), [agentLabel]);
 
   const entries = useMemo(() => sources.flatMap(source => {
     const plugins = new Map(source.inventory?.items.filter(item => item.kind === 'plugin').map(item => [item.id, item]) ?? []);
@@ -132,7 +162,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
   const detailOpen = Boolean(selected || creation);
   const shownDetail = detailOpen ? { entry: selected, creation } : lastDetail.current;
   const shownPicker = picker ?? lastPicker.current;
-  const indexed = useMemo(() => entries.map(entry => ({ entry, search: [entry.item.name, entry.item.description, entry.item.sourcePath, entry.item.nativeId, entry.sourceLabel, entry.profileName, agentLabel(entry.context.backendId), extensionKinds[entry.item.kind]].filter(Boolean).join(' ').toLocaleLowerCase() })), [entries, agentLabel]);
+  const indexed = useMemo(() => entries.map(entry => ({ entry, search: [entry.item.name, entry.item.description, entry.item.sourcePath, entry.item.nativeId, entry.sourceLabel, entry.profileName, sourceLabelFor(entry.context.backendId), extensionKinds[entry.item.kind], riffetActivationBadge(entry.item.activation)?.label].filter(Boolean).join(' ').toLocaleLowerCase() })), [entries, sourceLabelFor]);
   const contextRows = useMemo(() => indexed.filter(({ entry }) => entry.context.backendId === backend
     && entry.context.profileId === profileId
     && (scope === 'all' || entry.item.scope === scope)
@@ -176,15 +206,17 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
   useEffect(() => { onBeforeLeaveChange(guard); return () => onBeforeLeaveChange(undefined); }, [guard, onBeforeLeaveChange]);
   // Keep a removed Agent/profile from leaving an unusable directory, while preserving drafts.
   useEffect(() => {
-    if (dirty || busy) return;
+    if (dirty || busy || backend === RIFFET_SOURCE_ID) return;
     const agent = agentOptions.find(value => value.backendId === backend);
     if (agent?.profiles.some(value => value.id === profileId)) return;
     const nextAgent = agent ?? agentOptions.find(value => value.backendId === initialBackend) ?? agentOptions[0];
-    const nextProfile = nextAgent?.profiles[0];
-    if ((nextAgent?.backendId ?? '') === backend && (nextProfile?.id ?? '') === profileId) return;
+    const nextBackend: SourceId = nextAgent?.backendId ?? RIFFET_SOURCE_ID;
+    const nextProfile = nextAgent?.profiles[0]?.id ?? RIFFET_SOURCE_ID;
+    if (nextBackend === (backend as SourceId | '') && nextProfile === profileId) return;
     discardSelection(); setPicker(undefined); setChecked(new Set()); setBatchMode(false);
-    setBackend(nextAgent?.backendId ?? ''); setProfileId(nextProfile?.id ?? '');
-  }, [backend, profileId, agentOptions, initialBackend, dirty, busy, discardSelection]);
+    setBackend(nextBackend); setProfileId(nextProfile);
+    if (!nextAgent && !riffetKinds.includes(kind)) setKind('mcp');
+  }, [backend, profileId, kind, agentOptions, initialBackend, dirty, busy, discardSelection]);
   const appliedFocus = useRef(0);
   useEffect(() => {
     if (!focus || focus.at === appliedFocus.current || dirty || busy) return;
@@ -232,27 +264,37 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     void guard().then(ok => { if (ok) { if (returnFocus) detailTrigger.current = returnFocus; if (entry.item.kind !== kind) resetFilters(); selectedSnapshot.current = entry; setSelectedKey(key); setDetailVisit((visit) => visit + 1); setKind(entry.item.kind); setChecked(new Set()); setBatchMode(false); setError(''); setResult(undefined); } });
   }, [selectedKey, creation, guard, entriesByKey, backend, profileId, kind, resetFilters]);
   const selectEntry = useCallback((key: string) => setChecked(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; }), []);
-  async function switchContext(next: { backend?: NativeBackendId; kind?: ExtensionKind; projectId?: string }) {
+  async function switchContext(next: { backend?: SourceId; kind?: ExtensionKind; projectId?: string }) {
     if (!await guard()) return;
+    let nextIsRiffet = isRiffet;
     if (next.backend !== undefined) {
-      const agent = agentOptions.find(value => value.backendId === next.backend);
-      if (!agent) return;
-      setBackend(agent.backendId); setProfileId(agent.profiles[0].id);
+      if (next.backend === RIFFET_SOURCE_ID) {
+        nextIsRiffet = true;
+        setBackend(RIFFET_SOURCE_ID); setProfileId(RIFFET_SOURCE_ID);
+        writeRememberedSource(RIFFET_SOURCE_ID);
+      } else {
+        const agent = agentOptions.find(value => value.backendId === next.backend);
+        if (!agent) return;
+        nextIsRiffet = false;
+        setBackend(agent.backendId); setProfileId(agent.profiles[0].id);
+        writeRememberedSource(agent.backendId);
+      }
     }
     if (next.kind !== undefined) setKind(next.kind);
+    else if (nextIsRiffet && !riffetKinds.includes(kind)) setKind('mcp');
     if (next.projectId !== undefined) setProjectId(next.projectId);
     resetFilters(); setChecked(new Set()); setBatchMode(false); setResult(undefined); setError('');
   }
   async function openCreation(trigger?: HTMLElement) {
     const returnFocus = trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    if (!currentSource || !createTargets.length || !await guard()) return;
+    if (!currentSource || isRiffetSource(currentSource.context) || !createTargets.length || !await guard()) return;
     detailTrigger.current = returnFocus; setError(''); setResult(undefined);
     setCreation({ context: currentSource.context, profileName: currentSource.profileName, targets: createTargets });
     setDetailVisit((visit) => visit + 1);
     setChecked(new Set()); setBatchMode(false);
   }
 
-  async function changed(_context?: ExtensionContext) {
+  async function changed(_context?: ExtensionSourceContext) {
     invalidateSlashCatalogs(); setRuntime({});
     await refresh();
   }
@@ -271,7 +313,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     finally { operationLock.current = false; setOperationBusy(false); }
   }
   async function readSkillManifest(entry?: ExtensionEntry) {
-    if (entry?.item.kind !== 'skill') return;
+    if (entry?.item.kind !== 'skill' || isRiffetSource(entry.context)) return;
     if (!entry.item.documentId) throw new Error(t`无法读取 Skill 主文件，请刷新目录后重试。`);
     // Always use the manifest, even when the inspector is showing a supporting file.
     const document = await api.extensionDocument(entry.context, entry.item.documentId);
@@ -321,23 +363,25 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     finally { operationLock.current = false; setOperationBusy(false); }
   }
   async function onAction(entry: ExtensionEntry, action: ExtensionAction, runtimeTarget?: string) {
+    if (isRiffetSource(entry.context)) return;
     const allowed = runtimeTarget && action === 'login' ? entry.capabilities?.kinds.mcp?.includes('login') : extensionActions(entry).includes(action);
     if (!allowed) return;
     await apply(entry.context, { action, ...(runtimeTarget ? { target: runtimeTarget } : action === 'reload' ? {} : { itemId: entry.item.id }) }, runtimeTarget ?? entry.item.name, entry);
   }
   async function batch(enable: boolean) {
     if (operationLock.current || editorBusy || dirty) return;
-    const targets = enable ? enableEntries : disableEntries;
+    const targets = (enable ? enableEntries : disableEntries).filter(entry => !isRiffetSource(entry.context));
     if (!targets.length) return;
     operationLock.current = true; setOperationBusy(true); setError('');
     try {
-      const requests: Array<{ entry: ExtensionEntry; request: ExtensionActionRequest }> = [];
+      const requests: Array<{ entry: ExtensionEntry; context: ExtensionContext; request: ExtensionActionRequest }> = [];
       // Read every Skill manifest before confirmation. A failed read leaves the entire batch untouched.
       for (const entry of targets) {
+        if (isRiffetSource(entry.context)) continue;
         const document = await readSkillManifest(entry);
-        requests.push({ entry, request: { action: enable ? 'enable' : 'disable', itemId: entry.item.id, ...(document ? { expectedHash: document.hash } : {}) } });
+        requests.push({ entry, context: entry.context, request: { action: enable ? 'enable' : 'disable', itemId: entry.item.id, ...(document ? { expectedHash: document.hash } : {}) } });
       }
-      const contexts = new Set(targets.map(entry => agentLabel(entry.context.backendId)));
+      const contexts = new Set(requests.map(item => agentLabel(item.context.backendId)));
       const notes = new Set(targets.filter(entry => entry.item.kind === 'skill').map(entry => entry.item.managementNote ?? t`技能开关可能影响同配置的其他项目。`));
       const description = [t`${[...contexts].join('、')}。`, ...notes, t`${checkedEntries.length - targets.length} 项不支持此操作或无需变更，将跳过。`].join('\n');
       const batchLabel = enable ? t`启用` : t`停用`;
@@ -348,9 +392,9 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
       const incompleteLabel = t`操作未完成`;
       const failedLabel = t({ message: '操作失败', context: 'extensions-action-failed' });
       // Native configuration locks are profile-wide; serialize writes and never retry mutations.
-      for (const { entry, request } of requests) {
+      for (const { entry, context, request } of requests) {
         try {
-          const response = await api.extensionAction(entry.context, request);
+          const response = await api.extensionAction(context, request);
           if (response.success) { successes++; if (response.applyEffect) effects.add(response.applyEffect); }
           else failures.push(t`${entry.item.name}：${response.output || response.applyEffect || incompleteLabel}`);
         } catch (reason) { failures.push(t`${entry.item.name}：${errorMessage(reason, failedLabel)}`); }
@@ -362,7 +406,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     finally { operationLock.current = false; setOperationBusy(false); }
   }
   async function openPicker(mode: Picker) {
-    if (!currentSource || !await guard()) return;
+    if (!currentSource || isRiffetSource(currentSource.context) || !await guard()) return;
     setPickerKey(currentSource.key); setTarget(''); setInstallScope('user'); setResult(undefined); setPicker(mode);
   }
   const authUrl = authorizationLink(result?.authorizationUrl);
@@ -388,7 +432,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     <PageHeader divided title={<Trans>扩展管理</Trans>} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} actions={<>
         <Button size="icon-sm" variant="quiet" disabled={busy} aria-label={t`刷新目录`} title={t`刷新目录`} onClick={() => void refreshDirectory()} busy={loading}><IconRefreshCw /></Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
-          <DropdownMenuItem disabled={busy || !currentSource} onSelect={() => void openPicker('runtime')}><Trans>运行状态与 MCP</Trans></DropdownMenuItem>
+          <DropdownMenuItem disabled={busy || !currentSource || isRiffet} onSelect={() => void openPicker('runtime')}><Trans>运行状态与 MCP</Trans></DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setShowDiagnostics(true)}><Trans>诊断</Trans></DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
@@ -398,26 +442,28 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
       <section ref={catalogRef} className="extensions-catalog" aria-label={t`扩展目录`}>
         <div className="extensions-page-nav">
           <div className="extensions-context-controls">
-            <Select<string> className="extensions-agent-filter" label="Agent" value={backend} disabled={busy || !agentOptions.length} onChange={next => void switchContext({ backend: next as NativeBackendId })} options={agentOptions.map(agent => ({ value: agent.backendId, label: agentLabel(agent.backendId) }))} />
-            <Select className="extensions-project-filter" label={t`配置范围`} value={projectId} disabled={busy} onChange={next => void switchContext({ projectId: next })} options={[{ value: '', label: t`用户配置` }, ...projects.filter(value => !value.archivedAt).map(value => ({ value: value.id, label: value.name }))]} />
+            <Select<string> className="extensions-agent-filter" label="Agent" value={backend} disabled={busy} onChange={next => void switchContext({ backend: next as SourceId })} options={[...agentOptions.map(agent => ({ value: agent.backendId, label: agentLabel(agent.backendId) })), { value: RIFFET_SOURCE_ID, label: 'Riffet' }]} />
+            {isRiffet
+              ? <Select className="extensions-project-filter" label={t`配置范围`} value="" disabled onChange={() => undefined} options={[{ value: '', label: t`本机服务器` }]} />
+              : <Select className="extensions-project-filter" label={t`配置范围`} value={projectId} disabled={busy} onChange={next => void switchContext({ projectId: next })} options={[{ value: '', label: t`用户配置` }, ...projects.filter(value => !value.archivedAt).map(value => ({ value: value.id, label: value.name }))]} />}
           </div>
           <SearchField ref={searchRef} className="extensions-search" aria-label={t`搜索扩展`} placeholder={t`搜索扩展`} value={query} onChange={setQuery} hint={<Kbd>/</Kbd>} />
         </div>
         <div className="extensions-browse-bar">
-          <div className="extensions-kind-tabs"><UnderlineTabs value={kind} onChange={next => { if (next !== kind) void switchContext({ kind: next }); }} ariaLabel={t`扩展类型`} options={kinds.map(value => ({ value, label: <>{extensionKinds[value]}<span className="extensions-kind-count">{counts[value]}</span></>, disabled: busy }))} /></div>
+          <div className="extensions-kind-tabs"><UnderlineTabs value={kind} onChange={next => { if (next !== kind) void switchContext({ kind: next }); }} ariaLabel={t`扩展类型`} options={visibleKinds.map(value => ({ value, label: <>{extensionKinds[value]}<span className="extensions-kind-count">{counts[value]}</span></>, disabled: busy }))} /></div>
           <div className="extensions-toolbar">
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}><PopoverTrigger asChild><Button size="icon-sm" title={t({ message: '筛选', context: 'extensions-filters-label' })} variant={activeFilters.length ? 'secondary' : 'quiet'} aria-label={activeFilters.length ? t`筛选，${activeFilters.length} 项已启用` : t({ message: '筛选', context: 'extensions-filters-label' })}><IconSettings2 />{activeFilters.length > 0 && <span className="text-2xs tabular-nums">{activeFilters.length}</span>}</Button></PopoverTrigger><PopoverContent mobileSheet align="end" className="w-[340px] max-w-[calc(100vw-24px)] p-4">
               <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-medium"><Trans context="extensions-filters-label">筛选</Trans></h2><Button size="xs" variant="quiet" onClick={resetFilters}><Trans>重置</Trans></Button></div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label={t`作用域`}><Select label={t`作用域筛选`} value={scope} onChange={setScope} options={[{ value: 'all', label: t`全部作用域` }, ...Object.entries(extensionScopes).filter(([value]) => value !== 'riffet' || ownScope).map(([value, label]) => ({ value, label }))]} /></Field>
+                {!isRiffet && <Field label={t`作用域`}><Select label={t`作用域筛选`} value={scope} onChange={setScope} options={[{ value: 'all', label: t`全部作用域` }, ...Object.entries(extensionScopes).filter(([value]) => value !== 'riffet' || ownScope).map(([value, label]) => ({ value, label }))]} /></Field>}
                 <Field label={t({ message: '状态', context: 'extensions-status-filter' })}><Select<string> label={t`扩展状态`} value={status} onChange={next => setStatus(next as Status)} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label: `${label}${value === 'attention' ? ` · ${attention}` : ''}` }))} /></Field>
-                <Field label={t`来源`}><Select label={t`扩展来源筛选`} value={origin} onChange={setOrigin} options={[{ value: 'all', label: t`全部来源` }, { value: 'own', label: t`独立配置` }, { value: 'plugin', label: t`插件提供` }]} /></Field>
+                {!isRiffet && <Field label={t`来源`}><Select label={t`扩展来源筛选`} value={origin} onChange={setOrigin} options={[{ value: 'all', label: t`全部来源` }, { value: 'own', label: t`独立配置` }, { value: 'plugin', label: t`插件提供` }]} /></Field>}
                 <Field label={t({ message: '排序', context: 'extensions-sort-field' })}><Select label={t`排序方式`} value={sort} onChange={setSort} options={[{ value: 'default', label: t`默认排序` }, { value: 'name', label: t`名称 A–Z` }]} /></Field>
               </div>
               <div className="mt-4 flex justify-end"><Button size="sm" variant="secondary" onClick={() => setFiltersOpen(false)}><Trans context="extensions-done-action">完成</Trans></Button></div>
             </PopoverContent></Popover>
-            {batchMode ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setBatchMode(false); setChecked(new Set()); }}><Trans context="extensions-done-action">完成</Trans></Button> : <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`列表操作`} title={t`列表操作`}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={busy || !filtered.length} onSelect={() => { setBatchMode(true); setChecked(new Set()); }}><Trans>批量选择</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
-            {kind === 'plugin' ? <Button size="sm" variant="secondary" disabled={busy || !currentSource} onClick={() => void openPicker('install')}><IconDownload /><Trans>安装插件</Trans></Button> : createTargets.length > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={event => void openCreation(event.currentTarget)}><IconPlus /><Trans>新建</Trans></Button>}
+            {!isRiffet && (batchMode ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setBatchMode(false); setChecked(new Set()); }}><Trans context="extensions-done-action">完成</Trans></Button> : <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`列表操作`} title={t`列表操作`}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem disabled={busy || !filtered.length} onSelect={() => { setBatchMode(true); setChecked(new Set()); }}><Trans>批量选择</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>)}
+            {!isRiffet && (kind === 'plugin' ? <Button size="sm" variant="secondary" disabled={busy || !currentSource} onClick={() => void openPicker('install')}><IconDownload /><Trans>安装插件</Trans></Button> : createTargets.length > 0 && <Button size="sm" variant="secondary" disabled={busy} onClick={event => void openCreation(event.currentTarget)}><IconPlus /><Trans>新建</Trans></Button>)}
           </div>
         </div>
         <FeedbackNotice scope={JSON.stringify(['extensions-directory', projectId, backend, profileId])} message={failed.length > 0 && t`扩展目录读取失败`} className="mb-3" tone="warning"
@@ -433,7 +479,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     </div>
     <Dialog open={active && showDiagnostics} onOpenChange={setShowDiagnostics}>
       <DialogContent size="content" aria-describedby={undefined}>
-        <DialogHeader><DialogTitle><Trans>诊断</Trans></DialogTitle><DialogDescription>{backend ? agentLabel(backend) : 'Agent'} · {projectId ? projects.find(value => value.id === projectId)?.name ?? t`项目配置` : t`用户配置`}</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle><Trans>诊断</Trans></DialogTitle><DialogDescription>{sourceLabelFor(backend)} · {isRiffet ? t`本机服务器` : projectId ? projects.find(value => value.id === projectId)?.name ?? t`项目配置` : t`用户配置`}</DialogDescription></DialogHeader>
         <DialogBody className="max-h-[55dvh] space-y-4">
           {error && <Notice tone="danger">{errorContent}</Notice>}
           {failed.length > 0 && <div className="space-y-2">{failed.map(source => <Notice key={source.key} tone="danger"><p className="whitespace-pre-wrap break-words text-xs leading-5">{source.error}</p></Notice>)}</div>}
@@ -441,7 +487,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
           {!error && !failed.length && !diagnostics.length && <p className="py-4 text-sm text-fg-3">{currentSource?.loading ? t`正在读取扩展` : currentSource?.inventory ? t`暂无诊断记录` : t`尚未读取目录`}</p>}
         </DialogBody>
         <DialogFooter>
-          <Button variant="quiet" disabled={!diagnostics.length && !failed.length} onClick={() => void copyWithToast([backend && agentLabel(backend), ...failed.map(source => source.error), ...diagnostics].filter(Boolean).join('\n'))}><Trans>复制记录</Trans></Button>
+          <Button variant="quiet" disabled={!diagnostics.length && !failed.length} onClick={() => void copyWithToast([backend && sourceLabelFor(backend), ...failed.map(source => source.error), ...diagnostics].filter(Boolean).join('\n'))}><Trans>复制记录</Trans></Button>
           <Button variant="secondary" disabled={busy} busy={loading} onClick={() => void refreshDirectory()}><Trans>重新读取</Trans></Button>
           <Button onClick={() => setShowDiagnostics(false)}><Trans>关闭</Trans></Button>
         </DialogFooter>
@@ -452,19 +498,19 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
       {(shownDetail.entry || shownDetail.creation) && <ExtensionInspector key={detailVisit} active={active && detailOpen} entry={shownDetail.entry} creation={shownDetail.creation} runtime={selectedReport ?? (shownDetail.entry ? runtime[extensionContextKey(shownDetail.entry.context)] : undefined)} disabled={operationBusy} onClose={() => { void guard(); }} onOpen={openEntry} onDirtyChange={setDirty} onBusyChange={setEditorBusy} onChanged={changed} onAction={onAction} onCheckRuntime={checkRuntime} />}
     </DialogContent></Dialog>
     <Dialog open={Boolean(picker)} onOpenChange={value => { if (!value && !busy) setPicker(undefined); }}><DialogContent><DialogHeader><DialogTitle>{shownPicker === 'install' ? t`安装插件` : t`运行状态与 MCP`}</DialogTitle><DialogDescription className="sr-only"><Trans>选择操作的 Agent 配置</Trans></DialogDescription></DialogHeader><DialogBody className="flex flex-col gap-4">
-      <p className="text-xs text-fg-3">{selectedSource ? agentLabel(selectedSource.context.backendId) : ''}</p>
+      <p className="text-xs text-fg-3">{selectedSource ? sourceLabelFor(selectedSource.context.backendId) : ''}</p>
       {shownPicker === 'install' && <>
         {!selectedSource?.capabilities && !selectedSource?.capabilityError ? <Spinner /> : !selectedSource?.capabilities?.actions.includes('install') ? <p className="text-xs text-fg-3">{selectedSource?.capabilityError || selectedSource?.capabilities?.reason || t`此配置不支持原生插件安装。`}</p> : <><Field label={t`插件名称`} hint={t`使用原生插件标识，例如 name@marketplace`}><Input aria-label={t`插件名称`} value={target} disabled={busy} onChange={event => setTarget(event.target.value)} /></Field><Field label={t`安装作用域`}><Select<'user' | 'project'> label={t`安装作用域`} value={installScope} disabled={busy} onChange={setInstallScope} options={[{ value: 'user', label: t({ message: '用户级', context: 'extensions-scope-user' }) }, ...(selectedSource.context.projectId && selectedSource.capabilities.installScopes?.includes('project') ? [{ value: 'project' as const, label: t`当前项目` }] : [])]} /></Field></>}
       </>}
       {shownPicker === 'runtime' && <>
         {selectedSource?.capabilityError && <p role="alert" className="text-xs text-danger">{selectedSource.capabilityError}</p>}
-        {pickerReport && <div className="max-h-72 overflow-auto"><p className="mb-2 text-xs text-fg-3">{t`检查于 ${formatClock(pickerReport.checkedAt)}`}</p>{pickerReport.entries.map((entry, index) => <div key={index} className="flex items-center gap-2 border-b border-line py-2"><span className="min-w-0 flex-1"><span className="block truncate text-sm">{entry.name}</span><span className="block truncate text-2xs text-fg-3" title={entry.sessionId}>{entry.sessionId}{entry.message ? ` · ${entry.message}` : ''}</span></span><span className="text-xs text-fg-3">{runtimeStateLabels[entry.state]}</span>{entry.kind === 'mcp' && selectedSource?.capabilities?.kinds.mcp?.includes('login') && <Button size="xs" variant="ghost" disabled={busy} onClick={() => void apply(selectedSource.context, { action: 'login', target: entry.name }, entry.name)}><Trans>认证</Trans></Button>}</div>)}{pickerReport.diagnostics.map((line, index) => <p className="mt-2 break-words text-xs text-fg-3" key={index}>{line}</p>)}</div>}
+        {pickerReport && <div className="max-h-72 overflow-auto"><p className="mb-2 text-xs text-fg-3">{t`检查于 ${formatClock(pickerReport.checkedAt)}`}</p>{pickerReport.entries.map((entry, index) => <div key={index} className="flex items-center gap-2 border-b border-line py-2"><span className="min-w-0 flex-1"><span className="block truncate text-sm">{entry.name}</span><span className="block truncate text-2xs text-fg-3" title={entry.sessionId}>{entry.sessionId}{entry.message ? ` · ${entry.message}` : ''}</span></span><span className="text-xs text-fg-3">{runtimeStateLabels[entry.state]}</span>{entry.kind === 'mcp' && selectedSource?.capabilities?.kinds.mcp?.includes('login') && !isRiffetSource(selectedSource.context) && <Button size="xs" variant="ghost" disabled={busy} onClick={() => void apply(selectedSource.context as ExtensionContext, { action: 'login', target: entry.name }, entry.name)}><Trans>认证</Trans></Button>}</div>)}{pickerReport.diagnostics.map((line, index) => <p className="mt-2 break-words text-xs text-fg-3" key={index}>{line}</p>)}</div>}
       </>}
       {error && <Notice tone="danger" role="alert">{errorContent}</Notice>}
       {result && <Notice tone={result.success ? 'neutral' : 'warning'}><div className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs">{[result.applyEffect, result.output, ...(result.diagnostics ?? [])].filter(Boolean).join('\n')}</div>{authUrl && <a className="mt-2 inline-block text-accent underline" href={authUrl} target="_blank" rel="noopener noreferrer"><Trans>打开授权页面</Trans></a>}</Notice>}
     </DialogBody><DialogFooter><Button disabled={busy} onClick={() => setPicker(undefined)}><Trans>关闭</Trans></Button>
-      {shownPicker === 'install' && <Button variant="primary" disabled={busy || !target.trim() || !selectedSource?.capabilities?.actions.includes('install')} onClick={() => { if (selectedSource) void apply(selectedSource.context, { action: 'install', target: target.trim(), scope: installScope }, target.trim()); }}>{operationBusy && <Spinner />}<Trans>安装插件</Trans></Button>}
-      {shownPicker === 'runtime' && selectedSource && <><Button disabled={editorBusy} busy={operationBusy} onClick={() => void checkRuntime(selectedSource.context)}><Trans>检查</Trans></Button>{selectedSource.capabilities?.actions.includes('reload') && <Button disabled={busy} onClick={() => void apply(selectedSource.context, { action: 'reload' }, t`MCP 配置`)}><Trans>重载 MCP</Trans></Button>}</>}
+      {shownPicker === 'install' && <Button variant="primary" disabled={busy || !target.trim() || !selectedSource?.capabilities?.actions.includes('install')} onClick={() => { if (selectedSource && !isRiffetSource(selectedSource.context)) void apply(selectedSource.context, { action: 'install', target: target.trim(), scope: installScope }, target.trim()); }}>{operationBusy && <Spinner />}<Trans>安装插件</Trans></Button>}
+      {shownPicker === 'runtime' && selectedSource && !isRiffetSource(selectedSource.context) && <><Button disabled={editorBusy} busy={operationBusy} onClick={() => void checkRuntime(selectedSource.context as ExtensionContext)}><Trans>检查</Trans></Button>{selectedSource.capabilities?.actions.includes('reload') && <Button disabled={busy} onClick={() => void apply(selectedSource.context as ExtensionContext, { action: 'reload' }, t`MCP 配置`)}><Trans>重载 MCP</Trans></Button>}</>}
     </DialogFooter></DialogContent></Dialog>
   </div></OverlayScopeContext.Provider>;
 }

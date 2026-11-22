@@ -23,7 +23,37 @@ async function harness(backend: 'claude' | 'traex' = 'claude', driver: Partial<N
   const profile = { id: 'local', backendId: backend, name: 'Fixture', config: { configDir: user, executable: join(root, 'unavailable-agent') } };
   const app = Fastify();
   app.setErrorHandler<Error>((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'ERROR', message: error.message }));
-  registerExtensionRoutes(app, { stateDir: root, store: { getProject: () => project, getSession: () => ({ projectId: 'project', backendId: 'codex', backendProfileId: 'local' }) }, nativeBackends: { catalog: { validateProfile: (_backend: string, id?: string) => { if (id && id !== 'local') throw new AppError('NOT_FOUND', 'profile', 404); return profile; }, invalidateSlashCatalogs: invalidate }, registry: { require: () => driver }, host: {} } } as unknown as RouteDeps);
+  registerExtensionRoutes(app, {
+    stateDir: root,
+    store: { getProject: () => project, getSession: () => ({ projectId: 'project', backendId: 'codex', backendProfileId: 'local' }) },
+    nativeBackends: {
+      catalog: {
+        validateProfile: (_backend: string, id?: string) => { if (id && id !== 'local') throw new AppError('NOT_FOUND', 'profile', 404); return profile; },
+        invalidateSlashCatalogs: invalidate,
+        listBackends: async () => [{ backendId: 'claude', label: 'Claude Code', available: true, profiles: [], capabilities: { supportsRiffetTools: true, extensionToggles: { mcp: true, skills: true } } }],
+      },
+      registry: { require: () => driver },
+      host: {},
+    },
+    plugins: { descriptors: async () => [] },
+    devices: { list: () => [] },
+    settings: { getSettings: () => ({ defaultBackendId: 'claude' }) },
+    riffetMcp: {
+      describeCatalog: () => ({
+        serverName: 'riffet',
+        core: [{ name: 'read_context', description: 'Read context' }],
+        agents: [],
+        task: [],
+        remote: [{ name: 'remote_exec', description: 'Run on linked server' }],
+        device: [],
+        screen: [],
+        window: [],
+        assistant: [],
+        capabilities: [{ id: 'workbench.status', domain: 'workbench', description: 'Read workbench status' }],
+        plugins: [],
+      }),
+    },
+  } as unknown as RouteDeps);
   cleanups.push(() => app.close());
   return { app, user, invalidate };
 }
@@ -99,5 +129,26 @@ describe('extension routes', () => {
     expect(await readFile(join(backupPath, 'SKILL.md'), 'utf8')).toBe(manifest.content);
     expect((await inventory()).items.some((item: { id: string }) => item.id === before.id)).toBe(false);
     expect((await action('uninstall')).statusCode).toBe(404);
+  });
+
+  it('serves read-only Riffet built-in MCP, skills, rules and config catalog', async () => {
+    const { app } = await harness();
+    const list = await app.inject('/api/extensions/riffet');
+    expect(list.statusCode).toBe(200);
+    const items = list.json().items as Array<{ id: string; kind: string; name: string; scope: string; activation?: string; documentId?: string }>;
+    expect(new Set(items.map(item => item.kind))).toEqual(new Set(['mcp', 'skill', 'rule', 'config']));
+    expect(items.every(item => item.scope === 'riffet' && Boolean(item.activation))).toBe(true);
+    const mcpCore = items.find(item => item.kind === 'mcp' && item.name === 'riffet:core')!;
+    expect(mcpCore).toMatchObject({ activation: 'auto' });
+    expect(items.find(item => item.kind === 'mcp' && item.name === 'riffet:remote')).toMatchObject({ activation: 'opt-in' });
+    const detail = await app.inject(`/api/extensions/riffet/${mcpCore.id}`);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().files).toHaveLength(1);
+    const doc = await app.inject(`/api/extensions/riffet/documents/${mcpCore.documentId}`);
+    expect(doc.statusCode).toBe(200);
+    expect(doc.json()).toMatchObject({ editable: false, language: 'markdown' });
+    expect(doc.json().content).toContain('read_context');
+    expect((await app.inject('/api/extensions/riffet/missing')).statusCode).toBe(404);
+    expect((await app.inject('/api/extensions/riffet/documents/missing')).statusCode).toBe(404);
   });
 });

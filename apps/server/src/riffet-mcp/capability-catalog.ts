@@ -30,6 +30,10 @@ export class CapabilityCatalog {
     }
   }
 
+  entries(): ReadonlyArray<AssistantRead['entry']> {
+    return [...this.byId.values()].map(item => item.entry);
+  }
+
   call(name: string, input: Record<string, unknown>, sessionId: string) {
     if (name === 'capability_read') {
       const result = selection.safeParse(input);

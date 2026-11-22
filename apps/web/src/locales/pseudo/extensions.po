@@ -70,6 +70,14 @@ msgstr ""
 msgid "主文件"
 msgstr ""
 
+#: src/app/extensions/model.ts
+msgid "仅个人助理"
+msgstr ""
+
+#: src/app/extensions/model.ts
+msgid "仅任务会话"
+msgstr ""
+
 #: src/app/extensions/ExtensionInspector.tsx
 msgctxt "extensions-runtime-session"
 msgid "会话"
@@ -254,6 +262,10 @@ msgctxt "extensions-done-action"
 msgid "完成"
 msgstr ""
 
+#: src/app/extensions/model.ts
+msgid "实时只读"
+msgstr ""
+
 #: src/app/extensions/ExtensionsPage.tsx
 msgid "将整个 Skill 目录从来源位置移出并备份。若此目录由多个 Agent 共用，这些 Agent 都会受到影响。"
 msgstr ""
@@ -390,6 +402,10 @@ msgstr ""
 
 #: src/app/extensions/ExtensionsPage.tsx
 msgid "技能开关可能影响同配置的其他项目。"
+msgstr ""
+
+#: src/app/extensions/model.ts
+msgid "按对话开启"
 msgstr ""
 
 #: src/app/extensions/ExtensionsPage.tsx
@@ -579,6 +595,10 @@ msgstr ""
 msgid "未确认"
 msgstr ""
 
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "本机服务器"
+msgstr ""
+
 #: src/app/extensions/ExtensionInspector.tsx
 #: src/app/extensions/ExtensionsPage.tsx
 msgid "来源"
@@ -722,6 +742,10 @@ msgstr ""
 msgid "编辑"
 msgstr ""
 
+#: src/app/extensions/model.ts
+msgid "自动生效"
+msgstr ""
+
 #: src/app/extensions/ExtensionInspector.tsx
 #: src/app/extensions/ExtensionsPage.tsx
 msgid "认证"
@@ -752,9 +776,8 @@ msgid "运行状态与 MCP"
 msgstr ""
 
 #. placeholder {0}: item.name
-#. placeholder {1}: label(entry.context.backendId)
 #: src/app/extensions/ExtensionCatalog.tsx
-msgid "选择 {0} · {1}"
+msgid "选择 {0} · {sourceName}"
 msgstr ""
 
 #: src/app/extensions/ExtensionsPage.tsx
@@ -818,6 +841,10 @@ msgstr ""
 
 #: src/app/extensions/ExtensionInspector.tsx
 msgid "阅读"
+msgstr ""
+
+#: src/app/extensions/model.ts
+msgid "需启用能力包"
 msgstr ""
 
 #: src/app/extensions/ExtensionsPage.tsx

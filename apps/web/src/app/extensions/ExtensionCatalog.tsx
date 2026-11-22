@@ -9,7 +9,7 @@ import { Badge, EmptyState, Spinner } from '@/components/ui/controls';
 import { useBackendLabel } from '@/lib/backends';
 import { extensionScopes } from '@/lib/extensions';
 import { cn } from '@/lib/utils';
-import { extensionActions, extensionContextKey, extensionStatus, type ExtensionEntry } from './model';
+import { extensionActions, extensionContextKey, extensionStatus, isRiffetSource, riffetActivationBadge, type ExtensionEntry } from './model';
 
 // Keep this height in sync with .extensions-row in extensions.css.
 const rowHeight = 76;
@@ -24,19 +24,24 @@ const CatalogRow = memo(function CatalogRow({ entry, active, checked, batchMode,
   const status = extensionStatus(entry, runtime);
   const description = item.description || (item.ownerPluginId ? entry.sourceLabel : '');
   const showStatus = status.tone === 'warning' || item.enabled === false;
-  const skillSource = item.kind !== 'skill' ? undefined : item.ownerPluginId ? t`插件提供`
-    : item.scope === 'riffet' ? extensionScopes.riffet : item.scope === 'builtin' ? t`内置` : item.scope === 'project' ? t({ message: '项目级', context: 'extensions-scope-project' }) : undefined;
+  const activation = isRiffetSource(entry.context) ? riffetActivationBadge(item.activation) : undefined;
+  const skillSource = item.kind !== 'skill'
+    ? (item.scope === 'riffet' && !isRiffetSource(entry.context) ? extensionScopes.riffet : undefined)
+    : item.ownerPluginId ? t`插件提供`
+      : item.scope === 'riffet' ? (isRiffetSource(entry.context) ? undefined : extensionScopes.riffet) : item.scope === 'builtin' ? t`内置` : item.scope === 'project' ? t({ message: '项目级', context: 'extensions-scope-project' }) : undefined;
   // File ownership and native management are independent: a read-only Skill can still be toggled.
-  const skillReadOnly = item.kind === 'skill' && Boolean(item.readOnlyReason);
+  const skillReadOnly = item.kind === 'skill' && Boolean(item.readOnlyReason) && !isRiffetSource(entry.context);
   const skillDeletable = item.kind === 'skill' && extensionActions(entry).includes('uninstall');
   const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'riffet' ? BrandMark : item.scope === 'builtin' ? IconPackage : IconFolder;
+  const sourceName = isRiffetSource(entry.context) ? 'Riffet' : label(entry.context.backendId);
   return <div role="listitem" aria-posinset={rowIndex} aria-setsize={rowCount} className={cn('extensions-row', active && 'is-active', checked && 'is-checked')}>
-    {batchMode && <label className="flex h-full w-8 shrink-0 cursor-pointer items-center justify-center"><Checkbox checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${label(entry.context.backendId)}`} onCheckedChange={() => onSelect(entry.key)} /></label>}
+    {batchMode && <label className="flex h-full w-8 shrink-0 cursor-pointer items-center justify-center"><Checkbox checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${sourceName}`} onCheckedChange={() => onSelect(entry.key)} /></label>}
     <button type="button" disabled={disabled} className="extensions-open" onClick={event => onOpen(entry.key, event.currentTarget)} aria-expanded={active} aria-label={t`查看 ${item.name}`}>
       <span className="extensions-row-content">
         <span className="extensions-row-heading">
           <span className="truncate text-sm font-medium text-fg" title={item.name}>{item.name}</span>
-          {(skillSource || skillReadOnly || skillDeletable) && <span className="extensions-skill-badges">
+          {(activation || skillSource || skillReadOnly || skillDeletable) && <span className="extensions-skill-badges">
+            {activation && <Badge tone={activation.tone} className="rounded-full font-normal">{activation.label}</Badge>}
             {skillSource && <span title={entry.sourceLabel}><Badge className="rounded-full font-normal"><SourceIcon />{skillSource}</Badge></span>}
             {skillReadOnly && <span title={item.readOnlyReason}><Badge tone="warning" className="rounded-full font-normal"><IconLock /><Trans>文件只读</Trans></Badge></span>}
             {skillDeletable && <span title={item.managementNote}><Badge tone="accent" className="rounded-full font-normal"><IconTrash2 /><Trans>可删除</Trans></Badge></span>}
