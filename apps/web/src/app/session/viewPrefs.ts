@@ -69,7 +69,7 @@ export const useViewPrefs = <S,>(selector: (state: ViewPrefs) => S, isEqual?: (a
 
 export function setViewPlacement(placement: ViewSwitchPlacement) { viewPrefs.set({ placement }); }
 
-export function setSessionSide(side: SessionSide) { viewPrefs.set({ side }); }
+export function setSessionSide(side: SessionSide, mark?: RailMark) { viewPrefs.set(mark ? { side, mark } : { side }); }
 
 export function setRailMark(mark: RailMark) { viewPrefs.set({ mark }); }
 

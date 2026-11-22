@@ -20,8 +20,8 @@ struct ComposerFeatures {
     var projectId: String?
     var addSessionReference: ((Session) -> Void)?
     var openSessionReference: ((String) -> Void)?
-    /// Plain Return sends (`composerEnterBehavior == "send"`).
-    var enterSends = false
+    /// Plain Return sends (default; off when `composerEnterBehavior == "newline"`).
+    var enterSends = true
     /// Presentation only; SessionComposer chooses and preserves the actual send intent.
     var steersWhileRunning = false
     var enqueue: (() -> Void)?

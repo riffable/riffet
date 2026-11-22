@@ -97,6 +97,21 @@ export interface CustomTheme {
    * source of truth: clients paint [palette] and never derive from this.
    */
   seed?: ThemeSeed;
+  /** Optional window/sidebar canvas gradient per mode; absence paints solid `bg-sidebar`. */
+  gradient?: ThemeGradient;
+}
+
+/** One mode's canvas gradient: 2 or 3 `#rrggbb` stops and a CSS angle in degrees (0–360). */
+export interface ThemeGradientHalf {
+  colors: string[];
+  angle: number;
+}
+
+export interface ThemeGradient {
+  light: ThemeGradientHalf;
+  dark: ThemeGradientHalf;
+  /** 0 keeps the main content card opaque; 1 lets the canvas gradient show fully through. */
+  blend?: number;
 }
 
 /** One point on the canvas: [hue] is the OKLCH hue in degrees, [radius] runs from grey (0) to full colour (1). */
@@ -106,13 +121,18 @@ export interface ThemeSeedPoint {
 }
 
 export interface ThemeSeed {
-  /** The surface point, then the optional accent and sidebar points. */
+  /** One to three colour points: 1 gives a solid frame, 2–3 blend into a canvas gradient. */
   points: ThemeSeedPoint[];
   /** 0 keeps day white and night black; 1 softens both. */
   softness: number;
+  /** 0 keeps the main card opaque; 1 lets the canvas gradient show fully through. */
+  blend?: number;
 }
 
 export const MAX_THEME_SEED_POINTS = 3;
+export const MIN_THEME_GRADIENT_COLORS = 2;
+export const MAX_THEME_GRADIENT_COLORS = 3;
+export const DEFAULT_THEME_GRADIENT_BLEND = 0.25;
 
 /** `GET /api/themes` and the local cache. `revision` is an opaque content hash. */
 export interface ThemeLibrary {
@@ -280,9 +300,10 @@ function checkSeed(issues: ThemeValidationIssue[], path: string, value: unknown)
     return;
   }
   for (const key of Object.keys(value)) {
-    if (key !== 'points' && key !== 'softness') issues.push({ path: `${path}.${key}`, message: 'is not a seed field' });
+    if (key !== 'points' && key !== 'softness' && key !== 'blend') issues.push({ path: `${path}.${key}`, message: 'is not a seed field' });
   }
   checkUnit(issues, `${path}.softness`, value.softness, 1);
+  if (value.blend !== undefined) checkUnit(issues, `${path}.blend`, value.blend, 1);
   const points = value.points;
   if (!Array.isArray(points) || points.length < 1 || points.length > MAX_THEME_SEED_POINTS) {
     issues.push({ path: `${path}.points`, message: `must have 1 to ${MAX_THEME_SEED_POINTS} points` });
@@ -345,13 +366,47 @@ function checkSyntax(issues: ThemeValidationIssue[], path: string, value: unknow
   checkSyntaxHalf(issues, `${path}.dark`, value.dark);
 }
 
+function checkGradientHalf(issues: ThemeValidationIssue[], path: string, value: unknown): void {
+  if (!isRecord(value)) {
+    issues.push({ path, message: 'must be an object' });
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'colors' && key !== 'angle') issues.push({ path: `${path}.${key}`, message: 'is not a gradient field' });
+  }
+  checkUnit(issues, `${path}.angle`, value.angle, 360);
+  const colors = value.colors;
+  if (!Array.isArray(colors) || colors.length < MIN_THEME_GRADIENT_COLORS || colors.length > MAX_THEME_GRADIENT_COLORS) {
+    issues.push({ path: `${path}.colors`, message: `must have ${MIN_THEME_GRADIENT_COLORS} to ${MAX_THEME_GRADIENT_COLORS} colours` });
+    return;
+  }
+  colors.forEach((color, index) => {
+    if (typeof color !== 'string' || !HEX_ANSI_COLOR.test(color)) {
+      issues.push({ path: `${path}.colors[${index}]`, message: 'must be #rrggbb' });
+    }
+  });
+}
+
+function checkGradient(issues: ThemeValidationIssue[], path: string, value: unknown): void {
+  if (!isRecord(value)) {
+    issues.push({ path, message: 'must be an object' });
+    return;
+  }
+  if (Object.keys(value).some((key) => key !== 'light' && key !== 'dark' && key !== 'blend')) {
+    issues.push({ path, message: 'may only contain light, dark and blend' });
+  }
+  checkGradientHalf(issues, `${path}.light`, value.light);
+  checkGradientHalf(issues, `${path}.dark`, value.dark);
+  if (value.blend !== undefined) checkUnit(issues, `${path}.blend`, value.blend, 1);
+}
+
 function checkTheme(issues: ThemeValidationIssue[], path: string, value: unknown): void {
   if (!isRecord(value)) {
     issues.push({ path, message: 'must be an object' });
     return;
   }
   for (const key of Object.keys(value)) {
-    if (!['id', 'name', 'description', 'palette', 'ansi', 'design', 'syntax', 'seed'].includes(key)) issues.push({ path: `${path}.${key}`, message: 'is not a theme field' });
+    if (!['id', 'name', 'description', 'palette', 'ansi', 'design', 'syntax', 'seed', 'gradient'].includes(key)) issues.push({ path: `${path}.${key}`, message: 'is not a theme field' });
   }
   if (typeof value.id !== 'string' || !THEME_ID.test(value.id)) {
     issues.push({ path: `${path}.id`, message: 'must be custom- followed by 8–64 lowercase letters, digits or dashes' });
@@ -362,6 +417,7 @@ function checkTheme(issues: ThemeValidationIssue[], path: string, value: unknown
   if (value.design !== undefined) checkThemeDesign(issues, path + '.design', value.design);
   if (value.syntax !== undefined) checkSyntax(issues, path + '.syntax', value.syntax);
   if (value.seed !== undefined) checkSeed(issues, `${path}.seed`, value.seed);
+  if (value.gradient !== undefined) checkGradient(issues, `${path}.gradient`, value.gradient);
 
   if (!isRecord(value.palette)) {
     issues.push({ path: `${path}.palette`, message: 'must be an object' });
@@ -441,7 +497,23 @@ export function normalizeThemes(themes: CustomTheme[]): CustomTheme[] {
     ...(theme.design !== undefined ? { design: normalizeThemeDesign(theme.design) } : {}),
     ...(theme.syntax !== undefined ? { syntax: normalizeCodeSyntax(theme.syntax) } : {}),
     ...(theme.seed !== undefined ? { seed: normalizeThemeSeed(theme.seed) } : {}),
+    ...(theme.gradient !== undefined ? { gradient: normalizeThemeGradient(theme.gradient) } : {}),
   }));
+}
+
+/** Rounds gradient angles, blend and stop colours so identical themes hash the same. */
+export function normalizeThemeGradient(gradient: ThemeGradient): ThemeGradient {
+  const roundAngle = (value: number) => Math.round(value * 10) / 10;
+  const roundUnit = (value: number) => Math.round(value * 1000) / 1000;
+  const half = (value: ThemeGradientHalf): ThemeGradientHalf => ({
+    colors: value.colors.map((color) => color.toLowerCase()),
+    angle: roundAngle(((value.angle % 360) + 360) % 360) % 360,
+  });
+  return {
+    light: half(gradient.light),
+    dark: half(gradient.dark),
+    ...(gradient.blend !== undefined ? { blend: roundUnit(gradient.blend) } : {}),
+  };
 }
 
 function normalizeCodeSyntaxHalf(half: CustomCodeSyntaxHalf): CustomCodeSyntaxHalf {
@@ -468,6 +540,7 @@ export function normalizeThemeSeed(seed: ThemeSeed): ThemeSeed {
   return {
     points: seed.points.map((point) => ({ hue: round(point.hue % 360), radius: round(point.radius) })),
     softness: round(seed.softness),
+    ...(seed.blend !== undefined ? { blend: round(seed.blend) } : {}),
   };
 }
 

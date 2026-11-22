@@ -1,16 +1,18 @@
 import SwiftUI
 
 /// Arc-style colour canvas, the Mac twin of `apps/web/src/app/settings/ThemeCanvas.tsx`. The angle
-/// around the centre is the hue and the distance from it is how much colour: the first point tints
-/// the surfaces, the optional second one is the accent and the third the sidebar. Moving the surface
-/// point carries the others round with it, so a pairing survives a change of hue.
+/// around the centre is the hue and the distance from it is how much colour: 1 point paints a solid
+/// frame, while 2 or 3 points blend into a canvas gradient whose angle follows the points' layout.
+/// Moving the primary point rotates the rest with it so pairings survive a change of hue.
 struct ThemeCanvasView: View {
     let seed: CachedThemeSeed
     let onChange: (CachedThemeSeed) -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The point being dragged and the seed as the drag found it. Every step is computed from that
     /// snapshot, so steps that arrive before a redraw cannot build on a stale seed.
     @State private var drag: (index: Int, start: CachedThemeSeed)?
+    @State private var presetPage: Int?
 
     /// The share of the canvas width between the centre and full colour.
     static let reach = 0.44
@@ -22,16 +24,47 @@ struct ThemeCanvasView: View {
         let points: [CachedThemeSeed.Point]
     }
 
-    private static let presets: [Preset] = [
-        Preset(name: "石墨", points: [.init(hue: 258, radius: 0.13), .init(hue: 265, radius: 0.96)]),
-        Preset(name: "纸张", points: [.init(hue: 80, radius: 0.45), .init(hue: 45, radius: 0.75)]),
-        Preset(name: "沙丘", points: [.init(hue: 65, radius: 0.5), .init(hue: 200, radius: 0.6)]),
-        Preset(name: "苔藓", points: [.init(hue: 140, radius: 0.35), .init(hue: 150, radius: 0.6)]),
-        Preset(name: "海", points: [.init(hue: 230, radius: 0.4), .init(hue: 235, radius: 0.8)]),
-        Preset(name: "暮色", points: [.init(hue: 300, radius: 0.35), .init(hue: 290, radius: 0.7)]),
-        Preset(name: "玫瑰", points: [.init(hue: 10, radius: 0.35), .init(hue: 15, radius: 0.8)]),
-        Preset(name: "素", points: [.init(hue: 0, radius: 0), .init(hue: 0, radius: 0)]),
+    private struct PresetPage {
+        let label: LocalizedStringResource
+        let presets: [Preset]
+    }
+
+    private static let presetPages: [PresetPage] = [
+        PresetPage(label: "单色", presets: [
+            Preset(name: "素", points: [.init(hue: 0, radius: 0)]),
+            Preset(name: "纸张", points: [.init(hue: 75, radius: 0.45)]),
+            Preset(name: "琥珀", points: [.init(hue: 45, radius: 0.72)]),
+            Preset(name: "绯红", points: [.init(hue: 18, radius: 0.72)]),
+            Preset(name: "蔷薇", points: [.init(hue: 345, radius: 0.68)]),
+            Preset(name: "暮紫", points: [.init(hue: 295, radius: 0.68)]),
+            Preset(name: "蔚蓝", points: [.init(hue: 240, radius: 0.72)]),
+            Preset(name: "青苔", points: [.init(hue: 155, radius: 0.65)]),
+        ]),
+        PresetPage(label: "双色", presets: [
+            Preset(name: "晴空", points: [.init(hue: 235, radius: 0.72), .init(hue: 280, radius: 0.78)]),
+            Preset(name: "朝霞", points: [.init(hue: 48, radius: 0.75), .init(hue: 350, radius: 0.78)]),
+            Preset(name: "苔原", points: [.init(hue: 145, radius: 0.62), .init(hue: 195, radius: 0.72)]),
+            Preset(name: "晚风", points: [.init(hue: 205, radius: 0.72), .init(hue: 255, radius: 0.76)]),
+            Preset(name: "绯樱", points: [.init(hue: 325, radius: 0.74), .init(hue: 20, radius: 0.76)]),
+            Preset(name: "紫雾", points: [.init(hue: 275, radius: 0.74), .init(hue: 335, radius: 0.76)]),
+            Preset(name: "柠檬", points: [.init(hue: 95, radius: 0.68), .init(hue: 155, radius: 0.7)]),
+            Preset(name: "琥海", points: [.init(hue: 35, radius: 0.72), .init(hue: 225, radius: 0.74)]),
+        ]),
+        PresetPage(label: "三色", presets: [
+            Preset(name: "暮光", points: [.init(hue: 265, radius: 0.8), .init(hue: 330, radius: 0.78), .init(hue: 215, radius: 0.76)]),
+            Preset(name: "极光", points: [.init(hue: 165, radius: 0.72), .init(hue: 220, radius: 0.78), .init(hue: 290, radius: 0.74)]),
+            Preset(name: "落日", points: [.init(hue: 55, radius: 0.76), .init(hue: 15, radius: 0.82), .init(hue: 315, radius: 0.74)]),
+            Preset(name: "蜜桃", points: [.init(hue: 38, radius: 0.76), .init(hue: 355, radius: 0.78), .init(hue: 300, radius: 0.7)]),
+            Preset(name: "霓虹", points: [.init(hue: 320, radius: 0.82), .init(hue: 245, radius: 0.8), .init(hue: 185, radius: 0.76)]),
+            Preset(name: "春野", points: [.init(hue: 110, radius: 0.68), .init(hue: 170, radius: 0.72), .init(hue: 225, radius: 0.74)]),
+            Preset(name: "深海", points: [.init(hue: 210, radius: 0.76), .init(hue: 175, radius: 0.74), .init(hue: 270, radius: 0.76)]),
+            Preset(name: "星云", points: [.init(hue: 285, radius: 0.78), .init(hue: 20, radius: 0.76), .init(hue: 210, radius: 0.76)]),
+        ]),
     ]
+
+    private var activePresetPage: Int {
+        presetPage ?? max(0, min(2, seed.points.count - 1))
+    }
 
     var body: some View {
         VStack(spacing: Space.md) {
@@ -57,48 +90,123 @@ struct ThemeCanvasView: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line))
 
-            HStack(spacing: 0) {
-                ForEach(Self.presets.indices, id: \.self) { index in
-                    let preset = Self.presets[index]
-                    if index > 0 { Spacer(minLength: Space.xxs) }
-                    Button {
-                        onChange(CachedThemeSeed(points: preset.points, softness: seed.softness))
-                    } label: {
-                        Circle()
-                            .fill(LinearGradient(
-                                stops: [
-                                    .init(color: color(ThemeSeedMath.pointColor(preset.points[0])), location: 0.5),
-                                    .init(color: color(ThemeSeedMath.pointColor(preset.points[1])), location: 0.5),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ))
-                            .overlay(Circle().strokeBorder(palette.line))
-                            .frame(width: 22, height: 22)
-                            .contentShape(Circle())
+            VStack(spacing: Space.xs) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(Self.presetPages.indices, id: \.self) { pageIndex in
+                            let page = Self.presetPages[pageIndex]
+                            HStack(spacing: 0) {
+                                ForEach(page.presets.indices, id: \.self) { index in
+                                    let preset = page.presets[index]
+                                    if index > 0 { Spacer(minLength: Space.xxs) }
+                                    Button {
+                                        let nextBlend = preset.points.count > 1 ? (seed.blend ?? ThemeSeedMath.defaultBlend) : seed.blend
+                                        onChange(CachedThemeSeed(points: preset.points, softness: seed.softness, blend: nextBlend))
+                                    } label: {
+                                        presetSwatch(preset.points)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().strokeBorder(palette.line))
+                                            .frame(width: 22, height: 22)
+                                            .contentShape(Circle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help(Text(preset.name))
+                                    .accessibilityLabel(Text(preset.name))
+                                }
+                            }
+                            .padding(.vertical, Space.xxs)
+                            .containerRelativeFrame(.horizontal)
+                            .id(pageIndex)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .help(Text(preset.name))
-                    .accessibilityLabel(Text(preset.name))
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $presetPage)
+
+                HStack(spacing: Space.xs) {
+                    ForEach(Self.presetPages.indices, id: \.self) { index in
+                        let page = Self.presetPages[index]
+                        let active = activePresetPage == index
+                        Button {
+                            withAnimation(reduceMotion ? nil : Motion.standard) { presetPage = index }
+                        } label: {
+                            Capsule()
+                                .fill(active ? palette.fg3 : palette.fg4.opacity(0.5))
+                                .frame(width: active ? 14 : 6, height: 6)
+                                .padding(.vertical, Space.xxs)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .help(Text(page.label))
+                        .accessibilityLabel(Text(page.label))
+                        .accessibilityAddTraits(active ? .isSelected : [])
+                    }
+                }
+            }
+            .onAppear { presetPage = max(0, min(2, seed.points.count - 1)) }
+            .onChange(of: seed.points.count) { _, count in
+                let target = max(0, min(2, count - 1))
+                if presetPage != target {
+                    withAnimation(reduceMotion ? nil : Motion.standard) { presetPage = target }
                 }
             }
 
-            Slider(value: Binding(get: { seed.softness }, set: { value in
-                var next = seed
-                next.softness = value
-                onChange(next)
-            }), in: 0...1)
-            .labelsHidden()
-            .controlSize(.small)
-            .tint(palette.accent)
-            .accessibilityLabel(Text("柔和度"))
+            VStack(spacing: Space.xs) {
+                sliderRow(label: "柔和度", value: Binding(get: { seed.softness }, set: { value in
+                    var next = seed
+                    next.softness = value
+                    onChange(next)
+                }))
+                if seed.points.count > 1 {
+                    sliderRow(label: "透底", value: Binding(get: { seed.blend ?? ThemeSeedMath.defaultBlend }, set: { value in
+                        var next = seed
+                        next.blend = value
+                        onChange(next)
+                    }))
+                }
+            }
+        }
+    }
+
+    private func sliderRow(label: LocalizedStringKey, value: Binding<Double>) -> some View {
+        HStack(spacing: Space.sm) {
+            Text(label)
+                .font(RiffetFont.caption)
+                .foregroundStyle(palette.fg3)
+                .frame(width: 40, alignment: .leading)
+            Slider(value: value, in: 0...1)
+                .labelsHidden()
+                .controlSize(.small)
+                .tint(palette.accent)
+                .accessibilityLabel(Text(label))
         }
     }
 
     // MARK: - Points
 
+    @ViewBuilder
+    private func presetSwatch(_ points: [CachedThemeSeed.Point]) -> some View {
+        let colors = points.map { color(ThemeSeedMath.pointColor($0)) }
+        if colors.count == 1 {
+            colors[0]
+        } else if colors.count == 2 {
+            LinearGradient(colors: [colors[0], colors[1]], startPoint: .topLeading, endPoint: .bottomTrailing)
+        } else {
+            ZStack {
+                LinearGradient(colors: [colors[0], colors[2]], startPoint: .topLeading, endPoint: .bottomTrailing)
+                EllipticalGradient(
+                    colors: [colors[1], colors[1].opacity(0)],
+                    center: UnitPoint(x: 0.88, y: 0.18),
+                    startRadiusFraction: 0,
+                    endRadiusFraction: 0.85
+                )
+            }
+        }
+    }
+
     private func role(_ index: Int) -> String {
-        [String(localized: "底色"), String(localized: "强调色"), String(localized: "侧栏色")][index]
+        [String(localized: "颜色 1"), String(localized: "颜色 2"), String(localized: "颜色 3")][index]
     }
 
     private func offset(_ point: CachedThemeSeed.Point, side: Double) -> CGSize {
@@ -153,18 +261,18 @@ struct ThemeCanvasView: View {
             }
         }
         points[index] = point
-        onChange(CachedThemeSeed(points: points, softness: start.softness))
+        onChange(CachedThemeSeed(points: points, softness: start.softness, blend: start.blend))
     }
 
     // MARK: - Controls
 
     private var controls: some View {
         let count = seed.points.count
-        let remove = count == 3 ? String(localized: "移除侧栏色") : String(localized: "移除强调色")
-        let add = count == 1 ? String(localized: "添加强调色") : String(localized: "添加侧栏色")
+        let remove = String(localized: "移除颜色")
+        let add = String(localized: "添加颜色")
         return HStack(spacing: Space.xxs) {
             Button {
-                onChange(CachedThemeSeed(points: Array(seed.points.dropLast()), softness: seed.softness))
+                onChange(CachedThemeSeed(points: Array(seed.points.dropLast()), softness: seed.softness, blend: seed.blend))
             } label: { Image(icon: "minus") }
             .disabled(count == 1)
             .help(remove)
@@ -231,6 +339,8 @@ private func color(_ rgba: ThemeSeedMath.Rgba) -> Color {
 /// `ThemeEditor.tsx`.
 struct ThemeWindowPreview: View {
     let colors: DraftColors
+    var gradient: CachedThemeGradientHalf? = nil
+    var cardOpacity: Double = 1
 
     var body: some View {
         HStack(spacing: 0) {
@@ -242,7 +352,7 @@ struct ThemeWindowPreview: View {
         .font(.riffet(size: S(11)))
         .foregroundStyle(colors.fg)
         .frame(maxWidth: .infinity, minHeight: 300, alignment: .topLeading)
-        .background(colors.bgSidebar)
+        .background(ThemeCanvasBackground(gradient: gradient, fallback: colors.bgSidebar))
         .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(colors.line))
         .accessibilityHidden(true)
@@ -331,7 +441,7 @@ struct ThemeWindowPreview: View {
             composer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(colors.bg, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+        .background(colors.bg.opacity(cardOpacity), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
     }
 
     private var diff: some View {

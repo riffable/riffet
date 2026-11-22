@@ -1531,9 +1531,21 @@
  */
 html:root {
   --canvas: var(--bg-sidebar);
+  --bg-canvas-gradient: none;
+  --bg-card: var(--bg);
   --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
   --shadow-composer-focus: 0 0 0 0.5px rgb(24 24 26 / 0.12), 0 2px 4px rgb(24 24 26 / 0.04), 0 12px 32px -12px rgb(24 24 26 / 0.18);
   --shadow-peek: 0 0 0 1px var(--line), 0 18px 48px -16px rgb(24 24 26 / 0.28);
+}
+[data-theme] {
+  --bg-canvas-gradient: none;
+  --bg-card: var(--bg);
+}
+.bg-canvas {
+  background-image: var(--bg-canvas-gradient, none);
+}
+.bg-card {
+  background-color: var(--bg-card);
 }
 html.dark {
   --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
@@ -2506,7 +2518,7 @@ html.dark {
     padding: 8px;
   }
   .dark .ui-floating-content.ui-floating-sheet {
-    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.5);
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.3);
   }
   .ui-floating-content.ui-floating-sheet[data-state="closed"] {
     animation: floating-sheet-exit var(--duration-base) var(--ease-standard) both;

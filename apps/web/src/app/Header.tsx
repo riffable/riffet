@@ -244,7 +244,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   if (tabbed && !assistantPage) {
     return (
       <>
-        {center && <header className="workbench-header flex min-h-12 shrink-0 items-center justify-center bg-bg px-3 md:h-13">{center}</header>}
+        {center && <header className="workbench-header flex min-h-12 shrink-0 items-center justify-center max-md:bg-bg md:bg-transparent px-3 md:h-13">{center}</header>}
         {chrome?.actions && createPortal(actions, chrome.actions)}
       </>
     );
@@ -252,7 +252,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
 
   const sessionServer = useServerBadge(session?.id ?? project?.id);
   return (
-    <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-0 bg-bg px-1.5 md:gap-1 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
+    <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-0 max-md:bg-bg md:bg-transparent px-1.5 md:gap-1 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
       <div className={center ? 'flex min-w-0 items-center gap-1' : 'contents'}>
         <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenMobileSidebar}><IconMenu /></Button>
         {sidebarCollapsed && !tabbed && (

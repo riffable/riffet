@@ -524,25 +524,30 @@ private struct ThemePreviewCard: View {
     }
 
     private var preview: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-                .fill(color(values.bgSidebar))
+        let gradientHalf = dark ? entry.gradient?.dark : entry.gradient?.light
+        let cardOpacity = entry.gradient?.cardOpacity ?? 1
+        return HStack(spacing: 0) {
+            Color.clear
                 .frame(width: Space.lg + Space.xxs)
-            VStack(alignment: .leading, spacing: Space.xs) {
-                HStack(spacing: Space.xxs) {
-                    Circle()
-                        .fill(color(values.accent))
-                        .frame(width: 6, height: 6)
-                    line(values.fg, width: 46)
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack(spacing: Space.xxs) {
+                        Circle()
+                            .fill(color(values.accent))
+                            .frame(width: 6, height: 6)
+                        line(values.fg, width: 46)
+                    }
+                    line(values.fg2, width: 38)
+                    line(values.fg3, width: 30)
                 }
-                line(values.fg2, width: 38)
-                line(values.fg3, width: 30)
+                .padding(Space.sm)
+                Spacer(minLength: 0)
             }
-            .padding(Space.sm)
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(color(values.bg).opacity(cardOpacity))
         }
         .frame(height: Space.xxl + Space.xl)
-        .background(color(values.bg))
+        .background(ThemeCanvasBackground(gradient: gradientHalf, fallback: color(values.bgSidebar)))
         .clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)

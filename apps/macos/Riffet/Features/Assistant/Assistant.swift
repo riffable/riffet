@@ -154,7 +154,7 @@ struct AssistantPage: View {
                 working: false,
                 sendState: nil,
                 minLines: 3,
-                features: ComposerFeatures(enterSends: workbench.settings?.composerEnterBehavior == "send", menuBelow: true),
+                features: ComposerFeatures(enterSends: workbench.settings?.composerEnterBehavior != "newline", menuBelow: true),
                 sendEnabled: !creating && project != nil && currentCatalog?.available != false,
                 busy: creating,
                 onSend: { _ in send() },

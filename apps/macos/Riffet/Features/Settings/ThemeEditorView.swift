@@ -161,7 +161,11 @@ struct ThemeEditorView: View {
                             self.draft?.redraw(with: next)
                         }
                         .frame(width: 236)
-                        ThemeWindowPreview(colors: DraftColors(values: preview))
+                        ThemeWindowPreview(
+                            colors: DraftColors(values: preview),
+                            gradient: draft.gradient.map { mode == .light ? $0.light : $0.dark },
+                            cardOpacity: draft.gradient?.cardOpacity ?? 1
+                        )
                     }
                     .padding(.vertical, Space.xs)
                 } header: {
@@ -624,8 +628,10 @@ private struct ThemeDraft {
     var syntax: CachedThemeSyntax?
     /// Set once the canvas has drawn this palette; absent for a copy nobody has drawn yet.
     var seed: CachedThemeSeed?
+    /// Optional window/sidebar canvas gradient derived from 2–3 canvas points.
+    var gradient: CachedThemeGradient?
 
-    init(id: String, name: String, summary: String, light: [String: String], dark: [String: String], ansiLight: [String], ansiDark: [String], isNew: Bool, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil) {
+    init(id: String, name: String, summary: String, light: [String: String], dark: [String: String], ansiLight: [String], ansiDark: [String], isNew: Bool, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil, gradient: CachedThemeGradient? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
@@ -637,6 +643,7 @@ private struct ThemeDraft {
         self.design = design
         self.syntax = syntax
         self.seed = seed
+        self.gradient = gradient
     }
 
     init(editing theme: CachedCustomTheme) {
@@ -651,7 +658,8 @@ private struct ThemeDraft {
             isNew: false,
             design: theme.design,
             syntax: theme.syntax,
-            seed: theme.seed
+            seed: theme.seed,
+            gradient: theme.gradient
         )
     }
 
@@ -677,7 +685,8 @@ private struct ThemeDraft {
             isNew: true,
             design: custom?.design,
             syntax: custom?.syntax,
-            seed: custom?.seed
+            seed: custom?.seed,
+            gradient: custom?.gradient
         )
     }
 
@@ -693,6 +702,7 @@ private struct ThemeDraft {
         let seed = ThemeSeedMath.normalized(next)
         light = ThemeSeedMath.apply(light, previous: self.seed, next: seed, dark: false)
         dark = ThemeSeedMath.apply(dark, previous: self.seed, next: seed, dark: true)
+        gradient = ThemeSeedMath.deriveGradient(seed)
         self.seed = seed
     }
 
@@ -705,6 +715,7 @@ private struct ThemeDraft {
     }
 
     mutating func setColor(_ value: String, role: String, mode: ThemeDraftMode) {
+        if role == "bg-sidebar" { gradient = nil }
         if mode == .light { light[role] = value } else { dark[role] = value }
     }
 
@@ -788,7 +799,8 @@ private struct ThemeDraft {
             ansi: CachedThemeAnsi(light: ansiLight, dark: ansiDark),
             design: design,
             syntax: syntax,
-            seed: seed
+            seed: seed,
+            gradient: gradient
         )
     }
 }

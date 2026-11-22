@@ -42,9 +42,10 @@ export interface AppSettings {
   defaultBackendId?: NativeBackendId;
   nativeBackendDefaults?: Partial<Record<NativeBackendId, NativeBackendDefaults>>;
   /**
-   * What Enter does in the composer, on every device signed in to this workbench: `'newline'`
-   * (default) breaks the line and Cmd/Ctrl+Enter sends; `'send'` sends on Enter. Cmd/Ctrl+Enter
-   * sends under both, so the setting can never leave the keyboard without a way to submit.
+   * What Enter does in the composer, on every device signed in to this workbench: `'send'`
+   * (default) sends on Enter and Shift+Enter breaks the line; `'newline'` breaks the line and
+   * Cmd/Ctrl+Enter sends. Cmd/Ctrl+Enter sends under both, so the setting can never leave the
+   * keyboard without a way to submit.
    */
   composerEnterBehavior?: 'newline' | 'send';
   /**
@@ -247,7 +248,7 @@ export const DEFAULT_QUICK_CHAT_PRESETS: readonly QuickChatPreset[] = [
  * record reads as the value here; the doc comment on each field says the same in words.
  */
 export const SETTING_DEFAULTS = {
-  composerEnterBehavior: 'newline',
+  composerEnterBehavior: 'send',
   composerRunningBehavior: 'queue',
   composerSendLater: false,
   sidebarPinned: DEFAULT_SIDEBAR_PINNED,

@@ -41,7 +41,7 @@ final class SessionTabsPreferences {
 
     private init() {
         let defaults = UserDefaults.standard
-        style = defaults.string(forKey: Self.styleKey).flatMap(SessionTabStyle.init) ?? .titleBar
+        style = defaults.string(forKey: Self.styleKey).flatMap(SessionTabStyle.init) ?? .off
         // A stored `manual`, a third mode that now is what `preview` does, reads as `preview`.
         openMode = defaults.string(forKey: Self.openModeKey).flatMap(SessionTabOpenMode.init) ?? .preview
         newMode = defaults.string(forKey: Self.newModeKey).flatMap(SessionTabNewMode.init) ?? .keep

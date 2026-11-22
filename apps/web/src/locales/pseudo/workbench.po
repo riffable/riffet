@@ -2266,6 +2266,10 @@ msgstr ""
 msgid "自动换行"
 msgstr ""
 
+#: src/app/SidebarUserMenu.tsx
+msgid "自定义主题"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "自定义侧栏"
 msgstr ""

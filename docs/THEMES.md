@@ -90,7 +90,8 @@ interface CustomTheme {
   description?: string;  // ≤200 字符
   palette: { light: Record<ThemeRole, string>; dark: Record<ThemeRole, string> };
   ansi: { light: string[]; dark: string[] };   // 各 16 个 #rrggbb
-  seed?: { points: { hue: number; radius: number }[]; softness: number };  // 画板状态，1–3 个点
+  seed?: { points: { hue: number; radius: number }[]; softness: number; blend?: number };  // 画板状态，1–3 个点
+  gradient?: { light: { colors: string[]; angle: number }; dark: { colors: string[]; angle: number }; blend?: number }; // 可选窗口/侧栏渐变（2–3 个 #rrggbb + 0–360°）与主卡片透底（0–1，缺省 0.25）
 }
 interface ThemeLibrary { version: 1; revision: string; themes: CustomTheme[]; }
 interface ThemeLibraryUpdate { expectedRevision: string; themes: CustomTheme[]; }
@@ -118,8 +119,8 @@ interface ThemeLibraryUpdate { expectedRevision: string; themes: CustomTheme[]; 
 
 - 编辑只在 Web 与 macOS，移动端只展示和选择。
 - 入口在配色列表里：末尾的「新建主题」以当前正在显示的配色（内置、插件或自定义）为底稿，保存后本机直接选中它；自定义主题卡片上的编辑按钮打开编辑，删除（需确认）在编辑框底部。明暗两个页签；53 个角色分组展示；ANSI 收在「终端颜色」折叠区。macOS 的「主题」页是同一流程（新建卡片、卡片上的编辑按钮）。
-- 两端编辑器都以 Arc 式画板为主入口（Web `apps/web/src/lib/theme-seed.ts`，macOS `apps/macos/Riffet/Theme/ThemeSeed.swift` 逐行移植，同一 seed 得到同一组 hex，跨端「手改过的角色」判断才一致）：角度是 OKLCH 色相，离中心的距离是用色量；第一个点给表面着色，可选的第二、第三个点分别是强调色和侧栏色，拖第一个点时其余点跟着转，⟳ 在互补/分裂互补、三分、邻近之间切换；滑块是柔和度（浅色离纯白、深色离纯黑的距离）。预览是一个缩小的 Riffet 窗口（侧栏、对话、diff、输入框）。画板只重绘表面、文本、分隔线、主要操作、强调色、提示条与 `chart-1`，状态、diff、agent、其余图表和 ANSI 保持草稿原值；文本按对比度阈值自动调整明度。53 个角色收进「逐项调整」，手改过的角色（与上一个 `seed` 的派生值不同）在画板重绘时保留。
-- `seed` 只供编辑器重新打开画板，`palette` 仍是唯一的绘制来源，各端不从 `seed` 派生；Kotlin 契约与 macOS 缓存原样带着它，保存不会丢。
+- 两端编辑器都以 Arc 式画板为主入口（Web `apps/web/src/lib/theme-seed.ts`，macOS `apps/macos/Riffet/Theme/ThemeSeed.swift` 逐行移植，同一 seed 得到同一组 hex 与渐变，跨端「手改过的角色」判断才一致）：角度是 OKLCH 色相，离中心的距离是用色量；1 个点绘制纯色窗口外框与侧栏，2–3 个点自动生成柔和的窗口/侧栏画布渐变（2 点按连线方向线性渐变，3 点为线性双角叠垂直椭圆漫射），主内容区与停靠侧板默认以 `blend = 0.25` 柔和透出背后的同一张整窗渐变（`0` 为纯色纸面，`1` 为整窗通铺），拖第一个点时其余点跟着转，⟳ 在邻近、三分、互补/分裂互补之间切换；两条滑块分别是「柔和度」（浅色离纯白、深色离纯黑的距离）与多点渐变时出现的「透底」（主卡片透明程度）。预览是一个缩小的 Riffet 窗口（侧栏、对话、diff、输入框）。画板只重绘表面、文本、分隔线、主要操作、强调色、提示条与 `chart-1`，状态、diff、agent、其余图表和 ANSI 保持草稿原值；文本按对比度阈值自动调整明度。53 个角色收进「逐项调整」，手改过的角色（与上一个 `seed` 的派生值不同）在画板重绘时保留；手改 `bg-sidebar` 会清除画布渐变。
+- `seed` 只供编辑器重新打开画板，`palette` 与可选 `gradient` 是唯一的绘制来源，各端不从 `seed` 派生；Kotlin 契约与 macOS 缓存原样带着它们，保存不会丢。
 - 预览是**局部**的：Web 在对话框内注入 `preview-<id>` 的规则块，macOS 用草稿 `Palette` 作用在一个预览卡片的环境里。两者都不改全局 `<html>` / 正在运行的主题。
 - 保存前跑结构校验；失败时列出具体字段。对比度按固定配对显示比值与阈值，**只警告**，低对比度主题仍可保存；服务端不检查对比度。
 

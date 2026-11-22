@@ -50,9 +50,9 @@
 
 新增**账号级**设置 `AppSettings.composerEnterBehavior`（`packages/contracts/src/index.ts:352-356`），随 `PATCH /api/settings` 持久化到服务端 `settings.json`，因此**换设备、换浏览器打开同一个工作台都生效**——这与「文字大小 / 会话间距」这类只影响这台设备的偏好（`lib/display-settings.ts:6-11`）是两种东西，界面上要把这个区别说清楚（见下）。
 
-- `'newline'`（**默认**）：Enter 换行、⌘/Ctrl+Enter 发送。
-- `'send'`：Enter 发送、Shift+Enter 换行（Riffet 现状）。
-- **已定**（2026-10-09）：默认按换行来，设置里给一个开关切回发送。
+- `'send'`（**默认**）：Enter 发送、Shift+Enter 换行，⌘/Ctrl+Enter 同样发送。
+- `'newline'`：Enter 换行、⌘/Ctrl+Enter 发送。
+- **已定**（2026-11-22）：默认 Enter 发送，设置里可切换为 Enter 换行（切换后仍可用 ⌘/Ctrl+Enter 发送）。
 - **全屏编辑不读这个设置**（2026-11-22）：全屏里 Enter 总是换行，⌘/Ctrl+Enter 发送，发送键提示 `⌘↵`（`Composer.tsx` 的 `keyBehavior`）。进入全屏就是要写长消息。
 
 字段命名为 `composerEnterBehavior` 而不是 `enterBehavior`：`AppSettings` 是扁平的，服务端 `validateSettings` 对未知键是**抛错**的（`apps/server/src/settings/index.ts:684`），以后输入框还会有别的键，先给它一个命名空间，避免以后叫 `enterBehavior` 的第二个设置撞名。

@@ -19,15 +19,15 @@ struct InputSettings: View {
 
     private func form(_ workbench: Workbench) -> some View {
         let settings = workbench.settings
-        let behavior = settings?.composerEnterBehavior == "send" ? "send" : "newline"
+        let behavior = settings?.composerEnterBehavior == "newline" ? "newline" : "send"
         let runningBehavior = settings?.composerRunningBehavior == "steer" ? "steer" : "queue"
         return Form {
             Section {
                 // The other key, the one the reader cannot see from the choice itself.
                 SettingsRow(String(localized: "Enter 键"), detail: behavior == "send" ? String(localized: "⇧↩ 换行") : String(localized: "⌘↩ 发送")) {
                     FormSegmented("Enter 键", selection: enterBinding(workbench, current: behavior)) {
-                        Text("换行").tag("newline")
                         Text("发送").tag("send")
+                        Text("换行").tag("newline")
                     }
                     .labelsHidden()
                     .fixedSize()

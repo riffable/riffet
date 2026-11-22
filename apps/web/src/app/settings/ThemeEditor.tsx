@@ -4,7 +4,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   CODE_THEME_ROLES, contrastRatio, importCodeThemeJson, normalizeThemeColor, normalizeThemeSeed, parseColor, resolveCodeThemeId, THEME_ANSI_KEYS, THEME_ROLES, validateCustomThemes,
-  type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf, type CustomTheme, type ThemeDesign, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeValidationIssue,
+  type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf, type CustomTheme, type ThemeDesign, type ThemeGradient, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeValidationIssue,
 } from '@contracts';
 import { BrandMark } from '@/components/BrandMark';
 import { IconArrowUp, IconCalendarClock, IconFolderOpen, IconPlus, IconSearch, IconSquarePen } from '@/components/icons';
@@ -21,7 +21,7 @@ import { setThemeId, useTheme } from '@/lib/theme';
 import { customThemeCss, currentThemeLibrary, saveThemeLibrary, syncThemeLibrary } from '@/lib/theme-library';
 import { DEFAULT_THEME_ID } from '@/lib/themes';
 import { CODE_ROLE_LABELS, THEME_ANSI_LABELS, THEME_CONTRAST_CHECKS, THEME_ROLE_GROUPS, THEME_ROLE_LABELS } from '@/lib/theme-role-labels';
-import { applySeed, inferSeed } from '@/lib/theme-seed';
+import { applySeed, deriveSeedGradient, inferSeed } from '@/lib/theme-seed';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
 import { ANSI_BY_THEME } from '@/lib/theme-ansi.generated';
@@ -43,6 +43,8 @@ interface Draft {
   syntax?: CustomCodeSyntax;
   /** Set once the canvas has drawn this palette; absent for a copy nobody has drawn yet. */
   seed?: ThemeSeed;
+  /** Optional window/sidebar canvas gradient derived from 2–3 canvas points. */
+  gradient?: ThemeGradient;
 }
 
 /** What the editor opens on: a new theme drawn from a palette, or an existing custom theme. */
@@ -255,7 +257,11 @@ function ThemeForm({ draft, mode, issues, openSyntax, onChange, onMode }: {
   const palette = draft.palette[mode];
   const modeLabel = mode === 'light' ? t`浅色` : t`深色`;
   const setColor = (role: ThemeRole, value: string) => {
-    onChange({ ...draft, palette: { ...draft.palette, [mode]: { ...palette, [role]: value } } });
+    onChange({
+      ...draft,
+      ...(role === 'bg-sidebar' ? { gradient: undefined } : {}),
+      palette: { ...draft.palette, [mode]: { ...palette, [role]: value } },
+    });
   };
   const setAnsi = (index: number, value: string) => {
     const colors = [...draft.ansi[mode]];
@@ -266,7 +272,8 @@ function ThemeForm({ draft, mode, issues, openSyntax, onChange, onMode }: {
   const inferred = useMemo(() => (draft.seed ? null : inferSeed(draft.palette)), [draft.seed, draft.palette]);
   const setSeed = (next: ThemeSeed) => {
     const seed = normalizeThemeSeed(next);
-    onChange({ ...draft, seed, palette: applySeed(draft.palette, draft.seed, seed) });
+    const gradient = deriveSeedGradient(seed);
+    onChange({ ...draft, seed, gradient, palette: applySeed(draft.palette, draft.seed, seed) });
   };
 
   return (
@@ -598,7 +605,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
   return (
     <div
       aria-hidden
-      className={cn('flex min-h-80 select-none overflow-hidden rounded-xl border border-line bg-sidebar text-2xs leading-snug text-fg', mode === 'dark' && 'dark')}
+      className={cn('flex min-h-80 select-none overflow-hidden rounded-xl border border-line bg-canvas text-2xs leading-snug text-fg', mode === 'dark' && 'dark')}
       data-theme={`preview-${draft.id}`}
     >
       <style>{css}</style>
@@ -624,7 +631,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
         <div className="truncate rounded-md py-1 pr-1.5 pl-6 text-fg-2"><Trans>发布说明</Trans></div>
       </div>
 
-      <div className="my-1.5 mr-1.5 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-bg">
+      <div className="my-1.5 mr-1.5 flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-card">
         <div className="flex items-center gap-2 border-b border-line-soft px-3 py-2">
           <span className="truncate font-medium"><Trans>主题画板</Trans></span>
           <span className="ml-auto flex shrink-0 items-center gap-1 text-fg-3"><span className="size-1.5 rounded-full bg-[var(--agent-claude)]" />Claude</span>
@@ -696,6 +703,7 @@ function buildTheme(draft: Draft): CustomTheme {
     ...(draft.design ? { design: structuredClone(draft.design) } : {}),
     ...(draft.syntax ? { syntax: structuredClone(draft.syntax) } : {}),
     ...(draft.seed ? { seed: structuredClone(draft.seed) } : {}),
+    ...(draft.gradient ? { gradient: structuredClone(draft.gradient) } : {}),
   };
 }
 
@@ -720,6 +728,7 @@ function previewTheme(draft: Draft): CustomTheme {
       dark: draft.ansi.dark.map((color) => normalizeThemeColor(color) ?? '#000000'),
     },
     ...(draft.syntax ? { syntax: { light: syntaxHalf(draft.syntax.light), dark: syntaxHalf(draft.syntax.dark) } } : {}),
+    ...(draft.gradient ? { gradient: draft.gradient } : {}),
   };
 }
 
@@ -735,6 +744,7 @@ function editDraft(id: string): Draft | null {
     ...(theme.design ? { design: structuredClone(theme.design) } : {}),
     ...(theme.syntax ? { syntax: structuredClone(theme.syntax) } : {}),
     ...(theme.seed ? { seed: structuredClone(theme.seed) } : {}),
+    ...(theme.gradient ? { gradient: structuredClone(theme.gradient) } : {}),
   };
 }
 
@@ -748,7 +758,7 @@ function newDraft(from: string, name: string): Draft {
 }
 
 /** A palette to start from: a built-in from the generated table, a plugin's palette, or an existing custom theme. The copy is the user's own: it takes a new custom id when saved. */
-function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 'syntax' | 'seed'> | null {
+function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 'syntax' | 'seed' | 'gradient'> | null {
   const plugin = pluginPaletteColors(id);
   if (plugin) {
     return {
@@ -774,6 +784,7 @@ function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 
     ...(custom.design ? { design: structuredClone(custom.design) } : {}),
     ...(custom.syntax ? { syntax: structuredClone(custom.syntax) } : {}),
     ...(custom.seed ? { seed: structuredClone(custom.seed) } : {}),
+    ...(custom.gradient ? { gradient: structuredClone(custom.gradient) } : {}),
   };
 }
 
@@ -820,6 +831,7 @@ function fieldLabel(path: string): string {
   if (path === 'name') return i18n._(msg`名称`);
   if (path === 'description') return i18n._(msg({ message: '说明', context: 'settings-theme-description' }));
   if (path === 'palette' || path === 'ansi' || path === 'syntax') return i18n._(msg`颜色`);
+  if (path === 'gradient' || path.startsWith('gradient.')) return i18n._(msg`渐变`);
   const palette = /^palette\.(light|dark)\.(.+)$/.exec(path);
   if (palette) {
     const mode = i18n._(palette[1] === 'light' ? msg`浅色` : msg`深色`);

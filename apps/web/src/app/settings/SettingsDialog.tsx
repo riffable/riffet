@@ -190,7 +190,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
           the overlay, never on <html>, so only that target is ignored. */}
       <DialogContent size="workspace" mobileFullscreen onEscapeKeyDown={(event) => { if (shortcutsSuspended()) event.preventDefault(); else if (canGoBack()) { event.preventDefault(); goBack(); } }} onInteractOutside={(event) => { if (event.target === document.documentElement) event.preventDefault(); }} overlayClassName={cn(framed && open && 'animate-none!')} className={cn(SETTINGS_DIALOG_CLASS, 'md:flex-row', framed && open && 'animate-none!')}>
         <DialogTitle className="sr-only"><Trans>设置</Trans></DialogTitle>
-        <nav aria-label={t`设置分区`} className="hidden w-52 shrink-0 flex-col gap-px overflow-y-auto edge-r bg-sidebar p-2 md:flex">
+        <nav aria-label={t`设置分区`} className="hidden w-52 shrink-0 flex-col gap-px overflow-y-auto edge-r bg-subtle p-2 md:flex">
           <h2 className="px-2.5 pb-3 pt-2 text-base font-semibold"><Trans>设置</Trans></h2>
           {navigationGroups.map((group) => <div key={group} className="mb-3 flex flex-col gap-px">
             {settingsGroupTitle(group) && <h3 className="px-2.5 pb-1 pt-2 text-2xs font-medium text-fg-4">{settingsGroupTitle(group)}</h3>}

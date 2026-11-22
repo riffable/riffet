@@ -115,7 +115,7 @@ struct InspectorView: View {
             .environment(\.panelMaximize, style.rightPanel == .panels ? maximize : nil)
             .environment(\.panelFloat, style.rightPanel == .panels ? float : nil)
         }
-        .background(palette.page)
+        .background(floating ? palette.page : Color.clear)
     }
 
     private func tabTrack(inset: CGFloat) -> some View {

@@ -202,7 +202,7 @@ data class AppSettings(
     val cursorCli: CursorCliSettings? = null,
     val defaultBackendId: NativeBackendId? = null,
     val nativeBackendDefaults: Map<NativeBackendId, NativeBackendDefaults>? = null,
-    /** `newline` (default: Enter breaks the line, Cmd+Enter sends) or `send`. Account-wide. */
+    /** `send` (default: Enter sends, Shift+Enter breaks the line) or `newline` (Enter breaks the line, Cmd/Ctrl+Enter sends). Account-wide. */
     val composerEnterBehavior: String? = null,
     /** `queue` (default) or `steer` for ordinary sends while a task runs. Account-wide. */
     val composerRunningBehavior: String? = null,

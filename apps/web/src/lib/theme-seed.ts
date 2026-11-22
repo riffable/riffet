@@ -1,12 +1,16 @@
 import {
-  colorToHex, contrastRatio, normalizeThemeColor, normalizeThemeSeed, parseColor, toOklab,
-  type Rgba, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeSeedPoint,
+  colorToHex, contrastRatio, DEFAULT_THEME_GRADIENT_BLEND, normalizeThemeColor, normalizeThemeGradient, normalizeThemeSeed, parseColor, toOklab,
+  type Rgba, type ThemeGradient, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeSeedPoint,
 } from '@contracts';
 
 /**
- * The theme canvas: a couple of points become the roles a reader feels as "the theme" — surfaces,
- * ink, lines, the primary action and the accent. Status, diff, agent and the rest of the chart
- * roles keep the values the draft started from; they carry meaning that one hue cannot.
+ * The theme canvas: 1 to 3 colour points become the roles a reader feels as "the theme" — paper,
+ * window canvas / gradient, ink, lines, the primary action and the accent. Status, diff, agent and
+ * the rest of the chart roles keep the values the draft started from; they carry meaning that one
+ * hue cannot.
+ *
+ * A single point paints a solid frame; 2 or 3 points blend into a canvas gradient whose direction
+ * follows the points' geometry on the wheel, like Arc's theme picker.
  *
  * Everything is computed in OKLCH so a hue keeps its perceived lightness, then fitted into sRGB by
  * giving up chroma, never lightness. Text is walked away from its background until it meets the
@@ -16,18 +20,16 @@ import {
 type Mode = 'light' | 'dark';
 type Palettes = { light: ThemePalette; dark: ThemePalette };
 
-/** How much colour the surface point can put into paper at the canvas edge. */
+/** How much colour the primary point can put into paper at the canvas edge. */
 const SURFACE_CHROMA = 0.035;
-/** The sidebar may carry more colour than the page: it frames the work rather than holding it. */
-const SIDEBAR_CHROMA = 0.06;
 
 /**
- * The offsets from the surface hue the harmony control steps through, per number of points:
- * complementary / split-complementary, triadic, analogous.
+ * The offsets from the first point's hue the harmony control steps through, per number of points:
+ * analogous silk gradient, triadic, complementary / split-complementary.
  */
 const HARMONIES: Record<number, number[][]> = {
-  2: [[180], [120], [40]],
-  3: [[150, 210], [120, 240], [40, 320]],
+  2: [[55], [120], [180]],
+  3: [[55, 305], [120, 240], [150, 210]],
 };
 
 export const SEED_ROLES = [
@@ -101,10 +103,61 @@ export function pointColor(point: ThemeSeedPoint): string {
   return hex(0.74, 0.02 + point.radius * 0.15, point.hue);
 }
 
+/**
+ * One stop of the window/sidebar canvas (also used as solid `bg-sidebar` when there is one point).
+ * Light stays luminous pastel and dark stays deep jewel-toned so sidebar ink stays readable across
+ * the whole wheel.
+ */
+function canvasStop(point: ThemeSeedPoint, mode: Mode, soft: number): string {
+  if (mode === 'light') {
+    const l = 0.97 - 0.065 * point.radius - 0.03 * soft;
+    const c = point.radius * (0.095 - 0.035 * soft);
+    return hex(l, c, point.hue);
+  }
+  const bgL = 0.185 + 0.07 * soft;
+  const l = bgL + 0.02 + 0.045 * point.radius;
+  const c = point.radius * (0.095 - 0.03 * soft);
+  return hex(l, c, point.hue);
+}
+
+/** CSS linear-gradient angle pointing from the first canvas point toward the last. */
+function gradientAngle(points: readonly ThemeSeedPoint[]): number {
+  const pos = (point: ThemeSeedPoint): readonly [number, number] => {
+    const rad = (point.hue * Math.PI) / 180;
+    return [point.radius * Math.sin(rad), -point.radius * Math.cos(rad)];
+  };
+  const [x0, y0] = pos(points[0]!);
+  let [x1, y1] = pos(points[points.length - 1]!);
+  let dx = x1 - x0;
+  let dy = y1 - y0;
+  if (Math.hypot(dx, dy) < 0.02 && points.length === 3) {
+    [x1, y1] = pos(points[1]!);
+    dx = x1 - x0;
+    dy = y1 - y0;
+  }
+  if (Math.hypot(dx, dy) < 0.02) return 135;
+  const raw = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
+  return (Math.round(raw * 10) / 10) % 360;
+}
+
+/**
+ * Derives the window/sidebar canvas gradient for 2 or 3 canvas points.
+ * A single point produces a solid frame (`undefined`).
+ */
+export function deriveSeedGradient(seed: ThemeSeed): ThemeGradient | undefined {
+  if (seed.points.length < 2) return undefined;
+  const angle = gradientAngle(seed.points);
+  const blend = seed.blend ?? DEFAULT_THEME_GRADIENT_BLEND;
+  return normalizeThemeGradient({
+    light: { colors: seed.points.map((point) => canvasStop(point, 'light', seed.softness)), angle },
+    dark: { colors: seed.points.map((point) => canvasStop(point, 'dark', seed.softness)), angle },
+    blend,
+  });
+}
+
 export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, string> {
   const surface = seed.points[0]!;
   const accentPoint = seed.points[1] ?? surface;
-  const sidebarPoint = seed.points[2];
   const h = surface.hue;
   const cs = surface.radius * SURFACE_CHROMA;
   const ha = accentPoint.hue;
@@ -121,9 +174,7 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
     const fg = readable(0.29, cs * 0.5, h, bg, 12, true);
     return {
       bg: colorToHex(bg),
-      'bg-sidebar': sidebarPoint
-        ? hex(bgL - 0.014 - 0.02 * sidebarPoint.radius, sidebarPoint.radius * SIDEBAR_CHROMA, sidebarPoint.hue)
-        : hex(bgL - 0.014, cs * 0.8, h),
+      'bg-sidebar': canvasStop(surface, 'light', soft),
       'bg-subtle': hex(bgL - 0.018, cs * 0.8, h),
       'bg-muted': hex(bgL - 0.04, cs, h),
       'bg-elevated': hex(elevatedL, cs * 0.4, h),
@@ -158,13 +209,11 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
   const ink = Math.min(cs, 0.03);
   return {
     bg: bgHex,
-    'bg-sidebar': sidebarPoint
-      ? hex(bgL + 0.022, sidebarPoint.radius * SIDEBAR_CHROMA, sidebarPoint.hue)
-      : hex(bgL + 0.022, cs * 0.7, h),
+    'bg-sidebar': canvasStop(surface, 'dark', soft),
     'bg-subtle': hex(bgL + 0.03, cs * 0.7, h),
     'bg-muted': hex(bgL + 0.075, cs * 0.7, h),
-    'bg-elevated': hex(bgL + 0.04, cs * 0.7, h),
-    'bg-popover': hex(bgL + 0.06, cs * 0.7, h),
+    'bg-elevated': hex(bgL + 0.065, cs * 0.9, h),
+    'bg-popover': hex(bgL + 0.085, cs * 0.9, h),
     'bg-hover': hex(0.98, ink, h, 0.06),
     'bg-active': hex(0.98, ink, h, 0.1),
     'bg-bubble': hex(bgL + 0.075, Math.min(ca * 0.15, 0.035), ha),
@@ -188,6 +237,34 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
 }
 
 /**
+ * Previous formulas for roles whose derivation evolved, so re-opening an older seed in the canvas
+ * upgrades those roles cleanly instead of freezing them as if the author had typed them by hand.
+ */
+function legacyDerived(seed: ThemeSeed, mode: Mode): Partial<Record<SeedRole, string>> {
+  const surface = seed.points[0]!;
+  const sidebarPoint = seed.points[2];
+  const h = surface.hue;
+  const cs = surface.radius * SURFACE_CHROMA;
+  const soft = seed.softness;
+  if (mode === 'light') {
+    const bgL = 1 - 0.012 * surface.radius - 0.05 * soft;
+    return {
+      'bg-sidebar': sidebarPoint
+        ? hex(bgL - 0.014 - 0.02 * sidebarPoint.radius, sidebarPoint.radius * 0.06, sidebarPoint.hue)
+        : hex(bgL - 0.014, cs * 0.8, h),
+    };
+  }
+  const bgL = 0.185 + 0.07 * soft;
+  return {
+    'bg-sidebar': sidebarPoint
+      ? hex(bgL + 0.022, sidebarPoint.radius * 0.06, sidebarPoint.hue)
+      : hex(bgL + 0.022, cs * 0.7, h),
+    'bg-elevated': hex(bgL + 0.04, cs * 0.7, h),
+    'bg-popover': hex(bgL + 0.06, cs * 0.7, h),
+  };
+}
+
+/**
  * Redraws [palettes] from [next]. A seed role the author has typed over — one that no longer
  * matches what [previous] produced — keeps the author's value. Without a previous seed the canvas
  * is being picked up for the first time and owns every seed role.
@@ -196,10 +273,17 @@ export function applySeed(palettes: Palettes, previous: ThemeSeed | undefined, n
   const redraw = (mode: Mode): ThemePalette => {
     const current = palettes[mode];
     const before = previous ? deriveSeedRoles(previous, mode) : null;
+    const legacy = previous ? legacyDerived(previous, mode) : null;
     const after = deriveSeedRoles(next, mode);
     const out = { ...current };
     for (const role of SEED_ROLES) {
-      const typed = before && normalizeThemeColor(current[role]) !== before[role];
+      // A multi-point canvas always owns `bg-sidebar` (manual `bg-sidebar` edits clear the gradient).
+      if (role === 'bg-sidebar' && next.points.length >= 2) {
+        out[role] = after[role];
+        continue;
+      }
+      const value = normalizeThemeColor(current[role]);
+      const typed = before && value !== before[role] && value !== legacy?.[role];
       if (!typed) out[role] = after[role];
     }
     return out;
@@ -214,38 +298,42 @@ function toOklch(value: string | undefined): { l: number; c: number; h: number }
   return { l, c: Math.hypot(a, b), h: ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360 };
 }
 
-/** Where a palette without a seed would sit on the canvas, so picking it up starts close by. */
+/** Where a palette without a seed would sit on the canvas: starts with 1 point so solid themes stay solid until extended. */
 export function inferSeed(palettes: Palettes): ThemeSeed {
   const clamp = (value: number) => Math.min(1, Math.max(0, value));
   const paper = toOklch(palettes.light['bg-muted']);
   const accent = toOklch(palettes.light.accent);
-  const surface: ThemeSeedPoint = paper ? { hue: paper.h, radius: clamp(paper.c / SURFACE_CHROMA) } : { hue: 0, radius: 0 };
-  const accentPoint: ThemeSeedPoint = accent ? { hue: accent.h, radius: clamp((accent.c - 0.02) / 0.2) } : surface;
+  const primary: ThemeSeedPoint = paper && paper.c > 0.008
+    ? { hue: paper.h, radius: clamp(paper.c / SURFACE_CHROMA) }
+    : accent
+      ? { hue: accent.h, radius: clamp(((accent.c - 0.02) / 0.2) * 0.5) }
+      : { hue: 0, radius: 0 };
   const bg = toOklch(palettes.light.bg);
-  const softness = bg ? clamp((1 - 0.012 * surface.radius - bg.l) / 0.05) : 0;
-  return normalizeThemeSeed({ points: [surface, accentPoint], softness });
+  const softness = bg ? clamp((1 - 0.012 * primary.radius - bg.l) / 0.05) : 0;
+  return normalizeThemeSeed({ points: [primary], softness });
 }
 
-/** The next pairing in the harmony cycle, measured from the surface point; the surface stays put. */
+/** The next pairing in the harmony cycle, measured from the first point; the first point stays put. */
 export function nextHarmony(seed: ThemeSeed): ThemeSeed {
-  const [surface, ...others] = seed.points;
+  const [primary, ...others] = seed.points;
   const cycle = HARMONIES[seed.points.length];
-  if (!surface || !cycle) return seed;
+  if (!primary || !cycle) return seed;
   const distance = (a: number, b: number) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
-  const offsets = others.map((point) => (point.hue - surface.hue + 360) % 360);
+  const offsets = others.map((point) => (point.hue - primary.hue + 360) % 360);
   const misfit = (set: number[]) => set.reduce((sum, value, index) => sum + distance(value, offsets[index]!), 0);
   const nearest = cycle.reduce((best, set, index) => (misfit(set) < misfit(cycle[best]!) ? index : best), 0);
   const next = cycle[(nearest + 1) % cycle.length]!;
-  return { ...seed, points: [surface, ...others.map((point, index) => ({ ...point, hue: (surface.hue + next[index]!) % 360 }))] };
+  return { ...seed, points: [primary, ...others.map((point, index) => ({ ...point, hue: (primary.hue + next[index]!) % 360 }))] };
 }
 
-/** One more point: the accent opposite the surface, then a sidebar mirroring the accent. */
+/** Adds one colour point: starts an analogous dual gradient, then completes a three-colour blend. */
 export function addSeedPoint(seed: ThemeSeed): ThemeSeed {
-  const [surface, accent] = seed.points;
-  if (!surface || seed.points.length >= 3) return seed;
-  if (!accent) return { ...seed, points: [surface, { hue: (surface.hue + 180) % 360, radius: Math.max(surface.radius, 0.7) }] };
-  const offset = (accent.hue - surface.hue + 360) % 360;
-  // A mirror of an opposite accent lands on the accent itself; a neighbour reads better there.
-  const mirrored = Math.abs(offset - 180) < 20 ? 40 : 360 - offset;
-  return { ...seed, points: [surface, accent, { hue: (surface.hue + mirrored) % 360, radius: Math.max(surface.radius, 0.5) }] };
+  const [primary, second] = seed.points;
+  if (!primary || seed.points.length >= 3) return seed;
+  const blend = seed.blend ?? DEFAULT_THEME_GRADIENT_BLEND;
+  if (!second) return { ...seed, blend, points: [primary, { hue: (primary.hue + 55) % 360, radius: Math.max(primary.radius, 0.72) }] };
+  const offset = (second.hue - primary.hue + 360) % 360;
+  // A mirror of an opposite colour lands on the second point itself; a neighbour reads better there.
+  const mirrored = Math.abs(offset - 180) < 20 ? 55 : 360 - offset;
+  return { ...seed, blend, points: [primary, second, { hue: (primary.hue + mirrored) % 360, radius: Math.max(primary.radius, 0.72) }] };
 }

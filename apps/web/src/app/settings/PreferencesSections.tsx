@@ -26,7 +26,8 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
 import { textOf } from '@/lib/errors';
 import { notificationBlocker, saveNotifications } from './notifications';
-import { readEnterKeyBehavior, type EnterKeyBehavior } from '../session/composerKeyboard';
+import { isApplePlatform } from '@/lib/platform';
+import { primaryEnterHint, readEnterKeyBehavior, type EnterKeyBehavior } from '../session/composerKeyboard';
 import { readComposerRunningBehavior, type ComposerRunningBehavior } from '../session/composerRunning';
 import { PermissionGlyph, setPermissionIconStyle, usePermissionIconStyle, type PermissionIconStyle, type PermissionTier } from '../session/ApprovalPicker';
 import { SettingsGroup as Group, SettingsLinkRow, SettingsRow as Row } from './SettingsLayout';
@@ -413,10 +414,17 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
     catch (error) { onError(errorMessage(error, t`无法保存消息输入设置`)); }
     finally { setBusy(false); }
   };
-  return <Group>
-    <Row title={t`Enter 键`} description={t`保存在服务器，所有设备生效。只影响物理键盘，手机软键盘始终换行。`}>
+  const newlineKey = isApplePlatform ? '⇧↵' : 'Shift+↵';
+  const sendKey = primaryEnterHint('newline');
+  return <Group note={t`保存在服务器，所有设备生效。`}>
+    <Row
+      title={t`Enter 键`}
+      description={behavior === 'send'
+        ? t`${newlineKey} 换行；仅影响物理键盘，手机软键盘始终换行。`
+        : t`${sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。`}
+    >
       <div className={busy ? 'pointer-events-none opacity-50' : ''} aria-busy={busy}>
-        <Segmented<EnterKeyBehavior> size="xs" value={behavior} onChange={(next) => { if (next !== behavior) void persist({ composerEnterBehavior: next }); }} ariaLabel={t`Enter 键`} options={[{ value: 'newline', label: t`换行`, disabled: busy }, { value: 'send', label: t`发送`, disabled: busy }]} />
+        <Segmented<EnterKeyBehavior> size="xs" value={behavior} onChange={(next) => { if (next !== behavior) void persist({ composerEnterBehavior: next }); }} ariaLabel={t`Enter 键`} options={[{ value: 'send', label: t`发送`, disabled: busy }, { value: 'newline', label: t`换行`, disabled: busy }]} />
       </div>
     </Row>
     <Row title={t`运行中发送的消息`}>

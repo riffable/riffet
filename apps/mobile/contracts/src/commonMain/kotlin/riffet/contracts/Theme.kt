@@ -53,6 +53,22 @@ data class CustomTheme(
     val syntax: ThemeSyntax? = null,
     /** The editor canvas the palette was drawn from; clients paint [palette] and never derive from it. */
     val seed: ThemeSeed? = null,
+    /** Optional window/sidebar canvas gradient per mode; absence paints solid `bg-sidebar`. */
+    val gradient: ThemeGradient? = null,
+)
+
+/** One mode's canvas gradient: 2 or 3 `#rrggbb` stops and a CSS angle in degrees (0–360). */
+@Serializable
+data class ThemeGradientHalf(
+    val colors: List<String>,
+    val angle: Double,
+)
+
+@Serializable
+data class ThemeGradient(
+    val light: ThemeGradientHalf,
+    val dark: ThemeGradientHalf,
+    val blend: Double? = null,
 )
 
 /** One canvas point: [hue] is the OKLCH hue in degrees, [radius] runs from grey (0) to full colour (1). */
@@ -62,11 +78,12 @@ data class ThemeSeedPoint(
     val radius: Double,
 )
 
-/** The surface point, then the optional accent and sidebar points, and how far both modes soften. */
+/** One to three colour points (1 gives a solid frame, 2–3 blend into a canvas gradient) and softness. */
 @Serializable
 data class ThemeSeed(
     val points: List<ThemeSeedPoint>,
     val softness: Double,
+    val blend: Double? = null,
 )
 
 /** `GET /api/themes`. [revision] is a content hash, not a counter. */

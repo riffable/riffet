@@ -12,7 +12,11 @@ import { cn } from '@/lib/utils';
  */
 export function ThemeSwatch({ id, className }: { id: string; className?: string }) {
   const half = (dark: boolean) => (
-    <span data-theme={id} className={cn('grid flex-1 place-items-center bg-bg', dark && 'dark')}>
+    <span
+      data-theme={id}
+      className={cn('grid flex-1 place-items-center bg-bg', dark && 'dark')}
+      style={{ backgroundImage: 'var(--bg-canvas-gradient, none)' }}
+    >
       <span className="size-1.5 rounded-full bg-accent" />
     </span>
   );

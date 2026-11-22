@@ -318,10 +318,11 @@ struct WorkbenchView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailHeight = $0 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth.value = $0 }
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-                .background(canvas)
+                .background { if !cards { canvasBackdrop } }
                 .modifier(CustomCard(on: cards, drawn: drawn))
                 // Maximized, the conversation keeps its width under the panel: no re-layout of
                 // the transcript on the way in or out, and its scroll position stays.
+                .opacity(maximized ? 0 : 1)
                 .allowsHitTesting(!maximized)
                 .accessibilityHidden(maximized)
             if panelReserved {
@@ -329,7 +330,7 @@ struct WorkbenchView: View {
                 // window's glass shows there until the panel has slid in over it.
                 Color.clear
                     .frame(width: panelRoom)
-                    .background(cards ? Color.clear : canvas)
+                    .background { if !cards { canvasBackdrop } }
             }
         }
         .overlay(alignment: .trailing) { sidePanel }
@@ -355,6 +356,20 @@ struct WorkbenchView: View {
 
     /// The content's colour over the window material; pages in the detail column paint none of their own.
     private var canvas: Color { palette.page.opacity(DisplayPreferences.shared.contentTint) }
+
+    /// Content column backdrop when not framed by `CustomCard`: blends the canvas gradient through
+    /// `palette.page` in native split-view and flat windows as well.
+    @ViewBuilder
+    private var canvasBackdrop: some View {
+        if palette.gradient != nil, palette.cardOpacity < 1 {
+            ZStack {
+                PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
+                palette.page.opacity(DisplayPreferences.shared.contentTint * palette.cardOpacity)
+            }
+        } else {
+            canvas
+        }
+    }
 
     /// The window is drawn by the app (`CustomWorkbench`), not the system's.
     private var drawn: Bool { !isWindow && DisplayPreferences.shared.style.backend == .custom }
@@ -386,6 +401,7 @@ struct WorkbenchView: View {
                         workbench.exitInspectorMaximized()
                     }) { workbench.toggleInspectorMaximized() }
                         .frame(minWidth: maximized ? 0 : panelWidth, maxWidth: maximized ? .infinity : panelWidth)
+                        .background { if !cards { canvasBackdrop } }
                         .modifier(CustomCard(on: cards, drawn: drawn))
                 }
                 .frame(maxWidth: maximized ? .infinity : nil)

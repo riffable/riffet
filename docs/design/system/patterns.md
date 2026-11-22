@@ -156,7 +156,7 @@
 - **结构**：页头（标题 `text-lg font-semibold`，可选一句说明 `text-sm text-fg-3`）、正文、页脚。左右内边距 20；页头上 20 下 12，页脚上 16 下 20。关闭按钮在右上角，桌面 28、手机 44。
 - **页脚按钮**靠右排列，主操作在最右，取消紧挨在它左边。两者同尺寸；取消用 `ghost`。不可逆的确认用 `danger`，打开时焦点落在取消上。主操作的文字是动词加对象（「删除会话」「添加项目」），标题陈述要发生的事（「删除这个会话？」）。
 - **手机**：确认、输入和小表单用底部弹层（`mobileSheet`），页脚按钮高 44、等宽铺满一行；大任务（设置、面板）全屏（`mobileFullscreen`）。
-- **底与层**：弹窗 `bg-elevated`、圆角 16（`rounded-2xl`）、`shadow-pop`；遮罩 `bg-black/25`（深色 50%）加 1.5px 模糊。
+- **底与层**：弹窗 `bg-elevated`、圆角 16（`rounded-2xl`）、`shadow-pop`；遮罩 `bg-black/25`（深色 30%）加 1.5px 模糊。
 - **动效**：进入取 `fast`、减速曲线，从 `--enter-scale` 放大；退出取 `exitFast`、加速曲线。
 
 - **实现**：宽度用 `DialogContent` 的 `size`（`confirm` / `form` / `content` / `workspace`，默认 `form`），调用处不写 `max-w-*`。底部弹层里 `DialogFooter` 的按钮由样式表拉成等宽、高 44，调用处不再各写一遍。

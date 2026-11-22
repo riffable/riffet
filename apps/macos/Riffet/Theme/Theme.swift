@@ -15,14 +15,16 @@ struct ThemeEntry: Identifiable, Sendable {
     let values: RiffetThemeValues
     let revision: String
     let syntax: RiffetCodeThemeValues?
+    let gradient: CachedThemeGradient?
 
-    init(id: String, name: String, summary: String, values: RiffetThemeValues, revision: String, syntax: RiffetCodeThemeValues? = nil) {
+    init(id: String, name: String, summary: String, values: RiffetThemeValues, revision: String, syntax: RiffetCodeThemeValues? = nil, gradient: CachedThemeGradient? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
         self.values = values
         self.revision = revision
         self.syntax = syntax
+        self.gradient = gradient
     }
 
     var ansi: RiffetAnsiValues { values.ansi }
@@ -81,7 +83,7 @@ final class ThemeStore {
     }
     /// A plugin palette in effect wins over the stored theme, which it never overwrites.
     var entry: ThemeEntry { AppearanceStore.shared.paletteEntry ?? catalog.first { $0.id == themeId } ?? Self.builtins[0] }
-    var palette: Palette { Palette(values: entry.values, revision: entry.revision) }
+    var palette: Palette { Palette(values: entry.values, revision: entry.revision, gradient: entry.gradient) }
     /// The revision of the palette currently on screen; caches and redraw keys include it.
     var revision: String { entry.revision }
     /// Resolves the active code syntax theme: an explicit built-in or custom theme, or `auto`
@@ -282,6 +284,24 @@ struct Palette: Sendable {
     let values: RiffetThemeValues
     /// `builtin` for the stylesheet's themes, or the library revision a custom palette was read at.
     let revision: String
+    /// Optional window/sidebar canvas gradient for custom multi-point themes.
+    let gradient: CachedThemeGradient?
+
+    init(values: RiffetThemeValues, revision: String, gradient: CachedThemeGradient? = nil) {
+        self.values = values
+        self.revision = revision
+        self.gradient = gradient
+    }
+
+    func gradientHalf(dark: Bool) -> CachedThemeGradientHalf? {
+        guard let gradient else { return nil }
+        return dark ? gradient.dark : gradient.light
+    }
+
+    /// Opacity of the main content card over the window canvas (1 when solid, < 1 when blended).
+    var cardOpacity: Double {
+        gradient?.cardOpacity ?? 1
+    }
 
     subscript(dynamicMember role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable) -> Color {
         PaletteCache.shared.color(values, revision, role)
@@ -395,6 +415,66 @@ extension EnvironmentValues {
     var palette: Palette {
         get { self[PaletteKey.self] }
         set { self[PaletteKey.self] = newValue }
+    }
+}
+
+/// Paints a custom theme's 2- or 3-colour canvas gradient, or falls back to solid `bgSidebar`.
+/// Mirrors `canvasGradientCss` in `apps/web/src/lib/theme-palette.ts`.
+struct ThemeCanvasBackground: View {
+    let gradient: CachedThemeGradientHalf?
+    let fallback: Color
+    var opacity: Double = 1
+
+    var body: some View {
+        Group {
+            if let gradient, gradient.colors.count >= 2 {
+                let stops = gradient.colors.compactMap { RiffetRGBA(hex: $0) }.map {
+                    Color(.sRGB, red: $0.red, green: $0.green, blue: $0.blue, opacity: $0.alpha)
+                }
+                if stops.count >= 2 {
+                    let rad = gradient.angle * .pi / 180
+                    let vx = sin(rad)
+                    let vy = -cos(rad)
+                    let start = UnitPoint(x: 0.5 - 0.5 * vx, y: 0.5 - 0.5 * vy)
+                    let end = UnitPoint(x: 0.5 + 0.5 * vx, y: 0.5 + 0.5 * vy)
+                    if stops.count >= 3 {
+                        let perp = (gradient.angle + 90) * .pi / 180
+                        let mid = UnitPoint(x: 0.5 + 0.45 * sin(perp), y: 0.5 - 0.45 * cos(perp))
+                        ZStack {
+                            LinearGradient(colors: [stops[0], stops[2]], startPoint: start, endPoint: end)
+                            EllipticalGradient(
+                                colors: [stops[1], stops[1].opacity(0)],
+                                center: mid,
+                                startRadiusFraction: 0,
+                                endRadiusFraction: 0.85
+                            )
+                        }
+                    } else {
+                        LinearGradient(colors: [stops[0], stops[1]], startPoint: start, endPoint: end)
+                    }
+                } else {
+                    fallback
+                }
+            } else {
+                fallback
+            }
+        }
+        .opacity(opacity)
+    }
+}
+
+/// Environment-backed canvas background using the active palette and colour scheme.
+struct PaletteCanvasBackground: View {
+    var opacity: Double = 1
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ThemeCanvasBackground(
+            gradient: palette.gradientHalf(dark: colorScheme == .dark),
+            fallback: palette.bgSidebar,
+            opacity: opacity
+        )
     }
 }
 

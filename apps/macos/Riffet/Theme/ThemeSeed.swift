@@ -1,8 +1,8 @@
 import Foundation
 
-/// The theme canvas, ported from `apps/web/src/lib/theme-seed.ts`: a couple of points become the
-/// roles a reader feels as "the theme" — surfaces, ink, lines, the primary action and the accent.
-/// Status, diff, agent and the remaining chart roles keep the draft's values.
+/// The theme canvas, ported from `apps/web/src/lib/theme-seed.ts`: 1 to 3 colour points become the
+/// roles a reader feels as "the theme" — paper, window canvas / gradient, ink, lines, the primary
+/// action and the accent. Status, diff, agent and the remaining chart roles keep the draft's values.
 ///
 /// The arithmetic follows the web line by line on purpose. A role counts as typed over when it
 /// differs from what the previous seed produced, so a theme drawn on one client must redraw to the
@@ -10,15 +10,15 @@ import Foundation
 enum ThemeSeedMath {
     typealias Palette = [String: String]
 
-    /// How much colour the surface point can put into paper at the canvas edge.
+    /// How much colour the primary point can put into paper at the canvas edge.
     private static let surfaceChroma = 0.035
-    /// The sidebar may carry more colour than the page: it frames the work rather than holding it.
-    private static let sidebarChroma = 0.06
+    /// Default main-card translucency over a canvas gradient (0 = solid card, 1 = full gradient).
+    static let defaultBlend = 0.25
 
-    /// Offsets from the surface hue the harmony control steps through, per number of points.
+    /// Offsets from the first point's hue the harmony control steps through, per number of points.
     private static let harmonies: [Int: [[Double]]] = [
-        2: [[180], [120], [40]],
-        3: [[150, 210], [120, 240], [40, 320]],
+        2: [[55], [120], [180]],
+        3: [[55, 305], [120, 240], [150, 210]],
     ]
 
     static let roles = [
@@ -138,12 +138,62 @@ enum ThemeSeedMath {
         fit(0.74, 0.02 + point.radius * 0.15, point.hue)
     }
 
+    /// One stop of the window/sidebar canvas (also used as solid `bg-sidebar` when there is one point).
+    private static func canvasStop(_ point: CachedThemeSeed.Point, dark: Bool, soft: Double) -> String {
+        if !dark {
+            let l = 0.97 - 0.065 * point.radius - 0.03 * soft
+            let c = point.radius * (0.095 - 0.035 * soft)
+            return hex(l, c, point.hue)
+        }
+        let bgL = 0.185 + 0.07 * soft
+        let l = bgL + 0.02 + 0.045 * point.radius
+        let c = point.radius * (0.095 - 0.03 * soft)
+        return hex(l, c, point.hue)
+    }
+
+    /// CSS linear-gradient angle pointing from the first canvas point toward the last.
+    private static func gradientAngle(_ points: [CachedThemeSeed.Point]) -> Double {
+        let pos = { (point: CachedThemeSeed.Point) -> (Double, Double) in
+            let rad = point.hue * .pi / 180
+            return (point.radius * sin(rad), -point.radius * cos(rad))
+        }
+        let (x0, y0) = pos(points[0])
+        var (x1, y1) = pos(points[points.count - 1])
+        var dx = x1 - x0
+        var dy = y1 - y0
+        if hypot(dx, dy) < 0.02, points.count == 3 {
+            (x1, y1) = pos(points[1])
+            dx = x1 - x0
+            dy = y1 - y0
+        }
+        if hypot(dx, dy) < 0.02 { return 135 }
+        let raw = (atan2(dx, -dy) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+        return ((raw * 10 + 0.5).rounded(.down) / 10).truncatingRemainder(dividingBy: 360)
+    }
+
+    /// Derives the window/sidebar canvas gradient for 2 or 3 canvas points; 1 point yields nil.
+    static func deriveGradient(_ seed: CachedThemeSeed) -> CachedThemeGradient? {
+        guard seed.points.count >= 2 else { return nil }
+        let angle = gradientAngle(seed.points)
+        let roundUnit = { (value: Double) in (value * 1000).rounded() / 1000 }
+        return CachedThemeGradient(
+            light: CachedThemeGradientHalf(
+                colors: seed.points.map { canvasStop($0, dark: false, soft: seed.softness) },
+                angle: angle
+            ),
+            dark: CachedThemeGradientHalf(
+                colors: seed.points.map { canvasStop($0, dark: true, soft: seed.softness) },
+                angle: angle
+            ),
+            blend: roundUnit(seed.blend ?? defaultBlend)
+        )
+    }
+
     // MARK: - Derivation
 
     static func derive(_ seed: CachedThemeSeed, dark: Bool) -> Palette {
         let surface = seed.points[0]
         let accentPoint = seed.points.count > 1 ? seed.points[1] : surface
-        let sidebarPoint: CachedThemeSeed.Point? = seed.points.count > 2 ? seed.points[2] : nil
         let h = surface.hue
         let cs = surface.radius * surfaceChroma
         let ha = accentPoint.hue
@@ -160,7 +210,7 @@ enum ThemeSeedMath {
             let fg = readable(0.29, cs * 0.5, h, on: bg, minimum: 12, darker: true)
             return [
                 "bg": hex(bg),
-                "bg-sidebar": sidebarPoint.map { hex(bgL - 0.014 - 0.02 * $0.radius, $0.radius * sidebarChroma, $0.hue) } ?? hex(bgL - 0.014, cs * 0.8, h),
+                "bg-sidebar": canvasStop(surface, dark: false, soft: soft),
                 "bg-subtle": hex(bgL - 0.018, cs * 0.8, h),
                 "bg-muted": hex(bgL - 0.04, cs, h),
                 "bg-elevated": hex(elevatedL, cs * 0.4, h),
@@ -195,11 +245,11 @@ enum ThemeSeedMath {
         let ink = min(cs, 0.03)
         return [
             "bg": bgHex,
-            "bg-sidebar": sidebarPoint.map { hex(bgL + 0.022, $0.radius * sidebarChroma, $0.hue) } ?? hex(bgL + 0.022, cs * 0.7, h),
+            "bg-sidebar": canvasStop(surface, dark: true, soft: soft),
             "bg-subtle": hex(bgL + 0.03, cs * 0.7, h),
             "bg-muted": hex(bgL + 0.075, cs * 0.7, h),
-            "bg-elevated": hex(bgL + 0.04, cs * 0.7, h),
-            "bg-popover": hex(bgL + 0.06, cs * 0.7, h),
+            "bg-elevated": hex(bgL + 0.065, cs * 0.9, h),
+            "bg-popover": hex(bgL + 0.085, cs * 0.9, h),
             "bg-hover": hex(0.98, ink, h, 0.06),
             "bg-active": hex(0.98, ink, h, 0.1),
             "bg-bubble": hex(bgL + 0.075, min(ca * 0.15, 0.035), ha),
@@ -222,15 +272,45 @@ enum ThemeSeedMath {
         ]
     }
 
+    /// Previous formulas for roles whose derivation evolved, matching `legacyDerived` in
+    /// `apps/web/src/lib/theme-seed.ts`, so older seeds upgrade cleanly instead of freezing.
+    private static func legacyDerived(_ seed: CachedThemeSeed, dark: Bool) -> Palette {
+        let surface = seed.points[0]
+        let sidebarPoint = seed.points.count > 2 ? seed.points[2] : nil
+        let h = surface.hue
+        let cs = surface.radius * surfaceChroma
+        let soft = seed.softness
+        if !dark {
+            let bgL = 1 - 0.012 * surface.radius - 0.05 * soft
+            return [
+                "bg-sidebar": sidebarPoint.map { hex(bgL - 0.014 - 0.02 * $0.radius, $0.radius * 0.06, $0.hue) }
+                    ?? hex(bgL - 0.014, cs * 0.8, h),
+            ]
+        }
+        let bgL = 0.185 + 0.07 * soft
+        return [
+            "bg-sidebar": sidebarPoint.map { hex(bgL + 0.022, $0.radius * 0.06, $0.hue) }
+                ?? hex(bgL + 0.022, cs * 0.7, h),
+            "bg-elevated": hex(bgL + 0.04, cs * 0.7, h),
+            "bg-popover": hex(bgL + 0.06, cs * 0.7, h),
+        ]
+    }
+
     /// Redraws one half from [next]. A seed role the author has typed over — one that no longer
     /// matches what [previous] produced — keeps the author's value; without a previous seed the
     /// canvas is being picked up for the first time and owns every seed role.
     static func apply(_ current: Palette, previous: CachedThemeSeed?, next: CachedThemeSeed, dark: Bool) -> Palette {
         let before = previous.map { derive($0, dark: dark) }
+        let legacy = previous.map { legacyDerived($0, dark: dark) }
         let after = derive(next, dark: dark)
         var out = current
         for role in roles {
-            let typed = before.map { current[role]?.lowercased() != $0[role] } ?? false
+            if role == "bg-sidebar", next.points.count >= 2 {
+                out[role] = after[role]
+                continue
+            }
+            let value = current[role]?.lowercased()
+            let typed = before.map { value != $0[role] && value != legacy?[role] } ?? false
             if !typed { out[role] = after[role] }
         }
         return out
@@ -241,7 +321,8 @@ enum ThemeSeedMath {
         let round = { (value: Double) in (value * 1000).rounded() / 1000 }
         return CachedThemeSeed(
             points: seed.points.map { .init(hue: round($0.hue.truncatingRemainder(dividingBy: 360)), radius: round($0.radius)) },
-            softness: round(seed.softness)
+            softness: round(seed.softness),
+            blend: seed.blend.map(round)
         )
     }
 
@@ -262,48 +343,56 @@ enum ThemeSeedMath {
         return (lab.0, hypot(lab.1, lab.2), (atan2(lab.2, lab.1) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360))
     }
 
-    /// Where a palette without a seed would sit on the canvas, so picking it up starts close by.
+    /// Where a palette without a seed would sit on the canvas: starts with 1 point so solid themes stay solid until extended.
     static func infer(light: Palette) -> CachedThemeSeed {
         let clamp = { (value: Double) in min(1, max(0, value)) }
-        let surface = oklch(light["bg-muted"]).map { CachedThemeSeed.Point(hue: $0.h, radius: clamp($0.c / surfaceChroma)) }
-            ?? .init(hue: 0, radius: 0)
-        let accent = oklch(light["accent"]).map { CachedThemeSeed.Point(hue: $0.h, radius: clamp(($0.c - 0.02) / 0.2)) } ?? surface
-        let softness = oklch(light["bg"]).map { clamp((1 - 0.012 * surface.radius - $0.l) / 0.05) } ?? 0
-        return normalized(CachedThemeSeed(points: [surface, accent], softness: softness))
+        let paper = oklch(light["bg-muted"])
+        let accent = oklch(light["accent"])
+        let primary: CachedThemeSeed.Point
+        if let paper, paper.c > 0.008 {
+            primary = .init(hue: paper.h, radius: clamp(paper.c / surfaceChroma))
+        } else if let accent {
+            primary = .init(hue: accent.h, radius: clamp(((accent.c - 0.02) / 0.2) * 0.5))
+        } else {
+            primary = .init(hue: 0, radius: 0)
+        }
+        let softness = oklch(light["bg"]).map { clamp((1 - 0.012 * primary.radius - $0.l) / 0.05) } ?? 0
+        return normalized(CachedThemeSeed(points: [primary], softness: softness))
     }
 
     private static func distance(_ a: Double, _ b: Double) -> Double {
         min(abs(a - b), 360 - abs(a - b))
     }
 
-    /// The next pairing in the harmony cycle, measured from the surface point; the surface stays put.
+    /// The next pairing in the harmony cycle, measured from the first point; the first point stays put.
     static func nextHarmony(_ seed: CachedThemeSeed) -> CachedThemeSeed {
-        guard let surface = seed.points.first, let cycle = harmonies[seed.points.count] else { return seed }
+        guard let primary = seed.points.first, let cycle = harmonies[seed.points.count] else { return seed }
         let others = Array(seed.points.dropFirst())
-        let offsets = others.map { ($0.hue - surface.hue + 360).truncatingRemainder(dividingBy: 360) }
+        let offsets = others.map { ($0.hue - primary.hue + 360).truncatingRemainder(dividingBy: 360) }
         let misfit = { (set: [Double]) in zip(set, offsets).reduce(0) { $0 + distance($1.0, $1.1) } }
         var nearest = 0
         for index in cycle.indices where misfit(cycle[index]) < misfit(cycle[nearest]) { nearest = index }
         let next = cycle[(nearest + 1) % cycle.count]
-        var points = [surface]
+        var points = [primary]
         for (index, point) in others.enumerated() {
-            points.append(.init(hue: (surface.hue + next[index]).truncatingRemainder(dividingBy: 360), radius: point.radius))
+            points.append(.init(hue: (primary.hue + next[index]).truncatingRemainder(dividingBy: 360), radius: point.radius))
         }
-        return CachedThemeSeed(points: points, softness: seed.softness)
+        return CachedThemeSeed(points: points, softness: seed.softness, blend: seed.blend)
     }
 
-    /// One more point: the accent opposite the surface, then a sidebar mirroring the accent.
+    /// Adds one colour point: starts an analogous dual gradient, then completes a three-colour blend.
     static func addPoint(_ seed: CachedThemeSeed) -> CachedThemeSeed {
-        guard let surface = seed.points.first, seed.points.count < 3 else { return seed }
+        guard let primary = seed.points.first, seed.points.count < 3 else { return seed }
         var next = seed
+        next.blend = seed.blend ?? defaultBlend
         if seed.points.count == 1 {
-            next.points.append(.init(hue: (surface.hue + 180).truncatingRemainder(dividingBy: 360), radius: max(surface.radius, 0.7)))
+            next.points.append(.init(hue: (primary.hue + 55).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.72)))
             return next
         }
-        let offset = (seed.points[1].hue - surface.hue + 360).truncatingRemainder(dividingBy: 360)
-        // A mirror of an opposite accent lands on the accent itself; a neighbour reads better there.
-        let mirrored = abs(offset - 180) < 20 ? 40 : 360 - offset
-        next.points.append(.init(hue: (surface.hue + mirrored).truncatingRemainder(dividingBy: 360), radius: max(surface.radius, 0.5)))
+        let offset = (seed.points[1].hue - primary.hue + 360).truncatingRemainder(dividingBy: 360)
+        // A mirror of an opposite colour lands on the second point itself; a neighbour reads better there.
+        let mirrored = abs(offset - 180) < 20 ? 55 : 360 - offset
+        next.points.append(.init(hue: (primary.hue + mirrored).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.72)))
         return next
     }
 }

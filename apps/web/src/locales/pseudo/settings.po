@@ -229,8 +229,16 @@ msgstr ""
 msgid "{name} · 每日"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "{newlineKey} 换行；仅影响物理键盘，手机软键盘始终换行。"
+msgstr ""
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "{recognizer} · 不可用"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。"
 msgstr ""
 
 #: src/app/settings/ServiceCharts.tsx
@@ -719,6 +727,10 @@ msgstr ""
 
 #: src/app/design/catalog.tsx
 msgid "三条取舍依据"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "三色"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -1242,10 +1254,6 @@ msgstr ""
 msgid "仅在远端非交互 shell 找不到 riffet 时填写"
 msgstr ""
 
-#: src/app/settings/ViewsSection.tsx
-msgid "仅导航条"
-msgstr ""
-
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "仅手机"
 msgstr ""
@@ -1570,10 +1578,6 @@ msgstr ""
 msgid "侧栏收起"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "侧栏色"
-msgstr ""
-
 #: src/app/design/mac/StylesChapter.tsx
 msgid "侧栏行高"
 msgstr ""
@@ -1637,10 +1641,6 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "保存在服务器，所有设备生效。"
-msgstr ""
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "保存在服务器，所有设备生效。只影响物理键盘，手机软键盘始终换行。"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -2511,6 +2511,10 @@ msgstr ""
 msgid "单独一条消息，展示思考与工具调用"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "单色"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 msgid "单行"
 msgstr ""
@@ -2652,6 +2656,10 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "去申请"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "双色"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -3274,7 +3282,7 @@ msgid "圆桌讨论"
 msgstr ""
 
 #: src/app/settings/ViewsSection.tsx
-msgid "圆点"
+msgid "圆点导航条"
 msgstr ""
 
 #: src/app/design/foundations/IconChapter.tsx
@@ -3869,10 +3877,6 @@ msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "导航层级"
-msgstr ""
-
-#: src/app/settings/ViewsSection.tsx
-msgid "导航条样式"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -4483,10 +4487,6 @@ msgstr ""
 msgid "底栏选中项下方一个圆点"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "底色"
-msgstr ""
-
 #: src/app/design/catalog.tsx
 msgid "底色、墨色、状态色"
 msgstr ""
@@ -4605,7 +4605,6 @@ msgid "弹窗结构"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
-#: src/app/settings/ThemeCanvas.tsx
 msgid "强调色"
 msgstr ""
 
@@ -5030,10 +5029,6 @@ msgstr ""
 msgid "把配色改成画板"
 msgstr ""
 
-#: src/app/design/surfaces/SessionChapter.tsx
-msgid "折叠"
-msgstr ""
-
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "报告一次操作的结果"
@@ -5387,6 +5382,7 @@ msgstr ""
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/design/surfaces/SessionChapter.tsx
 msgid "搜索"
 msgstr ""
 
@@ -6176,6 +6172,14 @@ msgstr ""
 msgid "明暗"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "星云"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "春野"
+msgstr ""
+
 #: src/app/design/patterns/ListsChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "昨天"
@@ -6222,6 +6226,14 @@ msgstr ""
 msgid "显示行号"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "晚风"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "晴空"
+msgstr ""
+
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "暂不支持选择"
 msgstr ""
@@ -6236,7 +6248,11 @@ msgid "暂无数据"
 msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
-msgid "暮色"
+msgid "暮光"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "暮紫"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -6374,6 +6390,10 @@ msgstr ""
 
 #: src/app/settings/settingsSections.ts
 msgid "服务管理"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "朝霞"
 msgstr ""
 
 #: src/app/settings/VoiceInputSection.tsx
@@ -6522,6 +6542,10 @@ msgstr ""
 msgid "来源清空后保留一次退场动画，可显示「已恢复」。"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "极光"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "极简墨色"
@@ -6542,6 +6566,10 @@ msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
 msgid "柔和度"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "柠檬"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
@@ -7032,10 +7060,6 @@ msgstr ""
 msgid "永不"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "沙丘"
-msgstr ""
-
 #: src/app/design/components/InputsChapter.tsx
 msgid "沙盒"
 msgstr ""
@@ -7212,10 +7236,6 @@ msgstr ""
 msgid "浮层进入"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "海"
-msgstr ""
-
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "消息"
 msgstr ""
@@ -7226,6 +7246,10 @@ msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "消息之外新增的中文字面量"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "深海"
 msgstr ""
 
 #: src/app/design/android/PhoneMiniature.tsx
@@ -7259,14 +7283,6 @@ msgstr ""
 msgid "添加互联"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "添加侧栏色"
-msgstr ""
-
-#: src/app/settings/ThemeCanvas.tsx
-msgid "添加强调色"
-msgstr ""
-
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加规则"
 msgstr ""
@@ -7287,6 +7303,10 @@ msgstr ""
 msgid "添加项目目录"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "添加颜色"
+msgstr ""
+
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/ChannelsSection.tsx
 msgid "添加飞书机器人"
@@ -7305,6 +7325,10 @@ msgstr ""
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/SupportSections.tsx
 msgid "清除"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "渐变"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -7414,12 +7438,16 @@ msgstr ""
 msgid "独立窗口"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "玫瑰"
-msgstr ""
-
 #: src/app/settings/ServiceCharts.tsx
 msgid "现在"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "琥海"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "琥珀"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -7675,7 +7703,6 @@ msgid "短暂反馈"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
-#: src/app/settings/ThemeCanvas.tsx
 msgid "石墨"
 msgstr ""
 
@@ -7832,10 +7859,6 @@ msgstr ""
 msgid "移除 {name}？"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "移除侧栏色"
-msgstr ""
-
 #: src/app/settings/DevicesSection.tsx
 msgid "移除后需要重新配对"
 msgstr ""
@@ -7844,12 +7867,12 @@ msgstr ""
 msgid "移除后需要重新配对，这个浏览器会退出登录"
 msgstr ""
 
-#: src/app/settings/ThemeCanvas.tsx
-msgid "移除强调色"
-msgstr ""
-
 #: src/app/settings/PushKeySection.tsx
 msgid "移除推送密钥？"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "移除颜色"
 msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
@@ -8145,13 +8168,17 @@ msgstr ""
 msgid "纸张"
 msgstr ""
 
-#: src/app/settings/ViewsSection.tsx
-msgid "线"
+#: src/app/settings/ThemeCanvas.tsx
+msgid "紫雾"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgctxt "interface-style"
 msgid "线条"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "线条导航条"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
@@ -8321,6 +8348,14 @@ msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "继续终端会话"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "绯樱"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "绯红"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -8528,7 +8563,7 @@ msgid "色块"
 msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
-msgid "苔藓"
+msgid "苔原"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
@@ -8582,8 +8617,24 @@ msgstr ""
 msgid "菜单与面板最高为屏高的 70%，超出时在外壳里滚动"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "落日"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "蔚蓝"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "蔷薇"
+msgstr ""
+
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "虚线是临时标签：它被下一个打开的会话替换，保留后变实线。"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "蜜桃"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -9007,6 +9058,7 @@ msgid "请求速率"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
+#: src/app/design/surfaces/SessionChapter.tsx
 msgid "读取"
 msgstr ""
 
@@ -9618,6 +9670,10 @@ msgstr ""
 msgid "连接飞书"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "连续合并"
+msgstr ""
+
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出"
@@ -9723,6 +9779,10 @@ msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "选项超过四个"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "透底"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
@@ -10139,6 +10199,14 @@ msgstr ""
 msgid "需要集中处理、有提交和取消的任务。"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "霓虹"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "青苔"
+msgstr ""
+
 #: src/app/design/mac/WindowChapter.tsx
 msgid "非会话页都用 PageScaffold：页头、一个滚动区和一条居中的内容列。内容列宽度不含内边距。"
 msgstr ""
@@ -10360,6 +10428,18 @@ msgstr ""
 msgid "颜色"
 msgstr ""
 
+#: src/app/settings/ThemeCanvas.tsx
+msgid "颜色 1"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "颜色 2"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "颜色 3"
+msgstr ""
+
 #: src/app/design/catalog.tsx
 msgid "颜色、文字、间距这些取值与通用规则。没有部件，其余各层都由它们组成。"
 msgstr ""
@@ -10555,4 +10635,3 @@ msgstr ""
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr ""
-

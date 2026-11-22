@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeBackendCatalogEntry, OwnerInfo } from '@contracts';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { ThemeSwatch } from '@/components/theme-swatch';
-import { IconChevronRight, IconCopy, IconLaptop, IconMonitor, IconMoon, IconServer, IconSettings, IconSun } from '@/components/icons';
+import { IconChevronRight, IconCopy, IconLaptop, IconMonitor, IconMoon, IconServer, IconSettings, IconSun, IconSwatchBook } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { StatusDot } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
@@ -23,13 +23,14 @@ interface Props {
   mobile?: boolean;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onOpenTheme?: () => void;
 }
 
 /** Prefetch only; opening the menu does not mount the settings workspace. */
 const preloadSettings = () => void import('./settings/SettingsDialog');
 
 /** The sidebar's only footer trigger: the account and the app; pages are reached from the navigation above. */
-export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings }: Props) {
+export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
   const { t } = useLingui();
   const { local, address } = hostInfo();
   const offline = stale?.mode === 'offline';
@@ -70,7 +71,7 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
           <IconChevronRight className="size-3.5 text-fg-4" />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <ThemeMenu />
+        <ThemeMenu onOpenTheme={onOpenTheme} />
         <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`} aria-label={backendNotice ? [t`设置`, backendNotice, backend?.reason].filter(Boolean).join(' · ') : undefined}>
           <IconSettings />
           <span className="min-w-0 flex-1"><Trans>设置</Trans>{backendNotice && <span className="block py-1 text-xs text-warning wrap-anywhere">{backendNotice}</span>}</span>
@@ -89,7 +90,7 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
   );
 }
 
-function ThemeMenu() {
+function ThemeMenu({ onOpenTheme }: { onOpenTheme?: () => void }) {
   const { t } = useLingui();
   const { mode, themeId, resolved, paletteKey } = useTheme();
   const themes = useThemeOptions();
@@ -115,6 +116,10 @@ function ThemeMenu() {
         {themes.map(theme => <DropdownMenuRadioItem key={theme.id} value={theme.id}><ThemeSwatch id={theme.id} className="h-4 w-6 rounded-sm" />{theme.name}</DropdownMenuRadioItem>)}
         {pluginPalettes.map(({ palette, key }) => <DropdownMenuRadioItem key={key} value={key}><ThemeSwatch id={key} className="h-4 w-6 rounded-sm" />{localizedText(palette.title) ?? palette.id}</DropdownMenuRadioItem>)}
       </DropdownMenuRadioGroup>
+      {onOpenTheme && <>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onOpenTheme}><IconSwatchBook /><Trans>自定义主题</Trans></DropdownMenuItem>
+      </>}
     </MenuSub>
   );
 }

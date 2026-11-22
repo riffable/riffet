@@ -2266,6 +2266,10 @@ msgstr "自动压缩阈值"
 msgid "自动换行"
 msgstr "自动换行"
 
+#: src/app/SidebarUserMenu.tsx
+msgid "自定义主题"
+msgstr "自定义主题"
+
 #: src/app/Sidebar.tsx
 msgid "自定义侧栏"
 msgstr "自定义侧栏"

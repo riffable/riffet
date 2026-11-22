@@ -64,7 +64,7 @@ export function PageScaffold({ title, meta, actions, column = 'document', divide
   const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
   return (
     <OverlayScopeContext.Provider value={overlay.scope}>
-      <div className="relative flex h-full min-h-0 flex-col bg-bg">
+      <div className="relative flex h-full min-h-0 flex-col max-md:bg-bg md:bg-transparent">
         <PageHeader title={title} meta={meta} actions={actions} divided={divided} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} />
         <div className="flex min-h-0 flex-1">
           {aside}

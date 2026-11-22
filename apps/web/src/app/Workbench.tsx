@@ -915,7 +915,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
       <main
-        className={cn('flex min-w-0 flex-1 flex-col', desktop && 'mb-2 mr-2 overflow-hidden rounded-xl bg-bg', desktop && !stripTabs && 'mt-2', desktop && sidebarCollapsed && 'ml-2')}
+        className={cn('flex min-w-0 flex-1 flex-col', desktop && 'mb-2 mr-2 overflow-hidden rounded-xl bg-card', desktop && !stripTabs && 'mt-2', desktop && sidebarCollapsed && 'ml-2')}
         aria-hidden={(panelMaximized && wide) || undefined}
         inert={panelMaximized && wide}
       >

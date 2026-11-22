@@ -11,6 +11,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { IconGitFork, IconPanelRight, IconSquareKanban } from '@/components/icons';
 import { PageScaffold } from '../PageScaffold';
 import { Composer } from '../session/Composer';
+import { useSettings } from '../state/stores';
 import { compactCount } from '../session/Activities';
 import { CouncilAside } from './CouncilAside';
 import { CouncilExportDialog } from './CouncilExportDialog';
@@ -88,6 +89,7 @@ export function CouncilPage({
 }: CouncilPageProps) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
+  const enterBehavior = useSettings((settings) => settings.composerEnterBehavior);
   const [items, setItems] = useState<CouncilSummary[]>([]);
   const [listed, setListed] = useState(false);
   // Seats run on quick chat too, which the Agents list leaves out; read again whenever that list changes.
@@ -264,6 +266,7 @@ export function CouncilPage({
                     references={[]}
                     onReferencesChange={() => {}}
                     placeholder={t`补充看法或约束`}
+                    enterBehavior={enterBehavior}
                     running={active.status === 'running'}
                     onStop={() => void run(() => api.councilStop(active.id), t`无法停止`)}
                     onSubmit={(text) => handleSupplement(text)}

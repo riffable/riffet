@@ -118,8 +118,8 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
             inert={!panelOpen}
           >
             {/* Keep the panel's contents at their docked width throughout the slide. */}
-            <div className="absolute inset-y-0 left-0 flex w-full min-w-(--panel-w) bg-bg">
-              {panel(project)}
+            <div className={cn('absolute inset-y-0 left-0 flex w-full min-w-(--panel-w)', maximized ? 'bg-canvas' : 'bg-card')}>
+              {maximized ? <div className="flex size-full bg-card">{panel(project)}</div> : panel(project)}
             </div>
           </aside>
           )}
@@ -127,7 +127,7 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
       )}
       {!wide && project && !pageOpen && (
         <Dialog open={panelOpen} onOpenChange={ui.setPanelOpen}>
-          <DialogContent mobileFullscreen hideClose aria-describedby={undefined} className={cn('left-auto right-0 top-0 h-dvh max-h-dvh max-w-none translate-x-0 translate-y-0 rounded-none p-0 transition-[width] duration-[var(--duration-slow)] ease-out-soft', !maximized ? 'w-[min(400px,92vw)]' : sidebarCollapsed ? 'w-screen' : 'w-[calc(100vw-var(--sidebar-w))]')}>
+          <DialogContent mobileFullscreen hideClose aria-describedby={undefined} className={cn('left-auto right-0 top-0 h-dvh max-h-dvh max-w-none translate-x-0 translate-y-0 rounded-none bg-bg p-0 transition-[width] duration-[var(--duration-slow)] ease-out-soft', !maximized ? 'w-[min(400px,92vw)]' : sidebarCollapsed ? 'w-screen' : 'w-[calc(100vw-var(--sidebar-w))]')}>
             <DialogTitle className="sr-only"><Trans>变更与文件</Trans></DialogTitle>
             {panel(project)}
           </DialogContent>

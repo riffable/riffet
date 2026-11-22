@@ -56,7 +56,7 @@ export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChan
   }, [current]);
 
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col bg-bg" aria-label={t`项目上下文`}>
+    <aside className="flex h-full min-h-0 w-full flex-col bg-transparent" aria-label={t`项目上下文`}>
       <div data-panel-drag className="flex h-12 shrink-0 items-stretch gap-2 edge-b px-1.5">
         {views.length > 0 && <ViewTabs value={current?.id ?? tab} onChange={onTabChange} options={views.map((view) => ({ value: view.id, label: view.title }))} />}
         <div className="ml-auto flex shrink-0 items-center pr-1.5">

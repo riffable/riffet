@@ -427,7 +427,7 @@ struct HomeView: View {
             projectId: project?.id,
             addSessionReference: currentCatalog?.capabilities.supportsSessionReferences == true ? { workbench.addSessionReference($0) } : nil,
             openSessionReference: { workbench.open(sessionId: $0) },
-            enterSends: workbench.settings?.composerEnterBehavior == "send",
+            enterSends: workbench.settings?.composerEnterBehavior != "newline",
             menuBelow: menuBelow
         )
     }

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CODE_THEME_ROLES, importCodeThemeJson, THEME_ANSI_KEYS, THEME_ROLES, type CodeThemePalette, type CustomCodeSyntax, type CustomTheme, type ThemePalette, type ThemeDesign } from '../../../../packages/contracts/src/index.js';
+import { CODE_THEME_ROLES, importCodeThemeJson, THEME_ANSI_KEYS, THEME_ROLES, type CodeThemePalette, type CustomCodeSyntax, type CustomTheme, type ThemeGradient, type ThemePalette, type ThemeDesign } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { changeSharedTheme } from './assistant.js';
 import { ThemeService, themeLibraryRevision } from './index.js';
@@ -205,6 +205,54 @@ describe('ThemeService', () => {
     ];
     for (const bad of invalidSyntaxes) {
       const err = await themes.replaceLibrary({ expectedRevision: saved.revision, themes: [{ ...theme(), syntax: bad } as CustomTheme] }).catch((v) => v);
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).code).toBe('INVALID_THEMES');
+    }
+  });
+
+  it('persists and canonicalizes optional canvas gradient and rejects invalid shapes', async () => {
+    const { themes, stateDir } = service();
+    const revision = themes.getLibrary().revision;
+    const gradient: ThemeGradient = {
+      light: { colors: ['#D8E8FC', '#F8DCE8', '#DCF2E2'], angle: 135.04 },
+      dark: { colors: ['#1E2640', '#38203A', '#1B332C'], angle: 360 },
+      blend: 0.2504,
+    };
+    const saved = await themes.replaceLibrary({ expectedRevision: revision, themes: [{ ...theme(), gradient }] });
+    expect(saved.themes[0]?.gradient).toEqual({
+      light: { colors: ['#d8e8fc', '#f8dce8', '#dcf2e2'], angle: 135 },
+      dark: { colors: ['#1e2640', '#38203a', '#1b332c'], angle: 0 },
+      blend: 0.25,
+    });
+    expect(new ThemeService({ stateDir }).getLibrary()).toEqual(saved);
+
+    // Equivalent angle / hex casing keeps the same revision (idempotent retry).
+    const retried = await themes.replaceLibrary({
+      expectedRevision: revision,
+      themes: [{
+        ...theme(),
+        gradient: {
+          blend: 0.25,
+          dark: { angle: 0, colors: ['#1e2640', '#38203a', '#1b332c'] },
+          light: { angle: 135, colors: ['#d8e8fc', '#f8dce8', '#dcf2e2'] },
+        },
+      }],
+    });
+    expect(retried).toEqual(saved);
+
+    const invalidGradients: unknown[] = [
+      null,
+      { light: { colors: ['#ffffff', '#000000'], angle: 90 } },
+      { light: { colors: ['#ffffff'], angle: 90 }, dark: { colors: ['#000000', '#111111'], angle: 90 } },
+      { light: { colors: ['#ffffff', '#000000', '#111111', '#222222'], angle: 90 }, dark: { colors: ['#000000', '#111111'], angle: 90 } },
+      { light: { colors: ['#ffffff', '#00000080'], angle: 90 }, dark: { colors: ['#000000', '#111111'], angle: 90 } },
+      { light: { colors: ['#ffffff', '#000000'], angle: -10 }, dark: { colors: ['#000000', '#111111'], angle: 90 } },
+      { light: { colors: ['#ffffff', '#000000'], angle: 90, extra: 1 }, dark: { colors: ['#000000', '#111111'], angle: 90 } },
+      { light: { colors: ['#ffffff', '#000000'], angle: 90 }, dark: { colors: ['#000000', '#111111'], angle: 90 }, blend: -0.1 },
+      { light: { colors: ['#ffffff', '#000000'], angle: 90 }, dark: { colors: ['#000000', '#111111'], angle: 90 }, blend: 1.1 },
+    ];
+    for (const bad of invalidGradients) {
+      const err = await themes.replaceLibrary({ expectedRevision: saved.revision, themes: [{ ...theme(), gradient: bad } as CustomTheme] }).catch((v) => v);
       expect(err).toBeInstanceOf(AppError);
       expect((err as AppError).code).toBe('INVALID_THEMES');
     }

@@ -75,7 +75,7 @@ struct AttemptsSheet: View {
             references: workbench.references,
             addReference: { workbench.addReference(path: $0) },
             removeReference: { workbench.removeReference($0) },
-            enterSends: workbench.settings?.composerEnterBehavior == "send",
+            enterSends: workbench.settings?.composerEnterBehavior != "newline",
             menuBelow: true
         )
     }

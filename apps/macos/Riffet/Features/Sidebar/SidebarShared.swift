@@ -345,6 +345,10 @@ enum SidebarFooterSupport {
             themeItem.image = AppearanceMenuItems.swatch(scheme == .dark ? entry.values.dark : entry.values.light)
             appearance.addItem(themeItem)
         }
+        appearance.addItem(.separator())
+        appearance.addItem(item(String(localized: "自定义主题"), "paintpalette") {
+            Self.openSettings(openSettings, on: .appearance)
+        })
         let appearanceItem = NSMenuItem(title: String(localized: "外观"), action: nil, keyEquivalent: "")
         appearanceItem.image = NSImage.icon("paintpalette", accessibilityDescription: nil)
         appearanceItem.submenu = appearance

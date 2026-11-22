@@ -21,7 +21,7 @@ const TABS_STORAGE = { tabs: 'riffet.sessionTabs.v1', style: 'riffet.sessionTabS
 /** 关闭: the classic title row. 标题栏: tabs replace it. 独立一行: tabs sit on the canvas above the panel. */
 export type TabStyle = 'off' | 'inline' | 'strip';
 
-const DEFAULT_TAB_STYLE: TabStyle = 'inline';
+const DEFAULT_TAB_STYLE: TabStyle = 'off';
 
 /**
  * 打开会话时. `preview`: a newly opened conversation is a temporary tab, kept only by the reader's own

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Kbd } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { isApplePlatform } from '@/lib/platform';
-import { primaryEnterHint } from '../../session/composerKeyboard';
+import { DEFAULT_ENTER_KEY_BEHAVIOR, primaryEnterHint } from '../../session/composerKeyboard';
 import { keybindingCaps, registerKeybindings } from '../../pluginKeybindings';
 import { hostShortcuts, shortcutGroups, type ShortcutGroup } from '../../hostShortcuts';
 import { familyCaps, shortcutCaps, shortcutHint, useShortcutOverrides } from '../../shortcuts';
@@ -40,7 +40,7 @@ function ShortcutMap() {
     <Frame className="grid gap-x-10 gap-y-8 p-8 md:grid-cols-2 xl:grid-cols-3 max-md:p-4">
       {shortcutGroups.map(({ group, title }) => <Group key={group} title={i18n._(title)} rows={rows(group)} />)}
       <Group title={t`输入框`} rows={[
-        [t`发送`, caps([primaryEnterHint('newline')])],
+        [t`发送`, caps([primaryEnterHint(DEFAULT_ENTER_KEY_BEHAVIOR)])],
         [t`换行`, caps([isApplePlatform ? '⇧' : 'Shift', '↵'])],
         [t`关闭菜单`, caps(['Esc'])],
       ]} />

@@ -78,6 +78,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
   const workers = agents.some((entry) => entry.backendId !== 'chat') ? agents.filter((entry) => entry.backendId !== 'chat') : agents;
   const nativeBackendDefaults = useSettings((settings) => settings.nativeBackendDefaults);
   const auxiliaryModels = useSettings((settings) => settings.auxiliaryModels);
+  const enterBehavior = useSettings((settings) => settings.composerEnterBehavior);
   const models: CouncilAgent[] = workers.map((entry) => startingAgent(entry, { nativeBackendDefaults, auxiliaryModels }));
   const [format, setFormat] = useState<CouncilFormat>('ld');
   const [seats, setSeats] = useState<Partial<Record<CouncilFormat, DraftSeat[]>>>({});
@@ -262,6 +263,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
         references={[]}
         onReferencesChange={() => {}}
         placeholder={{ ld: t`辩题，例如：首版应当先做 Web 端`, roundtable: t`要讨论的问题`, prism: t`要多角度回答的问题`, review: t`粘贴要审阅的文档或方案` }[format]}
+        enterBehavior={enterBehavior}
         disabled={busy}
         submitDisabled={!ready || busy}
         onSubmit={(text) => submit(text)}

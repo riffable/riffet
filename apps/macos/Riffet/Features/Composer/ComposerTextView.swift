@@ -19,7 +19,7 @@ struct ComposerTextView: NSViewRepresentable {
     var focusToken: Int = 0
     /// A caret placement requested from outside (after a menu pick), applied when this changes.
     var caretRequest: CaretRequest?
-    var enterSends = false
+    var enterSends = true
     var fontSize: CGFloat = 14
     /// The plugin and style fonts in effect: a change lays the text out again.
     private var fontKey: String { "\(AppearanceFonts.current.key)|\(DisplayPreferences.shared.style.fonts)" }

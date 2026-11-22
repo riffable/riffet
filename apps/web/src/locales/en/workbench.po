@@ -2266,6 +2266,10 @@ msgstr "Automatic compaction threshold"
 msgid "自动换行"
 msgstr "Word wrap"
 
+#: src/app/SidebarUserMenu.tsx
+msgid "自定义主题"
+msgstr "Custom themes"
+
 #: src/app/Sidebar.tsx
 msgid "自定义侧栏"
 msgstr "Customize sidebar"

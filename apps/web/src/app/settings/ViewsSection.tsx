@@ -3,21 +3,24 @@ import { Segmented, Switch } from '@/components/ui/controls';
 import { SortableList, SortHandle } from '@/components/ui/sortable-list';
 import { cn } from '@/lib/utils';
 import type { ViewEntry } from '@/plugins/catalog';
-import { setChapterNavigation, setProcessFoldTiming, setRailMark, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type ProcessFoldTiming, type RailMark, type SessionSide, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
+import { setChapterNavigation, setProcessFoldTiming, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type ProcessFoldTiming, type RailMark, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
 import { SettingsGroup as Group, SettingsRow as Row, SettingsThumbChoice, ThumbSidebar, thumbFrame } from './SettingsLayout';
 
 /** Settings list the views of a conversation, whichever one is open. */
 const SETTINGS_FACTS = { hasProject: true, hasSession: true, capabilities: new Set<string>() };
 
-/** One prompt's mark on the rail, as the miniature and the style switch draw it. */
-function Mark({ mark, active, className }: { mark: RailMark; active?: boolean; className?: string }) {
+type SessionSideOption = 'overview' | 'rail-line' | 'rail-dot';
+
+/** One prompt's mark on the rail, as the miniature draws it. */
+function Mark({ mark, active }: { mark: RailMark; active?: boolean }) {
   return mark === 'dot'
-    ? <i className={cn('rounded-full bg-current', active ? 'size-[4px]' : 'size-[3px]', className)} />
-    : <i className={cn('h-[2px] rounded-full bg-current', active ? 'w-[9px]' : 'w-[5px]', className)} />;
+    ? <i className={cn('rounded-full bg-current', active ? 'size-[4px]' : 'size-[3px]')} />
+    : <i className={cn('h-[2px] rounded-full bg-current', active ? 'w-[9px]' : 'w-[5px]')} />;
 }
 
-/** A miniature of a wide session: the reading column, and the overview column or the rail beside it. */
-function Thumb({ side, mark, selected }: { side: SessionSide; mark: RailMark; selected: boolean }) {
+/** A miniature of a wide session: the reading column, and the overview column or either rail style beside it. */
+function Thumb({ option, selected }: { option: SessionSideOption; selected: boolean }) {
+  const mark: RailMark = option === 'rail-dot' ? 'dot' : 'line';
   return (
     <span className={thumbFrame(selected)}>
       <ThumbSidebar />
@@ -25,7 +28,7 @@ function Thumb({ side, mark, selected }: { side: SessionSide; mark: RailMark; se
         <span className="flex flex-1 flex-col items-center gap-1 pt-0.5">
           {['70%', '52%', '64%', '40%'].map((width, row) => <i key={row} className="h-[3px] rounded-sm bg-active" style={{ width }} />)}
         </span>
-        {side === 'overview'
+        {option === 'overview'
           ? (
             <span className="flex w-[28%] flex-col gap-[3px] pt-0.5">
               {[0, 1, 2].map((row) => <i key={row} className={cn('h-[3px] rounded-sm', row === 2 ? 'bg-fg-4' : 'bg-active')} />)}
@@ -74,22 +77,25 @@ export function ViewsSection() {
   const sidebarHidden = useViewPrefs((state) => state.sidebarHidden);
   const offered = useSessionViews(SETTINGS_FACTS);
   const sidebar = useSidebarOrder();
+  const sideOption: SessionSideOption = side === 'overview' ? 'overview' : mark === 'dot' ? 'rail-dot' : 'rail-line';
+  const selectSide = (option: SessionSideOption) => {
+    if (option === 'overview') setSessionSide('overview');
+    else setSessionSide('rail', option === 'rail-dot' ? 'dot' : 'line');
+  };
   return <div className="flex flex-col gap-6">
     <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
     <Group title={t`会话右侧`}>
-      <SettingsThumbChoice<SessionSide>
+      <SettingsThumbChoice<SessionSideOption>
         label={t`会话右侧`}
-        value={side}
-        onChange={setSessionSide}
-        options={[{ value: 'overview', label: t`会话概览` }, { value: 'rail', label: t`仅导航条` }]}
-        thumb={(value, selected) => <Thumb side={value} mark={mark} selected={selected} />}
+        value={sideOption}
+        onChange={selectSide}
+        options={[
+          { value: 'overview', label: t`会话概览` },
+          { value: 'rail-line', label: t`线条导航条` },
+          { value: 'rail-dot', label: t`圆点导航条` },
+        ]}
+        thumb={(value, selected) => <Thumb option={value} selected={selected} />}
       />
-      <Row title={t`导航条样式`}>
-        <Segmented<RailMark> size="xs" value={mark} onChange={setRailMark} ariaLabel={t`导航条样式`} options={[
-          { value: 'line', label: t`线`, icon: <Mark mark="line" className="w-2.5" /> },
-          { value: 'dot', label: t`圆点`, icon: <Mark mark="dot" className="size-1.5" /> },
-        ]} />
-      </Row>
     </Group>
     <Group>
       <Row title={t`过程自动收起`}>

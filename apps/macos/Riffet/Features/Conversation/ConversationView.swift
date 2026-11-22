@@ -341,7 +341,7 @@ struct ConversationView: View {
             projectId: session.projectId,
             addSessionReference: catalog?.capabilities.supportsSessionReferences == true ? { workbench.addSessionReference($0) } : nil,
             openSessionReference: { workbench.open(sessionId: $0) },
-            enterSends: workbench.settings?.composerEnterBehavior == "send",
+            enterSends: workbench.settings?.composerEnterBehavior != "newline",
             steersWhileRunning: quickChat ? false : defaultSendSteers,
             enqueue: defaultSendSteers ? { Task { await send(interrupt: false, state: state, enqueue: true) } } : nil,
             sendLater: quickChat || workbench.settings?.composerSendLater?.boolValue != true ? nil : { date in Task { await sendLater(date) } }

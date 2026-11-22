@@ -598,7 +598,7 @@ export function Sidebar(props: Props) {
   const heldOfflineBanner = useHeld(offlineBanner);
 
   return (
-    <nav className={cn('mobile-sidebar flex h-full min-h-0 w-full flex-col', mobile ? 'bg-sidebar' : 'bg-canvas')} aria-label={t`工作区导航`}>
+    <nav className={cn('mobile-sidebar flex h-full min-h-0 w-full flex-col', mobile ? 'bg-canvas' : 'bg-transparent')} aria-label={t`工作区导航`}>
       <div data-touch-bar className={cn('flex shrink-0 items-center gap-2', mobile ? 'h-12 px-3' : 'h-13 pl-4 pr-2')}>
         <BrandMark className="size-5 shrink-0 text-fg" />
         <span className="text-base font-semibold tracking-tight text-fg">Riffet</span>

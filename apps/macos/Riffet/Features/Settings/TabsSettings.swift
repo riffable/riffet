@@ -8,8 +8,8 @@ struct TabsSettings: View {
             Section {
                 SettingsRow("标签样式") {
                     FormSegmented("标签样式", selection: $prefs.style) {
-                        Text("标题栏").tag(SessionTabStyle.titleBar)
                         Text("关闭").tag(SessionTabStyle.off)
+                        Text("标题栏").tag(SessionTabStyle.titleBar)
                     }
                     .labelsHidden()
                 }

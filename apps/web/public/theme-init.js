@@ -78,6 +78,50 @@
     return light && dark ? { light: light, dark: dark } : null;
   }
 
+  function readGradientHalf(value) {
+    if (!value || typeof value !== 'object') return null;
+    if (typeof value.angle !== 'number' || !isFinite(value.angle) || value.angle < 0 || value.angle > 360) return null;
+    if (!Array.isArray(value.colors) || value.colors.length < 2 || value.colors.length > 3) return null;
+    var colors = [];
+    for (var index = 0; index < value.colors.length; index++) {
+      if (typeof value.colors[index] !== 'string' || !ANSI_COLOR.test(value.colors[index])) return null;
+      colors.push(value.colors[index].toLowerCase());
+    }
+    return { colors: colors, angle: value.angle };
+  }
+
+  function readGradient(value) {
+    if (!value || typeof value !== 'object') return null;
+    var light = readGradientHalf(value.light);
+    var dark = readGradientHalf(value.dark);
+    if (!light || !dark) return null;
+    var blend = typeof value.blend === 'number' && isFinite(value.blend) && value.blend >= 0 && value.blend <= 1 ? value.blend : 0.25;
+    return { light: light, dark: dark, blend: blend };
+  }
+
+  function cardBgCss(gradient) {
+    if (!gradient) return 'var(--bg)';
+    var blend = Math.min(1, Math.max(0, typeof gradient.blend === 'number' ? gradient.blend : 0.25));
+    if (blend <= 0) return 'var(--bg)';
+    if (blend >= 1) return 'transparent';
+    var pct = Math.round((1 - blend) * 1000) / 10;
+    return 'color-mix(in srgb, var(--bg) ' + pct + '%, transparent)';
+  }
+
+  function gradientCss(half) {
+    if (!half || !half.colors || half.colors.length < 2) return 'none';
+    var c0 = half.colors[0];
+    var c1 = half.colors[1];
+    var c2 = half.colors[2];
+    if (c2) {
+      var perp = ((half.angle + 90) * Math.PI) / 180;
+      var x = Math.round((50 + 45 * Math.sin(perp)) * 10) / 10;
+      var y = Math.round((50 - 45 * Math.cos(perp)) * 10) / 10;
+      return 'radial-gradient(110% 110% at ' + x + '% ' + y + '%, ' + c1 + ' 0%, ' + c1 + '00 72%), linear-gradient(' + half.angle + 'deg, ' + c0 + ' 0%, ' + c2 + ' 100%)';
+    }
+    return 'linear-gradient(' + half.angle + 'deg, ' + c0 + ' 0%, ' + c1 + ' 100%)';
+  }
+
   function readTheme(value) {
     if (!value || typeof value !== 'object') return null;
     if (typeof value.id !== 'string' || !ID_PATTERN.test(value.id)) return null;
@@ -88,7 +132,8 @@
     if (!light || !dark) return null;
     if (!readAnsi(value.ansi && value.ansi.light) || !readAnsi(value.ansi && value.ansi.dark)) return null;
     var syntax = value.syntax !== undefined ? readSyntax(value.syntax) : null;
-    return { id: value.id, light: light, dark: dark, syntax: syntax };
+    var gradient = value.gradient !== undefined ? readGradient(value.gradient) : null;
+    return { id: value.id, light: light, dark: dark, syntax: syntax, gradient: gradient };
   }
 
   /*
@@ -123,12 +168,14 @@
     } catch (_) { return null; }
   }
 
-  function block(selector, scheme, palette) {
+  function block(selector, scheme, palette, gradientHalf, cardBg) {
     var lines = [selector + ' {', '  color-scheme: ' + scheme + ';'];
     for (var index = 0; index < THEME_ROLES.length; index++) {
       var role = THEME_ROLES[index];
       lines.push('  --' + role + ': ' + palette[role] + ';');
     }
+    lines.push('  --bg-canvas-gradient: ' + (gradientHalf ? gradientCss(gradientHalf) : 'none') + ';');
+    lines.push('  --bg-card: ' + (cardBg || 'var(--bg)') + ';');
     lines.push('}');
     return lines.join('\n');
   }
@@ -156,9 +203,10 @@
   function injectCustomThemes(themes, styleId) {
     if (!themes.length) return;
     var css = themes.map(function (theme) {
+      var cardBg = cardBgCss(theme.gradient);
       var parts = [
-        block('[data-theme="' + theme.id + '"]:not(.dark)', 'light', theme.light),
-        block('[data-theme="' + theme.id + '"].dark', 'dark', theme.dark)
+        block('[data-theme="' + theme.id + '"]:not(.dark)', 'light', theme.light, theme.gradient && theme.gradient.light, cardBg),
+        block('[data-theme="' + theme.id + '"].dark', 'dark', theme.dark, theme.gradient && theme.gradient.dark, cardBg)
       ];
       if (theme.syntax) {
         parts.push(

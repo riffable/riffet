@@ -23570,52 +23570,112 @@
         }
       }
     },
-    "沙丘": {
+    "晴空": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dune"
+            "value": "Sky"
           }
         }
       }
     },
-    "苔藓": {
+    "朝霞": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moss"
+            "value": "Dawn"
           }
         }
       }
     },
-    "海": {
+    "苔原": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sea"
+            "value": "Tundra"
           }
         }
       }
     },
-    "暮色": {
+    "暮光": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dusk"
+            "value": "Twilight"
           }
         }
       }
     },
-    "玫瑰": {
+    "极光": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rose"
+            "value": "Aurora"
+          }
+        }
+      }
+    },
+    "落日": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sunset"
+          }
+        }
+      }
+    },
+    "颜色 1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color 1"
+          }
+        }
+      }
+    },
+    "颜色 2": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color 2"
+          }
+        }
+      }
+    },
+    "颜色 3": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color 3"
+          }
+        }
+      }
+    },
+    "添加颜色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add color"
+          }
+        }
+      }
+    },
+    "移除颜色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove color"
           }
         }
       }
@@ -23640,62 +23700,202 @@
         }
       }
     },
-    "移除侧栏色": {
+    "透底": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Remove sidebar colour"
+            "value": "Blend"
           }
         }
       }
     },
-    "移除强调色": {
+    "单色": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Remove accent"
+            "value": "Single color"
           }
         }
       }
     },
-    "添加强调色": {
+    "双色": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add accent"
+            "value": "Two colors"
           }
         }
       }
     },
-    "添加侧栏色": {
+    "三色": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add sidebar colour"
+            "value": "Three colors"
           }
         }
       }
     },
-    "底色": {
+    "琥珀": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Surface"
+            "value": "Amber"
           }
         }
       }
     },
-    "侧栏色": {
+    "绯红": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sidebar"
+            "value": "Crimson"
+          }
+        }
+      }
+    },
+    "蔷薇": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rose"
+          }
+        }
+      }
+    },
+    "暮紫": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plum"
+          }
+        }
+      }
+    },
+    "蔚蓝": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cobalt"
+          }
+        }
+      }
+    },
+    "青苔": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moss"
+          }
+        }
+      }
+    },
+    "晚风": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Breeze"
+          }
+        }
+      }
+    },
+    "绯樱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blossom"
+          }
+        }
+      }
+    },
+    "紫雾": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mist"
+          }
+        }
+      }
+    },
+    "柠檬": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Citrus"
+          }
+        }
+      }
+    },
+    "琥海": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dusk sea"
+          }
+        }
+      }
+    },
+    "蜜桃": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peach"
+          }
+        }
+      }
+    },
+    "霓虹": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neon"
+          }
+        }
+      }
+    },
+    "春野": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meadow"
+          }
+        }
+      }
+    },
+    "深海": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abyss"
+          }
+        }
+      }
+    },
+    "星云": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nebula"
           }
         }
       }

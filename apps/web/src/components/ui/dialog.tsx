@@ -67,7 +67,7 @@ export function DialogContent({ className, overlayClassName, children, size = 'f
   }, [ref]);
   return (
     <Primitive.Portal>
-      <Primitive.Overlay className={cn('ui-dialog-overlay fixed inset-0 z-(--z-scrim) bg-black/25 backdrop-blur-[1.5px] animate-in fill-mode-both fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[var(--duration-exit-fast)] data-[state=closed]:ease-[var(--ease-accelerate)] dark:bg-black/50', mobileSheet && 'mobile-dialog-sheet-overlay', overlayClassName)} />
+      <Primitive.Overlay className={cn('ui-dialog-overlay fixed inset-0 z-(--z-scrim) bg-black/25 backdrop-blur-[1.5px] animate-in fill-mode-both fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-[var(--duration-exit-fast)] data-[state=closed]:ease-[var(--ease-accelerate)] dark:bg-black/30', mobileSheet && 'mobile-dialog-sheet-overlay', overlayClassName)} />
       <Primitive.Content
         ref={attachContent}
         className={cn(

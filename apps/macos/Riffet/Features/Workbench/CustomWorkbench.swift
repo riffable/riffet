@@ -67,12 +67,15 @@ struct CustomWorkbench<Header: View, Content: View>: View {
         let style = DisplayPreferences.shared.style
         let width = CustomChrome.sidebarWidth(stored: storedSidebarWidth, style: style)
         ZStack(alignment: .leading) {
+            if style.window == .insetCard {
+                PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
+            }
             // The content takes its width in one step; the sidebar slides over the space it leaves,
             // so the transcript is laid out once, not on every frame of the slide or the drag.
             HStack(spacing: 0) {
-                canvas.opacity(draggedWidth == nil ? 0 : 1)
+                Color.clear
                     .frame(width: sidebarShown ? width : 0)
-                main(style).background(style.window == .insetCard ? canvas : .clear)
+                main(style)
             }
             if !sidebarShown {
                 Color.clear.frame(width: 6).frame(maxHeight: .infinity)
@@ -99,12 +102,18 @@ struct CustomWorkbench<Header: View, Content: View>: View {
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     }
 
-    /// The sidebar's colour, which a card sits on; a flat window is one sheet, the content's colour.
-    /// The column paints its own, so it covers the content as it slides away.
-    private var canvas: Color {
-        DisplayPreferences.shared.style.window == .flat
-            ? palette.bg.opacity(DisplayPreferences.shared.contentTint)
-            : palette.bgSidebar.opacity(DisplayPreferences.shared.sidebarTint)
+    /// The sidebar's background: flat windows use content tint, inset-card windows let the full-window
+    /// canvas gradient shine through when docked so there is no seam, and paint their own backdrop
+    /// when sliding, peeking or dragging over content.
+    @ViewBuilder
+    private func sidebarBackdrop(_ style: StyleSpec) -> some View {
+        if style.window == .flat {
+            palette.bg.opacity(DisplayPreferences.shared.contentTint)
+        } else if !sidebarShown || peeking || draggedWidth != nil {
+            PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
+        } else {
+            Color.clear
+        }
     }
 
     /// The content beside the sidebar. Beside a card it keeps the gaps; the cards themselves are the
@@ -130,7 +139,7 @@ struct CustomWorkbench<Header: View, Content: View>: View {
             .background(alignment: .top) {
                 WindowDragArea().frame(height: CustomChrome.titleRow(style))
             }
-            .background(canvas)
+            .background { sidebarBackdrop(style) }
             .overlay(alignment: .trailing) {
                 SidebarResizeHandle(
                     dragged: $draggedWidth, current: width, drawn: style.window == .flat,
@@ -165,11 +174,12 @@ struct CustomCard: ViewModifier {
     func body(content: Content) -> some View {
         if drawn {
             let shape = CardShape(radius: on ? Radius.floating : 0)
+            let fillOpacity = DisplayPreferences.shared.contentTint * palette.cardOpacity
             content
                 .clipShape(shape)
                 .background(
-                    shape.fill(on ? palette.bg.opacity(DisplayPreferences.shared.contentTint) : .clear)
-                        .elevation(on ? .raised : nil)
+                    shape.fill(on ? palette.bg.opacity(fillOpacity) : .clear)
+                        .elevation(on && fillOpacity > 0.05 ? .raised : nil)
                 )
         } else {
             content

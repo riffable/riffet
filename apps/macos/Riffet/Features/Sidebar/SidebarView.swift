@@ -25,7 +25,7 @@ struct SidebarView: View {
             list
             SidebarFooter(workbench: workbench)
         }
-        .background(palette.bgSidebar.opacity(DisplayPreferences.shared.sidebarTint))
+        .background(PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint))
     }
 
     /// The brand, search and pages stay put above the list; only the conversations scroll.

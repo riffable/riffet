@@ -56,6 +56,23 @@ struct CachedThemeSeed: Codable, Sendable, Equatable {
 
     var points: [Point]
     var softness: Double
+    var blend: Double? = nil
+}
+
+/// One mode's canvas gradient: 2 or 3 `#rrggbb` stops and a CSS angle in degrees (0–360).
+struct CachedThemeGradientHalf: Codable, Sendable, Equatable {
+    var colors: [String]
+    var angle: Double
+}
+
+struct CachedThemeGradient: Codable, Sendable, Equatable {
+    var light: CachedThemeGradientHalf
+    var dark: CachedThemeGradientHalf
+    var blend: Double? = nil
+
+    var cardOpacity: Double {
+        max(0, min(1, 1 - (blend ?? ThemeSeedMath.defaultBlend)))
+    }
 }
 
 struct CachedThemeSyntaxHalf: Codable, Sendable, Equatable {
@@ -80,13 +97,15 @@ struct CachedCustomTheme: Codable, Sendable {
     var syntax: CachedThemeSyntax? = nil
     /// The editor canvas behind the palette. Kept so a save from here does not drop it for the web.
     var seed: CachedThemeSeed? = nil
+    /// Optional window/sidebar canvas gradient per mode; absence paints solid `bg-sidebar`.
+    var gradient: CachedThemeGradient? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, palette, ansi, design, syntax, seed
+        case id, name, palette, ansi, design, syntax, seed, gradient
         case summary = "description"
     }
 
-    init(id: String, name: String, summary: String?, palette: CachedThemePalette, ansi: CachedThemeAnsi, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil) {
+    init(id: String, name: String, summary: String?, palette: CachedThemePalette, ansi: CachedThemeAnsi, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil, gradient: CachedThemeGradient? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
@@ -95,6 +114,7 @@ struct CachedCustomTheme: Codable, Sendable {
         self.design = design
         self.syntax = syntax
         self.seed = seed
+        self.gradient = gradient
     }
 
     /// Converts a server answer. A theme whose id is not a legal custom id is dropped: it could not
@@ -116,7 +136,14 @@ struct CachedCustomTheme: Codable, Sendable {
             )
         }
         seed = theme.seed.map { value in
-            CachedThemeSeed(points: value.points.map { .init(hue: $0.hue, radius: $0.radius) }, softness: value.softness)
+            CachedThemeSeed(points: value.points.map { .init(hue: $0.hue, radius: $0.radius) }, softness: value.softness, blend: value.blend?.doubleValue)
+        }
+        gradient = theme.gradient.map { value in
+            CachedThemeGradient(
+                light: CachedThemeGradientHalf(colors: value.light.colors, angle: value.light.angle),
+                dark: CachedThemeGradientHalf(colors: value.dark.colors, angle: value.dark.angle),
+                blend: value.blend?.doubleValue
+            )
         }
     }
 
@@ -140,7 +167,14 @@ struct CachedCustomTheme: Codable, Sendable {
                 )
             },
             seed: seed.map { value in
-                ThemeSeed(points: value.points.map { ThemeSeedPoint(hue: $0.hue, radius: $0.radius) }, softness: value.softness)
+                ThemeSeed(points: value.points.map { ThemeSeedPoint(hue: $0.hue, radius: $0.radius) }, softness: value.softness, blend: value.blend.map(KotlinDouble.init(value:)))
+            },
+            gradient: gradient.map { value in
+                ThemeGradient(
+                    light: ThemeGradientHalf(colors: value.light.colors, angle: value.light.angle),
+                    dark: ThemeGradientHalf(colors: value.dark.colors, angle: value.dark.angle),
+                    blend: value.blend.map(KotlinDouble.init(value:))
+                )
             }
         )
     }
@@ -164,7 +198,8 @@ struct CachedCustomTheme: Codable, Sendable {
             summary: summary ?? String(localized: "自定义主题"),
             values: RiffetThemeValues(id: id, light: light, dark: dark, ansi: ansi),
             revision: revision,
-            syntax: syntaxEntry
+            syntax: syntaxEntry,
+            gradient: gradient
         )
     }
 }
