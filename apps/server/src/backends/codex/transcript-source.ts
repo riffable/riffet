@@ -504,7 +504,7 @@ export class CodexTranscriptSource implements TranscriptSource {
         const cmd = main && item.type === 'userMessage' ? this.options.commandOf(item, turn.id) : undefined;
         const run = cmd ? this.options.runOf(cmd) : undefined;
         for (const ev of this.project(item, turn, threadId, cmd, run, at, main, spans?.(item))) {
-          if (w.event(ev.nativeId)) return index;
+          if (w.eventOrder ? w.eventOrder(ev.nativeId) !== undefined : Boolean(w.event(ev.nativeId))) return index;
         }
       }
     }
@@ -540,25 +540,35 @@ export class CodexTranscriptSource implements TranscriptSource {
     const renamed = final && items.every(item => !isProvisionalItemId(subagentToolCallId(item)));
     const allRetired = new Set<string>(reconciled.flatMap(rows => rows.retire));
     if (renamed) for (const [id] of copies.positional) allRetired.add(id);
-    // Journal pins each entity's sort order to its rev=1 seq. If a new event (e.g. a renamed lasting
-    // id or late-materializing item) would land before an already-committed row in this turn or a
-    // later turn, or two existing rows were already committed out of order, rebuild the lane so the
-    // next pull imports everything in chronological order.
-    let seenNew = false;
-    let lastOrder = -1;
+    // Journal pins each entity's sort order to its rev=1 seq. Rebuild only when a new row would
+    // jump across turns or invert sequential (non-tool) content, or a renamed provisional item
+    // lands ahead of already-committed rows. Tool updates merge onto their tool_call without
+    // allocating a row, and concurrent or long-running tool_calls legitimately complete out of
+    // start order relative to other tools and intermediate messages.
+    const hasRetired = allRetired.size > 0;
+    let hasNewRow = false;
+    let seenNewNonTool = false;
+    let seenNewTool = false;
+    let lastNonToolOrder = -1;
     for (const rows of reconciled) {
       for (const ev of rows.events) {
-        if (allRetired.has(ev.nativeId)) continue;
+        if (allRetired.has(ev.nativeId) || ev.type === 'tool_call_update') continue;
         const order = w.eventOrder ? w.eventOrder(ev.nativeId) : (w.event(ev.nativeId) ? 0 : undefined);
-        if (order !== undefined) {
-          if (seenNew || order < lastOrder) { this.rewritten(w, depth); return 'rebuilt'; }
-          lastOrder = order;
+        const isTool = ev.type === 'tool_call';
+        if (order === undefined) {
+          hasNewRow = true;
+          if (isTool) seenNewTool = true; else seenNewNonTool = true;
+          continue;
+        }
+        if (isTool) {
+          if (hasRetired && (seenNewNonTool || seenNewTool || order < lastNonToolOrder)) { this.rewritten(w, depth); return 'rebuilt'; }
         } else {
-          seenNew = true;
+          if (seenNewNonTool || seenNewTool || order < lastNonToolOrder) { this.rewritten(w, depth); return 'rebuilt'; }
+          lastNonToolOrder = order;
         }
       }
     }
-    if (seenNew && hasLaterPersisted) {
+    if (hasNewRow && hasLaterPersisted) {
       this.rewritten(w, depth);
       return 'rebuilt';
     }
@@ -707,10 +717,18 @@ export class CodexTranscriptSource implements TranscriptSource {
       // A turn the feed shows running is where a restarted read starts again.
       if (!ended) open ??= op.turnId;
       if (op.kind === 'turn') { flush(); w.turnStarted(op.turnId, op.at ?? new Date().toISOString()); continue; }
-      if (op.kind === 'plan') { batch.events.push(planEvent(this.options.sessionId, threadId, op.turnId, op.entries, op.at, runs.get(op.turnId))); continue; }
+      if (op.kind === 'plan') {
+        if (batch.drafts.length) flush();
+        batch.events.push(planEvent(this.options.sessionId, threadId, op.turnId, op.entries, op.at, runs.get(op.turnId)));
+        continue;
+      }
       if (op.kind === 'draft') {
         const draft = this.intake.draftRow(threadId, op.itemId, runs.get(op.turnId));
-        if (draft) batch.drafts.push(draft);
+        if (draft) {
+          // Keep events and drafts in arrival order since commit() appends events before drafts.
+          if (batch.events.length) flush();
+          batch.drafts.push(draft);
+        }
         continue;
       }
       const turn: RpcTurn = { id: op.turnId, ...(op.at ? { startedAt: Date.parse(op.at) / 1000 } : {}) };
@@ -723,6 +741,7 @@ export class CodexTranscriptSource implements TranscriptSource {
       }
       const copies = copiesOf(state, op.turnId);
       const rows = reconcile(copies, subagentToolCallId(op.item), this.project(op.item, turn, threadId, commandId, runs.get(op.turnId), op.at ?? new Date().toISOString(), true, op.span));
+      if (batch.drafts.length && rows.events.length) flush();
       batch.events.push(...rows.events);
       batch.retire.push(...rows.retire);
       if (ended && !copies.positional.length) state.copies = state.copies?.filter(copy => copy !== copies);

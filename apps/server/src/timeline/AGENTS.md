@@ -25,6 +25,7 @@ verify:
 - 只折叠窗口尾部。已结束回合里的实体出新版本、工具更新、迟到输出或 Run 变化，要经 `fold.ts#LaneFold` 的 `unfreeze` 退回到那个回合的开头重折叠；新增会改写旧回合的输入时，要确认它走了这条路。
 - 冷会话清理（`service.ts#sweepCold`）删行但保留 head 并换 `epoch`，子 Agent 车道先把行数和文件改动存进 `timeline_heads.summary`，否则父工具行重折叠后摘要会变。内存里的后台任务不在日志里，行上带任务的会话不会被清理。
 - 迟到的旧回合记录不能覆盖子 Agent 当前轮次的状态；回合结束标记被撤销（tombstone）后，错误状态行要同步移除（`fold.ts#LaneFold`）。
+- `journal.rebuild` 产生的空日志通知短暂延迟折叠（`REBUILD_SETTLE_MS`）以等待源重新导入，多步重折叠的 `reset` 推迟到 `caughtUp` 后再发出，避免客户端闪现空时间线或半截历史。
 
 ## 外部行为
 

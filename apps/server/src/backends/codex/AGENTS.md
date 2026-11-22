@@ -47,6 +47,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 - `pnpm record codex all --check` 用本机 CLI 跑一遍场景并与录制比较，不写入仓库；有漂移时再重录。CLI 升级后先运行 `pnpm record codex all`，再运行 `npx vitest run apps/server/src/backends/codex/recordings.test.ts -u`，在代码评审中检查行的差异。
 - 测速（`metering.ts`）：`subAgentActivity` 的所有状态变更都属于等待事件（尽管只有 `kind: 'started'` 投影为时间线行），无 `item/started` 的子代理完成通知不得把子代理等待时间计入父模型生成耗时；当请求在短流式 delta 后继续生成未流式工具参数或隐藏推理时，请求窗口扩展为 `observed` 全程耗时。
 - rollout 只按回合记请求内容：`turn_context` 先于这个回合的消息写入，首个回合之前写下的 developer 消息和 AGENTS.md、`<environment_context>` 归第一个回合；第一条 developer 消息重复 `base_instructions`，追踪把它算作提示词而不是注入的消息。
+- 历史读取顺序（`transcript-source.ts#writeTurn`）：`thread/turns/list` 按 item 完成序返回，而实时通知 `item/started` 按开始序落盘。并行或跨旁白消息的长耗时 `tool_call` 以及合并到原卡片的 `tool_call_update` 在两者间交错属于正常现象，不触发 lane 重建；只有跨回合落位、非工具行逆序或临时 id（TRAE `item-*`）重命名越位时才 `rebuild`。
 
 ## 排障
 

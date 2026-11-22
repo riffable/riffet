@@ -62,7 +62,7 @@ export interface LaneWriter {
   turnEnd(turnId: string): { status: TurnEndStatus; at: string; error?: string } | undefined;
   /** The committed event being corrected, including its original position and payload. */
   event(nativeId: string): NativeWorkbenchEvent | undefined;
-  /** The journal sort key (`identity`) of a live committed event, or `undefined` if absent/retired/draft. */
+  /** The journal sort key (`identity`) of a live event or active draft, or `undefined` if absent or retired. */
   eventOrder?(nativeId: string): number | undefined;
   /** Whether a failed end is the exact diagnostic being reclassified, not a later real failure. */
   turnFailedAt(turnId: string, at: string, error: string): boolean;
@@ -301,7 +301,7 @@ export class JournalLaneWriter implements LaneWriter {
 
   eventOrder(nativeId: string): number | undefined {
     const row = this.journal.locate(this.key, nativeId);
-    return row && !row.kind.startsWith('meta.') && row.kind !== TOMBSTONE_KIND && row.kind !== DRAFT_KIND
+    return row && !row.kind.startsWith('meta.') && row.kind !== TOMBSTONE_KIND
       ? row.identity : undefined;
   }
 

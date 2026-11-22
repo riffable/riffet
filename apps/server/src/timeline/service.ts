@@ -11,7 +11,7 @@ import { META_PREFIX, TOMBSTONE_KIND, laneKey, type Journal, type JournalAppend,
 import { hasTurnEnded, servingKey, turnMetaId } from '../journal/ingest.js';
 import { reclaimFreePages } from '../sqlite-storage.js';
 import { materializeRowImages, type BlobWriter } from './budget.js';
-import { generationOf, LaneFold, rowFrames, timelineRuns, type FoldContext, type FoldInputs, type RowEntry, type TimelineChange } from './fold.js';
+import { generationOf, LaneFold, rowFrames, timelineRuns, type FoldContext, type FoldInputs, type ResetReason, type RowEntry, type TimelineChange } from './fold.js';
 import { LaneFinder } from './find.js';
 import { rowOf, TimelineTables, type StoredSubagentSummary } from './tables.js';
 import { toolFileChanges } from '../../../../packages/timeline/src/lineDiff.js';
@@ -52,6 +52,8 @@ export interface TimelineDeps {
   /** Lanes kept folded in memory; a lane past it folds its open turn again when next needed. */
   hotLanes?: number;
   debounceMs?: number;
+  /** How long an empty rebuilt log waits for replacement rows before folding and emitting `reset`. */
+  rebuildSettleMs?: number;
   /** Told of a lane that failed to fold; the default logs it. */
   onError?(error: unknown, sessionId: string, lane: SyncLane): void;
   /**
@@ -89,6 +91,8 @@ const TERMINAL_RUNS = new Set<Run['state']>(['completed', 'failed', 'cancelled',
 const MAX_POS = Number.MAX_SAFE_INTEGER;
 /** Log rows a fold takes per turn of the event loop: a few tens of milliseconds of folding at most. */
 const STEP_ROWS = 1_000;
+/** Grace window after `journal.rebuild` (empty log) before folding, so re-import replaces the view atomically. */
+const REBUILD_SETTLE_MS = 500;
 /** Rows a cold drop deletes per transaction; the event loop is yielded between chunks. */
 const COLD_CHUNK_ROWS = 2_000;
 /** Rows of the job check read per turn of the event loop. */
@@ -103,6 +107,8 @@ export class TimelineService {
   private readonly finder: LaneFinder;
   private readonly context: FoldContext;
   private readonly hot = new Map<string, Hot>();
+  /** Reset reasons awaiting multi-step catch-up; kept outside `hot` so a transient fold error cannot drop a client reset. */
+  private readonly pendingResets = new Map<string, ResetReason>();
   private readonly listeners = new Map<string, Set<(change: TimelineChange) => void>>();
   private readonly work = new Map<string, Work>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -612,6 +618,7 @@ export class TimelineService {
       for (const [id, timer] of [...this.timers]) if (owned(id)) { clearTimeout(timer); this.timers.delete(id); }
       for (const [id, work] of [...this.work]) if (owned(id)) { this.work.delete(id); for (const waiter of work.waiters) waiter(); }
       for (const id of [...this.listeners.keys()]) if (owned(id)) this.listeners.delete(id);
+      for (const id of [...this.pendingResets.keys()]) if (owned(id)) this.pendingResets.delete(id);
     }
     for (const id of [...this.summaries.keys()]) if (id.startsWith(`${sessionId}\n`)) { this.summaries.delete(id); this.staleSummaries.delete(id); }
     for (const id of [...this.laneFileChanges.keys()]) if (owned(id)) this.laneFileChanges.delete(id);
@@ -632,6 +639,7 @@ export class TimelineService {
     for (const work of this.work.values()) for (const waiter of work.waiters) waiter();
     this.work.clear();
     this.hot.clear();
+    this.pendingResets.clear();
     this.listeners.clear();
   }
 
@@ -640,8 +648,32 @@ export class TimelineService {
   private noteAppend(change: JournalAppend): void {
     if (change.lane !== 'main' && this.summaries.has(laneId(change.sessionId, change.lane))) this.staleSummaries.add(laneId(change.sessionId, change.lane));
     if (!this.wanted(change.sessionId, change.lane)) return;
+    if (change.reset === 'rebuilt' && change.toSeq === 0) {
+      // A rebuild empties the log before the source re-imports it. Wait briefly for the replacement
+      // rows so connected clients do not flash an empty transcript before the re-import lands.
+      this.deferRebuild(change.sessionId, change.lane);
+      return;
+    }
     this.workOf(change.sessionId, change.lane).journal = true;
     this.schedule();
+  }
+
+  /** Defers folding an empty rebuilt log until new rows arrive, `ready()` is awaited, or the grace window elapses. */
+  private deferRebuild(sessionId: string, lane: SyncLane): void {
+    if (this.closed) return;
+    const work = this.workOf(sessionId, lane);
+    if (!work.waiters.length) work.journal = false;
+    const id = laneId(sessionId, lane);
+    const existing = this.timers.get(id);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.timers.delete(id);
+      if (this.closed) return;
+      this.workOf(sessionId, lane).journal = true;
+      this.schedule();
+    }, this.deps.rebuildSettleMs ?? REBUILD_SETTLE_MS);
+    timer.unref();
+    this.timers.set(id, timer);
   }
 
   /**
@@ -680,10 +712,12 @@ export class TimelineService {
     for (const [id, work] of [...this.work]) {
       // Debounced work waits for its timer unless something else is due for the lane now.
       if (this.timers.has(id) && !work.journal && !work.waiters.length) continue;
+      const timer = this.timers.get(id);
+      if (timer) { clearTimeout(timer); this.timers.delete(id); }
       this.work.delete(id);
       const at = id.indexOf('\n');
       const sessionId = id.slice(0, at), lane = id.slice(at + 1) as SyncLane;
-      if (this.deps.deleted?.(sessionId)) { this.hot.delete(id); for (const waiter of work.waiters) waiter(); continue; }
+      if (this.deps.deleted?.(sessionId)) { this.hot.delete(id); this.pendingResets.delete(id); for (const waiter of work.waiters) waiter(); continue; }
       let caughtUp = true;
       try { caughtUp = this.flushLane(sessionId, lane, work); }
       catch (error) {
@@ -711,13 +745,13 @@ export class TimelineService {
     // A fold of the lane ends what is left of a cold drop of it: `LaneFold.attach` clears the leftover rows.
     this.dropping.delete(id);
     let hot = this.hot.get(id);
-    let reset: TimelineChange | undefined;
     let caughtUp: boolean;
     const step = this.deps.stepRows ?? STEP_ROWS;
     if (!hot || !hot.fold.current()) {
       const opened = LaneFold.open(this.context, sessionId, lane, this.inputs(sessionId, lane), step);
-      // A lane that started over is read whole again by its clients: they hear `reset`, not its rows.
-      if (opened.reset) reset = { type: 'reset', generation: opened.fold.generation, reason: opened.reset };
+      // A lane that started over is read whole again by its clients: hold `reset` until multi-step
+      // folding finishes so clients receive one complete snapshot instead of partial history.
+      if (opened.reset) this.pendingResets.set(id, opened.reset);
       hot = { fold: opened.fold };
       caughtUp = opened.caughtUp;
     } else {
@@ -732,11 +766,18 @@ export class TimelineService {
     this.hot.set(id, hot);
     this.evict();
     const changes = hot.fold.take();
-    if (reset || changes.length) this.clearExpandedFor(sessionId);
+    const pendingReset = this.pendingResets.get(id);
+    let reset: TimelineChange | undefined;
+    if (pendingReset && caughtUp) {
+      reset = { type: 'reset', generation: hot.fold.generation, reason: pendingReset };
+      this.pendingResets.delete(id);
+    }
+    const holdingReset = this.pendingResets.has(id);
+    if (reset || (!holdingReset && changes.length)) this.clearExpandedFor(sessionId);
     const listeners = this.listeners.get(id);
     if (reset) for (const listener of listeners ?? []) listener(reset);
-    else for (const change of changes) for (const listener of listeners ?? []) listener(change);
-    if (lane !== 'main') this.subagentLaneChanged(sessionId, lane, hot.fold);
+    else if (!holdingReset) for (const change of changes) for (const listener of listeners ?? []) listener(change);
+    if (lane !== 'main' && !holdingReset) this.subagentLaneChanged(sessionId, lane, hot.fold);
     return caughtUp;
   }
 
@@ -826,7 +867,7 @@ export class TimelineService {
     const limit = this.deps.hotLanes ?? 32;
     for (const id of this.hot.keys()) {
       if (this.hot.size <= limit) return;
-      if (this.listeners.has(id) || this.work.has(id)) continue;
+      if (this.listeners.has(id) || this.work.has(id) || this.pendingResets.has(id)) continue;
       this.hot.delete(id);
     }
   }

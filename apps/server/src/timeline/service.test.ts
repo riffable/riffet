@@ -24,7 +24,7 @@ beforeEach(async () => { dir = await realpath(await mkdtemp(join(tmpdir(), 'riff
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 /** One database, journal, writer and timeline service; `reopen` is a restart. */
-function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs?: NativeJob[]; stepRows?: number; idleSince?: string; activity?: (id: string) => { at?: string; running: boolean } | undefined } = {}) {
+function open(path = join(dir, 'state.db'), options: { debounceMs?: number; rebuildSettleMs?: number; jobs?: NativeJob[]; stepRows?: number; idleSince?: string; activity?: (id: string) => { at?: string; running: boolean } | undefined } = {}) {
   const db = new DatabaseSync(path);
   const journal = new Journal(db);
   const writer = JournalLaneWriter.open(journal, S);
@@ -39,7 +39,7 @@ function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs
     nativeChatId: () => 'chat-1', listJobs: () => options.jobs ?? [],
     onJobChanged: listener => { jobListeners.add(listener); return () => jobListeners.delete(listener); },
     coldSweep: false, busy: () => false, activity: options.activity ?? (() => ({ at: options.idleSince ?? new Date().toISOString(), running: false })),
-    debounceMs: options.debounceMs ?? 5, ...(options.stepRows ? { stepRows: options.stepRows } : {}),
+    debounceMs: options.debounceMs ?? 5, ...(options.rebuildSettleMs !== undefined ? { rebuildSettleMs: options.rebuildSettleMs } : {}), ...(options.stepRows ? { stepRows: options.stepRows } : {}),
   });
   const frames: TimelineChange[] = [];
   return {
@@ -676,6 +676,40 @@ describe('timeline service', () => {
     expect(promoted.generation).not.toBe(tail.generation);
     expect(env.frames).toEqual([{ type: 'reset', generation: promoted.generation, reason: 'promoted' }]);
     expect(env.all().map(row => row.kind === 'user' && row.text)).toEqual(['old question', 'tail question']);
+    env.close();
+  });
+
+  it('defers folding an empty rebuilt log and holds reset until multi-step refold catches up', async () => {
+    const env = open(undefined, { stepRows: 2, rebuildSettleMs: 120 });
+    turn(env, 1);
+    await env.ready();
+    env.listen();
+
+    // Rebuilding empties the log before the source asynchronously writes replacement turns.
+    env.writer.rebuild('identity-changed');
+    await new Promise(resolve => setTimeout(resolve, 25));
+    expect(env.frames).toEqual([]);
+
+    // Re-import writes multiple turns; with stepRows=2, folding takes multiple turns of the event loop,
+    // and clients receive one `reset` only after every replacement row is folded (never an empty/partial snapshot).
+    let rowsAtReset = -1;
+    const stop = env.service.subscribe(S, 'main', change => {
+      if (change.type === 'reset') rowsAtReset = env.all().length;
+    });
+    turn(env, 2);
+    turn(env, 3);
+    const rebuilt = await env.ready();
+    stop();
+    expect(env.frames).toEqual([{ type: 'reset', generation: rebuilt.generation, reason: 'rebuilt' }]);
+    expect(rowsAtReset).toBe(env.all().length);
+    expect(rowsAtReset).toBeGreaterThanOrEqual(4);
+
+    // A rebuild that genuinely stays empty still emits `reset` once the grace window elapses.
+    env.frames.length = 0;
+    env.writer.rebuild('identity-changed');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    expect(env.frames).toEqual([{ type: 'reset', generation: env.service.head(S, 'main')!.generation, reason: 'rebuilt' }]);
+    expect(env.all()).toEqual([]);
     env.close();
   });
 

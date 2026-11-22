@@ -54,6 +54,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Codex conversations with parallel or long-running tool calls no longer flash blank and progressively redraw their history during a turn.
 - The shared mobile client preserves the selected Agent, profile and model when it syncs a message that mentions another Agent.
 - The plugin marketplace keeps older package versions available for pinned installs when the Android Build and Paper plugins update.
 - Starting a server with a fresh data directory reliably creates its link certificate, including when the random serial number starts with zeros.

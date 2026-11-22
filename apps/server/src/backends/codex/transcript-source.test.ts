@@ -918,4 +918,74 @@ describe('Codex transcript source', () => {
     expect(orderedIds.indexOf('thread-1:t1:msg_1:assistant')).toBeLessThan(orderedIds.indexOf('thread-1:t1:fc_1:call'));
     checkSession(journal, 's');
   });
+
+  it('does not rebuild when parallel or long-running tool calls complete out of start order or across commentary messages', async () => {
+    const fixture = codexFixture();
+    const { native } = fixture;
+    native.threads.set('thread-1', [turn('t1', 10, [answer('msg_0', 'Earlier turn')])]);
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const signal = new AbortController().signal;
+    const writer = JournalLaneWriter.open(journal, 's');
+    const source = fixture.source();
+    const stop = source.watch!(writer, () => undefined);
+    await pullLane(source, writer, signal);
+    const initialGen = writer.generation;
+
+    // Live feed starts tool A (long-running), then tool B (fast), then commentary M, then tool C.
+    const toolA = command('exec-a', 'long task');
+    const toolB = command('exec-b', 'fast task');
+    const commentary = answer('msg_1', 'Checking status while A still runs');
+    native.notify('turn/started', { turn: { id: 't2', startedAt: 20 } });
+    native.notify('item/started', { turnId: 't2', item: { ...toolA, status: 'inProgress' } });
+    native.notify('item/started', { turnId: 't2', item: { ...toolB, status: 'inProgress' } });
+    native.notify('item/completed', { turnId: 't2', item: toolB });
+    await pullLane(source, writer, signal);
+
+    // Refresh sees completion order [toolB] while toolA is still in-progress (no :result yet),
+    // and then [toolB, commentary, toolA] once toolA completes after commentary.
+    native.turns().push(turn('t2', 20, [toolB, { ...toolA, status: 'inProgress' }], 'inProgress'));
+    await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
+    expect(writer.generation).toBe(initialGen);
+
+    native.turns()[1] = turn('t2', 20, [toolB, commentary, toolA], 'completed');
+    await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
+    stop();
+
+    expect(writer.generation).toBe(initialGen);
+    expect(journal.entity('s', 'thread-1:t2:exec-a:result')?.kind).toBe('tool_call_update');
+    expect(journal.entity('s', 'thread-1:t2:exec-b:result')?.kind).toBe('tool_call_update');
+    expect(journal.entity('s', 'thread-1:t2:msg_1:assistant')?.kind).toBe('agent_message_chunk');
+    checkSession(journal, 's');
+  });
+
+  it('keeps draft identity order ahead of a subsequent tool call without rebuilding on refresh', async () => {
+    const fixture = codexFixture();
+    const { native } = fixture;
+    native.threads.set('thread-1', []);
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const signal = new AbortController().signal;
+    const writer = JournalLaneWriter.open(journal, 's');
+    const source = fixture.source();
+    const stop = source.watch!(writer, () => undefined);
+    await pullLane(source, writer, signal);
+    const initialGen = writer.generation;
+
+    // A streamed draft arrives before a tool call in the same live flush batch.
+    const toolA = command('exec-a', 'run check');
+    native.notify('turn/started', { turn: { id: 't1', startedAt: 10 } });
+    native.notify('item/agentMessage/delta', { turnId: 't1', itemId: 'msg_1', delta: 'Running check...' });
+    native.notify('item/started', { turnId: 't1', item: { ...toolA, status: 'inProgress' } });
+    await pullLane(source, writer, signal);
+    expect(writer.eventOrder('thread-1:t1:msg_1:assistant')).toBeLessThan(writer.eventOrder('thread-1:t1:exec-a:call')!);
+
+    // History refresh sees the settled message + tool call: active draft order already matches, so no rebuild.
+    native.turns().push(turn('t1', 10, [answer('msg_1', 'Running check...'), toolA], 'completed'));
+    await pullLane(fixture.source(), JournalLaneWriter.open(journal, 's'), signal);
+    stop();
+
+    expect(writer.generation).toBe(initialGen);
+    const orderedIds = rowsOf(journal, 's').map(row => row.nativeId);
+    expect(orderedIds.indexOf('thread-1:t1:msg_1:assistant')).toBeLessThan(orderedIds.indexOf('thread-1:t1:exec-a:call'));
+    checkSession(journal, 's');
+  });
 });
