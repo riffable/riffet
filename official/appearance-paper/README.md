@@ -6,7 +6,7 @@ No package.json, Node dependencies, lockfile or SDK is needed. With Riffet insta
 
 ```sh
 riffet plugin pack .
-riffet plugin install "$PWD/dist/riffet.appearance-paper-1.0.0.tgz" --trusted
+riffet plugin install "$PWD/dist/riffet.appearance-paper-1.0.1.tgz" --trusted
 
 # After editing assets: validate and refresh the local Riffet automatically
 riffet plugin dev .

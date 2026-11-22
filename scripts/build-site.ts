@@ -10,6 +10,7 @@
 // integrity its record pins; the index then vouches for exactly those files. Built-in plugins are listed
 // from plugins/index.ts so the page can say they ship with Riffet. A release the published index (by default
 // the public one) already lists must keep its content: a changed package needs a new version.
+// Pages replaces the whole site, so older archives and their index entries are carried forward.
 
 import { execFileSync } from 'node:child_process';
 import { cp, mkdir, rm } from 'node:fs/promises';
@@ -61,7 +62,7 @@ async function main(): Promise<void> {
   await cp(join(root, 'site'), out, { recursive: true, filter: source => !source.startsWith(registry) });
   await mkdir(pluginsDir, { recursive: true });
   const plugins = await buildRegistry({
-    registry, out: pluginsDir, published,
+    registry, out: pluginsDir, published, carryForward: true, strictPublished: true,
     directory: (record: PathRecord, name) => {
       const directory = resolve(root, record.path);
       if (relative(root, directory).startsWith('..')) throw new Error(`${name}: path must be inside this repository`);

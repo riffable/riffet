@@ -4,7 +4,7 @@
   "name": "Paper",
   "apiVersion": 1,
   "defaultEnabled": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "title": {
     "zh-Hans": "纸墨",
     "en": "Paper"

@@ -4,7 +4,7 @@
   "name": "android",
   "apiVersion": 1,
   "defaultEnabled": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "title": {
     "zh-Hans": "Android 构建",
     "en": "Android Build"

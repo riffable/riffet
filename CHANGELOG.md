@@ -54,6 +54,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The plugin marketplace keeps older package versions available for pinned installs when the Android Build and Paper plugins update.
 - Starting a server with a fresh data directory reliably creates its link certificate, including when the random serial number starts with zeros.
 - Codex conversations on a model that is not OpenAI’s behind a custom endpoint (such as DeepSeek) fold the model’s thinking into the thinking row instead of showing it as prose between tool calls.
 - In the web composer's fullscreen editor, Enter now starts a new line whatever the Enter key setting, and ⌘/Ctrl+Enter sends. The new-conversation page offers fullscreen editing too; there its button sits left of Send, and the permission icon comes before the model.

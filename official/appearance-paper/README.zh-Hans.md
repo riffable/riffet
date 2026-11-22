@@ -6,7 +6,7 @@
 
 ```sh
 riffet plugin pack .
-riffet plugin install "$PWD/dist/riffet.appearance-paper-1.0.0.tgz" --trusted
+riffet plugin install "$PWD/dist/riffet.appearance-paper-1.0.1.tgz" --trusted
 
 # 修改资源后自动校验并刷新本机 Riffet
 riffet plugin dev .
