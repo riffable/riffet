@@ -566,7 +566,7 @@ private val layoutShiftTracing by lazy { lifecycleTraceEnabled() }
 /** Still growing: a streaming answer or a running turn's block changes height by design. */
 private fun TimelineEntry.live(): Boolean = when (this) {
     is TimelineEntry.Row -> when (val row = row) {
-        is TimelineRow.Single -> !row.settled
+        is TimelineRow.Single -> row.footer == TurnFooter.HELD
         is TimelineRow.Process -> row.turnActive
         is TimelineRow.Trigger -> false
     }
@@ -689,7 +689,7 @@ private fun TimelineEntryView(
 
         is TimelineEntry.Row -> when (val row = entry.row) {
             is TimelineRow.Trigger -> TriggerRow(row.notices)
-            is TimelineRow.Single -> SingleRow(row, speed)
+            is TimelineRow.Single -> SingleRow(row, speed, root = root, onOpenFile = onOpenFile)
             // A process row is always laid out as a header entry; spelled out so the `when` stays
             // exhaustive without an `else` that would swallow a new row kind.
             is TimelineRow.Process -> Unit
@@ -698,15 +698,26 @@ private fun TimelineEntryView(
 }
 
 @Composable
-private fun SingleRow(row: TimelineRow.Single, speed: SpeedTag?) {
+private fun SingleRow(
+    row: TimelineRow.Single,
+    speed: SpeedTag?,
+    root: String?,
+    onOpenFile: (String, Int?) -> Unit,
+) {
     when (val item = row.item) {
         is TimelineItem.User -> UserRow(item, stopShown = row.stopped, hasTurnOutput = row.settled)
         is TimelineItem.Assistant -> AssistantRow(
             item = item,
             settled = row.settled,
+            streaming = row.footer == TurnFooter.HELD,
             speed = speed,
             stopped = row.stopped && row.settled,
         )
+
+        is TimelineItem.Tool -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            ToolRow(item, root = root, stale = row.footer != TurnFooter.HELD, onOpenFile = onOpenFile)
+            if (row.footer == TurnFooter.SHOWN) TurnFooterRow(row.answerText, timelineItemTime(item))
+        }
 
         is TimelineItem.TaskNotification -> TaskNotificationRow(item)
         is TimelineItem.Activity -> ActivityRow(item)
@@ -714,10 +725,10 @@ private fun SingleRow(row: TimelineRow.Single, speed: SpeedTag?) {
             StatusRow(item)
             if (row.footer == TurnFooter.SHOWN) TurnFooterRow(row.answerText, timelineItemTime(item))
         }
-        // A process kind is always folded into a Process row, so this is unreachable; it is
-        // spelled out rather than using `else` so that adding a ninth variant is a compile
+        // Remaining process kinds are always folded into a Process row, so this is unreachable; it
+        // is spelled out rather than using `else` so that adding a ninth variant is a compile
         // error here instead of a silently dropped row.
-        is TimelineItem.Thought, is TimelineItem.Tool, is TimelineItem.Plan,
+        is TimelineItem.Thought, is TimelineItem.Plan,
         is TimelineItem.Image,
         -> Unit
     }

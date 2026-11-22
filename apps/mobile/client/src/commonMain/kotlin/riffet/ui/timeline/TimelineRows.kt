@@ -10,6 +10,7 @@ import riffet.core.TimelineItemKind
 import riffet.core.analyzeTimelineTurns
 import riffet.core.kind
 import riffet.core.timelineItemTime
+import riffet.core.toolKind
 import riffet.ui.composer.visibleTimeline
 
 /*
@@ -199,13 +200,15 @@ fun buildTimelineGrouping(
             }
         }
     }
-    // A steer shares its execution turn with the preceding answer. Later tool work may collect
-    // prose from its own input segment, but must not pull an earlier answer back into a process.
+    // A steer or user-facing decision tool (`question` / `plan` review) shares its execution turn
+    // with the preceding answer. Later tool work may collect prose from its own segment, but must
+    // not pull an earlier answer back into a process.
     val assistantBeforeProcess = BooleanArray(items.size)
     val laterProcessTurns = HashSet<String>()
     for (index in items.indices.reversed()) {
         val item = items[index]
         if (item is TimelineItem.User) laterProcessTurns.clear()
+        else if (item.isInteractionTool()) laterProcessTurns.remove(turnKeys[index])
         else if (item.kind in PROCESS_KINDS || item is TimelineItem.Status || item.isCommentary()) laterProcessTurns.add(turnKeys[index])
         else if (item is TimelineItem.Assistant) assistantBeforeProcess[index] = turnKeys[index] in laterProcessTurns
     }
@@ -218,12 +221,13 @@ fun buildTimelineGrouping(
             if (!activityBeforeProcess[index]) nextProcessTurn = null
         } else {
             nextProcessTurn = turnKeys[index].takeIf {
-                item.kind in PROCESS_KINDS || item.isCommentary() ||
+                (!item.isInteractionTool() && item.kind in PROCESS_KINDS) || item.isCommentary() ||
                     (item is TimelineItem.Assistant && item.phase == null && assistantBeforeProcess[index])
             }
         }
     }
     fun isProcessItem(item: TimelineItem, index: Int, continuingProcess: Boolean): Boolean {
+        if (item.isInteractionTool()) return false
         if (item.kind in PROCESS_KINDS) return true
         if (item.isProcessActivity()) {
             // Compaction and task updates stay with the surrounding work without splitting its
@@ -321,6 +325,7 @@ fun buildTimelineGrouping(
         val carries = when (item) {
             is TimelineItem.Assistant -> if (finalAnswer == null) endsTurn(index) else finalAnswer == index
             is TimelineItem.Status -> finalAnswer == null && analysis.lastIndexByTurn[turnKey] == index
+            is TimelineItem.Tool -> finalAnswer == null && item.isInteractionTool() && analysis.lastIndexByTurn[turnKey] == index
             else -> false
         }
         // For a user row, `settled` records that same-turn output already follows it.
@@ -332,9 +337,9 @@ fun buildTimelineGrouping(
                 turnKey = turnKey,
                 settled = settled,
                 footer = footerOf(carries, settled),
-                answerText = if (settled && item is TimelineItem.Status) latestAnswerText(items, turnKeys, index) else null,
+                answerText = if (settled && (item is TimelineItem.Status || item is TimelineItem.Tool)) latestAnswerText(items, turnKeys, index) else null,
                 stopped = turnKey in interruptedTurns && analysis.lastIndexByTurn[turnKey] == index &&
-                    (item is TimelineItem.Assistant || item is TimelineItem.User),
+                    (item is TimelineItem.Assistant || item is TimelineItem.User || item.isInteractionTool()),
             ),
             index,
             index,
@@ -358,6 +363,10 @@ fun buildTimelineGrouping(
 }
 
 private fun TimelineItem.isCommentary(): Boolean = this is TimelineItem.Assistant && phase == AssistantPhase.COMMENTARY
+
+/** User-facing decision tools (AskQuestion / AskUserQuestion / proposed plan reviews) stand outside the process block and bound earlier prose. */
+private fun TimelineItem.isInteractionTool(): Boolean =
+    this is TimelineItem.Tool && toolKind(event.base).let { it == "question" || it == "plan" }
 
 private fun TimelineItem.isProcessActivity(): Boolean = this is TimelineItem.Activity &&
     (activity.kind == NativeActivityKind.BACKGROUND_TASK || activity.kind == NativeActivityKind.COMPACTION)
@@ -396,7 +405,15 @@ private fun processRow(
     val ends = lastIndexByTurn[turnKey]?.let { it in first..last } == true
     // Answer prose starts streaming before the turn finishes. Keep its process block Working
     // until the whole turn ends so the first answer chunk does not also collapse the transcript.
-    val running = turnActive
+    // Earlier process blocks before a later interaction tool, steer, or process block are done.
+    val turnEnd = lastIndexByTurn[turnKey] ?: last
+    val hasLaterSegment = ((last + 1)..turnEnd).any { index ->
+        if (turnKeys[index] != turnKey) return@any false
+        val later = items[index]
+        later.isInteractionTool() || later is TimelineItem.User || later is TimelineItem.Thought ||
+            later is TimelineItem.Tool || later is TimelineItem.Plan || later is TimelineItem.Image || later.isCommentary()
+    }
+    val running = turnActive && !hasLaterSegment
     // The block carries the footer only when the turn ends on it without an answer.
     val carries = ends && !hasFinalAnswer
     val settled = carries && !turnActive && turnKey != processingTurn
@@ -408,7 +425,7 @@ private fun processRow(
         turnKey = turnKey,
         items = grouped,
         running = running,
-        turnActive = turnActive,
+        turnActive = running,
         settled = settled,
         endsTurn = ends,
         toolCount = grouped.count { isToolRunItem(it) },
@@ -470,7 +487,7 @@ fun updateTimelineGrouping(
     answerTurns?.let { turns ->
         previous.rows.forEachIndexed { index, row ->
             if (row is TimelineRow.Process && row.settled && row.turnKey in turns ||
-                row is TimelineRow.Single && row.item is TimelineItem.Status && row.settled && row.turnKey in turns) changed[index] = true
+                row is TimelineRow.Single && (row.item is TimelineItem.Status || row.item is TimelineItem.Tool) && row.settled && row.turnKey in turns) changed[index] = true
         }
     }
     val rows = previous.rows.toMutableList()
@@ -481,7 +498,7 @@ fun updateTimelineGrouping(
         rows[index] = when (val row = rows[index]) {
             is TimelineRow.Single -> row.copy(
                 item = items[first],
-                answerText = if (row.item is TimelineItem.Status && row.settled) latestAnswerText(items, previous.turnKeys, first) else null,
+                answerText = if ((row.item is TimelineItem.Status || row.item is TimelineItem.Tool) && row.settled) latestAnswerText(items, previous.turnKeys, first) else null,
             )
             is TimelineRow.Process -> processRow(
                 items, first, last, row.turnKey,
@@ -507,7 +524,7 @@ private fun patchable(before: TimelineItem, after: TimelineItem): Boolean {
     return when (after) {
         is TimelineItem.Assistant -> before is TimelineItem.Assistant && before.phase == after.phase
         is TimelineItem.Thought -> before is TimelineItem.Thought && before.channel == after.channel
-        is TimelineItem.Tool -> before is TimelineItem.Tool
+        is TimelineItem.Tool -> before is TimelineItem.Tool && before.isInteractionTool() == after.isInteractionTool()
         is TimelineItem.Plan -> before is TimelineItem.Plan
         is TimelineItem.Image -> before is TimelineItem.Image
         is TimelineItem.Status -> before is TimelineItem.Status && before.tone == after.tone

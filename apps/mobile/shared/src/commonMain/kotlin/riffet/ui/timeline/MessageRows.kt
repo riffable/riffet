@@ -260,6 +260,7 @@ internal fun AssistantRow(
     speed: SpeedTag?,
     /** The answer ends a stopped turn: 已停止 leads its time. */
     stopped: Boolean = false,
+    streaming: Boolean = !settled,
 ) {
     val motion = LocalRiffetMotion.current
     val colors = TimelineTheme.colors
@@ -274,7 +275,7 @@ internal fun AssistantRow(
             codeStyle = TimelineTheme.prose.code,
             // Markdown, but parsed only up to the last finished paragraph while the turn is live:
             // see PlainText.kt for why a whole-document re-parse per stream chunk is not affordable.
-            streaming = !settled,
+            streaming = streaming,
         )
         // Opens in place when the turn ends: the row appearing in one frame would push a followed
         // list's newest line out of view.

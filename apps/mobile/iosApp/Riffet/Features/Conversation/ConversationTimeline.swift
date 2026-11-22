@@ -28,8 +28,8 @@ struct ConversationTimelineRow: View, Equatable {
         switch onEnum(of: row) {
         case let .single(single):
             VStack(alignment: .leading, spacing: 8) {
-                ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: !single.settled, parentItems: parentItems, speed: speed)
-                if single.item is TimelineItemStatus, single.footer == .shown {
+                ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: single.footer == .held, parentItems: parentItems, speed: speed, showsFooter: single.footer == .shown)
+                if (single.item is TimelineItemStatus || single.item is TimelineItemTool), single.footer == .shown {
                     ConversationCopyActions(text: single.answerText ?? "", endedAt: ServerTime.date(timelineItemTime(item: single.item)), speed: speed)
                 }
             }

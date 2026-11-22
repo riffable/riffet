@@ -45,7 +45,7 @@ private fun markdownSources(rows: List<TimelineRow>): List<String> {
     }
     for (row in rows.asReversed()) {
         when (row) {
-            is TimelineRow.Single -> (row.item as? TimelineItem.Assistant)?.let { add(it.text, streaming = !row.settled) }
+            is TimelineRow.Single -> (row.item as? TimelineItem.Assistant)?.let { add(it.text, streaming = row.footer == TurnFooter.HELD) }
             // `TimelineFolds.isOpen` before the reader touches it; the folded reasoning stays unparsed.
             is TimelineRow.Process -> if (row.running || row.issueCount > 0) {
                 for (item in row.items.asReversed()) when {

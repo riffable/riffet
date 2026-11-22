@@ -197,6 +197,17 @@ export function toolDataKind(data: Record<string, unknown>): string {
 }
 
 /**
+ * User-facing decision tools (`AskQuestion` / `AskUserQuestion` / `request_user_input*`, and
+ * proposed plan reviews like `ExitPlanMode` / `CreatePlan` / Codex `Plan`). They stand outside
+ * the folded process block and bound earlier unphased prose so it is not swallowed when the turn
+ * continues or finishes.
+ */
+export function isInteractionToolData(data: Record<string, unknown>): boolean {
+  const kind = toolDataKind(data);
+  return kind === 'question' || kind === 'plan';
+}
+
+/**
  * A tool call's title and the command it ran. `fallback` names a call that carries no title; the
  * title of a multi-line command is cut to its first logical line so the folded header never dumps
  * an inline script body onto one line.

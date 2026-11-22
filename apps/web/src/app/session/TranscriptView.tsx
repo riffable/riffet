@@ -564,7 +564,17 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlight
       : [];
     const showModels = models.length > 0 && (!resources?.commonModelKey || models.some((info) => shareModelKey(info) !== resources.commonModelKey));
     const modelLabel = showModels ? [...new Map(models.map((info) => [shareModelKey(info), shareModelLabel(info)])).values()].join(' / ') : undefined;
-    content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
+    content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={row.footer === 'held'} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
+  }
+  else if (item.kind === 'tool') {
+    content = (
+      <div className="group/message flex min-w-0 flex-col gap-2.5">
+        <RememberedScope.Provider value={item.key}><MarkSourceContext.Provider value={item.event}>
+          <ToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={row.footer !== 'held'} more={context.onExpandRow && truncationOf(item) ? <TruncatedMore item={item} expand={context.onExpandRow} /> : undefined} />
+          {hasTurnFooter && <MessageFooter text={row.answerText} showActions={settled} stopped={row.stopped && settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />}
+        </MarkSourceContext.Provider></RememberedScope.Provider>
+      </div>
+    );
   }
   else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} root={context.root} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />;
   else if (item.kind === 'activity') content = <ActivityRow item={item} root={context.root} />;
@@ -581,7 +591,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlight
       className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
     >
       {content}
-      {item.kind !== 'task_notification' && <TruncatedMore item={item} expand={context.onExpandRow} />}
+      {item.kind !== 'task_notification' && item.kind !== 'tool' && <TruncatedMore item={item} expand={context.onExpandRow} />}
     </div>
   );
 });

@@ -1,4 +1,5 @@
 import type { NativeWorkbenchEvent, Run, Session, ShareModelInfo, ShareSnapshot, ShareTurn, ShareTurnCatalog, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { isInteractionToolData } from '../../../../packages/timeline/src/toolTitle.js';
 import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
 import type { IdentifiedSession } from '../session-identity.js';
@@ -94,6 +95,8 @@ function readingMessages(events: NativeWorkbenchEvent[]): NativeWorkbenchEvent[]
       const phase = event.data.phase ?? event.data.channel;
       if (phase === 'commentary') laterProcess.add(turn);
       else if (phase === 'final_answer' || !laterProcess.has(turn)) retained.add(event);
+    } else if ((kind === 'tool_call' || kind === 'tool_call_update') && !toolUpdates.has(event) && isInteractionToolData(event.data)) {
+      laterProcess.delete(turn);
     } else if (processKinds.has(kind) && !toolUpdates.has(event)) laterProcess.add(turn);
   }
   return events.filter(event => retained.has(event));

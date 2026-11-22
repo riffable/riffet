@@ -98,4 +98,23 @@ describe('frozen share capture', () => {
     expect(JSON.stringify(snapshot)).not.toContain('PROCESS');
     expect(snapshot.jobs).toEqual([]);
   });
+
+  it('retains unphased prose delivered before AskQuestion or plan review tools', async () => {
+    const event = (sequence: number, type: string, data: Record<string, unknown>): NativeWorkbenchEvent => ({ sequence, nativeId: `item-${sequence}`, nativeTurnId: 'turn', sessionId: session.id, type, data, createdAt: at });
+    const events = [
+      event(1, 'user_message_chunk', { content: { text: 'Design this' } }),
+      event(2, 'agent_message_chunk', { content: { text: 'PROCESS reading files first' } }),
+      event(3, 'tool_call', { toolCallId: 'read-1', kind: 'read', title: 'Read a.ts' }),
+      event(4, 'agent_message_chunk', { content: { text: 'Full design proposal before asking' } }),
+      event(5, 'tool_call', { toolCallId: 'ask-1', toolName: 'AskQuestion', kind: 'question', title: 'Choose option' }),
+      event(6, 'tool_call_update', { toolCallId: 'ask-1', status: 'completed' }),
+      event(7, 'agent_message_chunk', { content: { text: 'PROCESS implementing choice' } }),
+      event(8, 'tool_call', { toolCallId: 'edit-1', kind: 'edit', title: 'Edit a.ts' }),
+      event(9, 'agent_message_chunk', { content: { text: 'Final summary after edits' } }),
+    ];
+    const deps = { store: { getSession: () => session, listRuns: () => [] } as never, nativeBackends: { readShareTranscript: async () => ({ events, subagents: [], jobs: [] }) } as never };
+    const snapshot = await captureShareSnapshot(deps, session.id);
+    expect(snapshot.events.map(event => event.sequence)).toEqual([1, 4, 9]);
+    expect(JSON.stringify(snapshot)).not.toContain('PROCESS');
+  });
 });

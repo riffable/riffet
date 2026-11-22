@@ -395,7 +395,7 @@ struct RowBuilder {
             var message: String?
             switch onEnum(of: row) {
             case let .single(single):
-                live = !single.settled
+                live = single.footer == .held
                 collectsChapters = single.item is TimelineItemAssistant
                 height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, stopped: single.stopped, x: x, y: top, width: w)
                 if let user = single.item as? TimelineItemUser { message = user.text }

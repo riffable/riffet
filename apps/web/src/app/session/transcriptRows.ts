@@ -2,6 +2,7 @@ import type { NativeJob, Run, RunMetrics, TurnOutlineV3 } from '@contracts';
 import { str } from '@/lib/utils';
 import { nativeEventIds, type TimelineItem } from './model';
 import { withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
+import { isInteractionToolData } from '../../../../../packages/timeline/src/toolTitle';
 import { analyzeTimelineTurns, runIdFromTurnKey } from './timelineTurns';
 import { laneTurnOf } from '@/sync/rows';
 import { activeToolStates, currentToolActivity } from './toolView';
@@ -31,6 +32,10 @@ export function toolItemLiveness(item: ToolItem, options: { stale: boolean; reso
 // also the sole source of spacing inside a turn (the container no longer adds its own gap on top
 // of these margins).
 const processKinds = new Set<TimelineItem['kind']>(['thought', 'tool', 'plan', 'image']);
+
+function isInteractionTool(item: TimelineItem | undefined): item is ToolItem {
+  return item?.kind === 'tool' && isInteractionToolData(item.event.data);
+}
 
 function backgroundTask(item: TimelineItem): boolean {
   return item.kind === 'activity' && item.activity.kind === 'background_task';
@@ -213,18 +218,21 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       else if (item.run?.state === 'interrupted' || (item.run?.state === 'cancelled' && item.run.native?.stage !== 'acknowledged')) interruptedTurns.add(turnKeys[index]!);
     }
   }
-  // Steering shares a turn with the previous input. Later work must not collect prose that was
-  // already displayed before the steering message into a newly folded process.
+  // Steering and user-facing decision tools (`question` / `plan` review) share a turn with the
+  // work around them. Later work must not collect prose already delivered before them into a
+  // newly folded process.
   const assistantBeforeProcess = new Array<boolean>(timeline.length).fill(false);
   const laterProcessTurns = new Set<string>();
   for (let index = timeline.length - 1; index >= 0; index -= 1) {
     const item = timeline[index]!;
     if (item.kind === 'user') laterProcessTurns.clear();
+    else if (isInteractionTool(item)) laterProcessTurns.delete(turnKeys[index]!);
     // A terminal result also keeps unfinished prose in the process, without itself being folded.
     else if (processKinds.has(item.kind) || item.kind === 'status' || (item.kind === 'assistant' && item.phase === 'commentary')) laterProcessTurns.add(turnKeys[index]!);
     else if (item.kind === 'assistant') assistantBeforeProcess[index] = laterProcessTurns.has(turnKeys[index]!);
   }
   const isProcessItem = (item: TimelineItem, index: number): boolean => {
+    if (isInteractionTool(item)) return false;
     if (processKinds.has(item.kind)) return true;
     if (item.kind !== 'assistant') return false;
     if (item.phase) return item.phase === 'commentary';
@@ -349,17 +357,33 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const turnStatus = turnStatusOf(turnKey);
     const openingState = turnKey ? openingRunStateByTurn.get(turnKey) : undefined;
     const openingStillOpen = openingState === 'running' || openingState === 'queued';
+    const turnEnd = turnKey ? lastIndexByTurn.get(turnKey) : undefined;
+    // A process block before a later segment boundary (interaction tool, steer, or another process
+    // block in the same turn) has already finished its stage even while the turn keeps running.
+    let hasLaterSegment = false;
+    let followedByAnswer = false;
+    const turnDisplayedRunning = Boolean(turnKey && displayedRunning(turnKey));
+    if (turnKey && turnEnd !== undefined) {
+      for (let index = groupLastIndex + 1; index <= turnEnd; index += 1) {
+        if (turnKeys[index] !== turnKey) continue;
+        const later = timeline[index]!;
+        if (isInteractionTool(later) || later.kind === 'user' || processItems[index]) hasLaterSegment = true;
+        if ((later.kind === 'assistant' && !processItems[index])
+          || (isInteractionTool(later) && (() => {
+            const live = toolItemLiveness(later, { stale: !turnDisplayedRunning });
+            return !live.active && !live.incomplete;
+          })())) {
+          followedByAnswer = true;
+        }
+      }
+    }
     // `activeTurns` drops the turn as soon as the session phase goes idle. An opening run that is
-    // still `running` or `queued` has not settled, so the block stays in progress until it does.
-    const groupRunning = Boolean(turnKey && displayedRunning(turnKey));
-    const groupEndsTurn = Boolean(turnKey && lastIndexByTurn.get(turnKey) === groupLastIndex);
+    // still `running` or `queued` has not settled, so the active tail block stays in progress until
+    // it does; earlier completed stages before an interaction tool or steer do not.
+    const groupRunning = turnDisplayedRunning && !hasLaterSegment;
+    const groupEndsTurn = Boolean(turnKey && turnEnd === groupLastIndex);
     // Failure still opens its work by default; the result itself is always outside that fold.
     const issueCount = (failureIndexesByTurn.get(turnKey!) ?? []).filter(index => index >= groupStart).length;
-    // The final prose is outside this process's items. Its arrival closes the trailing tool run
-    // just like narration inside the process, even before the turn's completion arrives.
-    const answerIndex = turnKey ? finalAnswerIndexByTurn.get(turnKey) ?? lastIndexByTurn.get(turnKey) : undefined;
-    const followedByAnswer = answerIndex !== undefined && answerIndex > groupLastIndex
-      && timeline[answerIndex]?.kind === 'assistant' && !processItems[answerIndex];
     // The block carries the footer only when the turn ends on it without an answer.
     const carries = groupEndsTurn && !finalAnswerIndexByTurn.has(turnKey!);
     const settled = carries && !groupRunning && turnKey !== processingTurn;
@@ -372,8 +396,8 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const outcomeUnknown = Boolean(turnStatus === 'outcome_unknown' || (turnKey && outcomeUnknownTurns.has(turnKey)));
     const interrupted = Boolean(turnKey && (interruptedTurns.has(turnKey) || outlineStopped || groupLastIndex < (lastSteerIndexByTurn.get(turnKey) ?? -1)));
     const stopped = Boolean(!outcomeUnknown && turnKey && groupEndsTurn && (interruptedTurns.has(turnKey) || outlineStopped));
-    const canAutoFold = !groupRunning && !interrupted && !outcomeUnknown && issueCount === 0 && followedByAnswer && !hasIncompleteTools
-      && (turnStatus === undefined || turnStatus === 'completed') && !openingStillOpen;
+    const stageSettled = hasLaterSegment || ((turnStatus === undefined || turnStatus === 'completed') && !openingStillOpen);
+    const canAutoFold = !groupRunning && !interrupted && !outcomeUnknown && issueCount === 0 && followedByAnswer && !hasIncompleteTools && stageSettled;
     const first = items[0]!;
     // The first block of a lane turn is keyed by the turn rather than by its first item: older rows of
     // the same turn paging in above would otherwise remount the whole block, open tools and all.
@@ -427,17 +451,17 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const finalAnswer = finalAnswerIndexByTurn.get(turnKey);
     // The turn's answer, or what would be it if the turn ended now.
     const carries = finalAnswer === undefined
-      ? (item.kind === 'assistant' || item.kind === 'status') && lastTurnEnd(index)
+      ? (item.kind === 'assistant' || item.kind === 'status' || isInteractionTool(item)) && lastTurnEnd(index)
       : item.kind === 'assistant' && finalAnswer === index;
     // For a user row, `settled` records that same-turn output already follows it.
     const settled = item.kind === 'user'
       ? !lastTurnEnd(index)
       : carries && !activeTurns.has(turnKey) && turnKey !== processingTurn;
-    const answerText = settled && item.kind === 'status' ? answerBefore(index) : undefined;
-    // A status row (run_cancelled) already says it stopped; an answer or a prompt left last says it here.
+    const answerText = settled && (item.kind === 'status' || item.kind === 'tool') ? answerBefore(index) : undefined;
+    // A status row (run_cancelled) already says it stopped; an answer, prompt or decision tool left last says it here.
     const outlineStatus = turnStatusOf(turnKey);
     const outcomeUnknown = outlineStatus === 'outcome_unknown' || outcomeUnknownTurns.has(turnKey);
-    const stopped = !outcomeUnknown && (interruptedTurns.has(turnKey) || outlineStatus === 'interrupted' || outlineStatus === 'cancelled') && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user');
+    const stopped = !outcomeUnknown && (interruptedTurns.has(turnKey) || outlineStatus === 'interrupted' || outlineStatus === 'cancelled') && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user' || isInteractionTool(item));
     add({ type: 'item', key: item.key, item, gap: rowGap(previousItem, item, previousRowFooter), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: carries && settled ? metricsForTurn(turnKey) : undefined, runId: carries && settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
   }
   flushGroup();
