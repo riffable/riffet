@@ -301,8 +301,12 @@ class SessionSyncTest {
                 assertEquals(listOf("a", "b", "c"), store.timeline.value.map { it.key }, "reopen=$reopen")
                 withTimeout(5_000) { store.loadingHistory.first { !it } }
                 store.flush()
-                assertNull(cache.meta("s1")?.lastSeq, "An older window must not resume at the stream's head")
-                assertTrue(assertNotNull(cache.load("s1")).meta.hasAfter)
+                withTimeout(5_000) {
+                    while (cache.meta("s1")?.hasAfter != true) delay(20)
+                }
+                val stored = assertNotNull(cache.load("s1"))
+                assertTrue(stored.meta.hasAfter)
+                assertNull(stored.meta.lastSeq, "An older window must not resume at the stream's head")
 
                 store.loadOlder()
                 withTimeout(5_000) { pageEntered.await() }
