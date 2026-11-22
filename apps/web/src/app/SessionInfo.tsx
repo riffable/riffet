@@ -20,6 +20,7 @@ import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
 import type { ContextUsage } from './session/model';
 import { useStores, useWorkItems } from './state/stores';
+import { useServerBadge } from './useServerLabel';
 import type { AssistantSetupState } from './work-items/AssistantSetup';
 import { useStatusLabel } from './work-items/parts';
 import { Progress } from '@/components/ui/progress';
@@ -217,7 +218,9 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
   const since = busy ? relativeTime(session.activeSince ?? sessionActivityAt(session)) : '';
   const activityAt = sessionActivityAt(session);
   const activity = timeAgo(activityAt);
+  const server = useServerBadge(session.id);
   const facts: [label: string, value: ReactNode][] = [
+    ...(server ? [[t`服务器`, <span key="server" className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className={cn('min-w-0 break-words', server.offline && 'text-warning')}>{server.label}</span>{server.alias !== server.name && <span className="font-mono text-xs text-fg-3">{server.alias}</span>}</span>] as [string, ReactNode]] : []),
     ...(model ? [[t`模型`, <span key="model" className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="min-w-0 break-words font-mono text-xs">{model}</span>{modelDetail && <span className="min-w-0 text-xs text-fg-3">{modelDetail}</span>}</span>] as [string, ReactNode]] : []),
     ...(session.approval && !quickChat ? [[t`权限`, approval || session.approval] as [string, ReactNode]] : []),
     // The phone's composer carries the context ring; its sheet skips the row.

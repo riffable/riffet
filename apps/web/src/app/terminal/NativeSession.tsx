@@ -11,6 +11,7 @@ import { Collapse } from '@/components/ui/collapse';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, isSessionReference, restoreContext, type NativeSessionCreateResult, type PromptContextReference } from '@/lib/api';
+import { serverOfObject } from '@/lib/server-routing';
 import { workbenchAppearanceConnection } from '@/lib/workbench-appearance';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
@@ -22,7 +23,7 @@ import { backendSelection, hasNativeTerminal, launchSelection, sessionBackend, u
 import { useWakeLock } from '@/lib/wake-lock';
 import type { HeaderSlots } from '../Header';
 import { ApprovalPicker, ApprovalSummary } from '../session/ApprovalPicker';
-import { ToolsPicker, offersExtensionToggles, offersRiffetTools, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from '../session/ToolsPicker';
+import { ToolsPicker, offersExtensionToggles, offersRiffetTools, useControllablePhones, useExtensionsOffered, useLinkableServers, usePluginToolGroups } from '../session/ToolsPicker';
 import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
@@ -1012,7 +1013,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [toolGroupsValue, changeToolGroups] = useSessionPick(session, 'toolGroups', NO_TOOL_GROUPS, onSessionChanged, onError);
   const [extensionsOffValue, changeExtensionsOff] = useSessionPick(session, 'extensionsOff', NO_EXTENSIONS_OFF, onSessionChanged, onError);
   const pluginToolRows = usePluginToolGroups(toolGroupsValue).rows.length;
-  const phonesOffered = (useControllablePhones(toolGroupsValue).offered || pluginToolRows > 0) && offersRiffetTools(backendCapabilities);
+  const remoteSession = Boolean(serverOfObject(session.id));
+  const linkableServersOffered = useLinkableServers(toolGroupsValue, !quickChat && !archived && !remoteSession).offered;
+  const phonesOffered = (useControllablePhones(toolGroupsValue).offered || pluginToolRows > 0 || linkableServersOffered) && offersRiffetTools(backendCapabilities);
   const extensionToggles = session.projectId ? offersExtensionToggles(backendCapabilities) : undefined;
   const extensionPick = useMemo(() => (extensionToggles && session.projectId
     ? { backendId, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}), projectId: session.projectId, toggles: extensionToggles, off: extensionsOffValue, onChange: changeExtensionsOff }
@@ -1023,8 +1026,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const catalogBackends = useCatalog((state) => state.backends);
   const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: session.projectId, backends: catalogBackends } : undefined, [callsOffered, session.projectId, catalogBackends]);
   const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered || callsOffered)
-    ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} onError={onError} footnote={t`下次启动时生效`} />
-    : undefined), [quickChat, archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, toolGroupsValue, changeToolGroups, onError, t]);
+    ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} servers={!remoteSession} onError={onError} footnote={t`下次启动时生效`} />
+    : undefined), [quickChat, archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, remoteSession, toolGroupsValue, changeToolGroups, onError, t]);
   const handleSwitchingModel = useCallback((next: boolean) => {
     setSwitchingModel(next);
     if (next) {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NativeBackendId, NativeSlashCatalog } from '@contracts';
-import { api } from '@/lib/api';
+import { apiFor } from '@/lib/api';
 import { boundedCache } from '@/lib/bounded-cache';
 import { registerBounded } from '@/lib/cache-registry';
 
@@ -18,10 +18,10 @@ export function invalidateSlashCatalogs(): void { catalogs.clear(); }
  * One request per scope at a time. `refresh` asks the server to list again rather than answer
  * from its own cache, which it would otherwise do with the very copy that went stale here.
  */
-function load(key: string, backendId: NativeBackendId, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global' }, refresh: boolean): Promise<NativeSlashCatalog> {
+function load(key: string, backendId: NativeBackendId, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global' }, refresh: boolean, serverId?: string): Promise<NativeSlashCatalog> {
   const entry = catalogs.get(key) ?? { at: 0 };
   catalogs.set(key, entry);
-  entry.request ??= api.slashCatalog(backendId, scope, { refresh })
+  entry.request ??= apiFor(serverId || undefined).slashCatalog(backendId, scope, { refresh })
     .then((value) => { entry.value = value; entry.at = Date.now(); return value; })
     .finally(() => { entry.request = undefined; });
   return entry.request;
@@ -33,9 +33,9 @@ function load(key: string, backendId: NativeBackendId, scope: { projectId?: stri
  * conversation opened again shows its menu at once. `refresh` re-reads a listing that has gone
  * stale and is meant for the moment the menu opens.
  */
-export function useSlashCatalog(backendId: NativeBackendId | undefined, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global' }): { catalog?: NativeSlashCatalog; refresh: () => void } {
-  const { projectId, profileId, sessionId, scope: globalScope } = scope;
-  const key = backendId && (projectId || sessionId || globalScope) ? JSON.stringify([backendId, projectId ?? '', profileId ?? '', sessionId ?? '', globalScope ?? '']) : '';
+export function useSlashCatalog(backendId: NativeBackendId | undefined, scope: { projectId?: string; profileId?: string; sessionId?: string; scope?: 'global'; serverId?: string }): { catalog?: NativeSlashCatalog; refresh: () => void } {
+  const { projectId, profileId, sessionId, scope: globalScope, serverId } = scope;
+  const key = backendId && (projectId || sessionId || globalScope) ? JSON.stringify([serverId ?? '', backendId, projectId ?? '', profileId ?? '', sessionId ?? '', globalScope ?? '']) : '';
   // The listing is stored with its scope so a scope change never shows the old scope's menu for a frame.
   const [held, setHeld] = useState<{ key: string; value: NativeSlashCatalog } | undefined>(undefined);
   const catalog = !key ? undefined : held?.key === key ? held.value : catalogs.get(key)?.value;
@@ -48,10 +48,10 @@ export function useSlashCatalog(backendId: NativeBackendId | undefined, scope: {
     const entry = catalogs.get(key);
     if (entry?.value) setHeld({ key, value: entry.value });
     if (entry?.value && Date.now() - entry.at <= FRESH_MS) return;
-    load(key, backendId, { projectId, profileId, sessionId, scope: globalScope }, Boolean(entry?.value))
+    load(key, backendId, { projectId, profileId, sessionId, scope: globalScope }, Boolean(entry?.value), serverId)
       .then((value) => { if (currentKey.current === key) setHeld({ key, value }); })
       .catch(() => undefined);
-  }, [key, backendId, projectId, profileId, sessionId, globalScope]);
+  }, [key, backendId, projectId, profileId, sessionId, globalScope, serverId]);
 
   useEffect(() => {
     fetchIfStale();

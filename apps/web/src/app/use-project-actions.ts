@@ -136,10 +136,11 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
    * cannot drive one — the same two-step the "add project" dialog uses. The chooser opens on the
    * server's screen, so a reader on another machine goes straight to the in-app browser.
    */
-  const chooseSessionDirectory = useCallback(async () => {
+  const chooseSessionDirectory = useCallback(async (targetServer?: string) => {
     ui.setMobileSidebar(false);
-    // The chooser can only open on the entry server's screen; a project on a linked server browses in the app.
-    if (!hostInfo().local || serverOfObject(project?.id)) { ui.set({ sessionDirectoryOpen: true }); return; }
+    const server = targetServer !== undefined ? (targetServer || undefined) : serverOfObject(project?.id);
+    // The chooser can only open on the entry server's screen; a linked server always browses in the app.
+    if (!hostInfo().local || server) { ui.set({ sessionDirectoryOpen: true, sessionDirectoryServer: server ?? '' }); return; }
     try {
       const picked = await api.pickDirectory({ prompt: t`选择新会话的目录` });
       if (picked.cancelled) return;
@@ -150,7 +151,7 @@ export function useProjectActions({ project, loadBootstrap, selectProject }: {
       // fails too the user only sees the second error.
       console.warn('native directory picker unavailable; falling back to the in-app browser', error);
     }
-    ui.set({ sessionDirectoryOpen: true });
+    ui.set({ sessionDirectoryOpen: true, sessionDirectoryServer: '' });
   }, [project?.id, ui, startSessionInDirectory, t]);
 
   const openInEditor = useCallback((path: string, line?: number) => {

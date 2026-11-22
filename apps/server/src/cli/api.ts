@@ -26,6 +26,9 @@ export class Api {
     return new Api(base, { cookie, 'x-csrf-token': csrfToken });
   }
 
+  /** Session headers (cookie + CSRF token) for opening authenticated WebSockets against this server. */
+  authHeaders(): Record<string, string> { return { ...this.headers }; }
+
   /** The reply whatever its status. */
   async request<T = Record<string, unknown>>(method: string, path: string, body?: unknown, timeoutMs = 120_000, fetcher: typeof fetch = fetch): Promise<Reply<T>> {
     const response = await fetcher(this.base + path, {

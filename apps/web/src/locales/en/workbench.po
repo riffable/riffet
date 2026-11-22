@@ -7,6 +7,11 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
+#. placeholder {0}: server.name
+#: src/app/useServerLabel.tsx
+msgid "{0} · 离线"
+msgstr "{0} · Offline"
+
 #. placeholder {0}: agent.label
 #. placeholder {0}: backend.label
 #. placeholder {0}: label(backendId)
@@ -49,10 +54,6 @@ msgstr "Expires {0}"
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, one {Also deletes # side chat.} other {Also deletes # side chats.}}"
-
-#: src/app/useServerLabel.tsx
-msgid "{name} · 离线"
-msgstr "{name} · Offline"
 
 #: src/app/SessionDeletion.tsx
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
@@ -178,6 +179,11 @@ msgstr "Home"
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "Theme"
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "仅本机"
+msgstr "This machine only"
 
 #: src/app/Sidebar.tsx
 msgid "今天"
@@ -337,6 +343,11 @@ msgstr "Not now"
 msgid "先为这个任务选一个项目"
 msgstr "Choose a project for this task first"
 
+#. placeholder {0}: activeServer?.name ?? ''
+#: src/app/ProjectHome.tsx
+msgid "先在 {0} 选择一个目录"
+msgstr "Choose a directory on {0} first"
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Sidebar.tsx
@@ -361,6 +372,11 @@ msgstr "All sessions"
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
 msgstr "All sources"
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "全部服务器"
+msgstr "All servers"
 
 #: src/app/Sidebar.tsx
 msgid "全部标为已读"
@@ -700,6 +716,10 @@ msgstr "You can let Agents operate this phone in Skills and Tools"
 msgid "在内容中搜索「{needle}」"
 msgstr "Search content for \"{needle}\""
 
+#: src/app/ProjectHome.tsx
+msgid "在哪台服务器新建？"
+msgstr "Which server?"
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "在手机上接着看"
 msgstr "Pick up on your phone"
@@ -1013,6 +1033,10 @@ msgstr "Restore current session"
 #: src/app/Sidebar.tsx
 msgid "恢复项目"
 msgstr "Restore project"
+
+#: src/app/Sidebar.tsx
+msgid "恢复默认服务器范围"
+msgstr "Reset server scope"
 
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
@@ -1454,6 +1478,10 @@ msgstr "Couldn't refresh the project list"
 msgid "无法加载 Agent 列表"
 msgstr "Could not load the agent list"
 
+#: src/app/state/catalogStore.ts
+msgid "无法加载对端服务器的 Agent 列表"
+msgstr "Couldn't load agents from the linked server"
+
 #: src/app/Workbench.tsx
 msgid "无法加载工作台"
 msgstr "Couldn't load the workbench"
@@ -1705,12 +1733,21 @@ msgstr "Services and sharing"
 
 #: src/app/AddProjectDialog.tsx
 #: src/app/DirectoryPicker.tsx
+#: src/app/SessionInfo.tsx
 msgid "服务器"
 msgstr "Server"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
 msgstr "The server version is incompatible"
+
+#: src/app/Sidebar.tsx
+msgid "服务器范围"
+msgstr "Server scope"
+
+#: src/app/useServerLabel.tsx
+msgid "未允许本机操作"
+msgstr "Not allowed to operate"
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
@@ -1735,6 +1772,10 @@ msgstr "Unread"
 msgid "本机"
 msgstr "This machine"
 
+#: src/app/Sidebar.tsx
+msgid "本机与本机发起"
+msgstr "This machine & remote from here"
+
 #: src/app/plugins/PluginChannelsBlock.tsx
 msgctxt "plugin-channels-section"
 msgid "机器人"
@@ -1749,6 +1790,11 @@ msgstr "Permissions"
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
 msgstr "Source"
+
+#. placeholder {0}: activeServer.name
+#: src/app/ProjectHome.tsx
+msgid "来自 {0}"
+msgstr "From {0}"
 
 #: src/app/use-session-actions.ts
 msgid "查看"
@@ -1951,6 +1997,10 @@ msgctxt "plugin-version-label"
 msgid "版本"
 msgstr "Version"
 
+#: src/app/useServerLabel.tsx
+msgid "版本不兼容"
+msgstr "Incompatible version"
+
 #: src/app/plugins/PluginAgentBackendsBlock.tsx
 msgid "版本过旧"
 msgstr "Outdated"
@@ -2016,6 +2066,10 @@ msgstr "Folder path"
 #: src/app/AddProjectDialog.tsx
 msgid "直接添加为项目"
 msgstr "Add directly as a project"
+
+#: src/app/useServerLabel.tsx
+msgid "离线"
+msgstr "Offline"
 
 #: src/app/Sidebar.tsx
 msgid "离线 · 显示 {age} 前保存的列表"
@@ -2101,6 +2155,10 @@ msgstr "Filter providers"
 msgid "筛选日志"
 msgstr "Filter log"
 
+#: src/app/SessionSearchDialog.tsx
+msgid "筛选服务器"
+msgstr "Filter by server"
+
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "筛选模型"
 msgstr "Filter models"
@@ -2109,6 +2167,10 @@ msgstr "Filter models"
 msgctxt "plugin-detail-tab"
 msgid "管理"
 msgstr "Management"
+
+#: src/app/ProjectHome.tsx
+msgid "管理互联…"
+msgstr "Manage linked servers…"
 
 #: src/app/Workbench.tsx
 msgid "管理插件"
@@ -2455,10 +2517,12 @@ msgid "选择模型"
 msgstr "Choose model"
 
 #: src/app/DirectoryPicker.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录"
 msgstr "Choose folder"
 
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录…"
 msgstr "Choose Directory…"
 

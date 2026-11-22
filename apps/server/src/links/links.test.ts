@@ -113,12 +113,95 @@ describe('server links', () => {
   });
 
   it('denies what a peer must not reach, and its control over this server', async () => {
-    for (const [method, path] of [['GET', '/settings/push'], ['POST', '/pairing/code'], ['GET', '/links'], ['GET', '/devices'], ['PATCH', '/settings'], ['GET', `/servers/${a.serverId}/projects`], ['GET', '/assistant/memory']] as const) {
+    for (const [method, path] of [['GET', '/settings/push'], ['POST', '/pairing/code'], ['GET', '/links'], ['PATCH', '/links/self'], ['GET', '/devices'], ['PATCH', '/settings'], ['GET', `/servers/${a.serverId}/projects`], ['GET', '/assistant/memory']] as const) {
       const reply = await a.call(method, `/api/servers/${b.serverId}${path}`, method === 'GET' ? undefined : {});
       expect(reply.status, `${method} ${path}`).toBe(403);
       expect(reply.body.error?.code, `${method} ${path}`).toBe('LINK_FORBIDDEN');
     }
   });
+
+  it('renames this server and linked peers with unique aliases preserved across updates', async () => {
+    const renamedSelf = await b.call<{ self: { name: string } }>('PATCH', '/api/links/self', { name: 'Build Mac' });
+    expect(renamedSelf.status).toBe(200);
+    expect(renamedSelf.body.self.name).toBe('Build Mac');
+    await until(async () => (await a.call<{ servers: Array<{ id: string; name: string }> }>('GET', '/api/servers')).body.servers.find(server => server.id === b.serverId)?.name === 'Build Mac');
+
+    const badAlias = await a.call('PATCH', `/api/links/${b.serverId}`, { alias: 'Bad Alias!' });
+    expect(badAlias.status).toBe(400);
+    expect(badAlias.body.error?.code).toBe('INVALID_LINK_ALIAS');
+
+    const updated = await a.call<{ link: { name: string; peerName?: string; alias: string; note?: string; platform?: { os: string; arch: string } } }>('PATCH', `/api/links/${b.serverId}`, { name: 'My Mac', alias: 'mac-mini', note: 'iOS builds' });
+    expect(updated.status).toBe(200);
+    expect(updated.body.link).toMatchObject({ name: 'My Mac', peerName: 'Build Mac', alias: 'mac-mini', note: 'iOS builds', platform: { os: process.platform, arch: process.arch } });
+
+    // A later rename on the peer updates `peerName` without overwriting the local custom name or alias.
+    await b.call('PATCH', '/api/links/self', { name: 'Build Mac 2' });
+    await until(async () => (await a.call<{ links: Array<{ serverId: string; peerName?: string }> }>('GET', '/api/links')).body.links.find(link => link.serverId === b.serverId)?.peerName === 'Build Mac 2');
+    const kept = (await a.call<{ links: Array<{ serverId: string; name: string; alias: string; note?: string }> }>('GET', '/api/links')).body.links.find(link => link.serverId === b.serverId);
+    expect(kept).toMatchObject({ name: 'My Mac', alias: 'mac-mini', note: 'iOS builds' });
+  });
+
+  it('runs remote commands over the link with exit codes, timeout and inbound enforcement', async () => {
+    const ok = await a.call<{ exitCode: number | null; stdout: string; stderr: string; timedOut: boolean; truncated: boolean }>('POST', `/api/servers/${b.serverId}/remote/exec`, { command: 'printf hello; printf err >&2; exit 7' });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    expect(ok.body).toMatchObject({ exitCode: 7, stdout: 'hello', stderr: 'err', timedOut: false, truncated: false });
+
+    const timed = await a.call<{ timedOut: boolean }>('POST', `/api/servers/${b.serverId}/remote/exec`, { command: 'sleep 5', timeoutMs: 1_000 });
+    expect(timed.status).toBe(200);
+    expect(timed.body.timedOut).toBe(true);
+
+    // Turning off inbound on B immediately blocks remote execution too.
+    await b.call('PATCH', `/api/links/${a.serverId}`, { inbound: false });
+    const blocked = await a.call('POST', `/api/servers/${b.serverId}/remote/exec`, { command: 'echo nope' });
+    expect(blocked.status).toBe(403);
+    await b.call('PATCH', `/api/links/${a.serverId}`, { inbound: true });
+    await until(async () => (await a.call('POST', `/api/servers/${b.serverId}/remote/exec`, { command: 'true' })).status === 200);
+  }, 20_000);
+
+  it('exposes remote_list and remote_exec to Riffet MCP only for explicitly granted linked servers', async () => {
+    const project = a.store.createProject(tmpdir(), 'local');
+    const session = a.store.createSession({ projectId: project.id, kind: 'native', title: 'remote mcp' });
+    const spec = a.riffetMcp.server(session.id)!;
+    const token = (JSON.parse(await readFile(spec.args[spec.args.indexOf('--credential') + 1]!, 'utf8')) as { credential: string }).credential;
+    const mcp = async (method: string, params?: Record<string, unknown>) => {
+      const response = await a.app.inject({
+        method: 'POST',
+        url: '/api/riffet-mcp',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { method, params },
+      });
+      return response.json().result;
+    };
+
+    // By default, no remote tools are injected into ordinary conversations.
+    const initial = await mcp('tools/list') as { tools: Array<{ name: string }> };
+    expect(initial.tools.map(t => t.name)).not.toContain('remote_exec');
+
+    // Granting server B exposes `remote_list` and `remote_exec` scoped strictly to B.
+    const granted = await a.call('PATCH', `/api/sessions/${session.id}`, { toolGroups: [`server:${b.serverId}`] });
+    expect(granted.status, JSON.stringify(granted.body)).toBe(200);
+    const listed = await mcp('tools/list') as { tools: Array<{ name: string }> };
+    expect(listed.tools.map(t => t.name)).toEqual(expect.arrayContaining(['remote_list', 'remote_exec']));
+
+    const remotes = await mcp('tools/call', { name: 'remote_list', arguments: {} }) as { structuredContent?: { servers: Array<{ id: string; alias: string }> } };
+    expect(remotes.structuredContent?.servers).toHaveLength(1);
+    expect(remotes.structuredContent?.servers[0]).toMatchObject({ id: b.serverId, alias: 'mac-mini' });
+
+    const ran = await mcp('tools/call', { name: 'remote_exec', arguments: { server: 'mac-mini', command: 'printf from-mcp' } }) as { isError?: boolean; structuredContent?: { stdout: string; exitCode: number } };
+    expect(ran.isError).not.toBe(true);
+    expect(ran.structuredContent).toMatchObject({ stdout: 'from-mcp', exitCode: 0 });
+
+    // Calling a server outside the conversation's grant is rejected by the server whitelist.
+    const denied = await mcp('tools/call', { name: 'remote_exec', arguments: { server: 'ungranted-box', command: 'echo hi' } }) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(denied.isError).toBe(true);
+    expect(denied.content[0]?.text).toContain('REMOTE_NOT_ALLOWED');
+
+    // Removing the grant stops subsequent tool calls immediately without restarting the CLI.
+    await a.call('PATCH', `/api/sessions/${session.id}`, { toolGroups: [] });
+    const revoked = await mcp('tools/call', { name: 'remote_exec', arguments: { server: 'mac-mini', command: 'echo hi' } }) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(revoked.isError).toBe(true);
+    expect(revoked.content[0]?.text).toContain('TOOL_NOT_AVAILABLE');
+  }, 20_000);
 
   it('refuses the direction the other side did not allow', async () => {
     const reverse = await b.call('GET', `/api/servers/${a.serverId}/projects`);

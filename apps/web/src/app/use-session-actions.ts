@@ -305,8 +305,8 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         // Persist the full accepted selector, including effort, even when the first turn used a catalog default.
         // A 助理 conversation's choice is the 助理's (docs/ASSISTANT.md), not the composer's everywhere else.
         if (!matching && targetBackendId !== 'chat' && body.model && isAssistantProject(lists.get().projects.find((item) => item.id === targetProjectId))) settingsStore.rememberAssistant({ backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model });
-        // A 任务's own model is the task's, not a change to the composer's default.
-        else if (!matching && !workItemId && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
+        // A 任务's own model (and a linked server's own agent/provider) must not overwrite this server's composer defaults.
+        else if (!matching && !workItemId && !serverOfObject(targetProjectId) && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
         upsertSession(result.session);
         ui.set({ nativeRunSeed: { sessionId: result.session.id, run: result.run } });
         // The reader may have moved on while the request was in flight; only follow it if not.

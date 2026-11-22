@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, WORK_ITEM_STATUSES, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -14,7 +14,8 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { Tip } from '@/components/ui/tooltip';
 import { api, apiFor, type ProjectRecord } from '@/lib/api';
-import { ServerTag, useServerLabel } from './useServerLabel';
+import { serverOfObject } from '@/lib/server-routing';
+import { ServerTag, useServerBadge } from './useServerLabel';
 import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
 import { cn, isJustNow, readStored, relativeTime, writeStored } from '@/lib/utils';
@@ -103,11 +104,14 @@ interface Props {
 const COLLAPSED_KEY = 'riffet.collapsedProjects';
 const LAYOUT_KEY = 'riffet.sidebarLayout';
 const SORT_KEY = 'riffet.sidebarSort';
+const SERVER_FILTER_KEY = 'riffet.sidebarServerFilter';
 const PROJECT_SESSION_LIMIT = 5;
 
 type SidebarLayout = 'project' | 'time';
 /** 按标签页顺序 orders the pinned conversations as the tab bar's pinned zone does. */
 type SidebarSort = 'activity' | 'tabs';
+/** `'relevant'` shows this server's own conversations plus remote ones launched from here; a server id narrows to that peer. */
+type SidebarServerFilter = 'relevant' | 'all' | 'local' | (string & {});
 
 export function timeBucket(session: Session, now: Date): string {
   if (session.pinnedAt) return i18n._(msg`置顶`);
@@ -221,12 +225,12 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   // Without the item (deleted) the title stands alone; before summaries arrive from a legacy server, reserve the icon slot so the title does not jump.
   const summariesLoaded = useWorkItems((state) => state.summaries !== undefined);
   const taskStatus = useWorkItems((state) => session.workItemId ? state.summaries?.find((entry) => entry.id === session.workItemId)?.status : undefined);
-  // Where the conversation is, when rows of every project and server share one list.
-  const server = useServerLabel(session.id);
-  const place = projectName ? [server, projectName].filter(Boolean).join(' · ') : undefined;
+  // Remote conversations carry a quiet link icon with 1 peer, or its short alias when 2+ peers exist.
+  const server = useServerBadge(session.id);
+  const place = projectName;
   return (
     <ListRow
-      title={`${label} · ${session.title}`}
+      title={`${label}${server ? ` · ${server.label}` : ''} · ${session.title}`}
       onClick={(event) => onSelect(session, event.metaKey || event.ctrlKey)}
       selected={selected}
       aria-current={selected ? 'page' : undefined}
@@ -236,6 +240,19 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       // Decoration, not controls: in `actions` a click on them would stay theirs and never open the row.
       trailing={<>
       {marked && <span role="img" aria-label={t`已收藏`} title={t`已收藏`} className="inline-flex shrink-0 text-accent"><IconBookmarkFilled className="size-3.5" /></span>}
+      {server && (
+        <Tip label={server.label}>
+          {server.multiPeer ? (
+            <span aria-label={server.label} className={cn('max-w-16 shrink-0 truncate rounded bg-subtle px-1 py-px font-mono text-2xs', server.offline ? 'text-warning' : 'text-fg-4')}>
+              {server.alias}
+            </span>
+          ) : (
+            <span role="img" aria-label={server.label} className={cn('inline-flex shrink-0', server.offline ? 'text-warning' : 'text-fg-4')}>
+              <IconLink className="size-3" />
+            </span>
+          )}
+        </Tip>
+      )}
       {/* Idle, a row is a title and its time: which agent ran it and which directory it belongs to
           are only worth the width once the pointer is on the row (or the keyboard is inside it),
           and on a touch screen there is no hover to wait for, so they simply stay. */}
@@ -303,6 +320,21 @@ export function Sidebar(props: Props) {
   const [showArchived, setShowArchived] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [filterTag, setFilterTag] = useState('');
+  const [storedServerFilter, setStoredServerFilter] = useState<SidebarServerFilter>(() => (readStored(SERVER_FILTER_KEY) as SidebarServerFilter) || 'relevant');
+  const setServerFilter = (value: string) => {
+    const next = (value || 'relevant') as SidebarServerFilter;
+    writeStored(SERVER_FILTER_KEY, next === 'relevant' ? undefined : next);
+    setStoredServerFilter(next);
+  };
+  const servers = useLists((state) => state.servers);
+  const selfServerId = useMemo(() => servers.find((item) => item.self)?.id, [servers]);
+  const peerServers = useMemo(() => servers.filter((item) => !item.self && item.outbound && item.compatible), [servers]);
+  const hasLinkedServers = peerServers.length > 0;
+  const serverFilter: SidebarServerFilter = !hasLinkedServers
+    ? 'relevant'
+    : storedServerFilter === 'relevant' || storedServerFilter === 'all' || storedServerFilter === 'local' || peerServers.some((item) => item.id === storedServerFilter)
+      ? storedServerFilter
+      : 'relevant';
   const [layout, setLayoutState] = useState<SidebarLayout>(() => readStored(LAYOUT_KEY) === 'project' ? 'project' : 'time');
   const setLayout = (value: string) => {
     const next: SidebarLayout = value === 'time' ? 'time' : 'project';
@@ -339,9 +371,16 @@ export function Sidebar(props: Props) {
   // (docs/AGENT-CALLS.md §6) is reached from its caller while the caller is listed, unless it is the one open.
   const listedSessions = useMemo(() => {
     const live = new Set(sessions.filter((session) => !session.archivedAt).map((session) => session.id));
-    return sessions.filter((session) => sessionBackend(session) !== 'chat'
-      && !(session.origin?.kind === 'call' && session.origin.sessionId && live.has(session.origin.sessionId) && session.id !== selectedSessionId));
-  }, [sessions, selectedSessionId]);
+    return sessions.filter((session) => {
+      if (sessionBackend(session) === 'chat') return false;
+      if (session.origin?.kind === 'call' && session.origin.sessionId && live.has(session.origin.sessionId) && session.id !== selectedSessionId) return false;
+      if (!hasLinkedServers || serverFilter === 'all' || session.id === selectedSessionId) return true;
+      const ownerServer = serverOfObject(session.id);
+      if (serverFilter === 'local') return !ownerServer;
+      if (serverFilter === 'relevant') return !ownerServer || (session.origin?.kind === 'link' && Boolean(selfServerId) && session.origin.serverId === selfServerId);
+      return ownerServer === serverFilter;
+    });
+  }, [sessions, selectedSessionId, hasLinkedServers, serverFilter, selfServerId]);
   const tags = useMemo(() => [...new Set(listedSessions.filter((session) => !session.archivedAt).flatMap((session) => session.tags ?? []))].sort(), [listedSessions]);
   // The 助理 has its own row above and its conversations are not listed (docs/ASSISTANT.md).
   const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, t`未关联项目`), [projects, showArchived, t]);
@@ -361,8 +400,16 @@ export function Sidebar(props: Props) {
     for (const [projectId, bucket] of byProject) byProject.set(projectId, sortSessionsByActivity(bucket, { pinned: pinnedOrder }));
     return [...new Set(visibleProjects.values())]
       .map((project) => ({ project, sessions: byProject.get(project.id) ?? [] }))
-      .filter((group) => ((!filterTag && !unreadOnly) || group.sessions.length) && (!group.project.system || group.sessions.length));
-  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, pinnedOrder]);
+      .filter((group) => {
+        if ((filterTag || unreadOnly) && !group.sessions.length) return false;
+        if (group.project.system && !group.sessions.length) return false;
+        if (!hasLinkedServers || serverFilter === 'all') return true;
+        const ownerServer = serverOfObject(group.project.id);
+        if (serverFilter === 'local') return !ownerServer;
+        if (serverFilter === 'relevant') return !ownerServer || group.sessions.length > 0 || group.project.id === selectedSidebarProjectId;
+        return ownerServer === serverFilter;
+      });
+  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, pinnedOrder, hasLinkedServers, serverFilter, selectedSidebarProjectId]);
 
   const timeline = useMemo(() => {
     if (layout !== 'time') return [];
@@ -637,7 +684,24 @@ export function Sidebar(props: Props) {
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)}><Trans>显示已归档</Trans></DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={unreadOnly} onCheckedChange={(value) => setUnreadOnly(value === true)}><Trans>只看未读</Trans></DropdownMenuCheckboxItem>
-                <DropdownMenuItem onSelect={() => void Promise.all(['', ...Object.keys(linkedStatus).filter((id) => linkedStatus[id] !== 'offline')].map((server) => apiFor(server || undefined).markAllSessionsSeen())).catch((error) => toast.error(errorMessage(error)))}><Trans>全部标为已读</Trans></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => {
+                  const targets = serverFilter === 'all'
+                    ? ['', ...peerServers.filter((item) => linkedStatus[item.id] !== 'offline').map((item) => item.id)]
+                    : serverFilter === 'relevant' || serverFilter === 'local'
+                      ? ['']
+                      : linkedStatus[serverFilter] !== 'offline' ? [serverFilter] : [];
+                  void Promise.all(targets.map((server) => apiFor(server || undefined).markAllSessionsSeen())).catch((error) => toast.error(errorMessage(error)));
+                }}><Trans>全部标为已读</Trans></DropdownMenuItem>
+                {hasLinkedServers && <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel><Trans>服务器范围</Trans></DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={serverFilter} onValueChange={setServerFilter}>
+                    <DropdownMenuRadioItem value="relevant"><Trans>本机与本机发起</Trans></DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="all"><Trans>全部服务器</Trans></DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="local"><Trans>仅本机</Trans></DropdownMenuRadioItem>
+                    {peerServers.map((peer) => <DropdownMenuRadioItem key={peer.id} value={peer.id}>{peer.name}</DropdownMenuRadioItem>)}
+                  </DropdownMenuRadioGroup>
+                </>}
                 {tags.length > 0 && <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel><Trans>按标签筛选</Trans></DropdownMenuLabel>
@@ -652,9 +716,18 @@ export function Sidebar(props: Props) {
           </div>
         </div>
 
-        {filterTag && (
-          <div className="mb-1 flex items-center gap-1 px-2">
-            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft pl-2 pr-1 text-xs text-accent"><IconTag className="size-3" />{filterTag}<button type="button" aria-label={t({ message: '清除筛选', context: 'workbench-clear-filter' })} onClick={() => setFilterTag('')} className="grid size-4 place-items-center rounded hover:bg-accent/15"><IconX className="size-3" /></button></span>
+        {(filterTag || (hasLinkedServers && serverFilter !== 'relevant')) && (
+          <div className="mb-1 flex flex-wrap items-center gap-1 px-2">
+            {hasLinkedServers && serverFilter !== 'relevant' && (
+              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft pl-2 pr-1 text-xs text-accent">
+                {serverFilter === 'all' ? <IconLink className="size-3" /> : serverFilter === 'local' ? <IconLaptop className="size-3" /> : <IconServer className="size-3" />}
+                {serverFilter === 'all' ? <Trans>全部服务器</Trans> : serverFilter === 'local' ? <Trans>仅本机</Trans> : peerServers.find((item) => item.id === serverFilter)?.name}
+                <button type="button" aria-label={t`恢复默认服务器范围`} onClick={() => setServerFilter('relevant')} className="grid size-4 place-items-center rounded hover:bg-accent/15"><IconX className="size-3" /></button>
+              </span>
+            )}
+            {filterTag && (
+              <span className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft pl-2 pr-1 text-xs text-accent"><IconTag className="size-3" />{filterTag}<button type="button" aria-label={t({ message: '清除筛选', context: 'workbench-clear-filter' })} onClick={() => setFilterTag('')} className="grid size-4 place-items-center rounded hover:bg-accent/15"><IconX className="size-3" /></button></span>
+            )}
           </div>
         )}
 
@@ -665,11 +738,11 @@ export function Sidebar(props: Props) {
             </div>
           ))}
         </div>
-        {layout === 'time' && !timeline.length && <p className="px-3 py-8 text-center text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有会话`}</p>}
+        {layout === 'time' && !timeline.length && <p className="px-3 py-8 text-center text-sm text-fg-3">{filterTag || (hasLinkedServers && serverFilter !== 'relevant') ? t`没有匹配的结果` : t`还没有会话`}</p>}
         {layout === 'project' && !groups.length && (
           <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
-            <p className="text-sm text-fg-3">{filterTag ? t`没有匹配的结果` : t`还没有项目`}</p>
-            {!filterTag && <Button size="sm" onClick={props.onAddProject}><IconFolderPlus /><Trans>添加项目</Trans></Button>}
+            <p className="text-sm text-fg-3">{filterTag || (hasLinkedServers && serverFilter !== 'relevant') ? t`没有匹配的结果` : t`还没有项目`}</p>
+            {!filterTag && serverFilter === 'relevant' && <Button size="sm" onClick={props.onAddProject}><IconFolderPlus /><Trans>添加项目</Trans></Button>}
           </div>
         )}
 
@@ -683,6 +756,7 @@ export function Sidebar(props: Props) {
           mobile={mobile}
           onOpenProfile={props.onOpenProfile}
           onOpenSettings={() => props.onOpenSettings()}
+          onOpenTheme={() => props.onOpenSettings('appearance')}
         />
         <SidebarUpdateButton onOpen={() => props.onOpenSettings('about')} />
       </div>

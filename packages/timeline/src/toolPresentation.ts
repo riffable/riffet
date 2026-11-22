@@ -904,6 +904,24 @@ function parseMcpTool(
     if (left && right) { server = left.trim(); tool = right.trim(); }
   }
   if (!server || !tool) return undefined;
+  // Remote linked-machine tools (`remote_exec` / `remote_list`): show target machine clearly apart from local Bash.
+  if (/riffet/i.test(server) && tool === 'remote_exec') {
+    const target = str(input?.server);
+    const cmd = str(input?.command);
+    const cwd = str(input?.cwd);
+    const primary = cmd ? cleanLabel(cmd).slice(0, 56) : 'remote_exec';
+    return {
+      icon: 'execute',
+      verb: 'Run',
+      ...(target ? { prefix: target } : { prefix: 'remote' }),
+      primary,
+      primaryKind: 'code',
+      ...(cwd ? { secondary: cwd.slice(0, 40) } : {}),
+    };
+  }
+  if (/riffet/i.test(server) && tool === 'remote_list') {
+    return { icon: 'mcp', verb: 'List', primary: 'remote servers', primaryKind: 'code', mergeKey: 'mcp:remote_list' };
+  }
   // Normalize `riffet / browser_snapshot` -> `browser · snapshot` when tool carries its own domain prefix.
   let label = `${server} · ${tool}`;
   const underscore = tool.indexOf('_');

@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import WebSocket, { createWebSocketStream } from 'ws';
-import type { LinkInfo, LinkInviteResult } from '../../../../packages/contracts/src/index.js';
+import type { LinkInfo, LinkInviteResult, LinkSelfInfo, LinkUpdateRequest } from '../../../../packages/contracts/src/index.js';
 import { Api } from './api.js';
 import { accessToken, requireActive, serverUrl, stateDir } from './context.js';
 import { CliError, ago, columns, note, out, printJson, printLines, success } from './ui.js';
@@ -67,10 +67,36 @@ export async function linkList(options: Common) {
 export async function linkRemove(options: Common & { server: string }) {
   const client = await api(options.stateDir);
   const { links } = await client.call<{ links: LinkInfo[] }>('GET', '/api/links');
-  const target = links.find(link => link.serverId === options.server) ?? links.filter(link => link.name === options.server).at(0);
+  const target = links.find(link => link.serverId === options.server)
+    ?? links.find(link => link.alias.toLowerCase() === options.server.toLowerCase())
+    ?? links.filter(link => link.name === options.server).at(0);
   if (!target) throw new CliError(`No linked server named ${options.server}`, ['riffet link list']);
   await client.call('DELETE', `/api/links/${encodeURIComponent(target.serverId)}`);
   success(`Ended the link with ${target.name} on both servers`);
+}
+
+export async function linkRename(options: Common & { server: string; name?: string; alias?: string; note?: string }) {
+  const client = await api(options.stateDir);
+  const { links } = await client.call<{ links: LinkInfo[] }>('GET', '/api/links');
+  const target = links.find(link => link.serverId === options.server)
+    ?? links.find(link => link.alias.toLowerCase() === options.server.toLowerCase())
+    ?? links.filter(link => link.name === options.server).at(0);
+  if (!target) throw new CliError(`No linked server matching ${options.server}`, ['riffet link list']);
+  const change: LinkUpdateRequest = {
+    ...(options.name !== undefined ? { name: options.name } : {}),
+    ...(options.alias !== undefined ? { alias: options.alias } : {}),
+    ...(options.note !== undefined ? { note: options.note } : {}),
+  };
+  const { link } = await client.call<{ link: LinkInfo }>('PATCH', `/api/links/${encodeURIComponent(target.serverId)}`, change);
+  if (options.json) { printJson(link); return; }
+  success(`Updated ${link.name} (${link.alias})`);
+}
+
+export async function linkSelfName(options: Common & { name: string }) {
+  const client = await api(options.stateDir);
+  const { self } = await client.call<{ self: LinkSelfInfo }>('PATCH', '/api/links/self', { name: options.name });
+  if (options.json) { printJson(self); return; }
+  success(`This server is now named ${self.name}`);
 }
 
 /**
@@ -98,6 +124,7 @@ function describe(links: LinkInfo[]): string[] {
   const direction = (link: LinkInfo) => [link.outbound ? 'you operate it' : '', link.inbound ? 'it operates you' : ''].filter(Boolean).join(', ') || out.dim('neither direction allowed');
   return columns(links.map(link => [
     out.bold(link.name),
+    out.dim(link.alias),
     state(link),
     direction(link),
     out.dim(link.address ? `${link.transport} ${link.address}` : link.transport),

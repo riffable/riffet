@@ -18,9 +18,11 @@ import { ServerTag } from '../useServerLabel';
  *
  * This is the menu's contents, so the caller owns the trigger and the surface.
  */
-export function DirectoryMenu({ directories, selectedProjectId, isolating, onSelectProject, onSelectNoProject, onChooseDirectory, onOpenDirectory, onCreateWorktree }: {
+export function DirectoryMenu({ directories, selectedProjectId, showServerTag = true, isolating, onSelectProject, onSelectNoProject, onChooseDirectory, onOpenDirectory, onCreateWorktree }: {
   directories: ProjectRecord[];
   selectedProjectId: string;
+  /** False when the caller already narrowed `directories` to one server via the server pill. */
+  showServerTag?: boolean;
   /** A worktree is being cut; the entry stays visible but cannot be triggered again. */
   isolating?: boolean;
   onSelectProject: (project: ProjectRecord) => void;
@@ -34,12 +36,12 @@ export function DirectoryMenu({ directories, selectedProjectId, isolating, onSel
   const { t } = useLingui();
   const available = directories.filter((project) => !project.archivedAt);
   // A favorite that is already a listed project would only repeat its row. Favorites are this server's folders.
-  const favorites = byRecentUse(useFolderFavorites().favorites.filter((favorite) => favorite.exists && !available.some((project) => project.cwd === favorite.path && !serverOfObject(project.id))));
+  const favorites = byRecentUse(useFolderFavorites(undefined, Boolean(onOpenDirectory)).favorites.filter((favorite) => favorite.exists && !available.some((project) => project.cwd === favorite.path && !serverOfObject(project.id))));
   const row = (project: ProjectRecord) => (
     <DropdownMenuItem key={project.id} onSelect={() => onSelectProject(project)}>
       {project.worktree ? <IconGitBranch className="size-4 text-fg-3" /> : <IconFolder className="size-4 text-fg-3" />}
       <span className="min-w-0 flex-1 truncate" title={project.worktree?.branch ?? project.name}>{project.worktree?.branch ?? project.name}</span>
-      <ServerTag objectId={project.id} className="max-w-24 shrink-0 truncate text-2xs text-fg-3" />
+      {showServerTag && <ServerTag objectId={project.id} className="max-w-24 shrink-0 truncate text-2xs text-fg-3" />}
       <span className="max-w-40 truncate font-mono text-2xs text-fg-3" title={project.cwd}>{tildePath(project.cwd)}</span>
       {/* The check keeps its box whether or not it is shown, so the paths stay in one column. */}
       <span className="grid size-4 shrink-0 place-items-center">{project.id === selectedProjectId && <IconCheck className="size-4 text-fg" />}</span>

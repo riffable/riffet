@@ -4,7 +4,7 @@ import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Duplex } from 'node:stream';
 import WebSocket, { createWebSocketStream } from 'ws';
-import type { LinkAuditEntry, LinkInfo, LinkInviteResult, LinkJoinRequest, LinkState, LinkTransportId, ProtocolInfo, ServerInfo } from '../../../../packages/contracts/src/index.js';
+import type { LinkAuditEntry, LinkInfo, LinkInviteResult, LinkJoinRequest, LinkSelfInfo, LinkState, LinkTransportId, LinkUpdateRequest, ProtocolInfo, ServerInfo, ServerPlatform } from '../../../../packages/contracts/src/index.js';
 import { LINK_BUDGET } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { loadLinkIdentity, sameFingerprint, type LinkIdentity } from './identity.js';
@@ -25,7 +25,15 @@ import { sshTransport } from './ssh.js';
 
 export interface StoredLink {
   serverId: string;
+  /** The name last reported by the peer itself. */
   name: string;
+  /** Optional local display name set on this server; overrides `name` without being overwritten on reconnect. */
+  customName?: string;
+  /** Short local alias unique on this server (`^[a-z0-9][a-z0-9._-]{0,31}$`). */
+  alias?: string;
+  /** Optional local one-line note describing what this peer is used for. */
+  note?: string;
+  platform?: ServerPlatform;
   transport: LinkTransportId;
   /** `direct`: the acceptor's address. `ssh`: the destination. Empty on the accepting side. */
   address: string;
@@ -41,8 +49,17 @@ export interface StoredLink {
   protocol?: ProtocolInfo;
 }
 
-interface Hello { serverId: string; name: string; inbound: boolean; version: string; protocol: ProtocolInfo }
+interface Hello { serverId: string; name: string; inbound: boolean; version: string; protocol: ProtocolInfo; platform?: ServerPlatform }
 interface PendingInvite { inviteId: string; key: string; inbound: boolean; expiresAt: number }
+interface StoredSelf { name?: string }
+
+const ALIAS_PATTERN = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+
+/** Normalises any server name into a valid short alias seed. */
+export function slugifyAlias(seed: string): string {
+  const cleaned = seed.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+|[-._]+$/g, '');
+  return (cleaned || 'server').slice(0, LINK_BUDGET.aliasChars);
+}
 
 interface Live {
   /** Where this side sends its requests. */
@@ -87,20 +104,69 @@ export class LinkService {
   private readonly listeners = new Set<Listener>();
   private readonly revokers = new Set<(serverId: string) => void>();
   private readonly path: string;
+  private readonly selfPath: string;
   private readonly auditPath: string;
+  private customSelfName?: string;
   private auditTimer?: NodeJS.Timeout;
   private closed = false;
   /** Tunnels accepted but not yet tied to a link (`LINK_BUDGET.pendingTunnels`). */
   private pendingTunnels = 0;
 
   constructor(private readonly options: LinkServiceOptions) {
-    this.identity = loadLinkIdentity(options.stateDir, options.name());
     this.path = join(options.stateDir, 'links.json');
+    this.selfPath = join(options.stateDir, 'link-self.json');
     this.auditPath = join(options.stateDir, 'link-audit.json');
-    for (const record of readJson<StoredLink[]>(this.path, [])) if (record?.serverId) this.records.set(record.serverId, record);
+    const savedSelf = readJson<StoredSelf>(this.selfPath, {});
+    if (typeof savedSelf?.name === 'string' && savedSelf.name.trim()) {
+      this.customSelfName = savedSelf.name.trim().slice(0, LINK_BUDGET.nameChars);
+    }
+    this.identity = loadLinkIdentity(options.stateDir, this.selfName());
+    let needsSave = false;
+    for (const record of readJson<StoredLink[]>(this.path, [])) {
+      if (!record?.serverId) continue;
+      if (!record.alias || !ALIAS_PATTERN.test(record.alias)) {
+        record.alias = this.uniqueAlias(record.customName || record.name, record.serverId);
+        needsSave = true;
+      }
+      this.records.set(record.serverId, record);
+    }
+    if (needsSave) this.save();
     for (const [serverId, entries] of Object.entries(readJson<Record<string, LinkAuditEntry[]>>(this.auditPath, {}))) {
       if (Array.isArray(entries)) this.audits.set(serverId, entries.slice(-LINK_BUDGET.auditEntries));
     }
+  }
+
+  private defaultName(): string {
+    return this.options.name().trim().slice(0, LINK_BUDGET.nameChars) || 'Riffet';
+  }
+
+  selfName(): string {
+    return this.customSelfName || this.defaultName();
+  }
+
+  private selfPlatform(): ServerPlatform {
+    return { os: process.platform, arch: process.arch };
+  }
+
+  selfInfo(): LinkSelfInfo {
+    return { serverId: this.options.serverId, name: this.selfName(), defaultName: this.defaultName(), platform: this.selfPlatform() };
+  }
+
+  setSelfName(raw: string): LinkSelfInfo {
+    const trimmed = raw.trim().slice(0, LINK_BUDGET.nameChars);
+    const next = trimmed || undefined;
+    if (next !== this.customSelfName) {
+      this.customSelfName = next;
+      writeJson(this.selfPath, next ? { name: next } : {});
+      const announced = this.selfName();
+      for (const [serverId, live] of this.live) {
+        const record = this.records.get(serverId);
+        if (!record || record.removedByPeer) continue;
+        if (live.client && !live.client.destroyed) void control(live.client, '/_link/state', { name: announced }).catch(() => undefined);
+      }
+      this.changed();
+    }
+    return this.selfInfo();
   }
 
   /** Dials every link this side dials. Called once the HTTP server is ready to take forwarded connections. */
@@ -117,11 +183,17 @@ export class LinkService {
   }
 
   servers(): ServerInfo[] {
-    const self: ServerInfo = { id: this.options.serverId, name: this.options.name(), self: true, online: true, version: this.options.version, protocol: this.options.protocol, compatible: true, inbound: true, outbound: true };
+    const selfName = this.selfName();
+    const self: ServerInfo = {
+      id: this.options.serverId, name: selfName, alias: slugifyAlias(selfName), platform: this.selfPlatform(),
+      self: true, online: true, version: this.options.version, protocol: this.options.protocol, compatible: true, inbound: true, outbound: true,
+    };
     return [self, ...[...this.records.values()].filter(record => !record.removedByPeer).map(record => {
       const info = this.info(record);
       return {
-        id: record.serverId, name: record.name, online: info.state === 'online',
+        id: record.serverId, name: info.name, alias: info.alias,
+        ...(info.note ? { note: info.note } : {}), ...(info.platform ? { platform: info.platform } : {}),
+        online: info.state === 'online',
         ...(record.version ? { version: record.version } : {}), ...(record.protocol ? { protocol: record.protocol } : {}),
         compatible: record.protocol?.version === this.options.protocol.version,
         inbound: record.inbound, outbound: record.outbound,
@@ -160,7 +232,7 @@ export class LinkService {
     while (this.invites.size >= LINK_BUDGET.pendingInvites) this.invites.delete(this.invites.keys().next().value!);
     this.invites.set(inviteId, { inviteId, key, inbound: input.inbound, expiresAt });
     const url = input.url ? normalUrl(input.url) : '';
-    const invite: LinkInvite = { url, serverId: this.options.serverId, name: this.options.name(), fingerprint: this.identity.fingerprint, inviteId, key, expiresAt };
+    const invite: LinkInvite = { url, serverId: this.options.serverId, name: this.selfName(), fingerprint: this.identity.fingerprint, inviteId, key, expiresAt };
     return { link: encodeInvite(invite), expiresAt };
   }
 
@@ -169,12 +241,14 @@ export class LinkService {
     const invite = decodeInvite(request.link);
     if (invite.serverId === this.options.serverId) throw new AppError('LINK_SELF', 'This link string was made on this server', 400);
     const existing = this.records.get(invite.serverId);
-    if (existing && !existing.removedByPeer) throw new AppError('LINK_EXISTS', `Already linked with ${existing.name}`, 409, undefined, { name: existing.name });
+    if (existing && !existing.removedByPeer) throw new AppError('LINK_EXISTS', `Already linked with ${this.displayName(existing)}`, 409, undefined, { name: this.displayName(existing) });
     const transport: LinkTransportId = request.transport ?? 'direct';
     if (transport === 'direct' && !invite.url) throw new AppError('LINK_ADDRESS_REQUIRED', 'The link string has no address to dial; join over SSH instead', 400);
     if (transport === 'ssh' && !request.sshHost?.trim()) throw new AppError('LINK_ADDRESS_REQUIRED', 'Give the SSH destination of the other server', 400);
     const draft: StoredLink = {
-      serverId: invite.serverId, name: invite.name.slice(0, LINK_BUDGET.nameChars), transport,
+      serverId: invite.serverId, name: invite.name.slice(0, LINK_BUDGET.nameChars),
+      alias: this.uniqueAlias(invite.name, invite.serverId),
+      transport,
       address: transport === 'ssh' ? request.sshHost!.trim() : invite.url,
       ...(transport === 'ssh' && request.remoteCommand?.trim() ? { remoteCommand: request.remoteCommand.trim() } : {}),
       dialer: true, peerFingerprint: invite.fingerprint, inbound: request.inbound, outbound: false, createdAt: new Date().toISOString(),
@@ -190,7 +264,11 @@ export class LinkService {
       });
       accepted = true;
       if (reply.serverId !== invite.serverId) throw new AppError('LINK_MISMATCH', 'The other server answered with a different identity', 502);
-      Object.assign(draft, { name: reply.name.slice(0, LINK_BUDGET.nameChars), outbound: reply.inbound, version: reply.version, protocol: reply.protocol, lastConnectedAt: new Date().toISOString() });
+      const peerName = reply.name.slice(0, LINK_BUDGET.nameChars);
+      Object.assign(draft, {
+        name: peerName, alias: this.uniqueAlias(peerName, draft.serverId), outbound: reply.inbound, version: reply.version, protocol: reply.protocol,
+        ...(reply.platform ? { platform: reply.platform } : {}), lastConnectedAt: new Date().toISOString(),
+      });
       // Saved only once both tunnels are up, so a join that fails leaves no link behind on this side.
       this.records.set(draft.serverId, draft);
       const live = this.liveOf(draft.serverId);
@@ -211,16 +289,36 @@ export class LinkService {
     }
   }
 
-  update(serverId: string, change: { inbound?: boolean }): LinkInfo {
+  update(serverId: string, change: LinkUpdateRequest): LinkInfo {
     const record = this.require(serverId);
+    let dirty = false;
     if (change.inbound !== undefined && change.inbound !== record.inbound) {
       record.inbound = change.inbound;
-      this.save();
+      dirty = true;
       if (!record.inbound) this.closeInbound(serverId);
       const client = this.live.get(serverId)?.client;
       if (client && !client.destroyed) void control(client, '/_link/state', { inbound: record.inbound }).catch(() => undefined);
     }
-    this.changed();
+    if (change.name !== undefined) {
+      const trimmed = change.name.trim().slice(0, LINK_BUDGET.nameChars);
+      const next = trimmed && trimmed !== record.name ? trimmed : undefined;
+      if (next !== record.customName) { record.customName = next; dirty = true; }
+    }
+    if (change.alias !== undefined) {
+      const next = change.alias.trim().toLowerCase();
+      if (!ALIAS_PATTERN.test(next)) {
+        throw new AppError('INVALID_LINK_ALIAS', 'Alias may only contain lowercase letters, digits, and . _ -, starting with a letter or digit', 400);
+      }
+      if (this.aliasTaken(next, serverId)) {
+        throw new AppError('LINK_ALIAS_TAKEN', `Alias ${next} is already used by another linked server`, 409, undefined, { alias: next });
+      }
+      if (next !== record.alias) { record.alias = next; dirty = true; }
+    }
+    if (change.note !== undefined) {
+      const next = change.note.trim().slice(0, LINK_BUDGET.noteChars) || undefined;
+      if (next !== record.note) { record.note = next; dirty = true; }
+    }
+    if (dirty) { this.save(); this.changed(); }
     return this.info(record);
   }
 
@@ -240,10 +338,72 @@ export class LinkService {
   open(serverId: string): Duplex {
     const record = this.records.get(serverId);
     if (!record || record.removedByPeer) throw new AppError('LINK_NOT_FOUND', 'No such linked server', 404);
-    if (!record.outbound) throw new AppError('LINK_NOT_ALLOWED', `${record.name} does not allow this server to operate it`, 403, undefined, { name: record.name });
+    const label = this.displayName(record);
+    if (!record.outbound) throw new AppError('LINK_NOT_ALLOWED', `${label} does not allow this server to operate it`, 403, undefined, { name: label });
     const client = this.live.get(serverId)?.client;
-    if (!client || client.destroyed || client.closed) throw new AppError('LINK_OFFLINE', `${record.name} is offline`, 503, undefined, { name: record.name });
+    if (!client || client.destroyed || client.closed) throw new AppError('LINK_OFFLINE', `${label} is offline`, 503, undefined, { name: label });
     return plain(client.request({ ':method': 'CONNECT', ':authority': 'riffet.link:80' }) as unknown as Duplex);
+  }
+
+  /** Sends one internal JSON HTTP request to a linked server over its tunnel (e.g. Riffet MCP `remote_*` tools). */
+  async requestJson<T>(serverId: string, method: 'GET' | 'POST', path: string, body?: unknown, options?: { signal?: AbortSignal; timeoutMs?: number; origin?: string }): Promise<T> {
+    const tunnel = this.open(serverId);
+    const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body), 'utf8');
+    const timeoutMs = options?.timeoutMs ?? LINK_BUDGET.controlMs;
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const done = (error?: Error, value?: T) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        options?.signal?.removeEventListener('abort', onAbort);
+        if (error) reject(error);
+        else resolve(value as T);
+      };
+      const req = http.request({
+        host: 'riffet.link',
+        port: 80,
+        method,
+        path,
+        createConnection: () => tunnel as unknown as import('node:net').Socket,
+        headers: {
+          host: 'riffet.link',
+          accept: 'application/json',
+          ...(payload ? { 'content-type': 'application/json', 'content-length': String(payload.length) } : {}),
+          ...(options?.origin ? { 'x-riffet-link-origin': options.origin } : {}),
+        },
+      }, (res) => {
+        const chunks: Buffer[] = [];
+        let bytes = 0;
+        const cap = LINK_BUDGET.execOutputBytes * 2 + 65_536;
+        res.on('data', (chunk: Buffer) => {
+          bytes += chunk.length;
+          if (bytes <= cap) chunks.push(chunk);
+        });
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          let parsed: unknown;
+          try { parsed = text ? JSON.parse(text) : {}; }
+          catch { done(new AppError('LINK_FAILED', `Linked server returned invalid JSON (HTTP ${res.statusCode ?? 502})`, 502)); return; }
+          const status = res.statusCode ?? 502;
+          if (status < 200 || status >= 300) {
+            const errBody = (parsed as { error?: { code?: string; message?: string } })?.error;
+            done(new AppError(errBody?.code || 'LINK_FAILED', errBody?.message || `Linked server answered HTTP ${status}`, status));
+            return;
+          }
+          done(undefined, parsed as T);
+        });
+        res.on('error', (error) => done(new AppError('LINK_FAILED', error.message, 502)));
+      });
+      const onAbort = () => { req.destroy(); tunnel.destroy(); done(new AppError('ABORTED', 'Remote request cancelled', 499)); };
+      if (options?.signal?.aborted) { onAbort(); return; }
+      options?.signal?.addEventListener('abort', onAbort, { once: true });
+      const timer = setTimeout(() => { req.destroy(); tunnel.destroy(); done(new AppError('LINK_FAILED', 'Remote request timed out', 504)); }, timeoutMs);
+      timer.unref();
+      req.on('error', (error) => done(new AppError('LINK_FAILED', error.message, 502)));
+      if (payload) req.write(payload);
+      req.end();
+    });
   }
 
   /** `GET /api/links/tunnel`: a tunnel the other side dialed. The TLS certificate says which link it belongs to. */
@@ -290,12 +450,42 @@ export class LinkService {
 
   // Internals.
 
+  private displayName(record: StoredLink): string {
+    return record.customName || record.name;
+  }
+
+  private aliasTaken(alias: string, excludeServerId?: string): boolean {
+    for (const record of this.records.values()) {
+      if (record.removedByPeer || record.serverId === excludeServerId) continue;
+      if (record.alias?.toLowerCase() === alias.toLowerCase()) return true;
+    }
+    return false;
+  }
+
+  private uniqueAlias(seed: string, excludeServerId?: string): string {
+    const base = slugifyAlias(seed);
+    if (!this.aliasTaken(base, excludeServerId)) return base;
+    for (let n = 2; n < 1000; n++) {
+      const suffix = `-${n}`;
+      const candidate = `${base.slice(0, LINK_BUDGET.aliasChars - suffix.length)}${suffix}`;
+      if (!this.aliasTaken(candidate, excludeServerId)) return candidate;
+    }
+    return `${base.slice(0, LINK_BUDGET.aliasChars - 7)}-${(excludeServerId ?? 'x').slice(0, 6)}`;
+  }
+
   private info(record: StoredLink): LinkInfo {
     const live = this.live.get(record.serverId);
     const up = !!live?.client && !live.client.destroyed && live.served.size > 0;
     const state: LinkState = record.removedByPeer ? 'removed' : up ? 'online' : live?.connecting || (live?.client || live?.served.size) ? 'connecting' : 'offline';
+    const name = this.displayName(record);
+    const alias = record.alias || this.uniqueAlias(name, record.serverId);
     return {
-      serverId: record.serverId, name: record.name, transport: record.transport, address: record.address, dialer: record.dialer,
+      serverId: record.serverId, name,
+      ...(record.customName && record.customName !== record.name ? { peerName: record.name } : {}),
+      alias,
+      ...(record.note ? { note: record.note } : {}),
+      ...(record.platform ? { platform: record.platform } : {}),
+      transport: record.transport, address: record.address, dialer: record.dialer,
       inbound: record.inbound, outbound: record.outbound, state,
       ...(record.version ? { version: record.version } : {}), ...(record.protocol ? { protocol: record.protocol } : {}),
       ...(record.transport === 'direct' && record.dialer && record.address ? { webUrl: record.address } : {}),
@@ -305,7 +495,7 @@ export class LinkService {
   }
 
   private hello(record: Pick<StoredLink, 'inbound'>): Hello {
-    return { serverId: this.options.serverId, name: this.options.name().slice(0, LINK_BUDGET.nameChars), inbound: record.inbound, version: this.options.version, protocol: this.options.protocol };
+    return { serverId: this.options.serverId, name: this.selfName(), inbound: record.inbound, version: this.options.version, protocol: this.options.protocol, platform: this.selfPlatform() };
   }
 
   private async dial(serverId: string) {
@@ -340,7 +530,10 @@ export class LinkService {
       }
       if (!current()) { session.destroy(); throw new Error(STALE); }
       if (reply.serverId !== record.serverId) { session.destroy(); throw new Error('The other server answered with a different identity'); }
-      Object.assign(record, { name: reply.name.slice(0, LINK_BUDGET.nameChars), outbound: reply.inbound, version: reply.version, protocol: reply.protocol, lastConnectedAt: new Date().toISOString() });
+      Object.assign(record, {
+        name: reply.name.slice(0, LINK_BUDGET.nameChars), outbound: reply.inbound, version: reply.version, protocol: reply.protocol,
+        ...(reply.platform ? { platform: reply.platform } : {}), lastConnectedAt: new Date().toISOString(),
+      });
       this.save();
       this.attachClient(serverId, session);
       await this.openReverse(record, epoch);
@@ -522,11 +715,14 @@ export class LinkService {
     if (hello.serverId === this.options.serverId) throw new AppError('LINK_SELF', 'A server cannot link with itself', 400);
     // The joiner names its own id, so it may not take over another link's id or reuse a certificate pinned to one.
     const previous = this.records.get(hello.serverId);
-    if (previous && !previous.removedByPeer) throw new AppError('LINK_EXISTS', `Already linked with ${previous.name}`, 409, undefined, { name: previous.name });
+    if (previous && !previous.removedByPeer) throw new AppError('LINK_EXISTS', `Already linked with ${this.displayName(previous)}`, 409, undefined, { name: this.displayName(previous) });
     if (this.byFingerprint(fingerprint)) throw new AppError('LINK_MISMATCH', 'This certificate is already linked under another server', 403);
     this.invites.delete(invite.inviteId);
     const record: StoredLink = {
-      serverId: hello.serverId, name: hello.name, transport: 'direct', address: '', dialer: false, peerFingerprint: fingerprint,
+      serverId: hello.serverId, name: hello.name,
+      alias: this.uniqueAlias(hello.name, hello.serverId),
+      ...(hello.platform ? { platform: hello.platform } : {}),
+      transport: 'direct', address: '', dialer: false, peerFingerprint: fingerprint,
       inbound: invite.inbound, outbound: hello.inbound, createdAt: new Date().toISOString(), lastConnectedAt: new Date().toISOString(),
       version: hello.version, protocol: hello.protocol,
     };
@@ -543,13 +739,22 @@ export class LinkService {
     if (path === '/_link/hello') {
       const hello = parseHello(body);
       if (hello.serverId !== serverId) throw new AppError('LINK_MISMATCH', 'Identity does not match the paired certificate', 403);
-      Object.assign(record, { name: hello.name, outbound: hello.inbound, version: hello.version, protocol: hello.protocol, lastConnectedAt: new Date().toISOString() });
+      Object.assign(record, {
+        name: hello.name, outbound: hello.inbound, version: hello.version, protocol: hello.protocol,
+        ...(hello.platform ? { platform: hello.platform } : {}), lastConnectedAt: new Date().toISOString(),
+      });
       this.save();
       this.changed();
       return this.hello(record);
     }
     if (path === '/_link/state') {
-      if (typeof body.inbound === 'boolean') { record.outbound = body.inbound; this.save(); this.changed(); }
+      let dirty = false;
+      if (typeof body.inbound === 'boolean' && body.inbound !== record.outbound) { record.outbound = body.inbound; dirty = true; }
+      if (typeof body.name === 'string' && body.name.trim()) {
+        const nextName = body.name.trim().slice(0, LINK_BUDGET.nameChars);
+        if (nextName !== record.name) { record.name = nextName; dirty = true; }
+      }
+      if (dirty) { this.save(); this.changed(); }
       return {};
     }
     if (path === '/_link/remove') {
@@ -685,12 +890,19 @@ function readBody(stream: http2.ServerHttp2Stream): Promise<Record<string, unkno
 }
 
 function parseHello(body: Record<string, unknown>): Hello {
-  const { serverId, name, inbound, version, protocol } = body as Partial<Hello>;
+  const { serverId, name, inbound, version, protocol, platform } = body as Partial<Hello>;
   if (typeof serverId !== 'string' || !/^[0-9a-f-]{36}$/.test(serverId) || typeof name !== 'string' || typeof inbound !== 'boolean'
     || typeof version !== 'string' || typeof protocol?.version !== 'number' || !Array.isArray(protocol.features)) {
     throw new AppError('LINK_CONTROL_INVALID', 'The other server sent an invalid hello', 400);
   }
-  return { serverId, name: name.slice(0, LINK_BUDGET.nameChars), inbound, version: version.slice(0, 64), protocol: { version: protocol.version, features: protocol.features.filter(item => typeof item === 'string').slice(0, 64) } };
+  const parsedPlatform = platform && typeof platform === 'object' && typeof platform.os === 'string' && typeof platform.arch === 'string'
+    ? { os: platform.os.slice(0, 32), arch: platform.arch.slice(0, 32) }
+    : undefined;
+  return {
+    serverId, name: name.slice(0, LINK_BUDGET.nameChars), inbound, version: version.slice(0, 64),
+    protocol: { version: protocol.version, features: protocol.features.filter(item => typeof item === 'string').slice(0, 64) },
+    ...(parsedPlatform ? { platform: parsedPlatform } : {}),
+  };
 }
 
 function normalUrl(value: string): string {

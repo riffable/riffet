@@ -34,9 +34,10 @@ import { SidebarPeekTrigger, useSidebarPeek } from './use-sidebar-peek';
 import { useWorkbenchBootstrap } from './use-workbench-bootstrap';
 import { useGlobalShortcuts } from './use-global-shortcuts';
 import { usePluginCommands } from './usePluginCommands';
-import { useSessionActions } from './use-session-actions';
+import { clearContext, useSessionActions } from './use-session-actions';
 import { useProjectActions } from './use-project-actions';
 import { useTerminalActions } from './use-terminal-actions';
+import { useHomeServerOptions } from './useServerLabel';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
 import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useApprovals, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
 import { countWorkItemInbox } from './work-items/model';
@@ -150,6 +151,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const nativeCatalogError = useCatalog((state) => state.error);
   const catalogLoadedKey = useCatalog((state) => state.loadedKey);
   const catalogRevision = useCatalog((state) => state.revision);
+  const remoteBackendsMap = useCatalog((state) => state.remoteBackends);
+  const remoteSettingsMap = useCatalog((state) => state.remoteSettings);
+  const remoteHomeMap = useCatalog((state) => state.remoteHome);
 
   const desktop = !useMediaQuery(MOBILE_LAYOUT_QUERY);
   const tabStyle = useTabs((state) => state.style);
@@ -196,23 +200,50 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     panelSession.current = selectedSessionId;
   }, [selectedSessionId, ui]);
   useEffect(() => { if (loaded) ui.keepSessionPanels(new Set(sessions.map((item) => item.id))); }, [loaded, sessions, ui]);
+  const homeServerOptions = useHomeServerOptions();
+  /** Only set when the reader picked a linked server that has no registered projects yet. */
+  const [pickedServerId, setPickedServerId] = useState('');
+  const homeServerId = project && !project.system
+    ? (serverOfObject(project.id) ?? '')
+    : (pickedServerId && homeServerOptions.some((item) => item.id === pickedServerId && item.usable) ? pickedServerId : '');
+  useEffect(() => { if (project && !project.system && pickedServerId) setPickedServerId(''); }, [project, pickedServerId]);
+  useEffect(() => { if (pickedServerId && !homeServerOptions.some((item) => item.id === pickedServerId && item.usable)) setPickedServerId(''); }, [pickedServerId, homeServerOptions]);
   // The 助理 page's composer starts with the 助理's own agent and model, and a pick made there is the
   // 助理's, not the composer's everywhere else (docs/ASSISTANT.md).
   const assistantHome = isAssistantProject(project) && !session;
+  // On the new-session page targeting a linked server, the agent list, providers and read-only
+  // defaults come from that server so the conversation starts with what can actually run there.
+  const remoteHomeServerId = !session && !quickChat && !assistantHome ? homeServerId : '';
+  useEffect(() => { if (remoteHomeServerId) void catalog.loadRemote(remoteHomeServerId); }, [remoteHomeServerId, catalog]);
+  const remoteBackendsLoaded = !remoteHomeServerId || remoteBackendsMap[remoteHomeServerId] !== undefined;
+  const remoteBackends = remoteHomeServerId ? (remoteBackendsMap[remoteHomeServerId] ?? []) : undefined;
+  const remoteSettings = remoteHomeServerId ? remoteSettingsMap[remoteHomeServerId] : undefined;
+  const remoteHomeChoice = remoteHomeServerId ? remoteHomeMap[remoteHomeServerId] : undefined;
   const assistantPick = useMemo(() => assistantHome ? assistantChoice(settings.assistant, backends) : undefined, [assistantHome, settings.assistant, backends]);
   // The 助理 runs only on the agents that isolate it (docs/ASSISTANT.md §4).
-  const homeBackends = useMemo(() => assistantHome ? backends.filter((entry) => isAssistantBackend(entry.backendId)) : backends, [assistantHome, backends]);
-  const homeBackendId = assistantPick?.backendId ?? pickedBackendId;
-  const homeProfileId = assistantPick ? assistantPick.profileId : pickedProfileId;
-  /** The model the composer opens with: under the 助理, its own. */
-  const composerSettings = useMemo(() => assistantPick ? withAssistantDefaults(settings, assistantPick) : settings, [settings, assistantPick]);
+  const homeBackends = useMemo(() => remoteBackends ?? (assistantHome ? backends.filter((entry) => isAssistantBackend(entry.backendId)) : backends), [remoteBackends, assistantHome, backends]);
+  const homeBackendId = remoteHomeServerId ? (remoteHomeChoice?.backendId ?? pickedBackendId) : (assistantPick?.backendId ?? pickedBackendId);
+  const homeProfileId = remoteHomeServerId
+    ? (remoteHomeChoice?.profileId ?? remoteSettings?.nativeBackendDefaults?.[homeBackendId]?.profileId)
+    : (assistantPick ? assistantPick.profileId : pickedProfileId);
+  /** The model the composer opens with: under a linked server, its read-only defaults with this browser's composer UI prefs; under the 助理, its own. */
+  const composerSettings = useMemo(() => {
+    if (remoteHomeServerId) {
+      return remoteSettings
+        ? { ...remoteSettings, composerEnterBehavior: settings.composerEnterBehavior, composerRunningBehavior: settings.composerRunningBehavior, composerSendLater: settings.composerSendLater }
+        : settings;
+    }
+    return assistantPick ? withAssistantDefaults(settings, assistantPick) : settings;
+  }, [remoteHomeServerId, remoteSettings, settings, assistantPick]);
   const sidebarViews = useSidebarViews(project, session?.id);
   const sessionViews = useSessionViews({ hasProject: Boolean(project), hasSession: Boolean(session), projectSystem: project?.system, capabilities: new Set() });
   const catalogProject = project;
   const catalogSession = session;
+  const catalogServerId = catalogSession ? (serverOfObject(catalogSession.id) ?? '') : remoteHomeServerId;
+  const catalogBackends = remoteBackends ?? backends;
   const catalogBackendId = catalogSession ? sessionBackend(catalogSession) : quickChat ? 'chat' : homeBackendId;
   const catalogProfileId = catalogSession ? catalogSession.backendProfileId : quickChat ? undefined : homeProfileId;
-  const defaultProfileId = backends.find((entry) => entry.backendId === catalogBackendId)?.profiles.find((entry) => entry.isDefault)?.id ?? 'default';
+  const defaultProfileId = catalogBackends.find((entry) => entry.backendId === catalogBackendId)?.profiles.find((entry) => entry.isDefault)?.id ?? 'default';
   const recentModel = useMemo(() => {
     const preferred = quickChat ? settings.auxiliaryModels?.chat : undefined;
     const preferredValue = preferred ? `${preferred.backendId}:${preferred.profileId}:${preferred.model}` : '';
@@ -220,19 +251,20 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     let matching: Session | undefined;
     for (const item of sessions) {
       if (!item.model || sessionBackend(item) !== catalogBackendId) continue;
+      if (!catalogSession && !quickChat && (serverOfObject(item.id) ?? '') !== remoteHomeServerId) continue;
       if (!quickChat && (item.backendProfileId ?? defaultProfileId) !== (catalogProfileId ?? defaultProfileId)) continue;
       if (!latest || Date.parse(sessionActivityAt(item)) > Date.parse(sessionActivityAt(latest))) latest = item;
       if (preferredValue && parseSelection(item.model).model === preferredValue && (!matching || Date.parse(sessionActivityAt(item)) > Date.parse(sessionActivityAt(matching)))) matching = item;
     }
     return matching?.model ?? latest?.model;
-  }, [sessions, quickChat, settings.auxiliaryModels?.chat, catalogBackendId, catalogProfileId, defaultProfileId]);
-  const catalogKey = `${catalogProject?.id ?? ''}:${catalogSession?.id ?? ''}:${catalogBackendId}:${catalogProfileId ?? 'default'}:${catalogSession?.nativeSessionId ?? ''}${catalogBackendId === 'chat' ? `:${JSON.stringify(settings.quickChat?.presets)}` : ''}`;
+  }, [sessions, quickChat, settings.auxiliaryModels?.chat, catalogSession, remoteHomeServerId, catalogBackendId, catalogProfileId, defaultProfileId]);
+  const catalogKey = `${catalogServerId}@${catalogProject?.id ?? ''}:${catalogSession?.id ?? ''}:${catalogBackendId}:${catalogProfileId ?? 'default'}:${catalogSession?.nativeSessionId ?? ''}${catalogBackendId === 'chat' ? `:${JSON.stringify(settings.quickChat?.presets)}` : ''}`;
   // The key also moves when nothing a picker shows has (the first message writes the native id
   // back, a quick chat preset is saved). The last catalog of the same project, agent and provider
   // stays on screen until the new one lands, so a refresh never empties the pickers for a frame.
   // Catalogs can differ per session, so the hold never crosses from one session to another: only
   // within a session, or from the new-conversation composer to the session it just created.
-  const catalogAgent = `${catalogBackendId}:${catalogProfileId ?? 'default'}`;
+  const catalogAgent = `${catalogServerId}@${catalogBackendId}:${catalogProfileId ?? 'default'}`;
   const catalogFamily = `${catalogProject?.id ?? ''}:${catalogAgent}`;
   const catalogSessionId = catalogSession?.id ?? '';
   const heldCatalog = useRef<{ family: string; agent: string; sessionId: string; result: NonNullable<typeof catalogResult> } | undefined>(undefined);
@@ -241,8 +273,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const holds = held?.family === catalogFamily && (held.sessionId === catalogSessionId || (!held.sessionId && nativeRunSeed?.sessionId === catalogSessionId));
   // A key the store has not loaded yet (another project, say) still has its last known catalog in
   // the cache; `load` would paint it, but only after this render has painted a frame of loading.
-  const peekedCatalog = catalogResult?.key !== catalogKey && !holds && (catalogProject?.id || projectlessTasks)
-    ? catalog.peek({ projectId: catalogProject?.id ?? '', sessionId: catalogSessionId, backendId: catalogBackendId, profileId: catalogProfileId })
+  const peekedCatalog = catalogResult?.key !== catalogKey && !holds && (catalogProject?.id || projectlessTasks || Boolean(remoteHomeServerId))
+    ? catalog.peek({ projectId: catalogProject?.id ?? '', sessionId: catalogSessionId, backendId: catalogBackendId, profileId: catalogProfileId, ...(catalogServerId ? { serverId: catalogServerId } : {}) })
     : undefined;
   const currentCatalog = catalogResult?.key === catalogKey ? catalogResult : holds ? held.result : peekedCatalog ? { key: catalogKey, entry: peekedCatalog } : undefined;
   // A project with no catalog loaded or cached yet is unknown, not empty. Until its own lands, the
@@ -250,9 +282,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   // provider, so the picker keeps saying which model it holds; it is still loading, so sending
   // waits for the real one. A session's own pickers never borrow another catalog, and a read that
   // failed says so on an empty picker rather than behind a borrowed list.
-  const catalogLoading = !currentCatalog && (nativeCatalogLoading || catalogLoadedKey !== catalogKey);
+  const catalogLoading = !remoteBackendsLoaded || (!currentCatalog && (nativeCatalogLoading || catalogLoadedKey !== catalogKey));
   const standInCatalog = catalogLoading && !catalogSession && held?.agent === catalogAgent ? held.result.entry.models : undefined;
-  const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
+  const backend = currentCatalog ? currentCatalog.entry : catalogBackends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
   const viewCatalog = useViewCatalog();
   const mainViews = useMemo(() => mainViewsIn(viewCatalog), [viewCatalog]);
@@ -282,15 +314,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     if (section?.includes('/')) { void nav.navigate(() => nav.openPlugins(section.split('/')[0], section)); return; }
     void nav.navigate(() => { ui.openSettings(section); ui.setMobileSidebar(false); });
   }, [nav, ui]);
-  const { loadBootstrap, bootstrapFailed, refreshBackends, homeProfilesKey, loadCatalog } = useWorkbenchBootstrap({ loaded, project: catalogProject, session: catalogSession, backends, homeBackendId, homeProfileId, catalogRevision, catalogBackendId, catalogProfileId, catalogKey });
+  const { loadBootstrap, bootstrapFailed, refreshBackends, homeProfilesKey, loadCatalog } = useWorkbenchBootstrap({ loaded, project: catalogProject, session: catalogSession, backends: catalogBackends, homeBackendId, homeProfileId, catalogRevision, catalogBackendId, catalogProfileId, catalogKey, ...(catalogServerId ? { catalogServerId } : {}) });
   // The same for the per-provider lists, while `loadProfiles` has not published this key yet.
   const profilesCurrent = profileCatalogs?.key === homeProfilesKey;
   const peekedProfiles = useMemo(() => {
-    const profiles = backends.find((entry) => entry.backendId === homeBackendId)?.profiles ?? [];
-    if (profilesCurrent || session || quickChat || (!project && !projectlessTasks) || profiles.length < 2) return undefined;
-    const entries = catalog.peekProfiles(project?.id ?? '', homeBackendId, profiles);
+    const profiles = catalogBackends.find((entry) => entry.backendId === homeBackendId)?.profiles ?? [];
+    if (profilesCurrent || session || quickChat || (!project && !projectlessTasks && !remoteHomeServerId) || profiles.length < 2) return undefined;
+    const entries = catalog.peekProfiles(project?.id ?? '', homeBackendId, profiles, remoteHomeServerId || undefined);
     return entries.length ? entries : undefined;
-  }, [profilesCurrent, session, quickChat, project, projectlessTasks, backends, homeBackendId, catalog]);
+  }, [profilesCurrent, session, quickChat, project, projectlessTasks, remoteHomeServerId, catalogBackends, homeBackendId, catalog]);
   const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap });
   useGlobalShortcuts(desktop, newSession);
   const pluginCommands = usePluginCommands({ project: quickChat ? undefined : project, sessionId: session?.id, openSession: openSessionById });
@@ -343,6 +375,27 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     return Boolean(await createNative({ ...(target ? { projectId: target.id } : { projectless: true }), title: item.title, prompt, attachments: [], context: [], backendId: item.assignee.backendId, ...run(item.assignee), workItemId: item.id, follow: false }));
   };
   const { projectAction, addProject, startSessionInDirectory, startIsolatedDirectory, openWorktreeProject, onWorktreeMerged, chooseSessionDirectory, openInEditor } = useProjectActions({ project, loadBootstrap, selectProject });
+  const selectHomeServer = useCallback((targetServerId: string) => {
+    if (targetServerId === homeServerId) return;
+    const owned = recentDirectories.filter((item) => !item.archivedAt && (serverOfObject(item.id) ?? '') === targetServerId);
+    if (owned.length > 0) {
+      setPickedServerId('');
+      void selectProject(owned[0]!);
+      return;
+    }
+    if (!targetServerId) {
+      setPickedServerId('');
+      if (projectlessTasks) selectNoProject();
+      else void chooseSessionDirectory('');
+      return;
+    }
+    void nav.navigate(() => {
+      clearContext(ui);
+      nav.set({ projectId: '', sessionId: '', ...NO_PAGE });
+      setPickedServerId(targetServerId);
+      ui.set({ sessionDirectoryOpen: true, sessionDirectoryServer: targetServerId, mobileSidebar: false });
+    });
+  }, [homeServerId, recentDirectories, selectProject, projectlessTasks, selectNoProject, chooseSessionDirectory, nav, ui]);
   /** Opens a plugin task from its details page: its project, then the sidebar view that lists that provider's tasks (as a command's `task` result does). */
   const openPluginTask = useCallback((task: Task) => {
     const target = projects.find((entry) => entry.id === task.projectId);
@@ -384,21 +437,28 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
    * same write; `chooseBackend` deliberately clears the model instead, having no replacement.
    */
   const chooseHomeProfile = (profileId: string, model: string) => {
+    if (remoteHomeServerId) { catalog.setRemoteHomeProfile(remoteHomeServerId, profileId); return; }
     if (assistantHome) { settingsStore.rememberAssistant({ backendId: homeBackendId, profileId, model }); return; }
     catalog.setHomeProfile(profileId);
     settingsStore.remember(homeBackendId, { profileId, model });
   };
   /** `model` comes with an agent picked through one of its models; without one a new provider clears the old model. */
   const chooseBackend = (backendId: NativeBackendId, profileId?: string, model?: string) => {
+    if (remoteHomeServerId) {
+      catalog.setRemoteHome(remoteHomeServerId, backendId, profileId ?? remoteSettings?.nativeBackendDefaults?.[backendId]?.profileId);
+      return;
+    }
     if (assistantHome) { settingsStore.rememberAssistant({ backendId, profileId: profileId ?? null, model: model || null }); return; }
     catalog.setHome(backendId, profileId ?? settings.nativeBackendDefaults?.[backendId]?.profileId);
     writeStored(STORAGE_KEYS.backend, backendId);
     const savedProfile = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backends.find((entry) => entry.backendId === backendId)?.profiles.find((entry) => entry.isDefault)?.id;
     settingsStore.remember(backendId, { ...(profileId ? { profileId } : {}), ...(model !== undefined ? { model } : profileId && profileId !== savedProfile ? { model: '' } : {}) }, true);
   };
-  const rememberModel = (model: string) => assistantHome
-    ? settingsStore.rememberAssistant({ backendId: homeBackendId, profileId: homeProfileId ?? null, model: model || null })
-    : settingsStore.remember(homeBackendId, { model });
+  const rememberModel = (model: string) => {
+    if (remoteHomeServerId) return;
+    if (assistantHome) { settingsStore.rememberAssistant({ backendId: homeBackendId, profileId: homeProfileId ?? null, model: model || null }); return; }
+    settingsStore.remember(homeBackendId, { model });
+  };
 
   // The stores, the notification click and the header reach these through the handlers bag.
   useEffect(() => {
@@ -498,7 +558,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     onRefreshCatalog: () => {
       const projectId = project?.id ?? '';
       const profiles = backend?.profiles ?? [];
-      if ((projectId || projectlessTasks) && profiles.length > 1) void catalog.loadProfiles(projectId, homeBackendId, profiles, homeProfilesKey, true);
+      if (remoteHomeServerId) void catalog.loadRemote(remoteHomeServerId, true);
+      if ((projectId || projectlessTasks || Boolean(remoteHomeServerId)) && profiles.length > 1) void catalog.loadProfiles(projectId, homeBackendId, profiles, homeProfilesKey, true, remoteHomeServerId || undefined);
       void loadCatalog();
     },
     busy: creating,
@@ -654,7 +715,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onOpenProviderSettings={() => openSettingsAt('providers')}
       />
     );
-  } else if ((!project && !projectlessTasks) || (selectedSessionId && !project)) {
+  } else if ((!project && !projectlessTasks && !homeServerId) || (selectedSessionId && !project)) {
     content = <NoProjects onAddProject={() => ui.set({ addProjectOpen: true })} header={homeHeader} />;
   } else if (session?.kind === 'native') {
     // The frame stays across conversations; `SessionFrame` mounts each one afresh under its id.
@@ -677,7 +738,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           onReopen={() => void reopenNative(session)}
           onTerminalChanged={upsertTerminal}
           onSessionChanged={upsertSession}
-          {...(quickChat ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
+          {...(quickChat || serverOfObject(session.id) ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
           onError={pushError}
           notificationsEnabled={settings.notifications === true}
           enterBehavior={settings.composerEnterBehavior}
@@ -708,6 +769,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     content = (
       <NewSessionHome
         {...composerProps}
+        serverId={homeServerId}
+        serverOptions={homeServerOptions}
+        onSelectServer={selectHomeServer}
+        onOpenLinksSettings={() => openSettingsAt('links')}
         backendId={quickChat ? 'chat' : homeBackendId}
         profileId={quickChat ? undefined : homeProfileId}
         profileCatalogs={quickChat ? undefined : composerProps.profileCatalogs}
@@ -716,7 +781,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         referenceProjectId={quickChat ? taskProjectId ?? '' : project?.id ?? ''}
         sessions={sessions.filter((item) => project ? item.projectId === project.id : projects.some((target) => target.id === item.projectId && target.system === 'task-workspace'))}
         onSelectProject={selectProject}
-        onChooseDirectory={() => void chooseSessionDirectory()}
+        onChooseDirectory={() => void chooseSessionDirectory(homeServerId)}
         onOpenDirectory={(path) => void startSessionInDirectory(path)}
         onCreateWorktree={project && !project.system ? () => void startIsolatedDirectory() : undefined}
         isolating={creatingWorktree}
@@ -801,7 +866,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
               'flex w-(--sidebar-w)',
               peeking
                 ? 'fixed inset-y-2 left-2 z-(--z-panel) overflow-hidden rounded-xl bg-canvas shadow-peek animate-in fade-in-0 slide-in-from-left-3 duration-[var(--duration-base)] ease-[var(--ease-decelerate)]'
-                : cn('absolute inset-y-0 left-0 z-(--z-panel) transition-[translate] duration-[var(--duration-slow)] ease-out-soft', sidebarCollapsed ? '-translate-x-full' : 'translate-x-0', leavingPeek && 'transition-none'),
+                : cn('absolute inset-y-0 left-0 z-(--z-panel) transition-[translate] duration-[var(--duration-slow)] ease-out-soft', sidebarCollapsed ? '-translate-x-full bg-canvas' : 'translate-x-0', leavingPeek && 'transition-none'),
             )}
           >
             {sidebar(false)}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconSquareTerminal, IconTerminal } from '@/components/icons';
+import { IconCheck, IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconLaptop, IconLink, IconServer, IconSquareTerminal, IconTerminal } from '@/components/icons';
 import { AGENT_CALL_TOOL_GROUP, PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
@@ -8,9 +8,10 @@ import { RunnerGame } from '@/components/runner/RunnerGame';
 import { closeRunner, useRunnerOpen } from '@/components/runner/store';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
-import { api, type NativeSessionCreateInput, type ProjectRecord, type PromptContextReference } from '@/lib/api';
+import { api, apiFor, type NativeSessionCreateInput, type ProjectRecord, type PromptContextReference } from '@/lib/api';
+import { serverOfObject } from '@/lib/server-routing';
 import { catalogEntry, catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { agentMarkStyle, backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -18,7 +19,7 @@ import { isAssistantProject } from '@/lib/project-family';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
-import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from './session/ToolsPicker';
+import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered, useLinkableServers, usePluginToolGroups } from './session/ToolsPicker';
 import type { AgentMentionSource } from './session/agentMentions';
 import { AgentLogo } from '@/components/AgentLogo';
 import { BackendPicker } from './session/BackendPicker';
@@ -36,6 +37,7 @@ import { QuickChatHistory } from './QuickChatHistory';
 import type { SessionAction } from './Sidebar';
 import { QuickAction } from './QuickAction';
 import { AssistantSetup } from './work-items/AssistantSetup';
+import { formatServerPlatform, type HomeServerOption } from './useServerLabel';
 
 export interface ProfileCatalog { profile: NativeBackendProfile; models: ModelInfo[] }
 
@@ -78,6 +80,11 @@ export interface NewSessionComposerProps {
   recentModel?: string;
   /** Every project, so the composer can offer the others as new-session directories. */
   directories: ProjectRecord[];
+  /** Selected server for new sessions (`''` is this server); shown as a pill before the directory when links exist. */
+  serverId?: string;
+  serverOptions?: HomeServerOption[];
+  onSelectServer?: (serverId: string) => void;
+  onOpenLinksSettings?: () => void;
   onSelectProject: (project: ProjectRecord) => void;
   onSelectNoProject?: () => void;
   onCreationPersisted?: (recover?: boolean) => void;
@@ -138,7 +145,7 @@ interface Props extends NewSessionComposerProps {
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
-export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
+export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
   // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
@@ -166,13 +173,16 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   // Starts from the last pick on this browser; the server drops a phone that has since gone.
   const [toolGroups, setToolGroups] = useState<ToolGroupId[]>(lastToolGroups);
   const changeToolGroups = useCallback((next: ToolGroupId[]) => { setToolGroups(next); rememberToolGroups(next); }, []);
+  const activeServerId = serverId ?? (project && !project.system ? (serverOfObject(project.id) ?? '') : '');
+  const activeServer = serverOptions?.find((item) => item.id === activeServerId) ?? serverOptions?.[0];
   const { phones } = useControllablePhones(NO_TOOL_GROUPS);
   const pluginTools = usePluginToolGroups(NO_TOOL_GROUPS);
+  const linkedServerTools = useLinkableServers(toolGroups, !quickChat && !activeServerId);
   // A remembered phone that is offline now (or a plugin that is off) is left out of this conversation and kept for the next.
   // The new conversation's Agent may call other Agents (docs/AGENT-CALLS.md).
   const callsOffered = !quickChat && offersRiffetTools(capabilities);
-  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || (callsOffered && id === AGENT_CALL_TOOL_GROUP));
-  const toolsOffered = callsOffered || (!quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0));
+  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || linkedServerTools.available.includes(id) || (callsOffered && id === AGENT_CALL_TOOL_GROUP));
+  const toolsOffered = callsOffered || (!quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0 || linkedServerTools.offered));
   const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: project?.id ?? '', backends } : undefined, [callsOffered, project?.id, backends]);
   const [selection, setSelection] = useState(defaultModel);
   const [selectionEdited, setSelectionEdited] = useState(false);
@@ -181,7 +191,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
    * returning to it restores explicit picks while untouched controls follow their saved defaults.
    */
   // The 助理 keeps a choice of its own (docs/TASK-BOARD.md §5), apart from the same agent's elsewhere.
-  const choiceScope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
+  const choiceScope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
   const [selectionScope, setSelectionScope] = useState(choiceScope);
   const choices = useRef(new Map<string, { selection: string; approval: string; edited: boolean }>());
   if (selectionScope !== choiceScope) {
@@ -213,7 +223,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     ? grouped.flatMap(({ profile, models: list }) => list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name), group: profile.name })))
     : catalog.map((item) => ({ id: item.value, label: cleanLabel(item.name) })), [grouped, catalog]);
   const rememberedModelName = (targetBackend: NativeBackendId, targetProfile: string | undefined, targetCatalog: ModelInfo[]): string => {
-    const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${targetBackend}${CHOICE_SEPARATOR}${targetProfile ?? ''}`;
+    const scope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${targetBackend}${CHOICE_SEPARATOR}${targetProfile ?? ''}`;
     const previous = choices.current.get(scope);
     if (previous?.edited) return parseSelection(previous.selection).model;
     if (assistant) return '';
@@ -250,8 +260,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     });
   }, [grouped, backend, backendId, settings.nativeBackendDefaults, settings.defaultModel, assistant]);
   // Usage is read for the active provider only, stored raw so ModelPicker, settings and plugin pages share one cache.
-  const loadModelUsage = useCallback((signal: AbortSignal) => api.backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal), [backendId, project?.id, activeProfileId]);
-  const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) });
+  const loadModelUsage = useCallback((signal: AbortSignal) => apiFor(activeServerId || undefined).backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal), [activeServerId, backendId, project?.id, activeProfileId]);
+  const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}), ...(activeServerId ? { serverId: activeServerId } : {}) });
   const selected = backendSelection(backendId, activeCatalog, selection);
   const effectiveSelection = launchSelection(activeCatalog, selected);
   const selectionNeedsCatalog = Boolean(selection) && (catalogLoading || Boolean(catalogError) || activeCatalog.length === 0);
@@ -265,7 +275,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
    * its providers), and picking a model saves agent, provider and model in one write. Other agents'
    * lists paint from the cache and are read when the reader looks at them.
    */
-  const agentModels = useAgentModels(project?.id ?? '');
+  const agentModels = useAgentModels(project?.id ?? '', activeServerId);
   // Decided by layout alone: the agent list arrives after the first frames, and a choice that
   // waited for it would draw the separate agent button first and then swap it out.
   const agentChoices = !quickChat && !mobile;
@@ -378,7 +388,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   // setting is chosen. A sent message hands it to the new conversation instead.
   const prewarmClaims = useRef<{ current?: string; handedOff?: string }>({});
   useEffect(() => {
-    if (quickChat || !project || !capabilities?.supportsPrewarm) return;
+    if (quickChat || !project || !capabilities?.supportsPrewarm || activeServerId) return;
     const claims = prewarmClaims.current;
     let closed = false, claimId: string | undefined;
     const release = (id = claimId) => {
@@ -417,9 +427,18 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     return onCreate(input).then(created => { if (!created) claims.handedOff = undefined; return created; }, (error: unknown) => { claims.handedOff = undefined; throw error; });
   };
 
+  const hasServerPill = Boolean(serverOptions && serverOptions.length > 0);
+  const scopedDirectories = useMemo(
+    () => hasServerPill ? directories.filter((item) => (serverOfObject(item.id) ?? '') === activeServerId) : directories,
+    [directories, hasServerPill, activeServerId],
+  );
+  const needsRemoteDirectory = !quickChat && !assistant && Boolean(activeServerId) && !project;
+  const pillClass = 'flex h-7 max-w-full items-center gap-1.5 rounded-lg px-2 text-xs text-fg-2 transition-colors outline-none hover:bg-hover hover:text-fg data-[state=open]:bg-active data-[state=open]:text-fg focus-visible:ring-2 focus-visible:ring-focus';
+
   const creationNotices: FeedbackMessage[] = [];
   if (backendIssue) creationNotices.push({ id: `backend:${backendIssue}`, text: backendIssue, tone: 'danger' });
   if (selectionHeld) creationNotices.push({ id: 'selection', text: t`模型选择已保留，目录恢复前暂不能发送。`, tone: 'neutral' });
+  if (needsRemoteDirectory) creationNotices.push({ id: 'remote-directory', text: t`先在 ${activeServer?.name ?? ''} 选择一个目录`, tone: 'neutral' });
 
   return (
     <div className="relative flex flex-col">
@@ -428,26 +447,64 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           "new session" in the sidebar stays a plain navigation step. Fixed `h-7` keeps the
           composer in place when switching between 新建任务 and 快速对话. */}
       <div className="mb-1.5 flex h-7 items-center gap-1" inert={fullscreen || undefined}>
-        {!quickChat && !assistant && <DropdownMenu>
+        {!quickChat && !assistant && hasServerPill && serverOptions && <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" title={project?.cwd} className="flex h-7 max-w-full items-center gap-1.5 rounded-lg px-2 text-xs text-fg-2 transition-colors outline-none hover:bg-hover hover:text-fg data-[state=open]:bg-active data-[state=open]:text-fg focus-visible:ring-2 focus-visible:ring-focus">
+            <button type="button" className={cn(pillClass, 'shrink-0 max-w-44')}>
+              {activeServer?.self ? <IconLaptop className="size-3.5 shrink-0 text-fg-3" /> : <IconServer className="size-3.5 shrink-0 text-fg-3" />}
+              <span className="min-w-0 truncate font-medium">{activeServer?.name}</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[min(19rem,calc(100vw-1.5rem))]">
+            <DropdownMenuLabel>{t`在哪台服务器新建？`}</DropdownMenuLabel>
+            {serverOptions.map((item) => {
+              const subtitle = item.note || [item.alias && item.alias !== item.name ? item.alias : '', formatServerPlatform(item.platform)].filter(Boolean).join(' · ');
+              return (
+                <DropdownMenuItem key={item.id || 'self'} disabled={!item.usable} onSelect={() => onSelectServer?.(item.id)}>
+                  <StatusDot tone={item.usable ? 'success' : 'idle'} className="shrink-0" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">{item.name}</span>
+                    {!item.reason && subtitle && <span className="truncate text-2xs text-fg-4">{subtitle}</span>}
+                  </span>
+                  {item.reason && <span className="shrink-0 text-2xs text-fg-3">{item.reason}</span>}
+                  <span className="grid size-4 shrink-0 place-items-center">{item.id === activeServerId && <IconCheck className="size-4 text-fg" />}</span>
+                </DropdownMenuItem>
+              );
+            })}
+            {onOpenLinksSettings && <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onOpenLinksSettings}>
+                <IconLink className="size-4 text-fg-3" />
+                <span>{t`管理互联…`}</span>
+              </DropdownMenuItem>
+            </>}
+          </DropdownMenuContent>
+        </DropdownMenu>}
+        {!quickChat && !assistant && (needsRemoteDirectory ? (
+          <button type="button" onClick={onChooseDirectory} className={pillClass}>
+            <IconFolderPlus className="size-3.5 shrink-0 text-fg-3" />
+            <span className="min-w-0 truncate font-medium">{t`选择目录…`}</span>
+          </button>
+        ) : <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" title={project?.cwd} className={pillClass}>
               <IconFolderClosed className="size-3.5 shrink-0 text-fg-3" />
               <span className="min-w-0 truncate font-medium">{project?.system === 'task-workspace' || !project ? t`未关联项目` : project.name}</span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-[min(22rem,calc(100vw-1.5rem))]">
             <DirectoryMenu
-              directories={directories}
+              directories={scopedDirectories}
               selectedProjectId={project?.system === 'task-workspace' ? '' : project?.id ?? ''}
-              onSelectNoProject={onSelectNoProject}
+              showServerTag={!hasServerPill}
+              onSelectNoProject={activeServerId ? undefined : onSelectNoProject}
               onSelectProject={onSelectProject}
               {...(onChooseDirectory ? { onChooseDirectory } : {})}
-              {...(onOpenDirectory ? { onOpenDirectory } : {})}
+              {...(!activeServerId && onOpenDirectory ? { onOpenDirectory } : {})}
               onCreateWorktree={onCreateWorktree}
               isolating={isolating}
             />
           </DropdownMenuContent>
-        </DropdownMenu>}
+        </DropdownMenu>)}
       </div>
 
       <Composer
@@ -472,7 +529,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         referenceProjects={directories}
         onOpenReferenceSession={onOpenReferenceSession}
         disabled={busy}
-        submitDisabled={catalogLoading || selectionNeedsCatalog || backend?.available === false || (quickChat && !model)}
+        submitDisabled={catalogLoading || selectionNeedsCatalog || backend?.available === false || (quickChat && !model) || needsRemoteDirectory}
         // An empty list's picker is its own retry and holds itself while that runs, keeping focus.
         pickersDisabled={catalogWaited && models.length > 0}
         modelsLoading={catalogLoading}
@@ -488,7 +545,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
             disabled={busy || !capabilities.supportsPermissionSelection}
           />
         ) : undefined}
-        toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} disabled={busy} onError={onError} /> : undefined}
+        toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} servers={!activeServerId} disabled={busy} onError={onError} /> : undefined}
         mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
         // The model menu picks the agent too where it has a column for them; a phone keeps its own row.
@@ -499,11 +556,12 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         // Named the way the rows are: by profile while the providers come grouped, else by the column's own ids.
         activeProviderId={providerChoices ? activeProfileId : agentSources ? activeSourceId : undefined}
         modelLeading={agentSources && <><AgentLogo backend={backendId} size={14} className="shrink-0" style={agentMarkStyle(backendId)} /><span className="sr-only">{label(backendId)}</span></>}
+        modelSourceLabel={activeServerId && activeServer ? t`来自 ${activeServer.name}` : undefined}
         onPreviewModelProvider={(id) => { const other = splitOther(`${id}${OTHER_AGENT}`); if (other && id !== activeSourceId) agentModels.load(other.backendId, other.profileId); }}
         onSelectModelProvider={selectModelProvider}
         loadModelUsage={loadModelUsage}
         refreshCatalog={quickChat ? onRetryCatalog : () => { loadUnknownAgents(); return onRefreshCatalog?.(); }}
-        usageScopeKey={`${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}
+        usageScopeKey={`${activeServerId}|${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}
         model={model ? modelChoice : undefined}
         onModelChange={(id) => {
           // A model picked again on a provider comes back as last used there; another one keeps the
@@ -515,7 +573,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
             // Another agent's model: the agent, its provider and the model are saved together.
             // An empty model is that agent's default, for one that lists nothing.
             const next = other.model ? pickedSelection(agentModels.read(other.backendId, other.profileId) ?? [], other.model, inForce, lastOn(other.backendId, other.profileId)) : '';
-            const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
+            const scope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
             const previous = choices.current.get(scope);
             if (previous) choices.current.set(scope, { ...previous, selection: next, edited: true });
             onBackendChange(other.backendId, other.profileId, next);
@@ -557,7 +615,11 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
       />
       <FeedbackNotices scope={`${project?.id ?? 'global'}:${backendId}:${activeProfileId ?? ''}`} messages={creationNotices}
         className="mt-2" noticeClassName="items-start rounded-lg px-3 py-2 text-xs" icon={null}
-        action={message => message.id.startsWith('backend:') ? <Button size="xs" variant="quiet" onClick={onRetryCatalog} disabled={catalogLoading} className="-my-1 shrink-0">{t`重新检测`}</Button> : undefined} />
+        action={message => message.id.startsWith('backend:')
+          ? <Button size="xs" variant="quiet" onClick={onRetryCatalog} disabled={catalogLoading} className="-my-1 shrink-0">{t`重新检测`}</Button>
+          : message.id === 'remote-directory' && onChooseDirectory
+            ? <Button size="xs" variant="quiet" onClick={onChooseDirectory} className="-my-1 shrink-0">{t`选择目录`}</Button>
+            : undefined} />
     </div>
   );
 }

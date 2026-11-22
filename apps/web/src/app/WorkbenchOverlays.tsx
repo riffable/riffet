@@ -52,6 +52,7 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
   const searchOpen = useUi((state) => state.searchOpen);
   const importSession = useUi((state) => state.importSession);
   const directoryOpen = useUi((state) => state.sessionDirectoryOpen);
+  const directoryServer = useUi((state) => state.sessionDirectoryServer);
   const settingsOpen = useUi((state) => state.settingsOpen);
   const settingsMounted = useUi((state) => state.settingsMounted);
   const pendingSection = useUi((state) => state.pendingSettingsSection);
@@ -117,9 +118,13 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
       />
       <DirectoryPicker
         open={directoryOpen}
-        onOpenChange={(open) => ui.set({ sessionDirectoryOpen: open })}
-        initialPath={quickChat ? undefined : project?.cwd}
-        server={quickChat ? undefined : serverOfObject(project?.id)}
+        onOpenChange={(open) => ui.set({ sessionDirectoryOpen: open, ...(!open ? { sessionDirectoryServer: undefined } : {}) })}
+        initialPath={(() => {
+          if (quickChat) return undefined;
+          const target = directoryServer !== undefined ? directoryServer : (serverOfObject(project?.id) ?? '');
+          return target === (serverOfObject(project?.id) ?? '') ? project?.cwd : undefined;
+        })()}
+        server={directoryServer !== undefined ? (directoryServer || undefined) : (quickChat ? undefined : serverOfObject(project?.id))}
         chooseServer
         onPick={(path, server) => void startSessionInDirectory(path, server)}
         onError={onError}

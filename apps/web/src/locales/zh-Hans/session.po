@@ -292,6 +292,10 @@ msgstr "主会话模型"
 msgid "主对话"
 msgstr "主对话"
 
+#: src/app/session/ToolsPicker.tsx
+msgid "互联机器"
+msgstr "互联机器"
+
 #: src/app/session/Markdown.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "交互预览"
@@ -1534,6 +1538,10 @@ msgstr "服务器版本过旧"
 msgid "服务器版本过旧，请更新后重试"
 msgstr "服务器版本过旧，请更新后重试"
 
+#: src/app/session/ToolsPicker.tsx
+msgid "未允许"
+msgstr "未允许"
+
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 msgid "未完成"
@@ -1751,6 +1759,10 @@ msgstr "添加附件"
 msgctxt "session-render-preview-toggle"
 msgid "渲染预览"
 msgstr "渲染预览"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "版本不兼容"
+msgstr "版本不兼容"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "生成"

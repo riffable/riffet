@@ -29,6 +29,11 @@ msgstr ""
 msgid "，含内边距"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "· 需在 {0} 的「设置 › 互联」开启"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "“{name}”会从所有设备上移除，正在使用它的设备会回到 Riffet。"
 msgstr ""
@@ -70,6 +75,11 @@ msgstr ""
 msgid "{0} 上下文长度"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 不能操作这台电脑"
+msgstr ""
+
 #. placeholder {0}: counts.get(rule.id) ?? 0
 #: src/app/settings/TitleRulesSection.tsx
 msgid "{0} 个会话"
@@ -109,6 +119,11 @@ msgstr ""
 msgid "{0} 到窗口宽 − {1}"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 可浏览本机目录并新建会话"
+msgstr ""
+
 #. placeholder {0}: formatElapsed(left)
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "{0} 后停止"
@@ -130,11 +145,6 @@ msgstr ""
 msgid "{0} 已断开互联"
 msgstr ""
 
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "{0} 未允许这台电脑操作它"
-msgstr ""
-
 #. placeholder {0}: settings.titleRules.length
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "{0} 条"
@@ -148,11 +158,6 @@ msgstr ""
 #. placeholder {0}: STYLES.length
 #: src/app/design/mac/StylesChapter.tsx
 msgid "{0} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。"
-msgstr ""
-
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "{0} 被他人控制时，对方也能操作这台电脑"
 msgstr ""
 
 #. placeholder {0}: MAC.terminal.min
@@ -558,6 +563,10 @@ msgstr ""
 
 #: src/app/design/android/OverlayChapter.tsx
 msgid "Snackbar 整个应用一个队列，不压在底栏上"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "SSH 目标"
 msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
@@ -1129,10 +1138,6 @@ msgstr ""
 msgid "主风格，以 Web 为准：内缩卡片、项目树侧栏、会话标签栏，菜单与弹出层共用一种浮层。"
 msgstr ""
 
-#: src/app/settings/LinksSection.tsx
-msgid "也可以在这台机器上运行 <0>riffet link ssh 主机</0>，隧道经 SSH 建立"
-msgstr ""
-
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "事件循环延迟"
 msgstr ""
@@ -1152,6 +1157,14 @@ msgstr ""
 #: src/app/settings/LinksSection.tsx
 #: src/app/settings/settingsSections.ts
 msgid "互联"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "互联时向对端展示"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "互联时向对端展示 · {platform}"
 msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
@@ -1215,6 +1228,18 @@ msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "仅图标"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在本机显示，方便区分多台机器"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在本机生效，重连后不会被覆盖"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在远端非交互 shell 找不到 riffet 时填写"
 msgstr ""
 
 #: src/app/settings/ViewsSection.tsx
@@ -1483,6 +1508,14 @@ msgstr ""
 msgid "例如 公司网关"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "例如：iOS 构建机"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "例如在 Mac 上运行并开启此项后，就能在 devbox 的网页里选择 Mac 目录；远端被控制时也会波及本机"
+msgstr ""
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "依次实现 Web、Mac、Android、iOS"
 msgstr ""
@@ -1573,6 +1606,7 @@ msgstr ""
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -1657,6 +1691,10 @@ msgstr ""
 msgid "修复首帧跳变"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "修改"
+msgstr ""
+
 #: src/app/design/overview/Opening.tsx
 msgid "修改 3 个文件"
 msgstr ""
@@ -1724,6 +1762,10 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "允许对方操作这台电脑"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "允许远端操作发起命令的机器"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -2380,6 +2422,11 @@ msgstr ""
 msgid "前一个命令已占用"
 msgstr ""
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "前往 {0} 开启"
+msgstr ""
+
 #. placeholder {0}: formatNumber(status.quota.remaining)
 #. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
 #. placeholder {1}: formatNumber(status.quota.limit)
@@ -2394,10 +2441,6 @@ msgstr ""
 
 #: src/app/settings/settingsSections.ts
 msgid "功能"
-msgstr ""
-
-#: src/app/settings/LinksSection.tsx
-msgid "加入另一台服务器"
 msgstr ""
 
 #: src/app/design/foundations/StatesChapter.tsx
@@ -2722,6 +2765,7 @@ msgstr ""
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "取消"
@@ -2765,6 +2809,10 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "另一台服务器连到这里用的地址"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "另一台机器访问不到回环地址，请填内网/局域网 IP，或改用 SSH 互联"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -2841,11 +2889,6 @@ msgstr ""
 msgid "可以使用的人"
 msgstr ""
 
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "可以操作 {0}"
-msgstr ""
-
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr ""
@@ -2856,6 +2899,11 @@ msgstr ""
 
 #: src/app/design/android/PagesChapter.tsx
 msgid "可收起的大标题"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "可浏览 {0} 的目录并新建会话"
 msgstr ""
 
 #: src/app/settings/SupportSections.tsx
@@ -2985,6 +3033,7 @@ msgstr ""
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/ProfileSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "名称"
@@ -3081,6 +3130,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "命令与 Skills"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "命令会默认开启「本机操作远端」；断线重连需要免交互 SSH（密钥或 ssh-agent）"
 msgstr ""
 
 #: src/app/design/overview/Opening.tsx
@@ -3284,7 +3337,7 @@ msgid "在几种选择控件之间怎么选"
 msgstr ""
 
 #: src/app/settings/LinksSection.tsx
-msgid "在另一台服务器的「设置 › 互联」粘贴。5 分钟内有效，只能用一次"
+msgid "在另一台服务器的「设置 › 互联 › 粘贴链接串」中填入（5 分钟内有效，仅一次）。如需在这台电脑选择对方目录，记得在对方粘贴时开启授权开关"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
@@ -3297,6 +3350,10 @@ msgstr ""
 
 #: src/app/settings/ChannelsSection.tsx
 msgid "在插件中启用飞书后可添加"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "在无法被直连的机器上使用（如 Mac），主动连向生成链接串的一方"
 msgstr ""
 
 #: src/app/settings/StorageSection.tsx
@@ -3317,6 +3374,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "在服务器电脑上运行。"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "在本机可被对方直连时使用（如 devbox），由另一台粘贴后双向可用"
 msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
@@ -3397,6 +3458,10 @@ msgstr ""
 msgid "堆 {0} / {1}"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "填写要连向的远端主机（例如 devbox），在能 SSH 到它的机器终端执行下面命令"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "声明式描述"
 msgstr ""
@@ -3428,6 +3493,10 @@ msgstr ""
 
 #: src/app/settings/SupportSections.tsx
 msgid "备份已完成"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "备注"
 msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
@@ -3730,10 +3799,6 @@ msgstr ""
 msgid "对方的质询要先正面回答。"
 msgstr ""
 
-#: src/app/settings/LinksSection.tsx
-msgid "对方被他人控制时，也能操作这台电脑"
-msgstr ""
-
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "对比度"
 msgstr ""
@@ -3752,6 +3817,11 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "对比度提示（{modeLabel}）"
+msgstr ""
+
+#. placeholder {0}: link.peerName
+#: src/app/settings/LinksSection.tsx
+msgid "对端自报：{0}；留空恢复对端名称"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
@@ -4460,6 +4530,15 @@ msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
 msgid "开发版本"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "开启后对方可浏览本机目录并新建会话；{0} 被他人控制时也会波及这台电脑"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "开启后对方可浏览本机目录并新建会话；对方被他人控制时也会波及这台电脑"
 msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
@@ -5788,6 +5867,10 @@ msgstr ""
 msgid "无法保存文件访问设置"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "无法保存服务器名称"
+msgstr ""
+
 #: src/app/settings/TitleRulesSection.tsx
 msgid "无法保存标题规则"
 msgstr ""
@@ -6035,6 +6118,10 @@ msgstr ""
 msgid "无障碍已开启"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "无需开放端口；在能 SSH 到对方的机器运行（例如 Mac 连 devbox）"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "无需确认"
 msgstr ""
@@ -6112,6 +6199,10 @@ msgstr ""
 msgid "显示全部"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "显示名称"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "显示在侧栏里"
 msgstr ""
@@ -6133,6 +6224,11 @@ msgstr ""
 
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "暂不支持选择"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "暂不能操作 {0}"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -6375,6 +6471,10 @@ msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "本机"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "本机唯一，用于多服务器标签与命令行寻址（小写字母、数字、. _ -）"
 msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
@@ -7343,6 +7443,10 @@ msgstr ""
 msgid "生成到 Mac"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "生成命令"
+msgstr ""
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "生成文件"
 msgstr ""
@@ -7414,6 +7518,10 @@ msgstr ""
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "由 Codex 写入 ~/.codex/config.toml"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "由能连通对方的一台发起连接，连上后双向共用隧道，各自控制是否允许对方操作本机"
 msgstr ""
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
@@ -7556,6 +7664,10 @@ msgstr ""
 
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "短任务"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "短别名"
 msgstr ""
 
 #: src/app/design/android/PlatformChapter.tsx
@@ -8105,6 +8217,10 @@ msgstr ""
 msgid "终端只接受 #rrggbb，透明度会被忽略。"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "终端命令"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
 msgstr ""
@@ -8123,6 +8239,10 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "终端颜色（16 色）"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "经 SSH 互联"
 msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
@@ -8212,6 +8332,7 @@ msgid "缓慢淡入淡出"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "编辑"
 msgstr ""
 
@@ -8236,6 +8357,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "编辑器命令"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "编辑服务器"
 msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
@@ -9360,6 +9485,14 @@ msgstr ""
 msgid "这个聊天里的会话绑定一并忘记"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "这台服务器"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "这台电脑"
+msgstr ""
+
 #: src/app/settings/DevicesSection.tsx
 msgid "这台设备"
 msgstr ""
@@ -9437,6 +9570,10 @@ msgstr ""
 msgid "远程服务器"
 msgstr ""
 
+#: src/app/settings/LinksSection.tsx
+msgid "远端 riffet 路径（可选）"
+msgstr ""
+
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgctxt "settings-connect-action"
@@ -9470,6 +9607,10 @@ msgstr ""
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "连接已断开"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "连接方向只取决于网络可达性；想在 A 机器里选 B 机器的目录，只需在 B 开启「允许 A 操作这台电脑」"
 msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
@@ -9625,10 +9766,6 @@ msgstr ""
 
 #: src/app/design/patterns/parts.tsx
 msgid "避免"
-msgstr ""
-
-#: src/app/settings/LinksSection.tsx
-msgid "邀请另一台服务器"
 msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
@@ -10418,3 +10555,4 @@ msgstr ""
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr ""
+

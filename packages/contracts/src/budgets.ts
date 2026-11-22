@@ -537,6 +537,19 @@ export const LINK_BUDGET = {
   auditEntries: 200,
   /** A peer's name, as it reports it. */
   nameChars: 64,
+  /** A server's short local alias (`^[a-z0-9][a-z0-9._-]{0,31}$`) for CLI and multi-server labels. */
+  aliasChars: 32,
+  /** A one-line local note describing what a linked server is for. */
+  noteChars: 120,
+  /** Maximum characters of one command sent to `POST /api/remote/exec`. */
+  execCommandChars: 16_384,
+  /** Default and maximum wall-clock timeout for `POST /api/remote/exec`. */
+  execTimeoutDefaultMs: 60_000,
+  execTimeoutMaxMs: 10 * 60_000,
+  /** Combined stdout + stderr byte cap returned by `POST /api/remote/exec`; output past it is truncated. */
+  execOutputBytes: 256 * 1024,
+  /** Concurrent remote commands / interactive shells allowed on one server at once. */
+  execConcurrent: 8,
   /** 设置 › 互联 rereads the links this often while it is open, to show a tunnel coming up or dropping. */
   settingsPollMs: 5_000,
   /**

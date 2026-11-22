@@ -243,7 +243,7 @@ export async function createApp(options: AppOptions = {}) {
   });
   // Agent calls (docs/AGENT-CALLS.md) need the orchestration and the timeline made further down; the MCP tools and delivery reach them through this.
   let agentCallsRef:AgentCallService|undefined;
-  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
+  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
     const session=store.getSession(sessionId);
     if(session.archivedAt || session.state==='archived') return undefined;
     const project=store.getProject(session.projectId);

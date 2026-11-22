@@ -65,6 +65,8 @@ const RULES: readonly Rule[] = [
   { path: '/api/tasks', prefix: true, policy: 'serve' },
   { path: '/api/folder-favorites', prefix: true, policy: 'serve' },
   { path: '/api/browse', policy: 'serve' },
+  { path: '/api/remote/exec', methods: ['POST'], policy: 'serve' },
+  { path: '/api/remote/shell', methods: READ, policy: 'serve' },
   { path: '/api/native/prewarm', prefix: true, policy: 'serve' },
   { path: '/api/file-sites', prefix: true, policy: 'serve' },
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { isDoneUnseen, type Session } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
-import { IconChevronDown, IconGitBranch, IconFolder, IconMessageSquareText, IconPencilLine, IconPin, IconPinOff, IconPlus, IconX } from '@/components/icons';
+import { IconChevronDown, IconGitBranch, IconFolder, IconLink, IconMessageSquareText, IconPencilLine, IconPin, IconPinOff, IconPlus, IconServer, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,6 +17,7 @@ import { tabZones, type TabEntry } from './tabsStore';
 import { useTabs } from './useTabs';
 import { useZoneDrag } from './useZoneDrag';
 import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { ServerTag, useServerBadge } from '../useServerLabel';
 import { animationsOf, cancelAnimations, exit, settled } from '@/lib/motion';
 
 export type TabBarVariant = 'inline' | 'strip';
@@ -81,6 +82,7 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
   useLayoutEffect(() => { if (enter) growIn(ref.current); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const { tabs } = useStores();
   const id = session.id;
+  const server = useServerBadge(session.id);
   const title = session.title;
   const strip = variant === 'strip';
   const dot = session.state === 'waiting' || (session.state === 'failed' && isDoneUnseen(session)) || unread;
@@ -129,6 +131,11 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
     >
       <span className="grid size-3.5 shrink-0 place-items-center"><TabLead session={session} /></span>
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
+      {server && (
+        server.multiPeer
+          ? <span className={cn('max-w-16 shrink-0 truncate rounded bg-subtle px-1 py-px font-mono text-2xs', server.offline ? 'text-warning' : 'text-fg-4')}>{server.alias}</span>
+          : <IconLink aria-hidden className={cn('size-3 shrink-0', server.offline ? 'text-warning' : 'text-fg-4')} />
+      )}
       <span className="grid size-5 shrink-0 place-items-center">
         {dot && <span className="grid place-items-center group-hover/tab:hidden group-data-[active=true]/tab:hidden"><TabDot session={session} unread={unread} /></span>}
         <button
@@ -248,6 +255,7 @@ function TabCard({ session, anchor }: { session: Session; anchor: DOMRect }) {
     : session.state === 'waiting' ? t`等待处理`
       : session.state === 'failed' ? t`运行失败`
         : '';
+  const server = useServerBadge(session.id);
   const left = Math.max(8, Math.min(anchor.left, window.innerWidth - 280));
   return createPortal(
     <div
@@ -256,6 +264,13 @@ function TabCard({ session, anchor }: { session: Session; anchor: DOMRect }) {
       className="ui-floating-content pointer-events-none fixed z-(--z-tooltip) flex w-68 flex-col gap-1.5 rounded-xl bg-popover px-3.5 py-3 text-xs text-fg-2 shadow-peek animate-in fade-in-0 duration-[var(--duration-fast)]"
     >
       <span className="line-clamp-2 text-sm font-semibold text-fg">{session.title}</span>
+      {server && (
+        <span className={cn('flex min-w-0 items-center gap-1.5', server.offline && 'text-warning')}>
+          <IconServer className="size-3.5 shrink-0 text-fg-3" />
+          <span className="truncate">{server.label}</span>
+          {server.alias !== server.name && <span className="shrink-0 font-mono text-2xs text-fg-4">{server.alias}</span>}
+        </span>
+      )}
       {project && !project.system && (
         <span className="flex min-w-0 items-center gap-1.5"><IconFolder className="size-3.5 shrink-0 text-fg-3" /><span className="truncate">{(origin || project).name}</span>{project.worktree && <span className="shrink-0 text-fg-4">worktree</span>}</span>
       )}
@@ -466,6 +481,7 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
                     <DropdownMenuRadioItem key={session.id} value={session.id}>
                       <span className="grid size-4 shrink-0 place-items-center"><TabLead session={session} /></span>
                       <span className="min-w-0 flex-1 truncate">{session.title}</span>
+                      <ServerTag objectId={session.id} className="max-w-20 shrink-0 truncate text-2xs text-fg-4" />
                       {name && <span className="max-w-24 shrink-0 truncate text-xs text-fg-4">{name}</span>}
                     </DropdownMenuRadioItem>
                   );

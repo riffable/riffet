@@ -1,7 +1,8 @@
 import { toolObject as object, type BoundAssistantTool, type ToolDefinition } from '../assistant-capability.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { AgentToolGroup } from '@riffet/plugin-api';
-import type { DeviceCapability, Session, RiffetWakeup, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
+import type { DeviceCapability, RemoteExecResult, Session, RiffetWakeup, ServerInfo, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
+import { LINK_BUDGET } from '../../../../packages/contracts/src/index.js';
 import type { SessionReferenceService } from '../context-references/service.js';
 import type { Auth } from '../auth.js';
 import { materializeAttachment } from '../backends/attachments.js';
@@ -278,14 +279,27 @@ export interface TaskReports {
 /** What the 助理's tools do (the work items side, given by `app.ts`). */
 export interface AssistantTools { tools: ReadonlyMap<string, BoundAssistantTool> }
 
-export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; agentCalls?: () => AgentCallTools | undefined; assistant?: () => AssistantTools | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined;
+/** Linked servers this server can reach over tunnels, for per-conversation `server:<id>` tool groups. */
+export interface LinkedServersSource {
+  servers(): ServerInfo[];
+  requestJson<T>(serverId: string, method: 'GET' | 'POST', path: string, body?: unknown, options?: { signal?: AbortSignal; timeoutMs?: number; origin?: string }): Promise<T>;
+}
+
+const REMOTE_NAMES = new Set(['remote_list', 'remote_exec']);
+const SERVER_GROUP_PREFIX = 'server:';
+
+function serverGroupIds(session: Session): string[] {
+  return (session.toolGroups ?? []).filter(group => group.startsWith(SERVER_GROUP_PREFIX)).map(group => group.slice(SERVER_GROUP_PREFIX.length));
+}
+
+export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; agentCalls?: () => AgentCallTools | undefined; assistant?: () => AssistantTools | undefined; links?: () => LinkedServersSource | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined;
   boundWorkItem?(sessionId: string): string | undefined;
   workbenchAppearance?: Pick<WorkbenchAppearance, 'apply' | 'authorizeSetting'>;
   activeWorkbenchRun?(sessionId: string): string | undefined;
   /** Whether a conversation started from the composer is given a task (`workItems.composerSessions`). */
   composerTasks?: () => boolean }
 
-const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...AGENT_TOOLS, ...WORKBENCH_TOOLS, ...discoveryTools, deviceAppearanceTool].map(tool => tool.name));
+const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...AGENT_TOOLS, ...WORKBENCH_TOOLS, ...discoveryTools, deviceAppearanceTool].map(tool => tool.name).concat([...REMOTE_NAMES]));
 
 /**
  * The Riffet MCP server behind each conversation's stdio shim (docs/DEVICES.md §2). A request is
@@ -387,6 +401,39 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     return deviceGroupIds(session).filter(id => this.deps.auth.device(id));
   }
 
+  /** Linked servers explicitly mounted in this conversation's `toolGroups` (`server:<serverId>`). */
+  private serversOf(session: Session): ServerInfo[] {
+    const ids = serverGroupIds(session);
+    if (!ids.length) return [];
+    const available = this.deps.links?.()?.servers().filter(item => !item.self) ?? [];
+    const byId = new Map(available.map(item => [item.id, item]));
+    return ids.map(id => byId.get(id)).filter((item): item is ServerInfo => Boolean(item));
+  }
+
+  private remoteTools(session: Session): ToolDefinition[] {
+    const servers = this.serversOf(session);
+    if (!servers.length) return [];
+    const listSummary = servers.map(item => `${item.alias || item.id} (${item.name}${item.note ? `: ${item.note}` : ''})`).join(', ');
+    const aliases = servers.map(item => item.alias || item.id);
+    return [
+      {
+        name: 'remote_list',
+        description: 'List the linked servers explicitly granted to this conversation, including their alias, display name, online/permission status, platform, note, and registered project directories.',
+        inputSchema: object({}),
+      },
+      {
+        name: 'remote_exec',
+        description: `Run a non-interactive shell command on one of the linked servers granted to this conversation (${listSummary}) over its Riffet tunnel. Output and wall-clock time are bounded; use standard shell pipelines/tools to read files, inspect logs, or run builds.`,
+        inputSchema: object({
+          server: { type: 'string', description: `Target server alias or id: ${aliases.join(', ')}.${servers.length === 1 ? ' May be omitted.' : ''}` },
+          command: { type: 'string', description: 'Shell command to run on the target server.' },
+          cwd: { type: 'string', description: 'Working directory on the target server (~ expands to its home directory). Defaults to home.' },
+          timeoutSeconds: { type: 'number', description: `Wall-clock timeout in seconds (1-${Math.floor(LINK_BUDGET.execTimeoutMaxMs / 1000)}, default ${Math.floor(LINK_BUDGET.execTimeoutDefaultMs / 1000)}).` },
+        }, [...(servers.length > 1 ? ['server'] : []), 'command']),
+      },
+    ];
+  }
+
   /** Whether the snapshot has a phone the screen tools (T1) can drive; by platform, so stable while a CLI runs. */
   private screenTools(session: Session): boolean {
     return this.devicesOf(session).some(id => isScreenDevice(this.deps.auth.device(id)!));
@@ -444,7 +491,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     const core = [...(assistant ? TOOLS.filter(tool => tool.name !== 'schedule_task') : TOOLS), ...(session.workItemId ? TASK_TOOLS : []),
       ...(this.deps.agentCalls && session.origin?.kind !== 'call' ? AGENT_TOOLS : []), ...assistantTools,
       ...(main && this.deps.workbenchAppearance ? [...WORKBENCH_TOOLS, deviceAppearanceTool] : []), ...(main && this.catalog ? discoveryTools : []),
-      ...(main ? Array.from(this.catalog?.commands.values() ?? [], command => command.definition) : []), ...this.pluginTools(session)];
+      ...(main ? Array.from(this.catalog?.commands.values() ?? [], command => command.definition) : []), ...this.pluginTools(session), ...this.remoteTools(session)];
     const devices = this.devicesOf(session);
     if (!devices.length) return core;
     const names = Object.fromEntries(devices.map(id => [id, this.deps.auth.device(id)!.name]));
@@ -593,6 +640,13 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
         throw error;
       }
     }
+    if (typeof raw.name === 'string' && REMOTE_NAMES.has(raw.name)) {
+      try { return await this.callRemote(session, raw.name, args, signal); }
+      catch (error) {
+        if (error instanceof AppError) return errorResult(error.code, error.message);
+        throw error;
+      }
+    }
     // A group removed from the conversation stops working at once, even in a CLI launched with it.
     const available = screenTool || raw.name === SCREEN_HELP_TOOL.name ? this.screenTools(session)
       : windowTool ? this.windowTools(session)
@@ -606,6 +660,75 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
       throw error;
     }
+  }
+
+  private async callRemote(session: Session, name: string, input: Record<string, unknown>, signal?: AbortSignal): Promise<McpToolResult> {
+    const links = this.deps.links?.();
+    const allowed = this.serversOf(session);
+    if (!links || !allowed.length) return errorResult('TOOL_NOT_AVAILABLE', `${name} is not available in this conversation; grant a linked server in Skills & Tools first`);
+    const origin = `session:${session.id.slice(0, 8)}`;
+
+    if (name === 'remote_list') {
+      const servers = await Promise.all(allowed.map(async (server) => {
+        let projects: Array<{ name: string; cwd: string }> | undefined;
+        if (server.online && server.outbound && server.compatible) {
+          const list = await links.requestJson<{ projects?: Array<{ name: string; cwd: string; archivedAt?: string; system?: string }> }>(
+            server.id, 'GET', '/api/projects', undefined, { signal, timeoutMs: 5_000, origin },
+          ).catch(() => undefined);
+          if (Array.isArray(list?.projects)) {
+            projects = list.projects.filter(item => !item.archivedAt && !item.system).slice(0, 32).map(item => ({ name: item.name, cwd: item.cwd }));
+          }
+        }
+        return {
+          id: server.id,
+          alias: server.alias || server.id,
+          name: server.name,
+          online: server.online,
+          outbound: server.outbound,
+          compatible: server.compatible,
+          ...(server.platform ? { platform: server.platform } : {}),
+          ...(server.note ? { note: server.note } : {}),
+          ...(projects ? { projects } : {}),
+        };
+      }));
+      return textResult({ servers });
+    }
+
+    // Hard whitelist check: `server` must match one of the servers explicitly granted in `session.toolGroups`.
+    const rawServer = typeof input.server === 'string' ? input.server.trim() : '';
+    let target: ServerInfo | undefined;
+    if (!rawServer) {
+      if (allowed.length === 1) target = allowed[0];
+      else return errorResult('INVALID_ARGUMENT', `Specify which linked server: ${allowed.map(item => item.alias || item.id).join(', ')}`);
+    } else {
+      const lower = rawServer.toLowerCase();
+      target = allowed.find(item => item.alias?.toLowerCase() === lower || item.id.toLowerCase() === lower || item.name.toLowerCase() === lower);
+    }
+    if (!target) {
+      return errorResult('REMOTE_NOT_ALLOWED', `Server "${rawServer}" is not granted to this conversation. Allowed: ${allowed.map(item => item.alias || item.id).join(', ')}`);
+    }
+    if (!target.online) return errorResult('LINK_OFFLINE', `${target.name} (${target.alias || target.id}) is offline`);
+    if (!target.compatible) return errorResult('LINK_INCOMPATIBLE', `${target.name} runs an incompatible Riffet protocol version`);
+    if (!target.outbound) return errorResult('LINK_NOT_ALLOWED', `${target.name} does not allow this server to operate it`);
+
+    const command = typeof input.command === 'string' ? input.command : '';
+    if (!command.trim()) return errorResult('INVALID_ARGUMENT', 'command must be a non-empty string');
+    const cwd = typeof input.cwd === 'string' && input.cwd.trim() ? input.cwd.trim() : undefined;
+    const rawTimeout = input.timeoutSeconds;
+    if (rawTimeout !== undefined && (typeof rawTimeout !== 'number' || !Number.isFinite(rawTimeout) || rawTimeout < 1 || rawTimeout > Math.floor(LINK_BUDGET.execTimeoutMaxMs / 1000))) {
+      return errorResult('INVALID_ARGUMENT', `timeoutSeconds must be a number from 1 to ${Math.floor(LINK_BUDGET.execTimeoutMaxMs / 1000)}`);
+    }
+    const timeoutMs = rawTimeout !== undefined ? Math.round(rawTimeout * 1000) : LINK_BUDGET.execTimeoutDefaultMs;
+
+    const result = await links.requestJson<RemoteExecResult>(
+      target.id, 'POST', '/api/remote/exec',
+      { command, ...(cwd ? { cwd } : {}), timeoutMs },
+      { signal, timeoutMs: timeoutMs + 10_000, origin },
+    );
+    return textResult({
+      server: { id: target.id, alias: target.alias || target.id, name: target.name },
+      ...result,
+    });
   }
 
   /** A tool of a plugin group, or undefined when no plugin group (selected or not, on or off) has that name's prefix. */

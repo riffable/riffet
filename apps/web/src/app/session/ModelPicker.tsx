@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import type { ModelStatus, NativeBackendUsage } from '@contracts';
 import { invalidateModelUsage, readLiveUsage, usageRevision, writeLiveUsage } from '@/lib/catalog-cache';
 export { invalidateModelUsage };
-import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
+import { IconCheck, IconChevronDown, IconRotateCw, IconSearch, IconServer } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -298,7 +298,7 @@ function PickerScrollSync({ listRef, agentsRef, providersRef, activeOptionId, re
   return null;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, labelClassName, loading = false, refreshing = false, error, onRetry, open: openProp, onOpenChange }: {
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, onSelectProvider, leading, sourceLabel, labelClassName, loading = false, refreshing = false, error, onRetry, open: openProp, onOpenChange }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -355,6 +355,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   onSelectProvider?: (id: string) => void;
   /** Before the model's name in the trigger: the agent's mark when the menu also picks the agent. */
   leading?: ReactNode;
+  /** Shown at the top of the popover when agents and models are read from a linked server. */
+  sourceLabel?: string;
   /** The model's name in the trigger, where the trigger is set larger than the composer's (a council seat). */
   labelClassName?: string;
   /** Opened by its host rather than its trigger (a mention written in the draft); `onOpenChange` hears every change. */
@@ -794,6 +796,12 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         style={lockedHeight ? (side === 'bottom' ? { minHeight: `min(${lockedHeight}px, 64dvh)` } : { height: lockedHeight }) : undefined}
         className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,calc(100vw-24px))]' : 'w-[min(500px,calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
+        {sourceLabel && (
+          <div className="flex shrink-0 items-center gap-1.5 edge-b bg-subtle/40 px-3 py-1.5 text-2xs text-fg-3">
+            <IconServer className="size-3 shrink-0 text-fg-4" />
+            <span className="truncate">{sourceLabel}</span>
+          </div>
+        )}
         {/* The failure is the active agent's; another one previewed brings its own note in the list. */}
         {failure && previewIsActive && (
           <div role="status" className="flex shrink-0 items-center gap-2 edge-b px-3 py-1.5 text-2xs text-fg-3">

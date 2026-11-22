@@ -1,7 +1,9 @@
 {
   "INVALID_LINK": { "zh": "这不是完整的 Riffet 链接串，请重新复制", "en": "This is not a complete Riffet link string; copy it again" },
+  "INVALID_LINK_ALIAS": { "zh": "短别名只能用小写字母、数字和 . _ -，且以字母或数字开头", "en": "Alias may only contain lowercase letters, digits, and . _ -, starting with a letter or digit" },
   "INVALID_LINK_URL": { "zh": "地址要以 http:// 或 https:// 开头", "en": "The address must start with http:// or https://" },
   "LINK_ADDRESS_REQUIRED": { "zh": "链接串里没有可连的地址，请改用 riffet link ssh", "en": "The link string has no address to reach; use riffet link ssh instead" },
+  "LINK_ALIAS_TAKEN": { "zh": "短别名 {alias} 已被另一台服务器使用", "en": "Alias {alias} is already used by another linked server" },
   "LINK_EXISTS": { "zh": "已经和 {name} 互联", "en": "Already linked with {name}" },
   "LINK_EXPIRED": { "zh": "链接串已过期或已用过，请重新生成", "en": "The link string has expired or was already used; create a new one" },
   "LINK_FAILED": { "zh": "{message}", "en": "{message}" },
@@ -13,5 +15,6 @@
   "LINK_OFFLINE": { "zh": "{name} 离线", "en": "{name} is offline" },
   "LINK_PROOF_INVALID": { "zh": "链接串和对方不匹配，请重新生成", "en": "The link string doesn't match the other server; create a new one" },
   "LINK_REMOVED": { "zh": "对方已断开互联", "en": "The other server ended the link" },
-  "LINK_SELF": { "zh": "这个链接串是在这台服务器上生成的", "en": "This link string was created on this server" }
+  "LINK_SELF": { "zh": "这个链接串是在这台服务器上生成的", "en": "This link string was created on this server" },
+  "REMOTE_EXEC_BUSY": { "zh": "目标服务器正在执行的远端命令已达上限，请稍后再试", "en": "The target server is already running the maximum number of remote commands; try again shortly" }
 }

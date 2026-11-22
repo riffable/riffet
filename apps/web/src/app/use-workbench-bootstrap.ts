@@ -12,7 +12,7 @@ import { useStores } from './state/stores';
  * Loads the workbench's lists, capabilities, backends and model catalogs, and keeps the live
  * connection open once the lists are in.
  */
-export function useWorkbenchBootstrap({ loaded, project, session, backends, homeBackendId, homeProfileId, catalogRevision, catalogBackendId, catalogProfileId, catalogKey }: {
+export function useWorkbenchBootstrap({ loaded, project, session, backends, homeBackendId, homeProfileId, catalogRevision, catalogBackendId, catalogProfileId, catalogKey, catalogServerId }: {
   loaded: boolean;
   project: ProjectRecord | undefined;
   session: Session | undefined;
@@ -23,6 +23,8 @@ export function useWorkbenchBootstrap({ loaded, project, session, backends, home
   catalogBackendId: NativeBackendId;
   catalogProfileId: string | undefined;
   catalogKey: string;
+  /** Linked server whose agents/models are shown on the new-session page; empty for the entry server. */
+  catalogServerId?: string;
 }) {
   const { t } = useLingui();
   const { lists, nav, catalog, handlers } = useStores();
@@ -73,22 +75,25 @@ export function useWorkbenchBootstrap({ loaded, project, session, backends, home
   const homeProfiles = useMemo(() => backends.find((entry) => entry.backendId === homeBackendId)?.profiles ?? [], [backends, homeBackendId]);
   useEffect(() => {
     if (homeProfileId && homeProfiles.length && !homeProfiles.some((profile) => profile.id === homeProfileId)) {
-      catalog.setHomeProfile(homeProfiles.find((profile) => profile.isDefault)?.id);
+      const fallback = homeProfiles.find((profile) => profile.isDefault)?.id;
+      if (catalogServerId) catalog.setRemoteHomeProfile(catalogServerId, fallback);
+      else catalog.setHomeProfile(fallback);
     }
-  }, [homeProfileId, homeProfiles, catalog]);
-  const homeProfilesKey = `${project?.id ?? ''}:${homeBackendId}:${homeProfiles.map((entry) => entry.id).join(',')}:${catalogRevision}`;
+  }, [homeProfileId, homeProfiles, catalog, catalogServerId]);
+  const homeProfilesKey = `${catalogServerId ?? ''}:${project?.id ?? ''}:${homeBackendId}:${homeProfiles.map((entry) => entry.id).join(',')}:${catalogRevision}`;
   useEffect(() => {
     // One provider needs no grouping, and the single-catalog load below already covers it.
-    if (session?.id || project?.system === 'quick-chat' || (!project?.id && !projectlessTasks) || homeProfiles.length < 2) { catalog.clearProfileCatalogs(); return; }
-    return catalog.loadProfiles(project?.id ?? '', homeBackendId, homeProfiles, homeProfilesKey);
-  }, [session?.id, project?.id, projectlessTasks, homeBackendId, homeProfiles, homeProfilesKey, catalog]);
+    if (session?.id || project?.system === 'quick-chat' || (!project?.id && !projectlessTasks && !catalogServerId) || homeProfiles.length < 2) { catalog.clearProfileCatalogs(); return; }
+    return catalog.loadProfiles(project?.id ?? '', homeBackendId, homeProfiles, homeProfilesKey, false, catalogServerId);
+  }, [session?.id, project?.id, projectlessTasks, catalogServerId, homeBackendId, homeProfiles, homeProfilesKey, catalog]);
 
   const loadCatalog = useCallback(() => {
-    if (!project?.id && !projectlessTasks) return Promise.resolve();
-    return catalog.load({ projectId: project?.id ?? '', sessionId: session?.id ?? '', backendId: catalogBackendId, profileId: catalogProfileId, key: catalogKey });
+    if (!project?.id && !projectlessTasks && !catalogServerId) return Promise.resolve();
+    if (catalogServerId && !backends.length) return Promise.resolve();
+    return catalog.load({ projectId: project?.id ?? '', sessionId: session?.id ?? '', backendId: catalogBackendId, profileId: catalogProfileId, ...(catalogServerId ? { serverId: catalogServerId } : {}), key: catalogKey });
   },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a re-read backend list (`catalogRevision`) must reload the catalog
-    [catalog, project?.id, session?.id, projectlessTasks, catalogBackendId, catalogProfileId, catalogKey, catalogRevision]);
+    [catalog, project?.id, session?.id, projectlessTasks, catalogServerId, backends.length, catalogBackendId, catalogProfileId, catalogKey, catalogRevision]);
 
   useEffect(() => {
     void loadBootstrap().catch(bootstrapFailed);

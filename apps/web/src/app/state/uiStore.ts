@@ -113,6 +113,8 @@ export interface UiState {
   importSession?: { projectId?: string };
   /** Fallback browser for hosts whose native folder chooser cannot be driven. */
   sessionDirectoryOpen: boolean;
+  /** The server that `DirectoryPicker` opens on (`''` is the entry server; undefined falls back to the current project's). */
+  sessionDirectoryServer?: string;
   references: PromptContextReference[];
   creating: boolean;
   creatingWorktree: boolean;

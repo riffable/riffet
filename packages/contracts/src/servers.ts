@@ -11,10 +11,38 @@ export type LinkTransportId = 'direct' | 'ssh';
  */
 export type LinkState = 'online' | 'connecting' | 'offline' | 'removed';
 
+/** Operating system and CPU architecture reported by a server during the link handshake. */
+export interface ServerPlatform {
+  os: string;
+  arch: string;
+}
+
+/** This server's own identity as shown in 设置 › 互联 (`GET /api/links`). */
+export interface LinkSelfInfo {
+  serverId: string;
+  name: string;
+  /** The host-derived fallback name used when no custom name is set. */
+  defaultName: string;
+  platform: ServerPlatform;
+}
+
+/** `PATCH /api/links/self`. */
+export interface LinkSelfUpdateRequest {
+  /** Empty string clears the custom name and falls back to the host name. */
+  name: string;
+}
+
 /** One link as this server sees it (`GET /api/links`). */
 export interface LinkInfo {
   serverId: string;
   name: string;
+  /** The name the peer reported itself, when this server uses a local custom name. */
+  peerName?: string;
+  /** Short local alias unique on this server (used for multi-server labels and CLI targeting). */
+  alias: string;
+  /** Optional local note describing the peer (e.g. "iOS build Mac"). */
+  note?: string;
+  platform?: ServerPlatform;
   transport: LinkTransportId;
   /** `direct`: the other server's address. `ssh`: the SSH destination. Empty on the side that does not dial. */
   address: string;
@@ -56,7 +84,15 @@ export interface LinkJoinRequest {
 }
 
 /** `PATCH /api/links/:serverId`. */
-export interface LinkUpdateRequest { inbound?: boolean }
+export interface LinkUpdateRequest {
+  inbound?: boolean;
+  /** Local display name; empty string restores the peer's reported name. */
+  name?: string;
+  /** Short local alias (`^[a-z0-9][a-z0-9._-]{0,31}$`), unique on this server. */
+  alias?: string;
+  /** Local one-line note; empty string clears it. */
+  note?: string;
+}
 
 /** One thing the other server did here through the link (`GET /api/links/:serverId/audit`). */
 export interface LinkAuditEntry {
@@ -73,6 +109,10 @@ export interface LinkAuditEntry {
 export interface ServerInfo {
   id: string;
   name: string;
+  /** Short local alias for linked servers (and optional derived alias for self). */
+  alias?: string;
+  note?: string;
+  platform?: ServerPlatform;
   self?: true;
   online: boolean;
   version?: string;
@@ -82,4 +122,24 @@ export interface ServerInfo {
   inbound: boolean;
   outbound: boolean;
   lastConnectedAt?: string;
+}
+
+/** `POST /api/remote/exec` (normally called through `/api/servers/:serverId/remote/exec`). */
+export interface RemoteExecRequest {
+  command: string;
+  /** Working directory on the target machine; `~` expands to its home directory. Defaults to home. */
+  cwd?: string;
+  /** Wall-clock timeout in milliseconds, clamped to `LINK_BUDGET.execTimeoutMaxMs`. */
+  timeoutMs?: number;
+}
+
+export interface RemoteExecResult {
+  exitCode: number | null;
+  signal?: string;
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
+  timedOut: boolean;
+  durationMs: number;
+  cwd: string;
 }

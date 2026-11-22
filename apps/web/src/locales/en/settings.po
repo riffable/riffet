@@ -29,6 +29,11 @@ msgstr ", docks at the bottom of the conversation, drag the top edge to resize"
 msgid "，含内边距"
 msgstr ", with padding"
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "· 需在 {0} 的「设置 › 互联」开启"
+msgstr "· Turn on in {0}'s Settings › Linked servers"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "“{name}”会从所有设备上移除，正在使用它的设备会回到 Riffet。"
 msgstr "\"{name}\" will be removed from all devices. Devices using it will return to Riffet."
@@ -70,6 +75,11 @@ msgstr "{0} CLI login"
 msgid "{0} 上下文长度"
 msgstr "{0} context length"
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 不能操作这台电脑"
+msgstr "{0} cannot operate this computer"
+
 #. placeholder {0}: counts.get(rule.id) ?? 0
 #: src/app/settings/TitleRulesSection.tsx
 msgid "{0} 个会话"
@@ -109,6 +119,11 @@ msgstr "{0} min ago"
 msgid "{0} 到窗口宽 − {1}"
 msgstr "{0} to window width − {1}"
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "{0} 可浏览本机目录并新建会话"
+msgstr "{0} can browse directories and start sessions here"
+
 #. placeholder {0}: formatElapsed(left)
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "{0} 后停止"
@@ -130,11 +145,6 @@ msgstr "{0, plural, one {# hour} other {# hours}}"
 msgid "{0} 已断开互联"
 msgstr "{0} ended the link"
 
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "{0} 未允许这台电脑操作它"
-msgstr "{0} doesn't let this computer operate it"
-
 #. placeholder {0}: settings.titleRules.length
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "{0} 条"
@@ -149,11 +159,6 @@ msgstr "{0} interface styles share one set of components: values set sizes and m
 #: src/app/design/mac/StylesChapter.tsx
 msgid "{0} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。"
 msgstr "{0} interface styles share one set of components: the recipe decides which form each component takes, and the values decide its size. Colour comes from the theme, independent of style."
-
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "{0} 被他人控制时，对方也能操作这台电脑"
-msgstr "If someone else takes control of {0}, they can operate this computer too"
 
 #. placeholder {0}: MAC.terminal.min
 #: src/app/design/mac/WindowChapter.tsx
@@ -559,6 +564,10 @@ msgstr "SheetScaffold unifies the title, body, footer and keyboard handling; cal
 #: src/app/design/android/OverlayChapter.tsx
 msgid "Snackbar 整个应用一个队列，不压在底栏上"
 msgstr "One Snackbar queue for the whole app, kept above the tab bar"
+
+#: src/app/settings/LinksSection.tsx
+msgid "SSH 目标"
+msgstr "SSH destination"
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。"
@@ -1129,10 +1138,6 @@ msgstr "Main style"
 msgid "主风格，以 Web 为准：内缩卡片、项目树侧栏、会话标签栏，菜单与弹出层共用一种浮层。"
 msgstr "The main style, defined by the web: inset card, project-tree sidebar, session tab bar, with menus and popovers sharing one overlay."
 
-#: src/app/settings/LinksSection.tsx
-msgid "也可以在这台机器上运行 <0>riffet link ssh 主机</0>，隧道经 SSH 建立"
-msgstr "Or run <0>riffet link ssh host</0> on this machine to link over SSH"
-
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "事件循环延迟"
 msgstr "Event loop latency"
@@ -1153,6 +1158,14 @@ msgstr "QR code"
 #: src/app/settings/settingsSections.ts
 msgid "互联"
 msgstr "Server links"
+
+#: src/app/settings/LinksSection.tsx
+msgid "互联时向对端展示"
+msgstr "Shown to linked servers"
+
+#: src/app/settings/LinksSection.tsx
+msgid "互联时向对端展示 · {platform}"
+msgstr "Shown to linked servers · {platform}"
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "互联的服务器"
@@ -1216,6 +1229,18 @@ msgstr "Saved on this device only"
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "仅图标"
 msgstr "Icon only"
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在本机显示，方便区分多台机器"
+msgstr "Shown only on this server to tell machines apart"
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在本机生效，重连后不会被覆盖"
+msgstr "Applies only on this server and is kept across reconnects"
+
+#: src/app/settings/LinksSection.tsx
+msgid "仅在远端非交互 shell 找不到 riffet 时填写"
+msgstr "Only needed when riffet is not on the remote non-interactive shell PATH"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "仅导航条"
@@ -1483,6 +1508,14 @@ msgstr "Example"
 msgid "例如 公司网关"
 msgstr "e.g. Company gateway"
 
+#: src/app/settings/LinksSection.tsx
+msgid "例如：iOS 构建机"
+msgstr "e.g. iOS build Mac"
+
+#: src/app/settings/LinksSection.tsx
+msgid "例如在 Mac 上运行并开启此项后，就能在 devbox 的网页里选择 Mac 目录；远端被控制时也会波及本机"
+msgstr "For example, running on a Mac with this on lets devbox's web app pick Mac folders; anyone who controls the remote machine can also operate this one"
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "依次实现 Web、Mac、Android、iOS"
 msgstr "Implement on Web, Mac, Android and iOS in turn"
@@ -1573,6 +1606,7 @@ msgstr "Side panel"
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -1657,6 +1691,10 @@ msgstr "Fix the focus order in settings"
 msgid "修复首帧跳变"
 msgstr "Fix the first-frame jump"
 
+#: src/app/settings/LinksSection.tsx
+msgid "修改"
+msgstr "Change"
+
 #: src/app/design/overview/Opening.tsx
 msgid "修改 3 个文件"
 msgstr "Editing 3 files"
@@ -1725,6 +1763,10 @@ msgstr "Allow once"
 #: src/app/settings/LinksSection.tsx
 msgid "允许对方操作这台电脑"
 msgstr "Let the other server operate this computer"
+
+#: src/app/settings/LinksSection.tsx
+msgid "允许远端操作发起命令的机器"
+msgstr "Let the remote server operate the machine running this command"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "允许预览项目外的文件"
@@ -2380,6 +2422,11 @@ msgstr "Refresh quota"
 msgid "前一个命令已占用"
 msgstr "Already taken by the previous command"
 
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "前往 {0} 开启"
+msgstr "Turn on in {0}"
+
 #. placeholder {0}: formatNumber(status.quota.remaining)
 #. placeholder {0}: formatQuotaAmount(status.dailyQuota.remaining)
 #. placeholder {1}: formatNumber(status.quota.limit)
@@ -2395,10 +2442,6 @@ msgstr "{remaining}% left"
 #: src/app/settings/settingsSections.ts
 msgid "功能"
 msgstr "Features"
-
-#: src/app/settings/LinksSection.tsx
-msgid "加入另一台服务器"
-msgstr "Join another server"
 
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -2722,6 +2765,7 @@ msgstr "A control that obtains a value. Fields share the look of fieldClass; on 
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "取消"
@@ -2766,6 +2810,10 @@ msgstr "Stacking order"
 #: src/app/settings/LinksSection.tsx
 msgid "另一台服务器连到这里用的地址"
 msgstr "Address the other server reaches this one at"
+
+#: src/app/settings/LinksSection.tsx
+msgid "另一台机器访问不到回环地址，请填内网/局域网 IP，或改用 SSH 互联"
+msgstr "Another machine cannot reach a loopback address; enter a LAN/intranet IP or link over SSH instead"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "只写存储位置、能否撤销、是否跨设备、是否需重启、权限与计费。"
@@ -2841,11 +2889,6 @@ msgstr "Signs out of this browser only."
 msgid "可以使用的人"
 msgstr "People who can use it"
 
-#. placeholder {0}: link.name
-#: src/app/settings/LinksSection.tsx
-msgid "可以操作 {0}"
-msgstr "Can operate {0}"
-
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr "Reusable parts, each with variants, sizes and states. One implementation per component per platform."
@@ -2857,6 +2900,11 @@ msgstr "Recoverable"
 #: src/app/design/android/PagesChapter.tsx
 msgid "可收起的大标题"
 msgstr "Collapsing large title"
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "可浏览 {0} 的目录并新建会话"
+msgstr "Can browse directories and start sessions on {0}"
 
 #: src/app/settings/SupportSections.tsx
 msgid "可用"
@@ -2985,6 +3033,7 @@ msgstr "Two states of the same colour differ by filled and hollow; the pulse mar
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/LinksSection.tsx
 #: src/app/settings/ProfileSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "名称"
@@ -3082,6 +3131,10 @@ msgstr "Commands, conversations and projects, in one list"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "命令与 Skills"
 msgstr "Commands and Skills"
+
+#: src/app/settings/LinksSection.tsx
+msgid "命令会默认开启「本机操作远端」；断线重连需要免交互 SSH（密钥或 ssh-agent）"
+msgstr "Allows operating the remote server by default; automatic reconnect requires non-interactive SSH (key or ssh-agent)"
 
 #: src/app/design/overview/Opening.tsx
 msgid "四个客户端共用的颜色、文字、间距、动效与组件。"
@@ -3284,8 +3337,8 @@ msgid "在几种选择控件之间怎么选"
 msgstr "How to choose among several selection controls"
 
 #: src/app/settings/LinksSection.tsx
-msgid "在另一台服务器的「设置 › 互联」粘贴。5 分钟内有效，只能用一次"
-msgstr "Paste it in Settings › Server links on the other server. It works once, within 5 minutes."
+msgid "在另一台服务器的「设置 › 互联 › 粘贴链接串」中填入（5 分钟内有效，仅一次）。如需在这台电脑选择对方目录，记得在对方粘贴时开启授权开关"
+msgstr "Paste this in the other server's Settings › Linked servers › Paste link string (valid once for 5 minutes). Turn on the permission switch there if you want to browse its directories from here"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "在哪里找"
@@ -3298,6 +3351,10 @@ msgstr "Appears here after you pair by scanning the QR code on your phone."
 #: src/app/settings/ChannelsSection.tsx
 msgid "在插件中启用飞书后可添加"
 msgstr "Turn on the Feishu plugin to add one"
+
+#: src/app/settings/LinksSection.tsx
+msgid "在无法被直连的机器上使用（如 Mac），主动连向生成链接串的一方"
+msgstr "Use on a machine that cannot be reached directly (e.g. Mac) to connect to the server that generated the link string"
 
 #: src/app/settings/StorageSection.tsx
 msgid "在服务下次启动时进行，期间服务不可用"
@@ -3318,6 +3375,10 @@ msgstr "Run the restore command on the server computer, specifying the backup fo
 #: src/app/settings/PreferencesSections.tsx
 msgid "在服务器电脑上运行。"
 msgstr "Runs on the server computer."
+
+#: src/app/settings/LinksSection.tsx
+msgid "在本机可被对方直连时使用（如 devbox），由另一台粘贴后双向可用"
+msgstr "Use when the other server can reach this machine directly (e.g. devbox); works both ways once linked"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "在浏览器中打开"
@@ -3397,6 +3458,10 @@ msgstr "Foundations"
 msgid "堆 {0} / {1}"
 msgstr "Heap {0} / {1}"
 
+#: src/app/settings/LinksSection.tsx
+msgid "填写要连向的远端主机（例如 devbox），在能 SSH 到它的机器终端执行下面命令"
+msgstr "Enter the remote host to connect to (e.g. devbox), then run the command below on a machine that can SSH into it"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "声明式描述"
 msgstr "Declarative description"
@@ -3429,6 +3494,10 @@ msgstr "Backup failed"
 #: src/app/settings/SupportSections.tsx
 msgid "备份已完成"
 msgstr "Backup complete"
+
+#: src/app/settings/LinksSection.tsx
+msgid "备注"
+msgstr "Note"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "复制 App ID"
@@ -3730,10 +3799,6 @@ msgstr "Act on an item"
 msgid "对方的质询要先正面回答。"
 msgstr "The other side's cross-examination needs a direct answer first."
 
-#: src/app/settings/LinksSection.tsx
-msgid "对方被他人控制时，也能操作这台电脑"
-msgstr "If someone else takes control of the other server, they can operate this computer too"
-
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "对比度"
 msgstr "Contrast"
@@ -3753,6 +3818,11 @@ msgstr "Contrast is WCAG 2 relative luminance against bg. fg-4 is for informatio
 #: src/app/settings/ThemeEditor.tsx
 msgid "对比度提示（{modeLabel}）"
 msgstr "Contrast checks ({modeLabel})"
+
+#. placeholder {0}: link.peerName
+#: src/app/settings/LinksSection.tsx
+msgid "对端自报：{0}；留空恢复对端名称"
+msgstr "Peer reported: {0}; leave blank to restore"
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "对话、终端、输入框"
@@ -4461,6 +4531,15 @@ msgstr "Switch"
 #: src/app/settings/UpdateSection.tsx
 msgid "开发版本"
 msgstr "Development version"
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "开启后对方可浏览本机目录并新建会话；{0} 被他人控制时也会波及这台电脑"
+msgstr "Lets {0} browse directories and start sessions here; if {0} is compromised, this computer is too"
+
+#: src/app/settings/LinksSection.tsx
+msgid "开启后对方可浏览本机目录并新建会话；对方被他人控制时也会波及这台电脑"
+msgstr "Lets the other server browse directories and start sessions here; if it is compromised, this computer is too"
 
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "开始任务前"
@@ -5788,6 +5867,10 @@ msgstr "Couldn't save the push key"
 msgid "无法保存文件访问设置"
 msgstr "Couldn't save the file access setting"
 
+#: src/app/settings/LinksSection.tsx
+msgid "无法保存服务器名称"
+msgstr "Couldn't save server name"
+
 #: src/app/settings/TitleRulesSection.tsx
 msgid "无法保存标题规则"
 msgstr "Couldn't save the title rules"
@@ -6035,6 +6118,10 @@ msgstr "Accessibility"
 msgid "无障碍已开启"
 msgstr "Accessibility on"
 
+#: src/app/settings/LinksSection.tsx
+msgid "无需开放端口；在能 SSH 到对方的机器运行（例如 Mac 连 devbox）"
+msgstr "No exposed port needed; run on the machine that can SSH to the other (e.g. Mac to devbox)"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "无需确认"
 msgstr "No confirmation needed"
@@ -6112,6 +6199,10 @@ msgstr "Show as"
 msgid "显示全部"
 msgstr "Show all"
 
+#: src/app/settings/LinksSection.tsx
+msgid "显示名称"
+msgstr "Display name"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "显示在侧栏里"
 msgstr "Shown in the sidebar"
@@ -6134,6 +6225,11 @@ msgstr "Show line numbers"
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "暂不支持选择"
 msgstr "Selection isn't supported yet"
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
+msgid "暂不能操作 {0}"
+msgstr "Cannot operate {0} yet"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "暂无数据"
@@ -6376,6 +6472,10 @@ msgstr "Local source"
 #: src/app/design/components/InputsChapter.tsx
 msgid "本机"
 msgstr "This machine"
+
+#: src/app/settings/LinksSection.tsx
+msgid "本机唯一，用于多服务器标签与命令行寻址（小写字母、数字、. _ -）"
+msgstr "Unique on this server for labels and CLI targeting (lowercase letters, digits, . _ -)"
 
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "本机服务器"
@@ -7343,6 +7443,10 @@ msgstr "Generated for Android"
 msgid "生成到 Mac"
 msgstr "Generated for the Mac"
 
+#: src/app/settings/LinksSection.tsx
+msgid "生成命令"
+msgstr "Generate command"
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "生成文件"
 msgstr "Generated files"
@@ -7415,6 +7519,10 @@ msgstr "Scan with Feishu"
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr "Written by Codex to ~/.codex/config.toml"
+
+#: src/app/settings/LinksSection.tsx
+msgid "由能连通对方的一台发起连接，连上后双向共用隧道，各自控制是否允许对方操作本机"
+msgstr "Initiated from whichever machine can reach the other; once linked, both directions share one tunnel and each controls inbound access"
 
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -7557,6 +7665,10 @@ msgstr "Short"
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "短任务"
 msgstr "Short task"
+
+#: src/app/settings/LinksSection.tsx
+msgid "短别名"
+msgstr "Alias"
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "短暂反馈"
@@ -8105,6 +8217,10 @@ msgstr "Terminal"
 msgid "终端只接受 #rrggbb，透明度会被忽略。"
 msgstr "The terminal accepts only #rrggbb; transparency is ignored."
 
+#: src/app/settings/LinksSection.tsx
+msgid "终端命令"
+msgstr "Terminal command"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
 msgstr "Terminal font size"
@@ -8124,6 +8240,10 @@ msgstr "Terminal connections"
 #: src/app/settings/ThemeEditor.tsx
 msgid "终端颜色（16 色）"
 msgstr "Terminal colors (16)"
+
+#: src/app/settings/LinksSection.tsx
+msgid "经 SSH 互联"
+msgstr "Link over SSH"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "绑定你的飞书账号"
@@ -8212,6 +8332,7 @@ msgid "缓慢淡入淡出"
 msgstr "Slow fade"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/LinksSection.tsx
 msgid "编辑"
 msgstr "Edit"
 
@@ -8237,6 +8358,10 @@ msgstr "Editor"
 #: src/app/settings/PreferencesSections.tsx
 msgid "编辑器命令"
 msgstr "Editor command"
+
+#: src/app/settings/LinksSection.tsx
+msgid "编辑服务器"
+msgstr "Edit server"
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "编辑标题规则"
@@ -9360,6 +9485,14 @@ msgstr "The browser keeps this combination"
 msgid "这个聊天里的会话绑定一并忘记"
 msgstr "Its conversation bindings are forgotten too"
 
+#: src/app/settings/LinksSection.tsx
+msgid "这台服务器"
+msgstr "This server"
+
+#: src/app/settings/LinksSection.tsx
+msgid "这台电脑"
+msgstr "This computer"
+
 #: src/app/settings/DevicesSection.tsx
 msgid "这台设备"
 msgstr "This device"
@@ -9437,6 +9570,10 @@ msgstr "A busy button keeps its width; the spinner sits in place."
 msgid "远程服务器"
 msgstr "Remote server"
 
+#: src/app/settings/LinksSection.tsx
+msgid "远端 riffet 路径（可选）"
+msgstr "Remote riffet path (optional)"
+
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgctxt "settings-connect-action"
@@ -9471,6 +9608,10 @@ msgstr "Connection failed"
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "连接已断开"
 msgstr "Disconnected"
+
+#: src/app/settings/LinksSection.tsx
+msgid "连接方向只取决于网络可达性；想在 A 机器里选 B 机器的目录，只需在 B 开启「允许 A 操作这台电脑」"
+msgstr "Connection direction only depends on network reachability; to pick folders on B from A, turn on \"Let A operate this computer\" on B"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -9626,10 +9767,6 @@ msgstr "The scrim sits at the window level, over the top bar and tab bar"
 #: src/app/design/patterns/parts.tsx
 msgid "避免"
 msgstr "Avoid"
-
-#: src/app/settings/LinksSection.tsx
-msgid "邀请另一台服务器"
-msgstr "Invite another server"
 
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "都先问我"
@@ -10418,3 +10555,4 @@ msgstr "Default model"
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr "The default style. Ink in place of the accent, layers told apart by tone instead of lines, regular-weight rows, with weight kept for titles and unread items."
+

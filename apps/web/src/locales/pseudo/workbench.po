@@ -7,6 +7,11 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: pseudo\n"
 
+#. placeholder {0}: server.name
+#: src/app/useServerLabel.tsx
+msgid "{0} · 离线"
+msgstr ""
+
 #. placeholder {0}: agent.label
 #. placeholder {0}: backend.label
 #. placeholder {0}: label(backendId)
@@ -48,10 +53,6 @@ msgstr ""
 
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
-msgstr ""
-
-#: src/app/useServerLabel.tsx
-msgid "{name} · 离线"
 msgstr ""
 
 #: src/app/SessionDeletion.tsx
@@ -177,6 +178,11 @@ msgstr ""
 
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "仅本机"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -337,6 +343,11 @@ msgstr ""
 msgid "先为这个任务选一个项目"
 msgstr ""
 
+#. placeholder {0}: activeServer?.name ?? ''
+#: src/app/ProjectHome.tsx
+msgid "先在 {0} 选择一个目录"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Sidebar.tsx
@@ -360,6 +371,11 @@ msgstr ""
 #: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "全部服务器"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -700,6 +716,10 @@ msgstr ""
 msgid "在内容中搜索「{needle}」"
 msgstr ""
 
+#: src/app/ProjectHome.tsx
+msgid "在哪台服务器新建？"
+msgstr ""
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "在手机上接着看"
 msgstr ""
@@ -1012,6 +1032,10 @@ msgstr ""
 
 #: src/app/Sidebar.tsx
 msgid "恢复项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "恢复默认服务器范围"
 msgstr ""
 
 #: src/app/plugins/PluginTasksBlock.tsx
@@ -1454,6 +1478,10 @@ msgstr ""
 msgid "无法加载 Agent 列表"
 msgstr ""
 
+#: src/app/state/catalogStore.ts
+msgid "无法加载对端服务器的 Agent 列表"
+msgstr ""
+
 #: src/app/Workbench.tsx
 msgid "无法加载工作台"
 msgstr ""
@@ -1705,11 +1733,20 @@ msgstr ""
 
 #: src/app/AddProjectDialog.tsx
 #: src/app/DirectoryPicker.tsx
+#: src/app/SessionInfo.tsx
 msgid "服务器"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "服务器范围"
+msgstr ""
+
+#: src/app/useServerLabel.tsx
+msgid "未允许本机操作"
 msgstr ""
 
 #: src/app/Header.tsx
@@ -1735,6 +1772,10 @@ msgstr ""
 msgid "本机"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "本机与本机发起"
+msgstr ""
+
 #: src/app/plugins/PluginChannelsBlock.tsx
 msgctxt "plugin-channels-section"
 msgid "机器人"
@@ -1748,6 +1789,11 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
+msgstr ""
+
+#. placeholder {0}: activeServer.name
+#: src/app/ProjectHome.tsx
+msgid "来自 {0}"
 msgstr ""
 
 #: src/app/use-session-actions.ts
@@ -1951,6 +1997,10 @@ msgctxt "plugin-version-label"
 msgid "版本"
 msgstr ""
 
+#: src/app/useServerLabel.tsx
+msgid "版本不兼容"
+msgstr ""
+
 #: src/app/plugins/PluginAgentBackendsBlock.tsx
 msgid "版本过旧"
 msgstr ""
@@ -2015,6 +2065,10 @@ msgstr ""
 
 #: src/app/AddProjectDialog.tsx
 msgid "直接添加为项目"
+msgstr ""
+
+#: src/app/useServerLabel.tsx
+msgid "离线"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -2101,6 +2155,10 @@ msgstr ""
 msgid "筛选日志"
 msgstr ""
 
+#: src/app/SessionSearchDialog.tsx
+msgid "筛选服务器"
+msgstr ""
+
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "筛选模型"
 msgstr ""
@@ -2108,6 +2166,10 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"
 msgid "管理"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "管理互联…"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -2455,10 +2517,12 @@ msgid "选择模型"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录"
 msgstr ""
 
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录…"
 msgstr ""
 

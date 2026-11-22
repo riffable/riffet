@@ -10,7 +10,8 @@ import { doctor } from './doctor.js';
 import { configure, open, resolveLaunchOptions, restart, savedLaunchArgs, serve, start, stop, type LaunchOptions } from './launch.js';
 import { logs } from './logs.js';
 import { pair } from './pair.js';
-import { linkInvite, linkJoin, linkList, linkRemove, linkSsh, linkStdio } from './link.js';
+import { linkInvite, linkJoin, linkList, linkRemove, linkRename, linkSelfName, linkSsh, linkStdio } from './link.js';
+import { sshList, sshRun } from './ssh.js';
 import { buildPluginIndex, deletePluginData, developPlugin, inspectPlugin, installPlugin, listPlugins, manageSources, readPluginLogs, recoverPlugins, selectPlugin, uninstallPlugin, unlinkDevelopmentPlugin, updatePlugins, type PluginCliContext } from './plugins.js';
 import { installService, serviceStatus, uninstallService } from './service.js';
 import { list, resume } from './sessions.js';
@@ -151,8 +152,27 @@ export function buildProgram(relaunchArgs?: string[]): Command {
     .action(async (_opts, command: Command) => { await linkList(options(command)); });
   link.command('remove <server>').description('end a link on both servers')
     .action(async (server: string, _opts, command: Command) => { await linkRemove({ ...options(command), server }); });
+  link.command('rename <server>').description('set a linked server\'s local display name, alias or note')
+    .option('--name <text>', 'local display name (empty restores the peer\'s own name)')
+    .option('--alias <alias>', 'short unique alias (lowercase letters, digits, . _ -)')
+    .option('--note <text>', 'short local note describing what this server is for')
+    .option('--json', 'machine-readable output')
+    .action(async (server: string, _opts, command: Command) => { await linkRename({ ...options(command), server }); });
+  link.command('self-name <name>').description('set this server\'s own name as shown to linked servers')
+    .option('--json', 'machine-readable output')
+    .action(async (name: string, _opts, command: Command) => { await linkSelfName({ ...options(command), name }); });
   link.command('stdio', { hidden: true }).option('--role <role>').option('--join <invite>')
     .action(async (_opts, command: Command) => { await linkStdio(options(command)); });
+  program.command('ssh <target> [command...]').description('open a shell or run a command on a linked server through its tunnel (use `riffet ssh ls` to list servers)')
+    .option('--cwd <path>', 'working directory on the target server')
+    .option('--timeout <seconds>', 'command timeout in seconds (non-interactive only)')
+    .option('--json', 'machine-readable output')
+    .addHelpText('after', EXAMPLES([['riffet ssh ls', 'list linked servers and their aliases'], ['riffet ssh mac', 'open an interactive shell on mac'], ['riffet ssh mac -- uname -a', 'run one command on mac']]))
+    .action(async (target: string, commandArgs: string[], _opts, command: Command) => {
+      const opts = options<{ cwd?: string; timeout?: string; json?: boolean }>(command);
+      if ((target === 'ls' || target === 'list') && commandArgs.length === 0) { await sshList(opts); return; }
+      process.exitCode = await sshRun({ ...opts, target, command: commandArgs });
+    });
   program.command('url').description('print the address of the workbench')
     .option('--login', 'include the access token, for signing in once')
     .action((_opts, command: Command) => {

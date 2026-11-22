@@ -1,7 +1,7 @@
 import { Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLingui } from '@lingui/react/macro';
-import { IconArchive, IconArchiveRestore, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconTag, IconTrash2 } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconServer, IconTag, IconTrash2 } from '@/components/icons';
 import type { Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -26,6 +26,7 @@ import { TabChromeContext } from './tabs/chrome';
 import { useShortcutHint } from './shortcuts';
 import { ExpandSidebarButton } from './ExpandSidebarButton';
 import { useSwitchedIn } from './session/sessionFrame';
+import { useServerBadge } from './useServerLabel';
 
 /** A session-level command. Desktop lists it in the ⋯ menu; phones list it in the title sheet. */
 export interface HeaderAction {
@@ -249,6 +250,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     );
   }
 
+  const sessionServer = useServerBadge(session?.id ?? project?.id);
   return (
     <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-0 bg-bg px-1.5 md:gap-1 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
       <div className={center ? 'flex min-w-0 items-center gap-1' : 'contents'}>
@@ -262,12 +264,21 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
           {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{assistantPage ? t`个人助理` : projectName}</span>{worktreeBadge}</>}
           {project && session && !mobile && !isAssistantMain && (
             <>
+              {sessionServer && (
+                <Tip label={sessionServer.label}>
+                  <span className={cn('inline-flex max-w-32 shrink-0 items-center gap-1 rounded-md bg-subtle px-1.5 py-0.5 text-xs', sessionServer.offline ? 'text-warning' : 'text-fg-3')}>
+                    <IconServer className="size-3 shrink-0" />
+                    <span className="truncate">{sessionServer.name}</span>
+                  </span>
+                </Tip>
+              )}
               <span className="max-w-48 shrink truncate text-fg-3" title={tildePath(project.cwd)}>{projectName}</span>
               <span aria-hidden className="shrink-0 text-fg-4">/</span>
             </>
           )}
           {session && mobile && (
             <button type="button" onClick={() => setDetailsOpen(true)} className="flex min-h-11 min-w-0 max-w-full flex-1 items-center gap-1.5 overflow-hidden text-left" aria-label={t`会话信息与操作`}>
+              {sessionServer && <Badge tone={sessionServer.offline ? 'warning' : 'neutral'} className="max-w-24 shrink-0 truncate">{sessionServer.multiPeer ? sessionServer.alias : sessionServer.name}</Badge>}
               <span className="min-w-0 truncate font-medium leading-5 text-fg" title={title}>{title}</span>
               {worktreeBadge}
               {state && status === undefined && <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}>{state.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />}</span>}

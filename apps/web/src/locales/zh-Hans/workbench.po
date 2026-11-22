@@ -7,6 +7,11 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
+#. placeholder {0}: server.name
+#: src/app/useServerLabel.tsx
+msgid "{0} · 离线"
+msgstr "{0} · 离线"
+
 #. placeholder {0}: agent.label
 #. placeholder {0}: backend.label
 #. placeholder {0}: label(backendId)
@@ -49,10 +54,6 @@ msgstr "{0}到期"
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
-
-#: src/app/useServerLabel.tsx
-msgid "{name} · 离线"
-msgstr "{name} · 离线"
 
 #: src/app/SessionDeletion.tsx
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
@@ -178,6 +179,11 @@ msgstr "主目录"
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "主题"
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "仅本机"
+msgstr "仅本机"
 
 #: src/app/Sidebar.tsx
 msgid "今天"
@@ -337,6 +343,11 @@ msgstr "先不选"
 msgid "先为这个任务选一个项目"
 msgstr "先为这个任务选一个项目"
 
+#. placeholder {0}: activeServer?.name ?? ''
+#: src/app/ProjectHome.tsx
+msgid "先在 {0} 选择一个目录"
+msgstr "先在 {0} 选择一个目录"
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/plugins/PluginModelSourceProviders.tsx
 #: src/app/Sidebar.tsx
@@ -361,6 +372,11 @@ msgstr "全部会话"
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
 msgstr "全部插件源"
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "全部服务器"
+msgstr "全部服务器"
 
 #: src/app/Sidebar.tsx
 msgid "全部标为已读"
@@ -700,6 +716,10 @@ msgstr "在「技能与工具」里可以让 Agent 操作这台手机"
 msgid "在内容中搜索「{needle}」"
 msgstr "在内容中搜索「{needle}」"
 
+#: src/app/ProjectHome.tsx
+msgid "在哪台服务器新建？"
+msgstr "在哪台服务器新建？"
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "在手机上接着看"
 msgstr "在手机上接着看"
@@ -1013,6 +1033,10 @@ msgstr "恢复当前会话"
 #: src/app/Sidebar.tsx
 msgid "恢复项目"
 msgstr "恢复项目"
+
+#: src/app/Sidebar.tsx
+msgid "恢复默认服务器范围"
+msgstr "恢复默认服务器范围"
 
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
@@ -1454,6 +1478,10 @@ msgstr "无法刷新项目列表"
 msgid "无法加载 Agent 列表"
 msgstr "无法加载 Agent 列表"
 
+#: src/app/state/catalogStore.ts
+msgid "无法加载对端服务器的 Agent 列表"
+msgstr "无法加载对端服务器的 Agent 列表"
+
 #: src/app/Workbench.tsx
 msgid "无法加载工作台"
 msgstr "无法加载工作台"
@@ -1705,12 +1733,21 @@ msgstr "服务与分享"
 
 #: src/app/AddProjectDialog.tsx
 #: src/app/DirectoryPicker.tsx
+#: src/app/SessionInfo.tsx
 msgid "服务器"
 msgstr "服务器"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
 msgstr "服务器版本不兼容"
+
+#: src/app/Sidebar.tsx
+msgid "服务器范围"
+msgstr "服务器范围"
+
+#: src/app/useServerLabel.tsx
+msgid "未允许本机操作"
+msgstr "未允许本机操作"
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
@@ -1735,6 +1772,10 @@ msgstr "未读"
 msgid "本机"
 msgstr "本机"
 
+#: src/app/Sidebar.tsx
+msgid "本机与本机发起"
+msgstr "本机与本机发起"
+
 #: src/app/plugins/PluginChannelsBlock.tsx
 msgctxt "plugin-channels-section"
 msgid "机器人"
@@ -1749,6 +1790,11 @@ msgstr "权限"
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
 msgstr "来源"
+
+#. placeholder {0}: activeServer.name
+#: src/app/ProjectHome.tsx
+msgid "来自 {0}"
+msgstr "来自 {0}"
 
 #: src/app/use-session-actions.ts
 msgid "查看"
@@ -1951,6 +1997,10 @@ msgctxt "plugin-version-label"
 msgid "版本"
 msgstr "版本"
 
+#: src/app/useServerLabel.tsx
+msgid "版本不兼容"
+msgstr "版本不兼容"
+
 #: src/app/plugins/PluginAgentBackendsBlock.tsx
 msgid "版本过旧"
 msgstr "版本过旧"
@@ -2016,6 +2066,10 @@ msgstr "目录路径"
 #: src/app/AddProjectDialog.tsx
 msgid "直接添加为项目"
 msgstr "直接添加为项目"
+
+#: src/app/useServerLabel.tsx
+msgid "离线"
+msgstr "离线"
 
 #: src/app/Sidebar.tsx
 msgid "离线 · 显示 {age} 前保存的列表"
@@ -2101,6 +2155,10 @@ msgstr "筛选提供商"
 msgid "筛选日志"
 msgstr "筛选日志"
 
+#: src/app/SessionSearchDialog.tsx
+msgid "筛选服务器"
+msgstr "筛选服务器"
+
 #: src/app/plugins/PluginModelSourceProviders.tsx
 msgid "筛选模型"
 msgstr "筛选模型"
@@ -2109,6 +2167,10 @@ msgstr "筛选模型"
 msgctxt "plugin-detail-tab"
 msgid "管理"
 msgstr "管理"
+
+#: src/app/ProjectHome.tsx
+msgid "管理互联…"
+msgstr "管理互联…"
 
 #: src/app/Workbench.tsx
 msgid "管理插件"
@@ -2455,10 +2517,12 @@ msgid "选择模型"
 msgstr "选择模型"
 
 #: src/app/DirectoryPicker.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录"
 msgstr "选择目录"
 
 #: src/app/onboarding/Onboarding.tsx
+#: src/app/ProjectHome.tsx
 msgid "选择目录…"
 msgstr "选择目录…"
 

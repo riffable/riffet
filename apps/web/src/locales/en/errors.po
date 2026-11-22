@@ -289,6 +289,11 @@ msgstr "This is not a complete Riffet link string; copy it again"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_ALIAS"
+msgstr "Alias may only contain lowercase letters, digits, and . _ -, starting with a letter or digit"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.INVALID_LINK_URL"
 msgstr "The address must start with http:// or https://"
 
@@ -386,6 +391,11 @@ msgstr "{subject, select, file {A visualization preview must be an HTML file} te
 #: ../../i18n/errors/links.json
 msgid "error.LINK_ADDRESS_REQUIRED"
 msgstr "The link string has no address to reach; use riffet link ssh instead"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ALIAS_TAKEN"
+msgstr "Alias {alias} is already used by another linked server"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
@@ -666,6 +676,11 @@ msgstr "The plugin query result is too large"
 #: ../../i18n/errors/plugins.json
 msgid "error.QUERY_UNAVAILABLE"
 msgstr "This plugin query is currently unavailable"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.REMOTE_EXEC_BUSY"
+msgstr "The target server is already running the maximum number of remote commands; try again shortly"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json

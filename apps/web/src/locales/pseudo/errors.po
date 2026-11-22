@@ -289,6 +289,11 @@ msgstr ""
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_ALIAS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.INVALID_LINK_URL"
 msgstr ""
 
@@ -385,6 +390,11 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
 msgid "error.LINK_ADDRESS_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ALIAS_TAKEN"
 msgstr ""
 
 #. js-lingui-explicit-id
@@ -665,6 +675,11 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.QUERY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.REMOTE_EXEC_BUSY"
 msgstr ""
 
 #. js-lingui-explicit-id

@@ -1,13 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { AGENT_CALL_TOOL_GROUP, type DeviceInfo, type LoadedExtensions, type NativeBackendId, type ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, type DeviceInfo, type LoadedExtensions, type NativeBackendId, type ServerInfo, type ToolGroupId } from '@contracts';
 import { IconPuzzle } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { localizedText, usePlugins } from '@/lib/plugins';
-import { useStores } from '../state/stores';
+import { useLists, useStores } from '../state/stores';
 import { whenIdle } from './useEarlierHistory';
 import { cn, errorMessage } from '@/lib/utils';
 import { boundedCache } from '@/lib/bounded-cache';
@@ -15,19 +15,43 @@ import { registerBounded } from '@/lib/cache-registry';
 
 const LAST_PICK_KEY = 'riffet.tool-groups.last';
 const DEVICE_PREFIX = 'device:';
+const SERVER_PREFIX = 'server:';
 
 /** Whether a backend can have the tools injected at all; the picker is not offered otherwise. */
 export const offersRiffetTools = (capabilities?: { supportsRiffetTools?: boolean }) => capabilities?.supportsRiffetTools === true;
 
 export const phoneGroup = (deviceId: string) => `${DEVICE_PREFIX}${deviceId}` as ToolGroupId;
+export const serverGroup = (serverId: string) => `${SERVER_PREFIX}${serverId}` as ToolGroupId;
 
 /** Riffet's own tools are always injected; a pick only names phones. Older snapshots may still carry `riffet.core`. */
 export const phoneGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX));
+export const serverGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(SERVER_PREFIX));
 
 /** A plugin's agent tools, `<pluginId>/<name>` (docs/BROWSER.md §2). */
 const isPluginGroup = (id: string) => /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]*$/.test(id);
-/** What a pick may name: phones, plugin tool groups, and calling any Agent. */
-const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || isPluginGroup(id) || id === AGENT_CALL_TOOL_GROUP);
+/** What a pick may name: phones, explicitly mounted linked servers, plugin tool groups, and calling any Agent. */
+const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || id.startsWith(SERVER_PREFIX) || isPluginGroup(id) || id === AGENT_CALL_TOOL_GROUP);
+
+/**
+ * Linked servers this conversation may mount for remote command execution: online, compatible peers that
+ * allow this server to operate them, plus any already selected in `value` so they can still be cleared.
+ */
+export function useLinkableServers(value: readonly string[], enabled = true): { servers: ServerInfo[]; available: ToolGroupId[]; offered: boolean } {
+  const all = useLists((state) => state.servers);
+  const linkedStatus = useLists((state) => state.linkedStatus);
+  if (!enabled) return { servers: [], available: [], offered: false };
+  const selected = new Set(serverGroups(value));
+  const servers = all.filter((item) => {
+    if (item.self) return false;
+    const online = item.online && linkedStatus[item.id] !== 'offline';
+    const usable = online && item.compatible && item.outbound;
+    return usable || selected.has(serverGroup(item.id));
+  });
+  const available = servers
+    .filter((item) => item.online && linkedStatus[item.id] !== 'offline' && item.compatible && item.outbound)
+    .map((item) => serverGroup(item.id));
+  return { servers, available, offered: servers.length > 0 };
+}
 
 /**
  * The tool groups of the plugins that are on, plus any the value already names whose plugin is off now
@@ -45,16 +69,19 @@ export function usePluginToolGroups(value: readonly string[]): { rows: Array<{ i
   return { rows, available: rows.filter((row) => !row.off).map((row) => row.id) };
 }
 
-/** A new conversation starts with what the last one on this browser was given. */
+/**
+ * A new conversation starts with what the last one on this browser was given, deliberately excluding
+ * `server:*` grants so remote machine access is always opt-in per conversation.
+ */
 export function lastToolGroups(): ToolGroupId[] {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(LAST_PICK_KEY) ?? '[]') as unknown;
-    return Array.isArray(parsed) ? pickedGroups(parsed.filter((item): item is string => typeof item === 'string')) : [];
+    return Array.isArray(parsed) ? pickedGroups(parsed.filter((item): item is string => typeof item === 'string')).filter((id) => !id.startsWith(SERVER_PREFIX)) : [];
   } catch { return []; }
 }
 
 export function rememberToolGroups(groups: readonly ToolGroupId[]): void {
-  try { window.localStorage.setItem(LAST_PICK_KEY, JSON.stringify(pickedGroups(groups))); } catch { /* Storage may be unavailable. */ }
+  try { window.localStorage.setItem(LAST_PICK_KEY, JSON.stringify(pickedGroups(groups).filter((id) => !id.startsWith(SERVER_PREFIX)))); } catch { /* Storage may be unavailable. */ }
 }
 
 /*
@@ -207,11 +234,13 @@ export const ToolsPickerInMenu = createContext(false);
  * The plugin tools (the browser) and phones a conversation's agent may use (a phone's consent lives on the
  * phone, never here), and the MCP servers and skills it keeps. Riffet's own tools need no pick.
  */
-export function ToolsPicker({ value, onChange, extensions, agents, disabled, footnote, onError }: {
+export function ToolsPicker({ value, onChange, extensions, agents, servers: allowServers = false, disabled, footnote, onError }: {
   value: readonly string[];
   onChange: (next: ToolGroupId[]) => void;
   /** The conversation's Agent can call other Agents (docs/AGENT-CALLS.md): offers letting it call any of them. */
   agents?: boolean;
+  /** Local conversations may mount linked servers for `remote_exec`; disabled on remote conversations to prevent chaining. */
+  servers?: boolean;
   /** Absent when the backend cannot switch extensions or the conversation has no project to read them from. */
   extensions?: ExtensionPick;
   disabled?: boolean;
@@ -225,6 +254,8 @@ export function ToolsPicker({ value, onChange, extensions, agents, disabled, foo
   const picked = pickedGroups(value);
   const { phones } = useControllablePhones(value);
   const pluginGroups = usePluginToolGroups(value);
+  const linkedServers = useLinkableServers(value, allowServers);
+  const linkedStatus = useLists((state) => state.linkedStatus);
   const errorRef = useRef(onError);
   errorRef.current = onError;
   const loaded = useLoadedExtensions(extensions, open);
@@ -234,8 +265,13 @@ export function ToolsPicker({ value, onChange, extensions, agents, disabled, foo
   };
 
   const toggle = (group: ToolGroupId, on: boolean) => {
-    // A phone that is gone is dropped with the change; so is a plugin group that is no longer listed.
-    const kept = picked.filter((id) => id !== group && (id === AGENT_CALL_TOOL_GROUP || phones.some((device) => phoneGroup(device.id) === id) || pluginGroups.rows.some((row) => row.id === id)));
+    // A phone, server or plugin group that is gone is dropped with the change.
+    const kept = picked.filter((id) => id !== group && (
+      id === AGENT_CALL_TOOL_GROUP
+      || phones.some((device) => phoneGroup(device.id) === id)
+      || linkedServers.servers.some((server) => serverGroup(server.id) === id)
+      || pluginGroups.rows.some((row) => row.id === id)
+    ));
     onChange(on ? [...kept, group] : kept);
   };
 
@@ -251,9 +287,16 @@ export function ToolsPicker({ value, onChange, extensions, agents, disabled, foo
 
   const label = t`技能与工具`;
   const rows = phones.map((device) => ({ id: phoneGroup(device.id), name: t`控制 ${device.name}`, offline: !device.online }));
+  const serverRows = linkedServers.servers.map((server) => {
+    const online = server.online && linkedStatus[server.id] !== 'offline';
+    const status = !online ? t`离线` : !server.compatible ? t`版本不兼容` : !server.outbound ? t`未允许` : undefined;
+    return { id: serverGroup(server.id), name: server.name, alias: server.alias, status };
+  });
   // A revoked phone has no row, so it is not counted; until the list arrives, every pick is.
   const phonePicks = phoneGroups(picked);
+  const serverPicks = serverGroups(picked);
   const count = (phones.length ? phonePicks.filter((id) => rows.some((row) => row.id === id)).length : phonePicks.length)
+    + serverPicks.filter((id) => serverRows.some((row) => row.id === id)).length
     + picked.filter((id) => pluginGroups.available.includes(id) || (agents && id === AGENT_CALL_TOOL_GROUP)).length;
   const n = offCount;
   // With switches and nothing changed, everything installed is on: 默认, not 未开启.
@@ -282,6 +325,16 @@ export function ToolsPicker({ value, onChange, extensions, agents, disabled, foo
         (on) => toggle(row.id, on),
         row.offline && <span className="shrink-0 text-xs text-fg-3">{t`离线`}</span>,
       ))}
+      {serverRows.length > 0 && <DropdownMenuLabel>{t`互联机器`}</DropdownMenuLabel>}
+      {serverRows.map((row) => checkboxRow(
+        row.id,
+        picked.includes(row.id),
+        row.name,
+        (on) => toggle(row.id, on),
+        row.status
+          ? <span className="shrink-0 text-xs text-fg-3">{row.status}</span>
+          : row.alias && row.alias !== row.name && <span className="shrink-0 font-mono text-2xs text-fg-4">{row.alias}</span>,
+      ))}
       {mcpRows.length > 0 && <DropdownMenuLabel>{t`MCP`}</DropdownMenuLabel>}
       {mcpRows.map((name) => {
         const tools = toolCount.get(name);
@@ -304,7 +357,7 @@ export function ToolsPicker({ value, onChange, extensions, agents, disabled, foo
           <span className="shrink-0 text-xs">{t`重试`}</span>
         </DropdownMenuItem>
       )}
-      {footnote && (rows.length > 0 || pluginGroups.rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
+      {footnote && (rows.length > 0 || serverRows.length > 0 || pluginGroups.rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
     </>
   );
   if (inMenu) {

@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { Readable } from 'node:stream';
-import type { LinkInviteRequest, LinkJoinRequest, LinkTransportId, LinkUpdateRequest } from '../../../../packages/contracts/src/index.js';
+import type { LinkInviteRequest, LinkJoinRequest, LinkSelfUpdateRequest, LinkTransportId, LinkUpdateRequest, RemoteExecRequest } from '../../../../packages/contracts/src/index.js';
 import type { Auth } from '../auth.js';
 import { AppError } from '../errors.js';
 import { forwardHttp, forwardWebSocket, peerPath } from '../links/forward.js';
+import { attachRemoteShell, runRemoteExec } from '../links/remote-exec.js';
 import type { LinkService } from '../links/service.js';
 
 /**
@@ -17,7 +18,13 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   const { links, auth } = deps;
 
   app.get('/api/servers', async () => ({ servers: links.servers() }));
-  app.get('/api/links', async () => ({ links: links.list() }));
+  app.get('/api/links', async () => ({ links: links.list(), self: links.selfInfo() }));
+
+  app.patch<{ Body: Partial<LinkSelfUpdateRequest> }>('/api/links/self', async request => {
+    const name = request.body?.name;
+    if (typeof name !== 'string') throw new AppError('INVALID_INPUT', 'name must be a string', 400);
+    return { self: links.setSelfName(name) };
+  });
 
   app.post<{ Body: Partial<LinkInviteRequest> }>('/api/links/invites', async request => {
     const body = request.body ?? {};
@@ -43,9 +50,18 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   });
 
   app.patch<{ Params: { serverId: string }; Body: Partial<LinkUpdateRequest> }>('/api/links/:serverId', async request => {
-    const inbound = request.body?.inbound;
-    if (inbound !== undefined && typeof inbound !== 'boolean') throw new AppError('INVALID_INPUT', 'inbound must be true or false', 400);
-    return { link: links.update(request.params.serverId, inbound === undefined ? {} : { inbound }) };
+    const body = request.body ?? {};
+    if (body.inbound !== undefined && typeof body.inbound !== 'boolean') throw new AppError('INVALID_INPUT', 'inbound must be true or false', 400);
+    if (body.name !== undefined && typeof body.name !== 'string') throw new AppError('INVALID_INPUT', 'name must be a string', 400);
+    if (body.alias !== undefined && typeof body.alias !== 'string') throw new AppError('INVALID_INPUT', 'alias must be a string', 400);
+    if (body.note !== undefined && typeof body.note !== 'string') throw new AppError('INVALID_INPUT', 'note must be a string', 400);
+    const change: LinkUpdateRequest = {
+      ...(body.inbound !== undefined ? { inbound: body.inbound } : {}),
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.alias !== undefined ? { alias: body.alias } : {}),
+      ...(body.note !== undefined ? { note: body.note } : {}),
+    };
+    return { link: links.update(request.params.serverId, change) };
   });
 
   app.delete<{ Params: { serverId: string } }>('/api/links/:serverId', async request => {
@@ -54,6 +70,30 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   });
 
   app.get<{ Params: { serverId: string } }>('/api/links/:serverId/audit', async request => ({ entries: links.audit(request.params.serverId) }));
+
+  // Controlled remote execution & interactive PTY shell (reachable through `/api/servers/:serverId/remote/*`).
+  app.post<{ Body: Partial<RemoteExecRequest> }>('/api/remote/exec', async request => {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.raw.once('close', abort);
+    const unwatch = auth.onRevoke(request, abort);
+    try {
+      return await runRemoteExec(request.body ?? {}, controller.signal);
+    } finally {
+      request.raw.off('close', abort);
+      unwatch();
+    }
+  });
+
+  app.get<{ Querystring: { cwd?: string; cols?: string; rows?: string } }>('/api/remote/shell', { websocket: true }, (socket, request) => {
+    const cols = request.query.cols ? Number(request.query.cols) : undefined;
+    const rows = request.query.rows ? Number(request.query.rows) : undefined;
+    attachRemoteShell(socket, {
+      ...(typeof request.query.cwd === 'string' && request.query.cwd ? { cwd: request.query.cwd } : {}),
+      ...(cols && Number.isFinite(cols) ? { cols } : {}),
+      ...(rows && Number.isFinite(rows) ? { rows } : {}),
+    }, (cb) => auth.onRevoke(request, cb));
+  });
 
   // Public: the TLS certificate inside the tunnel is the credential (`app.ts` lists the route in PUBLIC_API).
   app.get<{ Querystring: { role?: string; join?: string } }>(LINK_TUNNEL_ROUTE, { websocket: true }, (socket, request) => {

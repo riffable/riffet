@@ -72,13 +72,22 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<SearchMode>('title');
   const [scope, setScope] = useState('');
+  const [serverFilter, setServerFilter] = useState<'all' | 'local' | string>('all');
   const [active, setActive] = useState(0);
   const { t } = useLingui();
   const listRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
   const needle = query.trim();
+  const servers = useLists((state) => state.servers);
+  const hasLinkedServers = servers.length > 1;
+  const effectiveServerFilter = hasLinkedServers && (serverFilter === 'all' || serverFilter === 'local' || servers.some((item) => !item.self && item.id === serverFilter)) ? serverFilter : 'all';
+  const matchesServer = useCallback((objectId: string) => {
+    if (effectiveServerFilter === 'all') return true;
+    const owner = serverOfObject(objectId);
+    return effectiveServerFilter === 'local' ? !owner : owner === effectiveServerFilter;
+  }, [effectiveServerFilter]);
   const projectMap = useMemo(() => sidebarProjectMap(projects, true), [projects]);
-  const ordered = useMemo(() => sortSessionsByActivity(sessions), [sessions]);
+  const ordered = useMemo(() => sortSessionsByActivity(sessions).filter((session) => matchesServer(session.id)), [sessions, matchesServer]);
   const titles = useMemo(() => {
     if (!needle) return ordered.filter((session) => !session.archivedAt).slice(0, 12);
     const scoreTitle = createTitleMatcher(needle);
@@ -88,10 +97,18 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
     }).sort((left, right) => left.score - right.score).map(({ session }) => session);
   }, [ordered, needle]);
   const linkedStatus = useLists((state) => state.linkedStatus);
-  const linked = useMemo(() => Object.keys(linkedStatus).filter((id) => linkedStatus[id] !== 'offline'), [linkedStatus]);
+  const linked = useMemo(() => {
+    const online = Object.keys(linkedStatus).filter((id) => linkedStatus[id] !== 'offline');
+    if (effectiveServerFilter === 'local') return [];
+    if (effectiveServerFilter !== 'all') return online.filter((id) => id === effectiveServerFilter);
+    return online;
+  }, [linkedStatus, effectiveServerFilter]);
   const found = useMessageSearch(open && mode === 'content' ? needle : '', scope || undefined, linked);
   // A linked server's own system conversations (its assistant, quick chats) are not in this workbench's lists.
-  const search = useMemo(() => linked.length ? { ...found, hits: found.hits.filter((hit) => !serverOfObject(hit.projectId) || projectMap.has(hit.projectId)) } : found, [found, linked.length, projectMap]);
+  const search = useMemo(() => ({
+    ...found,
+    hits: found.hits.filter((hit) => matchesServer(hit.projectId) && (!serverOfObject(hit.projectId) || projectMap.has(hit.projectId))),
+  }), [found, matchesServer, projectMap]);
   const lastMessages = useRef(search);
   useLayoutEffect(() => { if (open) lastMessages.current = search; }, [open, search]);
   // Stop the search immediately, but leave its last result visible for the dialog's exit.
@@ -183,32 +200,59 @@ export function SessionSearchResults({ open, sessions, projects, currentSessionI
         onKeyDown={onKeyDown}
         trailing={busy && <Spinner />}
       />
-      <div className="flex h-10 shrink-0 items-center justify-between gap-3 edge-b px-3">
+      <div className="flex h-10 shrink-0 items-center justify-between gap-2 edge-b px-3">
         <UnderlineTabs<SearchMode>
           value={mode}
           onChange={(value) => { setMode(value); inputRef.current?.focus(); }}
           ariaLabel={t`搜索字段`}
           options={[{ value: 'title', label: t`标题` }, { value: 'content', label: t`内容` }]}
         />
-        {content && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="quiet" size="sm" className="max-w-[55%]" aria-label={t`选择搜索会话`}>
-                <span className="truncate">{scopeSession?.title || t`全部会话`}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-72 max-w-80" onCloseAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}>
-              <DropdownMenuRadioGroup value={scope} onValueChange={setScope}>
-                <DropdownMenuRadioItem value=""><Trans>全部会话</Trans></DropdownMenuRadioItem>
-                {currentSession && <DropdownMenuRadioItem value={currentSession.id} textValue={currentSession.title}><span className="truncate"><Trans>当前会话 · {currentSession.title}</Trans></span></DropdownMenuRadioItem>}
-                <DropdownMenuSeparator />
-                {ordered.filter((session) => session.id !== currentSessionId).slice(0, SCOPE_MENU_SESSIONS).map((session) => (
-                  <DropdownMenuRadioItem key={session.id} value={session.id} textValue={session.title}><span className="truncate">{session.title}</span></DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+        <div className="flex min-w-0 items-center gap-1">
+          {hasLinkedServers && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="quiet" size="sm" className="max-w-36" aria-label={t`筛选服务器`}>
+                  <span className="truncate">
+                    {effectiveServerFilter === 'all' ? t`全部服务器`
+                      : effectiveServerFilter === 'local' ? t`仅本机`
+                        : servers.find((item) => item.id === effectiveServerFilter)?.name ?? t`全部服务器`}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-72 max-w-64" onCloseAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}>
+                <DropdownMenuRadioGroup value={effectiveServerFilter} onValueChange={(value) => { setServerFilter(value); setScope(''); }}>
+                  <DropdownMenuRadioItem value="all"><Trans>全部服务器</Trans></DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="local"><Trans>仅本机</Trans></DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  {servers.filter((item) => !item.self).map((item) => (
+                    <DropdownMenuRadioItem key={item.id} value={item.id} textValue={item.name}>
+                      <span className="truncate">{item.name}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {content && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="quiet" size="sm" className="max-w-44" aria-label={t`选择搜索会话`}>
+                  <span className="truncate">{scopeSession?.title || t`全部会话`}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-72 max-w-80" onCloseAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}>
+                <DropdownMenuRadioGroup value={scope} onValueChange={setScope}>
+                  <DropdownMenuRadioItem value=""><Trans>全部会话</Trans></DropdownMenuRadioItem>
+                  {currentSession && matchesServer(currentSession.id) && <DropdownMenuRadioItem value={currentSession.id} textValue={currentSession.title}><span className="truncate"><Trans>当前会话 · {currentSession.title}</Trans></span></DropdownMenuRadioItem>}
+                  <DropdownMenuSeparator />
+                  {ordered.filter((session) => session.id !== currentSessionId).slice(0, SCOPE_MENU_SESSIONS).map((session) => (
+                    <DropdownMenuRadioItem key={session.id} value={session.id} textValue={session.title}><span className="truncate">{session.title}</span></DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
       <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t`搜索结果`} aria-busy={busy} className={quickListClass}>
         {!content && !needle && titles.length > 0 && <div className="px-3 pb-1 pt-2 text-xs text-fg-4"><Trans>最近会话</Trans></div>}

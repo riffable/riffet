@@ -289,6 +289,11 @@ msgstr "这不是完整的 Riffet 链接串，请重新复制"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.INVALID_LINK_ALIAS"
+msgstr "短别名只能用小写字母、数字和 . _ -，且以字母或数字开头"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.INVALID_LINK_URL"
 msgstr "地址要以 http:// 或 https:// 开头"
 
@@ -386,6 +391,11 @@ msgstr "{subject, select, file {交互预览必须是 HTML 文件} text {交互�
 #: ../../i18n/errors/links.json
 msgid "error.LINK_ADDRESS_REQUIRED"
 msgstr "链接串里没有可连的地址，请改用 riffet link ssh"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.LINK_ALIAS_TAKEN"
+msgstr "短别名 {alias} 已被另一台服务器使用"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
@@ -666,6 +676,11 @@ msgstr "插件查询结果过大"
 #: ../../i18n/errors/plugins.json
 msgid "error.QUERY_UNAVAILABLE"
 msgstr "这个插件查询当前不可用"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
+msgid "error.REMOTE_EXEC_BUSY"
+msgstr "目标服务器正在执行的远端命令已达上限，请稍后再试"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
