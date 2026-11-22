@@ -8619,12 +8619,12 @@
         }
       }
     },
-    "等待发送" : {
+    "%lld 条排队消息" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Waiting to send"
+            "value" : "%lld queued messages"
           }
         }
       }

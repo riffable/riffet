@@ -213,12 +213,14 @@ private struct QuestionDockCard: View {
     }
 }
 
-/// Messages waiting to be sent, with the ways to send one sooner or take it back.
+/// Messages waiting to be sent, aligned with Android/Web's `QueueDock`: one compact row for a single
+/// message (no header), or collapsed by default under "N 条排队消息" when several wait.
 private struct QueueDockCard: View {
     let workbench: Workbench
     let draft: MessageDraft
     var supportsSteer = false
     var supportsTargetedStop = false
+    @State private var expanded = false
     @Environment(\.palette) private var palette
     private var canSteer: Bool {
         if let control = workbench.control {
@@ -232,36 +234,63 @@ private struct QueueDockCard: View {
     }
 
     var body: some View {
-        DockCard(expanded: true, label: String(localized: "等待发送", bundle: .riffet)) { expanded in
-            Label("等待发送", systemImage: "clock").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
-            if expanded {
-                if workbench.queued.count > 1 { Text(workbench.queued.count, format: .number).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
-            } else if let first = workbench.queued.first {
-                Text(first.prompt).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-            }
-        } content: {
-            // Three rows show; more scroll inside the card, so the dock never grows past the transcript.
-            DockScroll(maxHeight: RiffetMetrics.rowMinHeight * 3) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(workbench.queued, id: \.id) { run in queuedRun(run) }
-                    if (workbench.control?.held ?? workbench.status?.queue?.held)?.reason == .unconfirmed {
-                        Text("等待上一条消息确认").riffetFont(.caption).foregroundStyle(palette.fg3)
+        let expandable = workbench.queued.count > 1
+        let unconfirmed = (workbench.control?.held ?? workbench.status?.queue?.held)?.reason == .unconfirmed
+        VStack(alignment: .leading, spacing: 0) {
+            if expandable {
+                let title = String(localized: "\(workbench.queued.count) 条排队消息", bundle: .riffet)
+                Button { expanded.toggle() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bubble.left").riffetFont(.caption).foregroundStyle(palette.fg4)
+                        Text(title).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg).lineLimit(1)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg4)
+                            .rotationEffect(.degrees(expanded ? 180 : 0))
+                            .riffetAnimation(RiffetMotion.chevron, value: expanded)
+                    }
+                    .frame(minHeight: RiffetMetrics.hitTarget)
+                    .padding(.horizontal, RiffetMetrics.groupInset)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(title).accessibilityValue(expanded ? String(localized: "已展开", bundle: .riffet) : "")
+                if expanded {
+                    DockScroll(maxHeight: RiffetMetrics.hitTarget * 4) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(workbench.queued, id: \.id) { run in queuedRun(run, showLead: false) }
+                        }
                     }
                 }
+            } else if let first = workbench.queued.first {
+                queuedRun(first, showLead: true)
+            }
+            if unconfirmed {
+                Text("等待上一条消息确认").riffetFont(.caption).foregroundStyle(palette.fg3)
+                    .padding(.horizontal, RiffetMetrics.groupInset)
+                    .padding(.bottom, RiffetMetrics.floatingGap)
             }
         }
+        .dockSurface()
+        .onChange(of: expandable) { _, isExpandable in if !isExpandable { expanded = false } }
     }
 
-    private func queuedRun(_ run: Run) -> some View {
-        HStack(spacing: 0) {
-            Text(run.prompt).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg).lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            let governed = workbench.control != nil
-            let showsSteer = governed ? allows("steer", run) : (supportsSteer && workbench.status?.activeTurn != nil)
-            let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
-            let showEdit = !governed || allows("edit", run)
-            let showCancel = !governed || allows("cancel", run)
-            let usesSteer = showsSteer && canSteer
+    private func queuedRun(_ run: Run, showLead: Bool) -> some View {
+        let governed = workbench.control != nil
+        let showsSteer = governed ? allows("steer", run) : (supportsSteer && workbench.status?.activeTurn != nil)
+        let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
+        let showEdit = !governed || allows("edit", run)
+        let showCancel = !governed || allows("cancel", run)
+        let usesSteer = showsSteer && canSteer
+        let showMenu = (usesSteer && showSendNow) || (showsSteer && !usesSteer) || showEdit || showCancel
+        let hasActions = usesSteer || showSendNow || showMenu
+        return HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                if showLead { Image(systemName: "bubble.left").riffetFont(.caption).foregroundStyle(palette.fg4) }
+                Text(run.prompt).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, RiffetMetrics.groupInset)
+            .padding(.trailing, hasActions ? RiffetMetrics.floatingGap : RiffetMetrics.groupInset)
             if usesSteer {
                 Button { steer(run) } label: { Image(systemName: "arrow.turn.up.right").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                     .disabled(!canSteer).accessibilityLabel("补充到当前任务")
@@ -269,29 +298,30 @@ private struct QueueDockCard: View {
                 Button { sendNow(run) } label: { Image(systemName: "arrow.up").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                     .accessibilityLabel("停止并发送")
             }
-            if (usesSteer && showSendNow) || (showsSteer && !usesSteer) || showEdit || showCancel {
-            Menu {
-                if usesSteer && showSendNow {
-                    Button("停止并发送", systemImage: "arrow.up") { sendNow(run) }
-                } else if showsSteer {
-                    Button("补充到当前任务", systemImage: "arrow.turn.up.right") { steer(run) }.disabled(!canSteer)
-                }
-                if showEdit {
-                Button("移回输入框", systemImage: "square.and.pencil") { Task { await workbench.perform {
-                    if let taken = try await workbench.store.takeBackQueued(run: run) {
-                        if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.text = taken.text } else { draft.text += "\n\n" + taken.text }
-                        let ids = Set(draft.attachments.map(\.id)); draft.attachments.append(contentsOf: taken.attachments.filter { !ids.contains($0.id) })
-                        draft.references = mergeRestoredReferences(current: draft.references, restored: taken.context)
+            if showMenu {
+                Menu {
+                    if usesSteer && showSendNow {
+                        Button("停止并发送", systemImage: "arrow.up") { sendNow(run) }
+                    } else if showsSteer {
+                        Button("补充到当前任务", systemImage: "arrow.turn.up.right") { steer(run) }.disabled(!canSteer)
                     }
-                } } }
-                }
-                if showCancel {
-                Button("取消", systemImage: "trash", role: .destructive) { Task { await workbench.perform { _ = try await workbench.store.cancelRun(run: run) } } }
-                }
-            } label: { Image(systemName: "ellipsis").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
-                .accessibilityLabel("更多操作")
+                    if showEdit {
+                        Button("移回输入框", systemImage: "square.and.pencil") { Task { await workbench.perform {
+                            if let taken = try await workbench.store.takeBackQueued(run: run) {
+                                if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.text = taken.text } else { draft.text += "\n\n" + taken.text }
+                                let ids = Set(draft.attachments.map(\.id)); draft.attachments.append(contentsOf: taken.attachments.filter { !ids.contains($0.id) })
+                                draft.references = mergeRestoredReferences(current: draft.references, restored: taken.context)
+                            }
+                        } } }
+                    }
+                    if showCancel {
+                        Button("取消", systemImage: "trash", role: .destructive) { Task { await workbench.perform { _ = try await workbench.store.cancelRun(run: run) } } }
+                    }
+                } label: { Image(systemName: "ellipsis").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
+                    .accessibilityLabel("更多操作")
             }
         }
+        .frame(minHeight: RiffetMetrics.hitTarget)
         .riffetFont(.caption).foregroundStyle(palette.fg3)
         .disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control))
     }
