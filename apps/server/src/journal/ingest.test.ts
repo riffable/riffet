@@ -175,6 +175,16 @@ describe('ingest contract', () => {
     }
     await expect(runIngestContract(fakeFixture(new FakeTranscript(), native => new Turnless(native)))).rejects.toThrow(/G3/);
   });
+
+  it('rejects an unexpected rebuild during normal non-identity steps even when rows match a fresh import', async () => {
+    class RebuildingDrain extends FakeSource {
+      override async drain(w: LaneWriter): Promise<void> {
+        w.rebuild('identity-changed');
+        await super.drain(w);
+      }
+    }
+    await expect(runIngestContract(fakeFixture(new FakeTranscript(), native => new RebuildingDrain(native)))).rejects.toThrow(/G8/);
+  });
 });
 
 describe('lane writer', () => {

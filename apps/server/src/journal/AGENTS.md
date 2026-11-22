@@ -2,6 +2,15 @@
 module: server.journal
 verify:
   - npx vitest run apps/server/src/journal
+co-change:
+  - when: ingest.ts#eventOrder
+    with:
+      - apps/server/src/backends/codex/transcript-source.ts#CodexTranscriptSource
+    reason: eventOrder 决定转写源是否把已有实体（含活跃 draft）误判为新行并触发全量 rebuild
+  - when: ingest.ts#rebuild
+    with:
+      - apps/server/src/timeline/service.ts#TimelineService
+    reason: rebuild 先清空日志再异步重导，TimelineService 需配合延迟折叠与多步 pendingReset 避免客户端闪现空快照
 ---
 
 ## 职责
@@ -37,5 +46,5 @@ verify:
 
 - 会话页行重复或顺序错乱：查该会话 `journal_events` 中同一 `native_id` 是否有多个 `seq` 且 `rev` 不递增，以及后端是否在新实体落到已有实体之前、改名/扩充 part 或复活已 tombstone 槽位时未调用 `rebuild('identity-changed')`（`Journal` 按 `rev=1` 的 `seq` 永久固定 `identity` 排序）。
 - 回合不结束或被误判结束：查 `kind='meta.turn_ended'` 行与随后的 tombstone，对照 `ingest.ts#hasTurnEnded`。
-- 读回日志失败：`riffet logs --scope journal`（`reading <key> back failed`）。
+- 读回日志失败：`riffet logs --scope journal`（`reading <key> back failed`）；排查异常高频重建：`riffet logs --scope journal` 搜 `"event":"rebuild"`（`ingest.ts#JournalLaneWriter`）。
 - 存储迁移或整理问题：`riffet logs --scope storage`；`riffet doctor --compact` 整理数据库。

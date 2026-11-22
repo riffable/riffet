@@ -382,11 +382,16 @@ export class JournalLaneWriter implements LaneWriter {
 
   rebuild(reason: 'identity-changed'): void {
     if (this.owner) { this.owner.rebuild(reason); return; }
+    const previousGeneration = this.journal.peek(this.key)?.generation;
+    let droppedLanes = 0;
+    let nextGeneration = '';
     this.journal.tx(() => {
       const others = this.lane === 'main' ? this.journal.keysOf(this.sessionId).filter(key => key !== this.key) : [scratchKeyOf(this.key)];
+      droppedLanes = others.length;
       for (const key of others) this.journal.drop(key);
-      this.journal.rebuild(this.key);
+      nextGeneration = this.journal.rebuild(this.key).generation;
     });
+    console.warn('[journal]', JSON.stringify({ event: 'rebuild', sessionId: this.sessionId, lane: this.lane, reason, ...(previousGeneration ? { previousGeneration } : {}), nextGeneration, droppedLanes }));
     this.forget();
   }
 

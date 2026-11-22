@@ -365,6 +365,10 @@ describe('sync v3 stream', () => {
     const reset = of(stream.frames, 'reset')[0]!;
     expect(reset.data).toMatchObject({ reason: 'rebuilt' });
     expect(reset.data.generation).not.toBe(generation);
+    // The snapshot paired with `reset` must already carry the rebuilt transcript rather than flashing empty during async re-import.
+    const resetAt = stream.frames.indexOf(reset);
+    const rebuiltSnapshots = stream.frames.slice(resetAt + 1).filter(frame => frame.event === 'snapshot' && frame.data.generation === reset.data.generation);
+    expect(holds(apply(rebuiltSnapshots), 'answer n1')).toBe(true);
     await waitFor(() => expect(holds(apply(stream.frames), 'answer n1')).toBe(true));
     const rows = apply(stream.frames);
     expect(holds(rows, 'answer t1')).toBe(false);

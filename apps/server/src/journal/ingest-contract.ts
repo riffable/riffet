@@ -224,12 +224,28 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
   let journal = new Journal(db);
   let writer = JournalLaneWriter.open(journal, sessionId);
   let source = fixture.source();
+  let currentStep = 'the first import';
+  let forbidRebuild = true;
+  let unexpectedRebuild: string | undefined;
+  let unwatchRebuild: () => void = () => undefined;
+  const watchRebuilds = () => {
+    unwatchRebuild();
+    unwatchRebuild = journal.onAppend(change => {
+      if (forbidRebuild && change.reset === 'rebuilt') unexpectedRebuild ??= `G8: ${currentStep} rebuilt ${change.lane} unexpectedly`;
+    });
+  };
+  const assertNoRebuild = () => {
+    if (unexpectedRebuild) assert.fail(unexpectedRebuild);
+  };
+  watchRebuilds();
   const restart = () => {
+    unwatchRebuild();
     db.close();
     db = new DatabaseSync(path);
     journal = new Journal(db);
     writer = JournalLaneWriter.open(journal, sessionId);
     source = fixture.source();
+    watchRebuilds();
   };
   const now = () => snapshot(journal, sessionId);
   const sameAsFresh = async (step: string) => {
@@ -241,9 +257,11 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
     }
   };
   const replays = async (step: string) => {
+    currentStep = step;
     restart();
     const before = now();
     await catchUp(source, writer, maxPulls);
+    assertNoRebuild();
     assertUnchanged(before, now(), step);
   };
   try {
@@ -257,6 +275,7 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
     });
     await catchUp(source, writer, maxPulls);
     stop();
+    assertNoRebuild();
     assert.ok(!servingKey(journal, sessionId, 'main').scratch, 'G4: the scratch window still serves after the import caught up');
     assert.equal(served.at(-1)?.generation, writer.generation, 'G4: the lane does not end up served from its own log');
     if (fixture.scratch) assert.deepEqual(served.map(item => item.scratch), [true, false], `G4: the first import served ${served.length} generations; a scratch window, then the lane's own`);
@@ -266,6 +285,7 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
     await replays('a restart after the first import');
 
     // Appending writes only new rows after the old ones, and `watch` notices.
+    currentStep = 'an append';
     let before = now();
     if (source.watch) {
       let woke = false;
@@ -277,15 +297,18 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
       assert.ok(woke, 'watch did not wake after the native data changed');
     } else await fixture.append();
     await catchUp(source, writer, maxPulls);
+    assertNoRebuild();
     assertExtends(before, now(), 'an append');
     assert.ok(journal.peek(writer.key)!.lastSeq > before.get(writer.key)!.lastSeq, 'an append wrote nothing');
     checkSession(journal, sessionId, options);
     await sameAsFresh('an append');
 
     // An update in place is a new version of the entity it changes (G2).
+    currentStep = 'an update';
     before = now();
     await fixture.update();
     await catchUp(source, writer, maxPulls);
+    assertNoRebuild();
     assertExtends(before, now(), 'an update');
     const versions = rowsOf(journal, writer.key).filter(row => row.seq > before.get(writer.key)!.lastSeq && row.rev > 1 && !isHiddenKind(row.kind));
     assert.ok(versions.length > 0, 'G2: an update in place wrote no new version of an existing entity');
@@ -293,30 +316,41 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
     await sameAsFresh('an update');
 
     // A failed commit leaves the cursor where it was, and the next read resumes from it (G7).
+    currentStep = 'a read resumed after a failed commit';
+    before = now();
     await fixture.append();
     const cursor = writer.cursor;
     await source.pull(failingCommits(writer, journal), new AbortController().signal).catch((error: unknown) => { if (!(error instanceof InjectedFault)) throw error; });
     assert.equal(writer.cursor, cursor, 'G7: a commit that failed moved the cursor');
     await catchUp(source, writer, maxPulls);
+    assertNoRebuild();
+    assertExtends(before, now(), 'a read resumed after a failed commit');
     checkSession(journal, sessionId, options);
     await sameAsFresh('a read resumed after a failed commit');
     await replays('a restart after a failed commit');
 
     // A turn nobody started from the workbench still has its start and end (G3); drain reads what is on disk (G6).
+    currentStep = 'a turn typed into the terminal';
+    const beforeTerminal = now();
     await fixture.terminalTurn();
     await source.drain(writer);
+    assertNoRebuild();
+    assertExtends(beforeTerminal, now(), 'a turn typed into the terminal');
     before = now();
     await catchUp(source, writer, maxPulls);
+    assertNoRebuild();
     assertUnchanged(before, now(), 'a read after drain', 'G6');
     checkSession(journal, sessionId, options);
     await sameAsFresh('a turn typed into the terminal');
 
     // A subagent writes to a lane of its own (G9).
     if (fixture.subagent) {
+      currentStep = 'a subagent';
       const lanes = journal.keysOf(sessionId).length;
       before = now();
       await fixture.subagent();
       await catchUp(source, writer, maxPulls);
+      assertNoRebuild();
       assertExtends(before, now(), 'a subagent');
       assert.ok(journal.keysOf(sessionId).length > lanes, 'G9: a subagent opened no lane of its own');
       checkSession(journal, sessionId, options);
@@ -326,18 +360,21 @@ export async function runIngestContract(fixture: IngestContractFixture, options:
 
     // Only another native conversation starts the log over (G8), under a new generation.
     if (fixture.changeIdentity) {
+      forbidRebuild = false;
       const generation = writer.generation;
       await fixture.changeIdentity();
       await catchUp(source, writer, maxPulls);
       assert.notEqual(writer.generation, generation, 'G8: the lane kept its generation although it now reads another conversation');
       checkSession(journal, sessionId, options);
       await sameAsFresh('an identity change');
+      forbidRebuild = true;
       await replays('a restart after an identity change');
     }
     const lanes: Record<string, number> = {};
     for (const key of journal.keysOf(sessionId)) { const where = laneOfKey(key); if (where && !where.scratch) lanes[where.lane] = journal.peek(key)!.lastSeq; }
     return { served, lanes };
   } finally {
+    unwatchRebuild();
     db.close();
     await rm(dir, { recursive: true, force: true });
   }
