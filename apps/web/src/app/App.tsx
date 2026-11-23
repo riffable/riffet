@@ -17,6 +17,7 @@ import { clearNativeOutbox } from '@/lib/native-outbox-storage';
 import { clearCachedPlugins } from '@/lib/plugins';
 import { clearCaches } from '@/lib/cache-registry';
 import { clearCachedLists, loadCachedLists } from '@/lib/list-cache';
+import { clearRecentSearches } from '@/lib/recent-searches';
 import { cn, errorMessage, reconnectDelay } from '@/lib/utils';
 import { startOverlayNavigation } from '@/lib/overlay-navigation';
 import { connectWorkbenchAppearance, needsWorkbenchDocumentReload } from '@/lib/workbench-appearance';
@@ -52,6 +53,7 @@ function signInError(reason: unknown, fallback: MessageDescriptor): SignInFailur
 function forgetLocalData() {
   void clearTranscripts();
   clearCachedLists();
+  clearRecentSearches();
   clearCachedPlugins();
   clearCaches();
 }

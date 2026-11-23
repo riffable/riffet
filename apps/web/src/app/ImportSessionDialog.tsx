@@ -223,7 +223,6 @@ function ImportList({ project, inputRef, onImported, onError, onDone }: {
         role="listbox"
         aria-label={t`终端会话`}
         aria-busy={busy}
-        // Taller than the search palette's list: browsing a long history is the point here.
         className="min-h-0 h-[min(680px,72dvh)] shrink overflow-y-auto p-2"
         onScroll={(event) => { const el = event.currentTarget; if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) loadMore(); }}
       >

@@ -458,6 +458,10 @@ msgstr ""
 msgid "最近会话"
 msgstr ""
 
+#: src/app/SessionSearchDialog.tsx
+msgid "最近搜索"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "最近活动"
 msgstr ""
@@ -529,6 +533,11 @@ msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除后无法恢复"
+msgstr ""
+
+#. placeholder {0}: entry.query
+#: src/app/SessionSearchDialog.tsx
+msgid "删除搜索记录「{0}」"
 msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx

@@ -4,6 +4,8 @@ import { IconListFilter, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Kbd, Segmented } from '@/components/ui/controls';
 import { SearchField } from '@/components/ui/search-field';
+import type { RecentSearch } from '@/lib/recent-searches';
+import { RecentSearchChip } from '../../SessionSearchDialog';
 import { Chapter, Frame, Matrix, Plate } from '../specimen';
 
 /** The shared SearchField: Escape clears, then blurs. */
@@ -13,6 +15,23 @@ function Field() {
   return (
     <Frame className="flex justify-center p-8 max-md:p-4">
       <SearchField className="w-full max-w-sm" aria-label={t`搜索扩展`} placeholder={t`搜索扩展`} value={query} onChange={setQuery} hint={<Kbd>/</Kbd>} />
+    </Frame>
+  );
+}
+
+function RecentSearches() {
+  const { t } = useLingui();
+  const [entries, setEntries] = useState<RecentSearch[]>([{ query: 'README', mode: 'title' }, { query: 'fetch', mode: 'content' }]);
+  const [query, setQuery] = useState('');
+  return (
+    <Frame className="p-8 max-md:p-4">
+      <div className="mx-auto w-full max-w-sm space-y-1">
+        <SearchField aria-label={t`搜索会话`} value={query} onChange={setQuery} />
+        {!query && <div role="listbox" aria-label={t`最近搜索`} className="flex flex-wrap gap-1.5">
+          {entries.map((entry, index) => <RecentSearchChip key={entry.query} entry={entry} selected={index === 0}
+            onSelect={() => setQuery(entry.query)} onRemove={() => setEntries(entries.filter(item => item !== entry))} />)}
+        </div>}
+      </div>
     </Frame>
   );
 }
@@ -68,7 +87,10 @@ export function SearchChapter() {
       <Plate number={3} title={t`无结果`} note={t`标题写明没有符合什么；关键词不在结果里高亮。`}>
         <NoResults />
       </Plate>
-      <Plate number={4} title={t`使用处`} note={t`列表页共用 SearchField；浮层里的查询行是组合框，另有写法。`}>
+      <Plate number={4} title={t`最近搜索`}>
+        <RecentSearches />
+      </Plate>
+      <Plate number={5} title={t`使用处`} note={t`列表页共用 SearchField；浮层里的查询行是组合框，另有写法。`}>
         <Migrated />
       </Plate>
     </Chapter>

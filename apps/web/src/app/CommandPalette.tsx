@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconFolderClosed, IconMessagesSquare } from '@/components/icons';
@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import type { ProjectRecord } from '@/lib/api';
 import { matchCommands, type CommandCandidate, type CommandKind } from '@/lib/command-search';
 import { sortSessionsByActivity } from '@/lib/session-order';
+import { rememberSearch, type RecentSearch } from '@/lib/recent-searches';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { useListWindow } from '@/lib/use-list-window';
 import { cn } from '@/lib/utils';
@@ -64,12 +65,20 @@ const optionId = (index: number) => `command-palette-option-${index}`;
  */
 export function CommandPalette({ open, scope, onOpenChange, onScopeChange, search, ...list }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchDraft = useRef<RecentSearch | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   /** A result opened somewhere else; focus is that place's to set. */
   const navigating = useRef(false);
   const afterClose = useRef<(() => void) | undefined>(undefined);
   // The dialog stays open across a scope switch, so its own autofocus does not run again.
   useEffect(() => { if (open) inputRef.current?.focus(); }, [scope]);
+  // Global shortcuts can replace or close the search without going through the dialog's close button.
+  useLayoutEffect(() => {
+    if (open && scope === 'search') return;
+    const draft = searchDraft.current;
+    if (draft) rememberSearch(draft.query, draft.mode);
+    searchDraft.current = null;
+  }, [open, scope]);
 
   const run = (handler: (() => void) | undefined, takesFocus: boolean) => {
     if (takesFocus) afterClose.current = handler;
@@ -81,8 +90,8 @@ export function CommandPalette({ open, scope, onOpenChange, onScopeChange, searc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         mobileSheet
-        size="content"
-        className="top-[12%] max-h-[calc(88dvh-16px)] translate-y-0 gap-0 overflow-hidden p-0"
+        size="workspace"
+        className="top-[8%] translate-y-0 gap-0 overflow-hidden p-0 md:h-[min(820px,84dvh)]"
         aria-describedby={undefined}
         onOpenAutoFocus={(event) => {
           navigating.current = false;
@@ -112,6 +121,7 @@ export function CommandPalette({ open, scope, onOpenChange, onScopeChange, searc
               {...search}
               open={open}
               inputRef={inputRef}
+              searchDraft={searchDraft}
               onNavigate={() => { navigating.current = true; onOpenChange(false); }}
               onCommandMode={(query) => onScopeChange('commands', query)}
             />
@@ -209,7 +219,7 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onQueryKeyDown}
       />
-      <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t({ message: '命令', context: 'workbench-command-label' })} className={quickListTallClass}>
+      <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t({ message: '命令', context: 'workbench-command-label' })} className={cn(quickListTallClass, 'md:flex-1')}>
         {matches.length ? <div ref={rowsRef} role="presentation" style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}>{matches.slice(rows.from, rows.to).map((candidate, offset) => { const index = rows.from + offset; return (
           <div
             key={candidate.id}

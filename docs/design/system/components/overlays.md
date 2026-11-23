@@ -87,7 +87,7 @@ Radix Popover：Esc 关闭，焦点回到触发器；手机上打开时焦点落
 | `confirm` | 420 | 确认 |
 | `form`（默认） | 448 | 小表单 |
 | `content` | 768 | 内容较多的弹窗 |
-| `workspace` | 1080 | 带自己导航的工作区弹窗 |
+| `workspace` | 1080 | 带自己导航的工作区弹窗、会话搜索与命令面板 |
 
 `hideClose` 隐藏右上角关闭；`mobileFullscreen` 手机上铺满；`mobileSheet` 手机上从底部升起。结构：`DialogHeader`（标题 + 说明）、`DialogBody`、`DialogFooter`（取消在左、主操作在右）。
 

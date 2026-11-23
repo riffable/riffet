@@ -2129,6 +2129,10 @@ msgstr "Last time: {0}"
 msgid "最近会话"
 msgstr "Recent sessions"
 
+#: src/app/design/patterns/SearchChapter.tsx
+msgid "最近搜索"
+msgstr "Recent searches"
+
 #: src/app/settings/StorageSection.tsx
 msgid "最近活动"
 msgstr "Recent activity"
@@ -5533,6 +5537,7 @@ msgstr "Search and filter"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
+#: src/app/design/patterns/SearchChapter.tsx
 msgid "搜索会话"
 msgstr "Search sessions"
 
