@@ -124,55 +124,70 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
   });
   let request: AbortController | undefined;
   const cache = new Map<string, NativeBackendCatalogEntry>();
-  const remoteInFlight = new Map<string, Promise<void>>();
+  const remoteInFlight = new Map<string, { promise: Promise<void>; next?: Promise<void> }>();
+  let localBackendReads = Promise.resolve();
   let initialized = false;
   let preferredHome: NativeBackendId | undefined;
   /** An agent was picked in this browser or set as the server's default; until then the start follows availability. */
   let homeChosen = isNativeBackendId(stored);
   const report = (error: unknown, fallback: string) => { if (!offline() && !isUnreachable(error)) toast.error(errorMessage(error, fallback)); };
-
-  const actions = {
-    refreshBackends: singleFlight(async () => {
+  /** Keep an older list from overwriting a recheck, while settings refreshes keep their own invalidation. */
+  const loadLocalBackends = (recheckMissing: boolean): Promise<void> => {
+    const read = async () => {
       try {
-        const backends = await api.backends();
-        cache.clear();
+        const backends = await api.backends(recheckMissing);
         publishBackendLabels(backends);
+        if (recheckMissing && JSON.stringify(backends) === JSON.stringify(store.get().backends)) return;
+        cache.clear();
         store.set((current) => ({ backends, profileCatalogs: undefined, revision: current.revision + 1, ...offeredHome(current, backends, preferredHome, homeChosen) }));
       }
-      catch (error) { report(error, i18n._(msg`无法加载 Agent 列表`)); }
-    }),
+      catch (error) { if (!recheckMissing) report(error, i18n._(msg`无法加载 Agent 列表`)); }
+    };
+    localBackendReads = localBackendReads.then(read, read);
+    return localBackendReads;
+  };
+  const recheckLocalBackends = singleFlight(() => loadLocalBackends(true));
+
+  const actions = {
+    refreshBackends: singleFlight(() => loadLocalBackends(false)),
+    /** The picker may have hidden an Agent that was installed since the last list read. */
+    recheckBackends: (serverId: string): Promise<void> => serverId ? actions.loadRemote(serverId, true) : recheckLocalBackends(true),
     /** Reads a linked server's own agents and read-only defaults so the new-session picker matches that server. */
-    loadRemote(serverId: string, force = false): Promise<void> {
+    loadRemote(serverId: string, recheckMissing = false): Promise<void> {
       if (!serverId) return Promise.resolve();
-      if (!force && store.get().remoteBackends[serverId]) return Promise.resolve();
+      if (!recheckMissing && store.get().remoteBackends[serverId]) return Promise.resolve();
       const existing = remoteInFlight.get(serverId);
-      if (existing) return existing;
+      // The in-flight probe may predate an install. Reopens share one subsequent read.
+      if (existing) return recheckMissing
+        ? (existing.next ??= existing.promise.then(() => actions.loadRemote(serverId, true)))
+        : existing.promise;
       const run = (async () => {
         try {
           const remoteApi = apiFor(serverId);
           const [backends, settings] = await Promise.all([
-            remoteApi.backends(),
+            remoteApi.backends(recheckMissing),
             remoteApi.settings().catch(() => undefined),
           ]);
           publishBackendLabels(backends);
           store.set((current) => {
+            const changed = JSON.stringify(backends) !== JSON.stringify(current.remoteBackends[serverId]);
             const existingHome = current.remoteHome[serverId];
             const stillValid = existingHome && backends.some((entry) => entry.backendId === existingHome.backendId);
             const nextChoice = stillValid ? existingHome : initialRemoteHome(backends, settings ?? current.remoteSettings[serverId]);
             return {
-              remoteBackends: { ...current.remoteBackends, [serverId]: backends },
+              ...(changed ? { remoteBackends: { ...current.remoteBackends, [serverId]: backends } } : {}),
               ...(settings ? { remoteSettings: { ...current.remoteSettings, [serverId]: settings } } : {}),
               ...(nextChoice ? { remoteHome: { ...current.remoteHome, [serverId]: nextChoice } } : {}),
-              ...(force ? { revision: current.revision + 1 } : {}),
+              ...(recheckMissing && changed ? { revision: current.revision + 1 } : {}),
             };
           });
         } catch (error) {
-          if (!isUnreachable(error)) report(error, i18n._(msg`无法加载对端服务器的 Agent 列表`));
+          if (!recheckMissing) report(error, i18n._(msg`无法加载对端服务器的 Agent 列表`));
         } finally {
           remoteInFlight.delete(serverId);
         }
       })();
-      remoteInFlight.set(serverId, run);
+      remoteInFlight.set(serverId, { promise: run });
       return run;
     },
     /** Reads again whatever the first attempt could not fetch, once the server answers. */
@@ -222,11 +237,11 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
       if (loaded.size) publish();
       for (const profile of profiles) {
         const k = cacheKey(profile.id);
-        if (!refresh && cache.get(k)) continue;
+        if (!refresh && cache.get(k)?.available) continue;
         void apiFor(serverId || undefined).backendCatalog(backendId, profile.id, projectId || undefined, controller.signal).then((entry) => {
           cache.set(k, entry);
           rememberCatalog(k, entry);
-          loaded.set(profile.id, { profile, models: entry.models });
+          loaded.set(profile.id, { profile, models: entry.models, available: entry.available, reason: entry.reason });
           publish();
         }).catch(() => undefined);
       }
@@ -237,7 +252,7 @@ export function createCatalogStore({ offline }: { offline: () => boolean }) {
       return profiles.flatMap((profile) => {
         const key = profilesCacheKey(projectId, backendId, profile.id, serverId);
         const entry = cache.get(key) ?? cachedCatalog(key);
-        return entry ? [{ profile, models: entry.models }] : [];
+        return entry ? [{ profile, models: entry.models, available: entry.available, reason: entry.reason }] : [];
       });
     },
     clearProfileCatalogs() { if (store.get().profileCatalogs) store.set({ profileCatalogs: undefined }); },

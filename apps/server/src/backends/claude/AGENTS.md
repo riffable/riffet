@@ -62,6 +62,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 
 ## 排障
 
+- 新会话菜单里找不到 Claude Code：`launch.ts#claudeAvailability` 会在启动探测收到 `ENOENT` 后核对可执行文件是否存在。安装后探测会重新读取可执行文件。
 - 回合一直忙、模型或服务商切换被拒：看 `session-state.ts` 的 `cliQueue` 是否残留，`riffet logs --scope claude` 中有 `cli queue converged from screen` 或 `background converged from screen` 说明靠屏幕才收敛。
 - 切换模型或服务商后消息一直排队、会话却空闲：切换要重启 CLI 才生效（`configPending`），重启等主回合和后台任务都结束，期间排队消息被 `apps/server/src/native/lane.ts#admission` 以 `turn_running` 挡住。后台跑着开发服务这类不会自己结束的任务时，`runtime.ts#relaunchControl` 发布「新设置在后台任务结束后生效」和「结束后台任务并应用」（`runtimeControl`），由使用者决定是否结束它们。
 - 流式草稿与最终答案不一致或出现两份：日志 `live draft differs from its transcript text` 是版面漂移信号，按 `live/screen.ts` 顶部的步骤补录新版本屏幕。

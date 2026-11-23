@@ -397,17 +397,20 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   refreshCatalogRef.current = error?.trim() ? undefined : refreshCatalog;
   // A provider column needs the width of a pointer device's popover; a phone sheet keeps the one
   // grouped list, whose headings already say which provider each run of models came from.
-  const providerColumn = !isMobile && (providers?.length ?? 0) > 1;
+  const picksAgent = !isMobile && providers !== undefined && onSelectProvider !== undefined;
+  const currentProvider = providers?.find((provider) => provider.id === activeProviderId);
+  const providerCount = providers?.length ?? 0;
+  const providerColumn = !isMobile && (providerCount > 1 || (picksAgent && providerCount > 0));
   const agentColumn = providerColumn && Boolean(providers?.some((provider) => provider.agent));
   const groups = useMemo(() => agentColumn && providers ? agentGroups(providers) : [], [agentColumn, providers]);
   /** Agents in one column, the previewed agent's providers in a second, its models in the third. */
   const providerTier = groups.some((group) => group.providers.length > 1);
   const [previewProviderId, setPreviewProviderId] = useState(activeProviderId);
   const previewProvider = providers?.find((provider) => provider.id === previewProviderId) ?? providers?.[0];
-  const activeProvider = providers?.find((provider) => provider.id === activeProviderId) ?? providers?.[0];
+  const activeProvider = currentProvider ?? (picksAgent ? undefined : providers?.[0]);
   /** Whether the listed provider is the one in force; parameters and quota only describe that one. */
-  const previewIsActive = !providerColumn || previewProvider?.id === activeProvider?.id;
-  const selectableModels = providerColumn ? previewProvider?.models : models;
+  const previewIsActive = picksAgent && !activeProvider ? false : !providerColumn || previewProvider?.id === activeProvider?.id;
+  const selectableModels = providerColumn ? previewProvider?.models : picksAgent && !activeProvider ? undefined : models;
   /*
    * Beside the providers the list is as tall as the longest provider's needs (or the provider
    * column's), so moving between providers never resizes it; a short provider leaves room only
@@ -483,8 +486,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const catalogError = error?.trim();
   const failure = catalogError ? `Couldn't load models: ${catalogError}` : undefined;
   // Stays the retry while that retry runs, so the focused trigger is not disabled out from under it.
-  // Beside other agents the menu always opens: it is also how to leave an agent that lists nothing.
-  const retryOnly = !models.length && !failure && Boolean(onRetry) && !agentColumn;
+  // The Agent menu always opens so even an empty list can be rechecked.
+  const retryOnly = !models.length && !failure && Boolean(onRetry) && !picksAgent && !agentColumn;
   const retryHeld = retryOnly && (loading || refreshing);
   const waited = useLingering(loading, WAIT_GRACE_MS);
   const retryTitle = retryOnly && !loading ? failure ?? 'No models available' : undefined;
@@ -763,7 +766,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         aria-description={retryTitle ?? failure}
         aria-busy={loading || undefined}
         title={retryTitle ?? failure}
-        disabled={disabled || (!models.length && !retryOnly && !failure && !agentColumn)}
+        disabled={disabled || (!models.length && !retryOnly && !failure && !picksAgent && !agentColumn)}
         // With nothing to list the trigger opens no popup.
         {...(retryOnly ? { 'aria-haspopup': undefined, 'aria-expanded': undefined, 'aria-controls': undefined, 'aria-disabled': retryHeld || undefined } : {})}
         // Radix skips its toggle for a prevented click, so an empty list is read again instead of opened.

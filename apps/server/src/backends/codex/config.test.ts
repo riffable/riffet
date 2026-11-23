@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../../../../../packages/contracts/src/index.js';
 import type { NativeBackendProfileConfig } from '../types.js';
+import { availabilityOf } from './availability.js';
 import { executableOf, matchesRuntimeFingerprint, probeAppServer, reportedTraePermission, runtimeFingerprintFor } from './config.js';
 import { codexFlavor, traexFlavor, type CodexFlavor } from './flavors.js';
 
@@ -84,13 +85,17 @@ it('tracks the effective configuration home inherited by Codex', () => {
 it('refreshes the CLI probe after installation at the same path and retries a previously missing CLI', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'riffet-codex-version-'));
   const executable = join(directory, 'codex');
+  const current = { ...profile(codexFlavor), config: { executable } };
   const calls = join(directory, 'calls');
-  const launcher = (version: string) => `#!/usr/bin/env node\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)}, 'call\\n');\nconsole.log(process.argv.includes('--version') ? 'codex-cli ${version}' : '--listen unix:// --remote <ADDR> --no-alt-screen');\n`;
+  const launcher = (version: string) => `#!/usr/bin/env node\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)}, 'call\\n');\nconsole.log(process.argv.includes('--version') ? 'codex-cli ${version}' : 'Usage: app-server --listen unix:// --remote <ADDR> --no-alt-screen');\n`;
   try {
-    expect((await probeAppServer(executable)).version).toBeUndefined();
+    expect(await availabilityOf(codexFlavor, current)).toMatchObject({ available: false, cliMissing: true });
+    await writeFile(executable, `#!${join(directory, 'missing-interpreter')}\n`, { mode: 0o755 });
+    const broken = await availabilityOf(codexFlavor, current);
+    expect(broken.available).toBe(false);
+    expect(broken.cliMissing).toBeUndefined();
     await writeFile(executable, launcher('0.166.0'));
-    await chmod(executable, 0o755);
-    expect((await probeAppServer(executable)).version).toBe('codex-cli 0.166.0');
+    expect(await availabilityOf(codexFlavor, current)).toEqual({ available: true, version: 'codex-cli 0.166.0' });
     expect((await probeAppServer(executable)).version).toBe('codex-cli 0.166.0');
     expect((await readFile(calls, 'utf8')).trim().split('\n')).toHaveLength(3);
     const previous = await stat(executable);

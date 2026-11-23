@@ -290,6 +290,7 @@ export interface ComposerProps {
   onPreviewModelProvider?: (id: string) => void;
   /** An available agent or provider was clicked to switch directly (see `ModelPicker`). */
   onSelectModelProvider?: (id: string) => void;
+  onModelPickerOpenChange?: (open: boolean) => void;
   /** Before the model's name on its trigger, e.g. the agent's mark when the menu also picks the agent. */
   modelLeading?: ReactNode;
   /** Quiet banner at the top of the model menu when agents and models come from a linked server. */
@@ -1514,7 +1515,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    */
   const modelLeadsRow = !isMobile && Boolean(props.modelLeading);
   const renderModelPicker = () => props.onModelChange ? (
-    <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero && !fullscreen ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} onSelectProvider={props.onSelectModelProvider} leading={props.modelLeading} sourceLabel={props.modelSourceLabel} />
+    <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero && !fullscreen ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} onSelectProvider={props.onSelectModelProvider} onOpenChange={props.onModelPickerOpenChange} leading={props.modelLeading} sourceLabel={props.modelSourceLabel} />
   ) : null;
   const fullscreenToggle = !isMobile && fullscreenOffered && (text.trim() || fullscreen) ? (
     <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>

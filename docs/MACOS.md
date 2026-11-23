@@ -856,6 +856,7 @@ cd ../macos
 
 | 功能 | Web 位置 | Mac | 优先级 |
 | --- | --- | --- | --- |
+| 新会话的 Agent 菜单隐藏未安装的 CLI，重开时重新检测 | `ProjectHome.tsx` | 待对齐 | P1 |
 | 发送、排队、立即发送（打断）、停止 | `Composer.tsx:755` | ✅ | — |
 | 附件：拖放、图文混合粘贴、24 MiB / 20 个上限、整批拒绝、去重 | `composerAttachmentIntake.ts` | ✅ | — |
 | 草稿按会话保存 | `Composer.tsx:272` | ✅ 会话按会话保存；新会话页按后端 + 配置分开（`home.<backend>.<profile>`） | — |

@@ -75,6 +75,8 @@ export type AgentModel = ModelInfo;
 export interface AgentAvailability {
   available: boolean;
   reason?: string;
+  /** The executable for this profile could not be found on the host. */
+  cliMissing?: boolean;
   /** Runnable, but the Agent's account is signed out: clients show one generic sign-in hint. */
   needsLogin?: boolean;
   /** The CLI's version output, when the probe read it. */

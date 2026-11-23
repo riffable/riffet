@@ -14,7 +14,7 @@ import { type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { publishDroidStep, settleDroidStep, type DroidCallUsage, type DroidStep } from './metering.js';
 import { agentTitlePatch, firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
-import { resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
+import { isCliMissing, resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
 import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-selection.js';
 import { KeyedTurnTrackers } from '../shared/turn-tracker.js';
 import { activityId, ActivityLedger, withActivity } from '../../journal/activity.js';
@@ -310,7 +310,10 @@ export async function probeDroidCli(profile: NativeBackendProfileConfig): Promis
     if (!help.includes('stream-jsonrpc')) return { available: false, reason: `“${launch.configured}” does not support \`droid exec --input-format stream-jsonrpc\`; update Droid.`, version };
     return { available: true, version };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { available: false, reason: `Cannot find “${launch.configured}”. Install Droid (https://factory.ai) or set this profile's executable to its absolute path.` };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      const cliMissing = isCliMissing(resolveCliExecutable({ command: launch.configured }));
+      return { available: false, ...(cliMissing ? { cliMissing: true } : {}), reason: `Cannot find “${launch.configured}”. Install Droid (https://factory.ai) or set this profile's executable to its absolute path.` };
+    }
     return { available: false, reason: `Could not start Droid at “${launch.command}” (${errorMessage(error)}).` };
   }
 }

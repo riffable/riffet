@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } from '@contracts';
-import { AppError, estimatedTokens, materializeNativeInput, queryDirectory, redactSensitiveText, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
+import { AppError, estimatedTokens, isCliMissing, materializeNativeInput, queryDirectory, redactSensitiveText, resolveCliExecutable, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
   type AgentControlMessage, type AgentDelivery, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
@@ -416,9 +416,9 @@ export class CursorBackend implements AgentBackend {
         runCursor(launch, ['--version'], { cwd: process.cwd(), timeoutMs: 8000, maxOutputBytes: 16 * 1024 }),
         cursorNeedsLogin(launch).catch(() => false),
       ]);
-      return result.code === 0
-        ? { available: true, version: result.stdout || result.stderr, ...(needsLogin ? { needsLogin: true } : {}) }
-        : { available: false, reason: `cursor-agent exited with code ${result.code ?? 'unknown'}` };
+      if (result.code === 0) return { available: true, version: result.stdout || result.stderr, ...(needsLogin ? { needsLogin: true } : {}) };
+      const cliMissing = result.code === null && !result.timedOut && !result.truncated && isCliMissing(resolveCliExecutable({ command: launch.executable }));
+      return { available: false, ...(cliMissing ? { cliMissing: true } : {}), reason: `cursor-agent exited with code ${result.code ?? 'unknown'}` };
     } catch (error) {
       return { available: false, reason: error instanceof Error ? error.message : 'cursor-agent is unavailable' };
     }

@@ -51,7 +51,12 @@ export function mergeSlashItems(builtins: NativeSlashItem[], discovered: NativeS
   return [...result, ...byName.values()];
 }
 
-interface AvailabilityEntry { result: NativeBackendAvailability; checkedAt: number }
+interface AvailabilityEntry {
+  result: NativeBackendAvailability;
+  checkedAt: number;
+  /** Shared by picker reads for the lifetime of the default profile's probe. */
+  otherProfilesMissing?: Promise<boolean>;
+}
 
 /** Rated from the version the availability probe already read; nothing is spawned for it. */
 function cliVersionOf(driver: NativeBackendDriver, availability: NativeBackendAvailability): Pick<NativeBackendCatalogEntry, 'cliVersion'> {
@@ -381,9 +386,10 @@ export class BackendCatalog {
    * is why a backend whose executable could not be found still showed up as healthy until a
    * conversation tried to start it.
    */
-  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig, options: { staleOk?: boolean } = {}): Promise<AvailabilityEntry> {
+  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig, options: { staleOk?: boolean; recheckMissing?: boolean } = {}): Promise<AvailabilityEntry> {
     const key = `${driver.id}:${profile.id}`;
     const cached = this.availability.get(key);
+    if (options.recheckMissing && cached?.result.cliMissing) return this.probeAvailability(key, driver, profile);
     if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached;
     // A caller that only picks a default takes the last answer and lets the refresh run behind it.
     if (cached && options.staleOk) { void this.probeAvailability(key, driver, profile); return cached; }
@@ -394,12 +400,7 @@ export class BackendCatalog {
   private probeAvailability(key: string, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<AvailabilityEntry> {
     const running = this.availabilityProbes.get(key);
     if (running) return running;
-    const probe = (async () => {
-      // A source in its own process answers `resolve` only from a finished `prepare`; without one the probe would
-      // read (and cache) "not ready" for a source that is fine.
-      await prepareSource(profile.config).catch(() => undefined);
-      const result = await driver.available(this.host, profile)
-        .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
+    const probe = this.checkAvailability(driver, profile).then(result => {
       const entry = { result, checkedAt: Date.now() };
       this.availability.set(key, entry);
       for (const oldest of this.availability.keys()) {
@@ -407,9 +408,23 @@ export class BackendCatalog {
         this.availability.delete(oldest);
       }
       return entry;
-    })().finally(() => this.availabilityProbes.delete(key));
+    }).finally(() => this.availabilityProbes.delete(key));
     this.availabilityProbes.set(key, probe);
     return probe;
+  }
+
+  private async checkAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
+    // A source backed by another process can only resolve after prepare completes.
+    await prepareSource(profile.config).catch(() => undefined);
+    return driver.available(this.host, profile)
+      .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
+  }
+
+  private async otherProfilesMissing(driver: NativeBackendDriver, profiles: NativeBackendProfileConfig[], defaultProfile: NativeBackendProfileConfig): Promise<boolean> {
+    for (const profile of profiles) {
+      if (profile.id !== defaultProfile.id && !(await this.checkAvailability(driver, profile)).cliMissing) return false;
+    }
+    return true;
   }
 
   /**
@@ -427,19 +442,24 @@ export class BackendCatalog {
     return checked.filter((id): id is NativeBackendId => id !== undefined);
   }
 
-  async listBackends(onAvailability?: (id: NativeBackendId, checkedAt: number) => void): Promise<NativeBackendCatalogEntry[]> {
+  async listBackends(options: { onAvailability?: (id: NativeBackendId, checkedAt: number) => void; installation?: 'cached' | 'recheck-missing' } = {}): Promise<NativeBackendCatalogEntry[]> {
     const result: NativeBackendCatalogEntry[] = [];
     for (const driver of this.registry.list()) {
       const profiles = this.profiles(driver);
       const profile = profiles.find(item => item.isDefault) ?? profiles[0];
       if (!profile) continue;
       const capabilities = await this.driverCapabilities(driver, profile);
-      const { result: availability, checkedAt } = await this.backendAvailability(driver, profile);
-      onAvailability?.(driver.id, checkedAt);
+      const probe = await this.backendAvailability(driver, profile, { recheckMissing: options.installation === 'recheck-missing' });
+      const { result: availability, checkedAt } = probe;
+      options.onAvailability?.(driver.id, checkedAt);
+      // The picker needs agent-wide evidence. Cache the aggregate so extra profiles never evict
+      // the default profiles that settings and background readers share.
+      const cliMissing = availability.cliMissing && options.installation
+        && (profiles.length === 1 || await (probe.otherProfilesMissing ??= this.otherProfilesMissing(driver, profiles, profile)));
       const reason = availability.reason ? safeBackendReason(availability.reason, profile) : undefined;
       const rawDefaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
       const defaultModel = rawDefaultModel ? driver.normalizeModel?.(rawDefaultModel, profile) ?? rawDefaultModel : undefined;
-      result.push({ backendId: driver.id, label: driver.label, available: availability.available, ...(availability.needsLogin ? { needsLogin: true } : {}), profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models: [], ...(reason ? { reason } : {}), ...(defaultModel ? { defaultModel } : {}), ...cliVersionOf(driver, availability) });
+      result.push({ backendId: driver.id, label: driver.label, available: availability.available, ...(cliMissing ? { cliMissing: true } : {}), ...(availability.needsLogin ? { needsLogin: true } : {}), profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models: [], ...(reason ? { reason } : {}), ...(defaultModel ? { defaultModel } : {}), ...cliVersionOf(driver, availability) });
     }
     return result;
   }
@@ -478,6 +498,7 @@ export class BackendCatalog {
     }
     return {
       backendId, label: driver.label, available: availability.available,
+      ...(availability.cliMissing ? { cliMissing: true } : {}),
       ...(availability.needsLogin ? { needsLogin: true } : {}),
       ...(reason ? { reason } : {}),
       profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models,

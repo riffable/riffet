@@ -31,6 +31,7 @@ verify:
 
 ## 外部行为
 
+- Agent 列表的 `cliMissing` 表示所有提供商都已确认找不到 CLI。`GET /api/backends?recheckMissing=1` 会重新探测缓存中缺失的 CLI，已安装的仍沿用正常的缓存时限。
 - 没有外部输入：消费的是各驱动经 `types.ts#NativeBackendHost` 回报的状态、转写批和事件，以及插件进程经 `AgentHost` 传来的普通数据。各驱动的 CLI 录制放在各自目录。
 
 ## 排障

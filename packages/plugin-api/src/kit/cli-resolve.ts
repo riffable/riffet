@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, lstatSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, delimiter, isAbsolute, join, resolve } from 'node:path';
 import { expandHome, isExecutableFile, nodeDirectories, pathEntries } from './environment.js';
@@ -52,6 +52,10 @@ export interface CliResolveInput {
 
 const WINDOWS_EXTENSIONS = ['', '.cmd', '.exe', '.bat', '.ps1'];
 
+function commandNames(command: string): string[] {
+  return process.platform === 'win32' ? WINDOWS_EXTENSIONS.map(extension => `${command}${extension}`) : [command];
+}
+
 /** Install directories worth searching when PATH is wrong or empty. */
 export function installDirectories(input: CliResolveInput = { command: '' }): string[] {
   const home = input.home ?? homedir();
@@ -76,8 +80,7 @@ export function installDirectories(input: CliResolveInput = { command: '' }): st
 }
 
 function lookIn(directory: string, command: string): string | undefined {
-  const names = process.platform === 'win32' ? WINDOWS_EXTENSIONS.map(extension => `${command}${extension}`) : [command];
-  for (const name of names) {
+  for (const name of commandNames(command)) {
     const candidate = join(directory, name);
     if (isExecutableFile(candidate)) return candidate;
   }
@@ -125,6 +128,18 @@ export function resolveCliExecutable(input: CliResolveInput): CliResolution {
     }
   }
   return { executable: configured, configured, resolved: false, source: 'unresolved', searched };
+}
+
+/** Distinguishes an absent launcher from a file the daemon cannot execute or inspect. */
+export function isCliMissing(resolution: CliResolution): boolean {
+  if (resolution.resolved || !resolution.configured) return false;
+  const paths = resolution.source === 'unresolved'
+    ? resolution.searched.flatMap(directory => commandNames(resolution.configured).map(name => join(directory, name)))
+    : [resolution.executable];
+  return paths.every(path => {
+    try { return lstatSync(path, { throwIfNoEntry: false }) === undefined; }
+    catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOTDIR'; }
+  });
 }
 
 /** The shell a `shell:<function>` launcher has to run under: the user's own, not a hardcoded zsh. */

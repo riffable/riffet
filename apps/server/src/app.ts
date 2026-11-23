@@ -495,7 +495,7 @@ export async function createApp(options: AppOptions = {}) {
   workItemsRef=workItems;
   assistantRef=new AssistantBoard({store,workItems,workItemChoice:async named=>{const saved=settings.getSettings();if(named&&named!==saved.workItems?.backendId)return undefined;return workItemAgentChoice({...saved,defaultBackendId:await defaultBackendForClient(undefined,saved.defaultBackendId,nativeBackends)},await nativeBackends.catalog.listBackends());},defaultBackend:()=>defaultBackendForClient(undefined,settings.getSettings().defaultBackendId,nativeBackends),
     search:assistantSearch,transcript:id=>nativeBackends.contextTranscript(id,CONTEXT_LIMITS.bytes,AbortSignal.timeout(CONTEXT_LIMITS.timeoutMs)),
-    runtimeSessionIds:()=>nativeBackends.runtimeSessionIds(),runtimeStatus:id=>nativeBackends.hasRuntime(id)?nativeBackends.status(id):undefined,backends:onAvailability=>nativeBackends.catalog.listBackends(onAvailability),automations:()=>{
+    runtimeSessionIds:()=>nativeBackends.runtimeSessionIds(),runtimeStatus:id=>nativeBackends.hasRuntime(id)?nativeBackends.status(id):undefined,backends:onAvailability=>nativeBackends.catalog.listBackends({onAvailability}),automations:()=>{
       if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
       return orchestrationRef.automations();
     },work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??SETTING_DEFAULTS.assistant.dispatch});

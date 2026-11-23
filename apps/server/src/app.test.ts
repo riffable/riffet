@@ -1493,6 +1493,28 @@ describe('pi compatibility for clients that did not negotiate pi-agent', () => {
     expect(cleared.json().profiles[0].hasApiKey).toBe(false);
   });
 
+  it('discovers a newly installed agent in a non-default profile on the next picker read', async () => {
+    const { app, cookie, csrf, stateDir } = await boot();
+    const ask = client(app, cookie, csrf);
+    const executable = join(stateDir, 'new-pi');
+    expect((await ask('PATCH', '/api/backends/pi/profiles/local', { executable: join(stateDir, 'missing-pi') }, 'pi-agent')).statusCode).toBe(200);
+    expect((await ask('POST', '/api/backends/pi/profiles', { id: 'other', name: 'Other', executable, enabledModels: [] }, 'pi-agent')).statusCode).toBe(200);
+    const read = async () => {
+      const response = await ask('GET', '/api/backends?recheckMissing=1', undefined, 'pi-agent');
+      expect(response.statusCode).toBe(200);
+      return response.json().find((entry: { backendId: string }) => entry.backendId === 'pi');
+    };
+    expect(await read()).toMatchObject({ cliMissing: true });
+    // An installed CLI can still be incompatible. The picker should show it either way.
+    await writeFile(executable, '#!/bin/sh\necho 0.1.0\n', { mode: 0o755 });
+    const present = await read();
+    expect(present.available).toBe(false);
+    expect(present.cliMissing).toBeUndefined();
+    await writeFile(executable, '#!/bin/sh\necho "1.4.0 --mode rpc"\n');
+    const profile = await ask('GET', '/api/backends/pi/catalog?scope=global&profileId=other', undefined, 'pi-agent,projectless-tasks');
+    expect(profile.json()).toMatchObject({ available: true, models: [] });
+  });
+
   it('hides pi from bootstrap, lists, settings and direct reads until a client negotiates pi-agent', async () => {
     const { app, cookie, csrf, projectDir, store } = await boot({ defaultBackendId: 'pi', nativeBackendDefaults: { pi: { model: 'pi-model' } } });
     const ask = client(app, cookie, csrf);

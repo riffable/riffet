@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The web new-session picker hides agents missing from the selected server. Reopening it after installing an agent shows the new choice.
 - On the web, ⌘K opens a wider, taller search dialog on desktop so more matches and longer snippets are visible at once. Recent search terms appear as chips above recent sessions. Select a term to search again in its original Title or Content mode, or use × to remove it. History stays in this browser for this Riffet site.
 - On desktop web, drag sidebar destinations to reorder them, drag them out of More to pin them at a specific position, or drop them onto More to unpin them.
 - Web Settings is now a full top-level page instead of a fixed modal: on desktop, opening Settings swaps the main sidebar to a searchable 8-group settings navigation rail while the main card renders sections in a consistent 1200px layout (with sticky live previews on Theme and Typography, and two-column layouts on Sidebar and Shortcuts), remembers your last visited section (defaulting to Profile), keeps Design System open inside Settings at `/design`, mirrors `/settings/<section>` in the address bar while preserving the underlying session or page on close, and adds a direct Settings button to the right of the desktop sidebar footer while the avatar menu always shows current server status.

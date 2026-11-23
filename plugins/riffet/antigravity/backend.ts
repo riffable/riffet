@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeInteractionResult, NativeStatus } from '@contracts';
-import { resolveCliExecutable, runProcess } from '@riffet/plugin-api/kit';
+import { isCliMissing, resolveCliExecutable, runProcess } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
   type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
@@ -83,8 +83,9 @@ export class AntigravityBackend implements AgentBackend {
 
   async available(_host: AgentHost, profile: AgentProfile) {
     const parsed = parseAgyProfile(profile.config);
-    if (!resolveCliExecutable({ command: parsed.executable }).resolved)
-      return { available: false, reason: 'Antigravity CLI (agy) was not found' };
+    const resolution = resolveCliExecutable({ command: parsed.executable });
+    if (!resolution.resolved)
+      return { available: false, ...(isCliMissing(resolution) ? { cliMissing: true } : {}), reason: 'Antigravity CLI (agy) was not found' };
     const result = await runProcess(parsed.executable, ['--version'], { cwd: process.cwd(), timeoutMs: 5000, maxOutputBytes: 4096 }).catch(
       () => undefined,
     );

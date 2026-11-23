@@ -40,6 +40,7 @@ verify:
 
 ## 排障
 
+- Agent 被标记为未安装：`packages/plugin-api/src/kit/cli-resolve.ts#isCliMissing` 会逐个核对已搜索的路径，文件权限或损坏的符号链接会保留为运行故障。
 - 预热命中率低，服务日志持续出现 `prewarm: a new session did not match`：比较两侧的键，看 `launch-input.ts#sessionLaunchInput` 与各后端的 `warmKey` 派生。
 - 等待在服务繁忙时偶发超时：先确认调用走的是 `wait-for.ts#waitFor` 而不是裸 `setTimeout`。
 - 残留的 App Server 进程：`app-server-daemons.ts` 列出的就是本工作台的，用它而不是 `ps | grep` 判断归属。

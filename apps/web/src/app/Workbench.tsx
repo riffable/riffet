@@ -570,10 +570,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     onProfileChange: chooseHomeProfile,
     ...homeCatalogState,
     onRetryCatalog: loadCatalog,
+    onAgentPickerOpen: () => { void catalog.recheckBackends(remoteHomeServerId); },
     onRefreshCatalog: () => {
       const projectId = project?.id ?? '';
       const profiles = backend?.profiles ?? [];
-      if (remoteHomeServerId) void catalog.loadRemote(remoteHomeServerId, true);
       if ((projectId || projectlessTasks || Boolean(remoteHomeServerId)) && profiles.length > 1) void catalog.loadProfiles(projectId, homeBackendId, profiles, homeProfilesKey, true, remoteHomeServerId || undefined);
       void loadCatalog();
     },

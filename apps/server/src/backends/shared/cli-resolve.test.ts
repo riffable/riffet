@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { describeSearch, resolveCliExecutable, resolveCommandShell, shellFunctionInvocation } from './cli-resolve.js';
+import { describeSearch, isCliMissing, resolveCliExecutable, resolveCommandShell, shellFunctionInvocation } from './cli-resolve.js';
 
 let home: string;
 
@@ -83,11 +83,17 @@ describe('resolveCliExecutable', () => {
   });
 
   it('reports what it searched instead of failing silently', () => {
-    const resolution = resolveCliExecutable({ command: 'missing-agent', env: { PATH: `${directory('only')}${delimiter}/usr/bin` }, home });
+    const searchDirectory = directory('only');
+    const input = { command: 'missing-agent', env: { PATH: `${searchDirectory}${delimiter}/usr/bin` }, home };
+    const resolution = resolveCliExecutable(input);
     expect(resolution.resolved).toBe(false);
     expect(resolution.executable).toBe('missing-agent');
     expect(resolution.searched.length).toBeGreaterThan(0);
     expect(describeSearch(resolution)).toContain('Searched:');
+    expect(isCliMissing(resolution)).toBe(true);
+    writeFileSync(join(searchDirectory, input.command), 'not executable', { mode: 0o644 });
+    if (process.platform !== 'win32') expect(resolveCliExecutable(input).resolved).toBe(false);
+    expect(isCliMissing(resolveCliExecutable(input))).toBe(false);
   });
 
   it('keeps an unusable configured path visible, so the error names what the user chose', () => {

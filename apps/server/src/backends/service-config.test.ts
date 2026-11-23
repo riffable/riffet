@@ -87,6 +87,25 @@ function harness() {
   return { service, driver, delivered, publishedSessions, accepted: () => currentRun, setRun: (value: Run) => { currentRun = value; }, switchTo: (patch: Partial<Session>) => { current = { ...current, ...patch }; } };
 }
 
+it('shares the picker installation scan without evicting the default availability probe', async () => {
+  const { service, driver } = harness();
+  const profiles: ProfileConfig[] = Array.from({ length: 40 }, (_, index) => ({
+    id: String(index), backendId: 'dsh', name: String(index), isDefault: index === 0, config: {},
+  }));
+  driver.profiles = () => profiles;
+  const probe = vi.fn(async () => ({ available: false, cliMissing: true }));
+  driver.available = probe;
+
+  await service.catalog.listBackends();
+  expect(probe).toHaveBeenCalledTimes(1);
+  const readPicker = () => service.catalog.listBackends({ installation: 'cached' });
+  const [entries] = await Promise.all([readPicker(), readPicker()]);
+  expect(entries[0]?.cliMissing).toBe(true);
+  await readPicker();
+  await service.catalog.listBackends();
+  expect(probe).toHaveBeenCalledTimes(profiles.length);
+});
+
 describe('NativeBackendService.models', () => {
   it('preserves provider capabilities for a parameterized current model without adding a duplicate', async () => {
     const h = harness();

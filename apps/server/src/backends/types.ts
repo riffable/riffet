@@ -422,6 +422,8 @@ export interface ExternalHolder {
 export interface NativeBackendAvailability {
   available: boolean;
   reason?: string;
+  /** The executable for this profile could not be found on the host. */
+  cliMissing?: boolean;
   /** Runnable, but the account is signed out; listed on the catalog entry as `needsLogin`. */
   needsLogin?: boolean;
   /** The CLI's `--version` output, when the probe read it; the service rates it against `cliVersions`. */

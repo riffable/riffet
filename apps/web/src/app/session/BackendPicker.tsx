@@ -9,11 +9,12 @@ import { cn } from '@/lib/utils';
  * The agent a new session will run. Which provider it draws models from is a property of the
  * model, not of the agent, so it is chosen in the model picker and only named there.
  */
-export function BackendPicker({ backends, backendId, disabled, onChange, className, fullWidth }: {
+export function BackendPicker({ backends, backendId, disabled, onChange, onOpen, className, fullWidth }: {
   backends: NativeBackendCatalogEntry[];
   backendId: NativeBackendId;
   disabled?: boolean;
   onChange: (backendId: NativeBackendId) => void;
+  onOpen?: () => void;
   className?: string;
   /** Fills its row in the mobile settings sheet instead of hugging its label. */
   fullWidth?: boolean;
@@ -21,7 +22,7 @@ export function BackendPicker({ backends, backendId, disabled, onChange, classNa
   const { t } = useLingui();
   const label = useBackendLabel();
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) onOpen?.(); }}>
       <DropdownMenuTrigger
         disabled={disabled}
         aria-label={t`选择 Agent`}

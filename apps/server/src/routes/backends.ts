@@ -25,7 +25,10 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
     return { project, session };
   };
   // Quick chat is not an agent to pick or configure; a client reaches it through its own project.
-  app.get('/api/backends',async(request)=>visibleBackendsForClient(request.headers,(await nativeBackends.catalog.listBackends()).filter(entry=>entry.backendId!=='chat')));
+  app.get<{ Querystring: { recheckMissing?: string } }>('/api/backends', async (request) => {
+    const entries = await nativeBackends.catalog.listBackends({ installation: request.query.recheckMissing === '1' ? 'recheck-missing' : 'cached' });
+    return visibleBackendsForClient(request.headers, entries.filter(entry => entry.backendId !== 'chat'));
+  });
   /**
    * Why a machine behaves the way it does: which PATH the daemon resolved and from where, which
    * variables were scrubbed, and the toolchain a terminal would inherit. `riffet doctor` prints the

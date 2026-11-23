@@ -39,7 +39,7 @@ import { QuickAction } from './QuickAction';
 import { AssistantSetup } from './work-items/AssistantSetup';
 import { formatServerPlatform, type HomeServerOption } from './useServerLabel';
 
-export interface ProfileCatalog { profile: NativeBackendProfile; models: ModelInfo[] }
+export interface ProfileCatalog extends Pick<NativeBackendCatalogEntry, 'models' | 'available' | 'reason'> { profile: NativeBackendProfile }
 
 /**
  * A model choice has to name its provider too, and two providers may well offer the same model id.
@@ -113,6 +113,7 @@ export interface NewSessionComposerProps {
   catalogLoading: boolean;
   catalogError: string;
   onRetryCatalog: () => void;
+  onAgentPickerOpen: () => void;
   /** Re-reads the catalog(s) as the model list opens, without disturbing the current selection. */
   onRefreshCatalog?: () => Promise<void> | void;
   busy: boolean;
@@ -145,7 +146,7 @@ interface Props extends NewSessionComposerProps {
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
-export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
+export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onAgentPickerOpen, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
   // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
@@ -247,18 +248,21 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     const saved = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backend.profiles.find((profile) => profile.isDefault)?.id;
     return backend.profiles.map((profile) => {
       const entry = grouped.find((item) => item.profile.id === profile.id);
-      const list = entry?.models ?? [];
+      const list = entry?.available === false ? [] : entry?.models ?? [];
       const remembered = rememberedModelName(backendId, profile.id, list);
       return {
         id: profile.id,
         label: profile.name,
-        models: entry ? list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name) })) : [],
+        models: entry?.available && !list.length
+          ? [{ id: composeChoice(profile.id, ''), label: t`默认模型` }]
+          : list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name) })),
         loading: !entry,
+        ...(entry?.available === false ? { issue: entry.reason?.trim() || t`${label(backendId)} 不可用` } : {}),
         preferred: profile.id === saved,
         ...(remembered ? { rememberedModelId: composeChoice(profile.id, remembered) } : {}),
       };
     });
-  }, [grouped, backend, backendId, settings.nativeBackendDefaults, settings.defaultModel, assistant]);
+  }, [grouped, backend, backendId, settings.nativeBackendDefaults, settings.defaultModel, assistant, label, t]);
   // Usage is read for the active provider only, stored raw so ModelPicker, settings and plugin pages share one cache.
   const loadModelUsage = useCallback((signal: AbortSignal) => apiFor(activeServerId || undefined).backendUsage(backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) }, signal), [activeServerId, backendId, project?.id, activeProfileId]);
   const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}), ...(activeServerId ? { serverId: activeServerId } : {}) });
@@ -271,7 +275,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const catalogIssue = catalogError.trim();
   const modelsError = catalogIssue !== backendIssue ? catalogIssue : '';
   /*
-   * On a pointer device the model menu also picks the agent: its column lists every agent (with
+   * On a pointer device the model menu also picks the agent: its column lists the offered agents (with
    * its providers), and picking a model saves agent, provider and model in one write. Other agents'
    * lists paint from the cache and are read when the reader looks at them.
    */
@@ -279,28 +283,38 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   // Decided by layout alone: the agent list arrives after the first frames, and a choice that
   // waited for it would draw the separate agent button first and then swap it out.
   const agentChoices = !quickChat && !mobile;
+  const [agentPickerOpen, setAgentPickerOpen] = useState(false);
+  const pickerBackends = useMemo(() => backends.filter((entry) => entry.backendId !== 'chat' && entry.cliMissing !== true), [backends]);
   const agentOf = (id: NativeBackendId) => ({ id, label: label(id), icon: <AgentLogo backend={id} size={14} style={agentMarkStyle(id)} /> });
+  const listedBackend = backends.find((entry) => entry.backendId === backendId);
+  const activeAgentMissing = listedBackend?.cliMissing === true;
   /** The active agent's row while its providers are not grouped: the same id it has while another agent is active, so the column keeps its place when it becomes the active one. */
-  const listedProfiles = backends.find((entry) => entry.backendId === backendId)?.profiles ?? [];
+  const listedProfiles = listedBackend?.profiles ?? [];
   const activeSourceId = otherSource(backendId, listedProfiles.length ? activeProfileId ?? listedProfiles[0]?.id : undefined);
   // While every provider's models are listed together, the active provider's row holds only its own.
   const activeModels = grouped && activeProfileId ? models.filter((item) => item.id.startsWith(`${activeProfileId}${CHOICE_SEPARATOR}`)) : models;
-  const agentSources: ModelProviderChoices[] | undefined = agentChoices ? backends.filter((entry) => entry.backendId !== 'chat').flatMap((entry) => {
+  const agentSources: ModelProviderChoices[] | undefined = agentChoices ? pickerBackends.flatMap((entry) => {
     const agent = agentOf(entry.backendId);
     if (entry.backendId === backendId && providerChoices) return providerChoices.map((provider) => ({ ...provider, agent }));
     const profiles: Array<NativeBackendProfile | undefined> = entry.profiles.length ? entry.profiles : [undefined];
-    const saved = settings.nativeBackendDefaults?.[entry.backendId]?.profileId ?? entry.profiles.find((profile) => profile.isDefault)?.id;
+    const defaultProfile = (entry.profiles.find((profile) => profile.isDefault) ?? entry.profiles[0])?.id;
+    const saved = settings.nativeBackendDefaults?.[entry.backendId]?.profileId ?? defaultProfile;
     return profiles.map((profile): ModelProviderChoices => {
       const id = otherSource(entry.backendId, profile?.id);
       const label = profile?.name ?? agent.label;
       // The provider in force lists the composer's own catalog; the others, while it has several
       // that have not all been read, are listed like another agent's and fill in as they answer.
       if (id === activeSourceId) return { id, label, agent, models: activeModels, loading: catalogLoading && !models.length, ...(!models.length && (backendIssue || modelsError) ? { issue: backendIssue || modelsError } : {}) };
-      const list = agentModels.read(entry.backendId, profile?.id);
-      const issue = entry.available === false ? entry.reason?.trim() || t`${agent.label} 不可用` : list?.length ? undefined : agentModels.issue(entry.backendId, profile?.id);
+      const probe = agentModels.probed(entry.backendId, profile?.id);
+      const isDefault = profile?.id === defaultProfile;
+      const available = (!isDefault || entry.available) && probe?.available !== false;
+      const list = available ? agentModels.read(entry.backendId, profile?.id) : undefined;
+      const issue = !available
+        ? (probe?.reason ?? (isDefault ? entry.reason : undefined))?.trim() || t`${agent.label} 不可用`
+        : list?.length ? undefined : agentModels.issue(entry.backendId, profile?.id);
       const loading = !list?.length && agentModels.loading(entry.backendId, profile?.id);
       // An agent that lists nothing still starts on its own default model, as picking it alone used to.
-      const fallback = entry.available !== false && !loading && !list?.length && (list || issue);
+      const fallback = available && !loading && !list?.length && (list || issue);
       const remembered = rememberedModelName(entry.backendId, profile?.id, list ?? []);
       return {
         id,
@@ -348,14 +362,21 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     }
     if (targetProfileId) onProfileChange(targetProfileId, next);
   };
-  /** As the menu opens, reads the other agents nothing is known about yet; the rest are read on preview. */
-  const loadUnknownAgents = () => {
-    for (const source of agentSources ?? []) {
-      const other = splitOther(`${source.id}${OTHER_AGENT}`);
-      const entry = other && backends.find((item) => item.backendId === other.backendId);
-      if (other && source.id !== activeSourceId && entry?.available !== false && !source.models.length) agentModels.load(other.backendId, other.profileId);
+  // An installation may reveal a new Agent after the menu has opened.
+  const { load: loadAgentModels, read: readAgentModels, probed: probedAgent } = agentModels;
+  const groupedProviders = Boolean(providerChoices);
+  useEffect(() => {
+    if (!agentChoices || !agentPickerOpen) return;
+    for (const entry of pickerBackends) {
+      if (entry.backendId === backendId && groupedProviders) continue;
+      const defaultProfile = (entry.profiles.find((profile) => profile.isDefault) ?? entry.profiles[0])?.id;
+      for (const profileId of entry.profiles.length ? entry.profiles.map((profile) => profile.id) : [undefined]) {
+        if (otherSource(entry.backendId, profileId) === activeSourceId) continue;
+        if (profileId === defaultProfile && !entry.available) continue;
+        if (!readAgentModels(entry.backendId, profileId)?.length) loadAgentModels(entry.backendId, profileId, probedAgent(entry.backendId, profileId)?.cliMissing);
+      }
     }
-  };
+  }, [activeSourceId, agentChoices, agentPickerOpen, backendId, groupedProviders, loadAgentModels, pickerBackends, probedAgent, readAgentModels]);
 
   // A send held for the catalog has no reason of its own on the disabled button.
   const selectionHeld = selectionNeedsCatalog && !catalogLoading;
@@ -529,7 +550,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         referenceProjects={directories}
         onOpenReferenceSession={onOpenReferenceSession}
         disabled={busy}
-        submitDisabled={catalogLoading || selectionNeedsCatalog || backend?.available === false || (quickChat && !model) || needsRemoteDirectory}
+        submitDisabled={catalogLoading || selectionNeedsCatalog || activeAgentMissing || backend?.available === false || (quickChat && !model) || needsRemoteDirectory}
         // An empty list's picker is its own retry and holds itself while that runs, keeping focus.
         pickersDisabled={catalogWaited && models.length > 0}
         modelsLoading={catalogLoading}
@@ -549,7 +570,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
         // The model menu picks the agent too where it has a column for them; a phone keeps its own row.
-        startPickers={quickChat || agentSources ? undefined : <BackendPicker backends={backends} backendId={backendId} onChange={onBackendChange} disabled={busy} fullWidth={mobile} />}
+        startPickers={quickChat || agentChoices ? undefined : <BackendPicker backends={pickerBackends} backendId={backendId} onChange={onBackendChange} onOpen={onAgentPickerOpen} disabled={busy} fullWidth={mobile} />}
         startPickersLabel={quickChat ? undefined : label(backendId)}
         models={models}
         providers={agentSources ?? providerChoices}
@@ -559,8 +580,9 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         modelSourceLabel={activeServerId && activeServer ? t`来自 ${activeServer.name}` : undefined}
         onPreviewModelProvider={(id) => { const other = splitOther(`${id}${OTHER_AGENT}`); if (other && id !== activeSourceId) agentModels.load(other.backendId, other.profileId); }}
         onSelectModelProvider={selectModelProvider}
-        loadModelUsage={loadModelUsage}
-        refreshCatalog={quickChat ? onRetryCatalog : () => { loadUnknownAgents(); return onRefreshCatalog?.(); }}
+        onModelPickerOpenChange={agentChoices ? (open) => { setAgentPickerOpen(open); if (open) onAgentPickerOpen(); } : undefined}
+        loadModelUsage={activeAgentMissing ? undefined : loadModelUsage}
+        refreshCatalog={quickChat ? onRetryCatalog : agentChoices && activeAgentMissing ? undefined : onRefreshCatalog}
         usageScopeKey={`${activeServerId}|${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}
         model={model ? modelChoice : undefined}
         onModelChange={(id) => {

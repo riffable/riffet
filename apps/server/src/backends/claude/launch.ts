@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import type { NativeBackendId, NativeInteraction, Session, TerminalInfo } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { launchSource, modelSourceOf, resolveSource, sourceEndpoint } from '../shared/model-source.js';
-import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
+import { describeSearch, isCliMissing, resolveCliExecutable } from '../shared/cli-resolve.js';
 import { parseVersion, versionAtLeast, type CliVersion, type CliVersionRange } from '../shared/cli-version.js';
 import type { NativeBackendAvailability, NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
 import { claudeScreenInteraction, isClaudeScreenInteraction } from './screen-dialog.js';
@@ -380,9 +380,10 @@ export async function claudeAvailability(profile: NativeBackendProfileConfig): P
     const minimum = CLAUDE_CLI_VERSIONS.minimum!;
     if (!versionAtLeast(probe.parsed, minimum)) return { available: false, reason: `Claude Code ${version} is too old for the local interaction bridge; update to ${minimum} or later.`, version };
     return { available: true, version };
-  } catch {
+  } catch (error) {
     const configured = string(profile.config.executable)?.trim() || process.env.CLAUDE_CLI?.trim() || 'claude';
     const resolution = resolveCliExecutable({ command: configured });
-    return { available: false, reason: `Claude Code could not be started from “${resolution.executable}”.${resolution.resolved ? '' : ' Set this profile’s executable to an absolute path.'}${describeSearch(resolution)}` };
+    const cliMissing = (error as NodeJS.ErrnoException).code === 'ENOENT' && isCliMissing(resolution);
+    return { available: false, ...(cliMissing ? { cliMissing: true } : {}), reason: `Claude Code could not be started from “${resolution.executable}”.${resolution.resolved ? '' : ' Set this profile’s executable to an absolute path.'}${describeSearch(resolution)}` };
   }
 }

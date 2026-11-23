@@ -1,5 +1,5 @@
 import type { NativeBackendCapabilities } from '../../../../../packages/contracts/src/index.js';
-import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
+import { describeSearch, isCliMissing, resolveCliExecutable } from '../shared/cli-resolve.js';
 import { modelSourceOf, resolveSource } from '../shared/model-source.js';
 import type { NativeBackendAvailability, NativeBackendProfileConfig } from '../types.js';
 import { codexNativeSlashItems } from './commands.js';
@@ -57,18 +57,21 @@ export async function availabilityOf(flavor: CodexFlavor, profile: NativeBackend
   const source = modelSourceOf(profile.config);
   const sourceReason = source && resolveSource(source, profile.config).reason;
   if (sourceReason) return { available: false, reason: sourceReason };
-  const executable = executableOf(profile, flavor);
+  const resolution = resolveCliExecutable({ command: configuredCommand(profile, flavor) });
+  const { executable } = resolution;
   let probe;
   try {
     probe = await probeAppServer(executable);
   } catch (error) {
-    const resolution = resolveCliExecutable({ command: configuredCommand(profile, flavor) });
     const code = (error as NodeJS.ErrnoException).code;
     const detail = resolution.resolved ? ` (${typeof code === 'string' ? code : 'process error'})` : `${describeSearch(resolution)} Set this profile’s executable to an absolute path.`;
     return { available: false, reason: `${flavor.label} could not be started from “${executable}”.${detail}` };
   }
   const reason = flavor.unavailableReason(probe, executable);
   const version = probe.version ? { version: probe.version } : {};
-  if (reason) return { available: false, reason, ...version };
+  if (reason) {
+    const cliMissing = probe.executableNotFound && isCliMissing(resolution);
+    return { available: false, reason, ...version, ...(cliMissing ? { cliMissing: true } : {}) };
+  }
   return { available: true, ...version };
 }

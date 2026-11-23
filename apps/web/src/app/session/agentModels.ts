@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { ModelInfo, NativeBackendId } from '@contracts';
+import type { ModelInfo, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
 import { apiFor } from '@/lib/api';
 import { cachedCatalog, rememberCatalog } from '@/lib/catalog-cache';
 import { errorMessage } from '@/lib/utils';
@@ -13,6 +13,8 @@ const catalogKey = (serverId: string, projectId: string, backendId: NativeBacken
 export interface AgentModels {
   /** The last known models of one agent's provider: empty when it answered with none, undefined while nothing is known. */
   read(backendId: NativeBackendId, profileId?: string): ModelInfo[] | undefined;
+  /** The provider's own response during this visit, including availability when there are no models. */
+  probed(backendId: NativeBackendId, profileId?: string): NativeBackendCatalogEntry | undefined;
   /** Why the last read failed, or the agent's own reason for having no models. */
   issue(backendId: NativeBackendId, profileId?: string): string | undefined;
   loading(backendId: NativeBackendId, profileId?: string): boolean;
@@ -29,7 +31,7 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
   const [, repaint] = useState(0);
   const revision = useCatalog((state) => state.revision);
   /** This visit's answers, ahead of the persisted cache, which drops lists past its age limit and empty ones. */
-  const fresh = useRef(new Map<string, ModelInfo[]>());
+  const fresh = useRef(new Map<string, NativeBackendCatalogEntry>());
   const issues = useRef(new Map<string, string>());
   const pending = useRef(new Set<string>());
   const visited = useRef(new Set<string>());
@@ -40,8 +42,9 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
   }, [revision, projectId, serverId]);
   const read = useCallback((backendId: NativeBackendId, profileId?: string) => {
     const key = catalogKey(serverId, projectId, backendId, profileId);
-    return fresh.current.get(key) ?? cachedCatalog(key)?.models;
+    return fresh.current.get(key)?.models ?? cachedCatalog(key)?.models;
   }, [serverId, projectId]);
+  const probed = useCallback((backendId: NativeBackendId, profileId?: string) => fresh.current.get(catalogKey(serverId, projectId, backendId, profileId)), [serverId, projectId]);
   const load = useCallback((backendId: NativeBackendId, profileId?: string, force = false) => {
     const key = catalogKey(serverId, projectId, backendId, profileId);
     if (pending.current.has(key) || (!force && visited.current.has(key))) return;
@@ -49,7 +52,7 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
     visited.current.add(key);
     repaint((value) => value + 1);
     void apiFor(serverId || undefined).backendCatalog(backendId, profileId, projectId || undefined).then((entry) => {
-      fresh.current.set(key, entry.models);
+      fresh.current.set(key, entry);
       rememberCatalog(key, entry);
       if (entry.models.length) issues.current.delete(key);
       else issues.current.set(key, entry.reason?.trim() || '');
@@ -65,6 +68,7 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
   }, [serverId, projectId]);
   return {
     read,
+    probed,
     issue: (backendId, profileId) => issues.current.get(catalogKey(serverId, projectId, backendId, profileId)) || undefined,
     loading: (backendId, profileId) => pending.current.has(catalogKey(serverId, projectId, backendId, profileId)),
     load,

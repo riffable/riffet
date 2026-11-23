@@ -7,6 +7,8 @@ import type { CliVersionRange } from '../shared/cli-version.js';
 /** What `--help` says a CLI build can do; each flavor decides what it needs out of it. */
 export interface AppServerProbe {
   version?: string;
+  /** The OS could not start the executable because a path was missing. */
+  executableNotFound?: boolean;
   appServer: boolean;
   /** `app-server --listen unix://…` */
   unixSocket: boolean;

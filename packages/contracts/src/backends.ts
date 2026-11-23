@@ -229,6 +229,8 @@ export interface NativeBackendCatalogEntry {
   backendId: NativeBackendId;
   label: string;
   available: boolean;
+  /** All listed profiles lack their CLI, or the requested profile does for a profile-specific catalog. */
+  cliMissing?: boolean;
   reason?: string;
   /** The Agent is installed but its account is not signed in; `reason` may say more. A client shows one generic hint for it. */
   needsLogin?: boolean;

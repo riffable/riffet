@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import type { ModelInputModalities, Session } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { DEFAULT_DSH_CONFIG_DIR } from '../../compat.js';
-import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
+import { describeSearch, isCliMissing, resolveCliExecutable } from '../shared/cli-resolve.js';
 import { parseVersion, versionAtLeast, type CliVersion, type CliVersionRange } from '../shared/cli-version.js';
 import type { NativeBackendAvailability, NativeBackendProfileConfig } from '../types.js';
 import { nonEmpty } from './util.js';
@@ -149,7 +149,8 @@ export async function probeDshCli(profile: NativeBackendProfileConfig): Promise<
       // and how to make it unconditional.
       const resolution = resolveCliExecutable({ command: settings.executable });
       if (!resolution.resolved) {
-        return { available: false, reason: `Cannot find “${settings.executable}”. Install @deepseek-ai/dsh@${DSH_MINIMUM}, then set this profile's dsh executable to its absolute path.${describeSearch(resolution)}` };
+        const cliMissing = isCliMissing(resolution);
+        return { available: false, ...(cliMissing ? { cliMissing: true } : {}), reason: `Cannot find “${settings.executable}”. Install @deepseek-ai/dsh@${DSH_MINIMUM}, then set this profile's dsh executable to its absolute path.${describeSearch(resolution)}` };
       }
       return { available: false, reason: `Cannot start DeepSeek Harness at “${command.executable}”.` };
     }

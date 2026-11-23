@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ModelConfigOption, ModelInfo, NativeSlashItem } from '../../../../../packages/contracts/src/index.js';
 import { parseVersion, versionAtLeast } from '../shared/cli-version.js';
-import { resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
+import { isCliMissing, resolveCliExecutable, shellFunctionInvocation } from '../shared/cli-resolve.js';
 import { scanCommandRoots, scanSkillRoots } from '../shared/skill-files.js';
 import type { NativeBackendAvailability, NativeBackendProfileConfig } from '../types.js';
 import { piAgentDir } from './history.js';
@@ -295,7 +295,8 @@ export async function probePiCli(profile: NativeBackendProfileConfig): Promise<N
     return { available: true, version: found?.text };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { available: false, reason: `Cannot find “${launch.configured}”. Install pi or set this profile's executable to its absolute path.` };
+      const cliMissing = isCliMissing(resolveCliExecutable({ command: launch.configured }));
+      return { available: false, ...(cliMissing ? { cliMissing: true } : {}), reason: `Cannot find “${launch.configured}”. Install pi or set this profile's executable to its absolute path.` };
     }
     return { available: false, reason: `Could not start pi at “${launch.command}” (${errorMessage(error)}).` };
   }

@@ -197,9 +197,10 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
         `${appResult.stdout}\n${appResult.stderr}`,
         `${tuiResult.stdout}\n${tuiResult.stderr}`,
       );
-    } catch {
+    } catch (error) {
       probes.delete(key);
-      return { appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false };
+      const executableNotFound = (error as NodeJS.ErrnoException).code === 'ENOENT';
+      return { appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false, ...(executableNotFound ? { executableNotFound: true } : {}) };
     }
   })();
   probes.set(key, task);

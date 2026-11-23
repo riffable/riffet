@@ -824,7 +824,7 @@ export const api = {
   createWorktreeProject: (projectId: string, body: { name?: string; path?: string; branch?: string; base?: string } = {}) =>
     request<ProjectRecord>(`/api/projects/${encodeURIComponent(projectId)}/worktree-projects`, json('POST', body)),
   machine: () => request<MachineReport>('/api/system/machine'),
-  backends: () => request<NativeBackendCatalogEntry[]>('/api/backends'),
+  backends: (recheckMissing = false) => request<NativeBackendCatalogEntry[]>(recheckMissing ? '/api/backends?recheckMissing=1' : '/api/backends'),
   commandObservation: (id: NativeBackendId, signal?: AbortSignal) => request<CommandObservation>(`/api/backends/${encodeURIComponent(id)}/command-observation`, { signal }),
   trustCommandObservation: (id: NativeBackendId) => request<CommandObservation>(`/api/backends/${encodeURIComponent(id)}/command-observation/trust`, { method: 'POST' }),
   backendProfiles: (id: NativeBackendId, signal?: AbortSignal) => request<NativeBackendProfilesResponse>(`/api/backends/${id}/profiles`, { signal }),
