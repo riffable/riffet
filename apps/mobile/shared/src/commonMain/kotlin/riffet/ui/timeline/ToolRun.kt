@@ -34,23 +34,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.rememberResourceEnvironment
 import org.jetbrains.compose.resources.stringResource
-import riffet.contracts.NativeJobStatus
 import riffet.core.TimelineItem
 import riffet_mobile.shared.generated.resources.*
 
 /*
  * Ported from `ToolRun` in apps/web/src/app/session/TranscriptView.tsx (the Mac's `toolRun`).
  *
- * A stretch of tool calls folds into one line naming what the calls did. Work in progress opens
- * by default; a call that never settled or has nothing after it also opens. The reader can fold or
- * reopen it at any point.
+ * A stretch of tool calls folds into one line naming what the calls did. A tail run opens by
+ * default and folds once later content follows, even if a command inside it is still running in
+ * the background. The reader can fold or reopen it at any point.
  */
 @Composable
 internal fun ToolRun(
     items: List<TimelineItem>,
     followedByContent: Boolean,
-    /** The process block is working. */
-    running: Boolean,
     /** The turn is live; a pending call in it can still finish. */
     turnActive: Boolean,
     root: String?,
@@ -81,15 +78,7 @@ internal fun ToolRun(
     var choice by rememberSaveable { mutableStateOf<Boolean?>(null) }
     LaunchedEffect(reveal) { if (reveal) choice = true }
 
-    // Reasoning still streaming at the end of the block keeps its run open, as a working call does.
-    val thinking = running && !followedByContent && items.last() is TimelineItem.Thought
-    val active = thinking || tools.indices.any { index ->
-        tools[index].job?.let { it.status == NativeJobStatus.RUNNING } ?: presentations[index].running
-    }
-    val incomplete = tools.indices.any { index ->
-        tools[index].job?.let { it.status == NativeJobStatus.UNKNOWN } ?: presentations[index].dangling
-    }
-    val open = choice ?: (active || incomplete || !followedByContent)
+    val open = choice ?: !followedByContent
 
     val names = summary.counts.take(2).map { toolRunCountLabel(it) }
     val pair = if (names.size == 2) stringResource(Res.string.timeline_tool_run_pair, names[0], names[1]) else names.firstOrNull().orEmpty()

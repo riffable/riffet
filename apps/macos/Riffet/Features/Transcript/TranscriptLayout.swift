@@ -726,18 +726,13 @@ struct RowBuilder {
     }
 
     /// A stretch of tool calls (and the folded reasoning between them), folded into one line naming
-    /// what the calls did (the web's `ToolRun`). A working or unsettled run opens by default,
-    /// and once finished folds when delegation or the answer follows; the reader's choice wins.
+    /// what the calls did (the web's `ToolRun`). A tail run opens by default, and folds once prose,
+    /// delegation or the answer follows — even if a background command inside it is still running;
+    /// the reader's choice wins.
     private mutating func toolRun(_ run: [any TimelineItem], followedByContent: Bool, running: Bool, turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let id = "toolrun:\(run[0].key)"
         let tools = run.compactMap { $0 as? TimelineItemTool }
         let presentations = tools.map { toolPresentation(item: $0, root: root, stale: !turnActive) }
-        // Reasoning still streaming at the end of the block keeps its run open, as a working call does.
-        let thinking = running && !followedByContent && run.last is TimelineItemThought
-        let active = thinking || zip(tools, presentations).contains { tool, presentation in
-            tool.job.map { $0.status == .running } ?? presentation.running
-        }
-        let incomplete = presentations.contains { $0.dangling }
         let disclosures: [String] = run.compactMap { item in
             switch onEnum(of: item) {
             case let .thought(thought): "thought:\(thought.key)"
@@ -754,7 +749,7 @@ struct RowBuilder {
             }
         }
         let allDisclosures = disclosures + mergedDisclosures
-        let effectiveOpen = ui.toolRunChoice(id) ?? (active || incomplete || !followedByContent || allDisclosures.contains { ui.isOpen($0) })
+        let effectiveOpen = ui.toolRunChoice(id) ?? (!followedByContent || allDisclosures.contains { ui.isOpen($0) })
         ui.noteToolRun(id, items: run.map(\.key), disclosures: allDisclosures)
         let summary = toolRunSummary(items: tools, root: root, stale: !turnActive, presentations: presentations)
         let names = summary.counts.prefix(2).map { Self.toolRunCountLabel($0) }.joined(separator: String(localized: "、"))

@@ -33,28 +33,6 @@ final class ConversationToolRunChoices {
     }
 }
 
-/// Whether a call is still going or never settled, kept per immutable item so planning a long
-/// transcript does not parse every call again on each pass.
-@MainActor
-private enum ConversationToolRunState {
-    private final class Entry {
-        let item: TimelineItemTool // Retain identity while its cache key exists.
-        let active: Bool
-        let incomplete: Bool
-        init(item: TimelineItemTool, active: Bool, incomplete: Bool) { self.item = item; self.active = active; self.incomplete = incomplete }
-    }
-    private static let cache: NSCache<NSString, Entry> = CacheRegistry.cache("conversation.toolRunState", count: 512)
-    static func state(_ item: TimelineItemTool, stale: Bool) -> (active: Bool, incomplete: Bool) {
-        let key = "\(ObjectIdentifier(item))|\(stale)" as NSString
-        if let hit = cache.object(forKey: key) { return (hit.active, hit.incomplete) }
-        let presentation = toolPresentation(item: item, root: nil, stale: stale)
-        let active = item.job.map { $0.status == .running } ?? presentation.running
-        let incomplete = item.job.map { $0.status == .unknown } ?? presentation.dangling
-        cache.setObject(Entry(item: item, active: active, incomplete: incomplete), forKey: key)
-        return (active, incomplete)
-    }
-}
-
 /// Native scroll rows, with process children at the same lazy-layout level as their header.
 /// Entries retain immutable DTO references; generating a plan never parses or copies message text.
 enum ConversationRenderPlan {
@@ -137,7 +115,7 @@ enum ConversationRenderPlan {
                 let summary = toolRunSummary(items: tools, root: root, stale: stale, presentations: presentations)
                 let choiceKey = scope + "|" + id
                 let choices = ConversationToolRunChoices.shared
-                let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, process: process, followed: followed, disclosureState: disclosureState), readingAbove: readingAbove)
+                let open = choices[choiceKey] ?? choices.open(choiceKey, byDefault: defaultOpen(members, followed: followed, disclosureState: disclosureState), readingAbove: readingAbove)
                 result.append(Entry(id: id, rowKey: key, topSpacing: spacing(for: members[0], after: previous), isLastInRow: false, content: .toolRun(.init(id: id, choiceKey: choiceKey, items: members, summary: summary, open: open))))
                 if open {
                     let presentationsByKey = Dictionary(zip(tools, presentations).map { ($0.key, $1) }, uniquingKeysWith: { first, _ in first })
@@ -173,16 +151,11 @@ enum ConversationRenderPlan {
         isToolRunItem(item: item) || (item as? TimelineItemThought)?.channel == .thinking
     }
 
-    /// Open while a call is working or never settled, while a member row is expanded, or while nothing follows the run; the reader's choice wins.
+    /// Open while nothing follows the run or a member row is expanded; running or unsettled commands do not block folding once later content follows; the reader's choice wins.
     @MainActor
-    private static func defaultOpen(_ members: [any TimelineItem], process: TimelineRowProcess, followed: Bool, disclosureState: ConversationDisclosureState?) -> Bool {
+    private static func defaultOpen(_ members: [any TimelineItem], followed: Bool, disclosureState: ConversationDisclosureState?) -> Bool {
         if !followed { return true }
         if let disclosureState, members.contains(where: { disclosureState.isItemOpen($0) }) { return true }
-        let stale = !process.turnActive
-        for case let tool as TimelineItemTool in members {
-            let state = ConversationToolRunState.state(tool, stale: stale)
-            if state.active || state.incomplete { return true }
-        }
         return false
     }
 

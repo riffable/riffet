@@ -1,5 +1,5 @@
 import { createPortal, flushSync } from 'react-dom';
-import { memo, useCallback, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
+import { memo, useCallback, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowDown, IconChevronDown, IconChevronRight, IconRefreshCw, IconSearch, IconWrench, IconX } from '@/components/icons';
 import { Input, Spinner } from '@/components/ui/controls';
@@ -7,7 +7,7 @@ import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { matches } from '../shortcuts';
-import { cn, scrollBehavior, str } from '@/lib/utils';
+import { cn, scrollBehavior } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
 import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics, type TurnOutlineV3 } from '@contracts';
 import type { NativeHistoryLoadState } from './transcriptLoad';
@@ -25,7 +25,7 @@ import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
 import { rowKeyForMessage, type MessageFocus } from './focus-message';
 import { captureReadingAnchor, findRow, type ReadingAnchor } from './readingAnchor';
 import { useTranscriptScroll, type TranscriptScrollHandle } from './useTranscriptScroll';
-import { heldFooterRow, toolItemLiveness, transcriptTurns, type TranscriptRow, type TranscriptTurn } from './transcriptRows';
+import { heldFooterRow, transcriptTurns, type TranscriptRow, type TranscriptTurn } from './transcriptRows';
 import { useEarlierHistory, type EarlierLoad } from './useEarlierHistory';
 import { findQuote, rangeAt } from './textQuote';
 import { markedTurns, markTargetOf, MarkSourceContext, SessionMarksContext } from './marks';
@@ -34,7 +34,6 @@ import { shareModelKey, shareModelLabel, useTranscriptResources } from './transc
 import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
 import { groupAdjacentToolRunEntries, toolKind, toolRunSummary } from './toolView';
-import { NativeJobStoreContext } from './subagents';
 import { isComposingKey } from './composerKeyboard';
 import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
 import { POS_STEP } from '../../../../../packages/timeline/src/rows';
@@ -111,33 +110,9 @@ function hasOpenProcessDetail(remembered: ReadonlyMap<string, unknown> | undefin
 }
 
 /** A run of ordinary tool calls within the open process. */
-function ToolRun({ items, entries, followedByContent, stale, latestTurn, root, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; stale: boolean; latestTurn: boolean; root?: string; children: ReactNode; reveal?: number }) {
-  const jobs = useContext(NativeJobStoreContext);
-  const resources = useTranscriptResources();
+function ToolRun({ items, entries, followedByContent, latestTurn, root, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; latestTurn: boolean; root?: string; children: ReactNode; reveal?: number }) {
   const remembered = useContext(RememberedValues);
   const [, refresh] = useState(0);
-  // A background job can outlive the call that started it. Subscribe while folded too.
-  const subscribe = useCallback((listener: () => void) => {
-    const unsubscribers = items.flatMap(item => {
-      const id = str(item.event.data.toolCallId) ?? String(item.event.sequence);
-      return [jobs?.subscribe(id, listener)];
-    });
-    return () => unsubscribers.forEach(unsubscribe => unsubscribe?.());
-  }, [items, jobs]);
-  const snapshot = () => {
-    let active = false, incomplete = false;
-    for (const item of items) {
-      const id = str(item.event.data.toolCallId) ?? String(item.event.sequence);
-      const live = toolItemLiveness(item, { stale, resources: Boolean(resources), job: jobs?.get(id) ?? item.job });
-      active ||= live.active;
-      incomplete ||= live.incomplete;
-    }
-    // Primitive snapshot: one bit for active work, one for unconfirmed work.
-    return Number(incomplete) * 2 + Number(active);
-  };
-  const state = useSyncExternalStore(subscribe, snapshot, snapshot);
-  const active = state % 2 === 1;
-  const incomplete = (state & 2) !== 0;
   const summary = useMemo(() => toolRunSummary(items, root), [items, root]);
   const diffStats = useItemsDiffStats(items, root);
   const Icon = toolIcons[summary.kind] ?? IconWrench;
@@ -149,9 +124,10 @@ function ToolRun({ items, entries, followedByContent, stale, latestTurn, root, c
   const unconfirmed = useRef(catchingUp && latestTurn);
   if (!catchingUp) unconfirmed.current = false;
   const childOpen = entries.some((entry) => rememberedItemOpen(remembered, entry));
-  // Reasoning, delegation or the answer closes a completed run unless the reader opened a row inside
-  // it. A growing tail opens by default, while an explicit reader choice still controls it.
-  const open = choice ?? (unconfirmed.current ? false : active || incomplete || !followedByContent || childOpen);
+  // Subsequent content (prose, delegation, or the answer) folds a tool run regardless of whether a
+  // command inside it is still running in the background, unless the reader opened a row inside it.
+  // A growing tail opens by default, while an explicit reader choice still controls it.
+  const open = choice ?? (unconfirmed.current ? false : !followedByContent || childOpen);
   const contentsId = useId();
   useLayoutEffect(() => { if (reveal !== undefined) setChoice(true); }, [reveal, setChoice]);
   return (
@@ -478,7 +454,7 @@ const ToolRunBlock = memo(function ToolRunBlock({ items, start, end, lastOutputI
   return (
     <RememberedScope.Provider value={firstKey}>
       <div className={cn('min-w-0', gap, isFresh(fresh, firstKey, rowKey) && enter)}>
-        <ToolRun items={tools} entries={run} stale={!running} latestTurn={latestTurn} root={root} followedByContent={followedByContent} reveal={reveal?.version}>
+        <ToolRun items={tools} entries={run} latestTurn={latestTurn} root={root} followedByContent={followedByContent} reveal={reveal?.version}>
           {grouped.map((entry) => entry.kind === 'single' ? (
             <div key={entry.item.key} data-item-key={entry.item.key} className={cn('min-w-0', isFresh(fresh, entry.item.key, rowKey) && enter)}>
               <RememberedScope.Provider value={entry.item.key}><MarkSourceContext.Provider value={entry.item.event}>

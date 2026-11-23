@@ -13,10 +13,10 @@ type ToolItem = Extract<TimelineItem, { kind: 'tool' }>;
 const TURN_BLOCK = 'turn-process:';
 
 /**
- * Whether one tool call is still unfinished. `ToolRun` uses this same bit: `unknown`, or a status
- * that is still active (`pending` / `in_progress` / `running` / `queued` / `stopping`) once this
- * call is no longer the one running. A missing status is not unfinished — the tool view treats
- * that as completed — and `failed` is a finished call.
+ * Whether one tool call is still unfinished: `unknown`, or a status that is still active
+ * (`pending` / `in_progress` / `running` / `queued` / `stopping`) once this call is no longer the
+ * one running. A missing status is not unfinished — the tool view treats that as completed — and
+ * `failed` is a finished call.
  */
 export function toolItemLiveness(item: ToolItem, options: { stale: boolean; resources?: boolean; job?: NativeJob }): { active: boolean; incomplete: boolean } {
   const job = options.job ?? item.job;
@@ -102,7 +102,7 @@ export type TranscriptRow =
   | { type: 'process'; key: string; items: TimelineItem[]; gaps: string[]; spaced: boolean; running: boolean; settled: boolean; footer: TurnFooter; endsTurn: boolean; followedByAnswer: boolean; interrupted: boolean;
     /** The turn was stopped while this block was its end: the header reads 已停止 rather than 已处理. */
     stopped: boolean;
-    /** A tool call in this block has not reached a terminal status. Same predicate as `ToolRun`. */
+    /** A tool call in this block has not reached a terminal status. */
     hasIncompleteTools: boolean;
     /** Authoritative outline status for this turn, when the sync outline has one. */
     turnStatus: TurnOutlineV3['status'] | undefined;

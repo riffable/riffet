@@ -677,7 +677,6 @@ private fun TimelineEntryView(
         is TimelineEntry.ToolRun -> ToolRun(
             items = entry.items,
             followedByContent = entry.followedByContent,
-            running = entry.row.running,
             turnActive = entry.row.turnActive,
             root = root,
             reveal = revealed,
