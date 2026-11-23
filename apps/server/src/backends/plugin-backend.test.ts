@@ -426,4 +426,49 @@ describe('an Agent backend from a plugin', () => {
     expect(committed).toEqual([expect.objectContaining({ backendId: 'test.agent', nativeTurnId: 'turn', ownerRunId: 'owner', renderedText: 'guide' })]);
     await expect(agent!.commitDispatchFence('run-1')).rejects.toMatchObject({ code: 'AGENT_RUN_UNKNOWN' });
   });
+
+  it('bridges standing launch/context/newTopic and settled deliveries with session ownership checks', async () => {
+    const compacted: string[] = [];
+    const backend = {
+      id: 'test.agent',
+      label: 'Memory agent',
+      send: async (host: AgentHost, req: { context: { session: { id: string }; project: { id: string; name: string; cwd: string; system?: 'assistant' } }; runId: string; input: { text: string } }) => {
+        expect(host.standing?.launch(req.context.project)).toMatchObject({ systemPromptFile: '/tmp/sys.md' });
+        expect(host.standing?.context(req.context.session.id, 'prompt', req.runId)).toBe('<riffet-context>now</riffet-context>');
+        expect(host.standing?.newTopic?.(req.context.session.id, '/new')).toBe(true);
+        host.standing?.compacting?.(req.context.session.id);
+        expect(() => host.standing?.context('other-session', 'prompt')).toThrow(/does not belong/);
+        await host.commitDispatchFence(req.runId, { slashCommand: true, renderedText: req.input.text });
+        return { state: 'settled' as const };
+      },
+    } as unknown as AgentBackend;
+    const driver = new PluginBackendDriver(backend, 'test.agent');
+    const session = { id: 's', projectId: 'p', kind: 'native', backendId: 'test.agent', mode: 'agent', state: 'idle' };
+    const foreign = { id: 'other-session', projectId: 'p', kind: 'native', backendId: 'claude', mode: 'agent', state: 'idle' };
+    const project = { id: 'p', name: 'Assistant', cwd: '/tmp', system: 'assistant' as const };
+    const emitted: unknown[] = [];
+    const host = {
+      getSession: (id: string) => (id === 's' ? session : foreign),
+      getProject: () => project,
+      emitEvent: (_id: string, event: unknown) => { emitted.push(event); },
+      terminal: {},
+      withSessionLock: <T>(_id: string, operation: () => Promise<T>) => operation(),
+      standing: {
+        launch: (proj: { system?: string }) => proj.system === 'assistant'
+          ? { systemPromptFile: '/tmp/sys.md', memoryDir: '/tmp/mem', mcpConfigFiles: [], pluginDirs: [], protectedFiles: [], compactAtTokens: 200_000, instructionFiles: [], skillsDir: '/tmp/skills' }
+          : undefined,
+        context: () => '<riffet-context>now</riffet-context>',
+        compacting: (id: string) => { compacted.push(id); },
+        newTopic: (_id: string, text: string) => text === '/new',
+      },
+    } as unknown as NativeBackendHost;
+    const request = {
+      session, project, profile: { id: 'default', backendId: 'test.agent', name: 'Memory', config: {} }, runId: 'run-new', commandId: 'c-new',
+      input: { text: '/new', attachmentIds: [], context: [] }, config: {},
+      commitDispatchFence: () => ({} as Run),
+    };
+    await expect(driver.send(host, request as never)).resolves.toEqual({ settled: true });
+    expect(compacted).toEqual(['s']);
+    expect(emitted).toEqual([]);
+  });
 });

@@ -90,7 +90,7 @@ describe('ExtensionService static discovery and documents', () => {
     expect(inventory.items.every(item => item.runtimeState === 'unknown')).toBe(true);
   });
 
-  it('lists Riffet skills read-only for the assistant project on Claude and Codex, and nowhere else', async () => {
+  it('lists Riffet skills read-only for the assistant project on Claude, Codex, and Cursor, and nowhere else', async () => {
     const user = path.join(tempRoot, 'claude-user');
     const projectRoot = path.join(tempRoot, 'assistant');
     await mkdir(path.join(user, 'skills', 'owner'), { recursive: true });
@@ -124,7 +124,8 @@ describe('ExtensionService static discovery and documents', () => {
     expect(elsewhere.items.some(item => item.scope === 'riffet')).toBe(false);
     expect(elsewhere.items.filter(item => item.kind === 'skill').map(item => item.name).sort()).toEqual(['added', 'owner']);
     expect((await service.list(makeContext('codex', user, assistant))).items.some(item => item.scope === 'riffet')).toBe(true);
-    expect((await service.list(makeContext('cursor', user, assistant))).items.some(item => item.scope === 'riffet')).toBe(false);
+    expect((await service.list(makeContext('cursor', user, assistant))).items.some(item => item.scope === 'riffet')).toBe(true);
+    expect((await service.list(makeContext('pi', user, assistant))).items.some(item => item.scope === 'riffet')).toBe(false);
   });
 
   it('discovers pi agent and project layouts without reading credentials', async () => {

@@ -102,7 +102,7 @@ describe('assistant background runs', () => {
     const status = await first.app.inject({ method: 'GET', url: '/api/auth/status', headers: { host: '127.0.0.1:4317' } });
     const headers = { host: '127.0.0.1:4317', cookie: String(status.headers['set-cookie']).split(';')[0]!, 'x-csrf-token': (status.json() as { csrfToken: string }).csrfToken };
     // Not on an agent that does not isolate it: it would run with the owner's own configuration.
-    const elsewhere = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'cursor', clientSessionId: 'elsewhere', initialMessage: { commandId: 'e1', text: 'hello' } } });
+    const elsewhere = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'droid', clientSessionId: 'elsewhere', initialMessage: { commandId: 'e1', text: 'hello' } } });
     expect(elsewhere.json()).toMatchObject({ error: { code: 'ASSISTANT_BACKEND_UNSUPPORTED' } });
     const opened = await first.app.inject({ method: 'POST', url: '/api/sessions', headers, payload: { kind: 'native', projectId: session.projectId, backendId: 'claude', clientSessionId: 'main', initialMessage: { commandId: 'm1', text: 'hello' } } });
     expect(opened.statusCode, opened.body).toBe(202);

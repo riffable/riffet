@@ -28,11 +28,11 @@ export function scopeInEffect(ctx: Launch, scope: ExtensionItem['scope']): boole
 }
 
 /**
- * The project files the 助理 reads on Codex, which are Claude Code's (docs/ASSISTANT.md §4.1): its skills folder and
- * `.mcp.json`. Codex's own project files are switched off in its thread. Undefined for every other context.
+ * The project files the 助理 reads on Codex and Cursor, which are Claude Code's (docs/ASSISTANT.md §4.1): its skills
+ * folder and `.mcp.json`. The backend's own project files are switched off in an assistant launch.
  */
 export function standingCodexProject(ctx: Launch): { skill: string; mcp: string } | undefined {
-  return standing(ctx) && ctx.backendId === 'codex' ? { skill: '.claude/skills', mcp: '.mcp.json' } : undefined;
+  return standing(ctx) && (ctx.backendId === 'codex' || ctx.backendId === 'cursor') ? { skill: '.claude/skills', mcp: '.mcp.json' } : undefined;
 }
 
 function id(ctx: ExtensionContext, part: string, scenario: SkillScenario, name: string): string {

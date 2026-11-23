@@ -19,7 +19,7 @@ const MEMORY_INDEX = 'MEMORY.md';
 const USER_SEED = '# Owner\n\n<!-- Who the owner is and how they want to be helped. The assistant keeps this short. -->\n';
 const MEMORY_SEED = '# Memory\n\n<!-- One line per entry. Details live in topic files beside this one. -->\n';
 /** The CLI's own per-machine files, which are not the 助理's notes. */
-const IGNORED = '.claude/settings.local.json\n';
+const IGNORED = '.claude/settings.local.json\n.cursor/\n';
 /**
  * What is kept under git: the 助理's rules, its notes and its skills. Anything else it leaves in the directory
  * (a download, an MCP file holding a token) stays out of a history that deleting the file would not clean.
@@ -35,7 +35,7 @@ const PACKS_DIR = 'packs';
  * The owner's files: the rules the 助理 runs under and what its CLI starts with. It reads them; a change is the
  * owner's to make. MCP files are here because the launch starts their servers without asking again.
  */
-const PROTECTED = ['AGENTS.md', 'CLAUDE.md', '.mcp.json', '.claude/settings.json', '.claude/settings.local.json', `${PACKS_DIR}/**`];
+const PROTECTED = ['AGENTS.md', 'CLAUDE.md', '.mcp.json', '.claude/settings.json', '.claude/settings.local.json', '.cursor/**', `${PACKS_DIR}/**`];
 
 export interface AssistantHome {
   /** Riffet's text, rewritten on every start; outside the directory, so the 助理 cannot edit what it runs under. */

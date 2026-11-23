@@ -13,7 +13,7 @@ export const APPROVAL_MODES: ApprovalMode[] = ['allowlist','auto-review','unrest
  * `--auto-review` and `--force` are different autorun modes, so they are never passed together.
  */
 export function approvalArgs(approval: ApprovalMode|string|undefined): string[] {
-  if(approval==='unrestricted')return ['--force'];
+  if(approval==='unrestricted'||approval==='dontAsk')return ['--force'];
   if(approval==='auto-review')return ['--auto-review'];
   if(approval!==undefined&&approval!=='allowlist')throw new AppError('INVALID_APPROVAL_MODE','Choose a supported Cursor approval mode');
   return [];
@@ -103,11 +103,34 @@ export function cursorConfigDirectory(cli:string|CursorLaunchProfile):string {
   return typeof cli==='string'?resolveCursorLaunchProfile(undefined,cli).configDir:cli.configDir;
 }
 
+/**
+ * Derives a launch profile pointed at another configuration directory (the personal assistant's
+ * isolated directory) while keeping the same executable, endpoints, secret key and startup-cache front.
+ */
+export function withCursorConfigDir(profile:CursorLaunchProfile,configDir:string):CursorLaunchProfile {
+  const resolved=resolve(configDir);
+  if(resolved===profile.configDir)return profile;
+  const identityKey=createHash('sha256').update(JSON.stringify({executable:profile.executable,configDir:resolved,apiEndpoint:profile.apiEndpoint,agentEndpoint:profile.agentEndpoint,disableAutoUpdate:profile.disableAutoUpdate})).digest('hex');
+  const derived=Object.freeze({...profile,configDir:resolved,identityKey});
+  const secret=profileSecrets.get(profile);
+  if(secret!==undefined)profileSecrets.set(derived,secret);
+  const front=apiFronts.get(profile);
+  if(front)apiFronts.set(derived,front);
+  let set=derivedProfiles.get(profile);
+  if(!set){set=new Set();derivedProfiles.set(profile,set);}
+  set.add(derived);
+  return derived;
+}
+
 /** A running startup-query front (backend/api-cache.ts) per launch profile; launches go through it while it is set. */
 const apiFronts=new WeakMap<CursorLaunchProfile,string>();
+const derivedProfiles=new WeakMap<CursorLaunchProfile,Set<CursorLaunchProfile>>();
 
 export function setCursorApiFront(profile:CursorLaunchProfile,url:string|undefined):void {
   if(url)apiFronts.set(profile,url);else apiFronts.delete(profile);
+  for(const derived of derivedProfiles.get(profile)??[]){
+    if(url)apiFronts.set(derived,url);else apiFronts.delete(derived);
+  }
 }
 
 /**
@@ -195,7 +218,7 @@ export function cursorCommand(input:string|CursorLaunchProfile,args:string[],env
   if(apiKey!==undefined)childEnv.AGENT_CLI_CREDENTIAL_STORE='memory';
   let tmuxEnv:Record<string,string>|undefined;
   if(options.terminal){
-    tmuxEnv={CURSOR_CONFIG_DIR:profile.configDir,...(apiKey!==undefined?{AGENT_CLI_CREDENTIAL_STORE:'memory'}:{}),...(website?{CURSOR_WEBSITE_URL:website}:{}),...(env.NO_OPEN_BROWSER?{NO_OPEN_BROWSER:env.NO_OPEN_BROWSER}:{})};
+    tmuxEnv={CURSOR_CONFIG_DIR:profile.configDir,...(env.CURSOR_DATA_DIR?{CURSOR_DATA_DIR:env.CURSOR_DATA_DIR}:{}),...(apiKey!==undefined?{AGENT_CLI_CREDENTIAL_STORE:'memory'}:{}),...(website?{CURSOR_WEBSITE_URL:website}:{}),...(env.NO_OPEN_BROWSER?{NO_OPEN_BROWSER:env.NO_OPEN_BROWSER}:{})};
   }
   return {command,args:commandArgs,env:childEnv,custom:Boolean(functionName||profileSecrets.has(profile)||profile.apiEndpoint||profile.agentEndpoint||apiKey||process.env.CURSOR_API_KEY),...(tmuxEnv?{tmuxEnv}:{})};
 }

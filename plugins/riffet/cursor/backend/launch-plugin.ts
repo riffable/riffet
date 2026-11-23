@@ -34,24 +34,37 @@ export function probeCursorHookSteer(profile: CursorLaunchProfile): Promise<bool
 
 const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 
+export const CURSOR_HOOK_EVENTS = ['sessionStart', 'beforeSubmitPrompt', 'preToolUse', 'postToolUse', 'postToolUseFailure', 'stop', 'sessionEnd', 'preCompact'] as const;
+
+export function cursorHookCommand(configPath: string): string {
+  return `${quote(process.execPath)} ${quote(hookScript)} 8000 --config ${quote(configPath)}`;
+}
+
+/** Writes bridge credentials atomically and returns the hook bridge config file path. */
+export async function writeCursorHookBridgeConfig(stateDir: string, bridge: { url: string; token: string }): Promise<string> {
+  const root = join(stateDir, 'cursor-hook');
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const config = join(root, 'bridge.json');
+  const temporary = `${config}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(bridge), { mode: 0o600 });
+  await rename(temporary, config);
+  return config;
+}
+
 /** Only server state is written. A running CLI rereads bridge credentials on every hook call. */
 export async function writeCursorHookPlugin(stateDir: string, bridge: { url: string; token: string }): Promise<string> {
   const root = join(stateDir, 'cursor-hook');
   const plugin = join(root, 'plugin');
   await mkdir(join(plugin, '.cursor-plugin'), { recursive: true, mode: 0o700 });
   await mkdir(join(plugin, 'hooks'), { recursive: true, mode: 0o700 });
-  const config = join(root, 'bridge.json');
-  const temporary = `${config}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(bridge), { mode: 0o600 });
-  await rename(temporary, config);
-  const command = `${quote(process.execPath)} ${quote(hookScript)} 8000 --config ${quote(config)}`;
+  const config = await writeCursorHookBridgeConfig(stateDir, bridge);
+  const command = cursorHookCommand(config);
   await writeFile(join(plugin, '.cursor-plugin/plugin.json'), JSON.stringify({
     name: 'riffet-steer', version: '1.0.0', hooks: './hooks/hooks.json',
   }), { mode: 0o600 });
   await writeFile(join(plugin, 'hooks/hooks.json'), JSON.stringify({
     version: 1,
-    hooks: Object.fromEntries(['beforeSubmitPrompt', 'preToolUse', 'postToolUse', 'postToolUseFailure', 'stop', 'sessionEnd', 'preCompact']
-      .map(event => [event, [{ command, timeout: 10 }]])),
+    hooks: Object.fromEntries(CURSOR_HOOK_EVENTS.map(event => [event, [{ command, timeout: 10 }]])),
   }), { mode: 0o600 });
   return plugin;
 }

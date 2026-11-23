@@ -10,7 +10,7 @@ export interface AssistantChoice { backendId: NativeBackendId; profileId?: strin
  * The agents the 助理 runs on, first the one it starts on: those that launch it isolated from the owner's own
  * configuration (docs/ASSISTANT.md §4). On any other it would run with the owner's instructions, skills and servers.
  */
-export const ASSISTANT_BACKENDS: readonly NativeBackendId[] = ['claude', 'codex'];
+export const ASSISTANT_BACKENDS: readonly NativeBackendId[] = ['claude', 'codex', 'cursor'];
 
 export function isAssistantBackend(backendId: string | undefined): boolean {
   return ASSISTANT_BACKENDS.includes(backendId as NativeBackendId);

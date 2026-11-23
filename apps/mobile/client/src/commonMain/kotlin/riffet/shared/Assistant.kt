@@ -24,7 +24,7 @@ fun assistantMain(project: Project?, sessions: List<Session>): Session? {
  * The agents the assistant runs on, first the one it starts on: those that launch it isolated from the
  * owner's own configuration, `ASSISTANT_BACKENDS` of `packages/contracts`.
  */
-val ASSISTANT_BACKENDS = listOf(NativeBackendId.CLAUDE, NativeBackendId.CODEX)
+val ASSISTANT_BACKENDS = listOf(NativeBackendId.CLAUDE, NativeBackendId.CODEX, NativeBackendId.CURSOR)
 
 fun isAssistantBackend(id: NativeBackendId): Boolean = id in ASSISTANT_BACKENDS
 

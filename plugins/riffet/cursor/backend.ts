@@ -4,8 +4,8 @@ import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } fro
 import { AppError, estimatedTokens, materializeNativeInput, queryDirectory, redactSensitiveText, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
-  type AgentControlMessage, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
-  type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentSendRequest, type AgentStopOptions,
+  type AgentControlMessage, type AgentDelivery, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
+  type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentSendRequest, type AgentSessionView, type AgentStopOptions,
   type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
 } from '@riffet/plugin-api/experimental/agent';
 import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError } from './cli-adapter.js';
@@ -18,6 +18,7 @@ import { probeCursorHookSteer } from './backend/launch-plugin.js';
 import { CursorLiveReceipts } from './backend/live-receipts.js';
 import { CursorProjectConfigs } from './backend/project-configs.js';
 import { readCursorShare } from './backend/share-read.js';
+import { cursorProjectConfigDir, isStandingProject, prepareStandingLaunch, StandingProbeCache } from './backend/standing.js';
 import { CursorSteerBridge } from './backend/steer.js';
 import { CursorRiffetTools } from './backend/riffet-tools.js';
 import { CursorApiCache } from './backend/api-cache.js';
@@ -114,6 +115,7 @@ interface CursorParts {
 export const CURSOR_TRAITS: AgentTraits = {
   // Riffet's tools reach each CLI through a plugin directory of their own (`backend/riffet-tools.ts`).
   riffetTools: true,
+  startsNewTopic: true,
   settlesSlashOnSubmit: true,
   untaggedEcho: true,
   reportsTurnOutcome: true,
@@ -122,6 +124,8 @@ export const CURSOR_TRAITS: AgentTraits = {
   resumesByNativeId: true,
   terminalName: 'Cursor',
 };
+
+const MAX_PREVIOUS_NATIVE_SESSIONS = 8;
 
 /**
  * How the terminal host reads cursor-agent's panes: its prompt, or a turn in flight, means it
@@ -166,6 +170,7 @@ export class CursorBackend implements AgentBackend {
   private readonly usageListeners = new Set<() => void>();
   private readonly liveUsageListeners = new Set<(progress: CursorLiveUsageProgress) => void>();
   private readonly liveUsageEmitted = new Map<string, { outputTokens: number; sealed: boolean }>();
+  private readonly standingProbe = new StandingProbeCache();
   /** Metadata-only settled counters, plus live step progress; no transcript, launch configuration or credentials. */
   readonly usageService = {
     version: '1.1.0',
@@ -215,14 +220,61 @@ export class CursorBackend implements AgentBackend {
     const launch = cursorLaunchProfileOf(profile.config);
     const port = cursorPort(host);
     const live = new CursorLive(join(this.options.stateDir, 'cursor-live'));
-    const native = new NativeService(port, { configDir: launch.configDir, cliPath: launch.executable, profile: launch, live });
-    const runtime = new NativeRuntimeManager({ port, cliPath: launch.executable, configDir: launch.configDir, profile: launch, live, tools: new CursorRiffetTools(host, this.options.stateDir, () => probeCursorHookSteer(launch)), prepareModel: (model, project) => native.prepareModel(model, project) });
-    const steering = new CursorSteerBridge(host, port, native, this.options.stateDir, launch);
+    const configDirFor = (project: AgentProjectView) => cursorProjectConfigDir(launch.configDir, this.options.stateDir, project);
+    const tools = new CursorRiffetTools(host, this.options.stateDir, () => probeCursorHookSteer(launch));
+    // A gateway's startup queries are answered locally; the first launch waits for the front, a failed one is skipped.
+    const apiCache = cursorApiFrontable(launch, true) ? new CursorApiCache(launch.apiEndpoint!, join(this.options.stateDir, 'cursor-api-front.json')) : undefined;
+    const front = apiCache?.start().then(url => { if (!this.shutdown) setCursorApiFront(launch, url); }, error => {
+      console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    let steering!: CursorSteerBridge;
+    const standingExtras = async (session: AgentSessionView, project: AgentProjectView) => {
+      const standing = host.standing?.launch(project, session);
+      if (!standing) return undefined;
+      await front;
+      const bridgeConfigPath = await steering.ensureBridgeConfig().catch(() => undefined);
+      const prepared = prepareStandingLaunch({
+        baseProfile: launch,
+        stateDir: this.options.stateDir,
+        cwd: project.cwd,
+        launch: standing,
+        probeCache: this.standingProbe,
+        ...(bridgeConfigPath ? { bridgeConfigPath } : {}),
+      });
+      return { ...prepared, skipWarm: true as const };
+    };
+    const native = new NativeService(port, {
+      configDir: launch.configDir,
+      cliPath: launch.executable,
+      profile: launch,
+      live,
+      configDirFor,
+      restartLaunch: async (session, project) => {
+        await front;
+        const [pluginArgs, toolsLaunch, standing] = await Promise.all([
+          steering.launchArgs(session).catch(() => []),
+          tools.forSession(session.id).catch(() => undefined),
+          standingExtras(session, project).catch(() => undefined),
+        ]);
+        const args = [...pluginArgs, ...standing?.args ?? [], ...toolsLaunch?.args ?? []];
+        const env = standing?.env;
+        const paneEnv = toolsLaunch?.env;
+        if (!standing && !args.length && !paneEnv) return undefined;
+        return {
+          ...(standing ? { profile: standing.profile } : {}),
+          ...(args.length ? { args } : {}),
+          ...(env ? { env } : {}),
+          ...(paneEnv ? { paneEnv } : {}),
+        };
+      },
+    });
+    const runtime = new NativeRuntimeManager({ port, cliPath: launch.executable, configDir: launch.configDir, profile: launch, live, tools, launchExtras: standingExtras, prepareModel: (model, project) => native.prepareModel(model, project) });
+    steering = new CursorSteerBridge(host, port, native, this.options.stateDir, launch);
     this.usageHost = host;
     this.stopUsageChanges = host.stats.subscribeObservations?.(() => {
       for (const listener of this.usageListeners) { try { listener(); } catch { /* consumers are independent */ } }
     });
-    const usage = new CursorUsageIngest(host, live, launch.configDir);
+    const usage = new CursorUsageIngest(host, live, launch.configDir, configDirFor);
     steering.onPreCompact = (sessionId, info) => {
       this.activityEntry(sessionId, native).tracker.compactionStarted(info);
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.preCompact(info);
@@ -231,11 +283,6 @@ export class CursorBackend implements AgentBackend {
       this.activities.get(sessionId)?.tracker.settleLiveCompaction();
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.changed();
     };
-    // A gateway's startup queries are answered locally; the first launch waits for the front, a failed one is skipped.
-    const apiCache = cursorApiFrontable(launch, true) ? new CursorApiCache(launch.apiEndpoint!, join(this.options.stateDir, 'cursor-api-front.json')) : undefined;
-    const front = apiCache?.start().then(url => { if (!this.shutdown) setCursorApiFront(launch, url); }, error => {
-      console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
-    });
     runtime.useLaunchPlugin(async session => { await front; return steering.launchArgs(session); });
     this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live, sessionId => native.notePromptReceived(sessionId)), usage, ...(apiCache ? { apiCache } : {}) };
     this.ensureLiveUsageWatch();
@@ -294,8 +341,9 @@ export class CursorBackend implements AgentBackend {
   extensionLayout() { return CURSOR_EXTENSION_LAYOUT; }
 
   async prewarm(host: AgentHost, project: AgentProjectView, profile: AgentProfile, request: AgentPrewarmRequest): Promise<AgentPrewarmResult> {
-    // The warm CLI is launched from the default launch profile only.
+    // The warm CLI is launched from the default launch profile only, and standing conversations launch isolated.
     if (profile.id !== this.defaultProfile.id) return { state: 'skipped', reason: 'profile_unsupported' };
+    if (isStandingProject(project)) return { state: 'skipped', reason: 'standing_unsupported' };
     if (request.approval !== undefined && !CURSOR_PERMISSIONS.some(item => item.id === request.approval)) throw new AppError('INVALID_APPROVAL_MODE', 'Choose a known approval mode');
     const { claimId, renewOnly, ...config } = request;
     return this.parts(host, profile).runtime.prewarm(project.id, config, { ...(claimId ? { claimId } : {}), ...(renewOnly ? { renewOnly } : {}) });
@@ -343,7 +391,11 @@ export class CursorBackend implements AgentBackend {
    * them: project roots before user roots, the bundled `skills-cursor` last. Custom commands come
    * from `.cursor/commands`. Text after `/` is forwarded to the CLI verbatim either way.
    */
-  async slashItems(_host: AgentHost, project: AgentProjectView | undefined): Promise<NativeSlashItem[]> {
+  async slashItems(host: AgentHost, project: AgentProjectView | undefined): Promise<NativeSlashItem[]> {
+    const standing = project ? host.standing?.launch(project) : undefined;
+    if (standing) {
+      return await scanSkillRoots([standing.skillsDir, ...standing.pluginDirs.map(dir => join(dir, 'skills'))]);
+    }
     const home = homedir();
     const skillDirs = ['.cursor/skills', '.agents/skills', '.claude/skills', '.codex/skills'];
     const [skills, commands] = await Promise.all([
@@ -377,6 +429,11 @@ export class CursorBackend implements AgentBackend {
     const { session } = context;
     steering.bind(session.id);
     const prompt = options.initialPrompt;
+    if (prompt) {
+      const runs = await host.runs.find(session.id, { unfinished: true }).catch(() => []);
+      const dispatching = runs.find(item => item.delivery === 'dispatching' && item.intent !== 'steer');
+      if (dispatching) steering.noteRun(session.id, dispatching.id);
+    }
     let fencedAt: number | undefined;
     const fence = async () => { await host.beforeSpawn(session.id); fencedAt = Date.now(); };
     const { terminal, promptPending } = await runtime.ensure(session, {
@@ -425,10 +482,13 @@ export class CursorBackend implements AgentBackend {
     }
   }
 
-  async send(host: AgentHost, request: AgentSendRequest): Promise<void> {
+  async send(host: AgentHost, request: AgentSendRequest): Promise<AgentDelivery | void> {
+    const sourceText = request.sourceText ?? request.input.text;
+    if (host.standing?.newTopic?.(request.context.session.id, sourceText)) return await this.newTopic(host, request);
     const { text } = await materializeNativeInput(attachments(host), request.input);
     const { native, port, receipts, steering } = this.parts(host, request.context.profile);
     const session = port.getSession(request.context.session.id);
+    steering.noteRun(session.id, request.runId);
     const sentAt = Date.now();
     const fence = async ({ terminalId, epoch, chatId }: { terminalId: string; epoch: number; chatId?: string }) => {
       const nativeSessionId = chatId ?? session.nativeSessionId;
@@ -453,6 +513,39 @@ export class CursorBackend implements AgentBackend {
     // The echo in the store can be a whole answer away; the CLI taking the prompt is not.
     const chatId = port.getSession(session.id).nativeSessionId;
     if (chatId) receipts.expect({ host, sessionId: session.id, chatId, runId: request.runId, commandId: request.commandId, text, sentAt });
+  }
+
+  /**
+   * Starts a fresh topic in the personal assistant's main conversation (docs/ASSISTANT.md §5.5):
+   * archives the current chat id into `previousNativeSessionIds`, stops the old CLI process, and opens
+   * a fresh Cursor chat without carrying over the previous topic's recent turns.
+   */
+  private async newTopic(host: AgentHost, request: AgentSendRequest): Promise<AgentDelivery> {
+    if (request.input.attachmentIds.length || request.input.context.length || request.input.references?.length) {
+      throw new AppError('NATIVE_COMMAND_ARGUMENTS', 'Remove attachments and context references before running this command.', 400);
+    }
+    const { runtime, port, steering } = this.parts(host, request.context.profile);
+    const sessionId = request.context.session.id;
+    return await host.withSessionLock(sessionId, async () => {
+      const session = port.getSession(sessionId);
+      if (session.terminalHold) throw new AppError('TERMINAL_HELD', 'This conversation is open in a terminal; return it first.', 409);
+      const previous = session.nativeSessionId;
+      if (!previous) {
+        await host.commitDispatchFence(request.runId, { slashCommand: true, renderedText: request.input.text });
+        return { state: 'settled' as const };
+      }
+      await host.commitDispatchFence(request.runId, { slashCommand: true, renderedText: request.input.text, nativeSessionId: previous });
+      steering.reject(sessionId, 'Starting a new topic');
+      if (session.terminalId) {
+        await port.terminals.stop(session.terminalId).catch(() => undefined);
+      }
+      const archived = [...(session.previousNativeSessionIds ?? []).filter(id => id !== previous), previous].slice(-MAX_PREVIOUS_NATIVE_SESSIONS);
+      await host.updateSession(sessionId, { previousNativeSessionIds: archived, terminalId: undefined });
+      await host.setNativeSessionId(sessionId, undefined);
+      steering.skipStartContext(sessionId);
+      await runtime.ensure(port.getSession(sessionId));
+      return { state: 'settled' as const };
+    });
   }
 
   /** Strict V1 context accepts plain text; CLI commands/skills and attachments need a normal turn. */
@@ -511,7 +604,8 @@ export class CursorBackend implements AgentBackend {
   }
 
   readHistory(host: AgentHost, context: AgentContext, options?: AgentHistoryOptions) {
-    return readCursorShare(context, this.parts(host, context.profile).profile.configDir, options);
+    const configDir = cursorProjectConfigDir(this.parts(host, context.profile).profile.configDir, this.options.stateDir, context.project);
+    return readCursorShare(context, configDir, options);
   }
 
   async interaction(host: AgentHost, context: AgentContext) {
@@ -574,8 +668,12 @@ export class CursorBackend implements AgentBackend {
     return new CursorTranscriptSource({
       sessionId,
       live,
-      chatsDir: () => workspaceChatsDir(launch.configDir, port.getProject(port.getSession(sessionId).projectId).cwd),
+      chatsDir: () => {
+        const project = port.getProject(port.getSession(sessionId).projectId);
+        return workspaceChatsDir(cursorProjectConfigDir(launch.configDir, this.options.stateDir, project), project.cwd);
+      },
       chatId: () => port.getSession(sessionId).nativeSessionId,
+      previousChatIds: () => port.getSession(sessionId).previousNativeSessionIds ?? [],
       tailState: (chatId, turnId) => {
         const session = port.getSession(sessionId);
         if (session.nativeSessionId !== chatId) return;
@@ -633,6 +731,7 @@ export class CursorBackend implements AgentBackend {
       this.usageListeners.clear();
       this.liveUsageListeners.clear();
       this.liveUsageEmitted.clear();
+      this.standingProbe.clear();
       this.usageHost = undefined;
       const built = this.built;
       if (!built) return;

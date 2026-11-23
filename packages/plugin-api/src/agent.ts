@@ -39,10 +39,10 @@ export type AgentBackendId = NativeBackendId;
 
 /** A session as the plugin may read it. No store object: a value read at the time of the call. */
 export type AgentSessionView = Pick<Session,
-  'id' | 'projectId' | 'title' | 'state' | 'backendProfileId' | 'nativeSessionId' | 'terminalId' | 'model' | 'mode' | 'approval'
-  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt' | 'toolGroups' | 'extensionsOff' | 'terminalHold'>;
+  'id' | 'projectId' | 'title' | 'state' | 'backendProfileId' | 'nativeSessionId' | 'previousNativeSessionIds' | 'terminalId' | 'model' | 'mode' | 'approval'
+  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt' | 'toolGroups' | 'extensionsOff' | 'terminalHold' | 'origin'>;
 
-export type AgentProjectView = Pick<Project, 'id' | 'name' | 'cwd' | 'archivedAt'>;
+export type AgentProjectView = Pick<Project, 'id' | 'name' | 'cwd' | 'archivedAt' | 'system' | 'mainSessionId'>;
 
 /** A profile of this Agent. `config` is the plugin's own JSON; the core strips it from what clients are shown. */
 export interface AgentProfile {
@@ -119,6 +119,8 @@ export interface AgentTraits {
   resumesByNativeId?: boolean;
   /** Each launch can carry the Riffet MCP server (`host.riffetMcp`). */
   riffetTools?: boolean;
+  /** A standing conversation's new topic (`AgentStandingHost.newTopic`) is carried out: the model's context starts over. */
+  startsNewTopic?: boolean;
   /** The gateway protocols a profile of this Agent can be pointed at. A model source that serves one is offered to its profiles, whatever this Agent's id. */
   consumesProtocols?: readonly GatewayProtocol[];
 }
@@ -185,6 +187,7 @@ export interface AgentDispatchBinding {
  */
 export type AgentDelivery =
   | { state: 'submitted' }
+  | { state: 'settled' }
   | { state: 'accepted'; nativeMessageId?: string; nativeTurnId?: string }
   | { state: 'completed'; status: 'completed' | 'failed' | 'cancelled'; nativeMessageId?: string; nativeTurnId?: string; error?: string };
 
@@ -833,7 +836,29 @@ export interface AgentInteractionReceipt {
  * `nativeSessionId` is what `setNativeSessionId` writes (and is refused the same way when another live
  * conversation owns the chat); in a patch it lands in the same write as the other fields.
  */
-export type AgentSessionPatch = Partial<Pick<Session, 'model' | 'mode' | 'approval' | 'configPending' | 'terminalId' | 'title' | 'titleSource' | 'nativeSessionId' | 'state' | 'error'>>;
+export type AgentSessionPatch = Partial<Pick<Session, 'model' | 'mode' | 'approval' | 'configPending' | 'terminalId' | 'title' | 'titleSource' | 'nativeSessionId' | 'previousNativeSessionIds' | 'state' | 'error'>>;
+
+/** How a standing conversation (docs/ASSISTANT.md §4) is launched and isolated from the owner's own configuration. */
+export interface AgentStandingLaunch {
+  systemPromptFile: string;
+  memoryDir: string;
+  mcpConfigFiles: string[];
+  pluginDirs: string[];
+  protectedFiles: string[];
+  compactAtTokens: number;
+  allow?: string[];
+  instructionFiles: string[];
+  skillsDir: string;
+}
+
+export type AgentStandingMoment = 'prompt' | 'start' | 'compact';
+
+export interface AgentStandingHost {
+  launch(project: AgentProjectView, session?: Pick<AgentSessionView, 'origin'>): AgentStandingLaunch | undefined;
+  context(sessionId: string, moment: AgentStandingMoment, runId?: string): string | undefined;
+  compacting?(sessionId: string): void;
+  newTopic?(sessionId: string, text: string): boolean;
+}
 
 /** How a CLI starts the Riffet MCP shim (`AgentHost.riffetMcp`). */
 export interface AgentRiffetMcpServer { name: string; command: string; args: string[]; credentialFile: string }
@@ -967,4 +992,6 @@ export interface AgentHost {
   riffetMcpSignature?(sessionId: string): Promise<string | undefined>;
   /** Installs a per-call runtime binding check. Once required, calls stay refused across restarts until a validator is registered again. Disposing removes the validator, not the requirement. */
   bindRiffetMcp(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void;
+  /** What a standing conversation launches with and is told between turns (docs/ASSISTANT.md §4); absent in a bare test host. */
+  standing?: AgentStandingHost;
 }

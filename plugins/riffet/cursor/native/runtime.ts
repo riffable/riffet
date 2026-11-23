@@ -34,6 +34,15 @@ export interface NativeRuntimeTools {
 /** A warm CLI's terminal, and the provisional tools credential it holds until a session adopts it. */
 type CursorWarm = AgentReservation & { tools?: { adopt(sessionId: string): void; revoke(): void } };
 
+/** Extra profile, CLI flags, and pane env supplied per session (used by standing assistant launches). */
+export interface NativeLaunchExtras {
+  profile?: CursorLaunchProfile;
+  args?: string[];
+  env?: Record<string, string>;
+  /** True when the session must skip generic warm CLI reuse (isolated configuration). */
+  skipWarm?: boolean;
+}
+
 export interface NativeRuntimeManagerOptions {
   port: CursorPort;
   prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<string | undefined>;
@@ -42,6 +51,8 @@ export interface NativeRuntimeManagerOptions {
   configDir?: string;
   /** Riffet's tools for each CLI; without it the CLIs get none. */
   tools?: NativeRuntimeTools;
+  /** Session-specific launch overrides (e.g. standing assistant isolation). */
+  launchExtras?(session: AgentSessionView, project: AgentProjectView): Promise<NativeLaunchExtras | undefined>;
   profileKey?: string;
   /** Where the CLIs it starts write the step they stream (`live.ts`). */
   live?: CursorLive;
@@ -213,11 +224,13 @@ export class NativeRuntimeManager {
     }
 
     const fresh = !session.resumePicker && !session.nativeSessionId;
-    // The model check, the hook plugin and Riffet's tools do not depend on each other.
+    // The model check, the hook plugin, Riffet's tools and any standing overrides do not depend on each other.
     const pluginTask = this.launchPlugin?.(session) ?? Promise.resolve([]);
     void pluginTask.catch(() => undefined);
     const toolsTask = this.options.tools?.forSession(session.id) ?? Promise.resolve(undefined);
     void toolsTask.catch(() => undefined);
+    const extrasTask = this.options.launchExtras?.(session, project) ?? Promise.resolve(undefined);
+    void extrasTask.catch(() => undefined);
     let launchModel = session.model;
     if (!session.resumePicker) {
       const started = this.now();
@@ -228,7 +241,8 @@ export class NativeRuntimeManager {
       }
     }
 
-    if (fresh) {
+    const extras = await extrasTask;
+    if (fresh && !extras?.skipWarm) {
       // By the model as resolved now: one resolved differently at prewarm (a refreshed catalog) runs another model.
       const tools = await this.options.tools?.signature(session.id).catch(() => undefined);
       const resourceKey = this.resourceKey(project, { ...this.sessionConfig(session), model: launchModel, ...(tools ? { tools } : {}) });
@@ -258,7 +272,8 @@ export class NativeRuntimeManager {
 
     const pluginArgs = await pluginTask;
     const toolsLaunch = await toolsTask.catch(() => undefined);
-    const args = [...pluginArgs, ...toolsLaunch?.args ?? [], ...cursorAgentAdapter.buildArgs({
+    const launchProfile = extras?.profile ?? this.options.profile ?? this.options.cliPath;
+    const args = [...pluginArgs, ...extras?.args ?? [], ...toolsLaunch?.args ?? [], ...cursorAgentAdapter.buildArgs({
       ...(session.resumePicker ? { resumePicker: true } : {}),
       hasStoredSession: Boolean(chatId),
       mode: session.mode,
@@ -267,10 +282,10 @@ export class NativeRuntimeManager {
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     })];
     if (options.initialPrompt) await runBeforeSpawn(options.beforeSpawn);
-    writeChatApproval(cursorConfigDirectory(this.options.profile ?? this.options.cliPath), project.cwd, chatId, session.approval);
+    writeChatApproval(cursorConfigDirectory(launchProfile), project.cwd, chatId, session.approval);
     const launchStarted = this.now();
     const info = await this.port.terminals.launch(session.id, {
-      ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [...(chatId ? ['--resume', chatId] : []), ...args], {}, project.cwd, { paneEnv: { ...this.options.live?.launchEnv(), ...toolsLaunch?.env } }),
+      ...cursorLaunchSpec(launchProfile, [...(chatId ? ['--resume', chatId] : []), ...args], extras?.env ?? {}, project.cwd, { paneEnv: { ...this.options.live?.launchEnv(), ...toolsLaunch?.env } }),
       kind: 'cursor',
       reuseLive: true,
     });

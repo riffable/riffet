@@ -37,6 +37,10 @@ export interface NativeServiceOptions {
   stats?: StatsSink;
   /** Where the CLIs it restarts write the step they stream (`live.ts`). */
   live?: CursorLive;
+  /** Resolves the chat-store config directory for a project (standing conversations use an isolated dir). */
+  configDirFor?(project: AgentProjectView): string;
+  /** Extra profile, CLI args, and env for restarts (hooks, Riffet tools, standing isolation). */
+  restartLaunch?(session: AgentSessionView, project: AgentProjectView): Promise<{ profile?: CursorLaunchProfile; args?: string[]; env?: Record<string, string>; paneEnv?: Record<string, string> } | undefined>;
 }
 
 /** The phase of each watched conversation goes through its tracker; the pane and transcript are its evidence. */
@@ -864,7 +868,10 @@ export class NativeService {
     this.restartingSessions.add(session.id);
     try {
       await this.port.terminals.stop(session.terminalId);
-      writeChatApproval(this.options.configDir, project.cwd, session.nativeSessionId, next.approval);
+      const extras = await this.options.restartLaunch?.(next, project).catch(() => undefined);
+      const launchProfile = extras?.profile ?? this.options.profile ?? this.options.cliPath;
+      const effectiveConfigDir = extras?.profile?.configDir ?? this.configDirFor(project);
+      writeChatApproval(effectiveConfigDir, project.cwd, session.nativeSessionId, next.approval);
       // A restart has to say everything again: the mode and the approval mode are launch flags, and
       // dropping them would silently move the conversation back to the plain agent/allowlist default.
       // The argv comes from the adapter that owns it, so the launch flags cannot drift between the
@@ -872,8 +879,9 @@ export class NativeService {
       // already bound: the picker rule that keeps `--model` off a *new* picker launch would here drop
       // the very model the user just asked for.
       const info = await this.port.terminals.launch(session.id, {
-        ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [
+        ...cursorLaunchSpec(launchProfile, [
           ...(session.nativeSessionId ? ['--resume', session.nativeSessionId] : []),
+          ...extras?.args ?? [],
           ...cursorAgentAdapter.buildArgs({
             resumePicker: false,
             hasStoredSession: Boolean(session.nativeSessionId),
@@ -881,7 +889,7 @@ export class NativeService {
             approval: next.approval,
             model: next.model,
           }),
-        ], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),
+        ], extras?.env ?? {}, project.cwd, { paneEnv: { ...this.options.live?.launchEnv(), ...extras?.paneEnv } }),
         kind: 'cursor',
         reuseLive: true,
       });
@@ -992,7 +1000,7 @@ export class NativeService {
         // footer, counter included (see `followApproval`).
         const approval = adoptableApproval(footer, parsed.permission);
         const current = this.port.getSession(session.id);
-        if (!current.configPending && approval && approval !== current.approval) {
+        if (!current.configPending && current.approval !== 'dontAsk' && approval && approval !== current.approval) {
           this.port.bumpConfig(session.id, { approval });
         }
         // Nobody subscribes to this conversation, so this sweep is the only thing that will notice
@@ -1006,6 +1014,10 @@ export class NativeService {
     }
   }
 
+  private configDirFor(project: AgentProjectView): string {
+    return this.options.configDirFor?.(project) ?? this.options.configDir;
+  }
+
   private async tick(watch: Watch): Promise<void> {
     if (watch.closed) return;
     if (watch.ticking) {
@@ -1014,7 +1026,7 @@ export class NativeService {
       catch { await watch.tickPromise; return; }
       if (watch.chat?.chatId === session.nativeSessionId) {
         const project = this.port.getProject(session.projectId);
-        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.options.configDir, project.cwd));
+        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project), project.cwd));
         return;
       }
       // A chat switch still belongs to the in-flight maintenance pass. Coalesce callers on one
@@ -1030,7 +1042,7 @@ export class NativeService {
       try { session = this.port.getSession(watch.sessionId); }
       catch { watch.emit({ type: 'status', status: { phase: 'offline' } }); return; }
       const project = this.port.getProject(session.projectId);
-      const dir = workspaceChatsDir(this.options.configDir, project.cwd);
+      const dir = workspaceChatsDir(this.configDirFor(project), project.cwd);
       const followChat = async (chatId: string | undefined) => {
         if (watch.closed) return;
         if (chatId === watch.chat?.chatId) return;
@@ -1277,7 +1289,7 @@ export class NativeService {
    */
   private followApproval(watch: Watch, session: AgentSessionView, approval: ApprovalMode): void {
     const current = this.port.getSession(session.id);
-    if (current.archivedAt || current.configPending || current.approval === approval) return;
+    if (current.archivedAt || current.configPending || current.approval === 'dontAsk' || current.approval === approval) return;
     // The mode moved on the CLI's side, which is a change of meaning like any other: the counter has
     // to move with it, so a client holding the old settings is told before it submits rather than
     // after. A message already waiting in the queue is delivered under the mode in effect when it

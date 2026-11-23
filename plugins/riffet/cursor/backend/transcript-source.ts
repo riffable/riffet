@@ -55,6 +55,8 @@ export interface CursorTranscriptOptions {
   chatsDir(): string;
   /** The chat the session follows now; undefined until the CLI has made one. */
   chatId(): string | undefined;
+  /** Earlier chats of this conversation, oldest first (e.g. archived by `/new` in the personal assistant). */
+  previousChatIds?(): readonly string[];
   /** A live CLI owns its last turn. After exit, a recorded outcome takes precedence over the lost connection. */
   tailState?(chatId: string, turnId: string): 'live' | 'exited' | CursorTurnResult | undefined;
   /** Where change signals come from; without it `watch` never wakes. */
@@ -153,6 +155,8 @@ interface LaneState {
   retired?: Array<[number, number]>;
   /** True when a newer entity (e.g. compaction activity or abandoned live turn end) landed after a slot was retired. */
   retiredBarrier?: true;
+  /** How many chats from `previousChatIds` have already been imported into this lane ahead of the active chat. */
+  earlierDone?: number;
 }
 
 function parseState(cursor: string): LaneState | undefined {
@@ -285,8 +289,11 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
   }
 
   identity(): string | undefined {
-    this.bound = this.options.chatId();
-    return this.bound;
+    const current = this.options.chatId();
+    this.bound = current;
+    if (!current) return undefined;
+    const previous = (this.options.previousChatIds?.() ?? []).filter(id => id && id !== current && CHAT_ID.test(id));
+    return previous.length ? [...previous, current].join(' ') : current;
   }
 
   async pull(w: AgentLaneWriter, signal: AbortSignal): Promise<{ caughtUp: boolean }> {
@@ -294,8 +301,73 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
     if (!view) return { caughtUp: view === undefined };
     try {
       if (signal.aborted) return { caughtUp: false };
-      return { caughtUp: await this.readWithTail(w, view, 0, true, new Slice(this.limits.sliceMs, signal)) };
+      const slice = new Slice(this.limits.sliceMs, signal);
+      if (!await this.importEarlierChats(w, view.chatId, slice)) return { caughtUp: false };
+      return { caughtUp: await this.readWithTail(w, view, 0, true, slice) };
     } finally { view.close(); }
+  }
+
+  /**
+   * Imports archived chats from `previousChatIds` ahead of the active chat so `/new` keeps the full
+   * conversation history readable in one lane without conflicting positional ids.
+   */
+  private async importEarlierChats(w: AgentLaneWriter, currentChatId: string, slice: Slice): Promise<boolean> {
+    const previous = (this.options.previousChatIds?.() ?? []).filter(id => id && id !== currentChatId && CHAT_ID.test(id));
+    if (!previous.length) return true;
+    const saved = w.cursor === null ? undefined : parseState(w.cursor);
+    const alreadyDone = saved?.earlierDone ?? 0;
+    if (alreadyDone >= previous.length) return true;
+    let state = saved ?? emptyState(0, '');
+    for (let index = alreadyDone; index < previous.length; index += 1) {
+      if (slice.stopped) return false;
+      const prevId = previous[index]!;
+      const view = new ChatView(this.storePath(prevId), prevId);
+      try {
+        const snapshot = view.snapshot();
+        if (snapshot?.rootAvailable) {
+          const mapper = new TranscriptMapper();
+          mapper.observedChanges = this.options.observedChanges;
+          const prefix = `prev:${prevId}:`;
+          let batch: NativeWorkbenchEvent[] = [];
+          let activeTurn: { id: string; run?: string; at: string } | undefined;
+          const flushBatch = () => {
+            if (!batch.length) return;
+            w.commit({ events: batch, cursor: JSON.stringify(state) });
+            batch = [];
+          };
+          for (let pos = 0; pos < snapshot.messageIds.length; pos += 1) {
+            const blob = snapshot.messageIds[pos]!;
+            const read = view.reader.readMessage(blob);
+            if (read.status !== 'ok') continue;
+            const mapped = mapper.map({ id: `${pos}:${blob}`, message: read.message });
+            mapped.forEach((event, part) => {
+              const opens = event.type === 'user_message_chunk' || event.type === 'task_notification';
+              if (opens && event.runId !== activeTurn?.run) {
+                if (activeTurn) { flushBatch(); w.turnEnded(activeTurn.id, 'completed', activeTurn.at || new Date().toISOString()); }
+                const rawTurn = event.nativeTurnId ?? event.runId ?? `turn:${pos}:${blob}`;
+                activeTurn = { id: `${prefix}${rawTurn}`, ...(event.runId ? { run: event.runId } : {}), at: event.createdAt };
+              } else if (!activeTurn) {
+                activeTurn = { id: `${prefix}turn:${pos}:${blob}`, ...(event.runId ? { run: event.runId } : {}), at: event.createdAt };
+              }
+              if (event.createdAt) activeTurn.at = event.createdAt;
+              batch.push({
+                sequence: 0, sessionId: this.sessionId, nativeId: `${prefix}${pos}:${part}`,
+                nativeAliases: [`${prefix}${pos}:${blob}:${part}`],
+                ...(event.runId ? { runId: event.runId } : {}), nativeTurnId: activeTurn.id,
+                type: event.type, data: event.data, createdAt: event.createdAt,
+              });
+            });
+            if (batch.length >= COMMIT_EVENTS) flushBatch();
+            if (slice.due && await slice.yield()) return false;
+          }
+          flushBatch();
+          if (activeTurn) w.turnEnded(activeTurn.id, 'completed', activeTurn.at || new Date().toISOString());
+        }
+      } finally { view.close(); }
+      state = { ...state, earlierDone: index + 1 };
+      w.commit({ events: [], cursor: JSON.stringify(state) });
+    }
+    return true;
   }
 
   watch(_w: AgentLaneWriter, wake: () => void): () => void {
@@ -500,7 +572,7 @@ class LaneRead {
   private abandoned = false;
 
   constructor(private readonly source: CursorTranscriptSource, private readonly w: AgentLaneWriter, private readonly view: ChatView, saved: LaneState | undefined, private readonly options: ReadOptions) {
-    this.fresh = !saved;
+    this.fresh = !saved || (saved.root === undefined && saved.n === 0);
     this.state = saved ?? emptyState(0, '');
     this.mapper = this.source.restoreMapper(this.state.mapper);
     this.children = new Map(this.state.children);
@@ -721,7 +793,8 @@ class LaneRead {
       const from = this.options.origin === 'tail' ? await this.tailStart(ids) : 0;
       if (from === undefined) return this.abandon();
       this.hash = digestOf(ids, from);
-      this.state = emptyState(from, this.hash.copy().digest('hex'));
+      const earlierDone = this.state.earlierDone;
+      this.state = { ...emptyState(from, this.hash.copy().digest('hex')), ...(earlierDone !== undefined ? { earlierDone } : {}) };
       this.mapper = this.source.restoreMapper(this.state.mapper);
     } else {
       this.hash = digestOf(ids, Math.min(this.state.n, ids.length));
@@ -815,6 +888,7 @@ class LaneRead {
     this.state = {
       ...emptyState(before.from, ''), placed: before.placed, children: before.children,
       ...(before.live ? { live: true as const } : {}), ...(before.compacting ? { compacting: before.compacting } : {}),
+      ...(before.earlierDone !== undefined ? { earlierDone: before.earlierDone } : {}),
     };
     this.mapper = this.source.restoreMapper(this.state.mapper);
     this.hash = digestOf(ids, before.from);
@@ -1107,7 +1181,7 @@ class LaneRead {
   // ---- commits -------------------------------------------------------------------------------
 
   private encode(before?: Before): string {
-    const { v, mapping, reproject, from, root, n, len, live, placed, draft, liveEnded } = this.state;
+    const { v, mapping, reproject, from, root, n, len, live, placed, draft, liveEnded, earlierDone } = this.state;
     const turn = before ? before.turn : this.state.turn;
     const taken = new Set(Object.values(placed));
     const compacting = this.w.activities.list().filter(activity => isOpenCompaction(activity) && !taken.has(activity.id)).slice(-4);
@@ -1119,6 +1193,7 @@ class LaneRead {
       ...(compacting.length ? { compacting } : {}), ...(this.stale.size ? { stale: [...this.stale] } : {}),
       ...(this.retired.size ? { retired: [...this.retired.entries()].sort((a, b) => a[0] - b[0]) } : {}),
       ...(this.retired.size && this.retiredBarrier ? { retiredBarrier: true as const } : {}),
+      ...(earlierDone !== undefined ? { earlierDone } : {}),
     };
     return JSON.stringify(state);
   }

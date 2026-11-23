@@ -9,7 +9,9 @@ import { readCompleteTranscript } from '../native/transcript.js';
 export async function readCursorShare({ session, project }: AgentContext, configDir: string, options: AgentHistoryOptions = {}): Promise<AgentHistory> {
   options.signal?.throwIfAborted();
   const nativeId = session.nativeSessionId;
-  if (!nativeId) return { events: [], subagents: [] };
+  const previous = (session.previousNativeSessionIds ?? []).filter(id => id && id !== nativeId);
+  const allIds = [...previous, ...(nativeId ? [nativeId] : [])];
+  if (!allIds.length) return { events: [], subagents: [] };
   const directory = workspaceChatsDir(configDir, project.cwd);
   const read = async (id: string): Promise<NativeWorkbenchEvent[]> => {
     options.signal?.throwIfAborted();
@@ -18,19 +20,43 @@ export async function readCursorShare({ session, project }: AgentContext, config
     options.signal?.throwIfAborted();
     return events;
   };
-  const events = await read(nativeId), warnings: string[] = [], subagents: AgentHistory['subagents'] = [];
-  if (options.messagesOnly) return { events, subagents };
-  const pending = childReferences(events), visited = new Set([nativeId]);
-  // Children still running may not yet have a tool result; their own store metadata identifies the call.
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    options.signal?.throwIfAborted();
-    if (!entry.isDirectory() || !/^[A-Za-z0-9._-]+$/.test(entry.name)) continue;
-    const reader = new ChatReader(join(directory, entry.name, 'store.db'));
+  const events: NativeWorkbenchEvent[] = [];
+  const warnings: string[] = [];
+  const subagents: AgentHistory['subagents'] = [];
+  for (const id of previous) {
     try {
-      const info = reader.meta()?.subagentInfo;
-      if ((info?.rootParentAgentId === nativeId || info?.parentAgentId === nativeId) && info.toolCallId) pending.push({ toolCallId: info.toolCallId, agentId: entry.name, ...(info.typeName ? { subagentType: info.typeName } : {}) });
-    } finally { reader.close(); }
+      const prefix = `prev:${id}:`;
+      const prevEvents = await read(id);
+      for (const event of prevEvents) {
+        events.push({
+          ...event,
+          nativeId: `${prefix}${event.nativeId}`,
+          ...(event.nativeTurnId ? { nativeTurnId: `${prefix}${event.nativeTurnId}` } : {}),
+        });
+      }
+    } catch {
+      options.signal?.throwIfAborted();
+      warnings.push(`早期会话 ${id} 的历史不可用`);
+    }
   }
+  if (nativeId) events.push(...await read(nativeId));
+  if (options.messagesOnly) return { events, subagents };
+  const pending = childReferences(events), visited = new Set(allIds);
+  const rootSet = new Set(allIds);
+  // Children still running may not yet have a tool result; their own store metadata identifies the call.
+  try {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      options.signal?.throwIfAborted();
+      if (!entry.isDirectory() || !/^[A-Za-z0-9._-]+$/.test(entry.name)) continue;
+      const reader = new ChatReader(join(directory, entry.name, 'store.db'));
+      try {
+        const info = reader.meta()?.subagentInfo;
+        if (((info?.rootParentAgentId && rootSet.has(info.rootParentAgentId)) || (info?.parentAgentId && rootSet.has(info.parentAgentId))) && info.toolCallId) {
+          pending.push({ toolCallId: info.toolCallId, agentId: entry.name, ...(info.typeName ? { subagentType: info.typeName } : {}) });
+        }
+      } finally { reader.close(); }
+    }
+  } catch { /* directory may not exist yet */ }
   for (let index = 0; index < pending.length && index < MAX_CHILDREN; index++) {
     options.signal?.throwIfAborted();
     const child = pending[index]!;

@@ -9,7 +9,8 @@ import type { CursorPort } from '../host-port.js';
 import type { NativeService, SettledCursorTurn } from '../native/service.js';
 import { chatStorePath } from '../native/chat-store.js';
 import { resolveShellCall } from './shell-observation.js';
-import { probeCursorHookSteer, writeCursorHookPlugin } from './launch-plugin.js';
+import { probeCursorHookSteer, writeCursorHookBridgeConfig, writeCursorHookPlugin } from './launch-plugin.js';
+import { cursorProjectConfigDir, evaluateStandingToolUse, isStandingProject } from './standing.js';
 import { CursorTranscriptSource, type CursorTurnResult } from './transcript-source.js';
 
 /** The tools whose hooks name a file they change: the CLI reports every edit, a replacement included, as `Write`. */
@@ -76,6 +77,13 @@ export class CursorSteerBridge {
   private readonly server = new NativeHookServer((payload, _deliveryId, signal) => this.handle(payload, signal));
   private readonly steerHost: SteerHost;
   private plugin?: Promise<string[]>;
+  private bridgeConfig?: Promise<string>;
+  /** Latest runId dispatched to a session, read by `beforeSubmitPrompt` for standing turn proofs. */
+  private readonly pendingRuns = new Map<string, string>();
+  /** Standing sessions that just compacted and should receive a `compact` context note on their next prompt. */
+  private readonly compactedSessions = new Set<string>();
+  /** Standing sessions that started a fresh topic via `/new` and should not carry over earlier turns on `sessionStart`. */
+  private readonly skipStartCarry = new Set<string>();
   private closed = false;
 
   constructor(
@@ -119,11 +127,37 @@ export class CursorSteerBridge {
     return entry;
   }
 
+  /** Records the run id about to be submitted so `beforeSubmitPrompt` can pass it to `host.standing.context`. */
+  noteRun(sessionId: string, runId: string | undefined): void {
+    if (runId) this.pendingRuns.set(sessionId, runId);
+    else this.pendingRuns.delete(sessionId);
+  }
+
+  /** Marks a session started via `/new` so `sessionStart` does not inject the previous topic's carried turns. */
+  skipStartContext(sessionId: string): void {
+    this.skipStartCarry.add(sessionId);
+  }
+
+  /** Starts the local hook bridge server and writes `bridge.json`, returning its path. */
+  async ensureBridgeConfig(): Promise<string | undefined> {
+    if (this.closed) return undefined;
+    if (!await probeCursorHookSteer(this.profile)) return undefined;
+    if (this.closed) return undefined;
+    this.bridgeConfig ??= this.server.start().then(bridge => writeCursorHookBridgeConfig(this.stateDir, bridge));
+    return this.bridgeConfig;
+  }
+
   async launchArgs(session?: AgentSessionView): Promise<string[]> {
     if (this.closed) return [];
     if (session) this.bind(session.id);
     if (!await probeCursorHookSteer(this.profile)) return [];
     if (this.closed) return [];
+    // Standing sessions load all hooks from `<standingDir>/hooks.json` (`userHooks`) so interactive TUI
+    // fires `beforeSubmitPrompt` without duplicating hooks via `--plugin-dir`.
+    if (session && isStandingProject(this.host.view.project(session.projectId))) {
+      await this.ensureBridgeConfig();
+      return [];
+    }
     this.plugin ??= this.server.start().then(bridge => writeCursorHookPlugin(this.stateDir, bridge)).then(plugin => ['--plugin-dir', plugin]);
     return this.plugin;
   }
@@ -249,12 +283,36 @@ export class CursorSteerBridge {
     const nativeSessionId = typeof payload.conversation_id === 'string' ? payload.conversation_id : undefined;
     const turnId = typeof payload.generation_id === 'string' ? payload.generation_id : undefined;
     const event = payload.hook_event_name;
-    if (!nativeSessionId || !turnId || typeof event !== 'string') return {};
+    if (!nativeSessionId || typeof event !== 'string') return {};
+    if (event !== 'sessionStart' && !turnId) return {};
     if (childHook(payload, nativeSessionId)) return {};
     const session = this.native.sessionForChat(nativeSessionId);
     if (!session) return {};
+    const project = this.host.view.project(session.projectId);
+    const standingLaunch = project ? this.host.standing?.launch(project, session) : undefined;
+    // Enforce standing guardrails before taking workspace snapshots or letting the tool proceed.
+    if (event === 'preToolUse' && standingLaunch && project && typeof payload.tool_name === 'string') {
+      const toolInput = payload.tool_input && typeof payload.tool_input === 'object' && !Array.isArray(payload.tool_input)
+        ? payload.tool_input as Record<string, unknown> : undefined;
+      const decision = evaluateStandingToolUse(payload.tool_name, toolInput, standingLaunch, project.cwd, session.approval === 'dontAsk' || Boolean(standingLaunch.allow));
+      if (!decision.allowed) {
+        return {
+          permission: 'deny',
+          ...(decision.userMessage ? { user_message: decision.userMessage } : {}),
+          ...(decision.agentMessage ? { agent_message: decision.agentMessage } : {}),
+        };
+      }
+    }
+    if (event === 'sessionStart') {
+      if (!standingLaunch) return {};
+      if (this.skipStartCarry.delete(session.id)) return {};
+      try {
+        const context = this.host.standing?.context(session.id, 'start');
+        return context ? { additional_context: context } : {};
+      } catch { return {}; }
+    }
     const entry = this.bind(session.id);
-    const target = { nativeSessionId, turnId };
+    const target = { nativeSessionId, turnId: turnId! };
     // Outside the session lock: the snapshot can take a second or two, and the command waits for this hook but nothing else should.
     await this.observeWorkspace(session, payload);
     return this.port.withSessionLock(session.id, async () => {
@@ -266,7 +324,7 @@ export class CursorSteerBridge {
         this.end(entry, session.id, target, { status, at: new Date().toISOString() });
         return {};
       }
-      if (entry.retired.has(turnId)) return {};
+      if (entry.retired.has(target.turnId)) return {};
       if (event === 'beforeSubmitPrompt') {
         // The generation exists when the prompt is submitted, which is before the first tool hook.
         if (entry.active && !sameTarget(entry.active, target)) this.reject(session.id, 'Cursor generation changed before the input was consumed');
@@ -277,12 +335,34 @@ export class CursorSteerBridge {
             this.native.notifyTurnChanged(session.id);
           }
         }
+        if (standingLaunch) {
+          const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
+          if (prompt && !prompt.startsWith('/')) {
+            const pendingRun = this.pendingRuns.get(session.id);
+            if (pendingRun) this.pendingRuns.delete(session.id);
+            const runId = pendingRun ?? this.owner(session.id, target)?.id;
+            const blocks: string[] = [];
+            try {
+              if (this.compactedSessions.delete(session.id)) {
+                const compacted = this.host.standing?.context(session.id, 'compact');
+                if (compacted) blocks.push(compacted);
+              }
+              const promptContext = this.host.standing?.context(session.id, 'prompt', runId);
+              if (promptContext) blocks.push(promptContext);
+            } catch { /* a standing host's trouble is not the turn's */ }
+            if (blocks.length) return { additional_context: [...new Set(blocks)].join('\n\n') };
+          }
+        }
         return {};
       }
       if (event === 'preCompact') {
         const preTokens = typeof payload.context_tokens === 'number' && Number.isFinite(payload.context_tokens) ? payload.context_tokens : undefined;
+        if (standingLaunch) {
+          this.compactedSessions.add(session.id);
+          try { this.host.standing?.compacting?.(session.id); } catch { /* a standing host's trouble is not the turn's */ }
+        }
         this.onPreCompact?.(session.id, {
-          generationId: turnId, trigger: payload.trigger === 'manual' ? 'manual' : 'auto',
+          generationId: target.turnId, trigger: payload.trigger === 'manual' ? 'manual' : 'auto',
           ...(preTokens !== undefined ? { preTokens } : {}),
         });
         return {};
@@ -348,7 +428,8 @@ export class CursorSteerBridge {
       }
       const diffs = await changes.end(session.id, hookId);
       if (!diffs?.length || typeof input?.command !== 'string' || typeof payload.conversation_id !== 'string') return;
-      const store = chatStorePath(this.profile.configDir, this.port.getProject(session.projectId).cwd, payload.conversation_id);
+      const project = this.port.getProject(session.projectId);
+      const store = chatStorePath(cursorProjectConfigDir(this.profile.configDir, this.stateDir, project), project.cwd, payload.conversation_id);
       const callId = await resolveShellCall(store, input.command);
       if (callId) changes.record(session.id, callId, diffs);
     } catch { /* observation is best effort */ }
@@ -432,13 +513,23 @@ export class CursorSteerBridge {
     }).catch(() => undefined);
   }
 
-  dispose(sessionId: string): void { this.reject(sessionId, 'Conversation closed'); this.entries.delete(sessionId); }
+  dispose(sessionId: string): void {
+    this.reject(sessionId, 'Conversation closed');
+    this.entries.delete(sessionId);
+    this.pendingRuns.delete(sessionId);
+    this.compactedSessions.delete(sessionId);
+    this.skipStartCarry.delete(sessionId);
+  }
 
   async close(): Promise<void> {
     this.closed = true;
     for (const sessionId of this.entries.keys()) this.reject(sessionId, 'Cursor hook bridge closed');
     this.entries.clear();
+    this.pendingRuns.clear();
+    this.compactedSessions.clear();
+    this.skipStartCarry.clear();
     await this.plugin?.catch(() => undefined);
+    await this.bridgeConfig?.catch(() => undefined);
     await this.server.close();
   }
 }

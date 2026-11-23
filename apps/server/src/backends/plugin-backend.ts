@@ -35,6 +35,7 @@ const sessionView = (session: Session): AgentSessionView => ({
   id: session.id, projectId: session.projectId, title: session.title, state: session.state,
   ...(session.backendProfileId !== undefined ? { backendProfileId: session.backendProfileId } : {}),
   ...(session.nativeSessionId !== undefined ? { nativeSessionId: session.nativeSessionId } : {}),
+  ...(session.previousNativeSessionIds !== undefined ? { previousNativeSessionIds: [...session.previousNativeSessionIds] } : {}),
   ...(session.terminalId !== undefined ? { terminalId: session.terminalId } : {}),
   ...(session.model !== undefined ? { model: session.model } : {}),
   mode: session.mode,
@@ -50,6 +51,7 @@ const sessionView = (session: Session): AgentSessionView => ({
   ...(session.toolGroups !== undefined ? { toolGroups: session.toolGroups } : {}),
   ...(session.extensionsOff !== undefined ? { extensionsOff: session.extensionsOff } : {}),
   ...(session.terminalHold !== undefined ? { terminalHold: session.terminalHold } : {}),
+  ...(session.origin !== undefined ? { origin: session.origin } : {}),
 });
 
 /** A terminal record without the host's private reservation bookkeeping. */
@@ -60,7 +62,7 @@ const terminalView = (info: TerminalInfo): AgentTerminalView => {
 };
 
 /** What a session patch may carry, and what only a backend that keeps the session's run state may. */
-const PATCH_FIELDS = ['model', 'mode', 'approval', 'configPending', 'terminalId', 'title', 'titleSource', 'nativeSessionId'] as const;
+const PATCH_FIELDS = ['model', 'mode', 'approval', 'configPending', 'terminalId', 'title', 'titleSource', 'nativeSessionId', 'previousNativeSessionIds'] as const;
 const OBSERVED_FIELDS = ['state', 'error'] as const;
 
 const profileView = (profile: NativeBackendProfileConfig): AgentProfile => ({
@@ -70,7 +72,12 @@ const profileView = (profile: NativeBackendProfileConfig): AgentProfile => ({
   config: profile.config,
 });
 
-const projectView = (project: Project) => ({ id: project.id, name: project.name, cwd: project.cwd, ...(project.archivedAt !== undefined ? { archivedAt: project.archivedAt } : {}) });
+const projectView = (project: Project) => ({
+  id: project.id, name: project.name, cwd: project.cwd,
+  ...(project.archivedAt !== undefined ? { archivedAt: project.archivedAt } : {}),
+  ...(project.system !== undefined ? { system: project.system } : {}),
+  ...(project.mainSessionId !== undefined ? { mainSessionId: project.mainSessionId } : {}),
+});
 
 const runRef = (run: Run): AgentRunRef => ({
   id: run.id, sessionId: run.sessionId, commandId: run.commandId, state: run.state,
@@ -392,12 +399,13 @@ export class PluginBackendDriver implements NativeBackendDriver {
     } finally { this.spawnGuards.delete(session.id); }
   }
 
-  async send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void> {
+  async send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void | { settled: true }> {
     // Same window as interrupt: `host.checkStopTarget` sees the guard for the whole write, then it is gone.
     const guard = request.now ? request.beforeWrite : undefined;
     if (guard) this.stopGuards.set(request.session.id, guard);
     try {
-      await this.delivered(host, request, () => this.backend.send(this.hostFor(host), { ...this.sendRequest(request), ...(request.now ? { now: true } : {}) }));
+      const delivery = await this.delivered(host, request, () => this.backend.send(this.hostFor(host), { ...this.sendRequest(request), ...(request.now ? { now: true } : {}) }));
+      if (delivery && 'state' in delivery && delivery.state === 'settled') return { settled: true };
     } finally { if (guard) this.stopGuards.delete(request.session.id); }
   }
 
@@ -515,7 +523,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
       this.deferredFences.set(request.runId, request.commitDispatchFence);
       while (this.deferredFences.size > 256) this.deferredFences.delete(this.deferredFences.keys().next().value!);
     }
-    if (!delivery || 'deferred' in delivery || delivery.state === 'submitted') return delivery;
+    if (!delivery || 'deferred' in delivery || delivery.state === 'submitted' || delivery.state === 'settled') return delivery;
     const base = { sequence: 0, sessionId: request.session.id, runId: request.runId, createdAt: new Date().toISOString(), ...(delivery.nativeTurnId ? { nativeTurnId: delivery.nativeTurnId } : {}) };
     host.emitEvent(request.session.id, {
       ...base, type: 'native_input_receipt', nativeId: delivery.nativeMessageId ?? `receipt:${request.commandId}`,
@@ -838,6 +846,17 @@ export class PluginBackendDriver implements NativeBackendDriver {
       },
       riffetMcpSignature: async id => { own(id); return native.riffetMcp?.signature?.(id); },
       bindRiffetMcp: (id, validate) => { own(id); return native.riffetMcp?.bind?.(id, metadata => { if (this.revoked) throw new AppError('AGENT_HOST_REVOKED', 'Agent is disabled', 409); own(id); return validate(metadata); }) ?? (() => {}); },
+      ...(native.standing ? {
+        standing: {
+          launch: (project, session) => {
+            try { return native.standing!.launch(native.getProject(project.id), session); }
+            catch { return undefined; }
+          },
+          context: (id, moment, runId) => { own(id); return native.standing!.context(id, moment, runId); },
+          ...(native.standing.compacting ? { compacting: (id: string) => { own(id); native.standing!.compacting?.(id); } } : {}),
+          ...(native.standing.newTopic ? { newTopic: (id: string, text: string) => { own(id); return native.standing!.newTopic?.(id, text) ?? false; } } : {}),
+        },
+      } : {}),
     };
   }
 }

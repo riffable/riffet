@@ -531,7 +531,7 @@ export class SessionActor {
     const project = this.store.getProject(session.projectId);
     if (project.archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
     // A 助理 conversation started on an agent it no longer runs on (docs/ASSISTANT.md §4) would run with the owner's configuration.
-    if (project.system === 'assistant' && !isAssistantBackend(session.backendId)) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'The personal assistant runs on Claude Code or Codex', 409);
+    if (project.system === 'assistant' && !isAssistantBackend(session.backendId)) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'The personal assistant runs on Claude Code, Codex, or Cursor', 409);
     // Started, and waited for nowhere: a send to a running CLI used to wait for all of it. `prepareAt`
     // precedes anything the CLI is given, which is how the checkpoint tells what the turn changed meanwhile.
     if (armed.checkpoint) void Promise.resolve().then(() => this.options.beforeTurn!(session, run, armed.prepareAt)).catch(() => undefined);

@@ -1,5 +1,5 @@
 import type { UsageObservation } from '@riffet/plugin-api/kit';
-import type { AgentHost, AgentSessionView } from '@riffet/plugin-api/experimental/agent';
+import type { AgentHost, AgentProjectView, AgentSessionView } from '@riffet/plugin-api/experimental/agent';
 import { ChatReader, chatStorePath } from '../native/chat-store.js';
 import { cursorPromptAlias, type CursorLive, type CursorUsageCapture } from '../native/live.js';
 
@@ -38,7 +38,12 @@ export class CursorUsageIngest {
   private readonly timer: NodeJS.Timeout;
   private readonly unwatch: () => void;
 
-  constructor(private readonly host: AgentHost, private readonly live: Pick<CursorLive, 'readUsage' | 'ackUsage' | 'watchUsage'>, private readonly configDir: string) {
+  constructor(
+    private readonly host: AgentHost,
+    private readonly live: Pick<CursorLive, 'readUsage' | 'ackUsage' | 'watchUsage'>,
+    private readonly configDir: string,
+    private readonly configDirFor?: (project: AgentProjectView) => string,
+  ) {
     this.unwatch = live.watchUsage(() => { void this.drain(); });
     this.timer = setInterval(() => { void this.drain(); }, 2_000);
     this.timer.unref();
@@ -86,7 +91,8 @@ export class CursorUsageIngest {
   private owner(nativeId: string): Owner | undefined {
     if (!CHAT_ID.test(nativeId) || nativeId === '.' || nativeId === '..') return;
     const sessions = this.host.view.sessions();
-    const exact = sessions.filter(session => session.nativeSessionId === nativeId);
+    const owns = (session: AgentSessionView, id: string) => session.nativeSessionId === id || Boolean(session.previousNativeSessionIds?.includes(id));
+    const exact = sessions.filter(session => owns(session, nativeId));
     const current = exact.filter(session => !session.archivedAt);
     if (current.length === 1) return { session: current[0]! };
     if (current.length > 1) return;
@@ -98,12 +104,13 @@ export class CursorUsageIngest {
     for (const projectId of projects) {
       const project = this.host.view.project(projectId);
       if (!project) continue;
+      const dir = this.configDirFor?.(project) ?? this.configDir;
       const visited = new Set<string>([nativeId]);
       let child = nativeId;
       let parentNativeSessionId: string | undefined;
       let subagentType: string | undefined;
       for (let depth = 0; depth < 8; depth++) {
-        const reader = new ChatReader(chatStorePath(this.configDir, project.cwd, child));
+        const reader = new ChatReader(chatStorePath(dir, project.cwd, child));
         const meta = (() => { try { return reader.meta(); } finally { reader.close(); } })();
         if (meta?.agentId !== child || !meta.subagentInfo) break;
         const info = meta.subagentInfo;
@@ -111,7 +118,7 @@ export class CursorUsageIngest {
         if (!parent || !CHAT_ID.test(parent) || visited.has(parent)) break;
         parentNativeSessionId ??= parent;
         if (depth === 0 && typeof info.typeName === 'string') subagentType = info.typeName;
-        const matches = sessions.filter(session => session.projectId === projectId && session.nativeSessionId === parent);
+        const matches = sessions.filter(session => session.projectId === projectId && owns(session, parent));
         const active = matches.filter(session => !session.archivedAt);
         const session = active.length === 1 ? active[0] : active.length === 0 && matches.length === 1 ? matches[0] : undefined;
         if (session) {

@@ -105,7 +105,7 @@
 
 ## 4. 运行时
 
-底层默认是 Claude Code，也可以选 Codex（§4.1），由 `AppSettings.assistant` 选 Agent、Provider 和模型。只有这两个 Agent 实现了下面的隔离，助理也只在这两个上运行（`packages/contracts` 的 `ASSISTANT_BACKENDS`）：各端助理页的 Agent 菜单只列它们；服务端拒绝在助理项目里用其他 Agent 建会话，也拒绝给其他 Agent 上已有的助理会话发消息（`ASSISTANT_BACKEND_UNSUPPORTED`）；设置里存的其他 Agent 读出时连同 Provider 和模型一起丢掉。设置为空时，个人助理页从这两个里第一个可用的开始，不跟随新会话页上次用的 Agent（`assistantChoice`）；用户在页面上改选后以所选为准。驱动层通过 `NativeBackendHost.standing`（`backends/types.ts`）取得助理项目的启动设置。
+底层默认是 Claude Code，也可以选 Codex（§4.1）或 Cursor（§4.2），由 `AppSettings.assistant` 选 Agent、Provider 和模型。只有这三个 Agent 实现了下面的隔离，助理也只在这三个上运行（`packages/contracts` 的 `ASSISTANT_BACKENDS`）：各端助理页的 Agent 菜单只列它们；服务端拒绝在助理项目里用其他 Agent 建会话，也拒绝给其他 Agent 上已有的助理会话发消息（`ASSISTANT_BACKEND_UNSUPPORTED`）；设置里存的其他 Agent 读出时连同 Provider 和模型一起丢掉。设置为空时，个人助理页从这三个里第一个可用的开始，不跟随新会话页上次用的 Agent（`assistantChoice`）；用户在页面上改选后以所选为准。驱动层通过 `NativeBackendHost.standing`（`backends/types.ts`）或插件协议 `AgentHost.standing`（`packages/plugin-api/src/agent.ts`）取得助理项目的启动设置。
 
 助理项目里的会话启动时多出这些参数和设置：
 
@@ -149,6 +149,23 @@
 - 现状：用户的全局 `~/.codex/AGENTS.md` 仍会加载，Codex 没有关掉它的开关（只能换 `CODEX_HOME`，会连登录一起换掉）；developer 指令说明它是写给编程会话的、不必遵守。用户 `hooks.json` 里的 hook 仍会运行：Riffet 自己的命令观测也是 hook，hook 不能整体关掉。
 - 现状：用户文件只读只在 workspace-write 下成立（默认、`dontAsk`）。完全访问没有沙箱，不保护（Claude Code 的拒绝规则在任何模式下都生效）。回合一旦带了别的沙箱（切到只读或完全访问），它会一直留在已加载的 thread 上，压过权限配置；切回默认后服务端只能给不带只读文件的预设，直到 thread 重新加载（`/new`、服务重启）。按回合选权限配置要 app-server 的实验接口，Riffet 没有开。
 - 现状：压缩后的告知要等下一条消息才送到。Codex 在回合开始前压缩时，这一回合的模型不知道刚压缩过；压缩后它也不重读规则和记忆索引，developer 指令仍是 thread 加载时读出的那份。`.mcp.json` 里的 SSE 服务器 Codex 不支持，略过。改了规则、skill 或 `.mcp.json` 后，已加载在 app-server 里的 thread 要换话题（`/new`）或重新启动才用上。
+
+### 4.2 Cursor
+
+选 Cursor 时，隔离由 Cursor 插件按会话准备独立配置与数据目录完成（`plugins/riffet/cursor/backend/standing.ts`），在 cursor-agent 2026.10.01 上实测核对过：
+
+| 参数或设置 | 作用 |
+| --- | --- |
+| `CURSOR_CONFIG_DIR` 与 `CURSOR_DATA_DIR` 指向 `<数据目录>/cursor-standing` | 隔离用户级设置、hook 与会话记录；从用户原 `cli-config.json` 仅复制 `network` 传输项（如 HTTP/1 网关），不继承权限或审批模式 |
+| `--system-prompt` 与 `.cursor/rules/riffet-assistant.mdc`（`alwaysApply: true`）双轨 | 后台探测当前账号是否开放 `--system-prompt` 并按配置指纹缓存结果：支持时原生替换系统提示，规则文件仅放 `USER.md` 与记忆索引；账号拒绝时（如部分 team 账号）零重试延迟直接降级为由 `alwaysApply` 规则承载完整系统提示、`USER.md` 与记忆索引（`AGENTS.md` 由 Cursor 原生读取） |
+| `--plugin-dir` + `--approve-mcps` + `mcp-disabled.json` | 助理目录 `.mcp.json`、Riffet 工具和 `packs/` 能力包以 `--plugin-dir` 挂载并自动批准；用户 `~/.cursor/mcp.json` 与工作区 `.cursor/mcp.json` 中的其余 MCP 写入 `<cursor-standing>/projects/<slug>/mcp-disabled.json` 阻止启动 |
+| `<cursor-standing>/hooks.json` | 以 `userHooks` 挂载 `sessionStart`、`beforeSubmitPrompt`、`preCompact`、`preToolUse` 等全部钩子，保证交互式 TUI 每轮都触发 `beforeSubmitPrompt` 注入时间/待告知事项/压缩后提示，而不污染用户输入或历史 |
+| `preToolUse` 写保护与 `dontAsk` 白名单 | 拦截文件编辑工具修改 §2 的用户文件、`.cursor/**` 与 `packs/**`；后台运行（`dontAsk`）以 `--force --approve-mcps` 启动并在 `preToolUse` 只放行安全内置工具与隔离后的 MCP 工具，拒绝 `Shell`、`Delete`、`Task` 等 |
+| `/new` 新话题与 `previousNativeSessionIds` | 归档当前 `nativeSessionId`、停止旧终端并开启新会话，时间线与分享按段拼接历史 |
+
+- 现状：用户本机的全局/内置 skill（`~/.cursor/skills*`、`~/.claude/skills` 等）由 cursor-agent 直接从主目录扫描，CLI 没有关掉它们的开关；规则文件说明它们面向编程会话、不必遵守。
+- 现状：cursor-agent 没有自动压缩的 token 阈值参数（对应 `--autocompact 200000`），沿用 CLI 默认压缩行为。
+- 现状：账号未开放 `--system-prompt` 时，底层仍保留 Cursor 内置编码系统提示，由 `alwaysApply` 规则与 `sessionStart` 覆盖行为。
 
 ## 5. 长对话
 

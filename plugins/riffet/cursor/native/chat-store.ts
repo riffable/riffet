@@ -67,7 +67,8 @@ export function chatStorePath(configDir: string, cwd: string, chatId: string): s
  */
 export function writeChatApproval(configDir: string | undefined, cwd: string, chatId: string | undefined, approval: string | undefined): void {
   if (!configDir || !approval) return;
-  if (approval !== 'unrestricted') {
+  const effectiveApproval = approval === 'dontAsk' ? 'unrestricted' : approval;
+  if (effectiveApproval !== 'unrestricted') {
     let configPath = join(configDir, 'cli-config.json');
     let temporary: string | undefined;
     try {
@@ -97,9 +98,9 @@ export function writeChatApproval(configDir: string | undefined, cwd: string, ch
     const text = isHex ? Buffer.from(row.value, 'hex').toString('utf8') : row.value;
     const parsed = JSON.parse(text) as Record<string, unknown>;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
-    const isRunEverything = approval === 'unrestricted';
-    if (parsed.approvalMode === approval && parsed.isRunEverything === isRunEverything) return;
-    parsed.approvalMode = approval;
+    const isRunEverything = effectiveApproval === 'unrestricted';
+    if (parsed.approvalMode === effectiveApproval && parsed.isRunEverything === isRunEverything) return;
+    parsed.approvalMode = effectiveApproval;
     parsed.isRunEverything = isRunEverything;
     const serialized = JSON.stringify(parsed);
     const nextValue = isHex ? Buffer.from(serialized, 'utf8').toString('hex') : serialized;
