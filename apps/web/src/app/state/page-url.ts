@@ -8,7 +8,7 @@ export type DesignPlatform = (typeof DESIGN_PLATFORMS)[number];
  * The pages with an address of their own. A page covers the conversation, so its address does not
  * name one: a reload restores the conversation underneath from the stored selection.
  */
-const PAGES = ['tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design', 'view'] as const;
+const PAGES = ['tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design', 'settings', 'view'] as const;
 export type AddressPage = (typeof PAGES)[number];
 
 /**
@@ -18,8 +18,7 @@ export type AddressPage = (typeof PAGES)[number];
  * - `/p/<projectId>`: a project's new-conversation page.
  * - `/tasks` (任务), `/automations` (自动化), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`, `/view?id=<viewId>`.
  * - `/design/<chapter>?platform=macos`: a chapter of the design system; no chapter is its overview.
- * - `/settings/<sectionId>`: opens the settings dialog at that section on load. A dialog is not a page, so
- *   the address is not mirrored while it is open: the first mirror replaces it with the page underneath.
+ * - `/settings/<sectionId>`: the settings page at that section; `/settings` opens the default section.
  *
  * Plugin ids always contain a dot, and the server answers a path with an extension as a file, so
  * the id is a query parameter rather than a path segment.
@@ -36,9 +35,9 @@ export interface PageAddress {
   designPlatform?: DesignPlatform;
   /** The design page's chapter; absent is the overview. */
   designChapter?: string;
+  /** The settings section after `/settings/`; absent when `/settings` has no section segment. */
+  settingsSection?: string;
   stats: StatsUiState;
-  /** Set for `/settings`; `section` is the raw id after it, unchecked. */
-  settings?: { section?: string };
 }
 
 export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>): PageAddress {
@@ -50,9 +49,9 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
     const markId = search.get('mark');
     if (markId) address.markId = markId;
   } else if (head === 'p' && id) address.projectId = id;
-  else if (head === 'settings') address.settings = id ? { section: id } : {};
   else if ((PAGES as readonly string[]).includes(head ?? '')) {
     address.page = head as AddressPage;
+    if (head === 'settings' && id) address.settingsSection = id;
     const pluginId = head === 'plugins' ? search.get('id') : undefined;
     if (pluginId) address.pluginId = pluginId;
     const mainViewId = head === 'view' ? search.get('id') : undefined;
@@ -65,14 +64,15 @@ export function readPageAddress(location: Pick<Location, 'pathname' | 'search'>)
   return address;
 }
 
-export function pageAddressUrl(address: Required<Pick<PageAddress, 'sessionId' | 'projectId' | 'pluginId' | 'stats'>> & Pick<PageAddress, 'page' | 'mainViewId' | 'designPlatform' | 'designChapter'>): string {
-  const { page, sessionId, projectId, pluginId, mainViewId, stats, designPlatform, designChapter } = address;
+export function pageAddressUrl(address: Required<Pick<PageAddress, 'sessionId' | 'projectId' | 'pluginId' | 'stats'>> & Pick<PageAddress, 'page' | 'mainViewId' | 'designPlatform' | 'designChapter' | 'settingsSection'>): string {
+  const { page, sessionId, projectId, pluginId, mainViewId, stats, designPlatform, designChapter, settingsSection } = address;
   if (page === 'view') return mainViewId ? `/view?${new URLSearchParams({ id: mainViewId })}` : '/';
   if (page === 'plugins') return pluginId ? `/plugins?${new URLSearchParams({ id: pluginId })}` : '/plugins';
   if (page === 'design') {
     const path = designChapter ? `/design/${designChapter.split('/').map(encodeURIComponent).join('/')}` : '/design';
     return designPlatform && designPlatform !== 'web' ? `${path}?${new URLSearchParams({ platform: designPlatform })}` : path;
   }
+  if (page === 'settings') return settingsSection ? `/settings/${encodeURIComponent(settingsSection)}` : '/settings';
   if (page === 'stats') return `/stats${writeStatsSearch(stats)}`;
   if (page) return `/${page}`;
   if (sessionId) return `/c/${encodeURIComponent(sessionId)}`;

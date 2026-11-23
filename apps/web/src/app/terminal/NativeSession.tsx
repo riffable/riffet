@@ -647,7 +647,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       return { ...(prompt ? { prompt } : {}), ...(name ? { model: name } : {}) };
     },
   }), [session.title, session.model, backendId, projectName, catalog, t]);
-  const messageCommands = useMemo(() => ({ sessionId: session.id, ...(projectSystem ? { projectSystem } : {}), openModelSettings: (section: 'auxiliary' | 'quickchat') => stores.ui.openSettings(section) }), [session.id, projectSystem, stores.ui]);
+  const messageCommands = useMemo(() => ({ sessionId: session.id, ...(projectSystem ? { projectSystem } : {}), openModelSettings: (section: 'auxiliary' | 'quickchat') => { void stores.nav.navigate(() => { stores.nav.openSettings(section); stores.ui.setMobileSidebar(false); }, { keepUnderlying: true }); } }), [session.id, projectSystem, stores.nav, stores.ui]);
   const liveActivities = useMemo(() => native.activities ?? liveBackgroundActivities(visibleTimeline), [native.activities, visibleTimeline, native.timelineVersion]);
   // The header and the side column list these; they keep their memo while the transcript streams.
   const backgroundKey = liveActivities.map((activity) => `${activity.id}:${activity.status}:${activity.title}:${activity.startedAt ?? ''}`).join('\n');

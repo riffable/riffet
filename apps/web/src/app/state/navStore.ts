@@ -7,6 +7,7 @@ import { errorMessage, isRecord, readStored, writeStored } from '@/lib/utils';
 import type { StatsUiState } from '@/lib/stats-query';
 import type { MessageFocus } from '../session/focus-message';
 import { createStore } from '@/lib/store';
+import { DEFAULT_SETTINGS_SECTION, resolveSettingsSection, type SettingsSection } from '../settings/settingsSections';
 import { readPageAddress, type DesignPlatform, type PageAddress } from './page-url';
 
 export const STORAGE_KEYS = {
@@ -19,6 +20,7 @@ export const STORAGE_KEYS = {
   sidebarWidth: 'riffet.sidebarWidth.v1',
   panelWidth: 'riffet.panelWidth',
   backend: 'riffet.selectedBackend',
+  settingsSection: 'riffet.settingsSection.v1',
 };
 
 /** 介绍, the plugin's own page (its settings), and 管理 with 诊断. */
@@ -40,12 +42,18 @@ export interface NavState {
   councilOpen: boolean;
   extensionsOpen: boolean;
   marksOpen: boolean;
-  /** The design system's specimen page (docs/design/system). */
-  designOpen: boolean;
-  /** The platform that page shows; kept while it is closed, so reopening returns to it. */
+  /** The platform that the design system section shows; kept while closed, so reopening returns to it. */
   designPlatform: DesignPlatform;
-  /** The design page's chapter id; empty is its overview. */
+  /** The design system section's chapter id; empty is its overview. */
   designChapter: string;
+  /** The settings page; covers the active conversation or page without losing what was underneath. */
+  settingsOpen: boolean;
+  /** The active settings section (reflected in `/settings/<section>`). */
+  settingsSection: SettingsSection;
+  /** On phones, whether the section detail is open instead of the root category list. */
+  settingsMobileDetail: boolean;
+  /** Incremented on fresh entries or discarded drafts to remount stateful forms cleanly. */
+  settingsVisit: number;
   pluginsOpen: boolean;
   pluginId: string;
   pluginViewId: string;
@@ -66,7 +74,7 @@ export interface NavState {
 }
 
 /** The pages that cover the conversation. */
-export type NavPage = 'stats' | 'tasks' | 'automations' | 'council' | 'extensions' | 'marks' | 'plugins' | 'design';
+export type NavPage = 'stats' | 'tasks' | 'automations' | 'council' | 'extensions' | 'marks' | 'plugins';
 
 /** One way a conversation is shown, by view id: `chat`, `terminal`, or a plugin's `<pluginId>/<name>`. */
 export type SessionView = string;
@@ -107,7 +115,7 @@ function startingSelection(link: DeepLink | undefined, lists: { projects: Projec
 }
 
 /** Closes every page that covers the conversation, for a destination that is a conversation or project. */
-export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, designOpen: false, pluginsOpen: false, mainViewId: '', attemptsGroupId: '' } as const satisfies Partial<NavState>;
+export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, settingsOpen: false, pluginsOpen: false, mainViewId: '', attemptsGroupId: '' } as const satisfies Partial<NavState>;
 
 /**
  * What is selected and which page is showing, and the gate every change of destination goes through.
@@ -118,6 +126,9 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   const address = readPageAddress(window.location);
   const view = address.page;
   const extensionsOpen = view === 'extensions';
+  const settingsOpen = view === 'settings' || view === 'design';
+  const initialSettingsSection = view === 'design' ? 'design' : resolveSettingsSection(address.settingsSection);
+  const storedSettingsSection = resolveSettingsSection(readStored(STORAGE_KEYS.settingsSection));
   const link = deepLink(address);
   const stored = { projectId: readStored(STORAGE_KEYS.project), sessionId: readStored(STORAGE_KEYS.session) };
   const opened = startingSelection(link, cachedLists, stored);
@@ -135,9 +146,12 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     extensionsOpen,
     extensionsMounted: extensionsOpen,
     marksOpen: view === 'marks',
-    designOpen: view === 'design',
     designPlatform: address.designPlatform ?? 'web',
     designChapter: address.designChapter ?? '',
+    settingsOpen,
+    settingsSection: initialSettingsSection ?? storedSettingsSection ?? DEFAULT_SETTINGS_SECTION,
+    settingsMobileDetail: Boolean(initialSettingsSection),
+    settingsVisit: 0,
     pluginsOpen: view === 'plugins',
     pluginId: address.pluginId ?? '',
     pluginViewId: '',
@@ -153,6 +167,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   let startingLink: StartingLink | undefined = link && { link, stored, opened };
   let beforeLeave: (() => Promise<boolean>) | undefined;
   let beforePluginLeave: (() => Promise<boolean>) | undefined;
+  let beforeSettingsLeave: (() => Promise<boolean>) | undefined;
   let pending = false;
   let navigationRevision = 0;
   let previousDestination = store.get();
@@ -163,7 +178,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     if (current.projectId !== previousDestination.projectId || current.sessionId !== previousDestination.sessionId
       || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
       || current.extensionsOpen !== previousDestination.extensionsOpen || current.marksOpen !== previousDestination.marksOpen
-      || current.designOpen !== previousDestination.designOpen
+      || current.settingsOpen !== previousDestination.settingsOpen || current.settingsSection !== previousDestination.settingsSection
       || current.pluginsOpen !== previousDestination.pluginsOpen || current.pluginId !== previousDestination.pluginId
       || current.pluginViewId !== previousDestination.pluginViewId || current.pluginDetailTab !== previousDestination.pluginDetailTab
       || current.pluginOpenRevision !== previousDestination.pluginOpenRevision
@@ -183,7 +198,6 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
       store.set({ projectVisits });
       writeStored(STORAGE_KEYS.projectVisits, JSON.stringify(projectVisits));
     },
-    /** Hands the linked mark over once; later calls see nothing. */
     /** Hands the link over once, or nothing when the reader has left where the page opened at it. */
     takeStartingLink(): StartingLink | undefined {
       const start = startingLink;
@@ -192,28 +206,57 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
       return start && start.opened.projectId === projectId && start.opened.sessionId === sessionId ? start : undefined;
     },
     registerPluginBeforeLeave(guard: (() => Promise<boolean>) | undefined) { beforePluginLeave = guard; },
+    registerSettingsBeforeLeave(guard: (() => Promise<boolean>) | undefined) { beforeSettingsLeave = guard; },
     registerBeforeLeave(guard: (() => Promise<boolean>) | undefined) { beforeLeave = guard; },
     /**
-     * Every destination that changes the extension context goes through this one gate. It asks the
-     * open editor whether it may be left, so notification and long-lived async callbacks are covered too.
+     * Every destination that changes the active editor context goes through this one gate. It asks
+     * the open editor whether it may be left, so notification and long-lived async callbacks are
+     * covered too. Pass `keepUnderlying: true` when opening settings on top of plugins/extensions.
      */
-    async navigate(change: () => void): Promise<boolean> {
+    async navigate(change: () => void, options?: { keepUnderlying?: boolean }): Promise<boolean> {
       navigationRevision += 1;
       if (pending) return false;
       pending = true;
       try {
-        if (store.get().pluginsOpen && beforePluginLeave && !(await beforePluginLeave())) return false;
-        if (store.get().extensionsOpen && beforeLeave && !(await beforeLeave())) return false;
-        store.set({ extensionsOpen: false });
+        if (store.get().settingsOpen && beforeSettingsLeave && !(await beforeSettingsLeave())) return false;
+        if (!options?.keepUnderlying) {
+          if (store.get().pluginsOpen && beforePluginLeave && !(await beforePluginLeave())) return false;
+          if (store.get().extensionsOpen && beforeLeave && !(await beforeLeave())) return false;
+          store.set({ extensionsOpen: false });
+        }
         change();
         return true;
-      } catch (error) { toast.error(errorMessage(error, i18n._(msg`无法离开扩展管理页面`))); return false; }
+      } catch (error) { toast.error(errorMessage(error, i18n._(msg`无法离开当前页面`))); return false; }
       finally { pending = false; }
     },
     /** The page header and browser-back handler already checked the guard. */
     closeExtensions() { store.set({ extensionsOpen: false }); },
+    /** Opens settings over whatever is currently shown, keeping the underlying page or session intact. */
+    openSettings(section?: SettingsSection) {
+      const resolved = resolveSettingsSection(section);
+      const current = store.get();
+      const target = resolved ?? resolveSettingsSection(current.settingsSection) ?? DEFAULT_SETTINGS_SECTION;
+      if (resolved) writeStored(STORAGE_KEYS.settingsSection, resolved);
+      store.set({
+        settingsOpen: true,
+        settingsSection: target,
+        settingsMobileDetail: Boolean(resolved),
+        settingsVisit: current.settingsOpen ? current.settingsVisit : current.settingsVisit + 1,
+      });
+    },
+    setSettingsSection(section: SettingsSection, options?: { mobileDetail?: boolean; bumpVisit?: boolean }) {
+      const current = store.get();
+      if (resolveSettingsSection(section)) writeStored(STORAGE_KEYS.settingsSection, section);
+      store.set({
+        settingsSection: section,
+        ...(options?.mobileDetail !== undefined ? { settingsMobileDetail: options.mobileDetail } : {}),
+        ...(options?.bumpVisit ? { settingsVisit: current.settingsVisit + 1 } : {}),
+      });
+    },
+    /** Closes settings without disturbing the page or conversation underneath. */
+    closeSettings() { store.set({ settingsOpen: false }); },
     openPage(page: NavPage) {
-      store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', designOpen: page === 'design', mainViewId: '', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
+      store.set({ settingsOpen: false, pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', mainViewId: '', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
     },
     openMainView(viewId: string) {
       store.set({ ...NO_PAGE, extensionsOpen: false, mainViewId: viewId });

@@ -3,8 +3,6 @@ import { sameContextReference, type PromptContextReference } from '@/lib/api';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { readStored, writeStored } from '@/lib/utils';
 import type { PreviewTarget } from '../panels/sidebarViews';
-import { settingsSections, type SettingsSection } from '../settings/settingsSections';
-import { readPageAddress } from './page-url';
 import { createStore, resolve } from '@/lib/store';
 import { STORAGE_KEYS } from './navStore';
 
@@ -100,10 +98,6 @@ export interface UiState {
   sidebarWidth: number;
   panelWidth: number;
   selectedTerminalId: string;
-  settingsOpen: boolean;
-  settingsMounted: boolean;
-  /** A settings section the palette asked for, until its nav button exists to be clicked. */
-  pendingSettingsSection?: SettingsSection;
   /** A provider to open or pre-select for creation when 设置 › 模型提供商 mounts. */
   pendingProviderTarget?: ProviderSettingsTarget;
   paletteOpen: boolean;
@@ -125,14 +119,6 @@ export interface UiState {
 type Toggle = boolean | ((value: boolean) => boolean);
 const phone = () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches;
 
-/** The settings dialog a `/settings/<sectionId>` address asks for; an unknown section opens the default one. */
-function openedSettings(): Pick<UiState, 'settingsOpen' | 'settingsMounted' | 'pendingSettingsSection'> {
-  const request = readPageAddress(window.location).settings;
-  if (!request) return { settingsOpen: false, settingsMounted: false };
-  const section = settingsSections.find((item) => item.id === request.section)?.id;
-  return { settingsOpen: true, settingsMounted: true, ...(section ? { pendingSettingsSection: section } : {}) };
-}
-
 /** Panels, overlays and the transient state of in-flight actions. */
 export function createUiStore() {
   const store = createStore<UiState>({
@@ -148,7 +134,6 @@ export function createUiStore() {
     sidebarWidth: storedWidth(STORAGE_KEYS.sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT),
     panelWidth: storedWidth(STORAGE_KEYS.panelWidth, PANEL_MIN, PANEL_MAX, PANEL_DEFAULT),
     selectedTerminalId: '',
-    ...openedSettings(),
     paletteOpen: false,
     searchOpen: false,
     addProjectOpen: false,
@@ -226,12 +211,10 @@ export function createUiStore() {
     openSearch() { store.set({ searchOpen: true, paletteOpen: false, mobileSidebar: false }); },
     openImportSession(projectId?: string) { store.set({ importSession: projectId ? { projectId } : {}, paletteOpen: false, searchOpen: false, mobileSidebar: false }); },
     openPalette() { store.set({ paletteOpen: true, searchOpen: false, mobileSidebar: false }); },
-    /** Opens a settings section, mounting the dialog on first use. */
-    openSettings(section?: SettingsSection) { store.set({ settingsMounted: true, settingsOpen: true, pendingSettingsSection: section, pendingProviderTarget: undefined }); },
-    /** Opens 设置 › 模型提供商 focused on editing an existing provider or adding one with a source pre-selected. */
-    openProviderSettings(target: { kind: 'edit'; backendId: NativeBackendId; profileId: string } | { kind: 'add'; backendId?: NativeBackendId; modelSource: string }) {
+    /** Records a provider target to open or pre-select when 设置 › 模型提供商 mounts. */
+    setProviderTarget(target: { kind: 'edit'; backendId: NativeBackendId; profileId: string } | { kind: 'add'; backendId?: NativeBackendId; modelSource: string }) {
       providerTargetToken += 1;
-      store.set({ settingsMounted: true, settingsOpen: true, pendingSettingsSection: 'providers', pendingProviderTarget: { ...target, token: providerTargetToken } });
+      store.set({ pendingProviderTarget: { ...target, token: providerTargetToken } });
     },
     clearProviderTarget(token?: number) {
       store.set((current) => token === undefined || current.pendingProviderTarget?.token === token ? { pendingProviderTarget: undefined } : current);

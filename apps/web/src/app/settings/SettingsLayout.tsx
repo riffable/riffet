@@ -54,7 +54,7 @@ export function SettingsGroup({ title, action, note, children, loading }: { titl
     return () => observer.disconnect();
   }, [loading]);
   return (
-    <section className="flex flex-col">
+    <section className="flex min-w-0 flex-col">
       {(title || action) && <div className="mb-1 flex h-7 items-center justify-between">
         {title && <h3 className="text-xs font-medium text-fg-3">{title}</h3>}
         {action}

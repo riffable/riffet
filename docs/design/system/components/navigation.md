@@ -55,7 +55,7 @@
 - `SettingsLinkRow` 最小 48 且没有圆角，是卡片内的整宽分隔行，与 `SettingsRow`（`py-3.5`）同类。
 - `Disclosure` 是转录里的折叠行，高度随文字缩放，不属于列表行。
 
-设置导航在手机上仍是 48 高的整行列表（`SettingsDialog.tsx` 手机分支），那是另一种版式，不是 `ListRow`。
+设置导航在手机上仍是 48 高的整行列表（`SettingsPage.tsx` 手机分支），那是另一种版式，不是 `ListRow`。
 
 ### 现状
 

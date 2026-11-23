@@ -48,7 +48,7 @@ function Rows() {
       <Measured name="menuItem" source="dropdown-menu.tsx:17">
         <div className={cn(menuItem, 'data-[highlighted]:bg-hover')}><IconFileText />{t`文件`}</div>
       </Measured>
-      <Measured name="settings nav" source="SettingsDialog.tsx:178">
+      <Measured name="settings nav" source="SettingsSidebar.tsx:76">
         <ListRow tabIndex={-1} selected leading={<IconFolder />}>{t`项目`}</ListRow>
       </Measured>
       <Measured name="SettingsLinkRow" source="SettingsLayout.tsx:18">

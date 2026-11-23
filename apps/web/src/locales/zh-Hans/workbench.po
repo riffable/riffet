@@ -1564,8 +1564,8 @@ msgid "无法确认授权状态"
 msgstr "无法确认授权状态"
 
 #: src/app/state/navStore.ts
-msgid "无法离开扩展管理页面"
-msgstr "无法离开扩展管理页面"
+msgid "无法离开当前页面"
+msgstr "无法离开当前页面"
 
 #: src/app/plugins/PluginPageView.tsx
 msgid "无法读取"
@@ -2294,7 +2294,7 @@ msgstr "记忆"
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 #: src/app/SidebarUserMenu.tsx
-#: src/app/WorkbenchOverlays.tsx
+#: src/app/Workbench.tsx
 msgid "设置"
 msgstr "设置"
 

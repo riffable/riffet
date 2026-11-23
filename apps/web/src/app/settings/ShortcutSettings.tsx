@@ -70,15 +70,15 @@ export function ShortcutSettings() {
     );
   };
 
-  return <>
+  return <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
     {shortcutGroups.map(({ group, title }, index) => (
       <Group
         key={group}
-        title={index === 0 ? t`快捷键` : i18n._(title)}
+        title={i18n._(title)}
         action={index === 0 && customized ? <Button size="xs" variant="ghost" onClick={() => { resetAllBindings(); setNotice(undefined); }}><Trans>全部恢复默认</Trans></Button> : undefined}
       >
         {hostShortcuts.filter((shortcut) => shortcut.group === group).map(row)}
       </Group>
     ))}
-  </>;
+  </div>;
 }

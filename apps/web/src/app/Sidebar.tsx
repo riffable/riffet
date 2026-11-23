@@ -35,7 +35,7 @@ import { viewIcon } from '@/plugins/viewIcons';
 import { useTabs } from './tabs/useTabs';
 import type { SettingsSection } from './settings/settingsSections';
 import { SidebarUpdateButton } from './SidebarUpdateButton';
-import { SidebarUserMenu } from './SidebarUserMenu';
+import { SidebarSettingsButton, SidebarUserMenu } from './SidebarUserMenu';
 import { StatusIcon, useStatusLabel } from './work-items/parts';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
@@ -761,7 +761,10 @@ export function Sidebar(props: Props) {
           onOpenSettings={() => props.onOpenSettings()}
           onOpenTheme={() => props.onOpenSettings('appearance')}
         />
-        <SidebarUpdateButton onOpen={() => props.onOpenSettings('about')} />
+        <div className="ml-auto flex items-center gap-1">
+          <SidebarUpdateButton onOpen={() => props.onOpenSettings('about')} />
+          {!mobile && <SidebarSettingsButton backend={props.backend} onOpen={() => props.onOpenSettings()} />}
+        </div>
       </div>
     </nav>
   );

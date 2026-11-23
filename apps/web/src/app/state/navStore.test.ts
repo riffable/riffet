@@ -61,4 +61,60 @@ describe('automatic navigation receipt', () => {
     expect(nav.get().extensionsOpen).toBe(true);
     expect(nav.getNavigationRevision()).toBeGreaterThan(started);
   });
+
+  it('opens settings from /settings/<section>, keeps underlying page on close, and respects leave guards', async () => {
+    vi.stubGlobal('window', { location: { pathname: '/settings/providers', search: '', hash: '' } });
+    const nav = createNavStore();
+    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'providers', settingsMobileDetail: true });
+    nav.registerSettingsBeforeLeave(async () => false);
+    expect(await nav.navigate(() => nav.closeSettings(), { keepUnderlying: true })).toBe(false);
+    expect(nav.get().settingsOpen).toBe(true);
+    nav.registerSettingsBeforeLeave(undefined);
+    expect(await nav.navigate(() => nav.closeSettings(), { keepUnderlying: true })).toBe(true);
+    expect(nav.get().settingsOpen).toBe(false);
+
+    await nav.navigate(() => nav.openPage('plugins'));
+    await nav.navigate(() => nav.openSettings('appearance'), { keepUnderlying: true });
+    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'appearance', pluginsOpen: true });
+    nav.closeSettings();
+    expect(nav.get()).toMatchObject({ settingsOpen: false, pluginsOpen: true });
+  });
+
+  it('opens /design inside settings while preserving platform and chapter state', () => {
+    vi.stubGlobal('window', { location: { pathname: '/design/patterns/navigation', search: '?platform=macos', hash: '' } });
+    const nav = createNavStore();
+    expect(nav.get()).toMatchObject({
+      settingsOpen: true,
+      settingsSection: 'design',
+      settingsMobileDetail: true,
+      designPlatform: 'macos',
+      designChapter: 'patterns/navigation',
+    });
+    nav.setSettingsSection('appearance');
+    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'appearance', designPlatform: 'macos', designChapter: 'patterns/navigation' });
+  });
+
+  it('defaults settings to the first section and remembers the last visited section across visits and reloads', () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('window', {
+      location: { pathname: '/', search: '', hash: '' },
+      localStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+      },
+    });
+    const nav = createNavStore();
+    nav.openSettings();
+    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'profile', settingsMobileDetail: false });
+
+    nav.setSettingsSection('service');
+    nav.closeSettings();
+    nav.openSettings();
+    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'service', settingsMobileDetail: false });
+
+    const reloaded = createNavStore();
+    reloaded.openSettings();
+    expect(reloaded.get()).toMatchObject({ settingsOpen: true, settingsSection: 'service', settingsMobileDetail: false });
+  });
 });

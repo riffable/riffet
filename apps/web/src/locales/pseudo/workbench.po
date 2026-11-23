@@ -1564,7 +1564,7 @@ msgid "无法确认授权状态"
 msgstr ""
 
 #: src/app/state/navStore.ts
-msgid "无法离开扩展管理页面"
+msgid "无法离开当前页面"
 msgstr ""
 
 #: src/app/plugins/PluginPageView.tsx
@@ -2294,7 +2294,7 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 #: src/app/SidebarUserMenu.tsx
-#: src/app/WorkbenchOverlays.tsx
+#: src/app/Workbench.tsx
 msgid "设置"
 msgstr ""
 

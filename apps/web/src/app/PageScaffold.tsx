@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode, Ref, UIEventHandler } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { IconMenu } from '@/components/icons';
+import { IconArrowLeft, IconMenu } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { cn } from '@/lib/utils';
@@ -23,18 +23,24 @@ interface HeaderProps {
   actions?: ReactNode;
   /** A rule under the header on desktop too; phones always draw it. */
   divided?: boolean;
+  /** Replaces the phone sidebar button with a back button (e.g. a full-page section inside mobile Settings). */
+  mobileBack?: { label: string; onBack: () => void };
   sidebarCollapsed: boolean;
   onOpenSidebar: () => void;
   onExpandSidebar: () => void;
 }
 
 /** A page header: 48 / 52 tall, the sidebar button (phones, or a collapsed sidebar), the title, then the page's actions. */
-export function PageHeader({ title, meta, actions, divided, sidebarCollapsed, onOpenSidebar, onExpandSidebar, className }: HeaderProps & { className?: string }) {
+export function PageHeader({ title, meta, actions, divided, mobileBack, sidebarCollapsed, onOpenSidebar, onExpandSidebar, className }: HeaderProps & { className?: string }) {
   const { t } = useLingui();
   return (
     // A phone's bar matches the conversation header: 44 buttons 6 from the edges, the title 16 after the menu glyph (mobile.md §10.2).
     <header className={cn('flex h-12 shrink-0 items-center gap-2 px-1.5 max-md:edge-b md:h-13 md:px-3 md:pl-4', divided && 'edge-b', className)}>
-      <Button size="icon-sm" variant="quiet" className="-mr-2 size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
+      {mobileBack ? (
+        <Button size="icon-sm" variant="quiet" className="-mr-2 size-11 md:hidden" aria-label={mobileBack.label} onClick={mobileBack.onBack}><IconArrowLeft /></Button>
+      ) : (
+        <Button size="icon-sm" variant="quiet" className="-mr-2 size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
+      )}
       {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
       <h1 className="min-w-0 truncate text-sm font-medium text-fg">{title}</h1>
       {meta}
@@ -47,7 +53,7 @@ export function PageHeader({ title, meta, actions, divided, sidebarCollapsed, on
  * A workbench page: a fixed header over one scroller holding a centred column. The page is a
  * Back-closable layer, so the browser's Back and Escape-to-close reach `onClose`.
  */
-export function PageScaffold({ title, meta, actions, column = 'document', divided, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, scrollRef, onScroll, scrollerProps, columnClassName, pinned, aside, children }: HeaderProps & {
+export function PageScaffold({ title, meta, actions, column = 'document', divided, mobileBack, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, scrollRef, onScroll, scrollerProps, columnClassName, pinned, aside, children }: HeaderProps & {
   column?: PageColumn;
   onClose: () => void;
   scrollRef?: Ref<HTMLDivElement>;
@@ -65,7 +71,7 @@ export function PageScaffold({ title, meta, actions, column = 'document', divide
   return (
     <OverlayScopeContext.Provider value={overlay.scope}>
       <div className="relative flex h-full min-h-0 flex-col max-md:bg-bg md:bg-transparent">
-        <PageHeader title={title} meta={meta} actions={actions} divided={divided} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} />
+        <PageHeader title={title} meta={meta} actions={actions} divided={divided} mobileBack={mobileBack} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} />
         <div className="flex min-h-0 flex-1">
           {aside}
           <div ref={scrollRef} onScroll={onScroll} className="min-h-0 min-w-0 flex-1 overflow-y-auto" {...scrollerProps}>

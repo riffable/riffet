@@ -513,10 +513,6 @@ msgstr ""
 msgid "material3 风格的取值；其他风格的导航栏与底栏高度见「风格」一章。"
 msgstr ""
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
-msgstr ""
-
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 msgid "Prompt"
 msgstr ""
@@ -1232,7 +1228,7 @@ msgid "仅保存在这台服务器"
 msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -2774,6 +2770,7 @@ msgstr ""
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "取消"
@@ -3210,6 +3207,10 @@ msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "团队只有两名前端"
+msgstr ""
+
+#: src/app/settings/SettingsSidebar.tsx
+msgid "固定侧边栏"
 msgstr ""
 
 #: src/app/settings/SidebarSection.tsx
@@ -3715,6 +3716,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "实心块"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "实时预览"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
@@ -4292,6 +4297,10 @@ msgstr ""
 msgid "已注册"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "已生效"
+msgstr ""
+
 #: src/app/settings/ShortcutSettings.tsx
 msgid "已用于「{holderName}」"
 msgstr ""
@@ -4723,7 +4732,6 @@ msgstr ""
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/settingsSections.ts
-#: src/app/settings/ShortcutSettings.tsx
 msgid "快捷键"
 msgstr ""
 
@@ -5440,6 +5448,11 @@ msgstr ""
 msgid "搜索索引"
 msgstr ""
 
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
+msgid "搜索设置"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "摘要"
 msgstr ""
@@ -5510,6 +5523,10 @@ msgstr ""
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/settings/UpdateSection.tsx
 msgid "收起"
+msgstr ""
+
+#: src/app/settings/SettingsSidebar.tsx
+msgid "收起侧边栏"
 msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
@@ -5900,7 +5917,7 @@ msgstr ""
 msgid "无法保存默认提供商"
 msgstr ""
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "无法切换设置分区"
 msgstr ""
 
@@ -6080,7 +6097,7 @@ msgstr ""
 msgid "无法读取这张图片"
 msgstr ""
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "无法返回设置分区"
 msgstr ""
 
@@ -6765,6 +6782,10 @@ msgstr ""
 msgid "桌面 52，手机 48"
 msgstr ""
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面：主侧栏切为设置导航，主区取看板档（1200）"
+msgstr ""
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
 msgstr ""
@@ -6780,6 +6801,10 @@ msgstr ""
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgctxt "design-system-checks"
 msgid "检查"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "检查一下当前主题和代码高亮"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
@@ -6943,6 +6968,10 @@ msgstr ""
 msgid "正文、代码、错误原因"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "正文字色、代码块纸底与按钮层级会随所选配色实时变化。"
+msgstr ""
+
 #: src/app/design/android/notes.ts
 msgid "正文密度与 Material 3 相同"
 msgstr ""
@@ -7078,6 +7107,11 @@ msgstr ""
 
 #: src/app/settings/ProviderModelList.tsx
 msgid "没有匹配的模型。"
+msgstr ""
+
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
+msgid "没有匹配的设置"
 msgstr ""
 
 #: src/app/design/mac/TypeChapter.tsx
@@ -8845,7 +8879,7 @@ msgstr ""
 #: src/app/design/mac/notes.ts
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "设置"
 msgstr ""
 
@@ -8857,7 +8891,8 @@ msgstr ""
 msgid "设置、检测结果、数据、操作"
 msgstr ""
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "设置分区"
 msgstr ""
 
@@ -8866,7 +8901,7 @@ msgid "设置分组的一行：内边距、图标、间距与行高均取自档�
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设置是弹窗，不是页面，用工作区一档。"
+msgid "设置是一级页面，桌面端主侧栏切换为设置导航，主区统一取看板档（1200）。"
 msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
@@ -9447,11 +9482,13 @@ msgstr ""
 
 #: src/app/design/android/PagesChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "返回"
 msgstr ""
 
 #. placeholder {0}: parent.label
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "返回{0}"
 msgstr ""
 
@@ -9459,7 +9496,7 @@ msgstr ""
 msgid "返回模型提供商"
 msgstr ""
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "返回设置分区"
 msgstr ""
 

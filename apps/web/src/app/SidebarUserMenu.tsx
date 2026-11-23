@@ -26,16 +26,40 @@ interface Props {
   onOpenTheme?: () => void;
 }
 
-/** Prefetch only; opening the menu does not mount the settings workspace. */
-const preloadSettings = () => void import('./settings/SettingsDialog');
+/** Prefetch only; opening the menu or hovering the trigger does not mount the settings page. */
+const preloadSettings = () => void import('./settings/SettingsPage');
 
-/** The sidebar's only footer trigger: the account and the app; pages are reached from the navigation above. */
+/** Desktop sidebar footer's direct settings trigger; carries backend login/availability notices. */
+export function SidebarSettingsButton({ backend, onOpen }: { backend?: NativeBackendCatalogEntry; onOpen: () => void }) {
+  const { t } = useLingui();
+  const backendNotice = backend?.needsLogin ? t`${backend.label} 未登录` : backend && !backend.available ? t`${backend.label} 不可用` : undefined;
+  const label = [t`设置`, backendNotice].filter(Boolean).join(' · ');
+  const ariaLabel = [t`设置`, backendNotice, backend?.reason].filter(Boolean).join(' · ');
+  return (
+    <Tip label={label} side="top">
+      <Button
+        size="icon-sm"
+        variant="quiet"
+        aria-label={ariaLabel}
+        onPointerEnter={preloadSettings}
+        onFocus={preloadSettings}
+        onClick={onOpen}
+        className="relative"
+      >
+        <IconSettings />
+        {backendNotice && <StatusDot tone="warning" className="absolute right-1 bottom-1 ring-2 ring-canvas" />}
+      </Button>
+    </Tip>
+  );
+}
+
+/** The sidebar footer's account menu: profile, theme, and connection info (phones go straight to Settings). */
 export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
   const { t } = useLingui();
   const { local, address } = hostInfo();
   const offline = stale?.mode === 'offline';
   const backendNotice = backend?.needsLogin ? t`${backend.label} 未登录` : backend && !backend.available ? t`${backend.label} 不可用` : undefined;
-  const warning = offline ? t`无法连接服务器` : backendNotice;
+  const warning = offline ? t`无法连接服务器` : mobile ? backendNotice : undefined;
   const label = t`个人资料与更多`;
   const tooltip = [owner?.name, label, warning].filter(Boolean).join(' · ');
   const HostIcon = local ? IconLaptop : IconServer;
@@ -72,19 +96,13 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <ThemeMenu onOpenTheme={onOpenTheme} />
-        <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`} aria-label={backendNotice ? [t`设置`, backendNotice, backend?.reason].filter(Boolean).join(' · ') : undefined}>
-          <IconSettings />
-          <span className="min-w-0 flex-1"><Trans>设置</Trans>{backendNotice && <span className="block py-1 text-xs text-warning wrap-anywhere">{backendNotice}</span>}</span>
-        </DropdownMenuItem>
-        {(!local || offline) && <>
+        <DropdownMenuSeparator />
+        <MenuSub icon={<HostIcon className={offline ? 'text-warning' : undefined} />} label={hostLabel} value={offline ? t`无法连接服务器` : stale ? t`正在同步` : address} className="w-64">
+          <DropdownMenuLabel>{hostLabel}</DropdownMenuLabel>
+          <p className="px-2 pb-1 font-mono text-xs text-fg-2 wrap-anywhere">{address}</p>
           <DropdownMenuSeparator />
-          <MenuSub icon={<HostIcon className={offline ? 'text-warning' : undefined} />} label={hostLabel} value={offline ? t`无法连接服务器` : stale ? t`正在同步` : undefined} className="w-64">
-            <DropdownMenuLabel>{hostLabel}</DropdownMenuLabel>
-            <p className="px-2 pb-1 font-mono text-xs text-fg-2 wrap-anywhere">{address}</p>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => void copyWithToast(window.location.origin, t`已复制地址`)}><IconCopy /><Trans>复制地址</Trans></DropdownMenuItem>
-          </MenuSub>
-        </>}
+          <DropdownMenuItem onSelect={() => void copyWithToast(window.location.origin, t`已复制地址`)}><IconCopy /><Trans>复制地址</Trans></DropdownMenuItem>
+        </MenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   );

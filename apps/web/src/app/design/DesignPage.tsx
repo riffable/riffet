@@ -126,8 +126,9 @@ function PlatformTitle({ platform }: { platform: Exclude<DesignPlatform, 'web'> 
     : <PlatformCover name="Android" styles={ANDROID_STYLES.map((style) => android(style).title)} lines={[t`共用的基础与模式在 Android 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`风格各有一节，尺寸与动效读自同一份定义。`]} />;
 }
 
-export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar }: {
+export const DesignPage = memo(function DesignPage({ sidebarCollapsed, mobileBack, onClose, onOpenSidebar, onExpandSidebar }: {
   sidebarCollapsed: boolean;
+  mobileBack?: { label: string; onBack: () => void };
   onClose: () => void;
   onOpenSidebar: () => void;
   onExpandSidebar: () => void;
@@ -213,6 +214,7 @@ export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, 
         )}
         column="none"
         divided
+        mobileBack={mobileBack}
         aside={<Aside groups={groups} current={current} sections={sections} section={section} onGo={go} onSection={goSection} />}
         scrollRef={scroller}
         scrollerProps={{ 'data-design-scroller': true }}

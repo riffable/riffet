@@ -11,7 +11,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
 import { UpdateNotice } from '../../SidebarUpdateButton';
-import { SidebarUserMenu } from '../../SidebarUserMenu';
+import { SidebarSettingsButton, SidebarUserMenu } from '../../SidebarUserMenu';
 import { Chapter, Family, Frame, Plate, Specimen } from '../specimen';
 
 function MenuDemo() {
@@ -136,7 +136,10 @@ export function OverlayChapter() {
       </Family>
       <Family title={t`个人资料与更多`}>
         <Specimen name={t`个人资料`}>
-          <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
+          <div className="flex h-12 w-64 items-center gap-1 px-2">
+            <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
+            <div className="ml-auto flex items-center gap-1"><SidebarSettingsButton onOpen={() => {}} /></div>
+          </div>
         </Specimen>
         <Specimen name={t`无法连接服务器`}>
           <SidebarUserMenu stale={{ mode: 'offline' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
@@ -144,13 +147,13 @@ export function OverlayChapter() {
         <Specimen name={t`有新版本`} wide>
           <div className="flex h-12 w-64 items-center gap-1 px-2">
             <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
-            <div className="ml-auto"><UpdateNotice version="v0.7.1" seen={false} onOpen={() => {}} /></div>
+            <div className="ml-auto flex items-center gap-1"><UpdateNotice version="v0.7.1" seen={false} onOpen={() => {}} /><SidebarSettingsButton onOpen={() => {}} /></div>
           </div>
         </Specimen>
         <Specimen name={t`有新版本 · 已查看`} wide>
           <div className="flex h-12 w-64 items-center gap-1 px-2">
             <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
-            <div className="ml-auto"><UpdateNotice version="v0.7.1" seen onOpen={() => {}} /></div>
+            <div className="ml-auto flex items-center gap-1"><UpdateNotice version="v0.7.1" seen onOpen={() => {}} /><SidebarSettingsButton onOpen={() => {}} /></div>
           </div>
         </Specimen>
       </Family>

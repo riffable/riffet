@@ -513,10 +513,6 @@ msgstr "material3 and expressive use Material's dialog; the other styles use the
 msgid "material3 风格的取值；其他风格的导航栏与底栏高度见「风格」一章。"
 msgstr "material3 values; the bar heights of the other styles are in the Styles chapter."
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
-msgstr "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
-
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 msgid "Prompt"
 msgstr "Prompt"
@@ -1232,7 +1228,7 @@ msgid "仅保存在这台服务器"
 msgstr "Saved only on this server"
 
 #: src/app/design/patterns/FormsChapter.tsx
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -2774,6 +2770,7 @@ msgstr "A control that obtains a value. Fields share the look of fieldClass; on 
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "取消"
@@ -3211,6 +3208,10 @@ msgstr "Under the answer footer; a spinner replaces the icon while it runs"
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "团队只有两名前端"
 msgstr "The team has only two front-end engineers"
+
+#: src/app/settings/SettingsSidebar.tsx
+msgid "固定侧边栏"
+msgstr "Pin sidebar"
 
 #: src/app/settings/SidebarSection.tsx
 msgid "固定到侧栏"
@@ -3716,6 +3717,10 @@ msgstr "A solid card on the transcript’s width and axis; floating glass is for
 #: src/app/design/mac/notes.ts
 msgid "实心块"
 msgstr "Solid block"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "实时预览"
+msgstr "Live preview"
 
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
@@ -4292,6 +4297,10 @@ msgstr "Existing sessions keep their current setting."
 msgid "已注册"
 msgstr "Registered"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "已生效"
+msgstr "Applied"
+
 #: src/app/settings/ShortcutSettings.tsx
 msgid "已用于「{holderName}」"
 msgstr "Used by “{holderName}”"
@@ -4723,7 +4732,6 @@ msgstr "Shortcuts"
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/settingsSections.ts
-#: src/app/settings/ShortcutSettings.tsx
 msgid "快捷键"
 msgstr "Shortcuts"
 
@@ -5440,6 +5448,11 @@ msgstr "A search field has the search icon on the left and a clear button on the
 msgid "搜索索引"
 msgstr "Search index"
 
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
+msgid "搜索设置"
+msgstr "Search settings"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "摘要"
 msgstr "Summary"
@@ -5511,6 +5524,10 @@ msgstr "Favorites"
 #: src/app/settings/UpdateSection.tsx
 msgid "收起"
 msgstr "Collapse"
+
+#: src/app/settings/SettingsSidebar.tsx
+msgid "收起侧边栏"
+msgstr "Collapse sidebar"
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "改了 3 个文件"
@@ -5900,7 +5917,7 @@ msgstr "Couldn't save the notification setting"
 msgid "无法保存默认提供商"
 msgstr "Couldn't save the default provider"
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "无法切换设置分区"
 msgstr "Couldn't switch settings sections"
 
@@ -6080,7 +6097,7 @@ msgstr "Could not load auxiliary model details"
 msgid "无法读取这张图片"
 msgstr "Couldn't read this image"
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "无法返回设置分区"
 msgstr "Couldn't return to settings sections"
 
@@ -6765,6 +6782,10 @@ msgstr "Desktop"
 msgid "桌面 52，手机 48"
 msgstr "Desktop 52, phone 48"
 
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面：主侧栏切为设置导航，主区取看板档（1200）"
+msgstr "Desktop: sidebar swaps to settings nav; main area uses board (1200)"
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
 msgstr "On desktop the agent is part of the model menu; its button opens the toolbar row and the menu unfolds rightwards from it. Phones keep an Agent row in the settings sheet."
@@ -6781,6 +6802,10 @@ msgstr "Steps and nesting"
 msgctxt "design-system-checks"
 msgid "检查"
 msgstr "Checks"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "检查一下当前主题和代码高亮"
+msgstr "Check the current theme and syntax highlighting"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查于{checkedAt}"
@@ -6943,6 +6968,10 @@ msgstr "Body text"
 msgid "正文、代码、错误原因"
 msgstr "Body text, code, error reasons"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "正文字色、代码块纸底与按钮层级会随所选配色实时变化。"
+msgstr "Body text color, code block surface, and button hierarchy update live with the selected palette."
+
 #: src/app/design/android/notes.ts
 msgid "正文密度与 Material 3 相同"
 msgstr "Same text density as Material 3"
@@ -7079,6 +7108,11 @@ msgstr "No matching icons"
 #: src/app/settings/ProviderModelList.tsx
 msgid "没有匹配的模型。"
 msgstr "No matching models."
+
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
+msgid "没有匹配的设置"
+msgstr "No matching settings"
 
 #: src/app/design/mac/TypeChapter.tsx
 msgid "没有半档字号：11.5 并入 12，12.5 并入 13"
@@ -8845,7 +8879,7 @@ msgstr "Devices"
 #: src/app/design/mac/notes.ts
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "设置"
 msgstr "Settings"
 
@@ -8857,7 +8891,8 @@ msgstr "Settings, sidebar, conversation view"
 msgid "设置、检测结果、数据、操作"
 msgstr "Settings, detection results, data, actions"
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "设置分区"
 msgstr "Settings sections"
 
@@ -8866,8 +8901,8 @@ msgid "设置分组的一行：内边距、图标、间距与行高均取自档�
 msgstr "One row of a settings group: padding, icon, gaps and row height all come from the scale."
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "设置是弹窗，不是页面，用工作区一档。"
-msgstr "Settings is a dialog, not a page; use the workspace size."
+msgid "设置是一级页面，桌面端主侧栏切换为设置导航，主区统一取看板档（1200）。"
+msgstr "Settings is a top-level page: the desktop sidebar swaps to settings navigation, and the main area uniformly uses the board column (1200)."
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "设置是独立窗口，⌘, 打开"
@@ -9447,11 +9482,13 @@ msgstr "{1} runs in {0} days · {2} tokens"
 
 #: src/app/design/android/PagesChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "返回"
 msgstr "Back"
 
 #. placeholder {0}: parent.label
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "返回{0}"
 msgstr "Back to {0}"
 
@@ -9459,7 +9496,7 @@ msgstr "Back to {0}"
 msgid "返回模型提供商"
 msgstr "Back to model providers"
 
-#: src/app/settings/SettingsDialog.tsx
+#: src/app/settings/SettingsPage.tsx
 msgid "返回设置分区"
 msgstr "Back to settings sections"
 

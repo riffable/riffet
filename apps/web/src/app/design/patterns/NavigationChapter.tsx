@@ -66,6 +66,7 @@ function Addresses() {
     [t`项目主页`, pageAddressUrl({ ...base, projectId: '‹projectId›' })],
     ...(['tasks', 'marks', 'extensions'] as const).map((page): [string, string] => [page, pageAddressUrl({ ...base, page })]),
     ['plugins', pageAddressUrl({ ...base, page: 'plugins', pluginId: '‹pluginId›' })],
+    ['settings', pageAddressUrl({ ...base, page: 'settings', settingsSection: 'providers' })],
     ['design', pageAddressUrl({ ...base, page: 'design', designChapter: 'patterns/navigation' })],
   ];
   return (

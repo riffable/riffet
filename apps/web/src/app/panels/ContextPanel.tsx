@@ -43,7 +43,7 @@ interface Props {
  */
 export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChange, onReference, onError, onClose, onOpenWorktree, onWorktreeMerged, fullscreen, onToggleFullscreen, floating, onToggleFloating }: Props) {
   const { t } = useLingui();
-  const { ui } = useStores();
+  const { nav, ui } = useStores();
   useEffect(() => watchGitStatus(project.id), [project.id]);
   const panelOpen = useUi((state) => state.panelOpen);
   const views = useSidebarViews(project, sessionId);
@@ -68,7 +68,7 @@ export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChan
       </div>
       {views.length === 0 && (
         <EmptyState className="flex-1" icon={<IconPanelRight />} title={t`没有显示的视图`}>
-          <Button size="sm" variant="secondary" onClick={() => ui.openSettings('views')}><Trans>视图设置</Trans></Button>
+          <Button size="sm" variant="secondary" onClick={() => { void nav.navigate(() => { nav.openSettings('views'); ui.setMobileSidebar(false); }, { keepUnderlying: true }); }}><Trans>视图设置</Trans></Button>
         </EmptyState>
       )}
       {views.map((view) => {

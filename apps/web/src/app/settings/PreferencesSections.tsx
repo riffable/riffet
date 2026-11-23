@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, SETTING_DEFAULTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
-import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave } from '@/components/icons';
+import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave, IconSquareTerminal } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
 import { ThemeSwatch } from '@/components/theme-swatch';
@@ -103,7 +103,7 @@ async function loadConfig(limit = 42): Promise<Config> {
   return { name: "riffet", count: limit };
 }`;
 
-function CodeThemePreview() {
+function CodeThemePreview({ className }: { className?: string }) {
   const [html, setHtml] = useState<string | undefined>(() => cachedHighlight(CODE_PREVIEW_SNIPPET, 'typescript'));
   useEffect(() => {
     let active = true;
@@ -115,11 +115,58 @@ function CodeThemePreview() {
     return () => { active = false; };
   }, [html]);
   return (
-    <div className="py-3.5">
+    <div className={cn('py-3.5', className)}>
       <pre className="overflow-x-auto rounded-lg bg-subtle px-3.5 py-3 font-mono text-xs leading-5 text-fg">
         {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{CODE_PREVIEW_SNIPPET}</code>}
       </pre>
     </div>
+  );
+}
+
+/** Live conversation sample beside Theme controls on wide screens so changes read in context. */
+function ThemeLivePreview({ label }: { label: string }) {
+  const [html, setHtml] = useState<string | undefined>(() => cachedHighlight(CODE_PREVIEW_SNIPPET, 'typescript'));
+  useEffect(() => {
+    let active = true;
+    if (html === undefined) {
+      void highlightCode(CODE_PREVIEW_SNIPPET, 'typescript').then((result) => {
+        if (active && result !== undefined) setHtml(result);
+      });
+    }
+    return () => { active = false; };
+  }, [html]);
+  return (
+    <aside className="hidden lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-2">
+      <div className="flex h-7 items-center justify-between">
+        <span className="text-xs font-medium text-fg-3"><Trans>实时预览</Trans></span>
+        <span className="truncate text-2xs text-fg-4">{label}</span>
+      </div>
+      <div className="rounded-xl border border-line bg-canvas p-2.5">
+        <div className="flex flex-col gap-3 rounded-lg border border-line bg-card p-3.5">
+          <div className="self-end rounded-xl bg-bubble px-3 py-2 text-xs leading-5 text-fg">
+            <Trans>检查一下当前主题和代码高亮</Trans>
+          </div>
+          <div className="flex flex-col gap-2 text-xs leading-5 text-fg">
+            <div className="flex items-center gap-2 text-fg-3">
+              <IconSquareTerminal className="size-3.5 shrink-0" />
+              <span className="font-mono font-medium text-fg-2">Read</span>
+              <span className="truncate font-mono">theme.config.ts</span>
+            </div>
+            <p className="text-fg-2">
+              <Trans>正文字色、代码块纸底与按钮层级会随所选配色实时变化。</Trans>
+            </p>
+            <pre className="overflow-x-auto rounded-lg border border-line bg-subtle px-3 py-2.5 font-mono text-2xs leading-4.5 text-fg">
+              {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{CODE_PREVIEW_SNIPPET}</code>}
+            </pre>
+            <div className="flex items-center gap-2 pt-1">
+              <span className="inline-flex h-6 items-center rounded-md bg-primary px-2.5 text-2xs font-medium text-primary-fg"><Trans>发送</Trans></span>
+              <span className="inline-flex h-6 items-center rounded-md bg-fg/[0.07] px-2.5 text-2xs font-medium text-fg"><Trans>取消</Trans></span>
+              <span className="ml-auto inline-flex h-5 items-center rounded-md bg-success-soft px-2 text-2xs font-medium text-success"><Trans>已生效</Trans></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -169,76 +216,82 @@ export function ThemeSection() {
   // Opening the picker is a natural moment to ask whether another device has changed the library.
   // The startup sync already ran; a failure here is silent and leaves the cached list in place.
   useEffect(() => { void syncThemeLibrary(); void syncAppearance(); }, []);
-  return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-    {/* Untitled: the page title already says it. */}
-    <Group>
-      <Row title={t`明暗`}>
-        <Segmented<ThemeMode> size="xs" value={mode} onChange={setThemeMode} ariaLabel={t`明暗`} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
-      </Row>
-    </Group>
-    {catalog && (catalog.presets.length > 0 || catalog.backgrounds.length > 0) && <Group>
-      {catalog.presets.length > 0 && <Row title={t`预设`}>
-        <AppearanceChoice label={t`预设`} items={catalog.presets} value={catalog.presets.some((preset) => preset.id === selection.preset) ? selection.preset : undefined} onChange={(id) => selectPreset(id === APPEARANCE_DEFAULT ? undefined : id)} />
-      </Row>}
-      {catalog.backgrounds.length > 0 && <Row title={t`背景`}>
-        <AppearanceChoice label={t`背景`} items={catalog.backgrounds} value={effective.background?.id} onChange={(id) => selectAppearanceItem('background', id)} />
-      </Row>}
-    </Group>}
-    <Group title={t`配色`}>
-      <div className="grid grid-cols-2 gap-2 pt-3.5 pb-2 max-md:grid-cols-1">
-        {themes.map((theme) => <ThemeCard key={theme.id} theme={theme} selected={!paletteKey && theme.id === themeId} onEdit={theme.builtin ? undefined : () => openEditor({ edit: theme.id })} />)}
-        {/* A plugin's palette sits among the themes without replacing the one chosen above. */}
-        {plugins.map(({ palette, key }) => <ThemeCard key={key} theme={{ id: key, name: localizedText(palette.title) ?? palette.id }} selected={paletteKey === key} onSelect={() => selectAppearanceItem('palette', palette.id)} />)}
-        {/* A new theme starts from the one on screen: pick the closest, then reshape it. */}
-        <button
-          type="button"
-          onClick={() => openEditor({ from: paletteKey ?? themeId })}
-          className="flex min-h-11 items-center gap-3 rounded-lg border border-dashed border-line-strong px-2.5 py-2 text-left text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg"
-        >
-          <span className="flex h-6 w-9 shrink-0 items-center justify-center"><IconPlus className="size-4" /></span>
-          <Trans>新建主题</Trans>
-        </button>
-      </div>
-      {/* Upstream credits sit under the gallery rather than in the cards, so every card is one line. */}
-      <p className="pb-3.5 text-xs text-fg-3"><Trans>配色来源：{credits}</Trans></p>
-    </Group>
-    <Group title={t`代码高亮`}>
-      <Row title={t`风格`}>
-        <div className="flex items-center gap-2 max-md:w-full">
-          <Select<string>
-            label={t`风格`}
-            className="w-48 max-md:min-w-0 max-md:flex-1"
-            value={effectiveCodeValue}
-            onChange={(value) => setDisplaySettings({ codeTheme: parseCodeThemeSelection(value) })}
-            options={[
-              { value: CODE_THEME_AUTO, label: t`跟随界面主题` },
-              ...BUILTIN_CODE_THEMES.map((item) => ({
-                value: item.id,
-                label: item.id === 'monochrome' ? t`极简墨色` : item.name,
-              })),
-              ...customSyntaxThemes.map((item) => ({
-                value: item.id,
-                label: item.name,
-              })),
-            ]}
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              const syntaxFrom = isKnownCodeThemeId(effectiveCodeValue) ? effectiveCodeValue : undefined;
-              if (selectedCustomSyntax) openEditor({ edit: display.codeTheme, openSyntax: true, syntaxFrom });
-              else if (!paletteKey && isCustomThemeId(themeId)) openEditor({ edit: themeId, openSyntax: true, syntaxFrom });
-              else openEditor({ from: paletteKey ?? themeId, openSyntax: true, syntaxFrom });
-            }}
+  const activeThemeName = paletteKey
+    ? (localizedText(plugins.find((entry) => entry.key === paletteKey)?.palette.title) ?? paletteKey)
+    : (themes.find((theme) => theme.id === themeId)?.name ?? themeId);
+  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+    <div className="flex min-w-0 flex-col gap-6">
+      <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
+      {/* Untitled: the page title already says it. */}
+      <Group>
+        <Row title={t`明暗`}>
+          <Segmented<ThemeMode> size="xs" value={mode} onChange={setThemeMode} ariaLabel={t`明暗`} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
+        </Row>
+      </Group>
+      {catalog && (catalog.presets.length > 0 || catalog.backgrounds.length > 0) && <Group>
+        {catalog.presets.length > 0 && <Row title={t`预设`}>
+          <AppearanceChoice label={t`预设`} items={catalog.presets} value={catalog.presets.some((preset) => preset.id === selection.preset) ? selection.preset : undefined} onChange={(id) => selectPreset(id === APPEARANCE_DEFAULT ? undefined : id)} />
+        </Row>}
+        {catalog.backgrounds.length > 0 && <Row title={t`背景`}>
+          <AppearanceChoice label={t`背景`} items={catalog.backgrounds} value={effective.background?.id} onChange={(id) => selectAppearanceItem('background', id)} />
+        </Row>}
+      </Group>}
+      <Group title={t`配色`}>
+        <div className="grid grid-cols-2 gap-2 pt-3.5 pb-2 max-md:grid-cols-1">
+          {themes.map((theme) => <ThemeCard key={theme.id} theme={theme} selected={!paletteKey && theme.id === themeId} onEdit={theme.builtin ? undefined : () => openEditor({ edit: theme.id })} />)}
+          {/* A plugin's palette sits among the themes without replacing the one chosen above. */}
+          {plugins.map(({ palette, key }) => <ThemeCard key={key} theme={{ id: key, name: localizedText(palette.title) ?? palette.id }} selected={paletteKey === key} onSelect={() => selectAppearanceItem('palette', palette.id)} />)}
+          {/* A new theme starts from the one on screen: pick the closest, then reshape it. */}
+          <button
+            type="button"
+            onClick={() => openEditor({ from: paletteKey ?? themeId })}
+            className="flex min-h-11 items-center gap-3 rounded-lg border border-dashed border-line-strong px-2.5 py-2 text-left text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg"
           >
-            <Trans context="settings-code-theme-customize">自定义…</Trans>
-          </Button>
+            <span className="flex h-6 w-9 shrink-0 items-center justify-center"><IconPlus className="size-4" /></span>
+            <Trans>新建主题</Trans>
+          </button>
         </div>
-      </Row>
-      <CodeThemePreview />
-    </Group>
-    {editorTarget && <Suspense fallback={null}><ThemeEditor open={editorOpen} target={editorTarget} onOpenChange={setEditorOpen} /></Suspense>}
+        {/* Upstream credits sit under the gallery rather than in the cards, so every card is one line. */}
+        <p className="pb-3.5 text-xs text-fg-3"><Trans>配色来源：{credits}</Trans></p>
+      </Group>
+      <Group title={t`代码高亮`}>
+        <Row title={t`风格`}>
+          <div className="flex items-center gap-2 max-md:w-full">
+            <Select<string>
+              label={t`风格`}
+              className="w-48 max-md:min-w-0 max-md:flex-1"
+              value={effectiveCodeValue}
+              onChange={(value) => setDisplaySettings({ codeTheme: parseCodeThemeSelection(value) })}
+              options={[
+                { value: CODE_THEME_AUTO, label: t`跟随界面主题` },
+                ...BUILTIN_CODE_THEMES.map((item) => ({
+                  value: item.id,
+                  label: item.id === 'monochrome' ? t`极简墨色` : item.name,
+                })),
+                ...customSyntaxThemes.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                })),
+              ]}
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                const syntaxFrom = isKnownCodeThemeId(effectiveCodeValue) ? effectiveCodeValue : undefined;
+                if (selectedCustomSyntax) openEditor({ edit: display.codeTheme, openSyntax: true, syntaxFrom });
+                else if (!paletteKey && isCustomThemeId(themeId)) openEditor({ edit: themeId, openSyntax: true, syntaxFrom });
+                else openEditor({ from: paletteKey ?? themeId, openSyntax: true, syntaxFrom });
+              }}
+            >
+              <Trans context="settings-code-theme-customize">自定义…</Trans>
+            </Button>
+          </div>
+        </Row>
+        <CodeThemePreview className="lg:hidden" />
+      </Group>
+      {editorTarget && <Suspense fallback={null}><ThemeEditor open={editorOpen} target={editorTarget} onOpenChange={setEditorOpen} /></Suspense>}
+    </div>
+    <ThemeLivePreview label={activeThemeName} />
   </div>;
 }
 
@@ -248,29 +301,33 @@ export function TypographySection() {
   const display = useDisplaySettings();
   const { catalog, effective } = useAppearance();
   const [uiFonts, monoFonts] = [fontsOf(catalog, 'ui'), fontsOf(catalog, 'mono')];
-  return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-    <Group>
-      {uiFonts.length > 0 && <Row title={t`界面字体`}>
-        <AppearanceChoice label={t`界面字体`} items={uiFonts} value={effective.uiFont?.id} onChange={(id) => selectAppearanceItem('uiFont', id)} />
-      </Row>}
-      {monoFonts.length > 0 && <Row title={t`等宽字体`}>
-        <AppearanceChoice label={t`等宽字体`} items={monoFonts} value={effective.monoFont?.id} onChange={(id) => selectAppearanceItem('monoFont', id)} />
-      </Row>}
-      <Row title={t`文字大小`}>
-        <Segmented<TextSize> size="xs" value={display.textSize} onChange={(textSize) => setDisplaySettings({ textSize })} ariaLabel={t`文字大小`} options={[{ value: 'small', label: t`小` }, { value: 'standard', label: t`标准` }, { value: 'large', label: t`大` }, { value: 'extra-large', label: t`特大` }]} />
-      </Row>
-      <Row title={t`会话间距`}>
-        <Segmented<Density> size="xs" value={display.density} onChange={(density) => setDisplaySettings({ density })} ariaLabel={t`会话间距`} options={[{ value: 'compact', label: t`紧凑` }, { value: 'standard', label: t`标准` }, { value: 'relaxed', label: t`宽松` }]} />
-      </Row>
-    </Group>
+  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+    <div className="flex min-w-0 flex-col gap-6">
+      <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
+      <Group>
+        {uiFonts.length > 0 && <Row title={t`界面字体`}>
+          <AppearanceChoice label={t`界面字体`} items={uiFonts} value={effective.uiFont?.id} onChange={(id) => selectAppearanceItem('uiFont', id)} />
+        </Row>}
+        {monoFonts.length > 0 && <Row title={t`等宽字体`}>
+          <AppearanceChoice label={t`等宽字体`} items={monoFonts} value={effective.monoFont?.id} onChange={(id) => selectAppearanceItem('monoFont', id)} />
+        </Row>}
+        <Row title={t`文字大小`}>
+          <Segmented<TextSize> size="xs" value={display.textSize} onChange={(textSize) => setDisplaySettings({ textSize })} ariaLabel={t`文字大小`} options={[{ value: 'small', label: t`小` }, { value: 'standard', label: t`标准` }, { value: 'large', label: t`大` }, { value: 'extra-large', label: t`特大` }]} />
+        </Row>
+        <Row title={t`会话间距`}>
+          <Segmented<Density> size="xs" value={display.density} onChange={(density) => setDisplaySettings({ density })} ariaLabel={t`会话间距`} options={[{ value: 'compact', label: t`紧凑` }, { value: 'standard', label: t`标准` }, { value: 'relaxed', label: t`宽松` }]} />
+        </Row>
+      </Group>
+    </div>
     {/* The sample demonstrates the size and spacing chosen above. */}
-    <Group title={t`预览`}>
-      <div className="flex flex-col py-4" style={{ gap: display.density === 'compact' ? 6 : display.density === 'relaxed' ? 14 : 10 }}>
-        <p className="text-base font-medium text-fg"><Trans>今天的工作</Trans></p>
-        <p className="text-sm text-fg-2"><Trans>检查项目进度，继续处理会话。</Trans></p>
-      </div>
-    </Group>
+    <div className="min-w-0 lg:sticky lg:top-6">
+      <Group title={t`预览`}>
+        <div className="flex flex-col py-4" style={{ gap: display.density === 'compact' ? 6 : display.density === 'relaxed' ? 14 : 10 }}>
+          <p className="text-base font-medium text-fg"><Trans>今天的工作</Trans></p>
+          <p className="text-sm text-fg-2"><Trans>检查项目进度，继续处理会话。</Trans></p>
+        </div>
+      </Group>
+    </div>
   </div>;
 }
 

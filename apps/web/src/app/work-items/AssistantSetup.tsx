@@ -89,7 +89,7 @@ export function useAssistantSetup({ projectId, backendId, profileId, enabled = t
     if (instructions) { setEditing(true); return; }
     api.assistantInstructions().then((value) => { setInstructions(value); setEditing(true); }, (error: unknown) => toast.error(errorMessage(error)));
   };
-  const openSettings = () => { void nav.navigate(() => ui.openSettings('assistant')); };
+  const openSettings = () => { void nav.navigate(() => { nav.openSettings('assistant'); ui.setMobileSidebar(false); }, { keepUnderlying: true }); };
   const openAbilities = () => {
     void nav.navigate(() => {
       ui.set({ extensionsFocus: { projectId, backendId, kind: 'skill', at: Date.now() } });

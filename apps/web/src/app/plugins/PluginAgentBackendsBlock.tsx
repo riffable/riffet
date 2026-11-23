@@ -18,7 +18,7 @@ import { agentMarkStyle, backendLabel } from '@/lib/backends';
 import { formatNumber } from '@/lib/i18n/format';
 import { cn, errorMessage } from '@/lib/utils';
 import { SettingsGroup, SettingsLinkRow } from '../settings/SettingsLayout';
-import { useUi } from '../state/stores';
+import { useNav } from '../state/stores';
 
 /** Whether the plugin declares any Agent, so the host draws an 「Agent 配置」 group for it. */
 export function hasAgentBackendsBlock(plugin: PluginDescriptor): boolean {
@@ -102,7 +102,7 @@ export function PluginAgentBackendsBlock({ plugin, disabled, onOpenAgentSettings
   onOpenAgentSettings: (backendId: NativeBackendId, profileId?: string) => void;
 }) {
   const { t } = useLingui();
-  const settingsOpen = useUi((state) => state.settingsOpen);
+  const settingsOpen = useNav((state) => state.settingsOpen);
   const backendIds = useMemo(
     () => (plugin.declared?.agentBackends ?? []).map((item) => item.id as NativeBackendId),
     [plugin.declared?.agentBackends],

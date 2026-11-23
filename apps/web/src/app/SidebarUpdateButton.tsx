@@ -25,5 +25,5 @@ export function UpdateNotice({ version, seen, onOpen }: { version: string; seen:
 export function SidebarUpdateButton({ onOpen }: { onOpen: () => void }) {
   const { version, seen } = useAvailableUpdate();
   if (!version) return null;
-  return <div className="ml-auto"><UpdateNotice version={version} seen={seen} onOpen={onOpen} /></div>;
+  return <UpdateNotice version={version} seen={seen} onOpen={onOpen} />;
 }

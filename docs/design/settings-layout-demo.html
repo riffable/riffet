@@ -1,0 +1,2257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · Web 设置布局对比原型</title>
+<style>
+/*
+ * Interactive layout comparison prototype for Web Settings:
+ *   - Current: 1080×820 workspace modal over the workbench
+ *   - Option A: Full page with main sidebar kept + borderless in-page aside (same as PluginsPage)
+ *   - Option B: Full page with main sidebar swapped to settings navigation (Linear / Slack style)
+ *
+ * Role tokens match apps/web/src/styles/index.css (Riffet style, light & dark).
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sidebar: #f7f8fa;
+  --bg-subtle: #f5f6f8;
+  --bg-muted: #eef0f3;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055);
+  --bg-active: rgb(35 45 70 / 0.09);
+  --bg-bubble: #eef3fd;
+  --fg: #2a2c2e;
+  --fg-2: #50555d;
+  --fg-3: #60666e;
+  --fg-4: #adb2ba;
+  --line: rgb(15 23 42 / 0.08);
+  --line-soft: rgb(15 23 42 / 0.055);
+  --line-strong: rgb(15 23 42 / 0.13);
+  --primary: #15171a;
+  --primary-hover: #34373d;
+  --primary-fg: #ffffff;
+  --secondary-bg: rgb(21 23 26 / 0.07);
+  --secondary-hover: rgb(21 23 26 / 0.11);
+  --accent: #3867f0;
+  --accent-soft: rgb(56 103 240 / 0.1);
+  --success: #1f9d55;
+  --success-soft: rgb(31 157 85 / 0.1);
+  --warning: #c77f06;
+  --warning-soft: rgb(245 158 11 / 0.13);
+  --danger: #e0454b;
+  --danger-soft: rgb(224 69 75 / 0.08);
+  --chart-1: #3867f0;
+  --chart-2: #15968f;
+  --chart-3: #ba733c;
+  --chart-4: #8566c1;
+  --agent-claude: #d97757;
+  --agent-codex: #10a37f;
+  --agent-cursor: #3d4451;
+  --agent-pi: #6d5ce7;
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --scrim: rgb(0 0 0 / 0.25);
+  --focus-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #141416;
+  --bg-sidebar: #1a1a1d;
+  --bg-subtle: #1d1d20;
+  --bg-muted: #27272b;
+  --bg-elevated: #1f1f22;
+  --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --bg-bubble: #27282c;
+  --fg: #d2d4d7;
+  --fg-2: #b6bac1;
+  --fg-3: #9da2aa;
+  --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075);
+  --line-soft: rgb(255 255 255 / 0.05);
+  --line-strong: rgb(255 255 255 / 0.12);
+  --primary: #eceef1;
+  --primary-hover: #d3d6db;
+  --primary-fg: #141416;
+  --secondary-bg: rgb(255 255 255 / 0.08);
+  --secondary-hover: rgb(255 255 255 / 0.13);
+  --accent: #5b8cff;
+  --accent-soft: rgb(91 140 255 / 0.15);
+  --success: #3fb96f;
+  --success-soft: rgb(63 185 111 / 0.14);
+  --warning: #e5a13a;
+  --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c;
+  --danger-soft: rgb(240 103 108 / 0.13);
+  --chart-1: #5b8cff;
+  --chart-2: #2eb8ac;
+  --chart-3: #d99156;
+  --chart-4: #a58be0;
+  --agent-claude: #e8916f;
+  --agent-codex: #28be94;
+  --agent-cursor: #b4bac4;
+  --agent-pi: #9b8cf5;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.22);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+/* Optional warm paper theme preview */
+[data-palette="paper"]:not(.dark) {
+  --bg: #fcfaf6;
+  --bg-sidebar: #f4f1ea;
+  --bg-subtle: #f1ede4;
+  --bg-muted: #eae5da;
+  --bg-elevated: #fdfbf7;
+  --bg-popover: #fdfbf7;
+  --bg-bubble: #efeae0;
+  --accent: #a65c2e;
+  --accent-soft: rgb(166 92 46 / 0.12);
+}
+[data-palette="paper"].dark {
+  --bg: #171513;
+  --bg-sidebar: #1d1a17;
+  --bg-subtle: #211e1b;
+  --bg-muted: #2a2622;
+  --bg-elevated: #221f1b;
+  --bg-popover: #292521;
+  --bg-bubble: #2d2823;
+  --accent: #d8905c;
+  --accent-soft: rgb(216 144 92 / 0.16);
+}
+[data-palette="slate"]:not(.dark) {
+  --bg: #fbfcfd;
+  --bg-sidebar: #f1f4f8;
+  --bg-subtle: #edf1f6;
+  --bg-muted: #e4e9f0;
+  --bg-elevated: #ffffff;
+  --accent: #2c6e7f;
+  --accent-soft: rgb(44 110 127 / 0.11);
+}
+[data-palette="slate"].dark {
+  --bg: #12151a;
+  --bg-sidebar: #171b22;
+  --bg-subtle: #1b2029;
+  --bg-muted: #232a35;
+  --bg-elevated: #1c212a;
+  --accent: #5baec2;
+  --accent-soft: rgb(91 174 194 / 0.16);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: #0d0e11;
+  color: var(--fg);
+  font: 13px/20px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+button, input, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+svg.i * { vector-effect: non-scaling-stroke; }
+svg.i-sm { width: 14px; height: 14px; }
+svg.i-xs { width: 12px; height: 12px; }
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ================= Prototype Comparison Control Bar ================= */
+.proto-bar {
+  flex: none;
+  height: 48px;
+  padding: 0 16px;
+  background: #16181d;
+  color: #e2e5ea;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  user-select: none;
+  overflow-x: auto;
+  z-index: 100;
+}
+.proto-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+.proto-tag {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgb(255 255 255 / 0.1);
+  color: #b7bec9;
+  font-size: 11px;
+  font-weight: 500;
+}
+.proto-seg {
+  display: inline-flex;
+  align-items: center;
+  background: rgb(255 255 255 / 0.07);
+  padding: 3px;
+  border-radius: 8px;
+  gap: 2px;
+  flex: none;
+}
+.proto-seg button {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: #aeb5c0;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background-color 140ms var(--ease-standard), color 140ms var(--ease-standard);
+}
+.proto-seg button:hover { color: #fff; }
+.proto-seg button.active {
+  background: #ffffff;
+  color: #14161a;
+}
+.proto-sep { width: 1px; height: 18px; background: rgb(255 255 255 / 0.1); flex: none; }
+.proto-metrics {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #9ba3af;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.proto-metrics strong { color: #f3f5f8; font-weight: 600; }
+.proto-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.08);
+  color: #e2e5ea;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  flex: none;
+}
+.proto-chip:hover { background: rgb(255 255 255 / 0.14); }
+
+/* ================= Stage Frame (Viewport Simulator) ================= */
+.stage-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: #0d0e11;
+  overflow: auto;
+  padding: 0;
+}
+.stage-wrap.framed { padding: 14px; }
+.viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 620px;
+  background: var(--bg-sidebar);
+  color: var(--fg);
+  display: flex;
+  overflow: hidden;
+}
+.stage-wrap.framed .viewport {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 24px 64px -16px rgb(0 0 0 / 0.7);
+}
+
+/* ================= Workbench Shell (Riffet Style) ================= */
+.wb-sidebar {
+  width: 268px;
+  flex: none;
+  background: var(--bg-sidebar);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+  gap: 4px;
+  user-select: none;
+}
+.wb-main-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 8px 8px 0;
+  display: flex;
+}
+.wb-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ListRow */
+.list-row {
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: 13px;
+  width: 100%;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
+}
+.list-row:hover { background: var(--bg-hover); color: var(--fg); }
+.list-row.selected { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.list-row .leading { width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; flex: none; color: var(--fg-3); }
+.list-row.selected .leading { color: var(--fg); }
+.list-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row .meta { font-size: 11px; color: var(--fg-4); flex: none; font-variant-numeric: tabular-nums; }
+
+.nav-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 2px;
+}
+.nav-group-title {
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-4);
+}
+.nav-group:first-child .nav-group-title { padding-top: 4px; }
+
+.wb-footer {
+  flex: none;
+  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 8px;
+  color: var(--fg-2);
+}
+.avatar-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Status indicators in session sidebar */
+.dot-unread { width: 7px; height: 7px; border-radius: 99px; background: var(--accent); }
+.ring-spin {
+  width: 13px;
+  height: 13px;
+  border-radius: 99px;
+  border: 1.5px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ================= Underlying Chat Session (Visible in Current Modal or when Returning) ================= */
+.chat-header {
+  height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+.chat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 32px 120px;
+}
+.chat-col { max-width: 740px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.bubble-user {
+  align-self: flex-end;
+  background: var(--bg-bubble);
+  padding: 10px 14px;
+  border-radius: 12px;
+  max-width: 78%;
+  font-size: 14px;
+  line-height: 22px;
+}
+.msg-ai { font-size: 14px; line-height: 23px; color: var(--fg); }
+.msg-ai p { margin: 0 0 10px; }
+.msg-ai code { font-family: var(--font-mono); font-size: 0.86em; color: var(--fg-2); }
+.tool-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+  padding: 3px 0;
+}
+.tool-verb { font-family: var(--font-mono); min-width: 48px; color: var(--fg-2); font-weight: 500; }
+.code-block {
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 19px;
+  color: var(--fg-2);
+  overflow-x: auto;
+}
+.composer-float {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  width: min(740px, calc(100% - 48px));
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  box-shadow: var(--shadow-composer);
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.composer-placeholder { color: var(--fg-4); font-size: 14px; }
+.composer-tools { display: flex; align-items: center; gap: 8px; }
+
+/* ================= Shared UI Components ================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: none;
+  transition: background-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
+}
+.btn:active { transform: scale(0.97); }
+.btn-xs { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+.btn-primary { background: var(--primary); color: var(--primary-fg); }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-secondary { background: var(--secondary-bg); color: var(--fg); }
+.btn-secondary:hover { background: var(--secondary-hover); }
+.btn-quiet { background: transparent; color: var(--fg-2); }
+.btn-quiet:hover { background: var(--bg-hover); color: var(--fg); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
+.btn-icon { width: 28px; height: 28px; padding: 0; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--bg-muted);
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+.badge-success { background: var(--success-soft); color: var(--success); }
+.badge-warning { background: var(--warning-soft); color: var(--warning); }
+.badge-danger { background: var(--danger-soft); color: var(--danger); }
+.badge-accent { background: var(--accent-soft); color: var(--accent); }
+
+.input, .select {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--fg);
+  outline: none;
+}
+.input:focus, .select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-box .search-ic {
+  position: absolute;
+  left: 9px;
+  color: var(--fg-4);
+  pointer-events: none;
+}
+.search-box input {
+  width: 100%;
+  height: 30px;
+  padding: 0 26px 0 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 12.5px;
+  outline: none;
+}
+.search-box input:focus { border-color: var(--line-strong); }
+.search-box .clear-btn {
+  position: absolute;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-4);
+}
+.search-box .clear-btn:hover { background: var(--bg-hover); color: var(--fg); }
+
+.switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 99px;
+  background: var(--bg-muted);
+  border: 1px solid var(--line-strong);
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 140ms var(--ease-standard), border-color 140ms var(--ease-standard);
+  flex: none;
+}
+.switch[aria-checked="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.switch::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  transform: translateX(0);
+  transition: transform 140ms var(--ease-standard);
+}
+.switch[aria-checked="true"]::after {
+  background: var(--primary-fg);
+  transform: translateX(14px);
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  gap: 2px;
+}
+.segmented button {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--fg-3);
+  font-weight: 500;
+}
+.segmented button:hover { color: var(--fg); }
+.segmented button.active {
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: var(--shadow-soft);
+}
+
+.underline-tabs {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.underline-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  font-size: 13px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  flex: none;
+}
+.underline-tabs button:hover { color: var(--fg); }
+.underline-tabs button.active { color: var(--fg); font-weight: 500; }
+.underline-tabs button.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 2px;
+}
+
+/* SettingsGroup & SettingsRow */
+.s-group { display: flex; flex-direction: column; }
+.s-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+.s-group-title { font-size: 12px; font-weight: 500; color: var(--fg-3); margin: 0; }
+.s-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+}
+.s-card > * + * { border-top: 1px solid var(--line); }
+.s-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 0;
+}
+.s-row-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.s-row-title { font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.s-row-desc { font-size: 12px; color: var(--fg-3); }
+.s-group-note { font-size: 12px; color: var(--fg-3); margin: 8px 2px 0; }
+
+/* ================= Layout 1: Current Modal (1080×820) ================= */
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(1.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 40;
+}
+.modal-box {
+  width: min(1080px, calc(100% - 0px));
+  height: min(820px, calc(100% - 0px));
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  box-shadow: var(--shadow-pop);
+  border: 1px solid var(--line);
+  display: flex;
+  overflow: hidden;
+}
+.modal-nav {
+  width: 208px;
+  flex: none;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--line);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.modal-nav h2 { margin: 4px 8px 10px; font-size: 15px; font-weight: 600; }
+.modal-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+.modal-head {
+  height: 54px;
+  padding: 0 18px 0 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+}
+.modal-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.modal-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 36px;
+}
+
+/* Nested dialog illustration inside current modal */
+.nested-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+}
+.nested-dialog {
+  width: min(620px, 100%);
+  max-height: 85%;
+  background: var(--bg-elevated);
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.nested-dialog-head {
+  padding: 18px 20px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+.nested-dialog-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.nested-dialog-foot {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ================= Layout 2 (Option A) & Layout 3 (Option B): PageScaffold ================= */
+.page-header {
+  height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.page-header.divided { border-bottom: 1px solid var(--line); }
+.page-header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--fg); }
+.page-host { font-size: 12px; color: var(--fg-4); }
+.page-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Option A: Borderless In-Page Aside (same pattern as PluginsPage) */
+.page-aside-a {
+  width: 224px;
+  flex: none;
+  padding: 16px 12px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.page-scroller {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.col-document {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 28px 32px 64px;
+  box-sizing: content-box;
+}
+.col-board {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 32px 64px;
+  box-sizing: content-box;
+}
+.page-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.page-section-head h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.page-section-sub {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+.breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-bottom: 10px;
+}
+.breadcrumb button { color: var(--fg-3); display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 2px 6px; margin-left: -6px; }
+.breadcrumb button:hover { background: var(--bg-hover); color: var(--fg); }
+.breadcrumb .crumb-current { color: var(--fg); font-weight: 500; }
+
+/* Option B: Swapped Main Sidebar Header */
+.settings-back-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.back-btn:hover { background: var(--bg-hover); }
+.server-pill {
+  font-size: 11px;
+  color: var(--fg-4);
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  max-width: 118px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ================= Section Content Specifics ================= */
+.stack-20 { display: flex; flex-direction: column; gap: 20px; }
+.stack-14 { display: flex; flex-direction: column; gap: 14px; }
+.stack-10 { display: flex; flex-direction: column; gap: 10px; }
+
+/* Agent Marks */
+.agent-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  flex: none;
+}
+
+/* Provider Card / Rows */
+.provider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 0;
+  cursor: pointer;
+}
+.provider-row:hover .provider-name { color: var(--fg); }
+.provider-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-3);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+.quota-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 132px;
+  flex: none;
+}
+.quota-bar {
+  width: 112px;
+  height: 5px;
+  border-radius: 99px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.quota-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--fg-2);
+}
+.quota-fill.warn { background: var(--warning); }
+.quota-label { font-size: 11.5px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+
+/* Two-column split for Theme Preview & Service Charts on wide layouts */
+.split-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  gap: 24px;
+  align-items: start;
+}
+.narrow-content .split-preview {
+  grid-template-columns: minmax(0, 1fr);
+}
+.preview-sticky {
+  position: sticky;
+  top: 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg-sidebar);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-card {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 0;
+}
+.palette-tile {
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg);
+  text-align: left;
+  transition: border-color 140ms var(--ease-standard), box-shadow 140ms var(--ease-standard);
+}
+.palette-tile.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.palette-swatch {
+  height: 44px;
+  border-radius: 7px;
+  border: 1px solid rgb(128 128 128 / 0.16);
+  display: flex;
+  overflow: hidden;
+}
+
+/* Service Monitor KPI & Charts */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.narrow-content .kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.kpi-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kpi-label { font-size: 12px; color: var(--fg-3); }
+.kpi-val { font-size: 22px; line-height: 28px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); }
+.kpi-sub { font-size: 11.5px; color: var(--fg-4); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.narrow-content .charts-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.chart-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.chart-head { display: flex; align-items: center; justify-content: space-between; }
+.chart-head h3 { margin: 0; font-size: 13.5px; font-weight: 500; }
+.legend { display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--fg-3); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 5px; }
+
+.proc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.proc-table th {
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg-4);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.proc-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-2);
+}
+.proc-table tr:last-child td { border-bottom: 0; }
+.proc-table .r { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Provider Editor Grid */
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+.narrow-content .editor-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.field { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; }
+.field label { font-size: 13px; font-weight: 500; color: var(--fg); }
+.field-hint { font-size: 12px; color: var(--fg-3); }
+
+/* Floating annotation callout inside prototype (subtle, toggleable) */
+.callout-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--fg-2);
+  margin-bottom: 18px;
+}
+.callout-banner strong { color: var(--fg); font-weight: 500; }
+
+/* Subtle custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgb(128 128 128 / 0.25); border-radius: 99px; }
+::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<!-- ==================== Top Prototype Comparison Bar ==================== -->
+<div class="proto-bar">
+  <div class="proto-brand">
+    <span>Web 设置布局原型</span>
+    <span class="proto-tag">可交互对比</span>
+  </div>
+
+  <div class="proto-seg" role="tablist" aria-label="布局方案">
+    <button id="mode-current" onclick="setMode('current')">现状 · 弹窗 1080×820</button>
+    <button id="mode-a" onclick="setMode('optionA')">方案 A · 插件页式（双栏）</button>
+    <button id="mode-b" onclick="setMode('optionB')">方案 B · 侧栏切换整页（推荐）</button>
+  </div>
+
+  <div class="proto-sep"></div>
+
+  <div class="proto-seg" role="group" aria-label="模拟视口宽度">
+    <button id="vp-full" onclick="setViewport('full')">全宽</button>
+    <button id="vp-1440" onclick="setViewport('1440')">1440</button>
+    <button id="vp-1280" onclick="setViewport('1280')">1280</button>
+    <button id="vp-1024" onclick="setViewport('1024')">1024</button>
+  </div>
+
+  <button class="proto-chip" onclick="toggleDark()" id="btn-dark">深色</button>
+  <button class="proto-chip" onclick="toggleCallout()" id="btn-note">隐藏批注</button>
+
+  <div class="proto-metrics" id="proto-metrics"></div>
+</div>
+
+<!-- ==================== Simulated App Viewport ==================== -->
+<div class="stage-wrap" id="stage-wrap">
+  <div class="viewport" id="viewport">
+    <!-- Left Sidebar (switches between App Sidebar and Settings Sidebar in Option B) -->
+    <aside class="wb-sidebar" id="wb-sidebar"></aside>
+
+    <!-- Main Workbench Card -->
+    <div class="wb-main-wrap">
+      <main class="wb-main" id="wb-main"></main>
+    </div>
+
+    <!-- Modal Overlay (used only in Current mode when settings is open) -->
+    <div class="modal-scrim" id="modal-scrim" hidden></div>
+
+    <!-- Optional Nested Dialog (demonstrates dialog-over-dialog in Current mode, or single dialog in A/B) -->
+    <div class="nested-scrim" id="nested-scrim" hidden></div>
+  </div>
+</div>
+
+<script>
+// ==================== State ====================
+const state = {
+  mode: 'optionB',          // 'current' | 'optionA' | 'optionB'
+  viewport: '1440',         // 'full' | '1440' | '1280' | '1024'
+  dark: false,
+  palette: 'riffet',        // 'riffet' | 'paper' | 'slate'
+  showCallout: true,
+  inSettings: true,
+  section: 'providers',     // 'providers' | 'appearance' | 'service' | 'general' | any section id
+  search: '',
+  selectedAgent: 'claude',
+  editingProviderId: null,  // null or provider id
+  nestedDialog: null,       // null | 'probe' | 'provider-modal'
+  // interactive setting values
+  values: {
+    language: 'zh-CN',
+    sendKey: 'enter',
+    density: 'normal',
+    codeTheme: 'auto',
+    autoReclaim: true,
+    idleMinutes: '30',
+    streamDraft: true,
+    soundNotice: false,
+  },
+};
+
+// ==================== Full Real Section Inventory (8 Groups, 30 Items) ====================
+const GROUPS = [
+  { id: 'general', title: null, items: [
+    { id: 'profile', label: '个人资料', icon: 'user', col: 'document', keywords: '头像 昵称 profile avatar' },
+    { id: 'general', label: '通用设置', icon: 'settings', col: 'document', keywords: '语言 启动 自动更新 general language' },
+  ]},
+  { id: 'appearance', title: '外观', items: [
+    { id: 'appearance', label: '主题', icon: 'sun', col: 'board', keywords: '浅色 深色 配色 代码高亮 theme dark light' },
+    { id: 'typography', label: '排版', icon: 'text', col: 'document', keywords: '字体 字号 间距 阅读列宽 font size' },
+    { id: 'sidebar', label: '侧栏', icon: 'panel-left', col: 'document', keywords: '固定 导航 排序 sidebar pin' },
+    { id: 'tabs', label: '标签页', icon: 'columns', col: 'document', keywords: '临时标签 标题栏 tabs preview' },
+    { id: 'views', label: '视图', icon: 'panel-right', col: 'document', keywords: '侧边面板 悬浮 停靠 panel' },
+    { id: 'terminal', label: '终端', icon: 'terminal', col: 'document', keywords: '字体 字号 shell terminal' },
+    { id: 'appicon', label: '图标', icon: 'image', col: 'document', keywords: '应用图标 权限图标 icon shield' },
+  ]},
+  { id: 'behavior', title: '行为', items: [
+    { id: 'interaction', label: '输入', icon: 'enter', col: 'document', keywords: '回车 发送 语音输入 voice enter' },
+    { id: 'shortcuts', label: '快捷键', icon: 'keyboard', col: 'document', keywords: '改键 绑定 keybinding shortcut' },
+    { id: 'notifications', label: '通知', icon: 'bell', col: 'document', keywords: '桌面通知 推送 声音 notify' },
+    { id: 'titles', label: '会话标题', icon: 'pencil', col: 'document', keywords: '自动命名 规则 title rule' },
+    { id: 'files', label: '文件与编辑器', icon: 'file', col: 'document', keywords: '外部编辑器 无项目目录 editor' },
+  ]},
+  { id: 'features', title: '功能', items: [
+    { id: 'assistant', label: '个人助理', icon: 'bot', col: 'document', keywords: '跟进 记忆整理 能力包 委托 assistant' },
+    { id: 'workitems', label: '任务看板', icon: 'kanban', col: 'document', keywords: '任务 核验 默认执行者 task' },
+    { id: 'quickchat', label: '快速对话', icon: 'chat', col: 'document', keywords: '预设 归档 quickchat' },
+    { id: 'channels', label: '机器人', icon: 'send', col: 'board', keywords: '飞书 IM 通道 绑定 bot feishu' },
+  ]},
+  { id: 'models', title: '模型', items: [
+    { id: 'backends', label: 'Agent', icon: 'sparkles', col: 'document', keywords: '默认 Agent 启动设置 审批 CLI' },
+    { id: 'providers', label: '模型提供商', icon: 'layers', col: 'board', keywords: 'API Key 网关 代理 额度 provider gateway' },
+    { id: 'auxiliary', label: '辅助模型', icon: 'cpu', col: 'document', keywords: '标题 摘要 翻译 测速 probe auxiliary' },
+  ]},
+  { id: 'access', title: '连接', items: [
+    { id: 'connection', label: '连接与访问', icon: 'laptop', col: 'document', keywords: '令牌 局域网 分享 token auth' },
+    { id: 'devices', label: '设备管理', icon: 'phone', col: 'document', keywords: '手机 配对 二维码 撤销 device' },
+    { id: 'links', label: '互联', icon: 'link', col: 'board', keywords: '多服务器 SSH devbox 链接串 server link' },
+  ]},
+  { id: 'server', title: '服务器', items: [
+    { id: 'service', label: '服务管理', icon: 'server', col: 'board', keywords: '内存 CPU 进程 监控 重启 回收 monitor' },
+    { id: 'storage', label: '存储空间', icon: 'database', col: 'board', keywords: '磁盘 清理 缓存 快照 storage' },
+    { id: 'backup', label: '备份与恢复', icon: 'archive', col: 'document', keywords: '导出 导入 迁移 backup restore' },
+  ]},
+  { id: 'support', title: '支持', items: [
+    { id: 'diagnostics', label: '诊断', icon: 'gauge', col: 'document', keywords: '日志 状态 检查 log diagnostics' },
+    { id: 'design', label: '设计规范', icon: 'swatch', col: 'document', keywords: '组件 规范 design system' },
+    { id: 'about', label: '关于 Riffet', icon: 'info', col: 'document', keywords: '版本 更新日志 changelog update' },
+  ]},
+];
+
+const ALL_SECTIONS = GROUPS.flatMap(g => g.items.map(item => ({ ...item, groupTitle: g.title })));
+
+const AGENTS = [
+  { id: 'claude', name: 'Claude Code', short: 'C', color: 'var(--agent-claude)' },
+  { id: 'codex', name: 'Codex', short: 'X', color: 'var(--agent-codex)' },
+  { id: 'cursor', name: 'Cursor', short: 'Cu', color: 'var(--agent-cursor)' },
+  { id: 'pi', name: 'Pi', short: 'π', color: 'var(--agent-pi)' },
+];
+
+const PROVIDERS = {
+  claude: [
+    { id: 'anthropic-sub', name: 'Claude 订阅登录', kind: '账号登录', endpoint: 'claude.ai · OAuth', models: 4, isDefault: true, quotaLeft: 68, quotaLabel: '5h 剩余 68% · 周 84%', warn: false, protocol: 'Anthropic Messages', enabledList: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5'] },
+    { id: 'corp-gateway', name: '内部统一模型网关', kind: 'API · 网关适配器', endpoint: 'https://llm-gateway.example.internal/anthropic', models: 9, isDefault: false, quotaLeft: 14, quotaLabel: '今日剩余 14% · 3h 后重置', warn: true, protocol: 'Anthropic Messages', enabledList: ['claude-opus-4-5', 'claude-sonnet-4-5', 'deepseek-r1', 'qwen3-coder'] },
+    { id: 'openrouter', name: 'OpenRouter 备用', kind: 'API · 通用接口', endpoint: 'https://openrouter.ai/api/v1', models: 12, isDefault: false, quotaLeft: null, quotaLabel: '按量计费', warn: false, protocol: 'OpenAI Chat Completions', enabledList: ['anthropic/claude-sonnet-4.5', 'google/gemini-2.5-pro'] },
+  ],
+  codex: [
+    { id: 'openai-sub', name: 'ChatGPT Plus 登录', kind: '账号登录', endpoint: 'chatgpt.com · OAuth', models: 3, isDefault: true, quotaLeft: 91, quotaLabel: '5h 剩余 91%', warn: false, protocol: 'OpenAI Responses', enabledList: ['gpt-5.3-codex', 'o4-mini'] },
+    { id: 'openai-api', name: 'OpenAI Direct API', kind: 'API · 通用接口', endpoint: 'https://api.openai.com/v1', models: 5, isDefault: false, quotaLeft: null, quotaLabel: '按量计费', warn: false, protocol: 'OpenAI Responses', enabledList: ['gpt-5.3-codex', 'gpt-5-mini'] },
+  ],
+  cursor: [
+    { id: 'cursor-native', name: 'Cursor 账号', kind: '账号登录', endpoint: 'cursor.com · CLI', models: 8, isDefault: true, quotaLeft: 52, quotaLabel: '月度剩余 52%', warn: false, protocol: 'CLI 原生', enabledList: ['composer-2', 'claude-4.5-sonnet', 'gpt-5.3'] },
+  ],
+  pi: [
+    { id: 'pi-local', name: 'Ollama 本机推理', kind: 'API · 通用接口', endpoint: 'http://127.0.0.1:11434/v1', models: 3, isDefault: true, quotaLeft: null, quotaLabel: '本机无上限', warn: false, protocol: 'OpenAI Chat Completions', enabledList: ['qwen3-coder:32b', 'llama4:scout'] },
+  ],
+};
+
+// ==================== Minimal Lucide SVG Icons (1.25px stroke) ====================
+const ICONS = {
+  'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  'x': '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  'search': '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  'plus': '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  'refresh': '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>',
+  'user': '<circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  'settings': '<path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/>',
+  'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/>',
+  'text': '<path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/>',
+  'panel-left': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
+  'panel-right': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+  'columns': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>',
+  'terminal': '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  'image': '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+  'enter': '<polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/>',
+  'keyboard': '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 16h8"/>',
+  'bell': '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  'pencil': '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  'file': '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  'bot': '<rect width="16" height="12" x="4" y="8" rx="2"/><path d="M12 8V4H8"/><path d="M9 13v2"/><path d="M15 13v2"/>',
+  'kanban': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7"/><path d="M12 7v4"/><path d="M16 7v9"/>',
+  'chat': '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+  'send': '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  'sparkles': '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+  'layers': '<path d="m12 2 9 4.5-9 4.5-9-4.5Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 17.5 9 4.5 9-4.5"/>',
+  'cpu': '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/>',
+  'laptop': '<rect width="18" height="12" x="3" y="4" rx="2"/><path d="M2 20h20"/>',
+  'phone': '<rect width="12" height="20" x="6" y="2" rx="2"/><path d="M12 18h.01"/>',
+  'link': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  'server': '<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/>',
+  'database': '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  'archive': '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  'gauge': '<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  'swatch': '<path d="M11 17a4 4 0 0 1-8 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2Z"/><path d="M16.7 13H19a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H7"/>',
+  'info': '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  'puzzle': '<path d="M19.4 12.9a2 2 0 0 0 0-3.8l-.6-.2V6a2 2 0 0 0-2-2h-2.9l-.2-.6a2 2 0 0 0-3.8 0l-.2.6H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3.9z"/>',
+  'ellipsis': '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+};
+function ic(name, cls = 'i') {
+  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+}
+
+// ==================== Actions ====================
+function setMode(mode) {
+  state.mode = mode;
+  state.inSettings = true;
+  state.nestedDialog = null;
+  render();
+}
+function setViewport(vp) {
+  state.viewport = vp;
+  render();
+}
+function toggleDark() {
+  state.dark = !state.dark;
+  document.documentElement.classList.toggle('dark', state.dark);
+  render();
+}
+function setPalette(p) {
+  state.palette = p;
+  document.documentElement.setAttribute('data-palette', p);
+  render();
+}
+function toggleCallout() {
+  state.showCallout = !state.showCallout;
+  render();
+}
+function openSettings(sec) {
+  if (sec) state.section = sec;
+  state.inSettings = true;
+  state.editingProviderId = null;
+  state.nestedDialog = null;
+  render();
+}
+function closeSettings() {
+  state.inSettings = false;
+  state.nestedDialog = null;
+  render();
+}
+function selectSection(id) {
+  state.section = id;
+  state.editingProviderId = null;
+  state.nestedDialog = null;
+  render();
+}
+function setSearch(val) {
+  state.search = val;
+  renderSettingsNavOnly();
+}
+function clearSearch() {
+  state.search = '';
+  render();
+}
+function selectAgent(id) {
+  state.selectedAgent = id;
+  state.editingProviderId = null;
+  render();
+}
+function openProvider(id) {
+  if (state.mode === 'current') {
+    state.editingProviderId = id;
+    state.nestedDialog = 'provider-modal';
+  } else {
+    state.editingProviderId = id;
+  }
+  render();
+}
+function closeProvider() {
+  state.editingProviderId = null;
+  state.nestedDialog = null;
+  render();
+}
+function openNested(kind) {
+  state.nestedDialog = kind;
+  render();
+}
+function closeNested() {
+  state.nestedDialog = null;
+  render();
+}
+function toggleBool(key) {
+  state.values[key] = !state.values[key];
+  render();
+}
+function setVal(key, val) {
+  state.values[key] = val;
+  render();
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (state.nestedDialog) { closeNested(); return; }
+    if (state.editingProviderId) { closeProvider(); return; }
+    if (state.inSettings) { closeSettings(); return; }
+  }
+});
+
+// ==================== Render Helpers ====================
+function getFilteredGroups() {
+  const q = state.search.trim().toLowerCase();
+  if (!q) return GROUPS;
+  return GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(it =>
+      it.label.toLowerCase().includes(q) ||
+      (g.title && g.title.toLowerCase().includes(q)) ||
+      it.keywords.toLowerCase().includes(q)
+    ),
+  })).filter(g => g.items.length > 0);
+}
+
+function renderSettingsNavList(showSearch = true) {
+  const groups = getFilteredGroups();
+  const hasRealDemo = (id) => ['providers', 'appearance', 'service', 'general'].includes(id);
+  const searchHtml = showSearch ? `
+    <div class="search-box" style="margin-bottom:6px">
+      <span class="search-ic">${ic('search', 'i i-sm')}</span>
+      <input id="settings-search-input" type="text" value="${escapeAttr(state.search)}" placeholder="搜索设置项…" oninput="setSearch(this.value)" />
+      ${state.search ? `<button class="clear-btn" onclick="clearSearch()" aria-label="清除">${ic('x', 'i i-xs')}</button>` : ''}
+    </div>
+  ` : '';
+  const listHtml = groups.length ? groups.map(g => `
+    <div class="nav-group">
+      ${g.title ? `<div class="nav-group-title">${g.title}</div>` : ''}
+      ${g.items.map(it => `
+        <button class="list-row ${state.section === it.id ? 'selected' : ''}" onclick="selectSection('${it.id}')">
+          <span class="leading">${ic(it.icon)}</span>
+          <span class="label">${it.label}</span>
+          ${hasRealDemo(it.id) ? '<span class="meta">样页</span>' : ''}
+        </button>
+      `).join('')}
+    </div>
+  `).join('') : `<div style="padding:20px 8px;text-align:center;color:var(--fg-4);font-size:12px">没有匹配的设置项</div>`;
+
+  return `${searchHtml}<div class="nav-scroll" id="settings-nav-scroll">${listHtml}</div>`;
+}
+
+function renderAppSidebar() {
+  return `
+    <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:6px">
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('plus')}</span><span class="label">新会话</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('search')}</span><span class="label">搜索内容</span><span class="meta">⌘K</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('bot')}</span><span class="label">个人助理</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('kanban')}</span><span class="label">任务看板</span><span class="meta">3</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('puzzle')}</span><span class="label">插件</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading">${ic('ellipsis')}</span><span class="label">更多</span>
+      </button>
+    </div>
+
+    <div class="nav-scroll">
+      <div class="nav-group-title">今天</div>
+      <button class="list-row ${!state.inSettings ? 'selected' : ''}" onclick="closeSettings()">
+        <span class="leading"><span class="ring-spin"></span></span>
+        <span class="label">重构 Web 设置页布局方案</span>
+        <span class="meta">刚刚</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading"><span class="dot-unread"></span></span>
+        <span class="label">排查 Codex CLI 响应超时</span>
+        <span class="meta">18m</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading"></span>
+        <span class="label">补充多服务器互联权限提示</span>
+        <span class="meta">2h</span>
+      </button>
+      <div class="nav-group-title">近 7 天</div>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading"></span>
+        <span class="label">修复会话切换时过程块跳动</span>
+        <span class="meta">昨天</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading"></span>
+        <span class="label">设计权限模式四套图标</span>
+        <span class="meta">3天前</span>
+      </button>
+      <button class="list-row" onclick="closeSettings()">
+        <span class="leading"></span>
+        <span class="label">飞书机器人插件迁移验证</span>
+        <span class="meta">4天前</span>
+      </button>
+    </div>
+
+    <div class="wb-footer">
+      <button class="avatar-btn" onclick="openSettings()" title="打开设置">
+        <span class="avatar">R</span>
+        <span style="font-size:13px;font-weight:500">设置</span>
+      </button>
+      <span style="font-size:11px;color:var(--accent);font-weight:500;padding:0 6px;cursor:pointer" onclick="openSettings('about')">↑ 0.9.4</span>
+    </div>
+  `;
+}
+
+function renderSettingsSidebarOptionB() {
+  return `
+    <div class="settings-back-bar">
+      <button class="back-btn" onclick="closeSettings()">
+        ${ic('arrow-left')}
+        <span>返回会话</span>
+      </button>
+      <span class="server-pill" title="当前服务器">macbook.local</span>
+    </div>
+    ${renderSettingsNavList(true)}
+  `;
+}
+
+function renderUnderlyingChat() {
+  return `
+    <div class="chat-header">
+      <div style="display:flex;align-items:center;gap:8px;min-width:0">
+        <span style="font-weight:500;font-size:13.5px" class="trunc">重构 Web 设置页布局方案</span>
+        <span class="badge">riffet</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-secondary btn-xs" onclick="openSettings()">${ic('settings', 'i i-xs')} 打开设置</button>
+      </div>
+    </div>
+    <div class="chat-body">
+      <div class="chat-col">
+        <div class="bubble-user">最近觉得 Web 的设置项用得比较拮据，窗口继续放大，还是变成整页比较合适？</div>
+        <div class="msg-ai">
+          <div class="tool-line"><span class="tool-verb">Read</span><span class="mono">apps/web/src/app/settings/SettingsDialog.tsx</span></div>
+          <div class="tool-line"><span class="tool-verb">Read</span><span class="mono">apps/web/src/app/plugins/PluginsPage.tsx</span></div>
+          <p style="margin-top:10px">当前设置弹窗固定在 <code>min(1080px, 100vw - 32) × min(820px, 100dvh - 32)</code>，但内部已包含 8 组 30 个分类和 12 个嵌套弹窗。点击右上角「打开设置」或切换顶部方案条即可对比体验。</p>
+          <div class="code-block">export const SETTINGS_DIALOG_CLASS =<br/>  'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';</div>
+        </div>
+      </div>
+    </div>
+    <div class="composer-float">
+      <div class="composer-placeholder">输入消息，⌘↵ 发送…</div>
+      <div class="composer-tools">
+        <span class="badge">Claude Code · Sonnet 4.5</span>
+        <span style="margin-left:auto"><span class="btn btn-primary btn-xs">发送</span></span>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== Settings Section Contents ====================
+function renderCallout(secMeta) {
+  if (!state.showCallout) return '';
+  if (state.mode === 'current') {
+    return `<div class="callout-banner">
+      <span><strong>现状痛点：</strong>弹窗总宽被锁在 1080px，扣除 208px 侧栏与边距后内容区偏挤；且打开编辑/测速会形成「弹窗叠弹窗」。试试点击下方提供商行体验。</span>
+      <span class="badge">净宽受限</span>
+    </div>`;
+  }
+  if (state.mode === 'optionA') {
+    return `<div class="callout-banner">
+      <span><strong>方案 A（插件页式）：</strong>保留最左 268px 应用侧栏，随时可见会话状态；但再加 224px 页内目录共占 492px，在 1280px 视口下正文仍会收窄。</span>
+      <span class="badge">${secMeta.col === 'board' ? '看板档 1120' : '文档档 768'}</span>
+    </div>`;
+  }
+  return `<div class="callout-banner">
+    <span><strong>方案 B（侧栏切换整页）：</strong>主侧栏切换为设置导航（仅一根侧栏，仅占 268px），主区 100% 释放。常规表单用 768 文档档，重页（主题预览 / 服务监控 / 模型提供商）自动放宽至 1120 看板档。</span>
+    <span class="badge badge-accent">${secMeta.col === 'board' ? '看板档 1120' : '文档档 768'}</span>
+  </div>`;
+}
+
+function renderProvidersSection() {
+  const agent = AGENTS.find(a => a.id === state.selectedAgent) || AGENTS[0];
+  const list = PROVIDERS[state.selectedAgent] || [];
+
+  // In Option A / B, editing a provider opens an in-page breadcrumb subview instead of a stacked modal!
+  if (state.editingProviderId && state.mode !== 'current') {
+    const prov = list.find(p => p.id === state.editingProviderId) || list[0];
+    return `
+      <div class="breadcrumb">
+        <button onclick="closeProvider()">${ic('arrow-left', 'i i-sm')} 模型提供商</button>
+        <span>/</span>
+        <span>${agent.name}</span>
+        <span>/</span>
+        <span class="crumb-current">${prov.name}</span>
+      </div>
+      <div class="page-section-head">
+        <div>
+          <h2>${prov.name}</h2>
+          <p class="page-section-sub">${prov.kind} · 变更保存后对该 Agent 的新会话生效</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary" onclick="openNested('probe')">接口测速</button>
+          <button class="btn btn-primary" onclick="closeProvider()">保存修改</button>
+        </div>
+      </div>
+
+      <div class="editor-grid">
+        <div class="stack-20">
+          <div class="s-group">
+            <div class="s-group-head"><h3 class="s-group-title">连接与凭据</h3></div>
+            <div class="s-card">
+              <div class="field">
+                <label>名称</label>
+                <input class="input" value="${escapeAttr(prov.name)}" />
+              </div>
+              <div class="field">
+                <label>接口地址</label>
+                <input class="input mono" value="${escapeAttr(prov.endpoint)}" />
+                <span class="field-hint">Claude 自动追加 /v1/messages，无需手写路径后缀</span>
+              </div>
+              <div class="field">
+                <label>协议</label>
+                <select class="select"><option>${prov.protocol}</option><option>OpenAI Chat Completions</option><option>OpenAI Responses</option></select>
+              </div>
+              <div class="field">
+                <label>API Key</label>
+                <input class="input mono" type="password" value="sk-ant-demo-token-xxxx" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack-20">
+          <div class="s-group">
+            <div class="s-group-head">
+              <h3 class="s-group-title">可用模型（${prov.enabledList.length}）</h3>
+              <button class="btn btn-quiet btn-xs">${ic('refresh', 'i i-xs')} 重新拉取</button>
+            </div>
+            <div class="s-card">
+              ${prov.enabledList.map((m, idx) => `
+                <div class="s-row" style="padding:10px 0">
+                  <div class="s-row-text">
+                    <span class="s-row-title mono" style="font-size:12.5px">${m}</span>
+                    <span class="s-row-desc">${idx === 0 ? '200K 上下文 · 图像输入' : '128K 上下文'}</span>
+                  </div>
+                  <button class="switch" role="switch" aria-checked="true" aria-label="${m}"></button>
+                </div>
+              `).join('')}
+            </div>
+            <p class="s-group-note">宽屏下连接表单与模型清单并排展示，无需来回滚动，也告别了弹窗叠弹窗。</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="stack-20">
+      <div class="underline-tabs" role="tablist">
+        ${AGENTS.map(a => `
+          <button class="${state.selectedAgent === a.id ? 'active' : ''}" onclick="selectAgent('${a.id}')">
+            <span class="agent-dot" style="background:${a.color}">${a.short}</span>
+            <span>${a.name}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="s-group">
+        <div class="s-group-head">
+          <h3 class="s-group-title">${agent.name} 的提供商（${list.length}）</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-xs" onclick="openNested('probe')">接口测速</button>
+            <button class="btn btn-primary btn-xs" onclick="openProvider('${list[0]?.id || ''}')">${ic('plus', 'i i-xs')} 添加提供商</button>
+          </div>
+        </div>
+        <div class="s-card">
+          ${list.map(p => `
+            <div class="provider-row" onclick="openProvider('${p.id}')">
+              <div style="min-width:0;flex:1">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span class="provider-name trunc" style="font-size:14px;font-weight:500">${p.name}</span>
+                  ${p.isDefault ? '<span class="badge badge-accent">默认</span>' : ''}
+                  <span class="badge">${p.kind}</span>
+                </div>
+                <div class="provider-meta">
+                  <span class="mono trunc">${p.endpoint}</span>
+                  <span>·</span>
+                  <span>${p.models} 个模型</span>
+                </div>
+              </div>
+              <div class="quota-wrap">
+                ${p.quotaLeft !== null ? `
+                  <div class="quota-bar"><div class="quota-fill ${p.warn ? 'warn' : ''}" style="width:${p.quotaLeft}%"></div></div>
+                ` : ''}
+                <span class="quota-label" style="${p.warn ? 'color:var(--warning)' : ''}">${p.quotaLabel}</span>
+              </div>
+              <span style="color:var(--fg-4)">${ic('chevron-right')}</span>
+            </div>
+          `).join('')}
+        </div>
+        <p class="s-group-note">点击任意提供商：在现状弹窗里会继续叠一层弹窗；在方案 A/B 里直接以页内面包屑展开编辑。</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderAppearanceSection() {
+  const palettes = [
+    { id: 'riffet', name: 'Riffet 素墨', bg: '#ffffff', side: '#f7f8fa', accent: '#3867f0' },
+    { id: 'paper', name: '暖纸', bg: '#fcfaf6', side: '#f4f1ea', accent: '#a65c2e' },
+    { id: 'slate', name: '冷岩', bg: '#fbfcfd', side: '#f1f4f8', accent: '#2c6e7f' },
+  ];
+
+  const controls = `
+    <div class="stack-20">
+      <div class="s-group">
+        <div class="s-group-head"><h3 class="s-group-title">明暗模式</h3></div>
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">外观模式</span>
+              <span class="s-row-desc">仅保存在这台设备</span>
+            </div>
+            <div class="segmented">
+              <button class="${!state.dark ? 'active' : ''}" onclick="if(state.dark) toggleDark()">浅色</button>
+              <button class="${state.dark ? 'active' : ''}" onclick="if(!state.dark) toggleDark()">深色</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-group">
+        <div class="s-group-head">
+          <h3 class="s-group-title">内置配色</h3>
+          <button class="btn btn-secondary btn-xs">自定义主题</button>
+        </div>
+        <div class="s-card">
+          <div class="palette-grid">
+            ${palettes.map(p => `
+              <button class="palette-tile ${state.palette === p.id ? 'selected' : ''}" onclick="setPalette('${p.id}')">
+                <div class="palette-swatch">
+                  <span style="width:30%;background:${p.side};border-right:1px solid rgb(0 0 0 / 0.06)"></span>
+                  <span style="flex:1;background:${p.bg};display:flex;align-items:flex-end;justify-content:flex-end;padding:6px">
+                    <span style="width:12px;height:12px;border-radius:99px;background:${p.accent}"></span>
+                  </span>
+                </div>
+                <span style="font-size:12.5px;font-weight:500">${p.name}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="s-group">
+        <div class="s-group-head"><h3 class="s-group-title">代码高亮</h3></div>
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">高亮风格</span>
+              <span class="s-row-desc">独立于界面配色，代码块保持页面纸底</span>
+            </div>
+            <select class="select" onchange="setVal('codeTheme', this.value)">
+              <option value="auto" ${state.values.codeTheme === 'auto' ? 'selected' : ''}>跟随界面主题</option>
+              <option value="github" ${state.values.codeTheme === 'github' ? 'selected' : ''}>GitHub</option>
+              <option value="vitesse" ${state.values.codeTheme === 'vitesse' ? 'selected' : ''}>Vitesse</option>
+              <option value="mono" ${state.values.codeTheme === 'mono' ? 'selected' : ''}>极简墨色</option>
+            </select>
+          </div>
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">会话间距</span>
+            </div>
+            <div class="segmented">
+              <button class="${state.values.density === 'compact' ? 'active' : ''}" onclick="setVal('density','compact')">紧凑</button>
+              <button class="${state.values.density === 'normal' ? 'active' : ''}" onclick="setVal('density','normal')">标准</button>
+              <button class="${state.values.density === 'loose' ? 'active' : ''}" onclick="setVal('density','loose')">舒展</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const preview = `
+    <div class="preview-sticky">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px">
+        <span style="font-size:11.5px;font-weight:500;color:var(--fg-3)">实时预览</span>
+        <span style="font-size:11px;color:var(--fg-4)">${state.dark ? '深色' : '浅色'} · ${palettes.find(p => p.id === state.palette)?.name}</span>
+      </div>
+      <div class="preview-card">
+        <div style="align-self:flex-end;background:var(--bg-bubble);padding:7px 11px;border-radius:10px;font-size:12.5px">
+          检查一下设置页的列宽档位
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px;line-height:20px">
+          <div class="tool-line" style="font-size:11.5px"><span class="tool-verb" style="min-width:40px">Read</span><span class="mono">PageScaffold.tsx</span></div>
+          <div>表单页用 <code class="mono" style="color:var(--fg-2)">768px</code> 文档档，监控与主题预览用 <code class="mono" style="color:var(--fg-2)">1120px</code> 看板档。</div>
+          <div class="code-block" style="padding:9px 11px;font-size:11px;line-height:17px">
+            <span style="color:var(--accent)">const</span> column = isWide ? <span style="color:var(--success)">'board'</span> : <span style="color:var(--success)">'document'</span>;
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding-top:2px">
+            <span class="btn btn-primary btn-xs">主按钮</span>
+            <span class="btn btn-secondary btn-xs">次按钮</span>
+            <span class="badge badge-success" style="margin-left:auto">已生效</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // In Current modal, there is no room for side-by-side preview; in Option A/B wide layouts, show sticky right preview!
+  if (state.mode === 'current') return controls;
+  return `<div class="split-preview">${controls}${preview}</div>`;
+}
+
+function renderServiceSection() {
+  const procs = [
+    { name: 'riffet-server', kind: '服务器', pid: 41820, cpu: '1.8%', mem: '142 MB', status: '运行中', tone: 'badge-success' },
+    { name: 'claude-code · riffet', kind: 'Agent', pid: 49211, cpu: '6.4%', mem: '318 MB', status: '回合进行中', tone: 'badge-accent' },
+    { name: 'codex · api-gateway', kind: 'Agent', pid: 50104, cpu: '0.2%', mem: '186 MB', status: '14m 后回收', tone: '' },
+    { name: 'playwright-chromium', kind: '子进程', pid: 51332, cpu: '0.9%', mem: '248 MB', status: '空闲', tone: '' },
+  ];
+
+  return `
+    <div class="stack-20">
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">总内存占用</span>
+          <span class="kpi-val">894 MB</span>
+          <span class="kpi-sub">常驻预算 1.5 GB 以内</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">活跃 Agent 进程</span>
+          <span class="kpi-val">2</span>
+          <span class="kpi-sub">1 个运行中 · 1 个空闲待回收</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">已运行时长</span>
+          <span class="kpi-val">6d 14h</span>
+          <span class="kpi-sub">v0.9.3 · PID 41820</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">最近 10 分钟错误</span>
+          <span class="kpi-val">0</span>
+          <span class="kpi-sub">P95 接口响应 18 ms</span>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>内存与 CPU 趋势（近 10 分钟）</h3>
+            <div class="legend">
+              <span><i style="background:var(--chart-1)"></i>内存</span>
+              <span><i style="background:var(--chart-2)"></i>CPU</span>
+            </div>
+          </div>
+          <svg viewBox="0 0 460 140" style="width:100%;height:140px;display:block">
+            <line x1="0" y1="30" x2="460" y2="30" stroke="var(--line)" stroke-dasharray="3 3" />
+            <line x1="0" y1="75" x2="460" y2="75" stroke="var(--line)" stroke-dasharray="3 3" />
+            <line x1="0" y1="120" x2="460" y2="120" stroke="var(--line)" />
+            <path d="M0,96 C45,92 80,82 125,84 C170,86 210,60 265,64 C320,68 370,48 460,52 L460,120 L0,120 Z" fill="var(--chart-1)" opacity="0.11" />
+            <path d="M0,96 C45,92 80,82 125,84 C170,86 210,60 265,64 C320,68 370,48 460,52" fill="none" stroke="var(--chart-1)" stroke-width="2" />
+            <path d="M0,110 C55,104 95,108 145,96 C195,84 245,102 310,92 C370,82 415,88 460,79" fill="none" stroke="var(--chart-2)" stroke-width="1.6" stroke-dasharray="4 3" />
+          </svg>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-head">
+            <h3>空闲回收策略</h3>
+            <button class="btn btn-secondary btn-xs">立即回收空闲</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0;flex:1;justify-content:center">
+            <div class="s-row" style="padding:10px 0">
+              <div class="s-row-text">
+                <span class="s-row-title">自动回收空闲 Agent</span>
+                <span class="s-row-desc">仅回收无活跃回合与终端接管的 CLI</span>
+              </div>
+              <button class="switch" role="switch" aria-checked="${state.values.autoReclaim}" onclick="toggleBool('autoReclaim')"></button>
+            </div>
+            <div class="s-row" style="padding:10px 0;border-top:1px solid var(--line)">
+              <div class="s-row-text">
+                <span class="s-row-title">空闲时长</span>
+              </div>
+              <select class="select" onchange="setVal('idleMinutes', this.value)">
+                <option value="15" ${state.values.idleMinutes === '15' ? 'selected' : ''}>15 分钟</option>
+                <option value="30" ${state.values.idleMinutes === '30' ? 'selected' : ''}>30 分钟</option>
+                <option value="60" ${state.values.idleMinutes === '60' ? 'selected' : ''}>1 小时</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-group">
+        <div class="s-group-head">
+          <h3 class="s-group-title">受管进程</h3>
+          <button class="btn btn-danger btn-xs">空闲时重启服务</button>
+        </div>
+        <div class="s-card">
+          <table class="proc-table">
+            <thead>
+              <tr>
+                <th>进程</th>
+                <th>类别</th>
+                <th>状态</th>
+                <th class="r">PID</th>
+                <th class="r">CPU</th>
+                <th class="r">内存</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${procs.map(p => `
+                <tr>
+                  <td style="font-weight:500;color:var(--fg)" class="mono">${p.name}</td>
+                  <td>${p.kind}</td>
+                  <td><span class="badge ${p.tone}">${p.status}</span></td>
+                  <td class="r mono">${p.pid}</td>
+                  <td class="r mono">${p.cpu}</td>
+                  <td class="r mono">${p.mem}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderGeneralSection() {
+  return `
+    <div class="stack-20">
+      <div class="s-group">
+        <div class="s-group-head"><h3 class="s-group-title">界面与语言</h3></div>
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">界面语言</span>
+              <span class="s-row-desc">仅保存在这台设备</span>
+            </div>
+            <select class="select" onchange="setVal('language', this.value)">
+              <option value="system" ${state.values.language === 'system' ? 'selected' : ''}>跟随系统</option>
+              <option value="zh-CN" ${state.values.language === 'zh-CN' ? 'selected' : ''}>简体中文</option>
+              <option value="en" ${state.values.language === 'en' ? 'selected' : ''}>English</option>
+            </select>
+          </div>
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">Enter 键行为</span>
+              <span class="s-row-desc">同步到服务器；全屏编辑始终换行</span>
+            </div>
+            <div class="segmented">
+              <button class="${state.values.sendKey === 'enter' ? 'active' : ''}" onclick="setVal('sendKey','enter')">发送</button>
+              <button class="${state.values.sendKey === 'mod-enter' ? 'active' : ''}" onclick="setVal('sendKey','mod-enter')">⌘↵ 发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-group">
+        <div class="s-group-head"><h3 class="s-group-title">行为偏好</h3></div>
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">实时流式草稿</span>
+              <span class="s-row-desc">在 Agent 完整输出前先显示当前进展</span>
+            </div>
+            <button class="switch" role="switch" aria-checked="${state.values.streamDraft}" onclick="toggleBool('streamDraft')"></button>
+          </div>
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">提示音</span>
+              <span class="s-row-desc">等待确认或回合完成时播放</span>
+            </div>
+            <button class="switch" role="switch" aria-checked="${state.values.soundNotice}" onclick="toggleBool('soundNotice')"></button>
+          </div>
+        </div>
+        <p class="s-group-note">常规开关类页面在方案 A/B 中限定为 768px 文档档居中，保持左右视线距离舒适，不会在大屏下被拉散。</p>
+      </div>
+    </div>
+  `;
+}
+
+function renderPlaceholderSection(sec) {
+  return `
+    <div class="stack-20">
+      <div class="s-group">
+        <div class="s-group-head"><h3 class="s-group-title">${sec.groupTitle || '基础'} · ${sec.label}</h3></div>
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">建议正文列宽档位</span>
+              <span class="s-row-desc">${sec.col === 'board' ? '包含列表/图表/多列内容，使用看板档（1120–1200px）' : '以开关与表单行为主，使用文档档（768px）居中'}</span>
+            </div>
+            <span class="badge">${sec.col === 'board' ? 'board · 1120px' : 'document · 768px'}</span>
+          </div>
+          <div class="s-row">
+            <div class="s-row-text">
+              <span class="s-row-title">页面地址</span>
+              <span class="s-row-desc">支持刷新保持、浏览器后退与 Mac WebHandoff 直达</span>
+            </div>
+            <span class="mono" style="font-size:12px;color:var(--fg-3)">/settings/${sec.id}</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--fg-3);align-self:center">快速切换至完整样页：</span>
+        <button class="btn btn-secondary btn-xs" onclick="selectSection('providers')">模型提供商（层级编辑）</button>
+        <button class="btn btn-secondary btn-xs" onclick="selectSection('appearance')">主题（右栏实时预览）</button>
+        <button class="btn btn-secondary btn-xs" onclick="selectSection('service')">服务管理（监控看板）</button>
+        <button class="btn btn-secondary btn-xs" onclick="selectSection('general')">通用设置（768 表单）</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSectionBody(sec) {
+  if (state.section === 'providers') return renderProvidersSection();
+  if (state.section === 'appearance') return renderAppearanceSection();
+  if (state.section === 'service') return renderServiceSection();
+  if (state.section === 'general') return renderGeneralSection();
+  return renderPlaceholderSection(sec);
+}
+
+function renderNestedDialog() {
+  if (!state.nestedDialog) return '';
+  if (state.nestedDialog === 'provider-modal') {
+    const list = PROVIDERS[state.selectedAgent] || [];
+    const prov = list.find(p => p.id === state.editingProviderId) || list[0];
+    return `
+      <div class="nested-dialog">
+        <div class="nested-dialog-head">
+          <div>
+            <div style="font-size:15px;font-weight:600">编辑提供商 · ${prov.name}</div>
+            <div style="font-size:12px;color:var(--fg-3);margin-top:2px">现状模式下叠加在设置弹窗之上的第二层浮层</div>
+          </div>
+          <button class="btn btn-quiet btn-icon" onclick="closeNested()">${ic('x')}</button>
+        </div>
+        <div class="nested-dialog-body">
+          <div class="field" style="padding:0"><label>名称</label><input class="input" value="${escapeAttr(prov.name)}" /></div>
+          <div class="field" style="padding:0"><label>接口地址</label><input class="input mono" value="${escapeAttr(prov.endpoint)}" /></div>
+          <div class="field" style="padding:0"><label>API Key</label><input class="input mono" type="password" value="sk-ant-demo-token-xxxx" /></div>
+        </div>
+        <div class="nested-dialog-foot">
+          <button class="btn btn-quiet" onclick="closeNested()">取消</button>
+          <button class="btn btn-primary" onclick="closeNested()">保存</button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="nested-dialog">
+      <div class="nested-dialog-head">
+        <div>
+          <div style="font-size:15px;font-weight:600">模型接口测速</div>
+          <div style="font-size:12px;color:var(--fg-3);margin-top:2px">${state.mode === 'current' ? '当前叠加在设置大弹窗之上（双层遮罩）' : '整页模式下为标准单层弹窗，层级清爽'}</div>
+        </div>
+        <button class="btn btn-quiet btn-icon" onclick="closeNested()">${ic('x')}</button>
+      </div>
+      <div class="nested-dialog-body">
+        <div class="s-card">
+          <div class="s-row">
+            <div class="s-row-text"><span class="s-row-title mono">claude-sonnet-4-5</span><span class="s-row-desc">内部统一模型网关</span></div>
+            <span class="badge badge-success mono">TTFT 410ms · 78 tok/s</span>
+          </div>
+          <div class="s-row">
+            <div class="s-row-text"><span class="s-row-title mono">claude-haiku-4-5</span><span class="s-row-desc">Claude 订阅登录</span></div>
+            <span class="badge badge-success mono">TTFT 260ms · 112 tok/s</span>
+          </div>
+        </div>
+      </div>
+      <div class="nested-dialog-foot">
+        <button class="btn btn-primary" onclick="closeNested()">关闭</button>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== Main Render ====================
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function updateMetrics() {
+  const vpEl = document.getElementById('viewport');
+  const vpW = Math.round(vpEl.getBoundingClientRect().width);
+  let navW = 0;
+  let contentW = 0;
+  if (!state.inSettings) {
+    navW = 268;
+    contentW = Math.max(0, vpW - 276);
+  } else if (state.mode === 'current') {
+    const modalW = Math.min(1080, vpW - 32);
+    navW = 208;
+    contentW = Math.max(0, modalW - 208 - 48);
+  } else if (state.mode === 'optionA') {
+    navW = 268 + 224;
+    contentW = Math.max(0, vpW - 268 - 8 - 224 - 64);
+  } else {
+    navW = 268;
+    contentW = Math.max(0, vpW - 268 - 8 - 64);
+  }
+
+  // Toggle responsive narrow-content class based on actual available content width
+  vpEl.classList.toggle('narrow-content', contentW < 840);
+
+  const metricsEl = document.getElementById('proto-metrics');
+  metricsEl.innerHTML = `
+    <span>视口 <strong>${vpW}px</strong></span>
+    <span>·</span>
+    <span>左侧导航占 <strong>${navW}px</strong></span>
+    <span>·</span>
+    <span>正文可用宽 <strong>${contentW}px</strong></span>
+  `;
+}
+
+function renderSettingsNavOnly() {
+  const scroll = document.getElementById('settings-nav-scroll');
+  if (!scroll) { render(); return; }
+  const groups = getFilteredGroups();
+  const hasRealDemo = (id) => ['providers', 'appearance', 'service', 'general'].includes(id);
+  scroll.innerHTML = groups.length ? groups.map(g => `
+    <div class="nav-group">
+      ${g.title ? `<div class="nav-group-title">${g.title}</div>` : ''}
+      ${g.items.map(it => `
+        <button class="list-row ${state.section === it.id ? 'selected' : ''}" onclick="selectSection('${it.id}')">
+          <span class="leading">${ic(it.icon)}</span>
+          <span class="label">${it.label}</span>
+          ${hasRealDemo(it.id) ? '<span class="meta">样页</span>' : ''}
+        </button>
+      `).join('')}
+    </div>
+  `).join('') : `<div style="padding:20px 8px;text-align:center;color:var(--fg-4);font-size:12px">没有匹配的设置项</div>`;
+}
+
+function render() {
+  // Update top control states
+  document.getElementById('mode-current').classList.toggle('active', state.mode === 'current');
+  document.getElementById('mode-a').classList.toggle('active', state.mode === 'optionA');
+  document.getElementById('mode-b').classList.toggle('active', state.mode === 'optionB');
+  ['full', '1440', '1280', '1024'].forEach(v => {
+    document.getElementById('vp-' + v).classList.toggle('active', state.viewport === v);
+  });
+  document.getElementById('btn-dark').textContent = state.dark ? '浅色' : '深色';
+  document.getElementById('btn-note').textContent = state.showCallout ? '隐藏批注' : '显示批注';
+
+  // Viewport width simulation
+  const stage = document.getElementById('stage-wrap');
+  const vp = document.getElementById('viewport');
+  if (state.viewport === 'full') {
+    stage.classList.remove('framed');
+    vp.style.width = '100%';
+  } else {
+    stage.classList.add('framed');
+    vp.style.width = state.viewport + 'px';
+  }
+
+  const sidebarEl = document.getElementById('wb-sidebar');
+  const mainEl = document.getElementById('wb-main');
+  const modalScrim = document.getElementById('modal-scrim');
+  const nestedScrim = document.getElementById('nested-scrim');
+  const sec = ALL_SECTIONS.find(s => s.id === state.section) || ALL_SECTIONS[0];
+
+  // Sidebar
+  if (state.inSettings && state.mode === 'optionB') {
+    sidebarEl.innerHTML = renderSettingsSidebarOptionB();
+  } else {
+    sidebarEl.innerHTML = renderAppSidebar();
+  }
+
+  // Main Area & Modal
+  if (!state.inSettings || state.mode === 'current') {
+    mainEl.innerHTML = renderUnderlyingChat();
+  } else if (state.mode === 'optionA') {
+    const colClass = sec.col === 'board' ? 'col-board' : 'col-document';
+    mainEl.innerHTML = `
+      <header class="page-header">
+        <h1>设置</h1>
+        <span class="page-host">macbook.local</span>
+        <span class="badge mono" style="margin-left:auto">/settings/${sec.id}</span>
+        <button class="btn btn-quiet btn-xs" onclick="closeSettings()">返回会话</button>
+      </header>
+      <div class="page-body">
+        <nav class="page-aside-a" aria-label="设置分区">
+          ${renderSettingsNavList(true)}
+        </nav>
+        <div class="page-scroller">
+          <div class="${colClass}">
+            ${renderCallout(sec)}
+            ${!(state.section === 'providers' && state.editingProviderId) ? `
+              <div class="page-section-head">
+                <div>
+                  <h2>${sec.label}</h2>
+                  ${sec.groupTitle ? `<p class="page-section-sub">${sec.groupTitle}</p>` : ''}
+                </div>
+              </div>
+            ` : ''}
+            ${renderSectionBody(sec)}
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    // Option B: Swapped sidebar, main area 100% belongs to settings content
+    const colClass = sec.col === 'board' ? 'col-board' : 'col-document';
+    mainEl.innerHTML = `
+      <header class="page-header">
+        <h1>${sec.groupTitle ? `${sec.groupTitle} / ` : ''}${sec.label}</h1>
+        <span class="page-host">macbook.local</span>
+        <span class="badge mono" style="margin-left:auto">/settings/${sec.id}</span>
+      </header>
+      <div class="page-body">
+        <div class="page-scroller">
+          <div class="${colClass}">
+            ${renderCallout(sec)}
+            ${!(state.section === 'providers' && state.editingProviderId) ? `
+              <div class="page-section-head">
+                <div>
+                  <h2>${sec.label}</h2>
+                </div>
+              </div>
+            ` : ''}
+            ${renderSectionBody(sec)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Current Modal Overlay
+  if (state.inSettings && state.mode === 'current') {
+    modalScrim.hidden = false;
+    modalScrim.innerHTML = `
+      <div class="modal-box" role="dialog" aria-label="设置">
+        <nav class="modal-nav">
+          <h2>设置</h2>
+          ${renderSettingsNavList(false)}
+        </nav>
+        <div class="modal-main">
+          <div class="modal-head">
+            <h2>${sec.label}</h2>
+            <button class="btn btn-quiet btn-icon" onclick="closeSettings()" aria-label="关闭">${ic('x')}</button>
+          </div>
+          <div class="modal-scroll">
+            ${renderCallout(sec)}
+            ${renderSectionBody(sec)}
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    modalScrim.hidden = true;
+    modalScrim.innerHTML = '';
+  }
+
+  // Nested Dialog
+  if (state.nestedDialog) {
+    nestedScrim.hidden = false;
+    nestedScrim.innerHTML = renderNestedDialog();
+  } else {
+    nestedScrim.hidden = true;
+    nestedScrim.innerHTML = '';
+  }
+
+  requestAnimationFrame(updateMetrics);
+}
+
+window.addEventListener('resize', updateMetrics);
+render();
+</script>
+</body>
+</html>

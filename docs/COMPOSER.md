@@ -184,7 +184,7 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 | `apps/web/src/app/session/composerKeyboard.ts` + `.test.ts` | **新增**：`classifyEnterGesture()`、`resolveEnter()`、`readEnterKeyBehavior()`、`isComposingKey()`、`resolveEscapeLayer()`、`primaryEnterHint()`。纯函数，无 DOM、无 React（照 `image-upload.ts`、`streamResume.ts` 的既有分工：逻辑进 `.ts` 并被 `.test.ts` 覆盖）。 |
 | `packages/contracts/src/index.ts` | `AppSettings` 新增 `composerEnterBehavior?: 'newline' \| 'send'`。 |
 | `apps/server/src/settings/index.ts` | `validateSettings` 的 `known` 集合加键，并校验取值只能是这两个字面量（`:684`；未知键是抛错的，所以必须显式登记）。 |
-| `apps/web/src/app/settings/SettingsDialog.tsx` | 「外观」组加一行 `Row` + `Segmented`（Enter 换行 / Enter 发送），描述里写明「所有设备都生效，只影响桌面端的物理键盘」；保存走既有的即时 `PATCH`（`persistNotifications` 同款，落地为 `persistEnterBehavior`）。 |
+| `apps/web/src/app/settings/PreferencesSections.tsx` | 「外观」组加一行 `Row` + `Segmented`（Enter 换行 / Enter 发送），描述里写明「所有设备都生效，只影响桌面端的物理键盘」；保存走既有的即时 `PATCH`（`persistNotifications` 同款，落地为 `persistEnterBehavior`）。 |
 | `apps/web/src/app/Workbench.tsx` | 把 `settings.composerEnterBehavior` 传进会话页与首页；`setSettings` 已经会合并回写（`Workbench.tsx:565-577`），不用另加通路。 |
 | `apps/web/src/app/session/composerAttachmentIntake.ts` + `.test.ts` | **新增**：附件模型（图片/文件的判别、去重键、上限校验、拒绝文案、缩略图尺寸、删除后的焦点落点）。上限与服务端同数：`MAX_ATTACHMENTS_PER_MESSAGE = 20`、`MAX_ATTACHMENT_BYTES = 24 MiB`、`COMPOSER_IMAGE_TILE = 64`。 |
 | `apps/web/src/app/session/ComposerAttachments.tsx` | **新增**：缩略图轨、文件胶囊、上传中占位、失败重试、`ImageViewer` 接线；引用与附件由它一起渲染（`variant="rail"` / `"summary"`）。原先在 `Composer.tsx` 里的本地 `Chip` 随 P2 删除，那份标记复制进了这个组件（§10.1 P2 差异 1）。 |
@@ -272,7 +272,7 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 | `packages/contracts/src/index.ts` | `AppSettings.composerEnterBehavior?: 'newline' \| 'send'` |
 | `apps/server/src/settings/index.ts` | 显式登记键 + 只接受两个字面量（`:683`、`:730-735`） |
 | `apps/server/src/app.test.ts` | 缺省不发明值、`PATCH` 写入、部分更新不丢键、非法值 400、落盘可读 |
-| `apps/web/src/app/settings/SettingsDialog.tsx` | 「外观」组新增「Enter 键」行，即时保存，描述写明跨设备与「只管桌面物理键盘」 |
+| `apps/web/src/app/settings/PreferencesSections.tsx` | 「外观」组新增「Enter 键」行，即时保存，描述写明跨设备与「只管桌面物理键盘」 |
 | `apps/web/src/app/session/Composer.tsx` | 键盘判定改调 `resolveEnter`；按钮 `kbd` 跟随 `primaryEnterHint`；一次性说明（`riffet.composer.enterNotice`，本机、可关） |
 | `Workbench.tsx` → `NativeSession.tsx` / `ProjectHome.tsx` | 传入 `enterBehavior`；首页直接读 `settings.composerEnterBehavior` |
 

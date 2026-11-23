@@ -3,7 +3,7 @@ import type { AssistantPack } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useUi } from '../state/stores';
+import { useNav } from '../state/stores';
 
 /**
  * The 个人助理's installed capability packs, one entry each, above its composer (docs/ASSISTANT.md §8.2). An entry
@@ -11,7 +11,7 @@ import { useUi } from '../state/stores';
  * shows until a pack is added in Settings; read again as Settings closes, where packs are added.
  */
 export function AssistantEntries({ onPick, className }: { onPick: (command: string) => void; className?: string }) {
-  const settingsOpen = useUi((state) => state.settingsOpen);
+  const settingsOpen = useNav((state) => state.settingsOpen);
   const [packs, setPacks] = useState<AssistantPack[]>([]);
   useEffect(() => {
     if (settingsOpen) return;

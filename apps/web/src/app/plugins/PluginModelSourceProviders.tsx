@@ -31,7 +31,7 @@ import {
   summarizeUsage,
   useProviderUsage,
 } from '../settings/ProviderUsage';
-import { useCatalog, useSettings, useUi } from '../state/stores';
+import { useCatalog, useNav, useSettings } from '../state/stores';
 
 export interface NormalizedPluginModelSource {
   id: string;
@@ -385,7 +385,7 @@ export function PluginModelSourceProviders({ plugin, subpage, disabled, onSubpag
   const { t, i18n } = useLingui();
   const backends = useCatalog((state) => state.backends);
   const nativeDefaults = useSettings((state) => state.nativeBackendDefaults);
-  const settingsOpen = useUi((state) => state.settingsOpen);
+  const settingsOpen = useNav((state) => state.settingsOpen);
   const sources = useMemo(() => pluginModelSources(plugin), [plugin]);
   const sourceById = useMemo(() => new Map(sources.map((item) => [item.id, item])), [sources]);
   const backendIds = useMemo(
