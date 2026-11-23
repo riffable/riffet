@@ -1411,6 +1411,10 @@ msgstr ""
 msgid "无法使用该目录开始会话"
 msgstr ""
 
+#: src/app/useSidebarPinned.ts
+msgid "无法保存侧栏设置"
+msgstr ""
+
 #: src/app/use-session-actions.ts
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr ""
@@ -1702,7 +1706,7 @@ msgctxt "session-sheet-more"
 msgid "更多"
 msgstr ""
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarDestinationRows.tsx
 msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr ""
@@ -2270,7 +2274,7 @@ msgstr ""
 msgid "自定义主题"
 msgstr ""
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarDestinationRows.tsx
 msgid "自定义侧栏"
 msgstr ""
 

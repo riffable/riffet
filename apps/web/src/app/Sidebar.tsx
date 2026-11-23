@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, WORK_ITEM_STATUSES, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -28,8 +28,10 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useListWindow } from '@/lib/use-list-window';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
-import { useLists, useSettings, useStores, useWorkItems } from './state/stores';
-import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
+import { useLists, useStores, useWorkItems } from './state/stores';
+import { SIDEBAR_DESTINATION_META, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
+import { SidebarDestinationRows, sidebarNavRow } from './SidebarDestinationRows';
+import { useSidebarPinned } from './useSidebarPinned';
 import type { ViewEntry } from '@/plugins/catalog';
 import { viewIcon } from '@/plugins/viewIcons';
 import { useTabs } from './tabs/useTabs';
@@ -162,9 +164,6 @@ export function SessionIndicator({ session, mobile, selected, taskStatus }: { se
   if (taskStatus) return <StatusIcon status={taskStatus} />;
   return null;
 }
-
-const navRow = 'flex h-8 w-full items-center gap-[9px] rounded-lg px-2 text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg';
-const mobileNavRow = 'flex h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-fg transition-colors hover:bg-hover';
 
 /** A `role="button"` row answers Enter and Space like a native button; keys pressed on the controls inside it stay theirs. */
 function activateOnKey(event: KeyboardEvent<HTMLElement>, run: () => void): void {
@@ -558,7 +557,7 @@ export function Sidebar(props: Props) {
 
   const owner = useLists((state) => state.owner);
   const linkedStatus = useLists((state) => state.linkedStatus);
-  const sidebarPinned = useSettings((settings) => settings.sidebarPinned);
+  const { saved, save, canEdit } = useSidebarPinned();
   const mainViews = props.mainViews ?? [];
   const mainViewMap = useMemo(() => new Map(mainViews.map((view) => [view.id, view])), [mainViews]);
   const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
@@ -581,7 +580,6 @@ export function Sidebar(props: Props) {
     ...WEB_SIDEBAR_DESTINATIONS.filter((id) => destinations[id]),
     ...(props.onOpenMainView ? mainViews.map((view) => view.id) : []),
   ];
-  const { pinned, more } = splitSidebarDestinations(sidebarPinned, offeredIds);
   const destinationOf = (id: string) => {
     if (id in SIDEBAR_DESTINATION_META) {
       const meta = SIDEBAR_DESTINATION_META[id as WebSidebarDestination];
@@ -591,9 +589,6 @@ export function Sidebar(props: Props) {
     const view = mainViewMap.get(id)!;
     return { icon: viewIcon(view), label: view.title, open: () => props.onOpenMainView?.(view.id), active: props.activeMainViewId === view.id, trailing: undefined };
   };
-  // The page open behind the menu marks the row that reaches it.
-  const moreActive = more.some((id) => destinationOf(id).active);
-
   const offlineBanner = props.stale?.mode === 'offline' && (
     <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{offlineLabel(props.stale.savedAt)}</Notice>
   );
@@ -612,54 +607,26 @@ export function Sidebar(props: Props) {
         </div>
       </div>
 
-      <div data-primary-nav className={cn('flex flex-col px-2', mobile ? 'gap-0 pb-1' : 'gap-px pb-2')}>
+      <div data-primary-nav className={cn('flex flex-col px-2', mobile ? 'gap-0 pb-1' : 'max-h-3/5 gap-px pb-2 [&>button]:shrink-0')}>
         {/* New Session is a page, not a dialog: it opens the selected directory's empty composer and
             the directory itself is chosen there, on the composer (see ProjectHome), so that clicking
             "new session" never intercepts someone who only wanted to reach that page. */}
         {mobile ? (
-          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(mobileNavRow, 'disabled:opacity-50')}>
+          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(sidebarNavRow(true), 'disabled:opacity-50')}>
             <IconMessageCirclePlus className="size-4 text-fg-2" /><Trans context="workbench-sidebar-new-action">新建会话</Trans>
           </button>
         ) : (
-          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(navRow, 'disabled:opacity-50')}>
+          <button type="button" onClick={props.onNewSession} disabled={!canStartSession} className={cn(sidebarNavRow(false), 'disabled:opacity-50')}>
             <IconSquarePen className="size-[15px] shrink-0" /><Trans context="workbench-sidebar-new-action">新会话</Trans>
           </button>
         )}
-        <button type="button" data-touch-row onClick={props.onOpenSearch} className={mobile ? mobileNavRow : navRow}>
+        <button type="button" data-touch-row onClick={props.onOpenSearch} className={sidebarNavRow(mobile)}>
           <IconSearch className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />
           <span><Trans>搜索内容</Trans></span>
           <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{searchHint}</span>
         </button>
-        {pinned.map((id) => {
-          const { icon: Icon, label, open, active, trailing } = destinationOf(id);
-          return (
-            <button
-              key={id}
-              type="button"
-              aria-current={active ? 'page' : undefined}
-              onClick={open}
-              className={mobile ? cn(mobileNavRow, active && 'bg-active') : cn(navRow, active && 'bg-active text-fg')}
-            >
-              <Icon className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />{label}
-              {trailing}
-            </button>
-          );
-        })}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={mobile ? cn(mobileNavRow, moreActive && 'bg-active') : cn(navRow, moreActive && 'bg-active text-fg')}>
-              <IconEllipsis className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans context="workbench-sidebar-more">更多</Trans>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="start" className="w-56">
-            {more.map((id) => {
-              const { icon: Icon, label, open, active, trailing } = destinationOf(id);
-              return <DropdownMenuItem key={id} aria-current={active ? 'page' : undefined} onSelect={open}><Icon />{label}{trailing}</DropdownMenuItem>;
-            })}
-            {more.length > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuItem onSelect={props.onCustomizeSidebar}><IconSettings2 /><Trans>自定义侧栏</Trans></DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <SidebarDestinationRows mobile={mobile} saved={saved} save={canEdit ? save : undefined} offered={offeredIds}
+          destinationOf={destinationOf} onCustomize={props.onCustomizeSidebar} />
       </div>
 
       <Collapse open={Boolean(offlineBanner)}>{heldOfflineBanner}</Collapse>

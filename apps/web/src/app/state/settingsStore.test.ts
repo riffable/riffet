@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AppSettings, AppSettingsUpdate } from '@contracts';
 import { api } from '@/lib/api';
+import { moveSidebarPinned, toggleSidebarPinned } from '../sidebarDestinations';
 import { createSettingsStore } from './settingsStore';
 
 /** A server that applies each PATCH to what it holds, one request at a time. */
@@ -16,9 +17,27 @@ function fakeServer(initial: AppSettings) {
   return { bodies, current: () => server };
 }
 
+function pendingResponse() {
+  let resolve!: (value: AppSettings) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<AppSettings>((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe('settings store write queue', () => {
+  it('marks settings loaded only after the server provides them', () => {
+    const store = createSettingsStore({ sidebarPinned: ['assistant'] });
+    expect(store.get().loaded).toBe(false);
+    const settings = { sidebarPinned: ['tasks'] };
+    store.absorb(settings, store.bootstrapRevision());
+    expect(store.get()).toMatchObject({ settings, loaded: true });
+  });
+
   it('builds each backend-defaults write from the latest defaults, so quick saves do not overwrite each other', async () => {
     const server = fakeServer({});
     const store = createSettingsStore({});
@@ -40,5 +59,62 @@ describe('settings store write queue', () => {
     const expected = { defaultBackendId: 'claude', nativeBackendDefaults: { claude: { model: 'opus[effort=high,fast=true]' }, codex: { model: 'gpt-6[effort=xhigh,fast=false]' } } };
     expect(server.bodies.at(-1)).toMatchObject(expected);
     expect(createSettingsStore(server.current()).current()).toMatchObject(expected);
+  });
+
+  it('combines sidebar changes, retains unavailable slots, and skips unchanged drops', async () => {
+    const initial = { sidebarPinned: ['assistant', 'activity', 'tasks', 'plugins', 'other/hidden'] };
+    const { bodies, current } = fakeServer(initial);
+    const store = createSettingsStore(initial);
+    const offered = ['assistant', 'tasks', 'plugins', 'studio/workbench'];
+
+    expect(await store.updateSidebarPinned((saved) => moveSidebarPinned(saved, offered, 'assistant', 'assistant'))).toBe(false);
+    await store.updateSidebarPinned((saved) => moveSidebarPinned(saved, offered, 'assistant', 'tasks'));
+    await store.updateSidebarPinned((saved) => moveSidebarPinned(saved, offered, 'plugins', null));
+    expect(bodies).toEqual([]);
+
+    const pin = store.updateSidebarPinned((saved) => moveSidebarPinned(saved, offered, 'studio/workbench', 'assistant'));
+    const reorder = store.updateSidebarPinned((saved) => moveSidebarPinned(saved, offered, 'tasks', 'studio/workbench'));
+    const unpin = store.updateSidebarPinned((saved) => toggleSidebarPinned(saved, 'plugins', false));
+    const expected = ['tasks', 'activity', 'studio/workbench', 'assistant', 'other/hidden'];
+    expect(store.get().sidebarPinnedDraft).toEqual(expected);
+    expect(store.current()).toBe(initial);
+    expect(await Promise.all([pin, reorder, unpin])).toEqual([false, false, true]);
+    expect(bodies).toEqual([{ sidebarPinned: expected }]);
+    expect(store.current()).toEqual(current());
+    expect(store.get().sidebarPinnedDraft).toBeUndefined();
+  });
+
+  it('restores the last saved sidebar order after a later write fails and ignores stale bootstrap reads', async () => {
+    const initial = { sidebarPinned: ['assistant', 'tasks'] };
+    const store = createSettingsStore(initial);
+    const firstResponse = pendingResponse();
+    const secondResponse = pendingResponse();
+    const update = vi.spyOn(api, 'updateSettings')
+      .mockReturnValueOnce(firstResponse.promise)
+      .mockReturnValueOnce(secondResponse.promise);
+
+    const beforeWrites = store.bootstrapRevision();
+    const first = store.updateSidebarPinned(() => ['tasks', 'assistant']);
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    const second = store.updateSidebarPinned(() => ['tasks', 'assistant', 'plugins']);
+    const whileWriting = store.bootstrapRevision();
+    store.absorb(initial, beforeWrites);
+    expect(store.get().sidebarPinnedDraft).toEqual(['tasks', 'assistant', 'plugins']);
+
+    const committed = { sidebarPinned: ['tasks', 'assistant'] };
+    firstResponse.resolve(committed);
+    await first;
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    const rejected = expect(second).rejects.toThrow('save failed');
+    secondResponse.reject(new Error('save failed'));
+    await rejected;
+    expect(store.get().sidebarPinnedDraft).toBeUndefined();
+    expect(store.current()).toEqual(committed);
+
+    store.absorb(initial, whileWriting);
+    expect(store.current()).toEqual(committed);
+    const external = { sidebarPinned: ['plugins'] };
+    store.absorb(external, store.bootstrapRevision());
+    expect(store.current()).toEqual(external);
   });
 });

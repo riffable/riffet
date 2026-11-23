@@ -1566,6 +1566,7 @@ msgstr ""
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
+#: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "侧栏"
@@ -5986,10 +5987,6 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "无法保存主题"
-msgstr ""
-
-#: src/app/settings/SidebarSection.tsx
-msgid "无法保存侧栏设置"
 msgstr ""
 
 #: src/app/settings/ProfileSection.tsx

@@ -1566,6 +1566,7 @@ msgstr "Side panel views"
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
+#: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "侧栏"
@@ -5987,10 +5988,6 @@ msgstr "Could not save. Try again."
 #: src/app/settings/ThemeEditor.tsx
 msgid "无法保存主题"
 msgstr "Couldn't save the theme"
-
-#: src/app/settings/SidebarSection.tsx
-msgid "无法保存侧栏设置"
-msgstr "Could not save sidebar settings"
 
 #: src/app/settings/ProfileSection.tsx
 msgid "无法保存名称"

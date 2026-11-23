@@ -6,10 +6,10 @@ const OPEN_DELAY_MS = 90;
 const TRIGGER_DELAY_MS = 260;
 const CLOSE_DELAY_MS = 220;
 /**
- * A menu or popover opened from inside the panel. A trigger that also shows a tooltip carries the
+ * Keep the panel in reach during a navigation drag or a menu opened from the panel. A trigger also showing a tooltip carries the
  * tooltip's `data-state` (Radix spreads it over the menu's), so its `aria-expanded` is read too.
  */
-const OPEN_MENU = '[data-state="open"], [aria-haspopup][aria-expanded="true"]';
+const KEEP_PEEK_OPEN = '[data-sidebar-dragging], [data-state="open"], [aria-haspopup][aria-expanded="true"]';
 
 export interface SidebarPeekTriggerProps {
   onPointerEnter: (event: PointerEvent) => void;
@@ -38,7 +38,7 @@ export function useSidebarPeek(enabled: boolean) {
   useEffect(() => clear, []);
   useEffect(() => {
     if (!peek) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape' && !panelRef.current?.querySelector(OPEN_MENU)) close(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape' && !panelRef.current?.querySelector(KEEP_PEEK_OPEN)) close(); };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [peek, close]);
@@ -47,7 +47,7 @@ export function useSidebarPeek(enabled: boolean) {
     clear();
     timer.current = window.setTimeout(function check() {
       if (hovering.current) return;
-      if (panelRef.current?.querySelector(OPEN_MENU)) { timer.current = window.setTimeout(check, CLOSE_DELAY_MS); return; }
+      if (panelRef.current?.querySelector(KEEP_PEEK_OPEN)) { timer.current = window.setTimeout(check, CLOSE_DELAY_MS); return; }
       setPeek(false);
     }, CLOSE_DELAY_MS);
   };

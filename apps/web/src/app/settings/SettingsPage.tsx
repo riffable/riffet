@@ -192,7 +192,7 @@ export function SettingsPage({
       {section === 'general' && <GeneralSection />}
       {section === 'appearance' && <ThemeSection />}
       {section === 'typography' && <TypographySection />}
-      {section === 'sidebar' && <SidebarSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
+      {section === 'sidebar' && <SidebarSection onError={onError} />}
       {section === 'tabs' && <TabsSection />}
       {section === 'shortcuts' && <ShortcutSettings />}
       {section === 'views' && <ViewsSection />}

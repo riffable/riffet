@@ -189,7 +189,7 @@ export function createListsStore(deps: ListsDeps) {
      * Resolves with the bootstrap as the server sent it (settings after the merge).
      */
     async load(): Promise<Bootstrap> {
-      const requestedRevision = deps.settings.revision();
+      const requestedRevision = deps.settings.bootstrapRevision();
       const requestedWorkItemsTicket = deps.workItems?.ticket() ?? 0;
       const requestedProjectsGeneration = ++projectsGeneration;
       revision += 1;

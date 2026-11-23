@@ -10,6 +10,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tip } from '@/components/ui/tooltip';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
+import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { SidebarDestinationRows } from '../../SidebarDestinationRows';
+import { SIDEBAR_DESTINATION_META, type WebSidebarDestination } from '../../sidebarDestinations';
+import { useStores } from '../../state/stores';
 import { UpdateNotice } from '../../SidebarUpdateButton';
 import { SidebarSettingsButton, SidebarUserMenu } from '../../SidebarUserMenu';
 import { Chapter, Family, Frame, Plate, Specimen } from '../specimen';
@@ -27,6 +31,24 @@ function MenuDemo() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+function SidebarDemo() {
+  const { t } = useLingui();
+  const { nav } = useStores();
+  const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const [saved, save] = useState<readonly string[]>(['assistant', 'tasks', 'plugins']);
+  const [active, setActive] = useState<string>();
+  return <div className="w-56 rounded-xl bg-sidebar p-2">
+    <SidebarDestinationRows mobile={mobile} saved={saved} save={save}
+      offered={['assistant', 'tasks', 'automations', 'marks', 'plugins']}
+      destinationOf={id => {
+        const { icon, label } = SIDEBAR_DESTINATION_META[id as WebSidebarDestination];
+        return { icon, label: t(label), active: id === active, open: () => setActive(id) };
+      }}
+      onCustomize={() => void nav.navigate(() => nav.openSettings('sidebar'), { keepUnderlying: true })}
+    />
+  </div>;
 }
 
 function PopoverDemo() {
@@ -135,6 +157,7 @@ export function OverlayChapter() {
         </Specimen>
       </Family>
       <Family title={t`个人资料与更多`}>
+        <Specimen name={t`侧栏`}><SidebarDemo /></Specimen>
         <Specimen name={t`个人资料`}>
           <div className="flex h-12 w-64 items-center gap-1 px-2">
             <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />

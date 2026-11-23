@@ -1,4 +1,4 @@
-import { MODEL_PICKER_BUDGET, rememberProfileModel, type AppSettings, type AssistantSettings, type AssistantSettingsUpdate, type NativeBackendDefaults, type NativeBackendId, type WorkItemSettings, type WorkItemSettingsUpdate } from '@contracts';
+import { DEFAULT_SIDEBAR_PINNED, MODEL_PICKER_BUDGET, rememberProfileModel, type AppSettings, type AssistantSettings, type AssistantSettingsUpdate, type NativeBackendDefaults, type NativeBackendId, type WorkItemSettings, type WorkItemSettingsUpdate } from '@contracts';
 import { api } from '@/lib/api';
 import { mergeSavedSettings, preserveNewerDefaultModel } from '@/lib/reconcile';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -6,6 +6,7 @@ import { createStore } from '@/lib/store';
 
 /** The fields this store writes: the per-backend defaults and the two settings that mirror them. */
 type DefaultsPatch = Partial<Pick<AppSettings, 'nativeBackendDefaults' | 'defaultBackendId' | 'defaultModel'>>;
+type BootstrapSettingsRevision = { defaults: number; sidebar: number };
 const DEFAULT_KEYS = ['defaultModel', 'defaultBackendId', 'nativeBackendDefaults'] as const;
 const touchesDefaults = (patch: Partial<AppSettings>) => DEFAULT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 
@@ -15,7 +16,7 @@ export interface SettingsHooks {
 }
 
 /**
- * The server's settings, plus the only path that writes the per-backend defaults.
+ * The server's settings, plus the shared writers for per-backend defaults and sidebar order.
  *
  * Those defaults travel as one `nativeBackendDefaults` map, so two writers building that map from
  * their own snapshots overwrite each other. Every write here is therefore queued, and builds its
@@ -23,9 +24,10 @@ export interface SettingsHooks {
  * write back). Writes from other browser tabs are not coordinated.
  */
 export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks = {}) {
-  const store = createStore<{ settings: AppSettings }>({ settings: initial });
+  const store = createStore<{ settings: AppSettings; loaded: boolean; sidebarPinnedDraft: string[] | undefined }>({ settings: initial, loaded: false, sidebarPinnedDraft: undefined });
   /** Bumped whenever a default is changed or applied, so an older read or write can tell it lost. */
   let revision = 0;
+  let sidebarRevision = 0;
   let tail: Promise<unknown> = Promise.resolve();
   const get = () => store.get().settings;
   const put = (settings: AppSettings) => store.set({ settings });
@@ -54,14 +56,45 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
     ...store,
     current: get,
     revision: () => revision,
-    /** A bootstrap read replaces settings unless a default was changed while it was in flight. */
-    absorb(incoming: AppSettings, revisionAtRequest: number): AppSettings {
-      const next = preserveNewerDefaultModel(incoming, get(), revisionAtRequest, revision);
-      put(next);
-      return next;
+    bootstrapRevision: (): BootstrapSettingsRevision => ({ defaults: revision, sidebar: sidebarRevision }),
+    /** A bootstrap read preserves defaults and sidebar settings changed while it was in flight. */
+    absorb(incoming: AppSettings, requested: BootstrapSettingsRevision): AppSettings {
+      const current = get();
+      const next = preserveNewerDefaultModel(incoming, current, requested.defaults, revision);
+      const freshSidebar = store.get().sidebarPinnedDraft === undefined && requested.sidebar === sidebarRevision;
+      const settings = freshSidebar ? next : { ...next, sidebarPinned: current.sidebarPinned };
+      store.set({ settings, loaded: true });
+      return settings;
     },
     /** For sections that PATCH keys no one else writes and hand the server's answer over. */
     applySaved,
+    /** Both editors show changes immediately. Returns true when this write is confirmed by the server. */
+    async updateSidebarPinned(change: (current: readonly string[]) => readonly string[]): Promise<boolean> {
+      const state = store.get();
+      const current = state.sidebarPinnedDraft ?? state.settings.sidebarPinned ?? DEFAULT_SIDEBAR_PINNED;
+      const updated = change(current);
+      if (updated.length === current.length && updated.every((id, index) => id === current[index])) return false;
+      const sidebarPinned = [...updated];
+      const write = ++sidebarRevision;
+      store.set({ sidebarPinnedDraft: sidebarPinned });
+      return enqueue(async () => {
+        if (sidebarRevision !== write) return false;
+        try {
+          const patch = { sidebarPinned };
+          applySaved(await api.updateSettings(patch), patch);
+          return true;
+        } catch (error) {
+          if (sidebarRevision === write) throw error;
+          return false;
+        } finally {
+          if (sidebarRevision === write) {
+            // Reads started during a write can also carry its previous order.
+            sidebarRevision += 1;
+            store.set({ sidebarPinnedDraft: undefined });
+          }
+        }
+      });
+    },
     /**
      * Writes a change to one backend's defaults. The patch is built when the write's turn comes, from
      * the settings as they are then; `change` returns that backend's new entry, or undefined for

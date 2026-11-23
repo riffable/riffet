@@ -39,7 +39,19 @@ export function toggleSidebarPinned(saved: readonly string[] | undefined, id: st
 
 /** [saved] with its rows in [ordered]'s order, slot by slot; ids this client does not offer keep their places. */
 export function reorderSidebarPinned(saved: readonly string[] | undefined, ordered: readonly string[]): string[] {
-  const rows = new Set(ordered);
-  const queue = [...ordered];
-  return savedSidebarPinned(saved).map((id) => rows.has(id) ? queue.shift()! : id);
+  const current = savedSidebarPinned(saved);
+  const queue = ordered.filter((id) => current.includes(id));
+  const rows = new Set(queue);
+  return current.map((id) => rows.has(id) ? queue.shift()! : id);
+}
+
+/** Places an offered destination before another sidebar row, or at the end when beforeId is null. */
+export function moveSidebarPinned(saved: readonly string[], offered: readonly string[], id: string, beforeId: string | null): readonly string[] {
+  if (id === beforeId || !offered.includes(id)) return saved;
+  const ordered = saved.filter((entry) => entry !== id && offered.includes(entry));
+  const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
+  if (index < 0) return saved;
+  ordered.splice(index, 0, id);
+  const current = saved.includes(id) ? saved : [...saved, id];
+  return reorderSidebarPinned(current, ordered);
 }
