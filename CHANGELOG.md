@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- A background browser tab now counts conversations waiting for you or with unread results. Results read on another device clear from the count and from open conversation tabs after sync. In the default sidebar scope, Mark all as read also covers conversations started from this server on a linked server.
 - The web new-session picker hides agents missing from the selected server. Reopening it after installing an agent shows the new choice.
 - On the web, ⌘K opens a wider, taller search dialog on desktop so more matches and longer snippets are visible at once. Recent search terms appear as chips above recent sessions. Select a term to search again in its original Title or Content mode, or use × to remove it. History stays in this browser for this Riffet site.
 - On desktop web, drag sidebar destinations to reorder them, drag them out of More to pin them at a specific position, or drop them onto More to unpin them.

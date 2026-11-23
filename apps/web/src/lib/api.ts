@@ -663,6 +663,13 @@ export const api = {
   /** The conversation was on screen up to `activityAt`; the server keeps the latest such time for every device. */
   markSessionSeen: (id: string, activityAt: string) => request<Session>(`/api/sessions/${encodeURIComponent(id)}/seen`, json('POST', { activityAt })),
   markAllSessionsSeen: () => request<{ sessionIds: string[] }>('/api/sessions/seen', json('POST', { all: true })),
+  markSessionsSeen: async (sessionIds: readonly string[]) => {
+    const path = serverPath('/api/sessions/seen');
+    const batchSize = 5000; // The endpoint's limit for explicit ids.
+    for (let offset = 0; offset < sessionIds.length; offset += batchSize) {
+      await request(path, json('POST', { sessionIds: sessionIds.slice(offset, offset + batchSize) }));
+    }
+  },
   setPinOrder: async (sessionIds: string[]) => (await request<{ sessions: Session[] }>('/api/sessions/pin-order', json('PUT', { sessionIds }))).sessions,
   /** Provider conversations on the server's machine (docs/TERMINAL-SESSIONS.md). */
   externalSessions: (params: { scope: 'project' | 'directory' | 'all'; projectId?: string; cwd?: string; backendId?: string; q?: string; cursor?: string; limit?: number; nonInteractive?: boolean; refresh?: boolean }, signal?: AbortSignal) => request<ExternalSessionPage>(`/api/external-sessions${queryString(params)}`, { signal }),

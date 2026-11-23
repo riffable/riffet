@@ -1,7 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { isDoneUnseen, type Session } from '@contracts';
+import { isDoneUnseen, needsYou, type Session } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { IconChevronDown, IconGitBranch, IconFolder, IconLink, IconMessageSquareText, IconPencilLine, IconPin, IconPinOff, IconPlus, IconServer, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -52,12 +52,19 @@ function TabLead({ session }: { session: Session }) {
 }
 
 /** What needs the reader: a wait, or a failure or result they have not seen. */
-function TabDot({ session, unread }: { session: Session; unread: boolean }) {
+function TabDot({ session }: { session: Session }) {
   const { t } = useLingui();
-  if (session.state === 'waiting') return <StatusDot tone="warning" pulse label={t`等待处理`} className="size-[7px] shadow-[0_0_0_3px_var(--warning-soft)]" />;
-  if (session.state === 'failed' && isDoneUnseen(session)) return <StatusDot tone="danger" label={t`运行失败`} className="size-[7px]" />;
-  if (unread) return <StatusDot tone="accent" label={t({ message: '已完成', context: 'workbench-item-status-completed' })} className="size-[7px]" />;
-  return null;
+  const waiting = needsYou(session);
+  if (!waiting && !isDoneUnseen(session)) return null;
+  return (
+    <span className="grid place-items-center group-hover/tab:hidden group-data-[active=true]/tab:hidden">
+      {waiting
+        ? <StatusDot tone="warning" pulse label={t`等待处理`} className="size-[7px] shadow-[0_0_0_3px_var(--warning-soft)]" />
+        : session.state === 'failed'
+          ? <StatusDot tone="danger" label={t`运行失败`} className="size-[7px]" />
+          : <StatusDot tone="accent" label={session.state === 'interrupted' ? t`已中断` : t({ message: '已完成', context: 'workbench-item-status-completed' })} className="size-[7px]" />}
+    </span>
+  );
 }
 
 interface TabProps {
@@ -67,7 +74,6 @@ interface TabProps {
   /** The one tab Tab reaches; arrow keys move among the rest. */
   stop: boolean;
   pinned: boolean;
-  unread: boolean;
   variant: TabBarVariant;
   /** Opened after the bar was already showing: it grows into place. */
   enter: boolean;
@@ -75,7 +81,7 @@ interface TabProps {
   onHover: (node: HTMLElement | undefined, id: string) => void;
 }
 
-function Tab({ session, preview, active, stop, pinned, unread, variant, enter, onMenu, onHover }: TabProps) {
+function Tab({ session, preview, active, stop, pinned, variant, enter, onMenu, onHover }: TabProps) {
   const { t } = useLingui();
   const ref = useRef<HTMLDivElement>(null);
   // Only the mount: a tab that is already showing has nowhere to grow from.
@@ -85,7 +91,6 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
   const server = useServerBadge(session.id);
   const title = session.title;
   const strip = variant === 'strip';
-  const dot = session.state === 'waiting' || (session.state === 'failed' && isDoneUnseen(session)) || unread;
   return (
     <div
       ref={ref}
@@ -137,7 +142,7 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
           : <IconLink aria-hidden className={cn('size-3 shrink-0', server.offline ? 'text-warning' : 'text-fg-4')} />
       )}
       <span className="grid size-5 shrink-0 place-items-center">
-        {dot && <span className="grid place-items-center group-hover/tab:hidden group-data-[active=true]/tab:hidden"><TabDot session={session} unread={unread} /></span>}
+        <TabDot session={session} />
         <button
           type="button"
           tabIndex={-1}
@@ -299,7 +304,6 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
   const { t } = useLingui();
   const { tabs: store, handlers } = useStores();
   const entries = useTabs((state) => state.tabs);
-  const unread = useTabs((state) => state.unread);
   const ids = useMemo(() => new Set(entries.map((entry) => entry.sessionId)), [entries]);
   const sessions = useLists((state) => state.sessions.filter((session) => ids.has(session.id)), sameList);
   const projects = useLists((state) => state.projects);
@@ -427,7 +431,7 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
     const session = byId.get(entry.sessionId);
     if (!session) return null;
     const enter = Boolean(shown.current && !shown.current.ids.has(session.id) && !swapped.has(session.id));
-    return <Tab key={session.id} session={session} preview={entry.preview} pinned={pinned} active={session.id === activeId} stop={session.id === stopId} unread={Boolean(unread[session.id])} variant={variant} enter={enter} onMenu={onMenu} onHover={onHover} />;
+    return <Tab key={session.id} session={session} preview={entry.preview} pinned={pinned} active={session.id === activeId} stop={session.id === stopId} variant={variant} enter={enter} onMenu={onMenu} onHover={onHover} />;
   };
   const withLeaving = (nodes: ReactNode[], zone: 'pins' | 'tabs') => {
     for (const item of leaving.filter((ghost) => ghost.zone === zone).sort((a, b) => a.index - b.index)) {

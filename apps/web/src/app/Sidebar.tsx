@@ -115,6 +115,10 @@ type SidebarSort = 'activity' | 'tabs';
 /** `'relevant'` shows this server's own conversations plus remote ones launched from here; a server id narrows to that peer. */
 type SidebarServerFilter = 'relevant' | 'all' | 'local' | (string & {});
 
+function startedFromServer(session: Session, serverId: string | undefined): boolean {
+  return Boolean(serverId) && session.origin?.kind === 'link' && session.origin.serverId === serverId;
+}
+
 export function timeBucket(session: Session, now: Date): string {
   if (session.pinnedAt) return i18n._(msg`置顶`);
   if (isActiveSession(session)) return i18n._(msg({ message: '进行中', context: 'workbench-session-status-active' }));
@@ -379,7 +383,7 @@ export function Sidebar(props: Props) {
       if (!hasLinkedServers || serverFilter === 'all' || session.id === selectedSessionId) return true;
       const ownerServer = serverOfObject(session.id);
       if (serverFilter === 'local') return !ownerServer;
-      if (serverFilter === 'relevant') return !ownerServer || (session.origin?.kind === 'link' && Boolean(selfServerId) && session.origin.serverId === selfServerId);
+      if (serverFilter === 'relevant') return !ownerServer || startedFromServer(session, selfServerId);
       return ownerServer === serverFilter;
     });
   }, [sessions, selectedSessionId, hasLinkedServers, serverFilter, selfServerId]);
@@ -557,6 +561,27 @@ export function Sidebar(props: Props) {
 
   const owner = useLists((state) => state.owner);
   const linkedStatus = useLists((state) => state.linkedStatus);
+  const markAllSeen = async () => {
+    const requests: Promise<unknown>[] = [];
+    if (serverFilter === 'all' || serverFilter === 'local' || serverFilter === 'relevant') {
+      requests.push(api.markAllSessionsSeen());
+    }
+    const targets = peerServers.filter((peer) => peer.online && linkedStatus[peer.id] !== 'offline'
+      && (serverFilter === 'all' || serverFilter === 'relevant' || serverFilter === peer.id));
+    if (targets.length) {
+      const idsByServer = new Map<string, string[]>(targets.map((peer) => [peer.id, []]));
+      // Only sessions shared with this workbench. Each peer's assistant and quick chats stay private to it.
+      for (const session of sessions) {
+        if (serverFilter === 'relevant' && !startedFromServer(session, selfServerId)) continue;
+        const serverId = serverOfObject(session.id);
+        if (serverId) idsByServer.get(serverId)?.push(session.id);
+      }
+      for (const [serverId, ids] of idsByServer) {
+        if (ids.length) requests.push(apiFor(serverId).markSessionsSeen(ids));
+      }
+    }
+    await Promise.all(requests);
+  };
   const { saved, save, canEdit } = useSidebarPinned();
   const mainViews = props.mainViews ?? [];
   const mainViewMap = useMemo(() => new Map(mainViews.map((view) => [view.id, view])), [mainViews]);
@@ -654,14 +679,7 @@ export function Sidebar(props: Props) {
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)}><Trans>显示已归档</Trans></DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem checked={unreadOnly} onCheckedChange={(value) => setUnreadOnly(value === true)}><Trans>只看未读</Trans></DropdownMenuCheckboxItem>
-                <DropdownMenuItem onSelect={() => {
-                  const targets = serverFilter === 'all'
-                    ? ['', ...peerServers.filter((item) => linkedStatus[item.id] !== 'offline').map((item) => item.id)]
-                    : serverFilter === 'relevant' || serverFilter === 'local'
-                      ? ['']
-                      : linkedStatus[serverFilter] !== 'offline' ? [serverFilter] : [];
-                  void Promise.all(targets.map((server) => apiFor(server || undefined).markAllSessionsSeen())).catch((error) => toast.error(errorMessage(error)));
-                }}><Trans>全部标为已读</Trans></DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { void markAllSeen().catch((error) => toast.error(errorMessage(error))); }}><Trans>全部标为已读</Trans></DropdownMenuItem>
                 {hasLinkedServers && <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel><Trans>服务器范围</Trans></DropdownMenuLabel>

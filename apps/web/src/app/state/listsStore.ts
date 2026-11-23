@@ -102,6 +102,8 @@ export function createListsStore(deps: ListsDeps) {
   });
   /** Bumped by every local write and around every bootstrap read; an in-flight poll that straddles one is dropped. */
   let revision = 0;
+  /** An in-flight delta only belongs to the list revision it started from. */
+  let bootstrapGeneration = 0;
   let negotiatedProtocol = cached?.bootstrap.protocol;
   /** Projects have their own write generation: session updates must not invalidate their reads. */
   let projectsGeneration = 0;
@@ -109,7 +111,7 @@ export function createListsStore(deps: ListsDeps) {
   let terminalsGeneration = 0;
   /** The project revision the held projects were read at, when known. */
   let projectsVersion: number | undefined;
-  let pendingBootstrap: Promise<Bootstrap> | undefined;
+  let pendingBootstrap: { result: Promise<Bootstrap>; supersededBy?: Promise<Bootstrap> } | undefined;
   /** The `ETag` each list was last applied with. Absent means the server sent none, so every poll reads in full. */
   const etags: { sessions?: string; terminals?: string } = {};
   /** The state the list last reported per conversation, so a transition can be told from a re-read. */
@@ -186,33 +188,35 @@ export function createListsStore(deps: ListsDeps) {
     },
     /**
      * The full read. Settings are folded in by the settings store; the caller applies the selection.
-     * Resolves with the bootstrap as the server sent it (settings after the merge).
+     * Resolves with the applied bootstrap, including settings and session updates seen in flight.
      */
     async load(): Promise<Bootstrap> {
       const requestedRevision = deps.settings.bootstrapRevision();
       const requestedWorkItemsTicket = deps.workItems?.ticket() ?? 0;
       const requestedProjectsGeneration = ++projectsGeneration;
+      const sessionsAtRequest = store.get().sessions;
       revision += 1;
-      const pending = api.bootstrap();
-      pendingBootstrap = pending;
-      try {
-        const data = await pending;
+      const pending: NonNullable<typeof pendingBootstrap> = { result: api.bootstrap().then((data) => {
+        if (pending.supersededBy) return pending.supersededBy;
         negotiatedProtocol = data.protocol;
         revision += 1;
+        bootstrapGeneration += 1;
         terminalsGeneration += 1;
         // A linked server's settings, owner and work items are its own; only its lists are taken.
-        const next = linked ? { ...data, settings: {}, owner: undefined, workItemSummaries: undefined } : { ...data, settings: deps.settings.absorb(data.settings, requestedRevision) };
+        const settings = linked ? {} : deps.settings.absorb(data.settings, requestedRevision);
         if (!linked) deps.workItems?.absorb(data.workItemSummaries, data.revisions?.workItems, requestedWorkItemsTicket);
-        listCache.save(next);
         // The reads that follow start where these lists stand; an older server names no revisions, so they start over.
         etags.sessions = data.revisions ? `W/"${data.revisions.sessions}"` : undefined;
         etags.terminals = data.revisions ? `W/"${data.revisions.terminals}"` : undefined;
         const current = store.get();
         const applyProjects = requestedProjectsGeneration === projectsGeneration;
-        const previousSessions = current.sessions;
+        const receivedSessions = data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle);
+        const sessions = reconcileById(current.sessions, mergeBootstrapSessions(sessionsAtRequest, current.sessions, receivedSessions));
         if (applyProjects) { projectsGeneration += 1; projectsVersion = data.revisions?.projects; }
+        const next = { ...data, sessions, settings, ...(linked ? { owner: undefined, workItemSummaries: undefined } : {}) };
+        listCache.save(next);
         // The baseline a later delta's state changes are told against.
-        sessionStates = new Map(data.sessions.map((item) => [item.id, item.state]));
+        sessionStates = new Map(sessions.map((item) => [item.id, item.state]));
         store.set({
           loaded: true,
           projectlessTasks: data.protocol?.features.includes('projectless-tasks') ?? false,
@@ -220,7 +224,7 @@ export function createListsStore(deps: ListsDeps) {
           sessionDelete: data.protocol?.features.includes('session-delete-v1') ?? false,
           fileWrites: data.protocol?.features.includes('file-write-v1') ?? false,
           projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
-          sessions: reconcileById(current.sessions, data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle)),
+          sessions,
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
           ...(data.owner && !linked ? { owner: data.owner } : {}),
@@ -229,8 +233,16 @@ export function createListsStore(deps: ListsDeps) {
           bootError: '',
           bootUnreachable: false,
         });
-        confirmMissing(previousSessions, data.sessions);
+        confirmMissing(current.sessions, data.sessions);
         return next;
+      }, (error: unknown) => {
+        if (pending.supersededBy) return pending.supersededBy;
+        throw error;
+      }) };
+      if (pendingBootstrap) pendingBootstrap.supersededBy = pending.result;
+      pendingBootstrap = pending;
+      try {
+        return await pending.result;
       } finally {
         if (pendingBootstrap === pending) pendingBootstrap = undefined;
       }
@@ -306,9 +318,10 @@ export function createListsStore(deps: ListsDeps) {
     upsertSession(incoming: Session) {
       // A late write for a deleted conversation (a stream frame, a slow response) must not bring it back.
       if (isSessionDeleted(incoming.id)) return;
-      const updated = withShownTitle(incoming);
+      const shown = withShownTitle(incoming);
       mutate((current) => {
-        const previous = current.sessions.find((item) => item.id === updated.id);
+        const previous = current.sessions.find((item) => item.id === shown.id);
+        const updated = previous ? mergeSessionUpdate(previous, shown) : shown;
         if (previous && sameRecord(previous, updated)) return current;
         return { sessions: previous ? current.sessions.map((item) => item.id === updated.id ? updated : item) : [...current.sessions, updated] };
       });
@@ -375,7 +388,7 @@ export function createListsStore(deps: ListsDeps) {
         void (async () => {
           // A bootstrap owns the full snapshot; read projects after it instead of racing its write.
           while (pendingBootstrap) {
-            try { await pendingBootstrap; } catch { /* The project read can still recover independently. */ }
+            try { await pendingBootstrap.result; } catch { /* The project read can still recover independently. */ }
             if (!active) return;
           }
           // The bootstrap may have read this very revision.
@@ -438,6 +451,7 @@ export function createListsStore(deps: ListsDeps) {
         if (sessionsInFlight) { sessionsAgain = true; return; }
         sessionsInFlight = true;
         const startedAt = revision;
+        const requestedBootstrapGeneration = bootstrapGeneration;
         const since = hasDelta() ? etagRevision(etags.sessions) : undefined;
         const read: Promise<ConditionalList<Pick<SessionListDelta, 'full' | 'sessions' | 'removed'>>> = since === undefined
           ? api.sessionsIfChanged(etags.sessions).then((answer) => answer.unchanged ? answer : { ...answer, data: { full: true, sessions: answer.data } })
@@ -445,6 +459,7 @@ export function createListsStore(deps: ListsDeps) {
         void read
           .then((answer) => {
             if (!active) return;
+            if (requestedBootstrapGeneration !== bootstrapGeneration) { sessionsAgain = true; return; }
             if (store.get().status === 'offline') deps.handlers.reload();
             else store.set({ status: 'fresh' });
             if (answer.unchanged) return;
@@ -467,8 +482,8 @@ export function createListsStore(deps: ListsDeps) {
             const sessions = mergeDelta(current.sessions, incoming.map(withShownTitle), removed);
             if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
           })
-          .catch(onReadError)
-          .finally(() => { sessionsInFlight = false; if (sessionsAgain) { sessionsAgain = false; readSessions(); } });
+          .catch((error: unknown) => { if (requestedBootstrapGeneration === bootstrapGeneration) onReadError(error); })
+          .finally(() => { sessionsInFlight = false; if (active && sessionsAgain) { sessionsAgain = false; readSessions(); } });
       };
       const readTerminals = () => {
         if (terminalsInFlight) { terminalsAgain = true; return; }
@@ -527,7 +542,7 @@ export function createListsStore(deps: ListsDeps) {
           const terminals = terminalsPushed === undefined || terminalsPushed !== etagRevision(etags.terminals);
           if (sessions || terminals) poll({ sessions, terminals });
         };
-        if (pendingBootstrap) void pendingBootstrap.then(readMoved, readMoved); else readMoved();
+        if (pendingBootstrap) void pendingBootstrap.result.then(readMoved, readMoved); else readMoved();
       };
       const task = (event: Event) => {
         try { const parsed = JSON.parse((event as MessageEvent<string>).data) as Partial<TaskEvent>; if (typeof parsed.id === 'string' && typeof parsed.projectId === 'string') announceTask(parsed as TaskEvent); } catch { /* not a task event */ }
@@ -641,7 +656,7 @@ export function createListsStore(deps: ListsDeps) {
         };
         for (const [type, listener] of Object.entries(events)) source.addEventListener(type, listener);
       };
-      if (pendingBootstrap) void pendingBootstrap.then(connect, connect);
+      if (pendingBootstrap) void pendingBootstrap.result.then(connect, connect);
       else connect();
       const timer = window.setInterval(() => { if (missed || !pushed || Date.now() - lastPoll >= PUSHED_POLL_MS) poll(); }, 5000);
       // While the stream is up it has told every project change; without it the projects are read again.
@@ -679,6 +694,28 @@ export function createListsStore(deps: ListsDeps) {
 
 export type ListsStore = ReturnType<typeof createListsStore>;
 
+/** Keep changes since the request. The full list supplies membership and replaces untouched cached rows. */
+function mergeBootstrapSessions(atRequest: Session[], held: Session[], received: Session[]): Session[] {
+  if (atRequest === held) return received;
+  const before = new Map(atRequest.map((session) => [session.id, session]));
+  const updated = new Map(held.filter((session) => before.get(session.id) !== session).map((session) => [session.id, session]));
+  return received.map((session) => {
+    const changed = updated.get(session.id);
+    return changed ? mergeSessionUpdate(changed, session) : session;
+  });
+}
+
+/** The detail stream and list can arrive in either order. Reading on any device only moves forward. */
+function mergeSessionUpdate(held: Session, incoming: Session): Session {
+  const incomingIsOlder = incoming.updatedAt !== held.updatedAt && Date.parse(incoming.updatedAt) < Date.parse(held.updatedAt);
+  const latest = incomingIsOlder ? held : incoming;
+  const seen = incomingIsOlder ? incoming.seenActivityAt : held.seenActivityAt;
+  if (seen && seen !== latest.seenActivityAt && (!latest.seenActivityAt || Date.parse(seen) > Date.parse(latest.seenActivityAt))) {
+    return { ...latest, seenActivityAt: seen };
+  }
+  return latest;
+}
+
 /**
  * [held] with a delta applied (docs/LIST-SYNC.md): a changed session replaces its copy unless the copy
  * is newer (a stream frame landed meanwhile), removed ones go, and the order is the server's.
@@ -692,7 +729,7 @@ function mergeDelta(held: Session[], changed: readonly Session[], removed: reado
     const update = incoming.get(item.id);
     if (!update) return [item];
     incoming.delete(item.id);
-    return [update.updatedAt < item.updatedAt ? item : update];
+    return [mergeSessionUpdate(item, update)];
   });
   next.push(...incoming.values());
   next.sort((a, b) => (b.lastActivityAt ?? b.createdAt).localeCompare(a.lastActivityAt ?? a.createdAt));

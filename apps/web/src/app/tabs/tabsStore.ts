@@ -3,7 +3,7 @@ import { msg } from '@lingui/core/macro';
 import type { Session } from '@contracts';
 import { api, apiFor } from '@/lib/api';
 import { serverOfObject } from '@/lib/server-routing';
-import { comparePinnedSessions, isActiveSession, sortSessionsByActivity } from '@/lib/session-order';
+import { comparePinnedSessions, sortSessionsByActivity } from '@/lib/session-order';
 import { createStore } from '@/lib/store';
 import { toast } from '@/lib/toast';
 import { errorMessage, isRecord, readStored, writeStored } from '@/lib/utils';
@@ -49,9 +49,7 @@ export interface TabsState {
   newMode: TabNewMode;
   /** In the order the reader keeps them; which zone a tab shows in follows its session's pin. */
   tabs: TabEntry[];
-  /** Conversations that finished a turn while their tab was not the one being read. */
-  unread: Readonly<Record<string, true>>;
-  /** The conversation last read: where the next tab opens, also while the project home is showing. */
+  /** The conversation last selected: where the next tab opens, also while the project home is showing. */
   anchor: string;
 }
 
@@ -145,7 +143,7 @@ export interface TabsDeps {
  * the few ways a reader (or the workbench) commits to it keep that tab.
  */
 export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
-  const store = createStore<TabsState>({ style: readStyle(), openMode: readOpenMode(), newMode: readNewMode(), tabs: readTabs(), unread: {}, anchor: nav.get().sessionId });
+  const store = createStore<TabsState>({ style: readStyle(), openMode: readOpenMode(), newMode: readNewMode(), tabs: readTabs(), anchor: nav.get().sessionId });
   const closedStack: ClosedTab[] = [];
   /** A sidebar ⌘-click names the conversation it is about to select, which the navigation gate may delay. */
   let pendingKeep = '';
@@ -168,34 +166,23 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     launched = undefined;
     return store.get().newMode === 'keep';
   };
-  const withoutUnread = (unread: TabsState['unread'], ids: readonly string[]) => {
-    if (!ids.some((id) => unread[id])) return unread;
-    const next = { ...unread };
-    for (const id of ids) delete next[id];
-    return next;
-  };
-
-  /**
-   * Makes sure [sessionId] has a tab, as a preview unless [wantKeep] (or the reader keeps every opened
-   * one), and marks it read.
-   */
+  /** Makes sure [sessionId] has a tab, as a preview unless [wantKeep] (or the reader keeps every opened one). */
   const select = (sessionId: string, wantKeep: boolean) => {
     const sessions = sessionMap();
     const session = sessions.get(sessionId);
     if (!session || session.archivedAt || isMain(sessionId)) return;
     const keep = wantKeep || store.get().openMode === 'keep';
     store.set((state) => {
-      const unread = withoutUnread(state.unread, [sessionId]);
       const existing = state.tabs.find((tab) => tab.sessionId === sessionId);
       if (existing) {
         const tabs = keep && existing.preview ? state.tabs.map((tab) => tab === existing ? { sessionId, preview: false } : tab) : state.tabs;
-        return { tabs, unread, anchor: sessionId };
+        return { tabs, anchor: sessionId };
       }
       const entry: TabEntry = { sessionId, preview: !keep };
       const previewAt = keep ? -1 : state.tabs.findIndex((tab) => tab.preview);
-      if (previewAt >= 0) return { tabs: state.tabs.map((tab, index) => index === previewAt ? entry : tab), unread, anchor: sessionId };
+      if (previewAt >= 0) return { tabs: state.tabs.map((tab, index) => index === previewAt ? entry : tab), anchor: sessionId };
       const zones = tabZones(state.tabs, sessions);
-      return { tabs: insertNormal(state.tabs, zones.normal, entry, normalInsertIndex(zones, state.anchor)), unread, anchor: sessionId };
+      return { tabs: insertNormal(state.tabs, zones.normal, entry, normalInsertIndex(zones, state.anchor)), anchor: sessionId };
     });
   };
 
@@ -206,18 +193,14 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   };
 
   const remove = (ids: ReadonlySet<string>) => {
-    store.set((state) => ({ tabs: state.tabs.filter((tab) => !ids.has(tab.sessionId)), unread: withoutUnread(state.unread, [...ids]) }));
+    store.set((state) => ({ tabs: state.tabs.filter((tab) => !ids.has(tab.sessionId)) }));
   };
 
   // The selection drives the tabs.
   let lastSelected = nav.get().sessionId;
   nav.subscribe(() => {
-    const state = nav.get();
-    const { sessionId } = state;
-    if (sessionId === lastSelected) {
-      if (sessionId && !isPageOpen(state) && store.get().unread[sessionId]) store.set((current) => ({ unread: withoutUnread(current.unread, [sessionId]) }));
-      return;
-    }
+    const { sessionId } = nav.get();
+    if (sessionId === lastSelected) return;
     lastSelected = sessionId;
     detached = '';
     if (!sessionId || store.get().style === 'off') return;
@@ -234,30 +217,23 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     if (seed) launched = { sessionId: seed.sessionId, at: Date.now() };
   });
 
-  // What the lists say about each conversation, to tell a change from a re-read.
-  let seen = new Map<string, { state: Session['state']; pinned: boolean }>();
+  let pinnedBefore = new Set<string>();
   const onLists = () => {
     const { loaded, status, sessions } = lists.get();
     if (!loaded) return;
-    const next = new Map<string, { state: Session['state']; pinned: boolean }>();
+    const pinnedNow = new Set<string>();
     const selected = isPageOpen(nav.get()) ? '' : nav.get().sessionId;
-    const unread: string[] = [];
     const unpinned: string[] = [];
     const tabbed = new Set(store.get().tabs.map((tab) => tab.sessionId));
     for (const session of sessions) {
-      const pinned = Boolean(session.pinnedAt);
-      next.set(session.id, { state: session.state, pinned });
-      const before = seen.get(session.id);
-      if (!before || !tabbed.has(session.id)) continue;
-      if (session.id !== selected && isActiveSession({ state: before.state }) && session.state === 'idle') unread.push(session.id);
-      if (before.pinned && !pinned) unpinned.push(session.id);
+      if (session.pinnedAt) pinnedNow.add(session.id);
+      else if (pinnedBefore.has(session.id) && tabbed.has(session.id)) unpinned.push(session.id);
     }
-    seen = next;
+    pinnedBefore = pinnedNow;
     // Tabs stored before the main conversation became a page.
     const mainTabs = store.get().tabs.filter((tab) => isMain(tab.sessionId)).map((tab) => tab.sessionId);
     if (mainTabs.length) remove(new Set(mainTabs));
     if (store.get().style === 'off') return;
-    if (unread.length) store.set((state) => ({ unread: { ...state.unread, ...Object.fromEntries(unread.map((id) => [id, true as const])) } }));
     if (unpinned.length) {
       // An unpinned conversation returns to the front of the normal zone, where it is easy to find.
       store.set((state) => {

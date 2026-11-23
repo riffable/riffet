@@ -56,6 +56,8 @@ Web 在服务声明 `list-stream-ws` 时使用 WebSocket。HTTP/1.1 下，多个
 3. 合并增量：按 id 替换；本地已有更新的副本（`updatedAt` 更大，来自打开会话的流）时保留本地；删除 `removed` 中的 id；再按 `lastActivityAt ?? createdAt` 倒序，与全量的顺序一致。
 4. 读取被本地写入打断而丢弃时，立即再读一次，不等下一次推送。
 
+Web 收到单会话更新或列表增量时，保留更新时间较新的会话状态，并取两份记录中较晚的 `seenActivityAt`。刷新工作台期间收到的会话更新也按这条规则合并，哪些会话可见由最新的 bootstrap 决定。早于这次刷新的增量回复会丢弃，并从新的修订号补读。
+
 | 端 | 推送 | 兜底轮询 |
 | --- | --- | --- |
 | Web（`apps/web/src/app/state/listsStore.ts`） | 常连 | 推送连着 30 s；断开 5 s；标签页隐藏 15 s |

@@ -875,6 +875,7 @@ msgid "工作台"
 msgstr "Workbench"
 
 #: src/app/Header.tsx
+#: src/app/tabs/TabBar.tsx
 msgid "已中断"
 msgstr "Interrupted"
 
