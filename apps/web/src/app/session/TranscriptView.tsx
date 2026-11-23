@@ -1760,20 +1760,24 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           {loaded && !earlierTopicsCollapsed && hasMoreHistory && <PageProbe probeRef={earlierProbe} failed={earlier.failed} loading={loadingEarlier} onRetry={earlier.retry} className="mb-5" />}
           {/* A streamed frame hands unchanged rows back as the same objects, so their memo still holds.
               A long list mounts only a window of them, with empty spacers standing in for the height of
-              the rest; the spacers keep their keys, so the rows never remount when the mode changes. */}
-          <TranscriptCatchUp.Provider value={catchUp}><RememberedValues.Provider value={remembered}>
-          {layout ? (() => {
-            const mounted: ReactNode[] = [];
-            let cursor = 0;
-            segments.forEach(([from, to], segment) => {
-              mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
-              for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!));
-              cursor = to;
-            });
-            mounted.push(<div key="space:end" aria-hidden data-virtual-spacer style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
-            return mounted;
-          })() : rowsAll.map(renderRow)}
-          </RememberedValues.Provider></TranscriptCatchUp.Provider>
+              the rest; the spacers keep their keys, so the rows never remount when the mode changes.
+              Dedicated `[data-transcript-rows]` isolates row bisection (`readingAnchor`, `TurnRail`)
+              from notices, probes, interaction cards, and trailing spacers. */}
+          <div data-transcript-rows className="flex min-w-0 flex-col">
+            <TranscriptCatchUp.Provider value={catchUp}><RememberedValues.Provider value={remembered}>
+            {layout ? (() => {
+              const mounted: ReactNode[] = [];
+              let cursor = 0;
+              segments.forEach(([from, to], segment) => {
+                mounted.push(<div key={`space:${segment}`} ref={segment === 0 ? listMarker : undefined} aria-hidden data-virtual-spacer style={{ height: layout.offsets[from]! - layout.offsets[cursor]! }} />);
+                for (let index = from; index < to; index += 1) mounted.push(renderRow(rowsAll[index]!));
+                cursor = to;
+              });
+              mounted.push(<div key="space:end" aria-hidden data-virtual-spacer style={{ height: layout.offsets[rowsAll.length]! - layout.offsets[cursor]! }} />);
+              return mounted;
+            })() : rowsAll.map(renderRow)}
+            </RememberedValues.Provider></TranscriptCatchUp.Provider>
+          </div>
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}
           {progress && !heldFooter && <div className={standaloneProgressGap}>{progress}</div>}

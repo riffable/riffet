@@ -65,9 +65,10 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
   const [prevChoice, setPrevChoice] = useState(choice);
   const [prevReveal, setPrevReveal] = useState(reveal);
   /**
-   * An automatic fold put off while the reader is reading visible prose below this block without
-   * enough scroll room above to absorb the collapse. Does not record a manual choice, so once the
-   * block scrolls off-screen with room above it folds silently in one commit.
+   * An automatic fold put off while the reader is off-bottom reading prose below this block, so
+   * turn completion changes 0px above the viewport. Does not record a manual choice, so once the
+   * reader returns to following or scrolls above the block (moving it off-screen below) it folds
+   * cleanly without disturbing reading.
    */
   const [deferredFold, setDeferredFold] = useState(false);
   /** Folding is allowed only for a normal completion. Callers that omit it keep the historical rule. */
@@ -155,17 +156,22 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
       if (!canRelease()) return;
       setDeferredFold(false);
     };
-    // Wait until scrolling settles so the synchronous scrollTop adjustment never breaks momentum.
-    const onScroll = () => {
+    // Wait until scrolling settles so releasing the fold never interrupts momentum.
+    const scheduleRelease = () => {
       clearTimeout(timer);
       if (!canRelease()) return;
       timer = setTimeout(tryRelease, 180);
     };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
+    const observer = new MutationObserver(scheduleRelease);
+    observer.observe(scroller, { attributes: true, attributeFilter: [TRANSCRIPT_ATTR.following] });
+    scroller.addEventListener('scroll', scheduleRelease, { passive: true });
     scroller.addEventListener('scrollend', tryRelease);
+    // Cover the case where following already flipped true before this effect attached.
+    scheduleRelease();
     return () => {
       clearTimeout(timer);
-      scroller.removeEventListener('scroll', onScroll);
+      observer.disconnect();
+      scroller.removeEventListener('scroll', scheduleRelease);
       scroller.removeEventListener('scrollend', tryRelease);
     };
   }, [deferredFold]);

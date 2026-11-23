@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   canReleaseDeferredProcessFold,
+  captureReadingAnchor,
   decideProcessFold,
   readingAnchorTop,
   TRANSCRIPT_ATTR,
@@ -20,40 +21,40 @@ const metrics = (overrides: Partial<ProcessFoldMetrics> = {}): ProcessFoldMetric
 });
 
 describe('process auto-fold policy invariants', () => {
-  it('defers folding when a non-following reader views prose below with insufficient scroll room', () => {
+  it('defers folding whenever an off-bottom reader views prose below or alongside the process block', () => {
     expect(decideProcessFold(metrics({ scrollTop: 0, boxTop: 100, boxBottom: 648 }))).toBe('defer');
     expect(decideProcessFold(metrics({ scrollTop: 300, boxTop: -200, boxBottom: 348 }))).toBe('defer');
     expect(decideProcessFold(metrics({ scrollTop: 519, boxTop: -419, boxBottom: 129 }))).toBe('defer');
+    expect(decideProcessFold(metrics({ scrollTop: 1200, boxTop: -1100, boxBottom: -552 }))).toBe('defer');
   });
 
-  it('folds synchronously as soon as scrollTop can absorb the exact collapsible height', () => {
-    expect(decideProcessFold(metrics({ scrollTop: 520, boxTop: -420, boxBottom: 128 }))).toBe('instant');
-    expect(decideProcessFold(metrics({ scrollTop: 1200, boxTop: -1100, boxBottom: -552 }))).toBe('instant');
+  it('folds synchronously when off-screen below or when following with enough scroll headroom', () => {
+    expect(decideProcessFold(metrics({ following: false, scrollTop: 0, boxTop: 900, boxBottom: 1448 }))).toBe('instant');
+    expect(decideProcessFold(metrics({ following: true, scrollTop: 520, boxTop: -420, boxBottom: 128 }))).toBe('instant');
+    expect(decideProcessFold(metrics({ following: true, scrollTop: 1200, boxTop: -1100, boxBottom: -552 }))).toBe('instant');
   });
 
   it('animates when following a short turn or when the process fills the rest of the viewport', () => {
     expect(decideProcessFold(metrics({ following: true, scrollTop: 200, boxTop: -100, boxBottom: 448 }))).toBe('animate');
     expect(decideProcessFold(metrics({ following: false, scrollTop: 0, boxTop: 100, boxBottom: 900 }))).toBe('animate');
+    expect(decideProcessFold(metrics({ following: false, scrollTop: 1200, boxTop: -100, boxBottom: 900 }))).toBe('animate');
   });
 
-  it('always lands deferred folds off-screen as an instant single-commit fold', () => {
+  it('releases deferred folds only once the block moves below the viewport or the reader returns to following', () => {
     const cases: ProcessFoldMetrics[] = [
-      metrics({ scrollTop: 300, boxTop: -200, boxBottom: 348 }),
-      metrics({ scrollTop: 520, boxTop: -420, boxBottom: 128 }),
-      metrics({ scrollTop: 650, boxTop: -550, boxBottom: 0 }),
-      metrics({ scrollTop: 900, boxTop: -800, boxBottom: -252 }),
-      metrics({ scrollTop: 0, boxTop: 900, boxBottom: 1448 }),
+      metrics({ following: false, scrollTop: 300, boxTop: -200, boxBottom: 348 }),
+      metrics({ following: false, scrollTop: 900, boxTop: -800, boxBottom: -252 }),
+      metrics({ following: false, scrollTop: 0, boxTop: 900, boxBottom: 1448 }),
+      metrics({ following: true, scrollTop: 900, boxTop: -800, boxBottom: -252 }),
+      metrics({ following: true, scrollTop: 200, boxTop: -100, boxBottom: 448 }),
     ];
     expect(canReleaseDeferredProcessFold(cases[0]!)).toBe(false);
     expect(canReleaseDeferredProcessFold(cases[1]!)).toBe(false);
     expect(canReleaseDeferredProcessFold(cases[2]!)).toBe(true);
     expect(canReleaseDeferredProcessFold(cases[3]!)).toBe(true);
     expect(canReleaseDeferredProcessFold(cases[4]!)).toBe(true);
-    for (const sample of cases) {
-      if (canReleaseDeferredProcessFold(sample)) {
-        expect(decideProcessFold(sample)).toBe('instant');
-      }
-    }
+    // An off-bottom release is always off-screen below, so it lands synchronously with 0px impact.
+    expect(decideProcessFold(cases[2]!)).toBe('instant');
   });
 });
 
@@ -139,5 +140,59 @@ describe('readingAnchorTop folding invariants', () => {
       { key: 'event:final:1', slot: 'turn:1:assistant:0', top: -820, height: 1500 },
     ]);
     expect(readingAnchorTop(scroller, anchor)).toBe(680);
+  });
+
+  it('captures the latest reply row even when display:none trailing notices sit after it', () => {
+    const makeEl = (rect: { top: number; bottom: number; height: number }, rowKey?: string) => ({
+      dataset: rowKey ? { rowKey } : {},
+      children: [],
+      getBoundingClientRect: () => rect,
+      querySelector: () => null,
+    });
+    const hiddenNotice = () => makeEl({ top: 0, bottom: 0, height: 0 });
+    // Exact Workbench column shape: 2 hidden notices at top, 40 rows, 1 hidden FeedbackNotice
+    // after the last row (index 42, rect 0,0,0,0 <= bounds.top=60), and 1 trailing spacer.
+    const children = [
+      hiddenNotice(),
+      hiddenNotice(),
+      ...Array.from({ length: 39 }, (_, i) => makeEl({ top: -18000 + i * 400, bottom: -17600 + i * 400, height: 400 }, `row:${i}`)),
+      makeEl({ top: -580, bottom: 2062, height: 2642 }, 'event:333:1'),
+      hiddenNotice(),
+      makeEl({ top: 2062, bottom: 2062, height: 0 }),
+    ];
+    const column = { children };
+    const scroller = {
+      scrollTop: 16694,
+      getBoundingClientRect: () => ({ top: 60, bottom: 768, height: 708 }),
+      querySelector: (selector: string) => selector === `:scope > [${TRANSCRIPT_ATTR.content}]` ? column : null,
+    } as unknown as HTMLElement;
+
+    const anchor = captureReadingAnchor(scroller);
+    expect(anchor.rows.map((r) => r.key)).toEqual(['event:333:1']);
+    expect(anchor.rows[0]?.top).toBe(-640);
+  });
+
+  it('reads from the dedicated [data-transcript-rows] container isolated from sibling notices', () => {
+    const makeEl = (rect: { top: number; bottom: number; height: number }, rowKey?: string) => ({
+      dataset: rowKey ? { rowKey } : {},
+      children: [],
+      getBoundingClientRect: () => rect,
+      querySelector: () => null,
+    });
+    const rowsContainer = {
+      children: [
+        makeEl({ top: -1200, bottom: -800, height: 400 }, 'row:0'),
+        makeEl({ top: -580, bottom: 2062, height: 2642 }, 'event:333:1'),
+      ],
+    };
+    const scroller = {
+      scrollTop: 16694,
+      getBoundingClientRect: () => ({ top: 60, bottom: 768, height: 708 }),
+      querySelector: (selector: string) => selector === `[${TRANSCRIPT_ATTR.rows}]` ? rowsContainer : null,
+    } as unknown as HTMLElement;
+
+    const anchor = captureReadingAnchor(scroller);
+    expect(anchor.rows.map((r) => r.key)).toEqual(['event:333:1']);
+    expect(anchor.rows[0]?.top).toBe(-640);
   });
 });

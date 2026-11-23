@@ -10,6 +10,7 @@ export const TRANSCRIPT_ATTR = {
   scroll: 'data-transcript-scroll',
   following: 'data-transcript-following',
   content: 'data-content-column',
+  rows: 'data-transcript-rows',
   rowKey: 'data-row-key',
   rowSlot: 'data-row-slot',
   processOpen: 'data-process-open',
@@ -31,28 +32,30 @@ export type ProcessFoldAction = 'instant' | 'defer' | 'animate';
 
 /**
  * Single source of truth for how an automatic `TurnProcess` fold lands:
- * - `instant`: off-screen below, or `scrollTop` can absorb the full collapsed height in one commit
- *   so visible prose below moves 0px;
- * - `defer`: reader is not following, visible prose sits below the process block, and `scrollTop`
- *   cannot absorb the collapse without hitting 0 — hold until the block scrolls off-screen;
+ * - `instant`: off-screen below (zero effect on the viewport), or following with enough `scrollTop`
+ *   to absorb the collapsed height in one commit;
+ * - `defer`: reader is not following and is reading prose below (or alongside) this process block —
+ *   keep the block's height untouched so visible prose never relies on scrollTop compensation at
+ *   turn end, and release once the reader returns to following or scrolls above the block;
  * - `animate`: process fills the rest of the viewport (no prose below), or the reader is following
  *   at the end of a short turn.
  */
 export function decideProcessFold(metrics: ProcessFoldMetrics): ProcessFoldAction {
   if (metrics.boxTop >= metrics.viewBottom) return 'instant';
   if (metrics.boxTop >= metrics.viewTop && metrics.boxBottom >= metrics.viewBottom) return 'animate';
-  if (metrics.scrollTop >= metrics.collapsible) return 'instant';
   if (!metrics.following && metrics.boxBottom < metrics.viewBottom - 1) return 'defer';
+  if (metrics.following && metrics.scrollTop >= metrics.collapsible) return 'instant';
   return 'animate';
 }
 
 /**
- * Whether a deferred automatic fold can now land off-screen in one synchronous commit.
- * Whenever this returns `true`, `decideProcessFold(metrics)` is guaranteed to be `'instant'`.
+ * Whether a deferred automatic fold can now release without disturbing an off-bottom reader:
+ * - off-screen below (`boxTop >= viewBottom`): physically zero effect on visible prose (`instant`);
+ * - reader returned to following (`following === true`): view stays pinned to the end.
  */
 export function canReleaseDeferredProcessFold(metrics: ProcessFoldMetrics): boolean {
   if (metrics.boxTop >= metrics.viewBottom) return true;
-  return metrics.boxBottom <= metrics.viewTop && metrics.scrollTop >= metrics.collapsible;
+  return metrics.following;
 }
 
 /** A visible leaf block inside a row that starts above the viewport. */
@@ -84,6 +87,61 @@ const MIN_QUOTE_CHARS = 4;
 const LEADING_BULLET = /^\s*[•·▪▸◦\-*+]\s+/;
 
 /**
+ * Binary-search the first index in [children] whose eligible in-flow element has `bottom > line`.
+ * Children that are not laid out (`display: none`, e.g. `empty:hidden` notices whose rect is
+ * `0,0,0,0` even when `line > 0`) or out-of-flow overlays have no valid flow position; skipping
+ * them when picking a pivot preserves monotonicity without turning the lookup into a linear scan.
+ */
+function firstIndexPast(
+  children: ArrayLike<Element>,
+  line: number,
+  measureBottom: (element: Element) => number | undefined,
+): number {
+  let low = 0;
+  let high = children.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    let probe = middle;
+    let bottom = measureBottom(children[probe]!);
+    if (bottom === undefined) {
+      let left = middle - 1;
+      let right = middle + 1;
+      while (left >= low || right < high) {
+        if (left >= low) {
+          bottom = measureBottom(children[left]!);
+          if (bottom !== undefined) { probe = left; break; }
+          left -= 1;
+        }
+        if (right < high) {
+          bottom = measureBottom(children[right]!);
+          if (bottom !== undefined) { probe = right; break; }
+          right += 1;
+        }
+      }
+      if (bottom === undefined) return high;
+    }
+    if (bottom <= line) low = probe + 1;
+    else high = probe;
+  }
+  return low;
+}
+
+function measureFlowChildBottom(element: Element): number | undefined {
+  const rect = element.getBoundingClientRect();
+  if (rect.height === 0) return undefined;
+  const style = getComputedStyle(element);
+  if (style.position === 'absolute' || style.position === 'fixed') return undefined;
+  return rect.bottom;
+}
+
+function measureRowBottom(element: Element): number | undefined {
+  const row = element as HTMLElement;
+  if (!row.dataset?.rowKey) return undefined;
+  const rect = row.getBoundingClientRect();
+  return rect.height > 0 ? rect.bottom : undefined;
+}
+
+/**
  * The innermost block of [row] at or just below [line] (a viewport y), before [limit]: down through
  * the first child whose bottom is past the line, until a leaf or a child laid out inline. Children
  * stack in block flow, so the first one past the line is found by bisecting their bottoms.
@@ -93,19 +151,13 @@ function blockAt(row: Element, line: number, limit: number): Element | undefined
   let parent = row;
   for (let depth = 0; depth < MAX_DEPTH; depth += 1) {
     const children = parent.children;
-    let low = 0;
-    let high = children.length;
-    while (low < high) {
-      const middle = (low + high) >> 1;
-      if (children[middle]!.getBoundingClientRect().bottom <= line) low = middle + 1;
-      else high = middle;
-    }
+    const low = firstIndexPast(children, line, measureFlowChildBottom);
     let next: Element | undefined;
     for (let index = low; index < children.length; index += 1) {
       const child = children[index]!;
       const rect = child.getBoundingClientRect();
-      if (rect.top >= limit) break;
       if (rect.height === 0 || rect.bottom <= line) continue;
+      if (rect.top >= limit) break;
       const style = getComputedStyle(child);
       if (style.position === 'absolute' || style.position === 'fixed') continue;
       // Inline content is part of its parent's text, which is the block.
@@ -201,12 +253,16 @@ function reanchorByQuote(row: HTMLElement, saved: ReadingAnchor['rows'][number])
 }
 
 /**
- * The transcript's rows in order: the column's direct children, of which the rows are the ones
- * carrying a key. They stack top to bottom, so their edges only grow, which is what lets a lookup
- * bisect them instead of measuring every one from the first.
+ * The transcript's rows in order: the dedicated `[data-transcript-rows]` list (falling back to the
+ * content column for standalone callers). Rows stack top to bottom without sibling notices or
+ * overlays, so their edges are monotonic and bisecting stays O(log N).
  */
 function columnChildren(scroller: HTMLElement): HTMLCollection | undefined {
-  return scroller.querySelector(`:scope > [${TRANSCRIPT_ATTR.content}]`)?.children;
+  return (
+    scroller.querySelector(`:scope > * > [${TRANSCRIPT_ATTR.rows}]`)
+    ?? scroller.querySelector(`[${TRANSCRIPT_ATTR.rows}]`)
+    ?? scroller.querySelector(`:scope > [${TRANSCRIPT_ATTR.content}]`)
+  )?.children;
 }
 
 /** The row with [key], without collecting every row first. */
@@ -232,40 +288,58 @@ export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => Rea
   const children = columnChildren(scroller);
   const rows: ReadingAnchor['rows'] = [];
   if (!children) return { rows, scrollTop: scroller.scrollTop };
-  // The first child whose bottom is below the viewport's top edge.
-  let low = 0;
-  let high = children.length;
-  while (low < high) {
-    const middle = (low + high) >> 1;
-    if (children[middle]!.getBoundingClientRect().bottom <= bounds.top) low = middle + 1;
-    else high = middle;
-  }
+  const collectVisible = (startIndex: number) => {
+    for (let index = startIndex; index < children.length; index += 1) {
+      const row = children[index] as HTMLElement;
+      if (!row.dataset?.rowKey) continue;
+      const rect = row.getBoundingClientRect();
+      if (rect.height === 0) continue;
+      if (rect.bottom <= bounds.top) continue;
+      if (rect.top >= bounds.bottom) break;
+      const process = row.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.processOpen}]`);
+      const processCollapse = process?.querySelector<HTMLElement>(`:scope > [${TRANSCRIPT_ATTR.collapseState}]`);
+      const processOpen = process
+        ? process.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'true'
+          || (processCollapse !== null && processCollapse !== undefined && processCollapse.getAttribute(TRANSCRIPT_ATTR.collapseState) !== 'closed')
+        : undefined;
+      const foldingProcess = rect.top < bounds.top && process?.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'false';
+      // Only a row that starts above the view has something above the reader that could grow.
+      const blocks = !rows.length && rect.top < bounds.top && !foldingProcess ? captureBlocks(row, bounds.top, bounds.bottom) : undefined;
+      const slot = row.dataset.rowSlot;
+      rows.push({
+        key: row.dataset.rowKey,
+        ...(slot ? { slot } : {}),
+        top: rect.top - bounds.top,
+        height: rect.height,
+        ...(processOpen !== undefined ? { processOpen } : {}),
+        ...(blocks ? { blocks } : {}),
+      });
+    }
+  };
+  // The first laid-out row whose bottom is below the viewport's top edge.
+  const low = firstIndexPast(children, bounds.top, measureRowBottom);
   // Capture every row visible in the viewport (binary-searched from the top edge, stopped at the
   // bottom edge) so a folding process block and the prose row below it are never missed behind
   // several short rows at the top of the screen.
-  for (let index = low; index < children.length; index += 1) {
-    const row = children[index] as HTMLElement;
-    const rect = row.getBoundingClientRect();
-    if (rect.top >= bounds.bottom) break;
-    if (rect.height === 0 || !row.dataset.rowKey) continue;
-    const process = row.querySelector<HTMLElement>(`[${TRANSCRIPT_ATTR.processOpen}]`);
-    const processCollapse = process?.querySelector<HTMLElement>(`:scope > [${TRANSCRIPT_ATTR.collapseState}]`);
-    const processOpen = process
-      ? process.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'true'
-        || (processCollapse !== null && processCollapse !== undefined && processCollapse.getAttribute(TRANSCRIPT_ATTR.collapseState) !== 'closed')
-      : undefined;
-    const foldingProcess = rect.top < bounds.top && process?.getAttribute(TRANSCRIPT_ATTR.processOpen) === 'false';
-    // Only a row that starts above the view has something above the reader that could grow.
-    const blocks = !rows.length && rect.top < bounds.top && !foldingProcess ? captureBlocks(row, bounds.top, bounds.bottom) : undefined;
-    const slot = row.dataset.rowSlot;
-    rows.push({
-      key: row.dataset.rowKey,
-      ...(slot ? { slot } : {}),
-      top: rect.top - bounds.top,
-      height: rect.height,
-      ...(processOpen !== undefined ? { processOpen } : {}),
-      ...(blocks ? { blocks } : {}),
-    });
+  collectVisible(low);
+  // Invariant guard: if bisection ever returned empty while rows exist above `low` (for example
+  // from unexpected non-monotonic layout), fall back to a linear pass instead of silently dropping
+  // the reading anchor. Skip the scan when the reader has genuinely scrolled past the last row
+  // (e.g. viewing a tall interaction card below `[data-transcript-rows]`).
+  if (!rows.length && low > 0) {
+    let pastLastRow = false;
+    if (low === children.length) {
+      for (let index = children.length - 1; index >= 0; index -= 1) {
+        const bottom = measureRowBottom(children[index]!);
+        if (bottom !== undefined) { pastLastRow = bottom <= bounds.top; break; }
+      }
+    }
+    if (!pastLastRow) {
+      collectVisible(0);
+      if (rows.length && import.meta.env?.DEV) {
+        console.warn('[riffet] captureReadingAnchor bisection missed visible rows; recovered via linear scan', { low, count: children.length });
+      }
+    }
   }
   if (!rows.length) return fallback?.() ?? { rows, scrollTop: scroller.scrollTop };
   return { rows, scrollTop: scroller.scrollTop };

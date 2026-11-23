@@ -3,6 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import { IconBookmarkFilled } from '@/components/icons';
 import { formatTime } from '@/lib/i18n/format';
 import { cn, formatDateTime } from '@/lib/utils';
+import { TRANSCRIPT_ATTR } from './readingAnchor';
 import { useViewPrefs } from './viewPrefs';
 
 export interface Turn {
@@ -57,11 +58,34 @@ export function pickTurnIndex(rows: ArrayLike<Element>, line: number, indexByKey
   let candidate = -1;
   while (low <= high) {
     const mid = (low + high) >> 1;
-    if (rows[mid].getBoundingClientRect().top <= line) {
-      candidate = mid;
-      low = mid + 1;
+    // Skip non-laid-out children (e.g. `empty:hidden` FeedbackNotices whose rect is `0,0,0,0`)
+    // so they cannot break top-order monotonicity when `line > 0`.
+    let probe = mid;
+    let rect = rows[probe]!.getBoundingClientRect();
+    if (rect.height === 0 && rect.width === 0) {
+      let left = mid - 1;
+      let right = mid + 1;
+      let found = -1;
+      while (left >= low || right <= high) {
+        if (left >= low) {
+          const leftRect = rows[left]!.getBoundingClientRect();
+          if (leftRect.height > 0 || leftRect.width > 0) { found = left; rect = leftRect; break; }
+          left -= 1;
+        }
+        if (right <= high) {
+          const rightRect = rows[right]!.getBoundingClientRect();
+          if (rightRect.height > 0 || rightRect.width > 0) { found = right; rect = rightRect; break; }
+          right += 1;
+        }
+      }
+      if (found < 0) break;
+      probe = found;
+    }
+    if (rect.top <= line) {
+      candidate = probe;
+      low = probe + 1;
     } else {
-      high = mid - 1;
+      high = probe - 1;
     }
   }
   if (candidate < 0) return fallback;
@@ -144,8 +168,9 @@ function useActiveTurn({ turns, turnsVersion = 0, scrollRef, columnRef, onNaviga
       }
       const column = columnRef.current;
       if (!column) return;
+      const list = column.querySelector(`:scope > [${TRANSCRIPT_ATTR.rows}]`) ?? column;
       const line = scroller.getBoundingClientRect().top + Math.min(96, scroller.clientHeight * 0.2);
-      setCurrent(pickTurnIndex(column.children, line, indexByKey, 0));
+      setCurrent(pickTurnIndex(list.children, line, indexByKey, 0));
     };
     let frame: number | null = null;
     const schedule = () => {
