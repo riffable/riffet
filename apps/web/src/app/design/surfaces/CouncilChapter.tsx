@@ -4,6 +4,7 @@ import type { CouncilDiscussion, CouncilSeat, CouncilSummary, TimelineRow } from
 import type { SpeechRows } from '@/app/council/model';
 import { CouncilStage, CouncilStageSkeleton } from '@/app/council/CouncilStage';
 import { CouncilControls } from '@/app/council/CouncilPage';
+import { CouncilAside } from '@/app/council/CouncilAside';
 import { CouncilLaunch } from '@/app/council/CouncilLaunch';
 import { Chapter, Frame, Plate } from '../specimen';
 
@@ -106,19 +107,20 @@ export function CouncilChapter() {
     seats: d.seats.map(({ role, model, task }) => ({ role, model, ...(task ? { task } : {}) })),
   });
   const frame = (d: CouncilDiscussion, controls = false) => (
-    <Frame className="px-6 py-8 max-md:px-4">
-      <div className="mx-auto max-w-(--content-width)">
+    <Frame className="@container/figure flex gap-4 px-6 py-8 max-md:px-4">
+      <div className="mx-auto min-w-0 max-w-(--content-width) flex-1">
         <CouncilStage discussion={d} rows={rows} onLoadRows={() => {}} onToggleEdit={() => {}} />
         {controls && <div className="timeline-gap-turn"><CouncilControls discussion={d} onContinue={() => {}} /></div>}
       </div>
+      {d.format === 'roundtable' && <div className="hidden @4xl/figure:block"><CouncilAside discussion={d} /></div>}
     </Frame>
   );
   return (
-    <Chapter title={t`模型协作`} tone="canvas" lede={t`几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。`} source="apps/web/src/app/council/CouncilPage.tsx">
+    <Chapter title={t`模型协作`} tone="canvas" lede={t`右侧概览按轮次或阶段导航。并排的发言卡可以分别滚动，也可以展开到整行。`} source="apps/web/src/app/council/CouncilPage.tsx">
       <Plate number={1} title={t`起始 · 读取中`} note={t`席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。`}>
-        <Frame className="py-8"><CouncilLaunch backends={[]} recent={undefined} onCreate={async () => false} onOpenProviderSettings={() => {}} onError={() => {}} /></Frame>
+        <Frame><CouncilLaunch backends={[]} recent={undefined} onCreate={async () => false} onOpenProviderSettings={() => {}} onError={() => {}} /></Frame>
       </Plate>
-      <Plate number={2} title={t`打开 · 读取中`} note={t`列表里的摘要先画出席位与题目，进度和发言是骨架。`}>
+      <Plate number={2} title={t`打开 · 读取中`}>
         <Frame className="px-6 py-8 max-md:px-4"><div className="mx-auto max-w-(--content-width)"><CouncilStageSkeleton summary={summary(paused)} /></div></Frame>
       </Plate>
       <Plate number={3} title={t`1v1 辩论`} note={t`质询从发言里分出来，按裁判的记录标出回答情况。`}>{frame(paused, true)}</Plate>

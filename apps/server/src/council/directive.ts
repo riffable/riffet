@@ -66,6 +66,7 @@ function ledgerOf(json: Record<string, unknown>): CouncilLedger {
 
 function moderationOf(json: Record<string, unknown>, seats: ReadonlySet<string>): CouncilModeration {
   const unanswered = text(json.unanswered);
+  const convergence = oneOf(json.convergence, ['divergent', 'partial', 'converging', 'consensus'] as const, 'divergent');
   return {
     kind: 'moderation',
     positions: list(json.positions).flatMap(item => {
@@ -79,11 +80,11 @@ function moderationOf(json: Record<string, unknown>, seats: ReadonlySet<string>)
       const from = text(entry.from, 16);
       const to = text(entry.to, 16);
       const point = text(entry.point);
-      return from && to && point && seats.has(from) && seats.has(to) ? [{ from, to, point }] : [];
+      return from && to && from !== to && point && seats.has(from) && seats.has(to) ? [{ from, to, point }] : [];
     }),
     ...(unanswered ? { unanswered } : {}),
-    convergence: oneOf(json.convergence, ['divergent', 'partial', 'converging', 'consensus'] as const, 'divergent'),
-    action: oneOf(json.action, ['continue', 'conclude'] as const, 'continue'),
+    convergence,
+    action: oneOf(json.action, ['continue', 'conclude'] as const, convergence === 'consensus' ? 'conclude' : 'continue'),
   };
 }
 
@@ -127,11 +128,10 @@ export function directiveFor(
   seatId: string,
 ): CouncilDirective | undefined {
   if (!json) return undefined;
-  const seats = new Set(discussion.seats.map(seat => seat.id));
   switch (phase) {
     case 'ledger': return ledgerOf(json);
-    case 'summary': return moderationOf(json, seats);
-    case 'probe': return probeOf(json, seats);
+    case 'summary': return moderationOf(json, new Set(discussion.seats.filter(s => s.role === 'debater').map(s => s.id)));
+    case 'probe': return probeOf(json, new Set(discussion.seats.map(seat => seat.id)));
     case 'review': return editsOf(json, seatId, new Set(discussion.document?.paragraphs.map(p => p.id) ?? []));
     default: return undefined;
   }

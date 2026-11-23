@@ -85,19 +85,20 @@ export function CouncilAsideNav({
 export function CouncilHistoryMenu({
   items,
   activeId,
+  title,
   onSelect,
 }: {
   items: CouncilSummary[];
   activeId: string | null;
+  title?: string;
   onSelect: (id: string | null) => void;
 }) {
   const { t } = useLingui();
-  const current = activeId ? items.find((i) => i.id === activeId) : undefined;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="ml-1 flex h-7 min-w-0 items-center gap-1 rounded-md px-2 text-sm text-fg-2 outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus lg:hidden no-hover:min-h-11">
-        <span className="min-w-0 truncate">{current?.title ?? t`新建协作`}</span>
+        <span className="min-w-0 truncate">{title ?? (activeId ? t`模型协作` : t`新建协作`)}</span>
         <IconChevronDown className="size-3.5 shrink-0 text-fg-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="max-h-[min(70dvh,480px)] w-64 overflow-y-auto">

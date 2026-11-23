@@ -27,6 +27,9 @@ verify:
 
 ## 排障
 
+- 协作席位的首次设定取当前格式的 `brief`，回看历史发言则按保存的 `runId` 读取 `Run.prompt` 并核对会话的讨论归属。结构化记录是另一个回合，用 `recordRunId` 定位；旧记录缺少关联时不按时间猜测。
+- 中途停止或重启后，已完成的发言保留，恢复时只重跑被打断的席位。裁判等席位仍在生成结构化记录时，发言也属于进行中。补跑的辩手也要遵守同轮互不可见；到下一轮再把这条发言加入它已听过的记录。
+
 - 首次启动生成服务器链接证书时报 OpenSSL `illegal padding`：检查 `links/identity.ts` 的证书序列号。DER 要求正整数采用最短编码，随机首字节清除符号位后可能为零。
 
 - 新会话没有用上预热的进程：服务日志里出现 `prewarm: a new session did not match the warm one`（`packages/plugin-api/src/kit/warm-pool.ts`），日志里带着持有的键和想要的键，对比二者即可知道哪个字段不同。

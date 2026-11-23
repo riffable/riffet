@@ -8,6 +8,7 @@ import {
   type CouncilExportResult,
   type CouncilFormat,
   type CouncilPatchRequest,
+  type CouncilPrompts,
   type CouncilRole,
   type CouncilSeat,
   type CouncilSpeech,
@@ -124,14 +125,26 @@ export class CouncilService {
     return this.live.has(id) || Boolean(this.store.get(id));
   }
 
+  /** Generate a current brief, or retrieve historical inputs by their persisted run identities. */
+  prompts(id: string, seatId: string, speechId?: string): CouncilPrompts {
+    const discussion = this.get(id);
+    const seat = discussion.seats.find((item) => item.id === seatId);
+    if (!seat) throw new AppError('INVALID_COUNCIL_SEATS', 'Unknown seat', 404);
+    if (speechId === undefined) return { prompt: FORMATS[discussion.format].brief(discussion, seat) };
+    const speech = discussion.speeches.find((item) => item.id === speechId && item.seatId === seatId);
+    if (!speech) throw new AppError('COUNCIL_SPEECH_NOT_FOUND', 'Speech not found', 404);
+    return {
+      prompt: speech.runId && this.deps.seats.prompt(id, speech.runId),
+      record: speech.recordRunId && this.deps.seats.prompt(id, speech.recordRunId),
+    };
+  }
+
   /** The rows of a speech's turn, for a reader who opens it. */
   async speechRows(id: string, speechId: string): Promise<CouncilSpeechRows> {
     const d = this.get(id);
     const speech = d.speeches.find(item => item.id === speechId);
     if (!speech) throw new AppError('COUNCIL_SPEECH_NOT_FOUND', 'Speech not found', 404);
-    const sessionId = d.seats.find(seat => seat.id === speech.seatId)?.sessionId;
-    if (!sessionId || !speech.runId || !this.deps.seats.alive(sessionId)) return { rows: [] };
-    return { rows: await this.deps.seats.rows(sessionId, speech.runId) };
+    return { rows: speech.runId ? await this.deps.seats.rows(id, speech.runId) : [] };
   }
 
   create(req: CouncilCreateRequest): CouncilDiscussion {
@@ -393,13 +406,15 @@ export class CouncilService {
       live.turns.delete(turn.runId);
       if (!this.current(live)) return speech;
       speech.text = result.text;
-      speech.status = result.status;
       if (result.error) speech.error = result.error;
       if (result.metrics) speech.metrics = result.metrics;
       if (result.status === 'done' && spec.prompt.record) {
-        const directive = await this.record(live, seat, spec);
+        // A stop or restart must still recognize this speech as unfinished while its record is in flight.
+        const directive = await this.record(live, seat, spec, speech);
+        if (!this.current(live)) return speech;
         if (directive) speech.directive = directive;
       }
+      speech.status = result.status;
     } catch (error) {
       if (!this.current(live)) return speech;
       if (turn) { seats.stop(turn.sessionId, turn.runId); live.turns.delete(turn.runId); }
@@ -417,13 +432,15 @@ export class CouncilService {
   }
 
   /** The notes a speech's seat records in a turn of its own; none when it does not give them in time or in shape. */
-  private async record(live: Live, seat: CouncilSeat, spec: SpeechSpec) {
+  private async record(live: Live, seat: CouncilSeat, spec: SpeechSpec, speech: CouncilSpeech) {
     const d = live.discussion;
     const { seats } = this.deps;
     let turn: { sessionId: string; runId: string } | undefined;
     try {
       turn = await seats.send(d, seat, recordTurn(spec.prompt.record!));
       if (!this.current(live)) { seats.stop(turn.sessionId, turn.runId); return undefined; }
+      speech.recordRunId = turn.runId;
+      this.store.save(d);
       live.turns.set(turn.runId, turn.sessionId);
       const result = await seats.settle(turn.sessionId, turn.runId, AbortSignal.any([live.controller.signal, AbortSignal.timeout(COUNCIL_BUDGET.recordTimeoutMs)]));
       return directiveFor(spec.phase, parseJsonObject(result.text), d, seat.id);

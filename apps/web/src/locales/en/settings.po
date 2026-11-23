@@ -2176,10 +2176,6 @@ msgstr "Reduce motion"
 msgid "减速"
 msgstr "Decelerate"
 
-#: src/app/design/surfaces/CouncilChapter.tsx
-msgid "几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。"
-msgstr "Several Agents speak to one question, each seat its own conversation. A scoreboard or seat panel sits on top with the question centred as the heading; in a 1v1 pro and con face each other, speeches given at once sit in a row of cards, and the judge's and moderator's notes run across the page."
-
 #: src/app/design/overview/SystemChapter.tsx
 msgid "几个组件的组合与约定"
 msgstr "Combinations and conventions for several components"
@@ -2347,10 +2343,6 @@ msgstr "Row selection"
 #: src/app/design/android/notes.ts
 msgid "列表行高 56，分组之间 24"
 msgstr "Rows 56 high, 24 between groups"
-
-#: src/app/design/surfaces/CouncilChapter.tsx
-msgid "列表里的摘要先画出席位与题目，进度和发言是骨架。"
-msgstr "The summary in the list draws the seats and the question first; progress and speeches are skeletons."
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
@@ -3000,6 +2992,10 @@ msgstr "Rebuildable cache"
 #: src/app/design/android/PagesChapter.tsx
 msgid "右侧栏：会话详情，宽 {0}"
 msgstr "Right drawer: session details, {0} wide"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "右侧概览按轮次或阶段导航。并排的发言卡可以分别滚动，也可以展开到整行。"
+msgstr "The overview on the right links to each round or phase. Side-by-side answers scroll independently and can expand across the row."
 
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx

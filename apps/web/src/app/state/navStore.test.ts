@@ -37,6 +37,33 @@ describe('automatic navigation receipt', () => {
     expect(createNavStore().get()).toMatchObject({ taskProjectId: null, projectId: 'conversation-project' });
   });
 
+  it('keeps the discussion and reading state through page changes and clears them for new collaboration', () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal('window', { location: { pathname: '/council', search: '', hash: '' }, localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+      removeItem: (key: string) => values.delete(key),
+    } });
+    const nav = createNavStore();
+    nav.selectCouncilDiscussion('debate');
+    nav.setCouncilAsideOpen(false);
+    nav.setCouncilSpeechExpanded('debate', 'opening', true);
+    nav.rememberCouncilReadingPosition('debate', { top: 320, following: false });
+    nav.openPage('stats');
+    nav.openPage('council');
+    expect(nav.get()).toMatchObject({ councilOpen: true, councilDiscussionId: 'debate', councilAsideOpen: false });
+    expect(nav.getCouncilReadingPosition()).toEqual({ top: 320, following: false });
+    expect(nav.get().councilExpandedSpeeches).toEqual(new Set(['opening']));
+    expect(createNavStore().get()).toMatchObject({ councilDiscussionId: 'debate', councilAsideOpen: false, councilExpandedSpeeches: new Set() });
+
+    nav.selectCouncilDiscussion(null);
+    nav.rememberCouncilReadingPosition('debate', { top: 400, following: true });
+    nav.setCouncilSpeechExpanded('debate', 'rebuttal', true);
+    expect(nav.getCouncilReadingPosition()).toBeUndefined();
+    expect(nav.get().councilExpandedSpeeches.size).toBe(0);
+    expect(createNavStore().get().councilDiscussionId).toBeNull();
+  });
+
   it('cannot supersede a round trip through another page even when conversation IDs are unchanged', async () => {
     const nav = createNavStore();
     const started = nav.getNavigationRevision();

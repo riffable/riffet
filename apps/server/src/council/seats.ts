@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
-  COUNCIL_BUDGET, type CouncilDiscussion, type CouncilSeat, type NativeBackendId, type Project, type Run, type RunMetrics, type TimelineRow,
+  COUNCIL_BUDGET, type CouncilDiscussion, type CouncilSeat, type NativeBackendId, type Project, type Run, type RunMetrics, type TimelineRow, type TurnOutlineV3,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import type { NativeSessionRequest } from '../native/session-input.js';
@@ -27,8 +27,10 @@ export interface SeatDriver {
   stop(sessionId: string, runId: string): void;
   /** Follows the rows of the turn as they change; returns how to stop. */
   watch(sessionId: string, runId: string, onRows: (upserts: TimelineRow[], deletes: string[]) => void): () => void;
-  /** The rows of a turn as they stand. */
-  rows(sessionId: string, runId: string): Promise<TimelineRow[]>;
+  /** Original council input for a run belonging to this discussion. */
+  prompt(discussionId: string, runId: string): string | undefined;
+  /** The visible rows of a run belonging to this discussion. */
+  rows(discussionId: string, runId: string): Promise<TimelineRow[]>;
   /** Whether the conversation is still there to speak in. */
   alive(sessionId: string): boolean;
   /** Stops the conversation's turn and deletes it. */
@@ -64,6 +66,22 @@ export interface AgentSeatsDeps {
 
 export class AgentSeats implements SeatDriver {
   constructor(private readonly deps: AgentSeatsDeps) {}
+
+  prompt(discussionId: string, runId: string): string | undefined {
+    return this.discussionRun(discussionId, runId)?.prompt;
+  }
+
+  private discussionRun(discussionId: string, runId: string): Run | undefined {
+    const { store } = this.deps;
+    try {
+      const run = store.getRun(runId);
+      const origin = store.findSession(run.sessionId)?.origin;
+      if (origin?.kind === 'council' && origin.groupId === discussionId) return run;
+    } catch (error) {
+      if (!(error instanceof AppError && error.code === 'RUN_NOT_FOUND')) throw error;
+    }
+    return undefined;
+  }
 
   async send(d: CouncilDiscussion, seat: CouncilSeat, text: string): Promise<{ sessionId: string; runId: string; model?: string }> {
     const { store, orchestration } = this.deps;
@@ -139,11 +157,12 @@ export class AgentSeats implements SeatDriver {
     });
   }
 
-  async rows(sessionId: string, runId: string): Promise<TimelineRow[]> {
-    const turn = await this.turnOf(sessionId, runId);
-    if (!turn) return [];
-    const page = this.deps.timeline.page(sessionId, 'main', { from: turn.startPos, rows: COUNCIL_BUDGET.speechRows });
-    return page.rows.filter(row => row.turn === turn.turn);
+  async rows(discussionId: string, runId: string): Promise<TimelineRow[]> {
+    // A reopened seat can have a different sessionId. The run still points to its original lane.
+    const run = this.discussionRun(discussionId, runId);
+    if (!run) return [];
+    const turn = await this.turnOf(run.sessionId, run.id);
+    return turn ? this.rowsForTurn(run.sessionId, turn) : [];
   }
 
   alive(sessionId: string): boolean {
@@ -171,13 +190,18 @@ export class AgentSeats implements SeatDriver {
     return this.deps.timeline.outline(sessionId, 'main').turns.findLast(turn => turn.runId === runId);
   }
 
+  private rowsForTurn(sessionId: string, turn: TurnOutlineV3): TimelineRow[] {
+    const page = this.deps.timeline.page(sessionId, 'main', { from: turn.startPos, rows: COUNCIL_BUDGET.speechRows });
+    return page.rows.filter(row => row.turn === turn.turn && row.kind !== 'user');
+  }
+
   private async answer(sessionId: string, runId: string): Promise<string> {
     const turn = await this.turnOf(sessionId, runId);
     if (!turn) return '';
     const answer = this.deps.timeline.turnText(sessionId, turn.turn)?.answer;
     if (answer) return answer.trim();
     // A turn that did not complete still said something; its last words are what there is.
-    const rows = await this.rows(sessionId, runId);
+    const rows = this.rowsForTurn(sessionId, turn);
     return rows.findLast((row): row is Extract<TimelineRow, { kind: 'assistant' }> => row.kind === 'assistant' && Boolean(row.text.trim()))?.text.trim() ?? '';
   }
 }

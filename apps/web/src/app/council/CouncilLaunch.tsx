@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { IconPlus, IconX } from '@/components/icons';
 import { Composer } from '../session/Composer';
 import { LEAD_ROLES, useCouncilLabels } from './model';
-import { Halo, MarkTile } from './Speech';
+import { Halo, SeatMark } from './Speech';
 import { cn } from '@/lib/utils';
 import { useSettings } from '../state/stores';
 import { SeatPicker, seatAgents, startingAgent } from './SeatPicker';
@@ -150,143 +150,141 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
     disabled: busy,
     onChange: (model: CouncilAgent) => setList(list.map((item) => (item.key === seat.key ? { ...item, model } : item))),
   });
-  const remove = (seat: DraftSeat) => (
-    <Button size="icon-sm" variant="quiet" className="absolute top-2 right-2" aria-label={t`移除`} onClick={() => setList(list.filter((item) => item.key !== seat.key))}><IconX /></Button>
-  );
-
-  /**
-   * A seat on the stage: its Agent's mark on a tile, lit in the mark's colour, its role, and the model it runs on as
-   * its name. A reviewer also picks how it reads.
-   */
-  const podium = (seat: DraftSeat | undefined, size: 'lg' | 'md', removable = false) => seat && (
-    <div key={seat.key} className={cn('relative isolate flex min-w-0 flex-col items-center overflow-hidden rounded-3xl bg-subtle text-center', size === 'lg' ? 'gap-2.5 px-3 pt-5 pb-4 @lg:px-6 @lg:pt-7 @lg:pb-5' : 'gap-2 px-4 pt-5 pb-4')}>
-      {seat.model && <Halo backend={seat.model.backendId} />}
-      {pending ? <Skeleton className={size === 'lg' ? 'size-16 rounded-2xl' : 'size-11 rounded-xl'} />
-        : seat.model ? <MarkTile backend={seat.model.backendId} size={size} />
-        : <span className={cn('bg-bg', size === 'lg' ? 'size-16 rounded-2xl' : 'size-11 rounded-xl')} />}
-      <span className="text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
-      {pending ? <Skeleton className={size === 'lg' ? 'h-7 w-full max-w-36 rounded-lg' : 'h-6.5 w-full max-w-28 rounded-lg'} /> : <SeatPicker {...pickerProps(seat)} stage={size} />}
-      {seat.role === 'reviewer' && pending && <Skeleton className="mt-1 h-7 w-full max-w-48 rounded-lg" />}
-      {seat.role === 'reviewer' && !pending && (
-        <Segmented
-          size="xs"
-          ariaLabel={t`审阅角度`}
-          className="mt-1"
-          value={seat.task ?? 'correct'}
-          onChange={(task) => setList(list.map((item) => (item.key === seat.key ? { ...item, task } : item)))}
-          options={TASKS.map((task) => ({ value: task, label: labels.task(task) }))}
-        />
-      )}
-      {removable && !pending && remove(seat)}
-    </div>
-  );
-
-  /** The seat that leads the format (the judge, the moderator): a bench below the stage, not a podium on it. */
-  const bench = (seat: DraftSeat | undefined) => seat && (
-    <div key={seat.key} className="mx-auto flex w-full max-w-md min-w-0 items-center justify-center gap-2 rounded-2xl bg-subtle px-4 py-2.5">
-      <span className="shrink-0 text-xs font-semibold tracking-widest text-fg-3">{labels.roleOf(seat.role)}</span>
-      {pending ? <Skeleton className="h-7 w-full max-w-32 rounded-md" /> : <SeatPicker {...pickerProps(seat)} />}
-    </div>
-  );
-
-  const leadRule = ROLES[format].find((rule) => LEAD_ROLES.has(rule.role));
-  const stage = format === 'ld' ? (
-    // LD: the two sides face each other, the judge on the bench below.
-    <div className="@container flex flex-col gap-3" aria-busy={pending || undefined}>
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 @lg:gap-3">
-        {podium(list.find((seat) => seat.role === 'pro'), 'lg')}
-        <span className="text-center text-base font-extrabold tracking-tight text-fg-4 italic @lg:text-xl" aria-hidden>VS</span>
-        {podium(list.find((seat) => seat.role === 'con'), 'lg')}
+  const speakerCard = (seat: DraftSeat | undefined, removable = false) => seat && (
+    <div key={seat.key} role="group" aria-label={labels.roleOf(seat.role)} className="relative isolate flex min-w-0 flex-col overflow-hidden rounded-2xl bg-subtle">
+      {seat.model && <Halo backend={seat.model.backendId} className="-inset-y-full -left-1/2 w-full opacity-70" />}
+      <div className="relative flex flex-1 flex-col items-start justify-center gap-2 p-3.5 @md:min-h-22 @md:flex-row @md:items-center @md:justify-start @md:gap-3 @md:p-4 @3xl:min-h-26 @3xl:gap-4 @3xl:px-6 @3xl:py-5">
+        {pending ? <Skeleton className="size-8 shrink-0 rounded-lg" />
+          : seat.model && <SeatMark backend={seat.model.backendId} size={32} />}
+        <div className="flex w-full min-w-0 flex-col items-start gap-0.5 @md:flex-1">
+          <span className="text-xs font-medium text-fg-3">{labels.roleOf(seat.role)}</span>
+          {pending ? <div className="flex h-7 w-full items-center"><Skeleton className="h-4 w-full max-w-28 rounded-md" /></div>
+            : <SeatPicker {...pickerProps(seat)} card />}
+        </div>
+        {removable && !pending && (
+          <Button size="icon-sm" variant="quiet" disabled={busy} className="absolute top-1 right-1 no-hover:size-11 @md:relative @md:top-auto @md:right-auto" aria-label={t`移除`} onClick={() => setList(list.filter((item) => item.key !== seat.key))}><IconX /></Button>
+        )}
       </div>
-      {bench(list.find((seat) => seat.role === 'judge'))}
+      {seat.role === 'reviewer' && (
+        <div className="flex min-w-0 px-3.5 pb-3.5 @md:px-4 @md:pb-4 @3xl:px-6">
+          {pending ? <Skeleton className="h-7 w-full max-w-48 rounded-lg" /> : (
+            <Segmented
+              size="xs"
+              ariaLabel={t`审阅角度`}
+              value={seat.task ?? 'correct'}
+              onChange={(task) => setList(list.map((item) => (item.key === seat.key ? { ...item, task } : item)))}
+              options={TASKS.map((task) => ({ value: task, label: labels.task(task) }))}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const lead = list.find((seat) => LEAD_ROLES.has(seat.role));
+  const stage = format === 'ld' ? (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 @md:gap-4 @3xl:gap-6">
+      {speakerCard(list.find((seat) => seat.role === 'pro'))}
+      <span className="self-center text-xs font-medium italic text-fg-4 @md:text-sm" aria-hidden>VS</span>
+      {speakerCard(list.find((seat) => seat.role === 'con'))}
     </div>
   ) : (
-    <div className="@container flex flex-col gap-3" aria-busy={pending || undefined}>
-      <div className="grid gap-3 @md:grid-cols-2 @xl:grid-cols-3">
-        {ROLES[format].filter((rule) => rule !== leadRule).flatMap((rule) => {
-          const ofRole = list.filter((seat) => seat.role === rule.role);
-          return [
-            ...ofRole.map((seat) => podium(seat, 'md', ofRole.length > rule.min)),
-            ...(rule.max > 1 && ofRole.length < rule.max ? [(
-              <Button
-                key={`add-${rule.role}`}
-                variant="quiet"
-                disabled={busy || pending}
-                className="h-auto min-h-40 rounded-3xl border border-dashed border-line"
-                onClick={() => {
-                  const model = models[list.length % Math.max(1, models.length)];
-                  const seat: DraftSeat = { key: nextKey(), role: rule.role, ...(model ? { model } : {}), ...(rule.role === 'reviewer' ? { task: TASKS[ofRole.length % TASKS.length] } : {}) };
-                  const last = list.findLastIndex((item) => item.role === rule.role);
-                  setList([...list.slice(0, last + 1), seat, ...list.slice(last + 1)]);
-                }}
-              >
-                <IconPlus /><span>{labels.roleOf(rule.role)}</span>
-              </Button>
-            )] : []),
-          ];
-        })}
-      </div>
-      {leadRule && bench(list.find((seat) => seat.role === leadRule.role))}
+    <div className={cn('grid gap-3 @md:grid-cols-2 @3xl:gap-4', format !== 'review' && '@4xl:grid-cols-3')}>
+      {ROLES[format].filter((rule) => !LEAD_ROLES.has(rule.role)).flatMap((rule) => {
+        const ofRole = list.filter((seat) => seat.role === rule.role);
+        return [
+          ...ofRole.map((seat) => speakerCard(seat, ofRole.length > rule.min)),
+          ofRole.length < rule.max && (
+            <Button
+              key={`add-${rule.role}`}
+              variant="quiet"
+              disabled={busy || pending}
+              className="h-auto min-h-14 rounded-2xl border border-dashed border-line"
+              onClick={() => {
+                const model = models[list.length % Math.max(1, models.length)];
+                const seat: DraftSeat = { key: nextKey(), role: rule.role, ...(model ? { model } : {}), ...(rule.role === 'reviewer' ? { task: TASKS[ofRole.length % TASKS.length] } : {}) };
+                const last = list.findLastIndex((item) => item.role === rule.role);
+                setList([...list.slice(0, last + 1), seat, ...list.slice(last + 1)]);
+              }}
+            >
+              <IconPlus /><span>{labels.roleOf(rule.role)}</span>
+            </Button>
+          ),
+        ];
+      })}
     </div>
   );
 
   return (
-    <div className="mx-auto mt-8 flex w-full max-w-2xl flex-col gap-4 px-4 pb-16 max-md:mt-2">
-      <Segmented
-        size="xs"
-        ariaLabel={t`协作方式`}
-        className="self-start"
-        value={format}
-        onChange={setFormat}
-        options={FORMATS.map((value) => ({ value, label: labels.format(value) }))}
-      />
-
-      {noModels && (
-        <Notice tone="warning" action={<Button size="xs" variant="secondary" onClick={onOpenProviderSettings}><Trans>前往配置</Trans></Button>}>
-          <Trans>没有可用的 Agent</Trans>
-        </Notice>
-      )}
-
-      {stage}
-
-      <Composer
-        key={format}
-        variant="hero"
-        autoFocus
-        projectId=""
-        draftKey={`council:${format}`}
-        windowDrop={false}
-        attachmentsAllowed={false}
-        fileMentions={false}
-        referencesEnabled={false}
-        persistReferences={false}
-        references={[]}
-        onReferencesChange={() => {}}
-        placeholder={{ ld: t`辩题，例如：首版应当先做 Web 端`, roundtable: t`要讨论的问题`, prism: t`要多角度回答的问题`, review: t`粘贴要审阅的文档或方案` }[format]}
-        enterBehavior={enterBehavior}
-        disabled={busy}
-        submitDisabled={!ready || busy}
-        onSubmit={(text) => submit(text)}
-        onError={onError}
-      />
-
-      <div className="flex flex-wrap items-center gap-3">
-        {(format === 'ld' || format === 'roundtable') && (
-          <Select
-            label={t`轮数`}
-            className="w-28"
-            value={String(roundCount)}
-            onChange={(value) => setRounds((current) => ({ ...current, [format]: Number(value) }))}
-            options={ROUND_CHOICES.map((value) => ({ value, label: t`最多 ${value} 轮` }))}
+    <div className="@container">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 pt-5 pb-16 @lg:gap-8 @lg:px-6 @lg:pt-8 @3xl:gap-10 @3xl:px-10 @3xl:pt-12 @5xl:pt-16">
+        <div className="flex min-w-0 flex-col gap-3 @lg:gap-4 @3xl:gap-5">
+          <Segmented
+            size="xs"
+            ariaLabel={t`协作方式`}
+            className="self-start"
+            value={format}
+            onChange={setFormat}
+            options={FORMATS.map((value) => ({ value, label: labels.format(value) }))}
           />
-        )}
-        <Segmented
-          size="xs"
-          ariaLabel={t`节奏`}
-          value={rhythm}
-          onChange={(value) => setRhythms((current) => ({ ...current, [format]: value }))}
-          options={[{ value: 'pause', label: t`每轮暂停` }, { value: 'auto', label: t`自动进行` }]}
-        />
+
+          {noModels && (
+            <Notice tone="warning" action={<Button size="xs" variant="secondary" onClick={onOpenProviderSettings}><Trans>前往配置</Trans></Button>}>
+              <Trans>没有可用的 Agent</Trans>
+            </Notice>
+          )}
+
+          <Composer
+            key={format}
+            variant="hero"
+            autoFocus
+            projectId=""
+            draftKey={`council:${format}`}
+            windowDrop={false}
+            attachmentsAllowed={false}
+            fileMentions={false}
+            referencesEnabled={false}
+            persistReferences={false}
+            references={[]}
+            onReferencesChange={() => {}}
+            placeholder={{ ld: t`辩题，例如：首版应当先做 Web 端`, roundtable: t`要讨论的问题`, prism: t`要多角度回答的问题`, review: t`粘贴要审阅的文档或方案` }[format]}
+            enterBehavior={enterBehavior}
+            disabled={busy}
+            submitDisabled={!ready || busy}
+            onSubmit={(text) => submit(text)}
+            onError={onError}
+          />
+        </div>
+
+        <div className="flex min-w-0 flex-col gap-4 @3xl:gap-6" aria-busy={pending || undefined}>
+          {stage}
+          <div className="grid min-w-0 gap-3 @xl:grid-cols-[minmax(0,1fr)_auto] @xl:items-center @xl:gap-x-6">
+            {lead && (
+              <div role="group" aria-label={labels.roleOf(lead.role)} className="flex max-w-full min-w-0 items-center gap-1">
+                <span className="shrink-0 text-xs font-medium text-fg-3">{labels.roleOf(lead.role)}</span>
+                {pending ? <Skeleton className="h-7 w-32 rounded-md" /> : <SeatPicker {...pickerProps(lead)} />}
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              {(format === 'ld' || format === 'roundtable') && (
+                <Select
+                  label={t`轮数`}
+                  className="w-28"
+                  value={String(roundCount)}
+                  onChange={(value) => setRounds((current) => ({ ...current, [format]: Number(value) }))}
+                  options={ROUND_CHOICES.map((value) => ({ value, label: t`最多 ${value} 轮` }))}
+                />
+              )}
+              <Segmented
+                size="xs"
+                ariaLabel={t`节奏`}
+                value={rhythm}
+                onChange={(value) => setRhythms((current) => ({ ...current, [format]: value }))}
+                options={[{ value: 'pause', label: t`每轮暂停` }, { value: 'auto', label: t`自动进行` }]}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

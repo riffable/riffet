@@ -21,6 +21,8 @@ export const STORAGE_KEYS = {
   panelWidth: 'riffet.panelWidth',
   backend: 'riffet.selectedBackend',
   settingsSection: 'riffet.settingsSection.v1',
+  councilDiscussion: 'riffet.councilDiscussion.v1',
+  councilAside: 'riffet.councilAside.v1',
 };
 
 /** 介绍, the plugin's own page (its settings), and 管理 with 诊断. */
@@ -40,6 +42,10 @@ export interface NavState {
   automationsOpen: boolean;
   /** 多模型讨论. */
   councilOpen: boolean;
+  /** The selected local discussion. Null remembers the launch screen. */
+  councilDiscussionId: string | null;
+  councilAsideOpen: boolean;
+  councilExpandedSpeeches: ReadonlySet<string>;
   extensionsOpen: boolean;
   marksOpen: boolean;
   /** The platform that the design system section shows; kept while closed, so reopening returns to it. */
@@ -82,6 +88,7 @@ export type SessionView = string;
 /** The conversation or project an address names (`page-url.ts`), and a 收藏 to locate in it. */
 type DeepLink = { sessionId?: string; projectId?: string; markId?: string };
 type Selection = { projectId: string; sessionId: string };
+type CouncilReadingPosition = { top: number; following: boolean };
 
 function readProjectVisits(): Record<string, number> {
   try {
@@ -143,6 +150,9 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     tasksOpen: view === 'tasks',
     automationsOpen: view === 'automations',
     councilOpen: view === 'council',
+    councilDiscussionId: readStored(STORAGE_KEYS.councilDiscussion) || null,
+    councilAsideOpen: readStored(STORAGE_KEYS.councilAside) !== 'closed',
+    councilExpandedSpeeches: new Set(),
     extensionsOpen,
     extensionsMounted: extensionsOpen,
     marksOpen: view === 'marks',
@@ -170,6 +180,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   let beforeSettingsLeave: (() => Promise<boolean>) | undefined;
   let pending = false;
   let navigationRevision = 0;
+  let councilReadingPosition: CouncilReadingPosition | undefined;
   let previousDestination = store.get();
   // Direct page closes and bootstrap reconciliation use set(), while guarded navigation records
   // intent before it awaits an editor. Both invalidate an older automatic navigation receipt.
@@ -177,6 +188,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     const current = store.get();
     if (current.projectId !== previousDestination.projectId || current.sessionId !== previousDestination.sessionId
       || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
+      || current.councilDiscussionId !== previousDestination.councilDiscussionId
       || current.extensionsOpen !== previousDestination.extensionsOpen || current.marksOpen !== previousDestination.marksOpen
       || current.settingsOpen !== previousDestination.settingsOpen || current.settingsSection !== previousDestination.settingsSection
       || current.pluginsOpen !== previousDestination.pluginsOpen || current.pluginId !== previousDestination.pluginId
@@ -189,6 +201,29 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
 
   const actions = {
     getNavigationRevision: () => navigationRevision,
+    selectCouncilDiscussion(id: string | null) {
+      if (store.get().councilDiscussionId === id) return;
+      councilReadingPosition = undefined;
+      writeStored(STORAGE_KEYS.councilDiscussion, id ?? undefined);
+      store.set({ councilDiscussionId: id, councilExpandedSpeeches: new Set() });
+    },
+    setCouncilAsideOpen(open: boolean) {
+      writeStored(STORAGE_KEYS.councilAside, open ? undefined : 'closed');
+      store.set({ councilAsideOpen: open });
+    },
+    setCouncilSpeechExpanded(discussionId: string, speechId: string, expanded: boolean) {
+      const { councilDiscussionId, councilExpandedSpeeches } = store.get();
+      if (councilDiscussionId !== discussionId || councilExpandedSpeeches.has(speechId) === expanded) return;
+      const next = new Set(councilExpandedSpeeches);
+      if (expanded) next.add(speechId);
+      else next.delete(speechId);
+      store.set({ councilExpandedSpeeches: next });
+    },
+    /** Reading geometry only belongs to this workbench and the selected discussion. */
+    getCouncilReadingPosition: () => councilReadingPosition,
+    rememberCouncilReadingPosition(id: string, position: CouncilReadingPosition) {
+      if (store.get().councilDiscussionId === id) councilReadingPosition = position;
+    },
     rememberTaskProject(projectId: string | null) {
       writeStored(STORAGE_KEYS.taskProject, JSON.stringify(projectId));
       store.set({ taskProjectId: projectId });

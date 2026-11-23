@@ -1,5 +1,5 @@
 import type { CouncilDiscussion } from '../../../../../packages/contracts/src/index.js';
-import { LANGUAGE_RULE, latestDirective, SEAT_RULE, seatsOf, speak, speaker, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
+import { languageRule, latestDirective, recordSeatIds, SEAT_RULE, seatsOf, speak, speaker, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
 
 /**
  * Prism: the participants answer independently (round 1), the observer probes where they really
@@ -8,15 +8,15 @@ import { LANGUAGE_RULE, latestDirective, SEAT_RULE, seatsOf, speak, speaker, spo
  */
 
 const EXPLORE: SpeechPrompt = {
-  task: 'Answer the question independently with your most honest judgment. Take a clear position; do not hedge across every option. You may say the question itself is flawed. At most 400 words.',
+  task: '独立回答问题，给出你真实的判断。明确表明立场，避免在所有选项之间摇摆。你也可以指出问题本身的缺陷。最多 400 词。',
 };
 
-const PROBE_SHAPE = '{"contradictions":[{"title":"short title","seats":["p1","p2"],"question":"a question those seats cannot avoid"}],"gaps":["a constraint or risk nobody raised"]}';
+const PROBE_SHAPE = '{"contradictions":[{"title":"简短标题","seats":["p1","p2"],"question":"相关参与者无法回避的问题"}],"gaps":["没人提到的一项约束或风险"]}';
 
-const PROBE: SpeechPrompt = {
-  task: 'Find the real contradictions between these answers: conflicting premises, one word used in two senses, false consensus, shared blind spots. Write a short analysis for the reader, at most 250 words.',
-  record: `${PROBE_SHAPE}\nSeat ids are the bracketed ids. At most four contradictions, sharpest first.`,
-};
+const probeTask = (d: CouncilDiscussion): SpeechPrompt => ({
+  task: '找出回答里的实质性分歧，包括前提冲突、同一个词被赋予不同含义、表面上的共识，以及共同忽略的问题。为读者写一段简短的分析，最多 250 词。',
+  record: `${PROBE_SHAPE}\n${recordSeatIds(d, 'participant')}\n最多列出四处分歧，把最尖锐的放在最前面。`,
+});
 
 function deepenTask(d: CouncilDiscussion, seatId: string): SpeechPrompt {
   const probe = latestDirective(d, 'probe', 'probe');
@@ -24,17 +24,17 @@ function deepenTask(d: CouncilDiscussion, seatId: string): SpeechPrompt {
   const questions = mine.length ? mine : probe?.contradictions ?? [];
   return {
     task: [
-      questions.length ? `${mine.length ? 'Questions aimed at you' : 'The observer\'s questions'}:\n${questions.map(c => `- ${c.title}: ${c.question}`).join('\n')}\n` : '',
-      'Respond to the observer\'s probe directly. If another answer convinced you, change your position and say so plainly; if not, say what keeps you where you are. At most 350 words.',
+      questions.length ? `${mine.length ? '观察者向你提出的追问' : '观察者提出的追问'}\n${questions.map(c => `- ${c.title}：${c.question}`).join('\n')}\n` : '',
+      '直接回答观察者的追问。如果其他回答说服了你，明确说明你的立场有何变化。如果你维持原来的判断，说明理由。最多 350 词。',
     ].filter(Boolean).join('\n'),
   };
 }
 
 const CONCLUSION: SpeechPrompt = {
   task: [
-    'Answer the reader\'s question directly, drawing on the whole exchange.',
-    'If the models converged, give the answer and the conditions it holds under. If not, give a structured map of where and why they differ, and which way you lean.',
-    'At most 500 words.',
+    '结合整个讨论，直接回答读者的问题。',
+    '如果各模型的意见趋同，给出答案及其成立的条件。如果仍有分歧，分点说明分歧及其根源，并明确你的倾向。',
+    '最多 500 词。',
   ].join('\n'),
 };
 
@@ -42,13 +42,13 @@ export const prism: FormatSpec = {
   brief(d, seat) {
     if (seat.role === 'observer') {
       return [
-        `You observe ${seatsOf(d, 'participant').length} AI models answer the same question independently. You then probe where they really disagree, read their responses, and conclude for the reader.`,
-        SEAT_RULE, LANGUAGE_RULE, '', `Question: ${d.topic}`,
+        `你是多视角讨论的观察者。在 ${seatsOf(d, 'participant').length} 个 AI 模型独立回答同一个问题后，你要找出实质分歧并提出追问。阅读它们的回应后，为读者给出结论。`,
+        SEAT_RULE, languageRule('题目'), '', `问题：${d.topic}`,
       ].join('\n');
     }
     return [
-      `You are ${speaker(d, seat.id)}, one of several AI models answering the same question. You answer on your own first; an observer then probes where the answers disagree.`,
-      SEAT_RULE, LANGUAGE_RULE, '', `Question: ${d.topic}`,
+      `你是 ${speaker(d, seat.id)}，与其他 AI 模型共同回答一个问题。先独立作答，观察者随后会针对各方回答中的分歧追问。`,
+      SEAT_RULE, languageRule('题目'), '', `问题：${d.topic}`,
     ].join('\n');
   },
   // A participant's first answer is its own: the others' come with the probe.
@@ -60,7 +60,7 @@ export const prism: FormatSpec = {
     if (d.round === 1) {
       const missing = participants.filter(s => !spoken(d, 1, 'explore', s.id));
       if (missing.length) return speak(...missing.map(s => ({ seatId: s.id, round: 1, phase: 'explore' as const, prompt: EXPLORE })));
-      if (!spoken(d, 1, 'probe')) return speak({ seatId: observer, round: 1, phase: 'probe', prompt: PROBE });
+      if (!spoken(d, 1, 'probe')) return speak({ seatId: observer, round: 1, phase: 'probe', prompt: probeTask(d) });
       return { kind: 'round-end' };
     }
     if (d.concluding) return conclusion();

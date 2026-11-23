@@ -2176,10 +2176,6 @@ msgstr "减少动态效果"
 msgid "减速"
 msgstr "减速"
 
-#: src/app/design/surfaces/CouncilChapter.tsx
-msgid "几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。"
-msgstr "几个 Agent 围绕一个问题发言，每个席位是一段独立的会话。顶部是对阵或席位面板，问题居中作标题；1v1 正反方对席，同时发言的排成一行卡片，裁判与主持人的记录横跨整页。"
-
 #: src/app/design/overview/SystemChapter.tsx
 msgid "几个组件的组合与约定"
 msgstr "几个组件的组合与约定"
@@ -2347,10 +2343,6 @@ msgstr "列表行的选中面"
 #: src/app/design/android/notes.ts
 msgid "列表行高 56，分组之间 24"
 msgstr "列表行高 56，分组之间 24"
-
-#: src/app/design/surfaces/CouncilChapter.tsx
-msgid "列表里的摘要先画出席位与题目，进度和发言是骨架。"
-msgstr "列表里的摘要先画出席位与题目，进度和发言是骨架。"
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
@@ -3000,6 +2992,10 @@ msgstr "可重建缓存"
 #: src/app/design/android/PagesChapter.tsx
 msgid "右侧栏：会话详情，宽 {0}"
 msgstr "右侧栏：会话详情，宽 {0}"
+
+#: src/app/design/surfaces/CouncilChapter.tsx
+msgid "右侧概览按轮次或阶段导航。并排的发言卡可以分别滚动，也可以展开到整行。"
+msgstr "右侧概览按轮次或阶段导航。并排的发言卡可以分别滚动，也可以展开到整行。"
 
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx

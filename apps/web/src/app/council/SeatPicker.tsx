@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import type { AppSettings, CouncilAgent, NativeBackendCatalogEntry } from '@contracts';
+import { IconChevronDown } from '@/components/icons';
 import { useSettings } from '../state/stores';
 import { useAgentModelChoice } from '../session/agentModelChoice';
 import { ModelPicker } from '../session/ModelPicker';
@@ -32,20 +33,12 @@ export function startingAgent(entry: NativeBackendCatalogEntry, settings: SeatDe
   return { backendId: entry.backendId, profileId: profile, ...(model ? { model } : {}) };
 }
 
-const STAGE = {
-  lg: { trigger: 'h-auto max-w-full rounded-lg px-2 py-0.5 text-lg font-semibold text-fg', label: 'max-w-56 sm:max-w-56' },
-  md: { trigger: 'h-auto max-w-full rounded-lg px-2 py-0.5 text-base font-semibold text-fg', label: 'max-w-40 sm:max-w-40' },
-} as const;
-
-/**
- * A seat's Agent, provider and model, picked with the composer's Agent → Provider → Model menu. On the launch stage
- * the model's name is the seat's heading and the Agent's mark stands on its own tile, so the trigger drops it.
- */
-export function SeatPicker({ backends, value, disabled, stage, onChange }: {
+/** The card already shows the Agent mark. Its model trigger extends over the card header. */
+export function SeatPicker({ backends, value, disabled, card, onChange }: {
   backends: readonly NativeBackendCatalogEntry[];
   value: CouncilAgent | undefined;
   disabled?: boolean;
-  stage?: keyof typeof STAGE;
+  card?: boolean;
   onChange: (next: CouncilAgent) => void;
 }) {
   const { t } = useLingui();
@@ -58,8 +51,11 @@ export function SeatPicker({ backends, value, disabled, stage, onChange }: {
       align="start"
       placeholder={value ? t`默认模型` : t`选择模型`}
       {...picker}
-      className={stage ? STAGE[stage].trigger : 'h-7 max-w-64 px-2 text-sm'}
-      {...(stage ? { leading: null, labelClassName: STAGE[stage].label } : {})}
+      className={card
+        ? 'h-7 max-w-full rounded-none px-0 text-sm font-semibold text-fg after:absolute after:inset-0 after:rounded-2xl hover:bg-transparent hover:after:bg-hover/40 focus-visible:ring-0 focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-focus data-[state=open]:bg-transparent data-[state=open]:after:bg-hover/40 @md:text-base'
+        : 'h-7 max-w-full px-2 text-sm no-hover:min-h-11'}
+      labelClassName="min-w-0 max-w-none sm:max-w-none"
+      leading={<>{!card && picker.leading}<IconChevronDown aria-hidden className="order-last size-3 shrink-0 text-fg-3" /></>}
       disabled={disabled}
       onChange={(id) => {
         const picked = pick(id);

@@ -50,7 +50,7 @@ export function councilModelName(agent: CouncilAgent): string | undefined {
 }
 
 export interface CouncilSeat {
-  /** Short and stable within the discussion (`pro`, `s2`, `mod` …); models refer to seats by it. */
+  /** Short and stable within the discussion (`pro`, `s2`, `mod` …); used in structured records. */
   id: string;
   role: CouncilRole;
   model: CouncilAgent;
@@ -61,6 +61,14 @@ export interface CouncilSeat {
   sessionId?: string;
   /** Speeches of others and reader notes the conversation has been given, so the next turn tells only what is new. */
   heard?: string[];
+}
+
+/** Names the model in prose and distinguishes repeated selections by their roster order. */
+export function councilSeatLabel(seats: readonly CouncilSeat[], seat: CouncilSeat): string {
+  const modelName = (item: CouncilSeat) => councilModelName(item.model) ?? item.profileName;
+  const label = modelName(seat);
+  const namesakes = seats.filter((item) => modelName(item) === label);
+  return namesakes.length > 1 ? `${label} #${namesakes.findIndex((item) => item.id === seat.id) + 1}` : label;
 }
 
 /** The judge's account of one LD round. */
@@ -112,6 +120,8 @@ export interface CouncilSpeech {
   endedAt?: string;
   /** The seat conversation's run this speech is. */
   runId?: string;
+  /** The follow-up turn that requested structured notes, when recorded. */
+  recordRunId?: string;
   metrics?: RunMetrics;
   /** Notes the seat recorded for the next prompts in a turn of its own after the speech; not part of the speech. */
   directive?: CouncilDirective;
@@ -155,6 +165,21 @@ export interface CouncilDiscussion {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** The same round-end recommendation drives automatic advancement and the primary action at a pause. */
+export function councilSuggestsClosing(discussion: CouncilDiscussion): boolean {
+  const { speeches, round } = discussion;
+  if (discussion.format === 'roundtable') {
+    const summary = speeches.findLast(s => s.round === round && s.phase === 'summary')?.directive;
+    return summary?.kind === 'moderation' && summary.action === 'conclude';
+  }
+  if (discussion.format !== 'ld') return false;
+  const ledger = speeches.findLast(s => s.round === round && s.phase === 'ledger')?.directive;
+  if (ledger?.kind !== 'ledger') return false;
+  if (ledger.action === 'closing') return true;
+  const previous = speeches.findLast(s => s.round === round - 1 && s.phase === 'ledger')?.directive;
+  return ledger.intensity === 'stalling' && previous?.kind === 'ledger' && previous.intensity === 'stalling';
 }
 
 /** A discussion as the history list shows it. */
@@ -214,6 +239,9 @@ export type CouncilStreamEvent =
   | { type: 'speech'; discussionId: string; version: number; speech: CouncilSpeech }
   /** The rows of a speech's turn in its seat conversation as they change: thinking, tool calls, the answer. */
   | { type: 'rows'; discussionId: string; speechId: string; upserts: TimelineRow[]; deletes: string[] };
+
+/** Current seat brief, or the original input of a selected speech and its bookkeeping turn. */
+export interface CouncilPrompts { prompt?: string; record?: string }
 
 /** `GET /api/council/:id/speeches/:speechId/rows`: a finished speech's turn, read when the reader opens it. */
 export interface CouncilSpeechRows { rows: TimelineRow[] }

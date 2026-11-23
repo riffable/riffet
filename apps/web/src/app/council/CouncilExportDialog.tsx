@@ -5,12 +5,14 @@ import type { ProjectRecord } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Field, Select, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { conclusionOf } from './model';
+import { conclusionOf, readableCouncilText } from './model';
 
 /** The conclusion under the discussion's title; for a review, the revised document. */
 export function defaultExportBody(discussion: CouncilDiscussion): string {
   const conclusion = conclusionOf(discussion);
-  return conclusion ? `# ${discussion.title}\n\n${conclusion.text}` : discussion.title;
+  if (!conclusion) return discussion.title;
+  const text = discussion.format === 'review' ? conclusion.text : readableCouncilText(conclusion.text, discussion.seats);
+  return `# ${discussion.title}\n\n${text}`;
 }
 
 export function CouncilExportDialog({

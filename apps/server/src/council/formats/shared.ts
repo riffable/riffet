@@ -1,4 +1,4 @@
-import { councilModelName, type CouncilDiscussion, type CouncilPhase, type CouncilSeat, type CouncilSpeech } from '../../../../../packages/contracts/src/index.js';
+import { councilSeatLabel, type CouncilDiscussion, type CouncilPhase, type CouncilSeat, type CouncilSpeech } from '../../../../../packages/contracts/src/index.js';
 
 /**
  * What one speech asks of its seat. The seat's conversation remembers what it was told and said, so a
@@ -41,10 +41,12 @@ export interface FormatSpec {
   conclude(d: CouncilDiscussion): void;
 }
 
-export const LANGUAGE_RULE = 'Write in the language the topic is written in. Plain Markdown; no preamble, no title line.';
+export function languageRule(source: '题目' | '文档'): string {
+  return `请用${source}的语言作答。用 Markdown 直接写正文，省略开场白和标题行。`;
+}
 
 /** A seat's conversation is an Agent's: it could act, but here it only speaks. */
-export const SEAT_RULE = 'This is a discussion, not a task: do not change any file. Look things up only when a claim needs checking, and never invent facts, figures or sources.';
+export const SEAT_RULE = '本次只参与讨论，不要修改文件。仅在需要核实某个说法时查阅资料，不得编造事实、数字或来源。';
 
 export function seat(d: CouncilDiscussion, seatId: string): CouncilSeat {
   const found = d.seats.find(item => item.id === seatId);
@@ -66,27 +68,32 @@ export function latestDirective<K extends NonNullable<CouncilSpeech['directive']
   return speech?.directive as Extract<NonNullable<CouncilSpeech['directive']>, { kind: K }> | undefined;
 }
 
-/** How models name a seat: its id, which the notes use, and its model. */
+/** How models refer to a participant in reader-facing prose. */
 export function speaker(d: CouncilDiscussion, seatId: string): string {
   const item = seat(d, seatId);
-  return `[${item.id}] ${councilModelName(item.model) ?? item.profileName}`;
+  const name = councilSeatLabel(d.seats, item);
+  if (item.role === 'pro') return `${name}（正方）`;
+  if (item.role === 'con') return `${name}（反方）`;
+  return name;
+}
+
+/** The private recording turn needs the exact IDs used by the structured fields. */
+export function recordSeatIds(d: CouncilDiscussion, role: CouncilSeat['role']): string {
+  return `在 JSON 的席位引用字段中填写下列编号，正文和说明中使用对应的显示名称。\n${seatsOf(d, role)
+    .map((item) => `- ${item.id}：${councilSeatLabel(d.seats, item)}`).join('\n')}`;
 }
 
 export const speak = (...speeches: SpeechSpec[]): Step => ({ kind: 'speak', speeches });
-
-export function wordLimit(base: number, speakers: number): number {
-  return Math.max(150, Math.round(base / Math.max(1, speakers)));
-}
 
 export function closingRoundOf(d: CouncilDiscussion): number {
   return Math.min(d.closingRound ?? d.maxRounds, d.maxRounds);
 }
 
 const PHASE_NAMES: Record<CouncilPhase, string> = {
-  opening: 'opening', rebuttal: 'rebuttal', closing: 'closing', ledger: "judge's notes",
-  statement: 'statement', summary: "moderator's summary",
-  explore: 'first answer', probe: "observer's probe", deepen: 'response to the probe',
-  review: 'review', conclusion: 'conclusion',
+  opening: '立论', rebuttal: '驳论', closing: '结辩', ledger: '裁判记录',
+  statement: '发言', summary: '主持小结',
+  explore: '独立作答', probe: '观察者追问', deepen: '回应追问',
+  review: '审阅意见', conclusion: '结论',
 };
 
 /**
@@ -101,14 +108,19 @@ export function compose(format: FormatSpec, d: CouncilDiscussion, target: Counci
   const parts: string[] = [];
   if (first) parts.push(format.brief(d, target));
   if (news.length) {
-    parts.push(`${first ? 'The discussion so far' : 'Said since your last turn'}:\n\n${news.map(s => `### Round ${s.round}, ${PHASE_NAMES[s.phase]} — ${speaker(d, s.seatId)}\n${s.text}`).join('\n\n')}`);
+    const heading = first ? '此前的发言' : '你上次发言后的新发言';
+    const speeches = news.map(s => `### 第 ${s.round} 轮 · ${PHASE_NAMES[s.phase]} · ${speaker(d, s.seatId)}\n${s.text}`);
+    parts.push(`${heading}：\n\n${speeches.join('\n\n')}`);
   }
-  if (notes.length) parts.push(`Notes the reader added (context to weigh, not authority):\n${notes.map(note => `- ${note.text}`).join('\n')}`);
+  if (notes.length) parts.push(`读者补充（仅供参考，请自行判断）：\n${notes.map(note => `- ${note.text}`).join('\n')}`);
+  if (d.format === 'roundtable' || d.format === 'prism') {
+    parts.push('在正文中提到参与者时，使用讨论中显示的名称，不要写内部席位编号。');
+  }
   parts.push(spec.prompt.task);
   return { text: parts.join('\n\n'), heard: [...heard, ...news.map(s => s.id), ...notes.map(note => `note:${note.id}`)] };
 }
 
 /** The follow-up turn that asks a seat for its notes. */
 export function recordTurn(record: string): string {
-  return `Now record your notes on that speech for the discussion's bookkeeping; the reader does not see them. Reply with one JSON object and nothing else — no prose, no code fence — of this shape:\n${record}`;
+  return `请把刚才的发言整理成供后续讨论使用的结构化记录。按以下格式只输出一个 JSON 对象，省略说明文字和代码围栏。\n${record}`;
 }

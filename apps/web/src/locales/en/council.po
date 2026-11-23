@@ -7,15 +7,15 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{owed} 问待回应"
 msgstr "{owed} pending"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{side}占上风"
 msgstr "{side} ahead"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{side}略占上风"
 msgstr "{side} slightly ahead"
 
@@ -56,7 +56,6 @@ msgid "内容"
 msgstr "Content"
 
 #: src/app/council/CouncilLaunch.tsx
-#: src/app/council/CouncilStage.tsx
 msgid "最多 {value} 轮"
 msgstr "Up to {value} rounds"
 
@@ -93,17 +92,21 @@ msgstr "Configure"
 msgid "加强"
 msgstr "Gained"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "势均力敌"
 msgstr "Even"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "势头"
 msgstr "Momentum"
 
 #: src/app/council/CouncilNav.tsx
 msgid "协作历史"
 msgstr "History"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "协作提示词"
+msgstr "Collaboration prompts"
 
 #: src/app/council/CouncilLaunch.tsx
 msgid "协作方式"
@@ -144,6 +147,10 @@ msgstr "Speaking"
 #: src/app/council/Speech.tsx
 msgid "发言失败，已跳过"
 msgstr "Speech failed and was skipped"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "发言提示词原文"
+msgstr "Original speech prompt"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "取消"
@@ -227,12 +234,17 @@ msgid "带入会话"
 msgstr "Open in session"
 
 #: src/app/council/CouncilAside.tsx
+#: src/app/council/CouncilPromptDialog.tsx
 msgid "席位"
 msgstr "Seats"
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "开始会话"
 msgstr "Start session"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "当前角色设定"
+msgstr "Current role instructions"
 
 #: src/app/council/Speech.tsx
 msgid "待回应"
@@ -242,9 +254,13 @@ msgstr "Pending"
 msgid "总结"
 msgstr "Conclude"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "按裁判各轮的记录：论点加强、被击破，对方回避质询"
 msgstr "From the judge's notes each round: points reinforced or broken, and questions the other side dodged"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "提示词来源"
+msgstr "Prompt source"
 
 #: src/app/council/Speech.tsx
 msgid "收起"
@@ -274,6 +290,14 @@ msgstr "Could not start collaboration"
 msgid "无法继续"
 msgstr "Couldn't continue"
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "无法读取提示词"
+msgstr "Couldn't load the prompt"
+
+#: src/app/council/Speech.tsx
+msgid "无法读取过程"
+msgstr "Couldn't load the process"
+
 #: src/app/council/CouncilNav.tsx
 msgid "暂无记录"
 msgstr "No history yet"
@@ -286,9 +310,22 @@ msgstr "Update failed"
 msgid "本轮记录"
 msgstr "Round ledger"
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "查看协作提示词"
+msgstr "View collaboration prompts"
+
+#: src/app/council/CouncilNav.tsx
 #: src/app/council/CouncilPage.tsx
 msgid "模型协作"
 msgstr "Collaboration"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "正在读取提示词"
+msgstr "Loading prompt"
+
+#: src/app/council/Speech.tsx
+msgid "正在读取过程…"
+msgstr "Loading process…"
 
 #: src/app/council/model.ts
 msgid "正方"
@@ -301,6 +338,10 @@ msgstr "Pause each round"
 #: src/app/council/CouncilLaunch.tsx
 msgid "没有可用的 Agent"
 msgstr "No Agents available"
+
+#: src/app/council/Speech.tsx
+msgid "没有记录到执行过程"
+msgstr "No process was recorded"
 
 #: src/app/council/model.ts
 msgid "独立作答"
@@ -341,6 +382,10 @@ msgstr "Correctness"
 #: src/app/council/model.ts
 msgid "结构"
 msgstr "Structure"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "结构化记录提示词"
+msgstr "Structured record prompt"
 
 #: src/app/council/model.ts
 msgid "结论"
@@ -408,10 +453,6 @@ msgstr "Cross-examination"
 msgid "趋于一致"
 msgstr "Converging"
 
-#: src/app/council/CouncilAside.tsx
-msgid "跳转"
-msgstr "Jump to"
-
 #: src/app/council/CouncilExportDialog.tsx
 #: src/app/council/CouncilPage.tsx
 msgid "转为任务"
@@ -429,11 +470,19 @@ msgstr "Debater"
 msgid "辩题，例如：首版应当先做 Web 端"
 msgstr "A resolution, e.g. The first version should ship on the web first"
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "这次发言没有可读取的提示词原文。"
+msgstr "The original prompt for this speech is unavailable."
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "这次结构化记录没有可读取的提示词原文。"
+msgstr "The original prompt for this structured record is unavailable."
+
 #: src/app/council/CouncilPage.tsx
 msgid "进入{closing}"
 msgstr "Go to {closing}"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "进度"
 msgstr "Progress"
 
@@ -450,6 +499,8 @@ msgid "部分共识"
 msgstr "Partly agreed"
 
 #: src/app/council/CouncilPage.tsx
+#: src/app/council/CouncilPromptDialog.tsx
+#: src/app/council/Speech.tsx
 msgid "重试"
 msgstr "Retry"
 
@@ -460,6 +511,10 @@ msgstr "Project"
 #: src/app/council/model.ts
 msgid "风险"
 msgstr "Risks"
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "首次发言包含角色设定，后续回合补入该席位可见的新内容和本轮任务。"
+msgstr "The first turn includes the role instructions. Later turns include new context visible to that seat and its task for the turn."
 
 #: src/app/council/model.ts
 msgid "驳论"

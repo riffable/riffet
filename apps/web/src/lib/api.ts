@@ -10,7 +10,7 @@ import type {
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
   LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest, LinkSelfInfo, LinkUpdateRequest, ServerInfo,
-  CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
+  CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilPrompts, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
   ExtensionContext, ExtensionInventory, ExtensionDetail, ExtensionDocument, ExtensionManagementCapabilities, ExtensionActionRequest, ExtensionActionResult, ExtensionRuntimeReport,
@@ -1136,6 +1136,7 @@ export const api = {
   },
 
   councilList: (signal?: AbortSignal) => request<{ items: CouncilSummary[] }>('/api/council', { signal }),
+  councilGet: (id: string, signal?: AbortSignal) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { signal }),
   councilCreate: (body: CouncilCreateRequest) => request<CouncilDiscussion>('/api/council', { method: 'POST', body: JSON.stringify(body) }),
   councilPatch: (id: string, body: CouncilPatchRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) }),
   councilContinue: (id: string, body?: CouncilContinueRequest) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/continue`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
@@ -1143,6 +1144,10 @@ export const api = {
   councilStop: (id: string) => request<CouncilDiscussion>(`/api/council/${encodeURIComponent(id)}/stop`, { method: 'POST', body: '{}' }),
   councilDelete: (id: string) => request<void>(`/api/council/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   councilAgents: (signal?: AbortSignal) => request<NativeBackendCatalogEntry[]>('/api/council/agents', { signal }),
+  councilPrompts: (id: string, seatId: string, speechId: string | undefined, signal?: AbortSignal) => {
+    const query = speechId ? `?speechId=${encodeURIComponent(speechId)}` : '';
+    return request<CouncilPrompts>(`/api/council/${encodeURIComponent(id)}/seats/${encodeURIComponent(seatId)}/prompts${query}`, { signal });
+  },
   councilSpeechRows: (id: string, speechId: string, signal?: AbortSignal) => request<CouncilSpeechRows>(`/api/council/${encodeURIComponent(id)}/speeches/${encodeURIComponent(speechId)}/rows`, { signal }),
   councilExport: (id: string, body: CouncilExportRequest) => request<CouncilExportResult>(`/api/council/${encodeURIComponent(id)}/export`, { method: 'POST', body: JSON.stringify(body) }),
 };

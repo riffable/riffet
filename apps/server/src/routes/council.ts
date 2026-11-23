@@ -19,6 +19,9 @@ export function registerCouncilRoutes(app: FastifyInstance, deps: RouteDeps): vo
 
   app.get<{ Params: { id: string } }>('/api/council/:id', async (request) => council.get(request.params.id));
 
+  app.get<{ Params: { id: string; seatId: string }; Querystring: { speechId?: string } }>('/api/council/:id/seats/:seatId/prompts', async (request) =>
+    council.prompts(request.params.id, request.params.seatId, request.query.speechId));
+
   app.post<{ Body: CouncilCreateRequest }>('/api/council', async (request) => council.create(request.body));
 
   app.patch<{ Params: { id: string }; Body: CouncilPatchRequest }>('/api/council/:id', async (request) =>

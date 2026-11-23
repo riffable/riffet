@@ -7,15 +7,15 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: pseudo\n"
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{owed} 问待回应"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{side}占上风"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "{side}略占上风"
 msgstr ""
 
@@ -56,7 +56,6 @@ msgid "内容"
 msgstr ""
 
 #: src/app/council/CouncilLaunch.tsx
-#: src/app/council/CouncilStage.tsx
 msgid "最多 {value} 轮"
 msgstr ""
 
@@ -93,16 +92,20 @@ msgstr ""
 msgid "加强"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "势均力敌"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "势头"
 msgstr ""
 
 #: src/app/council/CouncilNav.tsx
 msgid "协作历史"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "协作提示词"
 msgstr ""
 
 #: src/app/council/CouncilLaunch.tsx
@@ -143,6 +146,10 @@ msgstr ""
 
 #: src/app/council/Speech.tsx
 msgid "发言失败，已跳过"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "发言提示词原文"
 msgstr ""
 
 #: src/app/council/CouncilExportDialog.tsx
@@ -227,11 +234,16 @@ msgid "带入会话"
 msgstr ""
 
 #: src/app/council/CouncilAside.tsx
+#: src/app/council/CouncilPromptDialog.tsx
 msgid "席位"
 msgstr ""
 
 #: src/app/council/CouncilExportDialog.tsx
 msgid "开始会话"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "当前角色设定"
 msgstr ""
 
 #: src/app/council/Speech.tsx
@@ -242,8 +254,12 @@ msgstr ""
 msgid "总结"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "按裁判各轮的记录：论点加强、被击破，对方回避质询"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "提示词来源"
 msgstr ""
 
 #: src/app/council/Speech.tsx
@@ -274,6 +290,14 @@ msgstr ""
 msgid "无法继续"
 msgstr ""
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "无法读取提示词"
+msgstr ""
+
+#: src/app/council/Speech.tsx
+msgid "无法读取过程"
+msgstr ""
+
 #: src/app/council/CouncilNav.tsx
 msgid "暂无记录"
 msgstr ""
@@ -286,8 +310,21 @@ msgstr ""
 msgid "本轮记录"
 msgstr ""
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "查看协作提示词"
+msgstr ""
+
+#: src/app/council/CouncilNav.tsx
 #: src/app/council/CouncilPage.tsx
 msgid "模型协作"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "正在读取提示词"
+msgstr ""
+
+#: src/app/council/Speech.tsx
+msgid "正在读取过程…"
 msgstr ""
 
 #: src/app/council/model.ts
@@ -300,6 +337,10 @@ msgstr ""
 
 #: src/app/council/CouncilLaunch.tsx
 msgid "没有可用的 Agent"
+msgstr ""
+
+#: src/app/council/Speech.tsx
+msgid "没有记录到执行过程"
 msgstr ""
 
 #: src/app/council/model.ts
@@ -340,6 +381,10 @@ msgstr ""
 
 #: src/app/council/model.ts
 msgid "结构"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "结构化记录提示词"
 msgstr ""
 
 #: src/app/council/model.ts
@@ -408,10 +453,6 @@ msgstr ""
 msgid "趋于一致"
 msgstr ""
 
-#: src/app/council/CouncilAside.tsx
-msgid "跳转"
-msgstr ""
-
 #: src/app/council/CouncilExportDialog.tsx
 #: src/app/council/CouncilPage.tsx
 msgid "转为任务"
@@ -429,11 +470,19 @@ msgstr ""
 msgid "辩题，例如：首版应当先做 Web 端"
 msgstr ""
 
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "这次发言没有可读取的提示词原文。"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "这次结构化记录没有可读取的提示词原文。"
+msgstr ""
+
 #: src/app/council/CouncilPage.tsx
 msgid "进入{closing}"
 msgstr ""
 
-#: src/app/council/CouncilStage.tsx
+#: src/app/council/CouncilAside.tsx
 msgid "进度"
 msgstr ""
 
@@ -450,6 +499,8 @@ msgid "部分共识"
 msgstr ""
 
 #: src/app/council/CouncilPage.tsx
+#: src/app/council/CouncilPromptDialog.tsx
+#: src/app/council/Speech.tsx
 msgid "重试"
 msgstr ""
 
@@ -459,6 +510,10 @@ msgstr ""
 
 #: src/app/council/model.ts
 msgid "风险"
+msgstr ""
+
+#: src/app/council/CouncilPromptDialog.tsx
+msgid "首次发言包含角色设定，后续回合补入该席位可见的新内容和本轮任务。"
 msgstr ""
 
 #: src/app/council/model.ts

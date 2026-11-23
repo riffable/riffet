@@ -1,5 +1,5 @@
 import type { CouncilDiscussion, CouncilReviewTask } from '../../../../../packages/contracts/src/index.js';
-import { LANGUAGE_RULE, SEAT_RULE, seatsOf, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
+import { languageRule, SEAT_RULE, seatsOf, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
 
 /**
  * Review: each reviewer reads the document from its own angle and proposes paragraph edits
@@ -9,34 +9,36 @@ import { LANGUAGE_RULE, SEAT_RULE, seatsOf, speak, spoken, type FormatSpec, type
 export const REVIEW_TASKS: readonly CouncilReviewTask[] = ['correct', 'augment', 'diagnose', 'restructure'];
 
 const FOCUS: Record<CouncilReviewTask, string> = {
-  correct: 'errors: wrong facts, contradictions in the reasoning, missed edge cases, statements that cannot work as written',
-  augment: 'omissions: unstated premises, missing branches or states, failure handling, permissions',
-  diagnose: 'risks: security, performance, compatibility, hidden assumptions, information the reader would need',
-  restructure: 'structure: order, context that should come first, sections mixing different concerns',
+  correct: '你负责纠错。检查事实错误、推理矛盾、遗漏的边界情况，以及按原文无法执行的说法。',
+  augment: '你负责补充遗漏。找出未说明的前提、缺失的分支或状态，以及遗漏的失败处理和权限要求。',
+  diagnose: '你负责审阅风险。检查安全、性能和兼容性风险，指出隐含假设以及读者作判断时还缺少的信息。',
+  restructure: '你负责审阅结构。检查段落顺序，指出哪些背景需要提前交代、哪些段落混杂了不同主题。',
 };
 
-const DOCUMENT_LANGUAGE = LANGUAGE_RULE.replace('the topic is', 'the document is');
-
 function numbered(d: CouncilDiscussion): string {
-  return `${d.document?.title ? `Document: ${d.document.title}\n\n` : ''}${(d.document?.paragraphs ?? []).map(p => `[${p.id}] ${p.text}`).join('\n\n')}`;
+  return `${d.document?.title ? `文档：${d.document.title}\n\n` : ''}${(d.document?.paragraphs ?? []).map(p => `[${p.id}] ${p.text}`).join('\n\n')}`;
 }
 
-const EDITS_SHAPE = '{"edits":[{"para":"P3","title":"short title","before":"the exact text in that paragraph to replace (its last sentence when inserting after it)","after":"the replacement text"}]}';
+const EDITS_SHAPE = '{"edits":[{"para":"P3","title":"修改要点","before":"从该段逐字摘录的原文","after":"替换后的完整文字"}]}';
 
 const REVIEW: SpeechPrompt = {
-  task: 'Write a short review for the reader, at most 200 words: what matters most from your angle.',
-  record: `${EDITS_SHAPE}\nPropose one to four edits, most important first. "before" must be copied exactly from the paragraph.`,
+  task: '从你的审阅角度，向读者说明最值得关注的问题。审阅意见不超过 200 词。',
+  record: `${EDITS_SHAPE}\n提出一至四条修改建议，最重要的排在前面。before 必须与段落原文逐字一致。如需在段末追加内容，before 填写原段最后一句，after 填写这句话及要追加的内容。`,
 };
 
 function mergeTask(d: CouncilDiscussion): SpeechPrompt {
   const accepted = new Set(d.accepted ?? []);
   const edits = d.speeches.flatMap(s => s.directive?.kind === 'edits' ? s.directive.edits : []).filter(e => accepted.has(e.id));
+  const changes = edits.map(edit => {
+    const change = edit.before ? `原文：${edit.before}\n  替换为：${edit.after}` : `在段末追加：${edit.after}`;
+    return `- [${edit.para}] ${edit.title}\n  ${change}`;
+  });
   return {
     task: [
-      'The reader accepted these edits:',
-      edits.map(e => `- [${e.para}] ${e.title}\n  replace: ${e.before || '(insert after the paragraph)'}\n  with: ${e.after}`).join('\n'),
+      '读者已采纳以下修改：',
+      ...changes,
       '',
-      'Apply them to the document and output the full revised document in Markdown, and nothing else. Leave everything the edits do not touch as it was. Drop the paragraph tags.',
+      '将已采纳的修改应用到原文，其他内容照原样保留。用 Markdown 输出完整修订稿，去掉审阅用的段落标签，不附加说明。',
     ].join('\n'),
   };
 }
@@ -44,9 +46,9 @@ function mergeTask(d: CouncilDiscussion): SpeechPrompt {
 export const review: FormatSpec = {
   brief(d, seat) {
     const lead = seat.role === 'editor'
-      ? 'You are the editor of a document other AI models review. When the reader has accepted some of their edits, you merge those into a revised document.'
-      : `You review a document from one angle only — ${FOCUS[seat.task ?? 'correct']}. Paragraphs are tagged [P1], [P2] and so on.`;
-    return [lead, SEAT_RULE, DOCUMENT_LANGUAGE, '', numbered(d)].join('\n');
+      ? '你负责修订文档。其他模型会先提出修改建议，读者选定后，由你把已采纳的建议合并成完整修订稿。'
+      : `${FOCUS[seat.task ?? 'correct']}只从这个角度审阅。文中的 [P1]、[P2] 等标记是段落编号。`;
+    return [lead, SEAT_RULE, languageRule('文档'), '', numbered(d)].join('\n');
   },
   // Reviews are independent, and the editor works from the accepted edits alone.
   hears: () => false,
