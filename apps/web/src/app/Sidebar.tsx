@@ -134,25 +134,32 @@ function offlineLabel(savedAt: number): string {
   return isJustNow(new Date(savedAt).toISOString()) ? i18n._(msg`离线 · 显示刚刚保存的列表`) : i18n._(msg`离线 · 显示 ${age} 前保存的列表`);
 }
 
-/** `taskRing`: the row shows its task's status ring, which turns while the conversation runs, so the slot stays empty then. */
-export function SessionIndicator({ session, mobile, selected, taskRing }: { session: Session; mobile: boolean; selected: boolean; taskRing?: boolean }) {
+/**
+ * Leading status slot of a conversation row. One mark occupies the 16px icon column so titles stay
+ * vertically aligned with the sidebar's navigation labels: terminal hold, running (task ring turns
+ * in place of a separate spinner), waiting, unread, or the task's status ring.
+ */
+export function SessionIndicator({ session, mobile, selected, taskStatus }: { session: Session; mobile: boolean; selected: boolean; taskStatus?: WorkItemStatus }) {
   const { t } = useLingui();
   const running = session.state === 'running' || session.state === 'starting';
   // Finished while nobody looked; the open conversation is being read. A failure once read is shown
   // in the conversation itself, so the row drops its mark like any other read one.
   const unread = !selected && isDoneUnseen(session);
   if (session.terminalHold) return <span role="img" aria-label={t`在终端中`} title={t`在终端中`} className="inline-flex text-fg-3"><IconSquareTerminal className="size-3.5" /></span>;
-  if (mobile) {
-    if (running) return taskRing ? null : <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>;
-    if (session.state === 'waiting') return <StatusDot tone="warning" shape="ring" pulse label={t`等待处理`} className="size-2" />;
-    if (unread && session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-2" />;
-    if (unread) return <StatusDot tone="accent" label={t`未读`} className="size-2" />;
-    return null;
+  if (running) {
+    if (taskStatus) return <StatusIcon status={taskStatus} running />;
+    return mobile
+      ? <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>
+      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
   }
-  if (running) return taskRing ? null : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
-  if (session.state === 'waiting') return <StatusDot tone="warning" label={t`等待处理`} />;
-  if (unread && session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
-  if (unread) return <StatusDot tone="accent" label={t`未读`} />;
+  if (session.state === 'waiting') {
+    return mobile
+      ? <StatusDot tone="warning" shape="ring" pulse label={t`等待处理`} className="size-2" />
+      : <StatusDot tone="warning" label={t`等待处理`} />;
+  }
+  if (unread && session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className={mobile ? 'size-2' : undefined} />;
+  if (unread) return <StatusDot tone="accent" label={t`未读`} className={mobile ? 'size-2' : undefined} />;
+  if (taskStatus) return <StatusIcon status={taskStatus} />;
   return null;
 }
 
@@ -222,8 +229,6 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   const deleting = useDeletionLoading(session.id);
   const backend = sessionBackend(session);
   const label = useBackendLabel()(backend);
-  // Without the item (deleted) the title stands alone; before summaries arrive from a legacy server, reserve the icon slot so the title does not jump.
-  const summariesLoaded = useWorkItems((state) => state.summaries !== undefined);
   const taskStatus = useWorkItems((state) => session.workItemId ? state.summaries?.find((entry) => entry.id === session.workItemId)?.status : undefined);
   // Remote conversations carry a quiet link icon with 1 peer, or its short alias when 2+ peers exist.
   const server = useServerBadge(session.id);
@@ -234,9 +239,10 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       onClick={(event) => onSelect(session, event.metaKey || event.ctrlKey)}
       selected={selected}
       aria-current={selected ? 'page' : undefined}
-      leading={<SessionIndicator session={session} mobile={mobile} selected={selected} taskRing={Boolean(taskStatus)} />}
-      // The others recede a step so the selected row reads first.
-      className={cn('cursor-default', mobile && 'text-fg hover:text-fg', session.archivedAt && 'opacity-60')}
+      leading={<SessionIndicator session={session} mobile={mobile} selected={selected} taskStatus={taskStatus} />}
+      // The others recede a step so the selected row reads first. On desktop `px-2` matches the
+      // primary nav and project rows so titles align on the same vertical axis.
+      className={cn('cursor-default', mobile ? 'text-fg hover:text-fg' : 'px-2', session.archivedAt && 'opacity-60')}
       // Decoration, not controls: in `actions` a click on them would stay theirs and never open the row.
       trailing={<>
       {marked && <span role="img" aria-label={t`已收藏`} title={t`已收藏`} className="inline-flex shrink-0 text-accent"><IconBookmarkFilled className="size-3.5" /></span>}
@@ -291,9 +297,6 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       </span>
       </>}
     >
-      {taskStatus
-        ? <StatusIcon status={taskStatus} running={session.state === 'running' || session.state === 'starting'} className="-mt-0.5 mr-1.5 inline-block align-middle" />
-        : session.workItemId && !summariesLoaded && <span aria-hidden="true" className="-mt-0.5 mr-1.5 inline-block size-3.5 align-middle" />}
       {session.title}
     </ListRow>
   );
@@ -495,7 +498,7 @@ export function Sidebar(props: Props) {
           <button
             type="button"
             onClick={() => toggleShowAll(entry.projectId)}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
+            className={cn('flex h-7 w-full items-center gap-2 rounded-lg text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2', mobile ? 'px-2.5' : 'px-2')}
           >
             <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconEllipsis className="size-3.5" /></span>
             <span><Trans>展开其余 {hiddenCount} 个会话</Trans></span>
@@ -507,7 +510,7 @@ export function Sidebar(props: Props) {
           <button
             type="button"
             onClick={() => toggleShowAll(entry.projectId)}
-            className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2"
+            className={cn('flex h-7 w-full items-center gap-2 rounded-lg text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg-2', mobile ? 'px-2.5' : 'px-2')}
           >
             <span className="grid size-4 shrink-0 place-items-center text-fg-4"><IconChevronRight className="-rotate-90 size-3.5" /></span>
             <span><Trans>收起历史会话</Trans></span>
@@ -525,8 +528,8 @@ export function Sidebar(props: Props) {
             onClick={() => { if (project.system === 'task-workspace') props.onSelectNoProject?.(); else props.onSelectProject(project); if (!open) toggleProject(project.id); }}
             onKeyDown={(event) => activateOnKey(event, () => project.system === 'task-workspace' ? props.onSelectNoProject?.() : props.onSelectProject(project))}
             className={cn(
-              'group/project flex h-8 cursor-default items-center gap-2 rounded-lg px-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
-              mobile ? cn('text-sm text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg') : cn('text-xs font-medium text-fg-3 hover:text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg hover:text-fg'),
+              'group/project flex h-8 cursor-default items-center gap-2 rounded-lg outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
+              mobile ? cn('px-2.5 text-sm text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg') : cn('px-2 text-xs font-medium text-fg-3 hover:text-fg-2', activeProject && !selectedSessionId && 'bg-active text-fg hover:text-fg'),
               project.archivedAt && 'opacity-60',
             )}
           >

@@ -14,6 +14,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On the web, task status rings in the sidebar now sit in the leading icon column instead of inline before the title, and conversation rows match the horizontal inset of navigation and project rows so all titles align on one vertical axis.
 - On the web, reading a reply above the bottom no longer jumps vertically when a turn finishes: the turn's process block updates to "Processed" and stays open above your reading position until you return to the bottom or scroll above it.
 - Question prompts and plan review tools now stay outside the folded process block across Web, Mac, iOS, Android, and shared exports, so long responses written before an `AskQuestion` or plan review are no longer hidden inside "Processed", and pre-question process blocks finish cleanly instead of staying "Working" alongside post-answer work.
 - Claude Code's synthetic `No response requested.` placeholder written on resume after a manual stop is no longer shown as an extra reply or counted as a model step.
