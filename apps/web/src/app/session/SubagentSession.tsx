@@ -123,7 +123,7 @@ export function SubagentSession({ stack, onBack, onClose, onOpen, findEvent, ses
   const fallback = call && call.view.contents.length ? <ToolContents view={call.view} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} /> : null;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-1 edge-b bg-bg px-1.5 md:px-3">
+      <div className="flex h-11 shrink-0 items-center gap-1 edge-b max-md:bg-bg md:bg-transparent px-1.5 md:px-3">
         <Tip label={parent ? t`返回上一级子 Agent` : t`返回主会话`}>
           <Button ref={backRef} size="icon-sm" variant="quiet" aria-label={parent ? t`返回上一级子 Agent` : t`返回主会话`} className="shrink-0 max-md:size-11" onClick={onBack}><IconArrowLeft className="size-4" /></Button>
         </Tip>

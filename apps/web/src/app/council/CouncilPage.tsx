@@ -253,7 +253,7 @@ export function CouncilPage({
               <div className="timeline-gap-turn"><CouncilControls discussion={active} onContinue={handleContinue} /></div>
             </div>
             {noting && (
-              <div className="sticky bottom-0 bg-bg pt-2 pb-4">
+              <div className="sticky bottom-0 max-md:bg-bg md:bg-transparent pt-2 pb-4">
                 <div className="mx-auto w-full max-w-(--content-width) px-3 sm:px-4 md:px-12">
                   <Composer
                     projectId=""

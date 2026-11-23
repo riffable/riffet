@@ -200,7 +200,7 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
         EditorView.theme({
           '&': { height: '100%', color: 'var(--fg)', backgroundColor: 'transparent', fontSize: '12px' },
           '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--font-mono)', lineHeight: '20px' },
-          '.cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--fg-4)', border: 'none', cursor: 'pointer' },
+          '.cm-gutters': { backgroundColor: 'var(--bg-card)', backdropFilter: 'blur(8px)', color: 'var(--fg-4)', border: 'none', cursor: 'pointer' },
           '.cm-lineNumbers .cm-gutterElement': { paddingLeft: '12px', paddingRight: '12px' },
           '.cm-lineNumbers .cm-gutterElement:hover': { color: 'var(--accent)' },
           '.cm-activeLine': { backgroundColor: 'var(--bg-hover)' },

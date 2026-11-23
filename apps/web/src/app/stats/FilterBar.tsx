@@ -71,7 +71,7 @@ export function FilterBar({ state, options, onChange, onExport }: {
     <div
       ref={barRef}
       style={{ '--stats-filter-height': `${barHeight}px` } as CSSProperties}
-      className="sticky top-0 z-10 flex flex-col gap-2 bg-bg/95 pb-3 pt-3 backdrop-blur-sm"
+      className="sticky top-0 z-10 flex flex-col gap-2 max-md:bg-bg/95 md:bg-transparent pb-3 pt-3 backdrop-blur-md"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         <DropdownMenu>

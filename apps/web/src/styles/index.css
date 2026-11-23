@@ -3529,8 +3529,8 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
 
 /* Keep the strip's original outline and concave feet, joining the panel at its own colour. */
 .tab-strip-current {
-  --tab-current-bg: var(--bg);
-  background: linear-gradient(to bottom, var(--tab-current-bg) 45%, var(--bg) calc(100% - 10px));
+  --tab-current-bg: var(--bg-card);
+  background: linear-gradient(to bottom, var(--tab-current-bg) 45%, var(--bg-card) calc(100% - 10px));
 }
 .tab-strip-current::before,
 .tab-strip-current > .tab-flare {
@@ -3543,11 +3543,11 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
 }
 .tab-strip-current::before {
   left: -10px;
-  background: radial-gradient(circle at 0 0, transparent 10px, var(--bg) 10.5px);
+  background: radial-gradient(circle at 0 0, transparent 10px, var(--bg-card) 10.5px);
 }
 .tab-strip-current > .tab-flare {
   right: -10px;
-  background: radial-gradient(circle at 100% 0, transparent 10px, var(--bg) 10.5px);
+  background: radial-gradient(circle at 100% 0, transparent 10px, var(--bg-card) 10.5px);
 }
 
 /* Only temporary tabs carry an edge, following the original curves with dashes. */
