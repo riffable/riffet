@@ -102,9 +102,12 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 | `Tip` | 悬停提示，可带 `kbd` | `components/ui/tooltip.tsx` |
 | `Markdown`、`DiffView` | 正文与差异 | `app/session/` |
 | `ModelField` | 选模型及其选项 | `plugins/ModelField.tsx` |
+| `CodeFile`、`FileIcon` | 只读显示一个项目文件（文本高亮、图片、二进制），⌘ 点击标识符交给视图；可选 `baseline`（行号右侧的改动标记）与 `blame`（行号左侧的作者列）；文件面板的文件图标 | `plugins/CodeFile.tsx`，内部是 `app/panels/CodeView.tsx` |
+| `Menu` | 应用的 `DropdownMenu`，按条目表画：命令、单选（连续的单选项为一组，当前项打勾）、开关、分隔线、组标题；`tip` 给图标触发按钮加 `Tip` | `plugins/PluginOverlays.tsx` |
+| `QuickPanel` | ⌘P、⌘K 那一种搜索弹窗（内容档 768，列表高 `min(480px, 56dvh)`）：查询行、范围页签与右侧工具、固定高度的列表区，可选的下方预览占列表区的一部分；选项由插件画，焦点留在查询行 | `plugins/PluginOverlays.tsx`，查询行是 `QuickInput` |
 | `icon(name)`、`toolIcon(kind)`、`copy(text)` | 图标、工具图标、复制并提示 | |
 
-- `Select`、`Segmented`、`Field`、`Notice`、`EmptyState` 与 `Button` 的 `busy` 是 web API 1 之后加的，没有升版本号（升号会让声明 `^1` 的现有插件全部不兼容）。2026-11 之前的宿主没有这些成员：`UiKit` 里它们是可选的，SDK 的同名包装在旧宿主上退回成无样式的文字或不渲染，插件直接用 `ui.*` 时先判断是否存在。
+- `Select`、`Segmented`、`Field`、`Notice`、`EmptyState`、`CodeFile`、`FileIcon`、`Menu`、`QuickPanel` 与 `Button` 的 `busy` 是 web API 1 之后加的，没有升版本号（升号会让声明 `^1` 的现有插件全部不兼容）。2026-11 之前的宿主没有这些成员：`UiKit` 里它们是可选的，SDK 的同名包装在旧宿主上退回成无样式的文字或不渲染，插件直接用 `ui.*` 时先判断是否存在。
 - 选用规则同[组件](components/TEMPLATE.md)与[模式](patterns.md)：几个并列的值用 `Segmented`、更多用选择菜单。`UiKit` 没有 `Dialog`，视图需要弹窗时先看能否改成声明式页面。
 - 隔离视图没有组件。用原生元素，靠基础样式获得宿主外观；需要弹窗、确认、通知时，经桥调 `notify.info`、`notify.error` 或 `commands.execute`，由宿主绘制。
 
@@ -115,7 +118,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 ## 5. 图标
 
 - 视图和命令的图标用包内 SVG（`icon.svg`，包内路径），可附带供 Mac 使用的 `icon.sfSymbol`；两者都缺时宿主用通用图标。Agent 的 `icon.svg` 至多 64 KB，只当图片画，不执行脚本。
-- 应用内模块从 `PluginIconName`（39 个 Lucide 图标）里选，用 `ui.icon(name)` 取，不引入第二套图标库。`WebPlugin.icons` 给宿主在视图标题旁画的图标。
+- 应用内模块从 `PluginIconName`（47 个 Lucide 图标）里选，用 `ui.icon(name)` 取，不引入第二套图标库。`WebPlugin.icons` 给宿主在视图标题旁画的图标。
 - 尺寸与描边按[基础](foundations.md) §8：Web 按钮、页签 16，行内 14，元信息 12，描边 1.25 且不随尺寸变；颜色跟随所在行的文字，不写固定色。
 - SVG 用 `currentColor` 描边或填充，不带固定色值。
 - 图标不套底板、不加外圈、不着色。同类条目的列表行首不重复同一个图标；标签页和分区标题不配图标（[基础](foundations.md) §12.5）。

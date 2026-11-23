@@ -5,8 +5,8 @@ import type { Metafile } from 'esbuild';
 
 // esbuild cannot see what the server resolves by path at runtime: KaTeX's build and fonts (the math
 // page and preview styles), pdf.js cmaps and standard fonts served to the PDF preview, and the lazily
-// required HEIC decoder. `tsx` (source runs only) and DSH's packages (from DSH's own install) stay out.
-const RESOLVED = ['katex', 'pdfjs-dist', 'heic-decode'];
+// required HEIC decoder and the code index's parser (loaded by its child processes). `tsx` (source runs only) and DSH's packages (from DSH's own install) stay out.
+const RESOLVED = ['katex', 'pdfjs-dist', 'heic-decode', 'web-tree-sitter'];
 
 const packageName = (specifier: string): string => specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/');
 

@@ -9,6 +9,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, attachmentPath, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
 import { copyWithToast } from '@/lib/files';
+import { serverOfObject } from '@/lib/server-routing';
 import { toast } from '@/lib/toast';
 import { errorMessage, newId } from '@/lib/utils';
 import { Markdown } from '../app/session/Markdown';
@@ -21,6 +22,8 @@ import { timelineItem } from '../sync/rows';
 import { allowedRequestPath, assertDeclaredSettings, declaredSettings } from './access';
 import { pluginIcon } from './icons';
 import { ModelField } from './ModelField';
+import { CodeFile, FileIcon } from './CodeFile';
+import { PluginMenu, PluginQuickPanel } from './PluginOverlays';
 
 const NO_SETTINGS_PAGE: SettingsPageService = { setDirty: () => undefined, setBusy: () => undefined };
 
@@ -73,6 +76,8 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
     sessions: {
       list: () => lists.get().sessions,
       projects: () => lists.get().projects,
+      servers: () => lists.get().servers,
+      serverOf: serverOfObject,
       subscribe: (listener) => {
         let summaries = summariesChosen();
         const offLists = lists.subscribe(listener);
@@ -116,6 +121,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
         if (target) handlers.selectSession(target);
       },
       ...(pluginId ? { openPluginPage: () => { void nav.navigate(() => nav.openPlugins(pluginId, '', 'page')); } } : {}),
+      quote: (projectId, reference) => handlers.quoteInProject(projectId, { path: reference.path, ...(reference.line !== undefined ? { line: reference.line } : {}), ...(reference.text !== undefined ? { text: reference.text } : {}) }),
     },
     notify: { error: (error, fallback) => toast.error(errorMessage(error, fallback)), errorText: errorMessage, success: (message) => toast.success(message) },
     request: {
@@ -154,7 +160,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       lineDiff: (before, after, context) => lineDiff(before, after, context),
     },
     ui: {
-      Button: PluginButton, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, Select: PluginSelect, Segmented: PluginSegmented, Field, Notice, EmptyState, ModelField,
+      Button: PluginButton, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, Select: PluginSelect, Segmented: PluginSegmented, Field, Notice, EmptyState, ModelField, CodeFile, FileIcon, Menu: PluginMenu, QuickPanel: PluginQuickPanel,
       icon: pluginIcon,
       toolIcon: (kind) => toolIcons[kind] ?? IconWrench,
       copy: copyWithToast,

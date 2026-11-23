@@ -113,6 +113,8 @@ export interface PluginRegistryOptions {
   serverPorts?: () => readonly number[];
   /** `host.sessions` of an in-process plugin that declares agent tools or channels. */
   sessions?: NonNullable<PluginHost['sessions']>;
+  /** `host.code` of an in-process plugin that declares agent tools. */
+  code?: PluginHost['code'];
   /** `host.models.complete` of an in-process plugin, given its own declared model uses. */
   completeModel?: Parameters<typeof createPluginHost>[1]['completeModel'];
   /** `host.models.stream` of an in-process plugin, given its own declared model uses. */
@@ -201,7 +203,7 @@ export class PluginRegistry {
     });
     this.invalidate = options.invalidateModelCatalogs ?? (() => undefined);
     this.agentBackendProvided = options.agentBackendProvided ?? (() => false);
-    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}), ...(options.completeModel ? { completeModel: options.completeModel } : {}), ...(options.streamModel ? { streamModel: options.streamModel } : {}) };
+    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}), ...(options.code ? { code: options.code } : {}), ...(options.completeModel ? { completeModel: options.completeModel } : {}), ...(options.streamModel ? { streamModel: options.streamModel } : {}) };
     if (options.emitAssistantEvent) this.emitAssistantEvent = options.emitAssistantEvent;
     if (options.approvals) this.approvals = options.approvals;
     this.runningTasks = options.runningTasks ?? (() => 0);
@@ -1365,6 +1367,7 @@ export class PluginRegistry {
       ...this.hostOptions, ownAgentBackends: (manifest.contributes?.agentBackends ?? []).map(declared => declared.id),
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
       ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
+      ownsAgentTools: Boolean(manifest.contributes?.agentTools?.length),
       ownModelUses: manifest.contributes?.modelUses ?? [],
       invalidateViews,
       ...(this.approvals ? { approvals: this.approvals } : {}),

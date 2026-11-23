@@ -38,7 +38,7 @@ riffet plugin unlink example.echo
 | --- | --- | --- |
 | `agentBackends` | `plugins/riffet/cursor`、`plugins/riffet/antigravity`、`examples/plugins/echo` | `echo` 是最小形状；Cursor 是完整驱动 |
 | `modelSources` | `examples/plugins/gateway-models`、`official/litellm` | 样例的 `server/index.mjs`：异步 `prepare()` 配同步 `resolve()`；LiteLLM 是网关适配器（`role: 'adapter'`）和额度（`usage`） |
-| `views` | `plugins/riffet/canvas`、`plugins/riffet/trace`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools`、`examples/plugins/workbench-sample` | 会话视图、侧栏、隔离视图、声明式渲染器、顶层 `main` 视图各一个 |
+| `views` | `plugins/riffet/canvas`、`plugins/riffet/trace`、`plugins/riffet/studio`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools`、`examples/plugins/workbench-sample` | 会话视图、侧栏、隔离视图、声明式渲染器、顶层 `main` 视图各一个 |
 | `queries` | `examples/plugins/workbench-sample` | 视图经消息桥 `plugin.query` 读服务端结构化数据，配合 `host.views.invalidate` 增量刷新 |
 | `assistantEvents` | 暂无（核心仓库没有发事件的插件；外部的理财插件是第一个使用者） | 清单声明主题，进程内的运行时调用 `host.assistant?.emit` |
 | `approvals`（运行时，无清单声明） | 暂无（核心仓库没有请求审批的插件） | 进程内的运行时用 `host.approvals?.request` 把待执行的写操作放进收件箱，`contributes` 之外在 `Contributions.approvals.decide(id, actionId, context)` 里执行用户的选择，见 [插件架构](PLUGIN_ARCHITECTURE.md)「收件箱审批」 |
@@ -139,6 +139,15 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 插件属于 B 类。Web 的顶层 `main` 页只列入口服务器启用的插件，视图使用包内的贡献 ID。查询在提供插件与数据的服务器执行；当前 Web 的插件目录取自入口，因而对端对象上的视图不能使用入口插件查询。链接策略允许查询请求（`serve`），引导页 `/plugin-view` 由入口提供（`deny`）。宿主按插件分发刷新事件，断线重连后通知视图重读。查询结果由视图消费，宿主不做持久缓存。旧宿主可以通过视图的 `requires` 和 `host.info.methods` 判定能力。
 
 Mac：W 类工作路径。当前 SDK 的顶层页面和 `plugin.query` 由 Web 承载；Mac 侧栏插件可用的方法见[自定义视图](PLUGIN_ARCHITECTURE.md#自定义视图)。
+
+## 代码导航（`host.code`）
+
+运行时服务，不是扩展点：进程内且声明了 `agentTools` 的插件可用，隔离安装的包没有。
+
+- 方法：`status(projectId)`、`search(projectId, q, { types?, limit? })`、`definition(projectId, { path, line, column?, word })`、`references(projectId, { path, word, scope })`、`outline(projectId, path)`；类型取自 `@riffet/contracts`。
+- 只读。`projectId` 是本服务器的项目（工具取自 `AgentToolContext.projectId`），路径与项目路由同样限在项目内，项目相对路径、行列从 1 起；`column` 缺省取该行第一个 `word`。
+- 索引没好时 `search` 返回空 `items` 加索引状态，`references` 的 `complete: false` 表示没查全：调用方必须把它们告诉 Agent，不能当作「没有」。
+- 在会话所在的服务器上执行；参考实现 `plugins/riffet/studio/tools.ts`，见 [Code Studio](CODE-STUDIO.md) §5。
 
 ## 能力与授权
 

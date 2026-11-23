@@ -134,6 +134,10 @@ msgstr "下一个标签"
 msgid "下移"
 msgstr "下移"
 
+#: src/plugins/CodeFile.tsx
+msgid "下载"
+msgstr "下载"
+
 #. placeholder {0}: artifact.name
 #: src/plugins/TasksView.tsx
 msgid "下载 {0}"
@@ -179,6 +183,10 @@ msgstr "主目录"
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "主题"
+
+#: src/plugins/CodeFile.tsx
+msgid "二进制文件"
+msgstr "二进制文件"
 
 #: src/app/SessionSearchDialog.tsx
 #: src/app/Sidebar.tsx
@@ -711,6 +719,10 @@ msgstr "命令面板"
 #: src/app/Sidebar.tsx
 msgid "固定侧边栏"
 msgstr "固定侧边栏"
+
+#: src/plugins/CodeFile.tsx
+msgid "图片无法加载"
+msgstr "图片无法加载"
 
 #. placeholder {0}: project.name
 #: src/app/Sidebar.tsx
@@ -1370,6 +1382,14 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr "文件"
 
+#: src/plugins/CodeFile.tsx
+msgid "文件不存在"
+msgstr "文件不存在"
+
+#: src/plugins/CodeFile.tsx
+msgid "文件过大，仅显示前一部分"
+msgstr "文件过大，仅显示前一部分"
+
 #: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
@@ -1536,6 +1556,10 @@ msgstr "无法导入会话"
 #: src/app/Workbench.tsx
 msgid "无法开始这个任务"
 msgstr "无法开始这个任务"
+
+#: src/plugins/CodeFile.tsx
+msgid "无法打开文件"
+msgstr "无法打开文件"
 
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
@@ -2615,6 +2639,7 @@ msgstr "重新读取"
 #: src/app/plugins/PluginSharesBlock.tsx
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Workbench.tsx
+#: src/plugins/CodeFile.tsx
 msgid "重试"
 msgstr "重试"
 

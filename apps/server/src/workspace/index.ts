@@ -4,15 +4,18 @@ import { spawn, execFile } from 'node:child_process';
 import { lstat, mkdir, open, opendir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
-import type { Attachment, CodeDefinitions, CodeReferences, FileEntry, FilePreview, SearchHit } from '../../../../packages/contracts/src/index.js';
+import type { Attachment, CodeDefinitions, CodeIndexStatus, CodeModules, CodeOutline, CodeReferences, CodeSymbolResults, FileEntry, FilePreview, SearchHit, SearchResults } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { collectArchiveEntries, gitArchiveEntries, rawFileType, readSample, siteFileType, zipStream, type RawFileType } from './download.js';
 import { expandHomePath, projectRoot, isSecretPath, isWithin, resolveReadablePath, resolveScopedPath, toProjectRelative, type ProjectRef } from './scope.js';
-import { FileIndex, rankPaths, ripgrepSearch } from './file-index.js';
+import { FileIndex, rankPaths, ripgrepSearch, SEARCH_TIMEOUT_MS } from './file-index.js';
+import { lineMatcher, maskMatcher, parseMasks, type SearchOptions } from './search-options.js';
 import { CodeNav, findDefinitions, findReferences, type DefinitionQuery, type ReferenceQuery } from './code-nav.js';
 import { decodePreviewText, MAX_PREVIEW_FILE_BYTES, previewKind } from '../previews/formats.js';
-import { FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
+import { CODE_INDEX_BUDGET, FILE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import { editableText, FileWrites } from './write.js';
+import { modulesOf } from './modules.js';
+import { SymbolIndexes } from './symbols/indexes.js';
 
 const MAX_LIST_PAGE = 200;
 const MAX_WALK_ENTRIES = 20_000;
@@ -242,6 +245,8 @@ export function pickerCancelled(platform: NodeJS.Platform, exit: { code: number;
 export class WorkspaceService {
   readonly stateDir: string;
   private readonly fileIndex = new FileIndex();
+  /** Per-project declaration indexes (`symbols/`), opened on first use and closed by `close()`. */
+  private readonly symbols: SymbolIndexes;
 
   /** Saves, creations, moves and deletions (`write.ts`). */
   readonly writes: FileWrites;
@@ -250,7 +255,11 @@ export class WorkspaceService {
     if (!options?.stateDir || !path.isAbsolute(options.stateDir)) throw new AppError('INVALID_STATE_DIR', 'stateDir must be an absolute path');
     this.stateDir = path.resolve(options.stateDir);
     this.writes = new FileWrites({ stateDir: this.stateDir, noteWrite: options.noteWrite });
+    this.symbols = new SymbolIndexes({ stateDir: this.stateDir, paths: root => this.fileIndex.paths(root), untracked: root => this.fileIndex.untracked(root) });
   }
+
+  /** Stops index builds and parser workers and closes the index files; the server calls it on shutdown. */
+  close(): Promise<void> { return this.symbols.close(); }
 
   async scopedPath(project: ProjectRef, filePath: string): Promise<string> {
     return resolveScopedPath(await projectRoot(project), filePath);
@@ -324,64 +333,147 @@ export class WorkspaceService {
     return found;
   }
 
-  async search(project: ProjectRef, query: string | FindQuery, signal?: AbortSignal): Promise<SearchHit[]> {
-    const options: FindQuery = typeof query === 'string' ? { q: query } : query;
+  async search(project: ProjectRef, query: string | (FindQuery & SearchOptions), signal?: AbortSignal): Promise<SearchResults> {
+    const options: FindQuery & SearchOptions = typeof query === 'string' ? { q: query } : query;
     const needle = (options.q ?? '').trim();
     if (!needle) throw new AppError('INVALID_QUERY', 'Search query is required');
     if (needle.length > 512) throw new AppError('INVALID_QUERY', 'Search query is too long');
     const root = await projectRoot(project);
     const base = await resolveScopedPath(root, options.path ?? '.', true);
     const { limit, offset } = pageArgs(options);
-    const searched = await ripgrepSearch(root, base, needle, limit, offset, signal);
+    const narrowed = await this.narrowedSearch(root, base, needle, limit, offset, signal, options);
+    if (narrowed) return narrowed;
+    const searched = await ripgrepSearch(root, base, needle, limit, offset, signal, options);
     if (searched) return searched;
+    const matches = lineMatcher(needle, options);
+    const include = parseMasks(options.include);
+    const exclude = parseMasks(options.exclude);
+    const included = include.length ? maskMatcher(include, false) : undefined;
+    const excluded = exclude.length ? maskMatcher(exclude, true) : undefined;
     const hits: SearchHit[] = [];
-    const lowerNeedle = needle.toLocaleLowerCase();
+    let more = false;
+    let incomplete: SearchResults['incomplete'];
     let skipped = 0;
     let visited = 0;
     let scannedBytes = 0;
     const walk = async (dir: string, depth: number): Promise<void> => {
-      if (depth > MAX_WALK_DEPTH || visited >= MAX_WALK_ENTRIES || hits.length >= limit || scannedBytes >= MAX_SEARCH_TOTAL_BYTES) return;
+      if (more || signal?.aborted) return;
+      if (depth > MAX_WALK_DEPTH || visited >= MAX_WALK_ENTRIES || scannedBytes >= MAX_SEARCH_TOTAL_BYTES) { incomplete = 'budget'; return; }
       const names = await readNamesBounded(dir, Math.max(1, MAX_WALK_ENTRIES - visited)).catch(() => [] as string[]);
       for (const name of names) {
-        if (visited++ >= MAX_WALK_ENTRIES || hits.length >= limit) break;
+        if (more) break;
+        if (visited++ >= MAX_WALK_ENTRIES) { incomplete = 'budget'; break; }
         const target = path.join(dir, name);
         let info;
         try { info = await lstat(target); } catch { continue; }
         if (info.isSymbolicLink()) continue;
+        const relative = toProjectRelative(root, target);
+        if (excluded?.(relative)) continue;
         if (info.isDirectory()) {
           if (!IGNORED_DIRS.has(name)) await walk(target, depth + 1);
           continue;
         }
-        if (!info.isFile() || info.size > 2 * 1024 * 1024) continue;
-        if (scannedBytes + info.size > MAX_SEARCH_TOTAL_BYTES) { scannedBytes = MAX_SEARCH_TOTAL_BYTES; return; }
+        if (!info.isFile() || info.size > 2 * 1024 * 1024 || (included && !included(relative))) continue;
+        if (scannedBytes + info.size > MAX_SEARCH_TOTAL_BYTES) { scannedBytes = MAX_SEARCH_TOTAL_BYTES; incomplete = 'budget'; return; }
         scannedBytes += info.size;
         let content: Buffer;
         try { content = await readFileBounded(target, 2 * 1024 * 1024); } catch { continue; }
         if (content.includes(0)) continue;
         const lines = content.toString('utf8').split(/\r?\n/);
-        const relative = toProjectRelative(root, target);
-        for (let i = 0; i < lines.length && hits.length < limit; i++) {
-          if (lines[i].toLocaleLowerCase().includes(lowerNeedle)) {
-            if (skipped < offset) skipped++;
-            else hits.push({ path: relative, line: i + 1, text: lines[i].slice(0, 1000) });
-          }
+        for (let i = 0; i < lines.length; i++) {
+          if (!matches(lines[i]!.slice(0, 1000))) continue;
+          if (skipped < offset) skipped++;
+          else if (hits.length >= limit) { more = true; break; }
+          else hits.push({ path: relative, line: i + 1, text: lines[i]!.slice(0, 1000) });
         }
       }
     };
     await walk(base, 0);
-    return hits;
+    return { hits, more, ...(incomplete && !more ? { incomplete } : {}) };
+  }
+
+  /**
+   * A whole-word search for an identifier, answered from the code index's word postings: only the Kotlin / Java
+   * files that can contain it (plus those changed since the index was checked) are searched, so a word in two files
+   * of a 380k-file monorepo costs milliseconds instead of a full scan. The postings cover `.kt`, `.kts` and `.java`
+   * only, so it applies when `include` names only those. `undefined` when it does not apply (not a whole-word
+   * identifier search, index not complete, changed files unknown, too many candidates, no ripgrep): the caller scans.
+   */
+  private async narrowedSearch(root: string, base: string, needle: string, limit: number, offset: number, signal: AbortSignal | undefined, options: SearchOptions): Promise<SearchResults | undefined> {
+    const include = parseMasks(options.include);
+    if (!options.word || options.regex || !/^[A-Za-z_$][\w$]*$/.test(needle) || !include.length || !include.every(mask => /^\*\.(?:kt|kts|java)$/i.test(mask))) return undefined;
+    // Postings are keyed by the lower-cased word; a word that is a keyword in any case is not in them.
+    const word = needle.toLowerCase();
+    const within = toProjectRelative(root, base);
+    const changed = await this.symbols.changedSince(root);
+    const indexed = changed && this.symbols.wordFiles(root, word, within);
+    if (!changed || !indexed) return undefined;
+    const names = new Set(indexed);
+    for (const item of changed) if (/\.(?:kt|kts|java)$/.test(item) && (!within || item.startsWith(`${within}/`))) names.add(item);
+    if (names.size > CODE_INDEX_BUDGET.referenceFiles) return undefined;
+    const included = maskMatcher(include, false);
+    const exclude = parseMasks(options.exclude);
+    const excluded = exclude.length ? maskMatcher(exclude, true) : undefined;
+    // Files that no longer exist (deleted since the check) and links are left out: a missing file would fail the whole ripgrep run.
+    const files: string[] = [];
+    const candidates = [...names].filter(item => included(item) && !excluded?.(item)).sort();
+    for (let at = 0; at < candidates.length; at += 64) {
+      const batch = candidates.slice(at, at + 64);
+      const regular = await Promise.all(batch.map(item => lstat(path.join(root, item)).then(info => info.isFile(), () => false)));
+      batch.forEach((item, index) => { if (regular[index]) files.push(item); });
+    }
+    const want = limit + offset;
+    const deadline = Date.now() + SEARCH_TIMEOUT_MS;
+    const hits: SearchHit[] = [];
+    let incomplete: SearchResults['incomplete'];
+    for (let at = 0; at < files.length && hits.length <= want; at += 500) {
+      if (signal?.aborted) break;
+      if (Date.now() > deadline) { incomplete = 'time'; break; }
+      const part = await ripgrepSearch(root, base, needle, want + 1 - hits.length, 0, signal, options, files.slice(at, at + 500));
+      if (!part) return undefined;
+      hits.push(...part.hits);
+      if (part.incomplete) incomplete = part.incomplete;
+    }
+    const more = hits.length > want;
+    return { hits: hits.slice(offset, want), more, ...(incomplete && !more ? { incomplete } : {}) };
   }
 
   /** Where the symbol under the cursor is declared, by search: its file, what that imports, its directory, then the project. */
   async definition(project: ProjectRef, query: DefinitionQuery, signal?: AbortSignal): Promise<CodeDefinitions> {
     const root = await projectRoot(project);
-    return findDefinitions(new CodeNav(root, () => this.fileIndex.paths(root), signal), query);
+    return findDefinitions(new CodeNav(root, () => this.fileIndex.paths(root), signal, this.symbols), query);
   }
 
   /** Whole-word uses of a symbol in the files of the same language, within the file's module or the whole project. */
   async references(project: ProjectRef, query: ReferenceQuery, signal?: AbortSignal): Promise<CodeReferences> {
     const root = await projectRoot(project);
-    return findReferences(new CodeNav(root, () => this.fileIndex.paths(root), signal), query);
+    return findReferences(new CodeNav(root, () => this.fileIndex.paths(root), signal, this.symbols), query);
+  }
+
+  /** Declarations matching `q`, best first; empty with the index's state until it is ready. Asking starts no build: `watchCodeIndex` does. */
+  async symbolSearch(project: ProjectRef, q: string, options: { types: boolean; limit: number }): Promise<CodeSymbolResults> {
+    return this.symbols.search(await projectRoot(project), q, options);
+  }
+
+  /** The declarations of one file, parsed directly: no index needed. */
+  async outline(project: ProjectRef, filePath: string): Promise<CodeOutline> {
+    const root = await projectRoot(project);
+    const target = await resolveReadablePath(root, filePath, false, [this.stateDir]);
+    return this.symbols.outline(target, toProjectRelative(root, target));
+  }
+
+  async codeIndexStatus(project: ProjectRef): Promise<CodeIndexStatus> { return this.symbols.status(await projectRoot(project)); }
+
+  async rebuildCodeIndex(project: ProjectRef): Promise<CodeIndexStatus> { return this.symbols.rebuild(await projectRoot(project)); }
+
+  /** Builds and checks the index only while a page renews its `lease`; once every page dropped or let its lease lapse, a build in progress stops (`SymbolIndexes.watch`). */
+  async watchCodeIndex(project: ProjectRef, lease: string, watching: boolean): Promise<CodeIndexStatus> { return this.symbols.watch(await projectRoot(project), lease, watching); }
+
+  /** The build-system modules of a project, from its file list. */
+  async codeModules(project: ProjectRef): Promise<CodeModules> {
+    const root = await projectRoot(project);
+    const list = await this.fileIndex.paths(root);
+    return list ? modulesOf(list, path.basename(root)) : { modules: [] };
   }
 
   /**
@@ -415,7 +507,7 @@ export class WorkspaceService {
     const listing = await this.fileIndex.paths(root);
     if (!listing) return undefined;
     const prefix = base === root ? '' : `${toProjectRelative(root, base)}/`;
-    const best = rankPaths(listing, query, limit + offset, prefix).slice(offset);
+    const best = (await rankPaths(listing, query, limit + offset, prefix)).slice(offset);
     const entries: FileEntry[] = [];
     for (const { path: relative, directory } of best) {
       // Listed paths are git's or ripgrep's: each is checked against the project before it is shown.

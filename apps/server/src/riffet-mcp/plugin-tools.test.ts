@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PLUGIN_API_VERSION, type AgentToolContext, type Plugin } from '@riffet/plugin-api';
@@ -60,6 +60,32 @@ describe('plugin agent tools through Riffet MCP', () => {
       unbind();
       expect((await rpc('tools/call', { name: 'probe_echo', arguments: {}, _meta: { conversation_id: 'native-b' } })).content[0].text).toContain('NATIVE_BINDING_UNAVAILABLE');
       expect(calls).toHaveLength(2);
+    } finally { await booted.app.close(); await rm(dir, { recursive: true, force: true }); }
+  });
+
+  // Code Studio's `code_*` tools (docs/CODE-STUDIO.md): they act on the session's own project and never read an unready index as "nothing exists".
+  it('answers code tools for the session\'s own project and says so when the index is not ready', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'riffet-code-tools-'));
+    const booted = await createApp({ stateDir: join(dir, 'state'), token: MASTER, cliPath: '/nonexistent/cursor-agent' });
+    try {
+      await booted.dispatch.close();
+      await booted.plugins.refresh();
+      const root = join(dir, 'app');
+      await mkdir(root);
+      await writeFile(join(root, 'Feed.kt'), 'package demo\n\nclass Feed {\n  fun load() {}\n}\n');
+      const project = booted.store.createProject(root, 'code');
+      const chosen = booted.store.createSession({ projectId: project.id, kind: 'native', toolGroups: ['riffet.studio/code'] });
+      const spec = booted.riffetMcp.server(chosen.id)!;
+      const token = (JSON.parse(await readFile(spec.args[spec.args.indexOf('--credential') + 1]!, 'utf8')) as { credential: string }).credential;
+      const rpc = (method: string, params?: unknown) => booted.app.inject({ method: 'POST', url: '/api/riffet-mcp', headers: { authorization: `Bearer ${token}` }, payload: { method, params } }).then(response => response.json().result);
+      const call = async (name: string, args: Record<string, unknown>) => JSON.parse((await rpc('tools/call', { name, arguments: args })).content[0].text) as Record<string, unknown>;
+
+      expect(((await rpc('tools/list')).tools as Array<{ name: string }>).map(tool => tool.name)).toEqual(expect.arrayContaining(['code_search', 'code_definition', 'code_references', 'code_outline']));
+      // A file outline needs no index, and reads the session's project.
+      expect((await call('code_outline', { path: 'Feed.kt' })).items).toEqual(['class Feed :3', '  function load :4']);
+      // Before the index is built a search is explicit about it instead of returning a bare empty list.
+      const searched = await call('code_search', { query: 'Feed' });
+      expect(searched).toMatchObject({ indexReady: false, items: [], note: expect.stringMatching(/rg/) });
     } finally { await booted.app.close(); await rm(dir, { recursive: true, force: true }); }
   });
 });

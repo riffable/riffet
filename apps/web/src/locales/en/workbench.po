@@ -134,6 +134,10 @@ msgstr "Next tab"
 msgid "下移"
 msgstr "Move down"
 
+#: src/plugins/CodeFile.tsx
+msgid "下载"
+msgstr "Download"
+
 #. placeholder {0}: artifact.name
 #: src/plugins/TasksView.tsx
 msgid "下载 {0}"
@@ -179,6 +183,10 @@ msgstr "Home"
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "Theme"
+
+#: src/plugins/CodeFile.tsx
+msgid "二进制文件"
+msgstr "Binary file"
 
 #: src/app/SessionSearchDialog.tsx
 #: src/app/Sidebar.tsx
@@ -711,6 +719,10 @@ msgstr "Command palette"
 #: src/app/Sidebar.tsx
 msgid "固定侧边栏"
 msgstr "Pin sidebar"
+
+#: src/plugins/CodeFile.tsx
+msgid "图片无法加载"
+msgstr "Couldn't load the image"
 
 #. placeholder {0}: project.name
 #: src/app/Sidebar.tsx
@@ -1370,6 +1382,14 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr "Files"
 
+#: src/plugins/CodeFile.tsx
+msgid "文件不存在"
+msgstr "File not found"
+
+#: src/plugins/CodeFile.tsx
+msgid "文件过大，仅显示前一部分"
+msgstr "File too large; showing only the first part"
+
 #: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
@@ -1536,6 +1556,10 @@ msgstr "Could not import the conversation"
 #: src/app/Workbench.tsx
 msgid "无法开始这个任务"
 msgstr "Couldn't start this task"
+
+#: src/plugins/CodeFile.tsx
+msgid "无法打开文件"
+msgstr "Couldn't open the file"
 
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
@@ -2615,6 +2639,7 @@ msgstr "Reload"
 #: src/app/plugins/PluginSharesBlock.tsx
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Workbench.tsx
+#: src/plugins/CodeFile.tsx
 msgid "重试"
 msgstr "Retry"
 

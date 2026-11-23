@@ -151,6 +151,11 @@ export function withClientFeatures(path: string): string {
   return `${url}${separator}features=${encodeURIComponent(CLIENT_FEATURES)}${hash ? `#${hash}` : ''}`;
 }
 
+/** A project image decoded for display (`/file/image`); `version` is the preview's hash, so a changed file is fetched again. */
+export function projectImageUrl(projectId: string, path: string, version: string): string {
+  return withClientFeatures(`/api/projects/${encodeURIComponent(projectId)}/file/image?path=${encodeURIComponent(path)}&version=${version}`);
+}
+
 export interface ProjectRecord {
   id: string;
   name: string;

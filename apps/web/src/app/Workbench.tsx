@@ -482,6 +482,14 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     handlers.sessionAction = (target, action) => void sessionAction(target, action);
     handlers.openMark = (id) => void openMark(id);
     handlers.openAssistant = openAssistant;
+    handlers.quoteInProject = (projectId, reference) => {
+      const target = projects.find((item) => item.id === projectId);
+      if (!target) return false;
+      // The conversation under the page reads its project's files; one of another project cannot, so a new conversation takes the reference there.
+      const move = session?.projectId === projectId ? nav.navigate(() => nav.set({ ...NO_PAGE })) : selectProject(target);
+      void move.then((moved) => { if (moved) ui.addReference(reference); });
+      return true;
+    };
     handlers.openPluginView = (id) => {
       if (mainViews.some((view) => view.id === id && !view.unavailable)) { openMainView(id); return true; }
       if (!project || quickChat || serverOfObject(project.id) || !sidebarViews.some((view) => view.id === id && !view.unavailable)) return false;

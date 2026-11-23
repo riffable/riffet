@@ -5,6 +5,7 @@ import { isLoopbackHost } from '../connection-addresses.js';
 import { FILE_SITE_ROUTE, proxiedRequest } from '../auth.js';
 import { DEFAULT_DSH_CONFIG_DIR } from '../compat.js';
 import path from 'node:path';
+import { CODE_INDEX_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import { previewImageData, readFileBounded } from '../workspace/index.js';
 import { MAX_VISUALIZATION_BYTES, renderVisualization, VISUALIZATION_CSP } from '../visualization.js';
 import { contentDisposition } from '../workspace/download.js';
@@ -26,8 +27,20 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
   app.get<{Params:{id:string};Querystring:{q?:string;limit?:string;offset?:string}}>('/api/projects/:id/find',async(request)=>workspace.find(store.getProject(request.params.id),{q:request.query.q??'',limit:pageSize(request.query.limit),offset:sequence(request.query.offset)}));
   /** Aborted when the client goes away before the answer, so its ripgrep scans stop with it. */
   const untilGone = (reply: FastifyReply) => { const controller = new AbortController(); reply.raw.once('close', () => { if (!reply.raw.writableFinished) controller.abort(); }); return controller.signal; };
-  app.get<{Params:{id:string};Querystring:{q?:string;limit?:string;offset?:string}}>('/api/projects/:id/search',async(request,reply)=>workspace.search(store.getProject(request.params.id),{q:requireString(request.query.q,'q',500),limit:pageSize(request.query.limit),offset:sequence(request.query.offset)},untilGone(reply)));
+  // Bare hits by default; `detail=1` answers `SearchResults` (`more`, `incomplete`) for clients that must tell "no more" from "stopped".
+  const flag=(value?:string)=>value==='1'||value==='true';
+  app.get<{Params:{id:string};Querystring:{q?:string;limit?:string;offset?:string;path?:string;case?:string;word?:string;regex?:string;include?:string;exclude?:string;detail?:string}}>('/api/projects/:id/search',async(request,reply)=>{
+    const {query}=request;
+    const result=await workspace.search(store.getProject(request.params.id),{q:requireString(query.q,'q',500),limit:pageSize(query.limit),offset:sequence(query.offset),...(query.path?{path:requireString(query.path,'path',8192)}:{}),caseSensitive:flag(query.case),word:flag(query.word),regex:flag(query.regex),include:query.include?.slice(0,2000),exclude:query.exclude?.slice(0,2000)},untilGone(reply));
+    return flag(query.detail)?result:result.hits;
+  });
   app.get<{Params:{id:string};Querystring:{path?:string;line?:string;column?:string;word?:string}}>('/api/projects/:id/code/definition',async(request,reply)=>workspace.definition(store.getProject(request.params.id),{path:requireString(request.query.path,'path',8192),line:Number(request.query.line),column:Number(request.query.column),word:requireString(request.query.word,'word',200)},untilGone(reply)));
+  app.get<{Params:{id:string};Querystring:{q?:string;types?:string;limit?:string}}>('/api/projects/:id/code/symbols',async(request)=>workspace.symbolSearch(store.getProject(request.params.id),request.query.q===undefined?'':requireString(request.query.q,'q',200),{types:request.query.types==='1'||request.query.types==='true',limit:Math.min(CODE_INDEX_BUDGET.maxSearchResults,Math.max(1,Math.floor(Number(request.query.limit))||CODE_INDEX_BUDGET.searchResults))}));
+  app.get<{Params:{id:string};Querystring:{path?:string}}>('/api/projects/:id/code/outline',async(request)=>workspace.outline(store.getProject(request.params.id),requireString(request.query.path,'path',8192)));
+  app.get<{Params:{id:string}}>('/api/projects/:id/code/index',async(request)=>workspace.codeIndexStatus(store.getProject(request.params.id)));
+  app.post<{Params:{id:string}}>('/api/projects/:id/code/index',async(request)=>workspace.rebuildCodeIndex(store.getProject(request.params.id)));
+  app.post<{Params:{id:string};Body:{lease?:unknown;watching?:unknown}}>('/api/projects/:id/code/index/watch',async(request)=>workspace.watchCodeIndex(store.getProject(request.params.id),requireString(request.body?.lease,'lease',64),request.body?.watching!==false));
+  app.get<{Params:{id:string}}>('/api/projects/:id/code/modules',async(request)=>workspace.codeModules(store.getProject(request.params.id)));
   app.get<{Params:{id:string};Querystring:{path?:string;word?:string;scope?:string}}>('/api/projects/:id/code/references',async(request,reply)=>workspace.references(store.getProject(request.params.id),{path:requireString(request.query.path,'path',8192),word:requireString(request.query.word,'word',200),scope:request.query.scope==='module'?'module':'project'},untilGone(reply)));
   /**
    * Conversation search across every project.

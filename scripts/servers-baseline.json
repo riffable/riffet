@@ -2,7 +2,6 @@
   "apiPath": {
     "apps/web/src/app/marks/MarkDetailDialog.tsx": 2,
     "apps/web/src/app/marks/MarksPage.tsx": 1,
-    "apps/web/src/app/panels/FilesPanel.tsx": 1,
     "apps/web/src/app/session/imageSource.ts": 2,
     "apps/web/src/app/session/Markdown.tsx": 1,
     "apps/web/src/app/session/VisualizationPreview.tsx": 1,
@@ -18,7 +17,7 @@
     "apps/web/src/plugins/access.ts": 1,
     "apps/web/src/plugins/host.ts": 5,
     "apps/web/src/plugins/isolated/entry.ts": 1,
-    "apps/web/src/plugins/isolated/services.ts": 6,
+    "apps/web/src/plugins/isolated/services.ts": 5,
     "apps/web/src/sync/protocol.ts": 2
   },
   "socket": {

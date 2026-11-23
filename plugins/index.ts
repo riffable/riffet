@@ -7,6 +7,7 @@ import { antigravity } from './riffet/antigravity/index.js';
 import { avatars } from './riffet/avatars/index.js';
 import { browser } from './riffet/browser/index.js';
 import { canvas } from './riffet/canvas/index.js';
+import { studio } from './riffet/studio/index.js';
 import { cursor } from './riffet/cursor/index.js';
 import { feishu } from './riffet/feishu/index.js';
 import { speechLocal } from './riffet/speech-local/index.js';
@@ -18,6 +19,7 @@ export const builtinPlugins: Plugin[] = [
   antigravity,
   canvas,
   trace,
+  studio,
   browser,
   avatars,
   translate,

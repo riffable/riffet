@@ -9,7 +9,7 @@ import { EmptyState, Segmented, Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { Tip } from '@/components/ui/tooltip';
-import { api, HttpError, withClientFeatures, type ProjectRecord, type PromptContextReference } from '@/lib/api';
+import { api, HttpError, projectImageUrl, type ProjectRecord, type PromptContextReference } from '@/lib/api';
 import { textOf } from '@/lib/errors';
 import { hostInfo, isApplePlatform, shortcutLabel } from '@/lib/platform';
 import { matches, useShortcutHint } from '../shortcuts';
@@ -774,7 +774,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       ) : preview.image ? imageLoadError ? (
         <EmptyState icon={<IconImage />} title={t`图片无法加载`} description={t`文件可能已更改，或超过图片预览大小上限。`} />
       ) : (() => {
-        const imageSrc = withClientFeatures(`/api/projects/${encodeURIComponent(project.id)}/file/image?path=${encodeURIComponent(preview.path)}&version=${preview.hash}`);
+        const imageSrc = projectImageUrl(project.id, preview.path, preview.hash);
         const imageName = preview.path.split('/').at(-1) ?? preview.path;
         const known = loadedImageSize(imageSrc);
         return (

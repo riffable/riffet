@@ -14,6 +14,7 @@ export interface BuiltinWebPlugin {
 export const builtinWebPlugins: BuiltinWebPlugin[] = [
   { id: 'riffet.canvas', load: () => import('./riffet/canvas/web/index.js') },
   { id: 'riffet.trace', load: () => import('./riffet/trace/web/index.js') },
+  { id: 'riffet.studio', load: () => import('./riffet/studio/web/index.js') },
   { id: 'riffet.browser', load: () => import('./riffet/browser/web/index.js') },
   { id: 'riffet.cursor', load: () => import('./riffet/cursor/web/index.js') },
 ];

@@ -232,11 +232,11 @@ describe('Git release protocol', () => {
     // The server build copies Riffet's own license and notice next to its output.
     for (const name of ['LICENSE', 'NOTICE']) await writeFile(join(clone, name), await readFile(resolve(name)));
     // build.ts writes the installed version of every runtime dependency, so the fixture needs the
-    // manifests of the packages dist/ resolves by path (the fake metafile below has no imports).
+    // manifests of the packages dist/ resolves by path (`RESOLVED` in scripts/runtime-package.ts; the fake metafile below has no imports).
     const manifest = JSON.parse(await readFile(join(clone, 'package.json'), 'utf8')) as Record<string, unknown>;
     const { dependencies } = JSON.parse(await readFile(resolve('package.json'), 'utf8')) as { dependencies: Record<string, string> };
     await writeFile(join(clone, 'package.json'), JSON.stringify({ ...manifest, dependencies }));
-    for (const name of ['katex', 'pdfjs-dist', 'heic-decode']) {
+    for (const name of ['katex', 'pdfjs-dist', 'heic-decode', 'web-tree-sitter']) {
       const installed = JSON.parse(await readFile(resolve('node_modules', name, 'package.json'), 'utf8')) as { version: string };
       await mkdir(join(clone, 'node_modules', name), { recursive: true });
       await writeFile(join(clone, 'node_modules', name, 'package.json'), JSON.stringify({ name, version: installed.version }));
@@ -252,6 +252,9 @@ describe('Git release protocol', () => {
     await writeFile(join(clone, 'apps/server/src/backends/claude/statusline-cli.mjs'), '// fixture');
     await mkdir(join(clone, 'apps/server/src/riffet-mcp'), { recursive: true });
     await writeFile(join(clone, 'apps/server/src/riffet-mcp/riffet-mcp.mjs'), '// fixture');
+    await mkdir(join(clone, 'apps/server/src/workspace/symbols/grammars'), { recursive: true });
+    await writeFile(join(clone, 'apps/server/src/workspace/symbols/parse-worker.mjs'), '// fixture');
+    await writeFile(join(clone, 'apps/server/src/workspace/symbols/grammars/NOTICE'), 'fixture');
     await mkdir(join(clone, 'packages/plugin-api/src/runtime'), { recursive: true });
     await writeFile(join(clone, 'packages/plugin-api/src/runtime/child.mjs'), '// fixture');
     // build.ts imports the preview and diagram asset builders; the fixture only needs them to exist.

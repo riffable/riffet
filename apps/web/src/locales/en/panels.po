@@ -1263,6 +1263,10 @@ msgstr "More views"
 msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
 msgstr "Unsaved edits are lost, and undoing the deletion doesn’t bring them back."
 
+#: src/app/panels/CodeView.tsx
+msgid "未提交"
+msgstr "Not committed"
+
 #. placeholder {0}: formatBytes(Math.min(size, FILE_BUDGET.tailBytes))
 #. placeholder {1}: formatBytes(size)
 #: src/app/panels/ByteViews.tsx

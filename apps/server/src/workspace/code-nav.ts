@@ -5,7 +5,10 @@ import type { CodeDefinitions, CodeLocation, CodeReferences } from '../../../../
 import { resolveCliExecutable } from '../backends/shared/cli-resolve.js';
 import { AppError } from '../errors.js';
 import type { Candidates } from './file-index.js';
+import { RESOURCE_FILE, RESOURCE_PATH, resourceReference, VALUE_TYPES, type ResourceReference } from './android-resources.js';
+import { isModuleMarker } from './modules.js';
 import { resolveScopedPath, toProjectRelative } from './scope.js';
+import type { SymbolLookup } from './symbols/indexes.js';
 
 // Search-based code navigation, as Sourcegraph's basic code intel and GitHub's search-based navigation
 // do it: no compiler, a table of declaration patterns per language, and the order in which places are
@@ -304,7 +307,8 @@ export class CodeNav {
   private listing?: Promise<Candidates | undefined>;
 
   /** `signal` ends the request's scans, for a client that went away. */
-  constructor(readonly root: string, private readonly paths: () => Promise<Candidates | undefined>, readonly signal?: AbortSignal) {}
+  /** `symbols` is the project's declaration index, when there is one: it narrows definitions and references once it is ready. */
+  constructor(readonly root: string, private readonly paths: () => Promise<Candidates | undefined>, readonly signal?: AbortSignal, readonly symbols?: SymbolLookup) {}
 
   list(): Promise<Candidates | undefined> { return this.listing ??= this.paths().catch(() => undefined); }
 
@@ -403,7 +407,8 @@ const globsOf = (family: Family | undefined) => (family ? EXTENSIONS[family].ext
 
 // ── Definitions ──────────────────────────────────────────────────────────────
 
-export interface DefinitionQuery { path: string; line: number; column: number; word: string }
+/** Without `column` the first whole-word occurrence of `word` on `line` is used. */
+export interface DefinitionQuery { path: string; line: number; column?: number; word: string }
 export interface ReferenceQuery { path: string; word: string; scope: 'module' | 'project' }
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
@@ -436,17 +441,32 @@ async function pack(nav: CodeNav, found: CodeLocation[]): Promise<CodeDefinition
 export async function findDefinitions(nav: CodeNav, query: DefinitionQuery): Promise<CodeDefinitions> {
   const word = symbol(query.word);
   const line = position(query.line, 'line');
-  const column = position(query.column, 'column');
   const file = await projectFile(nav, query.path);
   const text = await nav.text(file);
   if (text === undefined) throw new AppError('FILE_NOT_FOUND', 'File does not exist or cannot be read', 404);
+  let column: number;
+  if (query.column === undefined) {
+    const at = wordRegex(word).exec(text.split('\n')[line - 1] ?? '');
+    if (!at) throw new AppError('WORD_NOT_ON_LINE', `\`${word}\` does not occur on line ${line} of ${query.path}`, 404);
+    column = at.index + 1;
+  } else column = position(query.column, 'column');
   const ext = extOf(file);
   const group = GROUP_OF.get(ext) ?? 'generic';
   const family = FAMILY_OF.get(ext);
 
+  const source = text.split('\n')[line - 1] ?? '';
+  const before = source.slice(0, column - 1);
+
+  // 0. `R.string.name` in code, `@string/name` in a layout: an Android resource, found by name in the resource index.
+  const reference = RESOURCE_FILE.has(ext) ? resourceReference(before, source.slice(column - 1 + word.length), word) : undefined;
+  if (reference) {
+    if (reference === 'system') return { locations: [] };
+    const defined = await indexedResources(nav, file, reference);
+    if (defined) return pack(nav, defined);
+  }
+
   // 1. The file itself. A name after a dot is a member of something else, so what is nearest above does not shadow it.
   const own = declarationsOf(text, file, matcher(group, word)).map(item => item.location);
-  const before = (text.split('\n')[line - 1] ?? '').slice(0, column - 1);
   // `user.name` names a member of something else; `this.name` one of this file's classes.
   const member = /\.\s*$/.test(before) && !/\b(?:this|self|super)\s*\??\.\s*$/.test(before);
   const here = own.filter(item => item.line === line);
@@ -477,7 +497,18 @@ export async function findDefinitions(nav: CodeNav, query: DefinitionQuery): Pro
   if (ownRanked.length) return pack(nav, [...ownRanked, ...near]);
   const restated = [...near];
 
-  // 4. The module, then the whole project.
+  // 4a. The declaration index, once built, answers by name without a scan. It holds every tracked Kotlin and
+  // Java file the scan below would read, so a name it does not know is declared outside the project (a
+  // library class): the scan would spend its whole budget finding nothing.
+  // Files changed since the index last looked are read for the name too; when git cannot say which, the index does not get to say "none".
+  const changed = family === 'jvm' ? await nav.symbols?.changedSince(nav.root) : undefined;
+  if (changed) {
+    const indexed = await indexedDefinitions(nav, file, word, restated, changed);
+    if (indexed?.length) return pack(nav, [...indexed, ...restated]);
+    if (indexed) return pack(nav, restated);
+  }
+
+  // 4b. The module, then the whole project.
   const deadline = Date.now() + DEFINITION_SCAN_MS;
   const patterns = EXTENSIONS[family].groups.flatMap(name => RULES[name].map(rule => rule.re.replaceAll(NAME, () => namePattern(matcher(name, word).bare))));
   const accept = (hit: string, number: number, line: string): CodeLocation | undefined => {
@@ -495,6 +526,74 @@ export async function findDefinitions(nav: CodeNav, query: DefinitionQuery): Pro
     if (hits.length && !restated.length) restated.push(...hits);
   }
   return pack(nav, restated);
+}
+
+// ── Android resources ────────────────────────────────────────────────────────
+
+/** What `worker#resourcesOf` would find for `type` / `name` in these files, line by line and good enough for the few files a working tree has changed. */
+async function freshResources(nav: CodeNav, files: readonly string[], type: string, name: string): Promise<Array<{ path: string; line: number }>> {
+  const found: Array<{ path: string; line: number }> = [];
+  for (const item of files) {
+    const m = RESOURCE_PATH.exec(item)!;
+    const directory = m[1]!.split('-')[0]!;
+    if (directory !== 'values' && directory === type && m[2]!.split('.')[0] === name && await nav.isFile(item)) found.push({ path: item, line: 1 });
+    if (!m[2]!.endsWith('.xml')) continue;
+    const lines = (await nav.text(item))?.split('\n') ?? [];
+    const at = lines.findIndex((line) => {
+      if (type === 'id' && [...line.matchAll(/@\+id\/([\w.]+)/g)].some(hit => hit[1]!.replace(/[.:]/g, '_') === name)) return true;
+      const tag = directory === 'values' ? /<([\w-]+)\b[^>]*?\bname\s*=\s*"([^"]*)"/.exec(line) : null;
+      return Boolean(tag && tag[2]!.replace(/[.:]/g, '_') === name && (tag[1] === 'item' ? /\btype\s*=\s*"([\w-]+)"/.exec(line)?.[1] : VALUE_TYPES[tag[1]!]) === type);
+    });
+    if (at >= 0) found.push({ path: item, line: at + 1 });
+  }
+  return found;
+}
+
+/** `undefined` while the index cannot tell (not ready, or it has no such resource: a library's, or not Android code), so the ordinary search goes on. */
+async function indexedResources(nav: CodeNav, file: string, { type, name }: ResourceReference): Promise<CodeLocation[] | undefined> {
+  const indexedRows = nav.symbols?.resources(nav.root, type, name);
+  const changed = indexedRows ? await nav.symbols?.changedSince(nav.root) : undefined;
+  if (!indexedRows || !changed) return undefined;
+  // Resource files changed since the index last looked: their rows are replaced by what the files say now.
+  const fresh = changed.filter(item => RESOURCE_PATH.test(item));
+  const stale = new Set(fresh);
+  const rows = [...indexedRows.filter(row => !stale.has(row.path)), ...await freshResources(nav, fresh, type, name)];
+  if (!rows.length) return undefined;
+  // The default directory (`values`, `layout`) before its qualified variants (`values-night`), then the nearest.
+  const qualified = (item: { path: string }) => Number(dirOf(item.path).split('/').pop()!.includes('-'));
+  const order = nearest(file);
+  const found: CodeLocation[] = [];
+  for (const row of rows.sort((a, b) => qualified(a) - qualified(b) || order(a.path, b.path) || a.line - b.line).slice(0, MAX_DEFINITIONS)) {
+    const lineText = row.path.endsWith('.xml') ? (await nav.text(row.path))?.split('\n')[row.line - 1] ?? '' : '';
+    found.push({ path: row.path, line: row.line, column: Math.max(1, lineText.indexOf(name.split('_')[0]!) + 1), text: clip(lineText) });
+  }
+  return found;
+}
+
+/** Declarations of `word` the index knows, nearest to `file` first, overrides after the declaration they restate; `undefined` while there is no ready index. */
+async function indexedDefinitions(nav: CodeNav, file: string, word: string, restated: CodeLocation[], changed: readonly string[]): Promise<CodeLocation[] | undefined> {
+  const found = nav.symbols?.declarations(nav.root, word);
+  if (!found) return undefined;
+  // What the index holds for a changed file is out of date: its declarations are read from the file instead.
+  const fresh = changed.filter(item => item !== file && FAMILY_OF.get(extOf(item)) === 'jvm');
+  const stale = new Set(fresh);
+  const order = nearest(file);
+  const rows = found.filter(row => row.path !== file && !stale.has(row.path)).sort((a, b) => order(a.path, b.path) || a.line - b.line).slice(0, MAX_DEFINITIONS * 2);
+  const locations: CodeLocation[] = [];
+  const read = await pool(fresh, READ_CONCURRENCY, async (item) => {
+    const content = await nav.text(item);
+    return content?.includes(word) ? declarationsOf(content, item, matcher(groupOf(item), word)).map(entry => entry.location) : [];
+  });
+  locations.push(...read.flat().sort((a, b) => order(a.path, b.path) || a.line - b.line));
+  for (const row of rows) {
+    const line = (await nav.text(row.path))?.split('\n')[row.line - 1];
+    if (line === undefined) continue;
+    locations.push({ path: row.path, line: row.line, column: row.column, text: clip(line) });
+  }
+  const own = locations.filter(item => !overrides(item));
+  // Overrides alone only restate a declaration made elsewhere: keep them for when nothing better turns up.
+  if (!own.length) { if (!restated.length) restated.push(...locations); return []; }
+  return [...own, ...locations.filter(overrides)];
 }
 
 /** An override restates a declaration made elsewhere: it comes after the declaration itself. */
@@ -772,14 +871,12 @@ async function neighbourhood(nav: CodeNav, file: string, text: string, family: F
 
 // ── References ───────────────────────────────────────────────────────────────
 
-const MODULE_MARKERS = new Set(['build.gradle', 'build.gradle.kts', 'package.json', 'Cargo.toml', 'go.mod', 'pyproject.toml', 'setup.py', 'Package.swift', 'pubspec.yaml', 'Podfile']);
-
 /** The nearest directory above `file` that is a module of its build system, else the file's own directory. */
 async function moduleDirectory(nav: CodeNav, file: string): Promise<string> {
   const start = dirOf(file);
   for (let dir = start; ; dir = dirOf(dir)) {
     const entries = await readdir(path.join(nav.root, dir)).catch(() => [] as string[]);
-    if (entries.some(entry => MODULE_MARKERS.has(entry) || entry.endsWith('.csproj'))) return dir;
+    if (entries.some(isModuleMarker)) return dir;
     if (!dir) return start;
   }
 }
@@ -797,6 +894,33 @@ async function listedScan(nav: CodeNav, base: string, family: Family | undefined
     if (hits.length >= limit || Date.now() > deadline) { complete = false; return; }
     const content = await nav.text(item);
     content?.split('\n').forEach((line, index) => { const hit = hits.length < limit && line.length <= MAX_LINE_LENGTH ? accept(item, index + 1, line) : undefined; if (hit) hits.push(hit); });
+  });
+  return { hits, complete: complete && hits.length < limit };
+}
+
+/**
+ * Members, constants and any other name: the files the word index says contain the word, read for it. The
+ * index is a superset by construction (comments and strings count, words of changed files are only added), so
+ * the lines found are the ones the project-wide scan finds in the files the index knows. `undefined` when the
+ * index cannot narrow: not ready, the word too short or a keyword, or more candidates than `referenceFiles`.
+ */
+async function indexedWordScan(nav: CodeNav, file: string, word: string, within: string, changed: readonly string[], accept: (file: string, line: number, text: string) => CodeLocation | undefined, limit: number, deadline: number): Promise<Scan | undefined> {
+  const files = nav.symbols?.wordFiles(nav.root, word, within);
+  if (!files) return undefined;
+  const all = new Set(files);
+  for (const item of changed) if (FAMILY_OF.get(extOf(item)) === 'jvm' && (!within || item.startsWith(`${within}/`))) all.add(item);
+  all.delete(file);
+  return readCandidates(nav, [...all].sort(nearest(file)), word, accept, limit, deadline);
+}
+
+async function readCandidates(nav: CodeNav, inside: readonly string[], word: string, accept: (file: string, line: number, text: string) => CodeLocation | undefined, limit: number, deadline: number): Promise<Scan> {
+  const hits: CodeLocation[] = [];
+  let complete = true;
+  await pool(inside, READ_CONCURRENCY, async (item) => {
+    if (nav.signal?.aborted || hits.length >= limit || Date.now() > deadline) { complete = false; return; }
+    const content = await nav.text(item);
+    if (!content?.includes(word)) return;
+    content.split('\n').forEach((line, index) => { const hit = hits.length < limit && line.length <= MAX_LINE_LENGTH ? accept(item, index + 1, line) : undefined; if (hit) hits.push(hit); });
   });
   return { hits, complete: complete && hits.length < limit };
 }
@@ -820,7 +944,16 @@ export async function findReferences(nav: CodeNav, query: ReferenceQuery): Promi
   const deadline = Date.now() + (query.scope === 'module' ? MODULE_BUDGET_MS : PROJECT_BUDGET_MS);
   const bases = query.scope === 'module' ? [moduleDir] : moduleDir ? [moduleDir, ''] : [''];
   let complete = true;
-  for (const base of bases) {
+  // A name can only be used in files that contain it: read those the word index names, not the project. Types too: narrowing by
+  // imports misses `Outer.Inner` through `import Outer` and fully qualified uses.
+  const within = query.scope === 'module' ? moduleDir : '';
+  // The index is as of its last check: files changed since are read too, and without a list of them (no git, too many) it is not used.
+  const changed = family === 'jvm' ? await nav.symbols?.changedSince(nav.root) : undefined;
+  const narrowed = changed
+    ? await indexedWordScan(nav, file, word, within, changed, accept, MAX_REFERENCES + found.size, deadline)
+    : undefined;
+  if (narrowed) { narrowed.hits.forEach(add); complete = narrowed.complete && found.size < MAX_REFERENCES; }
+  else for (const base of bases) {
     const budget = deadline - Date.now();
     if (budget <= 0) { complete = false; break; }
     const limit = MAX_REFERENCES + found.size;

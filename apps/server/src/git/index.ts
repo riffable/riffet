@@ -3,10 +3,12 @@ import { watch as watchFiles, type FSWatcher } from 'node:fs';
 import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, rmdir, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { BranchInfo, Checkpoint, CheckpointChange, CheckState, GitBranchRef, GitCommit, GitCommitDetail, GitDiff, GitEntry, GitLineChange, GitLog, GitRefLabel, GitRefs, GitStatus, MergeResult, PullRequestCheck, PullRequestInfo, PullRequestStatus, PushResult, WorktreeComparison, WorktreeInfo } from '../../../../packages/contracts/src/index.js';
+import type { BranchInfo, Checkpoint, CheckpointChange, CheckState, GitBlame, GitBranchRef, GitFileAtRev, GitHead, GitCommit, GitCommitDetail, GitDiff, GitEntry, GitLineChange, GitLog, GitRefLabel, GitRefs, GitStatus, MergeResult, PullRequestCheck, PullRequestInfo, PullRequestStatus, PushResult, WorktreeComparison, WorktreeInfo } from '../../../../packages/contracts/src/index.js';
 import { AppError, requireString } from '../errors.js';
 import { assertWithin, isWithin, projectRoot, resolveScopedPath, toProjectRelative, type ProjectRef } from '../workspace/scope.js';
 import { runProcess, type ProcessResult } from './exec.js';
+import { BlameCache, parseBlame, READ_ENV, readFailure, SerialQueue, ZERO_HASH } from './read.js';
+import { FILE_BUDGET, GIT_READ_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 
 const MAX_CHECKPOINT_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_CHECKPOINT_TOTAL_BYTES = 256 * 1024 * 1024;
@@ -274,6 +276,8 @@ export class GitService {
   private readonly turnCheckpoints = new Map<string, Promise<Checkpoint | undefined>>();
   private readonly statusWatches = new Map<string, StatusWatch>();
   private closed = false;
+  private readonly blameQueue = new SerialQueue();
+  private readonly blameCache = new BlameCache();
   constructor(options: { stateDir: string }) {
     if (!options?.stateDir || !path.isAbsolute(options.stateDir)) throw new AppError('INVALID_STATE_DIR', 'stateDir must be an absolute path');
     this.stateDir = path.resolve(options.stateDir);
@@ -550,11 +554,104 @@ export class GitService {
     for (const watcher of watch.watchers.splice(0)) watcher.close();
   }
 
+  /** A read for the code viewer: no optional locks, and no fetch from a promisor remote. */
+  private readGit(repo: Repo, args: string[], options: { timeoutMs: number; maxOutputBytes?: number; input?: Buffer; signal?: AbortSignal }): Promise<ProcessResult> {
+    return runProcess('git', ['--no-optional-locks', ...args], { cwd: repo.root, env: READ_ENV, ...options });
+  }
+
+  /** The checkout's HEAD commit and branch; two reads that only look at refs, so they stay quick in a huge repository. */
+  async head(project: ProjectRef): Promise<GitHead> {
+    const repo = await this.repo(project);
+    const [commit, branch] = await Promise.all([
+      this.readGit(repo, ['rev-parse', '--verify', 'HEAD'], { timeoutMs: GIT_READ_BUDGET.headMs, maxOutputBytes: 4096 }),
+      this.readGit(repo, ['symbolic-ref', '-q', '--short', 'HEAD'], { timeoutMs: GIT_READ_BUDGET.headMs, maxOutputBytes: 4096 }),
+    ]);
+    const head = commit.stdout.trim();
+    if (commit.timedOut) throw new AppError('GIT_TIMEOUT', 'Git took too long to read HEAD', 504);
+    if (commit.code !== 0 || !head) throw new AppError('GIT_NO_COMMITS', 'This repository has no commits yet', 409);
+    const name = branch.code === 0 ? branch.stdout.trim() : '';
+    return { ...(name ? { branch: name } : {}), head, short: head.slice(0, 9) };
+  }
+
+  /** A file as a commit has it (`rev` is `HEAD` or a hash). One `cat-file`, so the cost is a single git call. */
+  async fileAtRev(project: ProjectRef, filePath: string, rev = 'HEAD', signal?: AbortSignal): Promise<GitFileAtRev> {
+    if (typeof rev !== 'string' || !(rev === 'HEAD' || /^[0-9a-f]{7,64}$/i.test(rev))) throw new AppError('INVALID_REV', 'rev must be HEAD or a commit hash');
+    const repo = await this.repo(project);
+    const file = await this.resolveGitPath(repo, filePath);
+    if (file.gitRelative.includes('\n')) throw new AppError('INVALID_PATH', 'Git path is invalid');
+    const cap = FILE_BUDGET.previewTextBytes;
+    const result = await this.readGit(repo, ['cat-file', '--batch'], { timeoutMs: GIT_READ_BUDGET.fileMs, maxOutputBytes: cap + 1024, input: Buffer.from(`${rev}:${file.gitRelative}\n`), ...(signal ? { signal } : {}) });
+    if (result.timedOut) throw new AppError('GIT_TIMEOUT', 'Git took too long to read the file', 504);
+    const data = result.stdoutData, lineEnd = data.indexOf(10);
+    if (lineEnd < 0) throw readFailure('cat-file', result.stderr);
+    const header = data.subarray(0, lineEnd).toString('utf8');
+    const answer = { path: file.projectRelative, rev };
+    if (header.endsWith(' missing') || header.endsWith(' ambiguous')) {
+      // `missing` is a path the commit lacks, or an object this clone does not hold; the tree listing tells which.
+      const listing = await this.readGit(repo, ['ls-tree', '-z', rev, '--', literalPath(file.gitRelative)], { timeoutMs: GIT_READ_BUDGET.fileMs, maxOutputBytes: 64 * 1024, ...(signal ? { signal } : {}) });
+      if (listing.timedOut) throw new AppError('GIT_TIMEOUT', 'Git took too long to read the file', 504);
+      if (listing.code !== 0) {
+        if (/not a valid object name|unknown revision/i.test(listing.stderr)) throw new AppError('GIT_REV_NOT_FOUND', `Commit ${rev} was not found`, 404);
+        throw readFailure('ls-tree', listing.stderr);
+      }
+      if (listing.stdout.trim()) throw readFailure('cat-file', 'missing blob: not available without fetching');
+      return { ...answer, missing: true };
+    }
+    const [, type, size] = /^\S+ (\w+) (\d+)$/.exec(header) ?? [];
+    if (type !== 'blob' || size === undefined) throw new AppError('INVALID_PATH', 'Path is not a file in that commit', 422);
+    const content = data.subarray(lineEnd + 1, lineEnd + 1 + Math.min(Number(size), cap));
+    if (content.subarray(0, 8000).includes(0)) return { ...answer, binary: true };
+    return { ...answer, text: content.toString('utf8'), ...(Number(size) > cap ? { truncated: true } : {}) };
+  }
+
+  /**
+   * Who last changed each line of a window of the working-tree file. One blame runs per repository at
+   * a time (a window takes seconds on a monorepo); answers are kept so scrolling back costs nothing.
+   */
+  async blame(project: ProjectRef, filePath: string, start: number, end: number, signal?: AbortSignal): Promise<GitBlame> {
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) throw new AppError('INVALID_RANGE', 'start and end must be line numbers with start <= end');
+    end = Math.min(end, start + GIT_READ_BUDGET.blameMaxLines - 1);
+    const repo = await this.repo(project);
+    const file = await this.resolveGitPath(repo, filePath);
+    const info = await stat(file.absolute).catch(() => undefined);
+    if (!info?.isFile()) throw new AppError('FILE_NOT_FOUND', 'File not found', 404);
+    if (info.size > FILE_BUDGET.previewReadBytes) throw new AppError('FILE_TOO_LARGE', 'The file is too large to blame here', 413);
+    const commit = await this.readGit(repo, ['rev-parse', '--verify', 'HEAD'], { timeoutMs: GIT_READ_BUDGET.headMs, maxOutputBytes: 4096, ...(signal ? { signal } : {}) });
+    const head = commit.stdout.trim() || 'unborn';
+    const key = JSON.stringify([repo.root, head, file.gitRelative, info.mtimeMs, info.size, start, end]);
+    const cached = this.blameCache.get(key);
+    if (cached) return cached;
+    // The window is cut to the file's length here, because git refuses a range past the end.
+    const data = await readFile(file.absolute);
+    let lines = 0;
+    for (let at = data.indexOf(10); at >= 0; at = data.indexOf(10, at + 1)) lines += 1;
+    if (data.length && data[data.length - 1] !== 10) lines += 1;
+    const last = Math.min(end, lines);
+    if (start > lines) return { path: file.projectRelative, start, end: start - 1, ranges: [], commits: {} };
+    return this.blameQueue.run(repo.root, signal, async () => {
+      const again = this.blameCache.get(key);
+      if (again) return again;
+      const result = await this.readGit(repo, ['blame', '--porcelain', '-L', `${start},${last}`, '--', file.gitRelative], { timeoutMs: GIT_READ_BUDGET.blameMs, maxOutputBytes: GIT_READ_BUDGET.blameOutputBytes, ...(signal ? { signal } : {}) });
+      if (result.aborted) throw new AppError('REQUEST_ABORTED', 'Request was cancelled', 499);
+      if (result.timedOut) throw new AppError('GIT_TIMEOUT', `Blame took longer than ${GIT_READ_BUDGET.blameMs / 1000} s on this repository and was stopped`, 504);
+      if (result.truncated) throw new AppError('GIT_OUTPUT_TOO_LARGE', 'Blame output is too large for this range', 413);
+      let answer: GitBlame;
+      if (result.code !== 0) {
+        // A file git does not track yet has no history: every line is the working tree's own.
+        if (!/no such path|not under version control/i.test(result.stderr)) throw readFailure('blame', result.stderr);
+        answer = { path: file.projectRelative, start, end: last, ranges: [{ start, count: last - start + 1, hash: ZERO_HASH }], commits: {} };
+      } else answer = parseBlame(result.stdout, file.projectRelative, start, last);
+      this.blameCache.set(key, answer);
+      return answer;
+    });
+  }
+
   /** Stops watching every followed project. */
   close(): void {
     this.closed = true;
     for (const watch of this.statusWatches.values()) { watch.listeners.clear(); this.closeStatusWatch(watch); }
     this.statusWatches.clear();
+    this.blameCache.clear();
   }
 
   private async readStatus(project: ProjectRef): Promise<GitStatus> {

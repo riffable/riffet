@@ -613,7 +613,7 @@ export const TRACE_BUDGET = {
 
 /** The code index of a project's declarations (`apps/server/src/workspace/symbols/`). */
 export const CODE_INDEX_BUDGET = {
-  /** Worker threads that parse files while an index is built; each holds the grammars and one file's tree. */
+  /** Child processes that parse and write files while an index is built; each holds the grammars and one file's tree. */
   workers: 4,
   /** Files handed to a worker at once: it compares them with the index, parses what changed and writes it in one transaction. */
   batchFiles: 200,
@@ -625,8 +625,10 @@ export const CODE_INDEX_BUDGET = {
   openIndexes: 3,
   /** An open index nobody asked anything of for this long is closed, and its workers stopped. */
   idleCloseMs: 10 * 60_000,
-  /** A ready index compares the project's files with itself again when asked after this long: a pass stats every source file. */
+  /** A watched index compares the project's files with itself again after this long: a pass stats every source file. */
   recheckMs: 5 * 60_000,
+  /** A build or check runs only while a page watches the index: one watch keeps it going this long, and a build nobody renews is stopped. */
+  watchMs: 15_000,
   /** Results of one symbol search, by default and at most. */
   searchResults: 50,
   maxSearchResults: 200,
@@ -638,6 +640,38 @@ export const CODE_INDEX_BUDGET = {
   candidateRows: 5_000,
   /** Declarations of one name that definition lookup considers. */
   definitionRows: 200,
+  /** Files a member reference search reads at most when the word index names its candidates; a word in more files than this is searched with ripgrep instead. */
+  referenceFiles: 20_000,
+  /** Files changed since the last check that an index answer may add to its candidates (git diff against the checked commit, files dirty then, untracked files); more than this and the index is not trusted for that answer. */
+  changedFiles: 2_000,
+  /** `git diff` of the working tree against the index is given this long; on a timeout the answer is not narrowed by the index. */
+  changedGitMs: 1_500,
+  /** Comparing git's index with the checked commit walks every tracked file (a second on a monorepo) and only changes when the index does: it is redone, with this long, when the index file changed. */
+  changedIndexMs: 15_000,
+  /** Most output read from a `git diff` listing changed files; past it the list is not available. */
+  changedListBytes: 16 * MIB,
+  /** The changed-file list of a project is reused for this long. */
+  changedTtlMs: 2_000,
   /** Files a worker parses before it is replaced, so its WebAssembly heap does not keep what a large index once needed. */
-  workerRecycleFiles: 20_000,
+  workerRecycleFiles: 10_000,
+} as const;
+
+/** Read-only Git lookups for the code viewer (`apps/server/src/git/read.ts`): HEAD, a file at a commit, blame. */
+export const GIT_READ_BUDGET = {
+  /** `git rev-parse` and `symbolic-ref` for the head. */
+  headMs: 10_000,
+  /** One `cat-file` of a file at a commit; text past `FILE_BUDGET.previewTextBytes` is cut. */
+  fileMs: 20_000,
+  /** One `git blame` is killed past this; the request fails with `GIT_TIMEOUT` (a window of lines takes seconds on a monorepo, a whole file over a minute). */
+  blameMs: 30_000,
+  /** Lines one blame covers; a longer range is cut to this many from its start. */
+  blameMaxLines: 400,
+  /** Most output one blame is read for. */
+  blameOutputBytes: 8 * MIB,
+  /** Blames of one repository run one at a time; this many may wait behind the running one, a further request is refused. */
+  blameWaiting: 8,
+  /** Blame answers kept for scrolling back, by count and by size; the least recently used goes first, and an entry unused for `blameCacheTtlMs` is dropped. */
+  blameCacheEntries: 64,
+  blameCacheBytes: 2 * MIB,
+  blameCacheTtlMs: 10 * 60_000,
 } as const;

@@ -10,7 +10,7 @@
 // and no raw `fetch` with the user's credentials, so the same calls can later cross a message
 // bridge to an isolated view.
 
-import { createContext, createElement, useContext, useMemo, useSyncExternalStore, type ComponentProps, type ComponentType, type ReactNode } from 'react';
+import { createContext, createElement, useContext, useMemo, useSyncExternalStore, type ComponentProps, type ComponentType, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import type { AppSettings, AppSettingsUpdate, ModelInfo, Run, Session, SyncLane, TimelinePage, TimelineRow, TurnOutlineV3 } from '@contracts';
 
 // The message bridge of isolated views: protocol types and limits. The client a view bundles is `bridge-client.ts`.
@@ -98,12 +98,30 @@ export interface PluginProject {
   name: string;
   cwd: string;
   worktree?: { branch: string };
+  /** Set on a project the app keeps for itself (`quick-chat`, `assistant`, `task-workspace`), not one the user opened. */
+  system?: string;
+  archivedAt?: string;
+}
+
+/** A server whose conversations and projects the app lists: the one this page is served by, and the linked ones. */
+export interface PluginServer {
+  id: string;
+  name: string;
+  /** The user's short name for a linked server. */
+  alias?: string;
+  /** Set on the server this page is served by. */
+  self?: true;
+  online: boolean;
 }
 
 export interface SessionService {
   /** Every conversation the user can see, as the app holds them now. `subscribe` fires when this or `projects()` changes. */
   list(): readonly Session[];
   projects(): readonly PluginProject[];
+  /** The servers `projects()` come from, this one first; `subscribe` fires when they change. Hosts without linked servers may omit it. */
+  servers?(): readonly PluginServer[];
+  /** The linked server a project or conversation lives on; `undefined` for this server's own. */
+  serverOf?(objectId: string): string | undefined;
   subscribe(listener: () => void): () => void;
   /** The turns of one lane, in order. Rejects with an `AbortError` when `signal` aborts. */
   outline(sessionId: string, options?: { lane?: SyncLane; signal?: AbortSignal }): Promise<TurnOutlineV3[]>;
@@ -139,6 +157,12 @@ export interface NavigationService {
   openSession(sessionId: string): void;
   /** Opens this plugin's own page in its details (docs/PLUGIN_ARCHITECTURE.md「插件详情」). Absent from an older host. */
   openPluginPage?(): void;
+  /**
+   * Quotes a project file, or one line of it, into a conversation of that project: the one under the page
+   * when it is of that project, else a new conversation's composer. False when the project is unknown.
+   * Added 2026-11: absent from an older host.
+   */
+  quote?(projectId: string, reference: { path: string; line?: number; text?: string }): boolean;
 }
 
 export interface NotifyService {
@@ -227,7 +251,8 @@ export type PluginIconName =
   | 'copy' | 'folder' | 'folder-closed' | 'git-branch' | 'git-commit-horizontal' | 'git-compare' | 'git-fork' | 'globe' | 'graph' | 'info'
   | 'list-checks' | 'maximize' | 'message-circle-question' | 'messages-square' | 'minus' | 'paperclip' | 'pause' | 'play' | 'plus' | 'search'
   | 'sparkle' | 'sparkles' | 'square-arrow-out-up-right' | 'square-terminal' | 'target' | 'wrench' | 'x' | 'arrow-right-left'
-  | 'chevron-right' | 'refresh-cw' | 'save' | 'activity';
+  | 'chevron-right' | 'refresh-cw' | 'save' | 'activity' | 'file-code' | 'panel-right'
+  | 'list-filter' | 'history' | 'chevrons-down-up' | 'case-sensitive' | 'whole-word' | 'regex';
 
 export type IconComponent = ComponentType<{ className?: string }>;
 
@@ -324,6 +349,92 @@ export interface ModelFieldProps {
   onOpen?(): void;
 }
 
+/** An identifier in a shown file; `line` and `column` are 1-based. */
+export interface CodeSymbolAt { word: string; line: number; column: number }
+/** A place to show in a file: scrolled to the middle and flashed, or with `restore` put back at the top; a new `token` shows it again. */
+export interface CodeFileTarget { line: number; column?: number; restore?: boolean; token: number }
+/**
+ * A project file read as the files panel reads it: the host loads it, highlights text, draws images
+ * and says when it cannot be shown. Read only. ⌘-click (Ctrl-click) on an identifier and the context
+ * menu hand it to `onSymbol` with the pointer, for the view to resolve.
+ */
+export interface CodeFileProps {
+  projectId: string;
+  path: string;
+  target?: CodeFileTarget | undefined;
+  onSymbol?(at: CodeSymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }): void;
+  /** The first line in view, as the reader scrolls. */
+  onTopLine?(line: number): void;
+  /** A line number was clicked. */
+  onLine?(line: { path: string; line: number; text: string }): void;
+  /** Added 2026-11; an older host ignores these. The first and last line in view, as the reader scrolls. */
+  onViewport?(first: number, last: number): void;
+  /** The file as committed: lines changed since are marked beside the line numbers. */
+  baseline?: string | undefined;
+  /** Who last changed which lines, drawn as a column before the line numbers (`GitBlame` has this shape). */
+  blame?: CodeBlameView | undefined;
+  /** A commit in the blame column was clicked. */
+  onBlameCommit?(hash: string): void;
+}
+/** Consecutive lines from one commit, and the commits by hash; a hash of zeros is lines not committed yet. */
+export interface CodeBlameView {
+  ranges: ReadonlyArray<{ start: number; count: number; hash: string }>;
+  commits: Readonly<Record<string, { author: string; date: string; summary: string }>>;
+}
+/** The files panel's icon for a file name, or a folder. */
+export interface FileIconProps { name: string; directory?: boolean; className?: string }
+
+/** One entry of a `Menu`: a command, a choice of one (`radio`, ticked when current), an on/off option, a line, or a group's caption. */
+export type MenuEntry =
+  | { kind: 'item'; label: string; icon?: ReactNode; shortcut?: string; disabled?: boolean; danger?: boolean; onSelect(): void }
+  | { kind: 'radio'; label: string; icon?: ReactNode; checked: boolean; disabled?: boolean; onSelect(): void }
+  | { kind: 'check'; label: string; icon?: ReactNode; checked: boolean; disabled?: boolean; onCheckedChange(checked: boolean): void }
+  | { kind: 'separator' }
+  | { kind: 'label'; label: string };
+/** The app's dropdown menu, opened by `trigger` (one element that takes a ref, such as a `Button`). */
+export interface MenuProps {
+  trigger: ReactElement;
+  /** The trigger's tooltip, for an icon button. */
+  tip?: string;
+  entries: readonly MenuEntry[];
+  align?: 'start' | 'center' | 'end';
+  /** Narrow menus that must stay by their trigger on a phone; otherwise a phone shows the menu as a bottom sheet. */
+  mobileSheet?: boolean;
+}
+/**
+ * The app's search dialog, as ⌘P and ⌘K open it: a query row, an optional row of scopes, and a list
+ * area of fixed height (switching scope does not resize it). The plugin draws the list; options carry
+ * `role="option"` and ids, and `activeId` names the current one, so focus stays in the query.
+ */
+export interface QuickPanelProps {
+  open: boolean;
+  onOpenChange(open: boolean): void;
+  /** The dialog's accessible name. */
+  title: string;
+  query: string;
+  onQueryChange(query: string): void;
+  placeholder: string;
+  onKeyDown?(event: KeyboardEvent<HTMLInputElement>): void;
+  busy?: boolean;
+  /** Changes to put the caret back in the query (a shortcut asked for the dialog again). */
+  focusToken?: number;
+  /** Scope tabs under the query; `Tab` handling is the plugin's. */
+  tabs?: readonly { value: string; label: string }[];
+  tab?: string;
+  onTabChange?(tab: string): void;
+  /** At the end of the tabs row: options such as match case, a scope, a hint. */
+  tools?: ReactNode;
+  /** At the end of the query row, before the close button. */
+  trailing?: ReactNode;
+  listId: string;
+  activeId?: string;
+  listLabel: string;
+  /** The list area, scrolled by the host. */
+  children: ReactNode;
+  /** Under the list, at a fixed share of its height: a preview of the current option. */
+  preview?: ReactNode;
+}
+
 /** The host's own components, so a plugin looks like the app and ships none of its own chrome. */
 export interface UiKit {
   Button: ComponentType<ButtonProps>;
@@ -349,6 +460,12 @@ export interface UiKit {
   EmptyState?: ComponentType<EmptyStateProps>;
   /** Chooses a model, and its options, from a list. */
   ModelField: ComponentType<ModelFieldProps>;
+  /** Added 2026-11 (see `Select`): a project file, and a file's icon. Test for the member before use. */
+  CodeFile?: ComponentType<CodeFileProps>;
+  FileIcon?: ComponentType<FileIconProps>;
+  /** Added 2026-11 (see `Select`): the app's dropdown menu and its search dialog. Test for the member before use. */
+  Menu?: ComponentType<MenuProps>;
+  QuickPanel?: ComponentType<QuickPanelProps>;
   icon(name: PluginIconName): IconComponent;
   /** The icon of a tool kind (`read`, `execute`...); a wrench for one it does not know. */
   toolIcon(kind: string): IconComponent;
@@ -388,6 +505,15 @@ export function useSessions(): readonly Session[] {
 export function useProjects(): readonly PluginProject[] {
   const { sessions } = usePluginHost();
   return useSyncExternalStore(sessions.subscribe, sessions.projects);
+}
+
+const NO_SERVERS: readonly PluginServer[] = [];
+const noServers = () => NO_SERVERS;
+
+/** The servers projects come from (`SessionService.servers`), empty on a host that does not list them. */
+export function useServers(): readonly PluginServer[] {
+  const { sessions } = usePluginHost();
+  return useSyncExternalStore(sessions.subscribe, sessions.servers ?? noServers);
 }
 
 /** The declared settings keys, and re-renders when one changes. */

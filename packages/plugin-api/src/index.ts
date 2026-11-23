@@ -14,7 +14,7 @@ import type {
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { ImChannelProvider } from './im-channel.js';
-import type { GatewayProtocol, PluginApprovalRequest, PluginApprovalResult } from '@riffet/contracts';
+import type { CodeDefinitions, CodeIndexStatus, CodeOutline, CodeReferences, CodeSymbolResults, GatewayProtocol, PluginApprovalRequest, PluginApprovalResult } from '@riffet/contracts';
 
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
@@ -387,6 +387,14 @@ export interface PluginHost {
      */
     saveImage?(sessionId: string, image: { name: string; mimeType: string; data: Buffer }): Promise<{ id: string; path: string }>;
   };
+  /**
+   * Read-only code navigation over a project's Kotlin / Java / Android sources (docs/CODE-STUDIO.md), for a plugin that
+   * declares `agentTools`; absent otherwise and on a host that predates it. Every path is project-relative and checked
+   * against the project: nothing outside it is read. Lines and columns are 1-based. A `building` or `failed` index answers
+   * with its state and no items, and a reference search that could not cover every file says `complete: false`: neither
+   * means the symbol does not exist.
+   */
+  code?: PluginCodeNavigation;
   /** Notifies mounted views of this plugin that cached query data changed (`plugin.data` bridge push). Absent on a host that predates it. */
   views?: { invalidate(topic?: string): void };
   /**
@@ -424,6 +432,17 @@ export interface PluginHost {
   };
   /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
   error(code: string, message: string, statusCode?: number): Error;
+}
+
+/** `host.code`. `projectId` is a project of this server; an agent tool passes its context's. */
+export interface PluginCodeNavigation {
+  status(projectId: string): Promise<CodeIndexStatus>;
+  /** Declarations matching `q`, best first; `types` limits them to classes, interfaces, objects, enums and annotations. */
+  search(projectId: string, q: string, options?: { types?: boolean; limit?: number }): Promise<CodeSymbolResults>;
+  /** Where `word` at `line` of `path` is declared. Without `column` the word's first occurrence on that line is used. */
+  definition(projectId: string, query: { path: string; line: number; column?: number; word: string }, signal?: AbortSignal): Promise<CodeDefinitions>;
+  references(projectId: string, query: { path: string; word: string; scope: 'module' | 'project' }, signal?: AbortSignal): Promise<CodeReferences>;
+  outline(projectId: string, path: string): Promise<CodeOutline>;
 }
 
 /** What `host.models.complete` sends. Thinking is off where the protocol allows; a reply cut off at `maxOutputTokens` rejects. */

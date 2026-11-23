@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +26,31 @@ it('orders directories before files across listing pages', async () => {
       [['b-folder', 'directory'], ['z-folder', 'directory']],
       [['a.txt', 'file'], ['m.txt', 'file']],
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('searches with file masks that keep ignore rules, reports more results, and rejects a bad regex', async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), 'riffet-search-')));
+  try {
+    spawnSync('git', ['init', '-q'], { cwd: root });
+    await Promise.all([mkdir(path.join(root, 'src')), mkdir(path.join(root, 'build'))]);
+    await Promise.all([
+      writeFile(path.join(root, '.gitignore'), 'build/\n'),
+      writeFile(path.join(root, 'src/A.kt'), 'val Needle = 1\nneedles\n'),
+      writeFile(path.join(root, 'src/B.java'), 'Needle\n'),
+      writeFile(path.join(root, 'build/C.kt'), 'Needle\n'),
+    ]);
+    const workspace = new WorkspaceService({ stateDir: path.join(root, '.state') });
+    const paths = async (options: object) => (await workspace.search(root, { q: 'needle', ...options })).hits.map(hit => `${hit.path}:${hit.line}`).sort();
+    expect(await paths({ include: '*.kt' })).toEqual(['src/A.kt:1', 'src/A.kt:2']);
+    expect(await paths({ include: '*.kt', word: true, caseSensitive: true })).toEqual([]);
+    expect(await paths({ word: true, exclude: '*.java' })).toEqual(['src/A.kt:1']);
+    expect(await paths({ regex: true, q: 'Needle$', caseSensitive: true })).toEqual(['src/B.java:1']);
+    expect(await workspace.search(root, { q: 'needle', limit: 1 })).toMatchObject({ more: true });
+    expect(await workspace.search(root, { q: 'needle', limit: 5 })).toMatchObject({ more: false });
+    await expect(workspace.search(root, { q: 'foo(', regex: true })).rejects.toMatchObject({ code: 'INVALID_QUERY' });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

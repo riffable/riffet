@@ -2100,6 +2100,34 @@ html.dark {
   background: var(--diff-del-strong) !important;
   text-decoration: none;
 }
+/* Lines changed since the last commit, beside the line numbers: a bar for added and changed lines, a notch where lines were removed. */
+.cm-editor .cm-change-gutter .cm-gutterElement {
+  width: 3px;
+  padding: 0;
+}
+.cm-editor .cm-change-gutter .cm-change-added {
+  background: var(--diff-add-marker);
+}
+.cm-editor .cm-change-gutter .cm-change-modified {
+  background: var(--accent);
+}
+.cm-editor .cm-change-gutter .cm-change-deleted {
+  box-shadow: inset 0 2px 0 var(--diff-del-marker);
+}
+/* Who last changed each line: the date and author once per run of lines from one commit. */
+.cm-editor .cm-blame-gutter .cm-gutterElement {
+  width: 18ch;
+  overflow: hidden;
+  padding: 0 8px;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.cm-editor .cm-blame-gutter .cm-gutterElement:hover {
+  color: var(--fg-2);
+}
 /* The commit graph's lanes: mid-tones that hold on both the light and the dark surface. */
 .git-graph {
   --lane-0: var(--accent);

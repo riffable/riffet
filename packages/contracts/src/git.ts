@@ -65,3 +65,19 @@ export interface PullRequestInfo {
 export interface PullRequestStatus { branch: BranchInfo; pullRequest: PullRequestInfo | null; }
 /** The change of one worktree against the commit its attempt started from, committed or not. */
 export interface WorktreeComparison { base: string; /** The branch `base` was found on, when the comparison chose it. */ ref?: string; head?: string; commits: number; files: Array<{ path: string; status: string; added?: number; removed?: number }>; /** Set when more files changed than are listed. */ filesTotal?: number; added: number; removed: number; }
+/** HEAD of a project's checkout. `branch` is absent when detached. */
+export interface GitHead { branch?: string; head: string; short: string; }
+/** A file as it is in a commit. `missing`: not in that commit (a new file). `text` is absent for a binary file. */
+export interface GitFileAtRev { path: string; rev: string; text?: string; missing?: boolean; binary?: boolean; truncated?: boolean; }
+export interface GitBlameCommit { hash: string; author: string; date: string; summary: string; }
+/**
+ * Who last changed each line of `start..end` (1-based, inclusive) of the working-tree file; `end` is
+ * what was answered after the range was cut to the limit and to the file's length. `ranges` are
+ * consecutive lines of one commit, with an all-zero `hash` for lines not committed yet (these have no
+ * entry in `commits`).
+ */
+export interface GitBlame {
+  path: string; start: number; end: number;
+  ranges: Array<{ start: number; count: number; hash: string }>;
+  commits: Record<string, GitBlameCommit>;
+}

@@ -1,8 +1,10 @@
 import { execFile, spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { SearchHit } from '../../../../packages/contracts/src/index.js';
+import type { SearchHit, SearchResults } from '../../../../packages/contracts/src/index.js';
+import { AppError } from '../errors.js';
 import { resolveCliExecutable } from '../backends/shared/cli-resolve.js';
+import { ripgrepMaskArgs, type SearchOptions } from './search-options.js';
 
 // File search as an IDE's "Go to File" does it (VS Code's Quick Open is the model: list every file
 // the repository does not ignore, then score the names): a project's paths come from git, which reads
@@ -12,12 +14,13 @@ import { resolveCliExecutable } from '../backends/shared/cli-resolve.js';
 // honours .gitignore and searches in parallel; without it the caller walks the tree itself.
 
 const LIST_TIMEOUT_MS = 30_000;
-const UNTRACKED_TTL_MS = 60_000;
-const SEARCH_TIMEOUT_MS = 20_000;
+const UNTRACKED_TTL_MS = 20_000;
+const MAX_UNTRACKED_DIRS = 200;
+export const SEARCH_TIMEOUT_MS = 20_000;
 const MAX_LIST_BYTES = 512 * 1024 * 1024;
 const MAX_LINE = 1000;
 
-interface Listing { tracked: string[]; untracked: string[]; candidates?: Candidates; key: string; untrackedAt: number; refreshing?: Promise<void> }
+interface Listing { tracked: string[]; untracked: string[]; untrackedOk?: boolean; candidates?: Promise<Candidates>; key: string; untrackedAt: number; refreshing?: Promise<void> }
 
 /** Every file, then every directory, of a project, with each one's name in lower case, built once per listing. */
 export interface Candidates {
@@ -28,11 +31,45 @@ export interface Candidates {
   dirStart: number;
 }
 
-export function candidates(files: readonly string[]): Candidates {
+/** Work done per turn of the event loop while a listing is turned into `Candidates`: the rest of the server waits at most this long. */
+const SLICE_MS = 8;
+const CHECK_EVERY = 1024;
+
+/** A check for long loops: `await due(index)` lets the event loop run once a slice (`SLICE_MS`) is used up, looking at the clock every `CHECK_EVERY` items. */
+function slicer(): (index: number) => Promise<void> {
+  let sliceEnd = performance.now() + SLICE_MS;
+  return async (index) => {
+    if (index % CHECK_EVERY || performance.now() < sliceEnd) return;
+    await new Promise<void>(resolve => setImmediate(resolve));
+    sliceEnd = performance.now() + SLICE_MS;
+  };
+}
+
+/**
+ * Builds `Candidates` in slices that yield to the event loop: a monorepo's half a million paths took
+ * ~0.7 s in one go, during which the whole server stood still.
+ */
+export async function candidates(files: readonly string[]): Promise<Candidates> {
+  const due = slicer();
   const dirs = new Set<string>();
-  for (const file of files) for (let at = file.indexOf('/'); at > 0; at = file.indexOf('/', at + 1)) dirs.add(file.slice(0, at));
-  const paths = [...files, ...dirs];
-  return { paths, names: paths.map(item => item.slice(item.lastIndexOf('/') + 1).toLowerCase()), dirStart: files.length };
+  // Files come grouped by directory (git lists them sorted): a file in the previous file's directory adds nothing.
+  let previous = '';
+  for (let index = 0; index < files.length; index++) {
+    await due(index);
+    const file = files[index]!;
+    const last = file.lastIndexOf('/');
+    if (last <= 0 || (last === previous.length && file.startsWith(previous))) continue;
+    previous = file.slice(0, last);
+    for (let at = file.indexOf('/'); at > 0; at = file.indexOf('/', at + 1)) dirs.add(file.slice(0, at));
+  }
+  const paths = files.concat([...dirs]);
+  const names = new Array<string>(paths.length);
+  for (let index = 0; index < paths.length; index++) {
+    await due(index);
+    const item = paths[index]!;
+    names[index] = item.slice(item.lastIndexOf('/') + 1).toLowerCase();
+  }
+  return { paths, names, dirStart: files.length };
 }
 
 function run(file: string, args: string[], cwd: string, timeout = LIST_TIMEOUT_MS): Promise<string> {
@@ -42,6 +79,25 @@ function run(file: string, args: string[], cwd: string, timeout = LIST_TIMEOUT_M
 }
 
 const split = (output: string): string[] => output.split('\0').filter(Boolean);
+
+/**
+ * The files git shows as untracked. `ls-files -o` walks the whole tree (~15 s on a 400k-file monorepo, even
+ * with core.untrackedCache); `status -unormal` uses git's untracked cache where it is on and names a new
+ * directory once (~2-5 s), so only those directories are listed file by file. `--no-optional-locks` keeps it
+ * from writing the index under the user's own git commands.
+ */
+async function untrackedFiles(root: string): Promise<string[]> {
+  const base = ['-c', 'core.quotePath=false'];
+  const everything = () => run('git', [...base, 'ls-files', '-z', '--others', '--exclude-standard'], root, 120_000).then(split);
+  const status = await run('git', ['--no-optional-locks', ...base, 'status', '--porcelain=v1', '-z', '-unormal', '--no-renames', '--ignore-submodules'], root, 120_000).catch(() => undefined);
+  if (status === undefined) return everything();
+  const files: string[] = [];
+  const dirs: string[] = [];
+  for (const entry of split(status)) if (entry.startsWith('?? ')) (entry.endsWith('/') ? dirs : files).push(entry.slice(3));
+  if (dirs.length > MAX_UNTRACKED_DIRS) return everything();
+  if (dirs.length) files.push(...split(await run('git', [...base, 'ls-files', '-z', '--others', '--exclude-standard', '--', ...dirs], root, 120_000)));
+  return files;
+}
 
 /** Where git keeps the index of the checkout at `root`, whose change time marks a change of the tracked set. */
 async function gitIndex(root: string): Promise<string | undefined> {
@@ -73,13 +129,13 @@ export class FileIndex {
         const output = await run('git', ['-c', 'core.quotePath=false', 'ls-files', '-z', '--cached'], root).catch(() => undefined);
         if (output === undefined) return undefined;
         const tracked = split(output);
-        listing = { tracked, untracked: listing?.untracked ?? [], key, untrackedAt: listing?.untrackedAt ?? 0 };
+        listing = { tracked, untracked: listing?.untracked ?? [], untrackedOk: listing?.untrackedOk, key, untrackedAt: listing?.untrackedAt ?? 0 };
         this.listings.set(root, listing);
       }
       if (Date.now() - listing.untrackedAt > UNTRACKED_TTL_MS && !listing.refreshing) {
         const current = listing;
-        current.refreshing = run('git', ['-c', 'core.quotePath=false', 'ls-files', '-z', '--others', '--exclude-standard'], root, 120_000)
-          .then(output => { current.untracked = split(output); current.candidates = undefined; }, () => undefined)
+        current.refreshing = untrackedFiles(root)
+          .then(files => { current.untracked = files; current.untrackedOk = true; current.candidates = undefined; }, () => undefined)
           .finally(() => { current.untrackedAt = Date.now(); current.refreshing = undefined; });
         // The first listing of a checkout waits briefly for them; a later one uses what it has.
         if (!current.untrackedAt) await Promise.race([current.refreshing, new Promise(resolve => setTimeout(resolve, 1500))]);
@@ -100,8 +156,19 @@ export class FileIndex {
     return this.withDirs(listing);
   }
 
-  private withDirs(listing: Listing): Candidates {
-    listing.candidates ??= candidates(listing.untracked.length ? [...listing.tracked, ...listing.untracked] : listing.tracked);
+  /**
+   * The untracked files of a git checkout as of the last walk (at most `UNTRACKED_TTL_MS` old, refreshed in
+   * the background by `paths`); `undefined` without git, or while the first walk has not finished or failed.
+   */
+  async untracked(root: string): Promise<string[] | undefined> {
+    if (!(await this.paths(root))) return undefined;
+    const listing = this.listings.get(root);
+    return listing?.key.startsWith('git:') && listing.untrackedOk ? listing.untracked : undefined;
+  }
+
+  private withDirs(listing: Listing): Promise<Candidates> {
+    // Concurrent callers share one build; a failed one is not kept.
+    listing.candidates ??= candidates(listing.untracked.length ? listing.tracked.concat(listing.untracked) : listing.tracked);
     return listing.candidates;
   }
 }
@@ -177,7 +244,7 @@ function letters(lower: string, starts: readonly boolean[], query: string, prefe
  * with `/` matches its last part against the name and the parts before it, in order, against the
  * directories. A directory ranks below the files whose names match about as well.
  */
-export function rankPaths(list: Candidates, query: string, limit: number, within = ''): Array<{ path: string; directory: boolean }> {
+export async function rankPaths(list: Candidates, query: string, limit: number, within = ''): Promise<Array<{ path: string; directory: boolean }>> {
   const parts = query.trim().toLowerCase().split('/').filter(Boolean);
   const name = parts.pop();
   if (!name) return [];
@@ -185,7 +252,9 @@ export function rankPaths(list: Candidates, query: string, limit: number, within
   let floor = -Infinity;
   const first = name[0]!;
   const order = (a: { index: number; score: number }, b: { index: number; score: number }) => b.score - a.score || list.paths[a.index]!.length - list.paths[b.index]!.length;
+  const due = slicer();
   for (let index = 0; index < list.paths.length; index++) {
+    await due(index);
     const lower = list.names[index]!;
     // Most names do not even contain the first letter: skip them before scoring.
     if (!lower.includes(first)) continue;
@@ -222,37 +291,53 @@ export function rankPaths(list: Candidates, query: string, limit: number, within
 // ── Content ──────────────────────────────────────────────────────────────────
 
 /**
- * Lines containing `needle` (case-insensitive, literal) under `base`, with ripgrep; `undefined` when
- * it is not installed. Stops once `limit + offset` lines are found, so a common word costs no more
- * than a rare one. The first page takes what its threads find first; a later page reads in path
- * order (one thread), so pages neither overlap nor skip. Paths are relative to `root`. `signal`
- * ends the search, for a client that went away.
+ * Lines matching `needle` under `base`, with ripgrep (`options` choose case, whole word, regex and file
+ * masks; the default is a case-insensitive literal); `undefined` when it is not installed. Stops once
+ * one line more than `limit + offset` is found (that line is how `more` is known), so a common word
+ * costs no more than a rare one. The first page takes what its threads find first; a later page reads in
+ * path order (one thread), so pages neither overlap nor skip. Paths are relative to `root`. `signal`
+ * ends the search, for a client that went away. An invalid regular expression throws `INVALID_QUERY`.
  */
-export function ripgrepSearch(root: string, base: string, needle: string, limit: number, offset: number, signal?: AbortSignal): Promise<SearchHit[] | undefined> {
+export function ripgrepSearch(root: string, base: string, needle: string, limit: number, offset: number, signal?: AbortSignal, options: SearchOptions = {}, files?: readonly string[]): Promise<SearchResults | undefined> {
   const rg = ripgrep();
   if (!rg) return Promise.resolve(undefined);
-  return new Promise((resolve) => {
+  // Named files are searched as given (the caller has applied ignore rules and masks), in the order given.
+  const masks = files ? { args: [] as string[], filter: undefined } : ripgrepMaskArgs(options);
+  return new Promise((resolve, reject) => {
     const want = limit + offset;
     const hits: SearchHit[] = [];
     const child = spawn(rg, [
-      '--no-config', ...(offset > 0 ? ['--sort', 'path'] : []), '--null', '--line-number', '--no-heading', '--color', 'never', '--fixed-strings', '--ignore-case',
-      '--max-filesize', '2M', '--max-columns', String(MAX_LINE), '--max-columns-preview', '--hidden', '--glob', '!.git', '--', needle, '.',
-    ], { cwd: base, stdio: ['ignore', 'pipe', 'ignore'] });
+      '--no-config', ...(offset > 0 || files ? ['--sort', 'path'] : []), '--null', '--with-filename', '--line-number', '--no-heading', '--color', 'never',
+      ...(options.regex ? [] : ['--fixed-strings']), options.caseSensitive ? '--case-sensitive' : '--ignore-case', ...(options.word ? ['--word-regexp'] : []),
+      '--max-filesize', '2M', '--max-columns', String(MAX_LINE), '--max-columns-preview', '--hidden', '--glob', '!.git', ...masks.args, '-e', needle, '--', ...(files ?? ['.']),
+    ], { cwd: files ? root : base, stdio: ['ignore', 'pipe', 'pipe'] });
     let buffer = '';
+    let stderr = '';
     let done = false;
-    const finish = () => {
+    let timedOut = false;
+    const finish = (code?: number | null) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
-      signal?.removeEventListener('abort', finish);
+      signal?.removeEventListener('abort', onAbort);
       child.kill('SIGTERM');
+      // Exit 2 is an error; with no hits it is the query's (an invalid regular expression) or the files'.
+      if (code === 2 && !hits.length && !timedOut) {
+        if (options.regex && /error|parse/i.test(stderr)) { reject(new AppError('INVALID_QUERY', stderr.replace(/^rg: /, '').trim().slice(0, 500))); return; }
+        resolve({ hits: [], more: false, incomplete: 'error' });
+        return;
+      }
       // ripgrep reports in the order its threads finish; a stable order reads better.
       hits.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line));
-      resolve(hits.slice(offset, want));
+      const more = hits.length > want;
+      resolve({ hits: hits.slice(offset, want), more, ...(timedOut && !more ? { incomplete: 'time' as const } : code === 2 && !more ? { incomplete: 'error' as const } : {}) });
     };
-    const timer = setTimeout(finish, SEARCH_TIMEOUT_MS);
-    if (signal?.aborted) finish(); else signal?.addEventListener('abort', finish, { once: true });
+    const onAbort = () => finish();
+    const timer = setTimeout(() => { timedOut = true; finish(); }, SEARCH_TIMEOUT_MS);
+    if (signal?.aborted) finish(); else signal?.addEventListener('abort', onAbort, { once: true });
     child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => { if (stderr.length < 4096) stderr += chunk; });
     child.stdout.on('data', (chunk: string) => {
       buffer += chunk;
       let end: number;
@@ -262,12 +347,13 @@ export function ripgrepSearch(root: string, base: string, needle: string, limit:
         const nul = line.indexOf('\0');
         const colon = line.indexOf(':', nul + 1);
         if (nul < 0 || colon < 0) continue;
-        const file = path.relative(root, path.resolve(base, line.slice(0, nul))).split(path.sep).join('/');
+        const file = path.relative(root, path.resolve(files ? root : base, line.slice(0, nul))).split(path.sep).join('/');
+        if (masks.filter && !masks.filter(file)) continue;
         hits.push({ path: file, line: Number(line.slice(nul + 1, colon)), text: line.slice(colon + 1, colon + 1 + MAX_LINE) });
-        if (hits.length >= want) { finish(); return; }
+        if (hits.length > want) { finish(0); return; }
       }
     });
-    child.on('close', finish);
+    child.on('close', code => finish(code));
     child.on('error', () => { if (!done) { done = true; clearTimeout(timer); resolve(undefined); } });
   });
 }

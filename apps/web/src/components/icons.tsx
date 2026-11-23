@@ -1,15 +1,15 @@
 import {
   Clock, Blocks, Link, Activity, Archive, ArchiveRestore, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRightLeft, ArrowUp, ArrowUpRight, AtSign, Binary, Bookmark, BookmarkMinus, BookmarkPlus,
-  BookOpen, Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
+  BookOpen, Bot, Brain, CaseSensitive, ChartColumn, ChevronRight, ChevronsDownUp, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine, FilePlus,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   Keyboard, KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, Mic, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareQuote, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
-  Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Printer, Repeat, RotateCw, Save,
+  Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Printer, Regex, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, TextQuote, SquareKanban, List, Inbox, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
-  Timer, Trash2, Undo2, Unlock, Upload, User, Volume2, Workflow, WrapText, Wrench, Zap,
+  Timer, Trash2, Undo2, Unlock, Upload, User, Volume2, WholeWord, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
 
@@ -50,6 +50,10 @@ export const IconCornerDownLeft = icon(CornerDownLeft);
 export const IconDices = icon(Dices);
 export const IconDownload = icon(Download);
 export const IconHistory = icon(History);
+export const IconCaseSensitive = icon(CaseSensitive);
+export const IconChevronsDownUp = icon(ChevronsDownUp);
+export const IconRegex = icon(Regex);
+export const IconWholeWord = icon(WholeWord);
 export const IconListFilter = icon(ListFilter);
 export const IconEllipsis = icon(Ellipsis);
 /** The handle a row is dragged by to reorder its list (`SortableList`). */

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { AppError, requireString } from '../errors.js';
@@ -10,6 +10,12 @@ import type { GitLineChange } from '../../../../packages/contracts/src/index.js'
 
 export function registerGitRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const {store,git}=deps;
+  const untilGone=(reply:FastifyReply)=>{const controller=new AbortController();reply.raw.once('close',()=>{if(!reply.raw.writableFinished)controller.abort();});return controller.signal;};
+  app.get<{Params:{id:string}}>('/api/projects/:id/git/head',async(request)=>git.head(store.getProject(request.params.id)));
+  /** A file as `rev` (`HEAD` or a hash) has it; `missing` when that commit lacks it. */
+  app.get<{Params:{id:string};Querystring:{path?:string;rev?:string}}>('/api/projects/:id/git/file',async(request,reply)=>git.fileAtRev(store.getProject(request.params.id),requireString(request.query.path,'path',8192),request.query.rev||'HEAD',untilGone(reply)));
+  /** Blame of lines `start..end` of the working-tree file; the range is cut to the budget (see `GIT_READ_BUDGET`). */
+  app.get<{Params:{id:string};Querystring:{path?:string;start?:string;end?:string}}>('/api/projects/:id/git/blame',async(request,reply)=>git.blame(store.getProject(request.params.id),requireString(request.query.path,'path',8192),Number(request.query.start),Number(request.query.end),untilGone(reply)));
   /** `fresh=true` reads again even when the project is being followed and nothing is known to have changed. */
   app.get<{Params:{id:string};Querystring:{fresh?:string}}>('/api/projects/:id/git/status',async(request)=>git.status(store.getProject(request.params.id),request.query.fresh==='true'));
   /**

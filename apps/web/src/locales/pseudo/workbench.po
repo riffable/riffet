@@ -134,6 +134,10 @@ msgstr ""
 msgid "下移"
 msgstr ""
 
+#: src/plugins/CodeFile.tsx
+msgid "下载"
+msgstr ""
+
 #. placeholder {0}: artifact.name
 #: src/plugins/TasksView.tsx
 msgid "下载 {0}"
@@ -178,6 +182,10 @@ msgstr ""
 
 #: src/app/SidebarUserMenu.tsx
 msgid "主题"
+msgstr ""
+
+#: src/plugins/CodeFile.tsx
+msgid "二进制文件"
 msgstr ""
 
 #: src/app/SessionSearchDialog.tsx
@@ -710,6 +718,10 @@ msgstr ""
 
 #: src/app/Sidebar.tsx
 msgid "固定侧边栏"
+msgstr ""
+
+#: src/plugins/CodeFile.tsx
+msgid "图片无法加载"
 msgstr ""
 
 #. placeholder {0}: project.name
@@ -1370,6 +1382,14 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr ""
 
+#: src/plugins/CodeFile.tsx
+msgid "文件不存在"
+msgstr ""
+
+#: src/plugins/CodeFile.tsx
+msgid "文件过大，仅显示前一部分"
+msgstr ""
+
 #: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
@@ -1535,6 +1555,10 @@ msgstr ""
 
 #: src/app/Workbench.tsx
 msgid "无法开始这个任务"
+msgstr ""
+
+#: src/plugins/CodeFile.tsx
+msgid "无法打开文件"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
@@ -2615,6 +2639,7 @@ msgstr ""
 #: src/app/plugins/PluginSharesBlock.tsx
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/app/Workbench.tsx
+#: src/plugins/CodeFile.tsx
 msgid "重试"
 msgstr ""
 

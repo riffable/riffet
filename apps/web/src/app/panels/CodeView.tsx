@@ -8,6 +8,7 @@ import { unifiedMergeView } from '@codemirror/merge';
 import type { FilePreview } from '@contracts';
 import type { PromptContextReference } from '@/lib/api';
 import { codeTokens } from '@/lib/code-tokens';
+import { blameGutter, changeGutter, type BlameView } from './codeGutters';
 import { isApplePlatform } from '@/lib/platform';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
@@ -79,17 +80,25 @@ function symbolAt(view: EditorView, x: number, y: number): (SymbolAt & { from: n
  * replaces the document. `original` shows the document against it, change by change, each of which
  * can be kept or taken back.
  */
-export function CodeView({ preview, text = preview.content, editing = false, original, target, onReference, onSymbol, onTopLine, onChange, onSave, onEscape }: {
+export function CodeView({ preview, text = preview.content, editing = false, original, baseline, blame, onBlameCommit, target, onReference, onSymbol, onTopLine, onViewport, onChange, onSave, onEscape }: {
   preview: FilePreview;
   text?: string;
   editing?: boolean;
   original?: string | undefined;
+  /** The file as committed: lines changed since are marked beside the line numbers. */
+  baseline?: string | undefined;
+  /** Who last changed the lines, as a column before the line numbers. */
+  blame?: BlameView | undefined;
+  /** A line's commit in the blame column was clicked. */
+  onBlameCommit?: (hash: string) => void;
   target?: CodeTarget | undefined;
   onReference: (reference: PromptContextReference) => void;
   /** `menu` carries where the pointer was, for a menu at it. */
   onSymbol?: (at: SymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }) => void;
   /** The first line in view, as the reader scrolls. */
   onTopLine?: (line: number) => void;
+  /** The first and last line in view, as the reader scrolls. */
+  onViewport?: (first: number, last: number) => void;
   /** The document after an edit. */
   onChange?: (text: string) => void;
   /** ⌘S (Ctrl-S) while editing. */
@@ -100,9 +109,9 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   const { t } = useLingui();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | undefined>(undefined);
-  const compartments = useRef<{ theme: Compartment; edit: Compartment; merge: Compartment } | null>(null);
-  if (compartments.current === null) compartments.current = { theme: new Compartment(), edit: new Compartment(), merge: new Compartment() };
-  const { theme: themeCompartment, edit: editCompartment, merge: mergeCompartment } = compartments.current;
+  const compartments = useRef<{ theme: Compartment; edit: Compartment; merge: Compartment; changes: Compartment; blame: Compartment } | null>(null);
+  if (compartments.current === null) compartments.current = { theme: new Compartment(), edit: new Compartment(), merge: new Compartment(), changes: new Compartment(), blame: new Compartment() };
+  const { theme: themeCompartment, edit: editCompartment, merge: mergeCompartment, changes: changesCompartment, blame: blameCompartment } = compartments.current;
   const { resolved } = useTheme();
   const dark = resolved === 'dark';
   const darkRef = useRef(dark);
@@ -114,6 +123,17 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   symbol.current = onSymbol;
   const topLine = useRef(onTopLine);
   topLine.current = onTopLine;
+  const viewport = useRef(onViewport);
+  viewport.current = onViewport;
+  const baselineRef = useRef(baseline);
+  baselineRef.current = baseline;
+  const blameRef = useRef(blame);
+  blameRef.current = blame;
+  const blameCommit = useRef(onBlameCommit);
+  blameCommit.current = onBlameCommit;
+  const blameLabels = useRef({ uncommitted: '' });
+  blameLabels.current = { uncommitted: t`未提交` };
+  const blameExtension = (value: BlameView | undefined) => blameGutter(value, blameLabels.current, (hash) => blameCommit.current?.(hash));
   const callbacks = useRef({ onChange, onSave, onEscape });
   callbacks.current = { onChange, onSave, onEscape };
   const editingRef = useRef(editing);
@@ -159,12 +179,14 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
         themeCompartment.of(EditorView.theme({}, { dark: darkRef.current })),
         EditorView.contentAttributes.of({ tabindex: '0', 'aria-label': preview.path }),
         highlightActiveLine(), highlightSelectionMatches(), search({ top: true }), keymap.of(searchKeymap), syntax, link, flash,
+        blameCompartment.of(blameExtension(blameRef.current)),
         lineNumbers({ domEventHandlers: { mousedown(view, block, event) {
           if (!(event instanceof MouseEvent) || event.button !== 0) return false;
           const line = view.state.doc.lineAt(block.from);
           reference.current({ path: preview.path, line: line.number, text: line.text });
           return true;
         } } }),
+        changesCompartment.of(changeGutter(baselineRef.current)),
         EditorView.domEventHandlers({
           mousemove(event, view) {
             const at = symbol.current && modifier(event) ? symbolAt(view, event.clientX, event.clientY) : undefined;
@@ -245,9 +267,17 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
       if (frame) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
-        topLine.current?.(view.state.doc.lineAt(view.lineBlockAtHeight(view.scrollDOM.scrollTop).from).number);
+        reportView();
       });
     };
+    const reportView = () => {
+      const { doc } = view.state;
+      const top = view.scrollDOM.scrollTop;
+      const first = doc.lineAt(view.lineBlockAtHeight(top).from).number;
+      topLine.current?.(first);
+      viewport.current?.(first, doc.lineAt(view.lineBlockAtHeight(top + view.scrollDOM.clientHeight).from).number);
+    };
+    requestAnimationFrame(() => { if (editor.current === view) reportView(); });
     view.scrollDOM.addEventListener('scroll', scrolled, { passive: true });
     // As on the small preview's line numbers: a click quotes the line.
     view.dom.querySelector('.cm-lineNumbers')?.setAttribute('title', t`引用这一行`);
@@ -272,6 +302,8 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   }, [editing]);
 
   useEffect(() => { editor.current?.dispatch({ effects: mergeCompartment.reconfigure(mergeExtension(original)) }); }, [original]);
+  useEffect(() => { editor.current?.dispatch({ effects: changesCompartment.reconfigure(changeGutter(baseline)) }); }, [baseline]);
+  useEffect(() => { editor.current?.dispatch({ effects: blameCompartment.reconfigure(blameExtension(blame)) }); }, [blame]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const view = editor.current;

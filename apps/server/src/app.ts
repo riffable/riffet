@@ -131,7 +131,7 @@ import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -273,6 +273,14 @@ export async function createApp(options: AppOptions = {}) {
     // docs/ASSISTANT.md §7.3: an event of an in-process plugin starts the runs of the delegations subscribed to its topic.
     emitAssistantEvent:(topic,payload,key)=>{if(!assistantDelegationsRef)throw new AppError('SERVICE_STARTING','The assistant is starting; emit again after activation',503);if(!plugins.assistantEventDeclared(topic))throw new AppError('PLUGIN_ASSISTANT_EVENT_UNAVAILABLE','The plugin is off; its events go nowhere',409);assistantDelegationsRef.pluginEvent(topic,payload,key);},
     approvals:{request:(pluginId,request)=>pluginApprovals.request(pluginId,request),withdraw:(pluginId,id)=>pluginApprovals.withdraw(pluginId,id)},
+    // docs/PLUGINS.md「代码导航」: read-only, through the same scoped paths the project routes use.
+    code:{
+      status:id=>workspace.codeIndexStatus(store.getProject(id)),
+      search:(id,q,options)=>workspace.symbolSearch(store.getProject(id),q,{types:options?.types===true,limit:Math.min(CODE_INDEX_BUDGET.maxSearchResults,Math.max(1,Math.floor(options?.limit??CODE_INDEX_BUDGET.searchResults)))}),
+      definition:(id,query,signal)=>workspace.definition(store.getProject(id),query,signal),
+      references:(id,query,signal)=>workspace.references(store.getProject(id),query,signal),
+      outline:(id,filePath)=>workspace.outline(store.getProject(id),filePath),
+    },
     // docs/BROWSER.md §2: what a plugin with agent tools or channels may read and do in a conversation.
     sessions:{
       get:id=>{let session;try{session=store.getSession(id);}catch{return undefined;}let projectPath:string|undefined;try{projectPath=store.getProject(session.projectId).cwd;}catch{/* removed project */}return {id:session.id,title:session.title,projectId:session.projectId,...(projectPath?{projectPath}:{}),archived:Boolean(session.archivedAt)};},
@@ -794,7 +802,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['code-index',()=>workspace.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }

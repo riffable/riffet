@@ -116,6 +116,9 @@ try {
   await copyFile('NOTICE', 'dist/NOTICE');
   await copyFile('apps/server/src/backends/shared/hook-cli.mjs', 'dist/hook-cli.mjs');
   await copyFile('apps/server/src/backends/shared/hook-target.mjs', 'dist/hook-target.mjs');
+  // The code index parses in child processes that load these files by path (apps/server/src/workspace/symbols/indexes.ts); the grammars' NOTICE travels with them.
+  await copyFile('apps/server/src/workspace/symbols/parse-worker.mjs', 'dist/parse-worker.mjs');
+  await cp('apps/server/src/workspace/symbols/grammars', 'dist/grammars', { recursive: true });
   // The shim an installed plugin package's process runs (apps/server/src/plugins-host/remote.ts); the permission model lets it read only this file.
   await copyFile('packages/plugin-api/src/runtime/child.mjs', 'dist/plugin-runtime.mjs');
   await copyFile('apps/server/src/backends/claude/statusline-cli.mjs', 'dist/statusline-cli.mjs');

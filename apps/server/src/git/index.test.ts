@@ -390,3 +390,28 @@ it('answers a followed status from the last read and tells followers of a change
     expect(seen.filter(entries => entries.join() === ' M file.txt')).toHaveLength(1);
   } finally { unfollow(); service.close(); }
 });
+
+it('reads head, a file at a commit, and blame with uncommitted lines marked by the zero hash', async () => {
+  const { root, service } = await repository();
+  const project = await realpath(root);
+  await writeFile(path.join(root, 'file.txt'), 'base\nsecond\n');
+  await git(root, 'add', '.');
+  await git(root, 'commit', '-m', 'second line');
+  const second = await git(root, 'rev-parse', 'HEAD');
+  await writeFile(path.join(root, 'file.txt'), 'base\nsecond\nlocal\n');
+  await writeFile(path.join(root, 'fresh.txt'), 'new\n');
+  try {
+    expect(await service.head(project)).toMatchObject({ branch: 'main', head: second });
+    expect(await service.fileAtRev(project, 'file.txt')).toMatchObject({ text: 'base\nsecond\n' });
+    expect(await service.fileAtRev(project, 'fresh.txt')).toMatchObject({ missing: true });
+    await expect(service.fileAtRev(project, 'file.txt', 'HEAD~1')).rejects.toMatchObject({ code: 'INVALID_REV' });
+    await expect(service.fileAtRev(project, '../outside.txt')).rejects.toBeInstanceOf(AppError);
+    const blame = await service.blame(project, 'file.txt', 1, 50);
+    expect(blame).toMatchObject({ start: 1, end: 3 });
+    expect(blame.ranges.map(range => [range.start, range.count, range.hash === second])).toEqual([[1, 1, false], [2, 1, true], [3, 1, false]]);
+    expect(blame.ranges[2]!.hash).toBe('0'.repeat(40));
+    expect(blame.commits[second]).toMatchObject({ author: 'Riffet Test', summary: 'second line' });
+    await expect(service.blame(project, '../outside.txt', 1, 2)).rejects.toBeInstanceOf(AppError);
+    expect((await service.blame(project, 'fresh.txt', 1, 1)).ranges).toEqual([{ start: 1, count: 1, hash: '0'.repeat(40) }]);
+  } finally { service.close(); }
+});

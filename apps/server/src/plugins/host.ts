@@ -26,6 +26,10 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   sessions?: NonNullable<PluginHost['sessions']>;
   /** Whether this plugin declares agent tools or channels. */
   ownsSessionSurfaces?: boolean;
+  /** `host.code`; offered only when `ownsAgentTools`. */
+  code?: PluginHost['code'];
+  /** Whether this plugin declares agent tools. */
+  ownsAgentTools?: boolean;
   /** `host.models.complete`, given the plugin's own declared model uses; absent for an isolated installed package, which gets none. */
   completeModel?: (request: Parameters<NonNullable<PluginHost['models']>['complete']>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
   /** `host.models.stream`, given the plugin's own declared model uses; absent for an isolated installed package. */
@@ -78,6 +82,7 @@ export function createPluginHost(id: PluginManifest['id'], options: {
     } } : {}),
     ...(options.service ? { services: { get: ((pluginId: string, name: string, range: string) => options.service!(pluginId, name, range)) as NonNullable<PluginHost['services']>['get'] } } : {}),
     ...(options.sessions && options.ownsSessionSurfaces ? { sessions: options.sessions } : {}),
+    ...(options.code && options.ownsAgentTools ? { code: options.code } : {}),
     ...(options.completeModel ? { models: {
       complete: request => options.completeModel!(request, options.ownModelUses ?? []),
       ...(options.streamModel ? { stream: request => options.streamModel!(request, options.ownModelUses ?? []) } : {}),

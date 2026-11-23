@@ -233,6 +233,9 @@ importers:
       vega-lite:
         specifier: 6.5.0
         version: 6.5.0(vega@6.4.0)
+      web-tree-sitter:
+        specifier: 0.25.10
+        version: 0.25.10
       ws:
         specifier: 8.22.0
         version: 8.22.0
@@ -4669,6 +4672,14 @@ packages:
 
   web-namespaces@2.0.1:
     resolution: {integrity: sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ==}
+
+  web-tree-sitter@0.25.10:
+    resolution: {integrity: sha512-Y09sF44/13XvgVKgO2cNDw5rGk6s26MgoZPXLESvMXeefBf7i6/73eFurre0IsTW6E14Y0ArIzhUMmjoc7xyzA==}
+    peerDependencies:
+      '@types/emscripten': ^1.40.0
+    peerDependenciesMeta:
+      '@types/emscripten':
+        optional: true
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
@@ -9635,6 +9646,8 @@ snapshots:
   wasm-feature-detect@1.9.0: {}
 
   web-namespaces@2.0.1: {}
+
+  web-tree-sitter@0.25.10: {}
 
   webidl-conversions@3.0.1: {}
 
