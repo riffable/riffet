@@ -29,39 +29,39 @@ const PRESET_PAGES: { label: MessageDescriptor; presets: Preset[] }[] = [
     label: msg`单色`,
     presets: [
       { name: msg`素`, points: [{ hue: 0, radius: 0 }] },
-      { name: msg`纸张`, points: [{ hue: 75, radius: 0.45 }] },
-      { name: msg`琥珀`, points: [{ hue: 45, radius: 0.72 }] },
-      { name: msg`绯红`, points: [{ hue: 18, radius: 0.72 }] },
-      { name: msg`蔷薇`, points: [{ hue: 345, radius: 0.68 }] },
-      { name: msg`暮紫`, points: [{ hue: 295, radius: 0.68 }] },
-      { name: msg`蔚蓝`, points: [{ hue: 240, radius: 0.72 }] },
-      { name: msg`青苔`, points: [{ hue: 155, radius: 0.65 }] },
+      { name: msg`纸张`, points: [{ hue: 75, radius: 0.28 }] },
+      { name: msg`琥珀`, points: [{ hue: 52, radius: 0.44 }] },
+      { name: msg`绯红`, points: [{ hue: 22, radius: 0.42 }] },
+      { name: msg`蔷薇`, points: [{ hue: 350, radius: 0.4 }] },
+      { name: msg`暮紫`, points: [{ hue: 295, radius: 0.4 }] },
+      { name: msg`蔚蓝`, points: [{ hue: 242, radius: 0.44 }] },
+      { name: msg`青苔`, points: [{ hue: 155, radius: 0.38 }] },
     ],
   },
   {
     label: msg`双色`,
     presets: [
-      { name: msg`晴空`, points: [{ hue: 235, radius: 0.72 }, { hue: 280, radius: 0.78 }] },
-      { name: msg`朝霞`, points: [{ hue: 48, radius: 0.75 }, { hue: 350, radius: 0.78 }] },
-      { name: msg`苔原`, points: [{ hue: 145, radius: 0.62 }, { hue: 195, radius: 0.72 }] },
-      { name: msg`晚风`, points: [{ hue: 205, radius: 0.72 }, { hue: 255, radius: 0.76 }] },
-      { name: msg`绯樱`, points: [{ hue: 325, radius: 0.74 }, { hue: 20, radius: 0.76 }] },
-      { name: msg`紫雾`, points: [{ hue: 275, radius: 0.74 }, { hue: 335, radius: 0.76 }] },
-      { name: msg`柠檬`, points: [{ hue: 95, radius: 0.68 }, { hue: 155, radius: 0.7 }] },
-      { name: msg`琥海`, points: [{ hue: 35, radius: 0.72 }, { hue: 225, radius: 0.74 }] },
+      { name: msg`晴空`, points: [{ hue: 232, radius: 0.4 }, { hue: 268, radius: 0.46 }] },
+      { name: msg`朝霞`, points: [{ hue: 55, radius: 0.42 }, { hue: 12, radius: 0.44 }] },
+      { name: msg`苔原`, points: [{ hue: 148, radius: 0.36 }, { hue: 192, radius: 0.42 }] },
+      { name: msg`晚风`, points: [{ hue: 205, radius: 0.38 }, { hue: 248, radius: 0.44 }] },
+      { name: msg`绯樱`, points: [{ hue: 338, radius: 0.38 }, { hue: 24, radius: 0.42 }] },
+      { name: msg`紫雾`, points: [{ hue: 278, radius: 0.38 }, { hue: 322, radius: 0.42 }] },
+      { name: msg`柠檬`, points: [{ hue: 98, radius: 0.36 }, { hue: 152, radius: 0.4 }] },
+      { name: msg`琥海`, points: [{ hue: 46, radius: 0.38 }, { hue: 222, radius: 0.42 }] },
     ],
   },
   {
     label: msg`三色`,
     presets: [
-      { name: msg`暮光`, points: [{ hue: 265, radius: 0.8 }, { hue: 330, radius: 0.78 }, { hue: 215, radius: 0.76 }] },
-      { name: msg`极光`, points: [{ hue: 165, radius: 0.72 }, { hue: 220, radius: 0.78 }, { hue: 290, radius: 0.74 }] },
-      { name: msg`落日`, points: [{ hue: 55, radius: 0.76 }, { hue: 15, radius: 0.82 }, { hue: 315, radius: 0.74 }] },
-      { name: msg`蜜桃`, points: [{ hue: 38, radius: 0.76 }, { hue: 355, radius: 0.78 }, { hue: 300, radius: 0.7 }] },
-      { name: msg`霓虹`, points: [{ hue: 320, radius: 0.82 }, { hue: 245, radius: 0.8 }, { hue: 185, radius: 0.76 }] },
-      { name: msg`春野`, points: [{ hue: 110, radius: 0.68 }, { hue: 170, radius: 0.72 }, { hue: 225, radius: 0.74 }] },
-      { name: msg`深海`, points: [{ hue: 210, radius: 0.76 }, { hue: 175, radius: 0.74 }, { hue: 270, radius: 0.76 }] },
-      { name: msg`星云`, points: [{ hue: 285, radius: 0.78 }, { hue: 20, radius: 0.76 }, { hue: 210, radius: 0.76 }] },
+      { name: msg`暮光`, points: [{ hue: 262, radius: 0.44 }, { hue: 312, radius: 0.42 }, { hue: 220, radius: 0.4 }] },
+      { name: msg`极光`, points: [{ hue: 168, radius: 0.38 }, { hue: 215, radius: 0.44 }, { hue: 272, radius: 0.4 }] },
+      { name: msg`落日`, points: [{ hue: 56, radius: 0.42 }, { hue: 22, radius: 0.46 }, { hue: 332, radius: 0.38 }] },
+      { name: msg`蜜桃`, points: [{ hue: 44, radius: 0.42 }, { hue: 8, radius: 0.42 }, { hue: 325, radius: 0.36 }] },
+      { name: msg`霓虹`, points: [{ hue: 312, radius: 0.48 }, { hue: 252, radius: 0.46 }, { hue: 196, radius: 0.44 }] },
+      { name: msg`春野`, points: [{ hue: 112, radius: 0.36 }, { hue: 162, radius: 0.4 }, { hue: 212, radius: 0.4 }] },
+      { name: msg`深海`, points: [{ hue: 212, radius: 0.42 }, { hue: 182, radius: 0.4 }, { hue: 258, radius: 0.42 }] },
+      { name: msg`星云`, points: [{ hue: 282, radius: 0.44 }, { hue: 28, radius: 0.38 }, { hue: 218, radius: 0.42 }] },
     ],
   },
 ];
@@ -160,7 +160,15 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
   const [presetPage, setPresetPage] = useState(initialPage);
   const syncedCount = useRef(count);
 
+  const blurRailFocus = () => {
+    const rail = railRef.current;
+    if (rail && document.activeElement instanceof HTMLElement && rail.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
+  };
+
   const scrollToPage = (index: number, behavior?: ScrollBehavior) => {
+    blurRailFocus();
     setPresetPage(index);
     const rail = railRef.current;
     if (!rail) return;
@@ -182,6 +190,7 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
   }, [count]);
 
   const onRailScroll = () => {
+    blurRailFocus();
     const rail = railRef.current;
     if (!rail || rail.clientWidth <= 0) return;
     const next = Math.min(PRESET_PAGES.length - 1, Math.max(0, Math.round(rail.scrollLeft / rail.clientWidth)));
@@ -248,10 +257,14 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
         <div
           ref={railRef}
           onScroll={onRailScroll}
-          className="flex snap-x snap-mandatory overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {PRESET_PAGES.map((page, pageIndex) => (
-            <div key={pageIndex} className="flex w-full shrink-0 snap-start items-center justify-between gap-1 px-0.5">
+            <div
+              key={pageIndex}
+              inert={pageIndex !== presetPage || undefined}
+              className="flex w-full shrink-0 snap-start snap-always items-center justify-between gap-1 px-0.5"
+            >
               {page.presets.map((preset) => {
                 const name = i18n._(preset.name);
                 return (
@@ -308,20 +321,19 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
             onValueChange={(softness) => commit({ ...seed, softness })}
           />
         </div>
-        {count > 1 && (
-          <div className="flex items-center gap-2.5">
-            <span className="w-10 shrink-0 text-2xs text-fg-3">{t`透底`}</span>
-            <Slider
-              className="min-w-0 flex-1"
-              min={0}
-              max={1}
-              step={0.01}
-              value={seed.blend ?? DEFAULT_THEME_GRADIENT_BLEND}
-              aria-label={t`透底`}
-              onValueChange={(blend) => commit({ ...seed, blend })}
-            />
-          </div>
-        )}
+        <div className={cn('flex items-center gap-2.5 transition-opacity', count < 2 && 'opacity-40')}>
+          <span className="w-10 shrink-0 text-2xs text-fg-3">{t`透底`}</span>
+          <Slider
+            className="min-w-0 flex-1"
+            min={0}
+            max={1}
+            step={0.01}
+            disabled={count < 2}
+            value={count > 1 ? (seed.blend ?? DEFAULT_THEME_GRADIENT_BLEND) : 0}
+            aria-label={t`透底`}
+            onValueChange={(blend) => commit({ ...seed, blend })}
+          />
+        </div>
       </div>
     </div>
   );

@@ -386,13 +386,13 @@ enum ThemeSeedMath {
         var next = seed
         next.blend = seed.blend ?? defaultBlend
         if seed.points.count == 1 {
-            next.points.append(.init(hue: (primary.hue + 55).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.72)))
+            next.points.append(.init(hue: (primary.hue + 55).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.44)))
             return next
         }
         let offset = (seed.points[1].hue - primary.hue + 360).truncatingRemainder(dividingBy: 360)
         // A mirror of an opposite colour lands on the second point itself; a neighbour reads better there.
         let mirrored = abs(offset - 180) < 20 ? 55 : 360 - offset
-        next.points.append(.init(hue: (primary.hue + mirrored).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.72)))
+        next.points.append(.init(hue: (primary.hue + mirrored).truncatingRemainder(dividingBy: 360), radius: max(primary.radius, 0.44)))
         return next
     }
 }

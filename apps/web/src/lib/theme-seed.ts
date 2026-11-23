@@ -331,9 +331,9 @@ export function addSeedPoint(seed: ThemeSeed): ThemeSeed {
   const [primary, second] = seed.points;
   if (!primary || seed.points.length >= 3) return seed;
   const blend = seed.blend ?? DEFAULT_THEME_GRADIENT_BLEND;
-  if (!second) return { ...seed, blend, points: [primary, { hue: (primary.hue + 55) % 360, radius: Math.max(primary.radius, 0.72) }] };
+  if (!second) return { ...seed, blend, points: [primary, { hue: (primary.hue + 55) % 360, radius: Math.max(primary.radius, 0.44) }] };
   const offset = (second.hue - primary.hue + 360) % 360;
   // A mirror of an opposite colour lands on the second point itself; a neighbour reads better there.
   const mirrored = Math.abs(offset - 180) < 20 ? 55 : 360 - offset;
-  return { ...seed, blend, points: [primary, second, { hue: (primary.hue + mirrored) % 360, radius: Math.max(primary.radius, 0.72) }] };
+  return { ...seed, blend, points: [primary, second, { hue: (primary.hue + mirrored) % 360, radius: Math.max(primary.radius, 0.44) }] };
 }

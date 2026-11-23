@@ -32,33 +32,33 @@ struct ThemeCanvasView: View {
     private static let presetPages: [PresetPage] = [
         PresetPage(label: "单色", presets: [
             Preset(name: "素", points: [.init(hue: 0, radius: 0)]),
-            Preset(name: "纸张", points: [.init(hue: 75, radius: 0.45)]),
-            Preset(name: "琥珀", points: [.init(hue: 45, radius: 0.72)]),
-            Preset(name: "绯红", points: [.init(hue: 18, radius: 0.72)]),
-            Preset(name: "蔷薇", points: [.init(hue: 345, radius: 0.68)]),
-            Preset(name: "暮紫", points: [.init(hue: 295, radius: 0.68)]),
-            Preset(name: "蔚蓝", points: [.init(hue: 240, radius: 0.72)]),
-            Preset(name: "青苔", points: [.init(hue: 155, radius: 0.65)]),
+            Preset(name: "纸张", points: [.init(hue: 75, radius: 0.28)]),
+            Preset(name: "琥珀", points: [.init(hue: 52, radius: 0.44)]),
+            Preset(name: "绯红", points: [.init(hue: 22, radius: 0.42)]),
+            Preset(name: "蔷薇", points: [.init(hue: 350, radius: 0.4)]),
+            Preset(name: "暮紫", points: [.init(hue: 295, radius: 0.4)]),
+            Preset(name: "蔚蓝", points: [.init(hue: 242, radius: 0.44)]),
+            Preset(name: "青苔", points: [.init(hue: 155, radius: 0.38)]),
         ]),
         PresetPage(label: "双色", presets: [
-            Preset(name: "晴空", points: [.init(hue: 235, radius: 0.72), .init(hue: 280, radius: 0.78)]),
-            Preset(name: "朝霞", points: [.init(hue: 48, radius: 0.75), .init(hue: 350, radius: 0.78)]),
-            Preset(name: "苔原", points: [.init(hue: 145, radius: 0.62), .init(hue: 195, radius: 0.72)]),
-            Preset(name: "晚风", points: [.init(hue: 205, radius: 0.72), .init(hue: 255, radius: 0.76)]),
-            Preset(name: "绯樱", points: [.init(hue: 325, radius: 0.74), .init(hue: 20, radius: 0.76)]),
-            Preset(name: "紫雾", points: [.init(hue: 275, radius: 0.74), .init(hue: 335, radius: 0.76)]),
-            Preset(name: "柠檬", points: [.init(hue: 95, radius: 0.68), .init(hue: 155, radius: 0.7)]),
-            Preset(name: "琥海", points: [.init(hue: 35, radius: 0.72), .init(hue: 225, radius: 0.74)]),
+            Preset(name: "晴空", points: [.init(hue: 232, radius: 0.4), .init(hue: 268, radius: 0.46)]),
+            Preset(name: "朝霞", points: [.init(hue: 55, radius: 0.42), .init(hue: 12, radius: 0.44)]),
+            Preset(name: "苔原", points: [.init(hue: 148, radius: 0.36), .init(hue: 192, radius: 0.42)]),
+            Preset(name: "晚风", points: [.init(hue: 205, radius: 0.38), .init(hue: 248, radius: 0.44)]),
+            Preset(name: "绯樱", points: [.init(hue: 338, radius: 0.38), .init(hue: 24, radius: 0.42)]),
+            Preset(name: "紫雾", points: [.init(hue: 278, radius: 0.38), .init(hue: 322, radius: 0.42)]),
+            Preset(name: "柠檬", points: [.init(hue: 98, radius: 0.36), .init(hue: 152, radius: 0.4)]),
+            Preset(name: "琥海", points: [.init(hue: 46, radius: 0.38), .init(hue: 222, radius: 0.42)]),
         ]),
         PresetPage(label: "三色", presets: [
-            Preset(name: "暮光", points: [.init(hue: 265, radius: 0.8), .init(hue: 330, radius: 0.78), .init(hue: 215, radius: 0.76)]),
-            Preset(name: "极光", points: [.init(hue: 165, radius: 0.72), .init(hue: 220, radius: 0.78), .init(hue: 290, radius: 0.74)]),
-            Preset(name: "落日", points: [.init(hue: 55, radius: 0.76), .init(hue: 15, radius: 0.82), .init(hue: 315, radius: 0.74)]),
-            Preset(name: "蜜桃", points: [.init(hue: 38, radius: 0.76), .init(hue: 355, radius: 0.78), .init(hue: 300, radius: 0.7)]),
-            Preset(name: "霓虹", points: [.init(hue: 320, radius: 0.82), .init(hue: 245, radius: 0.8), .init(hue: 185, radius: 0.76)]),
-            Preset(name: "春野", points: [.init(hue: 110, radius: 0.68), .init(hue: 170, radius: 0.72), .init(hue: 225, radius: 0.74)]),
-            Preset(name: "深海", points: [.init(hue: 210, radius: 0.76), .init(hue: 175, radius: 0.74), .init(hue: 270, radius: 0.76)]),
-            Preset(name: "星云", points: [.init(hue: 285, radius: 0.78), .init(hue: 20, radius: 0.76), .init(hue: 210, radius: 0.76)]),
+            Preset(name: "暮光", points: [.init(hue: 262, radius: 0.44), .init(hue: 312, radius: 0.42), .init(hue: 220, radius: 0.4)]),
+            Preset(name: "极光", points: [.init(hue: 168, radius: 0.38), .init(hue: 215, radius: 0.44), .init(hue: 272, radius: 0.4)]),
+            Preset(name: "落日", points: [.init(hue: 56, radius: 0.42), .init(hue: 22, radius: 0.46), .init(hue: 332, radius: 0.38)]),
+            Preset(name: "蜜桃", points: [.init(hue: 44, radius: 0.42), .init(hue: 8, radius: 0.42), .init(hue: 325, radius: 0.36)]),
+            Preset(name: "霓虹", points: [.init(hue: 312, radius: 0.48), .init(hue: 252, radius: 0.46), .init(hue: 196, radius: 0.44)]),
+            Preset(name: "春野", points: [.init(hue: 112, radius: 0.36), .init(hue: 162, radius: 0.4), .init(hue: 212, radius: 0.4)]),
+            Preset(name: "深海", points: [.init(hue: 212, radius: 0.42), .init(hue: 182, radius: 0.4), .init(hue: 258, radius: 0.42)]),
+            Preset(name: "星云", points: [.init(hue: 282, radius: 0.44), .init(hue: 28, radius: 0.38), .init(hue: 218, radius: 0.42)]),
         ]),
     ]
 
@@ -121,7 +121,7 @@ struct ThemeCanvasView: View {
                     }
                     .scrollTargetLayout()
                 }
-                .scrollTargetBehavior(.paging)
+                .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
                 .scrollPosition(id: $presetPage)
 
                 HStack(spacing: Space.xs) {
@@ -158,18 +158,23 @@ struct ThemeCanvasView: View {
                     next.softness = value
                     onChange(next)
                 }))
-                if seed.points.count > 1 {
-                    sliderRow(label: "透底", value: Binding(get: { seed.blend ?? ThemeSeedMath.defaultBlend }, set: { value in
-                        var next = seed
-                        next.blend = value
-                        onChange(next)
-                    }))
-                }
+                sliderRow(
+                    label: "透底",
+                    value: Binding(
+                        get: { seed.points.count > 1 ? (seed.blend ?? ThemeSeedMath.defaultBlend) : 0 },
+                        set: { value in
+                            var next = seed
+                            next.blend = value
+                            onChange(next)
+                        }
+                    ),
+                    disabled: seed.points.count < 2
+                )
             }
         }
     }
 
-    private func sliderRow(label: LocalizedStringKey, value: Binding<Double>) -> some View {
+    private func sliderRow(label: LocalizedStringKey, value: Binding<Double>, disabled: Bool = false) -> some View {
         HStack(spacing: Space.sm) {
             Text(label)
                 .font(RiffetFont.caption)
@@ -179,8 +184,10 @@ struct ThemeCanvasView: View {
                 .labelsHidden()
                 .controlSize(.small)
                 .tint(palette.accent)
+                .disabled(disabled)
                 .accessibilityLabel(Text(label))
         }
+        .opacity(disabled ? 0.4 : 1)
     }
 
     // MARK: - Points
