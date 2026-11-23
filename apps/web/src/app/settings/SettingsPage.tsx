@@ -194,12 +194,9 @@ export function SettingsPage({
       {section === 'typography' && <TypographySection />}
       {section === 'sidebar' && <SidebarSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
       {section === 'tabs' && <TabsSection />}
-      {section === 'shortcuts' && <div className="flex flex-col gap-6">
-        <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
-        <ShortcutSettings />
-      </div>}
+      {section === 'shortcuts' && <ShortcutSettings />}
       {section === 'views' && <ViewsSection />}
-      {section === 'terminal' && <TerminalSettingsSection />}
+      {section === 'terminal' && <TerminalSettingsSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
       {section === 'appicon' && <AppIconSection />}
       {section === 'notifications' && <NotificationsSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
       {section === 'backends' && <Suspense fallback={sectionFallback}><AgentSettingsSection settings={settings} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} /></Suspense>}

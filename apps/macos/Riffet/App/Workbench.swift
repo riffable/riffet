@@ -383,6 +383,7 @@ final class Workbench {
         clock?.invalidate()
         if let activation { NotificationCenter.default.removeObserver(activation) }
         pendingPanel = nil
+        terminalDock.stopAllControllers()
         holdWake(false)
         // The page models hold the workbench; letting them go breaks the cycle.
         pageModels = PageModels(workbench: self)

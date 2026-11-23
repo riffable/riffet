@@ -11,10 +11,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -22,9 +26,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Stable
@@ -68,7 +74,11 @@ import androidx.compose.material3.Text
 import org.jetbrains.compose.resources.stringResource
 import riffet.shared.TerminalConnection
 import riffet.shared.TerminalLink
+import riffet.shared.TerminalQuickKey
 import riffet.terminal.KeyHandler
+import riffet.ui.design.AlertDialog
+import riffet.ui.design.RiffetTextButton
+import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet_mobile.shared.generated.resources.*
@@ -276,35 +286,27 @@ internal fun TerminalKeyBar(
     moreOpen: Boolean,
     onToggleMore: () -> Unit,
     moreActions: List<Pair<String, () -> Unit>>,
+    quickKeys: List<TerminalQuickKey> = TerminalQuickKey.DEFAULT,
     modifier: Modifier = Modifier,
 ) {
     val c = controller
     val link by controller.link.collectAsState()
     val enabled = link !is TerminalLink.Exited && link != TerminalLink.Unauthenticated
-    val rows = listOf(
-        listOf(
-            BarKey("Esc") { c.key(KeyHandler.KEYCODE_ESCAPE) },
-            BarKey("Tab") { c.key(KeyHandler.KEYCODE_TAB) },
-            BarKey("⇧Tab") { c.key(KeyHandler.KEYCODE_TAB, KeyHandler.KEYMOD_SHIFT) },
-            BarKey("^C") { c.raw("\u0003") },
-            BarKey("↑", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_UP) },
-            BarKey("/") { c.typed("/") },
-            BarKey(stringResource(Res.string.timeline_terminal_newline)) { c.raw("\n") },
-            BarKey("⏎", primary = true) { c.raw("\r") },
-        ),
-        listOf(
-            BarKey("Ctrl", active = { c.ctrl }) { c.ctrl = !c.ctrl },
-            BarKey("Alt", active = { c.alt }) { c.alt = !c.alt },
-            BarKey("^O") { c.raw("\u000f") },
-            BarKey("←", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_LEFT) },
-            BarKey("↓", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_DOWN) },
-            BarKey("→", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_RIGHT) },
-            BarKey("⌨") { onToggleKeyboard() },
-            BarKey(
-                if (moreOpen) stringResource(Res.string.timeline_collapse) else stringResource(Res.string.timeline_more),
-                active = { moreOpen },
-            ) { onToggleMore() },
-        ),
+    val newlineLabel = stringResource(Res.string.timeline_terminal_newline)
+    val effectiveQuickKeys = quickKeys.ifEmpty { TerminalQuickKey.DEFAULT }
+    val firstRow = effectiveQuickKeys.map { it.toBarKey(c, newlineLabel) }
+    val secondRow = listOf(
+        BarKey("Ctrl", active = { c.ctrl }) { c.ctrl = !c.ctrl },
+        BarKey("Alt", active = { c.alt }) { c.alt = !c.alt },
+        BarKey("^O") { c.raw("\u000f") },
+        BarKey("←", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_LEFT) },
+        BarKey("↓", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_DOWN) },
+        BarKey("→", repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_RIGHT) },
+        BarKey("⌨") { onToggleKeyboard() },
+        BarKey(
+            if (moreOpen) stringResource(Res.string.timeline_collapse) else stringResource(Res.string.timeline_more),
+            active = { moreOpen },
+        ) { onToggleMore() },
     )
     Column(modifier.fillMaxWidth().background(materialContentBackground(LocalRiffetSurfaces.current.floating)).padding(horizontal = 4.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (moreOpen) {
@@ -321,12 +323,253 @@ internal fun TerminalKeyBar(
                 extra.forEach { KeyButton(it, Modifier.widthIn(min = MinKeyWidth), enabled) }
             }
         }
-        rows.forEach { row ->
+        if (firstRow.size <= 8) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
-                row.forEach { KeyButton(it, Modifier.weight(1f), enabled, inset = 2.dp) }
+                firstRow.forEach { KeyButton(it, Modifier.weight(1f), enabled, inset = 2.dp) }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
+                firstRow.forEach { KeyButton(it, Modifier.widthIn(min = MinKeyWidth), enabled) }
             }
         }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KeyGap)) {
+            secondRow.forEach { KeyButton(it, Modifier.weight(1f), enabled, inset = 2.dp) }
+        }
     }
+}
+
+private fun TerminalQuickKey.label(newlineLabel: String): String = when (this) {
+    TerminalQuickKey.ESC -> "Esc"
+    TerminalQuickKey.TAB -> "Tab"
+    TerminalQuickKey.SHIFT_TAB -> "⇧Tab"
+    TerminalQuickKey.CTRL_C -> "^C"
+    TerminalQuickKey.UP -> "↑"
+    TerminalQuickKey.SLASH -> "/"
+    TerminalQuickKey.NEWLINE -> newlineLabel
+    TerminalQuickKey.ENTER -> "⏎"
+    TerminalQuickKey.CTRL_D -> "^D"
+    TerminalQuickKey.CTRL_Z -> "^Z"
+    TerminalQuickKey.CTRL_L -> "^L"
+    TerminalQuickKey.CTRL_R -> "^R"
+    TerminalQuickKey.HOME -> "Home"
+    TerminalQuickKey.END -> "End"
+    TerminalQuickKey.PGUP -> "PgUp"
+    TerminalQuickKey.PGDN -> "PgDn"
+    TerminalQuickKey.PIPE -> "|"
+    TerminalQuickKey.TILDE -> "~"
+    TerminalQuickKey.DASH -> "-"
+}
+
+private fun TerminalQuickKey.toBarKey(c: TerminalInputController, newlineLabel: String): BarKey {
+    val label = label(newlineLabel)
+    return when (this) {
+        TerminalQuickKey.ESC -> BarKey(label) { c.key(KeyHandler.KEYCODE_ESCAPE) }
+        TerminalQuickKey.TAB -> BarKey(label) { c.key(KeyHandler.KEYCODE_TAB) }
+        TerminalQuickKey.SHIFT_TAB -> BarKey(label) { c.key(KeyHandler.KEYCODE_TAB, KeyHandler.KEYMOD_SHIFT) }
+        TerminalQuickKey.CTRL_C -> BarKey(label) { c.raw("\u0003") }
+        TerminalQuickKey.UP -> BarKey(label, repeat = true) { c.key(KeyHandler.KEYCODE_DPAD_UP) }
+        TerminalQuickKey.SLASH -> BarKey(label) { c.typed("/") }
+        TerminalQuickKey.NEWLINE -> BarKey(label) { c.raw("\n") }
+        TerminalQuickKey.ENTER -> BarKey(label, primary = true) { c.raw("\r") }
+        TerminalQuickKey.CTRL_D -> BarKey(label) { c.raw("\u0004") }
+        TerminalQuickKey.CTRL_Z -> BarKey(label) { c.raw("\u001a") }
+        TerminalQuickKey.CTRL_L -> BarKey(label) { c.raw("\u000c") }
+        TerminalQuickKey.CTRL_R -> BarKey(label) { c.raw("\u0012") }
+        TerminalQuickKey.HOME -> BarKey(label) { c.key(KeyHandler.KEYCODE_MOVE_HOME) }
+        TerminalQuickKey.END -> BarKey(label) { c.key(KeyHandler.KEYCODE_MOVE_END) }
+        TerminalQuickKey.PGUP -> BarKey(label) { c.key(KeyHandler.KEYCODE_PAGE_UP) }
+        TerminalQuickKey.PGDN -> BarKey(label) { c.key(KeyHandler.KEYCODE_PAGE_DOWN) }
+        TerminalQuickKey.PIPE -> BarKey(label) { c.typed("|") }
+        TerminalQuickKey.TILDE -> BarKey(label) { c.typed("~") }
+        TerminalQuickKey.DASH -> BarKey(label) { c.typed("-") }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun TerminalQuickKeysDialog(
+    keys: List<TerminalQuickKey>,
+    onChange: (List<TerminalQuickKey>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    val shape = RoundedCornerShape(LocalInterfaceStyle.current.controlRadius)
+    val hairline = LocalInterfaceStyle.current.metrics.hairlineWidth
+    val newlineLabel = stringResource(Res.string.timeline_terminal_newline)
+    val available = remember(keys) { TerminalQuickKey.entries.filter { it !in keys } }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.timeline_terminal_customize_keys)) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Portrait phone mockup showing the live quick-key bar arrangement.
+                val frameRadius = RoundedCornerShape(LocalInterfaceStyle.current.metrics.groupRadius)
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 220.dp)
+                        .fillMaxWidth()
+                        .clip(frameRadius)
+                        .background(colors.bg)
+                        .border(hairline, colors.line, frameRadius)
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(shape)
+                            .background(surfaces.card)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text("~/riffet main", style = typography.caption, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("❯ claude", style = typography.label, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (keys.size <= 8) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            keys.forEach { key ->
+                                val isPrimary = key == TerminalQuickKey.ENTER
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(24.dp)
+                                        .clip(shape)
+                                        .background(if (isPrimary) surfaces.primaryAction else surfaces.card)
+                                        .border(hairline, if (isPrimary) surfaces.primaryAction else colors.line, shape),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        key.label(newlineLabel),
+                                        style = typography.caption,
+                                        color = if (isPrimary) surfaces.primaryActionContent else colors.fg2,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Clip,
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            Modifier.fillMaxWidth().riffetHorizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            keys.forEach { key ->
+                                val isPrimary = key == TerminalQuickKey.ENTER
+                                Box(
+                                    modifier = Modifier
+                                        .widthIn(min = 28.dp)
+                                        .height(24.dp)
+                                        .clip(shape)
+                                        .background(if (isPrimary) surfaces.primaryAction else surfaces.card)
+                                        .border(hairline, if (isPrimary) surfaces.primaryAction else colors.line, shape)
+                                        .padding(horizontal = 4.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        key.label(newlineLabel),
+                                        style = typography.caption,
+                                        color = if (isPrimary) surfaces.primaryActionContent else colors.fg2,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Clip,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Text(stringResource(Res.string.timeline_terminal_quick_keys_active), style = typography.caption, color = colors.fg3)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    keys.forEachIndexed { index, key ->
+                        Row(
+                            modifier = Modifier
+                                .clip(shape)
+                                .background(surfaces.card)
+                                .border(hairline, colors.line, shape)
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (index > 0) {
+                                Icon(
+                                    imageVector = RiffetIcons.ChevronLeft,
+                                    contentDescription = null,
+                                    tint = colors.fg3,
+                                    modifier = Modifier.size(16.dp).clickable {
+                                        val next = keys.toMutableList()
+                                        val moved = next.removeAt(index)
+                                        next.add(index - 1, moved)
+                                        onChange(next)
+                                    },
+                                )
+                            }
+                            Text(key.label(newlineLabel), style = typography.label, color = colors.fg)
+                            if (index < keys.lastIndex) {
+                                Icon(
+                                    imageVector = RiffetIcons.ChevronRight,
+                                    contentDescription = null,
+                                    tint = colors.fg3,
+                                    modifier = Modifier.size(16.dp).clickable {
+                                        val next = keys.toMutableList()
+                                        val moved = next.removeAt(index)
+                                        next.add(index + 1, moved)
+                                        onChange(next)
+                                    },
+                                )
+                            }
+                            if (keys.size > 1) {
+                                Icon(
+                                    imageVector = RiffetIcons.Close,
+                                    contentDescription = null,
+                                    tint = colors.fg3,
+                                    modifier = Modifier.size(14.dp).clickable {
+                                        onChange(keys.filter { it != key })
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                if (available.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(stringResource(Res.string.timeline_terminal_quick_keys_available), style = typography.caption, color = colors.fg3)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        available.forEach { key ->
+                            Row(
+                                modifier = Modifier
+                                    .clip(shape)
+                                    .background(colors.bg)
+                                    .border(hairline, colors.line, shape)
+                                    .clickable { onChange(keys + key) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(imageVector = RiffetIcons.Plus, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(12.dp))
+                                Text(key.label(newlineLabel), style = typography.label, color = colors.fg2)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            RiffetTextButton(onClick = { onChange(TerminalQuickKey.DEFAULT) }) {
+                Text(stringResource(Res.string.timeline_terminal_quick_keys_reset))
+            }
+        },
+        confirmButton = {
+            RiffetTextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.timeline_terminal_quick_keys_done))
+            }
+        },
+    )
 }
 
 private val KeyGap = 4.dp

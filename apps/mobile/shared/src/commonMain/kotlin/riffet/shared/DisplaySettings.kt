@@ -54,6 +54,44 @@ enum class PageAnimation(val key: String) {
     }
 }
 
+/** One customizable key on the mobile terminal quick-key bar, stored only on this device. */
+enum class TerminalQuickKey(val key: String) {
+    ESC("esc"),
+    TAB("tab"),
+    SHIFT_TAB("shift-tab"),
+    CTRL_C("ctrl-c"),
+    UP("up"),
+    SLASH("slash"),
+    NEWLINE("newline"),
+    ENTER("enter"),
+    CTRL_D("ctrl-d"),
+    CTRL_Z("ctrl-z"),
+    CTRL_L("ctrl-l"),
+    CTRL_R("ctrl-r"),
+    HOME("home"),
+    END("end"),
+    PGUP("pgup"),
+    PGDN("pgdn"),
+    PIPE("pipe"),
+    TILDE("tilde"),
+    DASH("dash");
+
+    companion object {
+        val DEFAULT: List<TerminalQuickKey> = listOf(
+            ESC, TAB, SHIFT_TAB, CTRL_C, UP, SLASH, NEWLINE, ENTER,
+        )
+
+        fun parse(raw: String?): List<TerminalQuickKey> {
+            if (raw.isNullOrBlank()) return DEFAULT
+            val parsed = raw.split(',').mapNotNull { token ->
+                val trimmed = token.trim()
+                entries.firstOrNull { it.key == trimmed }
+            }.distinct()
+            return if (parsed.isEmpty()) DEFAULT else parsed
+        }
+    }
+}
+
 /**
  * The reader's display choices, stored on this device like the theme. Reads are snapshot state, so a
  * change repaints every reader at once.
@@ -146,12 +184,24 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         launchTab = key
     }
 
+    var terminalQuickKeys: List<TerminalQuickKey> by mutableStateOf(
+        TerminalQuickKey.parse(preferences?.string(TERMINAL_QUICK_KEYS_KEY)),
+    )
+        private set
+
+    fun changeTerminalQuickKeys(keys: List<TerminalQuickKey>) {
+        val normalized = keys.distinct().ifEmpty { TerminalQuickKey.DEFAULT }
+        preferences?.setString(TERMINAL_QUICK_KEYS_KEY, normalized.joinToString(",") { it.key })
+        terminalQuickKeys = normalized
+    }
+
     companion object {
         internal const val LAUNCH_TAB_KEY = "display.launch-tab"
         internal const val PAGE_ANIMATION_KEY = "display.page-animation"
         internal const val INTERFACE_STYLE_KEY = "display.interface-style"
         internal const val SURFACE_MATERIAL_KEY = "display.surface-material"
         internal const val MATERIAL_STRENGTH_KEY = "display.material-strength"
+        internal const val TERMINAL_QUICK_KEYS_KEY = "display.terminal-quick-keys"
         private const val AMOLED_KEY = "display.amoled"
         private const val CODE_THEME_KEY = "display.code-theme"
         private const val TEXT_SIZE_KEY = "display.text-size"

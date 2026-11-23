@@ -17,6 +17,8 @@ struct TerminalPage: View {
     @State private var error: String?
     @State private var busy = false
     @State private var terminate = false
+    @State private var backgroundGraceTask: Task<Void, Never>?
+    @State private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
     private var selected: TerminalInfo? { terminals.first { $0.id == selectedID } }
 
@@ -83,14 +85,23 @@ struct TerminalPage: View {
             if let selectedID, phase == .active { controller.start(workbench: workbench, terminalID: selectedID) }
         }
         .onChange(of: selectedID) { _, id in
+            cancelBackgroundGrace()
             controller.stop()
             if let id, phase == .active { controller.start(workbench: workbench, terminalID: id) }
         }
         .onChange(of: phase) { _, phase in
-            if phase == .active { reconnect() }
-            else { controller.stop() }
+            if phase == .active {
+                cancelBackgroundGrace()
+                // Keep the live socket across brief Control Center pulls or app switches (< 20 s).
+                if controller.connection == nil { reconnect() }
+            } else {
+                beginBackgroundGrace()
+            }
         }
-        .onDisappear { controller.stop() }
+        .onDisappear {
+            cancelBackgroundGrace()
+            controller.stop()
+        }
         .confirmationDialog("结束这个 Shell？", isPresented: $terminate, titleVisibility: .visible) {
             Button("结束 Shell", role: .destructive) { Task { await close() } }
         } message: { Text("Shell 及其中运行的进程会结束。") }
@@ -115,6 +126,44 @@ struct TerminalPage: View {
         guard let selectedID, phase == .active else { return }
         controller.stop()
         controller.start(workbench: workbench, terminalID: selectedID)
+    }
+
+    /// Hold the socket open for 20 seconds when backgrounded so short interruptions do not flash
+    /// or reseed the screen; tear down cleanly once the grace window or OS budget expires.
+    private func beginBackgroundGrace() {
+        guard backgroundGraceTask == nil, controller.connection != nil else { return }
+        let app = UIApplication.shared
+        var taskID: UIBackgroundTaskIdentifier = .invalid
+        taskID = app.beginBackgroundTask(withName: "riffet.terminal.grace") { [controller] in
+            let expiring = taskID
+            taskID = .invalid
+            Task { @MainActor in
+                controller.stop()
+            }
+            if expiring != .invalid {
+                app.endBackgroundTask(expiring)
+            }
+        }
+        backgroundTaskID = taskID
+        backgroundGraceTask = Task {
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            controller.stop()
+            endBackgroundTask()
+            backgroundGraceTask = nil
+        }
+    }
+
+    private func cancelBackgroundGrace() {
+        backgroundGraceTask?.cancel()
+        backgroundGraceTask = nil
+        endBackgroundTask()
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskID)
+        backgroundTaskID = .invalid
     }
     private func load() async {
         do {

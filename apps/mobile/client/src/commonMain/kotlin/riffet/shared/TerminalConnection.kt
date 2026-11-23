@@ -1,6 +1,7 @@
 package riffet.shared
 
 import io.ktor.websocket.Frame
+import io.ktor.websocket.readBytes
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -261,8 +262,15 @@ class TerminalConnection(
                 AppLog.log(TAG, "dial attempt=$attempt terminal=$terminalId")
                 api.terminalSocket(terminalId) {
                     _notice.value = null
+                    // Flips to true once the server sends a protocol 4 binary frame; older servers stay on JSON.
+                    var binaryProtocol = false
                     suspend fun emit(message: TerminalClientMessage?) {
-                        if (message != null) send(Frame.Text(encode(message)))
+                        if (message == null) return
+                        if (binaryProtocol && message is TerminalClientMessage.Input) {
+                            send(Frame.Binary(true, encodeInputBinaryFrame(message.clientId, message.epoch, message.data)))
+                        } else {
+                            send(Frame.Text(encode(message)))
+                        }
                     }
                     // Drop anything queued for the previous connection: its epoch is stale.
                     while (commands.tryReceive().isSuccess) { }
@@ -285,6 +293,31 @@ class TerminalConnection(
                             unacked = 0
                         }
                     }
+                    suspend fun applySnapshot(nextStreamId: String, nextSeq: Long, cols: Int, rows: Int, data: String) {
+                        if (streamId == nextStreamId && nextSeq < sequence) return
+                        streamId = nextStreamId
+                        sequence = nextSeq
+                        snapshotColumns = cols
+                        snapshotRows = rows
+                        attempt = 0
+                        _link.value = TerminalLink.Live
+                        onSnapshotGrid?.invoke(snapshotColumns, snapshotRows)
+                        delivered(data, true)
+                        fresh = false
+                    }
+                    suspend fun applyOutput(nextStreamId: String?, nextSeq: Long, data: String) {
+                        if (nextStreamId != null && nextStreamId != streamId) return
+                        if (nextSeq <= sequence) return
+                        sequence = nextSeq
+                        if (fresh) {
+                            _info.value?.let { snapshotColumns = it.cols.toInt(); snapshotRows = it.rows.toInt() }
+                            onSnapshotGrid?.invoke(snapshotColumns, snapshotRows)
+                            attempt = 0
+                            _link.value = TerminalLink.Live
+                        }
+                        delivered(data, fresh)
+                        fresh = false
+                    }
                     while (true) {
                         val next: Event = select<Event?> {
                             incoming.onReceiveCatching { result -> result.getOrNull()?.let { Incoming(it) } }
@@ -298,65 +331,56 @@ class TerminalConnection(
                                 emit(messageFor(next.command))
                             }
                             is Incoming -> {
-                                val frame = next.frame as? Frame.Text ?: continue
-                                val message = decode(frame.readText()) ?: continue
-                                when (message) {
-                                    is TerminalServerMessage.Snapshot -> {
-                                        if (streamId == message.streamId && message.sequence < sequence) continue
-                                        streamId = message.streamId
-                                        sequence = message.sequence
-                                        snapshotColumns = message.cols.toInt()
-                                        snapshotRows = message.rows.toInt()
-                                        attempt = 0
-                                        _link.value = TerminalLink.Live
-                                        onSnapshotGrid?.invoke(snapshotColumns, snapshotRows)
-                                        delivered(message.data, true)
-                                        fresh = false
-                                    }
-                                    is TerminalServerMessage.Output -> {
-                                        if (message.streamId != null && message.streamId != streamId) continue
-                                        if (message.sequence <= sequence) continue
-                                        sequence = message.sequence
-                                        if (fresh) {
-                                            _info.value?.let { snapshotColumns = it.cols.toInt(); snapshotRows = it.rows.toInt() }
-                                            onSnapshotGrid?.invoke(snapshotColumns, snapshotRows)
-                                            attempt = 0
-                                            _link.value = TerminalLink.Live
+                                when (val frame = next.frame) {
+                                    is Frame.Binary -> {
+                                        binaryProtocol = true
+                                        when (val decoded = decodeServerBinaryFrame(frame.readBytes())) {
+                                            is TerminalBinaryServerFrame.Ping -> send(Frame.Binary(true, encodePongBinaryFrame(decoded.timestamp)))
+                                            is TerminalBinaryServerFrame.Pong -> Unit
+                                            is TerminalBinaryServerFrame.Snapshot -> applySnapshot(decoded.streamId, decoded.sequence, decoded.cols, decoded.rows, decoded.data)
+                                            is TerminalBinaryServerFrame.Output -> applyOutput(decoded.streamId, decoded.sequence, decoded.data)
+                                            null -> Unit
                                         }
-                                        delivered(message.data, fresh)
-                                        fresh = false
                                     }
-                                    is TerminalServerMessage.State -> {
-                                        val previousOwner = _info.value?.ownerId
-                                        _info.value = message.terminal
-                                        followAppearance(message.terminal)
-                                        if (previousOwner != message.terminal.ownerId) {
-                                            AppLog.log(TAG, "lease owner=${message.terminal.ownerId ?: "-"} mine=${message.terminal.ownerId == clientId} epoch=${message.terminal.epoch}")
-                                            sentSize = null
+                                    is Frame.Text -> {
+                                        val message = decode(frame.readText()) ?: continue
+                                        when (message) {
+                                            is TerminalServerMessage.Snapshot -> applySnapshot(message.streamId, message.sequence, message.cols.toInt(), message.rows.toInt(), message.data)
+                                            is TerminalServerMessage.Output -> applyOutput(message.streamId, message.sequence, message.data)
+                                            is TerminalServerMessage.State -> {
+                                                val previousOwner = _info.value?.ownerId
+                                                _info.value = message.terminal
+                                                followAppearance(message.terminal)
+                                                if (previousOwner != message.terminal.ownerId) {
+                                                    AppLog.log(TAG, "lease owner=${message.terminal.ownerId ?: "-"} mine=${message.terminal.ownerId == clientId} epoch=${message.terminal.epoch}")
+                                                    sentSize = null
+                                                }
+                                                if (message.terminal.ownerId == clientId) pendingFor(message.terminal).forEach { emit(it) }
+                                                if (message.terminal.state == TerminalState.EXITED) {
+                                                    exited = true
+                                                    _link.value = TerminalLink.Exited(message.terminal.exitCode)
+                                                }
+                                                emit(sizeIfOwner())
+                                            }
+                                            is TerminalServerMessage.Error -> {
+                                                AppLog.log(TAG, "error ${message.code}: ${message.message}")
+                                                // A refused claim drops what was waiting for it, as the web does.
+                                                if (claiming) {
+                                                    claiming = false
+                                                    pending.clear()
+                                                }
+                                                // A viewer's claim is refused while the Mac holds control; that is
+                                                // the expected state, not something to show as a failure.
+                                                if (message.code != "TERMINAL_CONTROLLED") _notice.value = message.message
+                                            }
+                                            is TerminalServerMessage.Exit -> {
+                                                exited = true
+                                                _link.value = TerminalLink.Exited(message.exitCode)
+                                                onOutput("\r\n\u001b[90m[${L10n.uiText("terminal.exited", message.exitCode ?: "?")}]\u001b[0m\r\n", false)
+                                            }
                                         }
-                                        if (message.terminal.ownerId == clientId) pendingFor(message.terminal).forEach { emit(it) }
-                                        if (message.terminal.state == TerminalState.EXITED) {
-                                            exited = true
-                                            _link.value = TerminalLink.Exited(message.terminal.exitCode)
-                                        }
-                                        emit(sizeIfOwner())
                                     }
-                                    is TerminalServerMessage.Error -> {
-                                        AppLog.log(TAG, "error ${message.code}: ${message.message}")
-                                        // A refused claim drops what was waiting for it, as the web does.
-                                        if (claiming) {
-                                            claiming = false
-                                            pending.clear()
-                                        }
-                                        // A viewer's claim is refused while the Mac holds control; that is
-                                        // the expected state, not something to show as a failure.
-                                        if (message.code != "TERMINAL_CONTROLLED") _notice.value = message.message
-                                    }
-                                    is TerminalServerMessage.Exit -> {
-                                        exited = true
-                                        _link.value = TerminalLink.Exited(message.exitCode)
-                                        onOutput("\r\n\u001b[90m[${L10n.uiText("terminal.exited", message.exitCode ?: "?")}]\u001b[0m\r\n", false)
-                                    }
+                                    else -> continue
                                 }
                                 // Frames already buffered would otherwise run back to back without
                                 // suspending; let the dispatcher's other work (input, a frame publish) in.

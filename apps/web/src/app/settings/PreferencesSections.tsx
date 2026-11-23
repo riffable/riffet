@@ -1,9 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, SETTING_DEFAULTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
-import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave, IconSquareTerminal } from '@/components/icons';
+import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, SETTING_DEFAULTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog, type TerminalProfile, type TerminalServerSettings, type TerminalServerSettingsUpdate } from '@contracts';
+import { IconArrowLeft, IconArrowRight, IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave, IconSquareTerminal, IconTrash2, IconX } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
 import { ThemeSwatch } from '@/components/theme-swatch';
@@ -15,12 +15,22 @@ import { api } from '@/lib/api';
 import { appIcons, setAppIcon, useAppIcon } from '@/lib/app-icon';
 import { palettesOf, selectAppearanceItem, selectPreset, syncAppearance, useAppearance } from '@/lib/appearance';
 import { BUILTIN_CODE_THEMES } from '@/lib/code-themes.generated';
-import { defaultDisplaySettings, MAX_TERMINAL_PADDING_HORIZONTAL, MAX_TERMINAL_PADDING_VERTICAL, setDisplaySettings, terminalFontSizes, useDisplaySettings, type Density, type TextSize } from '@/lib/display-settings';
+import {
+  ALL_TERMINAL_MOBILE_KEYS, DEFAULT_TERMINAL_MOBILE_KEYS, defaultDisplaySettings,
+  MAX_TERMINAL_FONT_SIZE, MAX_TERMINAL_LETTER_SPACING, MAX_TERMINAL_LINE_HEIGHT,
+  MAX_TERMINAL_PADDING_HORIZONTAL, MAX_TERMINAL_PADDING_VERTICAL, MAX_TERMINAL_SCROLL_SENSITIVITY,
+  MIN_TERMINAL_FONT_SIZE, MIN_TERMINAL_LETTER_SPACING, MIN_TERMINAL_LINE_HEIGHT,
+  MIN_TERMINAL_SCROLL_SENSITIVITY, setDisplaySettings, TERMINAL_FONT_PRESETS, TERMINAL_FONT_WEIGHTS,
+  useDisplaySettings, type Density, type DisplaySettings, type TerminalBellMode, type TerminalCursorStyle,
+  type TerminalFontWeight, type TerminalMobileKeyId, type TerminalRendererMode,
+  type TerminalRightClickBehavior, type TextSize,
+} from '@/lib/display-settings';
 import { cachedHighlight, highlightCode } from '@/lib/highlight';
 import { localeOptions, setLocale, useLocale, type CatalogLocale } from '@/lib/i18n';
 import { setThemeId, setThemeMode, useTheme, type ThemeMode } from '@/lib/theme';
 import { localizedText } from '@/lib/plugins';
-import { isCustomThemeId, syncThemeLibrary, useCurrentThemeLibrary, useThemeOptions } from '@/lib/theme-library';
+import { customThemeAnsi, isCustomThemeId, syncThemeLibrary, useCurrentThemeLibrary, useThemeOptions } from '@/lib/theme-library';
+import { resolveTerminalFontFamily, terminalTheme } from '@/lib/terminal-theme';
 import { type ThemeDefinition } from '@/lib/themes';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
@@ -136,7 +146,7 @@ function ThemeLivePreview({ label }: { label: string }) {
     return () => { active = false; };
   }, [html]);
   return (
-    <aside className="hidden lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-2">
+    <aside className="hidden lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-1">
       <div className="flex h-7 items-center justify-between">
         <span className="text-xs font-medium text-fg-3"><Trans>实时预览</Trans></span>
         <span className="truncate text-2xs text-fg-4">{label}</span>
@@ -219,11 +229,9 @@ export function ThemeSection() {
   const activeThemeName = paletteKey
     ? (localizedText(plugins.find((entry) => entry.key === paletteKey)?.palette.title) ?? paletteKey)
     : (themes.find((theme) => theme.id === themeId)?.name ?? themeId);
-  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
     <div className="flex min-w-0 flex-col gap-6">
-      <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-      {/* Untitled: the page title already says it. */}
-      <Group>
+      <Group title={t`显示`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
         <Row title={t`明暗`}>
           <Segmented<ThemeMode> size="xs" value={mode} onChange={setThemeMode} ariaLabel={t`明暗`} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
         </Row>
@@ -301,10 +309,9 @@ export function TypographySection() {
   const display = useDisplaySettings();
   const { catalog, effective } = useAppearance();
   const [uiFonts, monoFonts] = [fontsOf(catalog, 'ui'), fontsOf(catalog, 'mono')];
-  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
+  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
     <div className="flex min-w-0 flex-col gap-6">
-      <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-      <Group>
+      <Group title={t`文字`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
         {uiFonts.length > 0 && <Row title={t`界面字体`}>
           <AppearanceChoice label={t`界面字体`} items={uiFonts} value={effective.uiFont?.id} onChange={(id) => selectAppearanceItem('uiFont', id)} />
         </Row>}
@@ -331,15 +338,467 @@ export function TypographySection() {
   </div>;
 }
 
-/** 终端: the terminal's font size and padding. */
-export function TerminalSettingsSection() {
+/** Live cursor indicator matching block / underline / bar and blink state. */
+function TerminalCursorSample({ style, blink, color }: { style: TerminalCursorStyle; blink: boolean; color: string }) {
+  // motion-loop: preview terminal cursor blink when blink preference is enabled
+  const blinkClass = blink ? 'animate-pulse motion-reduce:animate-none' : '';
+  if (style === 'underline') {
+    return <span aria-hidden className={cn('inline-block h-[1em] w-[0.6ch] border-b-2 align-text-bottom', blinkClass)} style={{ borderColor: color }} />;
+  }
+  if (style === 'bar') {
+    return <span aria-hidden className={cn('inline-block h-[1.05em] w-0.5 align-text-bottom', blinkClass)} style={{ backgroundColor: color }} />;
+  }
+  return <span aria-hidden className={cn('inline-block h-[1.05em] w-[0.65ch] align-text-bottom', blinkClass)} style={{ backgroundColor: color }} />;
+}
+
+/** Shared typography and real theme palette preview for the desktop terminal surface. */
+function TerminalDesktopPreviewCard({
+  display,
+  palette,
+  fontFamily,
+}: {
+  display: DisplaySettings;
+  palette: ReturnType<typeof terminalTheme>;
+  fontFamily: string;
+}) {
+  const { t } = useLingui();
+  const fg = palette.foreground ?? 'var(--fg)';
+  const bg = palette.background ?? 'var(--bg)';
+  const green = palette.green ?? 'var(--accent)';
+  const cyan = palette.cyan ?? 'var(--accent)';
+  const yellow = palette.yellow ?? 'var(--fg-2)';
+  const blue = palette.blue ?? 'var(--accent)';
+  const brightBlack = palette.brightBlack ?? 'var(--fg-3)';
+  const cursor = palette.cursor ?? fg;
+
+  return (
+    <div className="flex flex-col">
+      <div className="mb-1 flex h-7 items-center justify-between">
+        <span className="text-xs font-medium text-fg-3"><Trans>实时预览</Trans></span>
+        <span className="font-mono text-2xs text-fg-4">
+          {display.terminalRenderer === 'dom' ? 'DOM' : 'WebGL'} · {display.terminalFontSize.toFixed(1)}px
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-line bg-canvas shadow-sm">
+        <div className="flex items-center justify-between border-b border-line bg-elevated px-3 py-2 text-2xs text-fg-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1" aria-hidden>
+              <span className="size-2 rounded-full bg-line" />
+              <span className="size-2 rounded-full bg-line" />
+              <span className="size-2 rounded-full bg-line" />
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-mono text-fg-2">
+              <IconSquareTerminal className="size-3.5 shrink-0 text-fg-3" />
+              <span>zsh · ~/riffet</span>
+            </span>
+          </div>
+          <span className="font-mono text-fg-4">{display.terminalPaddingHorizontal}×{display.terminalPaddingVertical}</span>
+        </div>
+        <div
+          className="min-h-52 overflow-hidden"
+          style={{
+            backgroundColor: bg,
+            color: fg,
+            padding: `${display.terminalPaddingVertical}px ${display.terminalPaddingHorizontal}px`,
+            fontFamily,
+            fontSize: `${display.terminalFontSize}px`,
+            lineHeight: display.terminalLineHeight,
+            letterSpacing: `${display.terminalLetterSpacing}px`,
+            fontWeight: Number(display.terminalFontWeight),
+          }}
+        >
+          <div className="flex flex-col whitespace-pre">
+            <div className="truncate">
+              <span style={{ color: green }}>~/riffet</span>{' '}
+              <span style={{ color: cyan }}>main</span>{' '}
+              <span style={{ fontWeight: Number(display.terminalFontWeightBold) }}>pnpm test</span>
+            </div>
+            <div className="truncate">
+              <span style={{ color: green }}>✓</span>{' '}
+              <span style={{ fontWeight: Number(display.terminalFontWeightBold) }}>terminal/wire.test.ts</span>{' '}
+              <span style={{ color: brightBlack }}>(2)</span>{' '}
+              <span style={{ color: yellow }}>14ms</span>
+            </div>
+            <div className="truncate">
+              <span style={{ color: green }}>✓</span>{' '}
+              <span style={{ fontWeight: Number(display.terminalFontWeightBold) }}>terminal/history.test.ts</span>{' '}
+              <span style={{ color: brightBlack }}>(10)</span>{' '}
+              <span style={{ color: yellow }}>28ms</span>
+            </div>
+            <div className="truncate" style={{ color: blue }}>
+              {t`字体 · 字距 · 行高 · 字重`}
+            </div>
+            <div className="truncate" style={{ color: brightBlack }}>
+              0123456789 != == =&gt; -&gt;
+            </div>
+            <div className="flex items-center gap-1 truncate">
+              <span style={{ color: green }}>❯</span>
+              <span>git status</span>
+              <TerminalCursorSample style={display.terminalCursorStyle} blink={display.terminalCursorBlink} color={cursor} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** True portrait phone mockup (1:2 aspect ratio) previewing the mobile terminal and quick-key bar. */
+function TerminalMobilePortraitPreview({
+  display,
+  palette,
+  fontFamily,
+  mobileKeyLabels,
+}: {
+  display: DisplaySettings;
+  palette: ReturnType<typeof terminalTheme>;
+  fontFamily: string;
+  mobileKeyLabels: Record<TerminalMobileKeyId, string>;
+}) {
+  const fg = palette.foreground ?? 'var(--fg)';
+  const bg = palette.background ?? 'var(--bg)';
+  const green = palette.green ?? 'var(--accent)';
+  const cyan = palette.cyan ?? 'var(--accent)';
+  const yellow = palette.yellow ?? 'var(--fg-2)';
+  const brightBlack = palette.brightBlack ?? 'var(--fg-3)';
+  const cursor = palette.cursor ?? fg;
+  const mobileFontSize = Math.max(9, Math.min(12, display.terminalFontSize * 0.78));
+
+  return (
+    <div className="mx-auto flex h-96 w-48 shrink-0 flex-col overflow-hidden rounded-3xl border-2 border-line bg-canvas p-1.5 shadow-sm">
+      <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-elevated">
+        <div className="flex items-center justify-between px-3 pt-1.5 pb-1 text-2xs text-fg-4">
+          <span className="font-medium tabular-nums">9:41</span>
+          <span className="h-2.5 w-11 rounded-full bg-fg" aria-hidden />
+          <span className="h-2 w-4 rounded-sm border border-fg-4" aria-hidden />
+        </div>
+        <div className="flex items-center justify-between border-b border-line px-2.5 py-1 text-2xs text-fg-3">
+          <span className="truncate font-mono">zsh · ~/riffet</span>
+          <span className="size-1.5 shrink-0 rounded-full bg-accent" />
+        </div>
+        <div
+          className="flex flex-1 flex-col justify-between overflow-hidden px-2.5 py-2"
+          style={{
+            backgroundColor: bg,
+            color: fg,
+            fontFamily,
+            fontSize: `${mobileFontSize}px`,
+            lineHeight: display.terminalLineHeight,
+            letterSpacing: `${display.terminalLetterSpacing}px`,
+            fontWeight: Number(display.terminalFontWeight),
+          }}
+        >
+          <div className="flex flex-col whitespace-pre">
+            <div className="truncate">
+              <span style={{ color: green }}>~/riffet</span>{' '}
+              <span style={{ color: cyan }}>main</span>
+            </div>
+            <div className="truncate" style={{ fontWeight: Number(display.terminalFontWeightBold) }}>
+              $ pnpm dev
+            </div>
+            <div className="truncate" style={{ color: brightBlack }}>
+              ready in <span style={{ color: yellow }}>182ms</span>
+            </div>
+            <div className="truncate" style={{ color: brightBlack }}>
+              http://localhost:5173
+            </div>
+            <div className="truncate pt-1">
+              <span style={{ color: green }}>✓</span> connected
+            </div>
+          </div>
+          <div className="flex items-center gap-1 truncate">
+            <span style={{ color: green }}>❯</span>
+            <span>git diff</span>
+            <TerminalCursorSample style={display.terminalCursorStyle} blink={display.terminalCursorBlink} color={cursor} />
+          </div>
+        </div>
+        <div className="flex items-center gap-1 overflow-x-auto border-t border-line bg-elevated px-1.5 py-1.5">
+          {display.terminalMobileKeys.map((id) => (
+            <span
+              key={id}
+              className={cn(
+                'inline-flex h-6 shrink-0 items-center justify-center rounded border px-1.5 font-mono text-2xs',
+                id === 'enter'
+                  ? 'border-primary bg-primary text-primary-fg'
+                  : 'border-line bg-subtle text-fg',
+              )}
+            >
+              {mobileKeyLabels[id]}
+            </span>
+          ))}
+        </div>
+        <div className="flex justify-center bg-elevated pt-0.5 pb-1.5">
+          <span className="h-1 w-14 rounded-full bg-line" aria-hidden />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 终端: local display preferences plus server-side shell defaults and profiles. */
+export function TerminalSettingsSection({ settings, onSaved, onError }: ServerSettingsProps) {
   const { t } = useLingui();
   const display = useDisplaySettings();
-  return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-    <Group>
+  const { themeId, resolved, revision, pluginAnsi } = useTheme();
+  const terminalDark = resolved === 'dark';
+  const palette = useMemo(
+    () => terminalTheme(themeId, terminalDark, pluginAnsi ? pluginAnsi[terminalDark ? 'dark' : 'light'] : customThemeAnsi(themeId, terminalDark)),
+    [themeId, terminalDark, revision, pluginAnsi],
+  );
+  const previewFontFamily = resolveTerminalFontFamily(display.terminalFontFamily);
+  const serverTerminal = settings.terminal ?? {};
+  const [defaultShell, setDefaultShell] = useState(serverTerminal.defaultShell ?? '');
+  const [profileName, setProfileName] = useState('');
+  const [profileCommand, setProfileCommand] = useState('');
+  const [savingServer, setSavingServer] = useState(false);
+
+  useEffect(() => {
+    setDefaultShell(settings.terminal?.defaultShell ?? '');
+  }, [settings.terminal?.defaultShell]);
+
+  const saveTerminalServer = async (next: TerminalServerSettingsUpdate) => {
+    setSavingServer(true);
+    try {
+      const patch = { terminal: next };
+      onSaved(await api.updateSettings(patch), patch);
+    } catch (error) {
+      onError(errorMessage(error, t`无法保存终端设置`));
+    } finally {
+      setSavingServer(false);
+    }
+  };
+
+  const commitDefaultShell = () => {
+    const trimmed = defaultShell.trim();
+    if (trimmed === (serverTerminal.defaultShell ?? '')) return;
+    const next: TerminalServerSettingsUpdate = {
+      ...serverTerminal,
+      defaultShell: trimmed || null,
+    };
+    void saveTerminalServer(next);
+  };
+
+  const addProfile = () => {
+    const name = profileName.trim();
+    const parts = profileCommand.trim().split(/\s+/).filter(Boolean);
+    if (!name || !parts.length) return;
+    const id = `profile-${Date.now().toString(36)}`;
+    const entry: TerminalProfile = {
+      id,
+      name,
+      command: parts[0]!,
+      ...(parts.length > 1 ? { args: parts.slice(1) } : {}),
+    };
+    const next: TerminalServerSettings = {
+      ...serverTerminal,
+      profiles: [...(serverTerminal.profiles ?? []), entry],
+    };
+    setProfileName('');
+    setProfileCommand('');
+    void saveTerminalServer(next);
+  };
+
+  const removeProfile = (id: string) => {
+    const remaining = (serverTerminal.profiles ?? []).filter((item) => item.id !== id);
+    const next: TerminalServerSettings = { ...serverTerminal, profiles: remaining };
+    void saveTerminalServer(next);
+  };
+
+  const matchedPreset = TERMINAL_FONT_PRESETS.find((preset) => preset.toLowerCase() === display.terminalFontFamily.toLowerCase());
+  const [customFontMode, setCustomFontMode] = useState(() => Boolean(display.terminalFontFamily && !matchedPreset));
+  const [fontFamilyInput, setFontFamilyInput] = useState(display.terminalFontFamily);
+  useEffect(() => {
+    setFontFamilyInput(display.terminalFontFamily);
+    if (display.terminalFontFamily && !TERMINAL_FONT_PRESETS.some((p) => p.toLowerCase() === display.terminalFontFamily.toLowerCase())) {
+      setCustomFontMode(true);
+    }
+  }, [display.terminalFontFamily]);
+
+  const fontSelectValue = customFontMode ? '__custom__' : (matchedPreset ?? '__default__');
+
+  const commitFontFamily = () => {
+    const trimmed = fontFamilyInput.trim();
+    if (trimmed !== display.terminalFontFamily) setDisplaySettings({ terminalFontFamily: trimmed });
+  };
+
+  const mobileKeyLabels: Record<TerminalMobileKeyId, string> = {
+    esc: 'Esc',
+    tab: 'Tab',
+    shiftTab: '⇧Tab',
+    ctrlC: '^C',
+    ctrlD: '^D',
+    ctrlL: '^L',
+    ctrlR: '^R',
+    space: t`空格`,
+    up: '↑',
+    down: '↓',
+    left: '←',
+    right: '→',
+    slash: '/',
+    pipe: '|',
+    tilde: '~',
+    dash: '-',
+    enter: '⏎',
+  };
+
+  const moveMobileKey = (index: number, delta: -1 | 1) => {
+    const next = [...display.terminalMobileKeys];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    setDisplaySettings({ terminalMobileKeys: next });
+  };
+
+  const removeMobileKey = (id: TerminalMobileKeyId) => {
+    if (display.terminalMobileKeys.length <= 1) return;
+    setDisplaySettings({ terminalMobileKeys: display.terminalMobileKeys.filter((item) => item !== id) });
+  };
+
+  const addMobileKey = (id: TerminalMobileKeyId) => {
+    if (display.terminalMobileKeys.includes(id)) return;
+    setDisplaySettings({ terminalMobileKeys: [...display.terminalMobileKeys, id] });
+  };
+
+  const availableMobileKeys = ALL_TERMINAL_MOBILE_KEYS.filter((id) => !display.terminalMobileKeys.includes(id));
+  const isDefaultMobileKeys = display.terminalMobileKeys.length === DEFAULT_TERMINAL_MOBILE_KEYS.length
+    && display.terminalMobileKeys.every((id, index) => id === DEFAULT_TERMINAL_MOBILE_KEYS[index]);
+
+  const profiles = serverTerminal.profiles ?? [];
+  const shellIntegration = serverTerminal.shellIntegration ?? true;
+
+  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
+    <div className="flex min-w-0 flex-col gap-6">
+    <Group title={t`字体与排版`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
+      <Row title={t`字体`}>
+        <Select
+          label={t`终端字体`}
+          value={fontSelectValue}
+          onChange={(value) => {
+            if (value === '__default__') {
+              setCustomFontMode(false);
+              setDisplaySettings({ terminalFontFamily: '' });
+            } else if (value === '__custom__') {
+              setCustomFontMode(true);
+            } else {
+              setCustomFontMode(false);
+              setDisplaySettings({ terminalFontFamily: value });
+            }
+          }}
+          options={[
+            { value: '__default__', label: t`跟随默认等宽字体` },
+            ...TERMINAL_FONT_PRESETS.map((preset) => ({ value: preset, label: preset })),
+            { value: '__custom__', label: t`自定义字体…` },
+          ]}
+        />
+      </Row>
+      {customFontMode && (
+        <Row title={t`自定义字体名`}>
+          <div className="flex w-64 max-w-full items-center gap-1.5 max-md:w-full">
+            <Input
+              value={fontFamilyInput}
+              onChange={(event) => setFontFamilyInput(event.target.value)}
+              onBlur={commitFontFamily}
+              onKeyDown={(event) => { if (event.key === 'Enter') commitFontFamily(); }}
+              placeholder="Maple Mono, Menlo"
+              aria-label={t`自定义字体名`}
+              className="h-8 w-0 min-w-0 flex-1 font-mono text-xs"
+            />
+            <Tip label={t`恢复默认`}>
+              <Button
+                variant="quiet"
+                size="icon-xs"
+                className="shrink-0"
+                aria-label={t`恢复默认：终端字体`}
+                onClick={() => { setCustomFontMode(false); setDisplaySettings({ terminalFontFamily: '' }); }}
+              ><IconRotateCcw /></Button>
+            </Tip>
+          </div>
+        </Row>
+      )}
       <Row title={t`字号`}>
-        <Segmented<string> size="xs" value={String(display.terminalFontSize)} onChange={(value) => setDisplaySettings({ terminalFontSize: Number(value) })} ariaLabel={t`终端字号`} options={terminalFontSizes.map((size, index) => ({ value: String(size), label: [t`小`, t`标准`, t`大`, t`特大`][index] ?? String(size) }))} />
+        <div className="flex w-64 max-w-full items-center gap-2 max-md:w-full">
+          <Slider
+            min={MIN_TERMINAL_FONT_SIZE}
+            max={MAX_TERMINAL_FONT_SIZE}
+            step={0.5}
+            value={display.terminalFontSize}
+            aria-label={t`终端字号`}
+            className="min-w-0 flex-1"
+            onValueChange={(value) => setDisplaySettings({ terminalFontSize: value })}
+          />
+          <span className="w-14 shrink-0 text-right text-xs tabular-nums text-fg-3">{display.terminalFontSize.toFixed(1)} px</span>
+          <Tip label={t`恢复默认`}>
+            <Button
+              variant="quiet"
+              size="icon-xs"
+              aria-label={t`恢复默认：字号`}
+              disabled={display.terminalFontSize === defaultDisplaySettings.terminalFontSize}
+              onClick={() => setDisplaySettings({ terminalFontSize: defaultDisplaySettings.terminalFontSize })}
+            ><IconRotateCcw /></Button>
+          </Tip>
+        </div>
+      </Row>
+      <Row title={t`行高`}>
+        <div className="flex w-64 max-w-full items-center gap-2 max-md:w-full">
+          <Slider
+            min={MIN_TERMINAL_LINE_HEIGHT}
+            max={MAX_TERMINAL_LINE_HEIGHT}
+            step={0.1}
+            value={display.terminalLineHeight}
+            aria-label={t`行高`}
+            className="min-w-0 flex-1"
+            onValueChange={(value) => setDisplaySettings({ terminalLineHeight: value })}
+          />
+          <span className="w-12 shrink-0 text-right text-xs tabular-nums text-fg-3">{display.terminalLineHeight.toFixed(1)}</span>
+          <Tip label={t`恢复默认`}>
+            <Button
+              variant="quiet"
+              size="icon-xs"
+              aria-label={t`恢复默认：行高`}
+              disabled={display.terminalLineHeight === defaultDisplaySettings.terminalLineHeight}
+              onClick={() => setDisplaySettings({ terminalLineHeight: defaultDisplaySettings.terminalLineHeight })}
+            ><IconRotateCcw /></Button>
+          </Tip>
+        </div>
+      </Row>
+      <Row title={t`字距`}>
+        <div className="flex w-64 max-w-full items-center gap-2 max-md:w-full">
+          <Slider
+            min={MIN_TERMINAL_LETTER_SPACING}
+            max={MAX_TERMINAL_LETTER_SPACING}
+            step={0.5}
+            value={display.terminalLetterSpacing}
+            aria-label={t`字距`}
+            className="min-w-0 flex-1"
+            onValueChange={(value) => setDisplaySettings({ terminalLetterSpacing: value })}
+          />
+          <span className="w-14 shrink-0 text-right text-xs tabular-nums text-fg-3">{display.terminalLetterSpacing.toFixed(1)} px</span>
+          <Tip label={t`恢复默认`}>
+            <Button
+              variant="quiet"
+              size="icon-xs"
+              aria-label={t`恢复默认：字距`}
+              disabled={display.terminalLetterSpacing === defaultDisplaySettings.terminalLetterSpacing}
+              onClick={() => setDisplaySettings({ terminalLetterSpacing: defaultDisplaySettings.terminalLetterSpacing })}
+            ><IconRotateCcw /></Button>
+          </Tip>
+        </div>
+      </Row>
+      <Row title={t`常规字重`}>
+        <Select
+          label={t`常规字重`}
+          value={display.terminalFontWeight}
+          onChange={(value) => setDisplaySettings({ terminalFontWeight: value as TerminalFontWeight })}
+          options={TERMINAL_FONT_WEIGHTS.filter((w) => Number(w) <= 600).map((weight) => ({ value: weight, label: weight }))}
+        />
+      </Row>
+      <Row title={t`粗体字重`}>
+        <Select
+          label={t`粗体字重`}
+          value={display.terminalFontWeightBold}
+          onChange={(value) => setDisplaySettings({ terminalFontWeightBold: value as TerminalFontWeight })}
+          options={TERMINAL_FONT_WEIGHTS.filter((w) => Number(w) >= 500).map((weight) => ({ value: weight, label: weight }))}
+        />
       </Row>
       {([
         { key: 'terminalPaddingHorizontal', label: t`水平边距`, max: MAX_TERMINAL_PADDING_HORIZONTAL },
@@ -370,6 +829,241 @@ export function TerminalSettingsSection() {
         </Row>
       ))}
     </Group>
+    <Group title={t`光标与交互`}>
+      <Row title={t`光标样式`}>
+        <Segmented<TerminalCursorStyle>
+          size="xs"
+          value={display.terminalCursorStyle}
+          onChange={(terminalCursorStyle) => setDisplaySettings({ terminalCursorStyle })}
+          ariaLabel={t`光标样式`}
+          options={[
+            { value: 'block', label: t`方块` },
+            { value: 'underline', label: t`下划线` },
+            { value: 'bar', label: t`竖线` },
+          ]}
+        />
+      </Row>
+      <Row title={t`光标闪烁`}>
+        <Switch checked={display.terminalCursorBlink} onCheckedChange={(terminalCursorBlink) => setDisplaySettings({ terminalCursorBlink })} aria-label={t`光标闪烁`} />
+      </Row>
+      <Row title={t`选中即复制`}>
+        <Switch checked={display.terminalCopyOnSelect} onCheckedChange={(terminalCopyOnSelect) => setDisplaySettings({ terminalCopyOnSelect })} aria-label={t`选中即复制`} />
+      </Row>
+      <Row title={t`右键行为`}>
+        <Segmented<TerminalRightClickBehavior>
+          size="xs"
+          value={display.terminalRightClick}
+          onChange={(terminalRightClick) => setDisplaySettings({ terminalRightClick })}
+          ariaLabel={t`右键行为`}
+          options={[
+            { value: 'menu', label: t`默认菜单` },
+            { value: 'copyPaste', label: t`复制或粘贴` },
+          ]}
+        />
+      </Row>
+      {isApplePlatform && (
+        <Row title={t`Option 作为 Meta 键`}>
+          <Switch checked={display.terminalMacOptionIsMeta} onCheckedChange={(terminalMacOptionIsMeta) => setDisplaySettings({ terminalMacOptionIsMeta })} aria-label={t`Option 作为 Meta 键`} />
+        </Row>
+      )}
+      <Row title={t`响铃提醒`}>
+        <Segmented<TerminalBellMode>
+          size="xs"
+          value={display.terminalBell}
+          onChange={(terminalBell) => setDisplaySettings({ terminalBell })}
+          ariaLabel={t`响铃提醒`}
+          options={[
+            { value: 'none', label: t`关闭` },
+            { value: 'visual', label: t`闪烁` },
+            { value: 'sound', label: t`声音` },
+          ]}
+        />
+      </Row>
+    </Group>
+    <Group title={t`滚动与渲染`}>
+      <Row title={t`输入时滚到底部`}>
+        <Switch checked={display.terminalScrollOnInput} onCheckedChange={(terminalScrollOnInput) => setDisplaySettings({ terminalScrollOnInput })} aria-label={t`输入时滚到底部`} />
+      </Row>
+      <Row title={t`新输出时滚到底部`}>
+        <Switch checked={display.terminalScrollOnOutput} onCheckedChange={(terminalScrollOnOutput) => setDisplaySettings({ terminalScrollOnOutput })} aria-label={t`新输出时滚到底部`} />
+      </Row>
+      <Row title={t`滚轮速度`}>
+        <div className="flex w-64 max-w-full items-center gap-2 max-md:w-full">
+          <Slider
+            min={MIN_TERMINAL_SCROLL_SENSITIVITY}
+            max={MAX_TERMINAL_SCROLL_SENSITIVITY}
+            step={0.1}
+            value={display.terminalScrollSensitivity}
+            aria-label={t`滚轮速度`}
+            className="min-w-0 flex-1"
+            onValueChange={(value) => setDisplaySettings({ terminalScrollSensitivity: value })}
+          />
+          <span className="w-12 shrink-0 text-right text-xs tabular-nums text-fg-3">{display.terminalScrollSensitivity.toFixed(1)}×</span>
+          <Tip label={t`恢复默认`}>
+            <Button
+              variant="quiet"
+              size="icon-xs"
+              aria-label={t`恢复默认：滚轮速度`}
+              disabled={display.terminalScrollSensitivity === defaultDisplaySettings.terminalScrollSensitivity}
+              onClick={() => setDisplaySettings({ terminalScrollSensitivity: defaultDisplaySettings.terminalScrollSensitivity })}
+            ><IconRotateCcw /></Button>
+          </Tip>
+        </div>
+      </Row>
+      <Row title={t`渲染器`}>
+        <Segmented<TerminalRendererMode>
+          size="xs"
+          value={display.terminalRenderer}
+          onChange={(terminalRenderer) => setDisplaySettings({ terminalRenderer })}
+          ariaLabel={t`渲染器`}
+          options={[
+            { value: 'auto', label: t`自动 (WebGL)` },
+            { value: 'dom', label: 'DOM' },
+          ]}
+        />
+      </Row>
+    </Group>
+    <Group
+      title={t`移动端快捷按键栏`}
+      action={
+        <Button
+          size="xs"
+          variant="quiet"
+          disabled={isDefaultMobileKeys}
+          onClick={() => setDisplaySettings({ terminalMobileKeys: [...DEFAULT_TERMINAL_MOBILE_KEYS] })}
+        ><IconRotateCcw /><Trans>恢复默认</Trans></Button>
+      }
+    >
+      <div className="flex flex-col gap-6 py-4 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <span className="text-xs text-fg-3"><Trans>已启用按键</Trans></span>
+          <div className="flex flex-wrap gap-1.5">
+            {display.terminalMobileKeys.map((id, index) => (
+              <div key={id} className="inline-flex items-center gap-0.5 rounded-md border border-line bg-elevated px-1.5 py-1 font-mono text-xs text-fg">
+                <Button
+                  size="icon-xs"
+                  variant="quiet"
+                  aria-label={t`左移 ${mobileKeyLabels[id]}`}
+                  disabled={index === 0}
+                  onClick={() => moveMobileKey(index, -1)}
+                ><IconArrowLeft /></Button>
+                <span className="px-1">{mobileKeyLabels[id]}</span>
+                <Button
+                  size="icon-xs"
+                  variant="quiet"
+                  aria-label={t`右移 ${mobileKeyLabels[id]}`}
+                  disabled={index === display.terminalMobileKeys.length - 1}
+                  onClick={() => moveMobileKey(index, 1)}
+                ><IconArrowRight /></Button>
+                <Button
+                  size="icon-xs"
+                  variant="quiet"
+                  aria-label={t`移除 ${mobileKeyLabels[id]}`}
+                  disabled={display.terminalMobileKeys.length <= 1}
+                  onClick={() => removeMobileKey(id)}
+                ><IconX /></Button>
+              </div>
+            ))}
+          </div>
+          {availableMobileKeys.length > 0 && (
+            <div className="flex flex-col gap-1.5 pt-1">
+              <span className="text-xs text-fg-3"><Trans>添加按键</Trans></span>
+              <div className="flex flex-wrap gap-1.5">
+                {availableMobileKeys.map((id) => (
+                  <Button
+                    key={id}
+                    size="xs"
+                    variant="quiet"
+                    onClick={() => addMobileKey(id)}
+                    className="border border-line font-mono text-xs"
+                  ><IconPlus />{mobileKeyLabels[id]}</Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <TerminalMobilePortraitPreview
+          display={display}
+          palette={palette}
+          fontFamily={previewFontFamily}
+          mobileKeyLabels={mobileKeyLabels}
+        />
+      </div>
+    </Group>
+    <Group title={t`Shell 环境`} action={<span className="text-2xs text-fg-4"><Trans>保存在当前服务器</Trans></span>}>
+      <Row title={t`Shell Integration`} description={t`仅作用于 Riffet 启动的新 Shell，不修改本地 rc 文件`}>
+        <Switch
+          checked={shellIntegration}
+          disabled={savingServer}
+          onCheckedChange={(checked) => void saveTerminalServer({ ...serverTerminal, shellIntegration: checked })}
+          aria-label={t`Shell Integration`}
+        />
+      </Row>
+      <Row title={t`默认 Shell`}>
+        <Input
+          value={defaultShell}
+          disabled={savingServer}
+          onChange={(event) => setDefaultShell(event.target.value)}
+          onBlur={commitDefaultShell}
+          onKeyDown={(event) => { if (event.key === 'Enter') commitDefaultShell(); }}
+          placeholder="/bin/zsh"
+          aria-label={t`默认 Shell`}
+          className="h-8 w-64 max-w-full font-mono text-xs max-md:w-full"
+        />
+      </Row>
+    </Group>
+    <Group title={t`Shell 预设`}>
+      {profiles.map((profile) => (
+        <Row
+          key={profile.id}
+          title={profile.name}
+          description={[profile.command, ...(profile.args ?? [])].join(' ')}
+        >
+          <Tip label={t`删除预设`}>
+            <Button
+              size="icon-xs"
+              variant="quiet"
+              disabled={savingServer}
+              aria-label={t`删除预设：${profile.name}`}
+              onClick={() => removeProfile(profile.id)}
+            ><IconTrash2 /></Button>
+          </Tip>
+        </Row>
+      ))}
+      <div className="flex flex-wrap items-center gap-2 py-3.5">
+        <Input
+          value={profileName}
+          disabled={savingServer}
+          onChange={(event) => setProfileName(event.target.value)}
+          placeholder={t`名称`}
+          aria-label={t`预设名称`}
+          className="h-8 w-36 text-xs"
+        />
+        <Input
+          value={profileCommand}
+          disabled={savingServer}
+          onChange={(event) => setProfileCommand(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') addProfile(); }}
+          placeholder={t`命令，如 /bin/bash -l`}
+          aria-label={t`预设命令`}
+          className="h-8 min-w-44 flex-1 font-mono text-xs"
+        />
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={savingServer || !profileName.trim() || !profileCommand.trim()}
+          onClick={addProfile}
+        ><IconPlus /><Trans>添加</Trans></Button>
+      </div>
+    </Group>
+    </div>
+    <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-6">
+      <TerminalDesktopPreviewCard
+        display={display}
+        palette={palette}
+        fontFamily={previewFontFamily}
+      />
+    </aside>
   </div>;
 }
 
@@ -379,8 +1073,7 @@ export function AppIconSection() {
   const appIcon = useAppIcon();
   const permissionIconStyle = usePermissionIconStyle();
   return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这个浏览器。</Trans></p>
-    <Group title={t`应用图标`}>
+    <Group title={t`应用图标`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
       <div className="flex flex-wrap gap-2 pt-3.5 pb-2">
         {appIcons.map((icon) => <button
           key={icon.id}

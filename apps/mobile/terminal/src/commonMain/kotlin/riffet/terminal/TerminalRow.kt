@@ -26,6 +26,24 @@ class TerminalRow(
     /** If this row might contain chars with width != 1, used for deactivating fast path */
     internal var mHasNonOneWidthOrSurrogateChars = false
 
+    /**
+     * Monotonic content version bumped whenever this row's cells, styles, or wrap flag mutate.
+     * Frozen copies created by [copy] carry the same [revision] and [sourceRow] so frame snapshots
+     * can reuse unchanged copies in O(1) without reallocating [mText]/[mStyle].
+     */
+    var revision: Long = 1L
+        private set
+
+    internal var sourceRow: TerminalRow = this
+        private set
+
+    internal fun markDirty() {
+        revision++
+    }
+
+    /** True when this frozen copy still matches [live] with no intervening mutations. */
+    fun matchesSource(live: TerminalRow): Boolean = sourceRow === live && revision == live.revision
+
     /** Construct a blank row (containing only whitespace, ' ') with a specified style. */
     init {
         clear(style)
@@ -76,6 +94,8 @@ class TerminalRow(
         mStyle.copyInto(copy.mStyle)
         copy.mLineWrap = mLineWrap
         copy.mHasNonOneWidthOrSurrogateChars = mHasNonOneWidthOrSurrogateChars
+        copy.sourceRow = this
+        copy.revision = revision
         return copy
     }
 
@@ -139,6 +159,7 @@ class TerminalRow(
         mStyle.fill(style)
         mSpaceUsed = mColumns
         mHasNonOneWidthOrSurrogateChars = false
+        revision++
     }
 
     /*
@@ -157,6 +178,7 @@ class TerminalRow(
         if (!mHasNonOneWidthOrSurrogateChars) {
             mText.fill(' ', column, mColumns)
             mStyle.fill(style, column, mColumns)
+            revision++
             return
         }
         // Blanking the second half of a wide character blanks its first half too, in this style.
@@ -167,6 +189,7 @@ class TerminalRow(
         mText.fill(' ', index, needed)
         mSpaceUsed = needed
         mStyle.fill(style, start, mColumns)
+        revision++
     }
 
     /** Same as `copyInterval(source, 0, columns, 0)`: this row becomes a copy of [source]'s cells. */
@@ -176,6 +199,7 @@ class TerminalRow(
         mSpaceUsed = source.mSpaceUsed
         source.mStyle.copyInto(mStyle)
         mHasNonOneWidthOrSurrogateChars = source.mHasNonOneWidthOrSurrogateChars
+        revision++
         if (!mHasNonOneWidthOrSurrogateChars) return
         // copyInterval writes each character with its first column's style, which also lands on
         // the second column of a wide character; do the same.
@@ -197,6 +221,7 @@ class TerminalRow(
         if (columnToSet < 0 || columnToSet >= mStyle.size)
             throw IllegalArgumentException("TerminalRow.setChar(): columnToSet=$columnToSet, codePoint=$codePoint, style=$style")
 
+        revision++
         mStyle[columnToSet] = style
 
         val newCodePointDisplayWidth = WcWidth.width(codePoint)

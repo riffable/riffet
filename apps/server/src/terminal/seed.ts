@@ -11,14 +11,16 @@ const FORMATS = [
 
 /**
  * The commands whose replies, run back to back in one control-stream line, describe a pane: its
- * geometry and modes, the scrollback, the saved normal screen (empty unless an alternate screen is
- * on), the visible screen, and the escape sequence the pane's parser has only half received. `-N`
- * keeps physical rows with their background cells; `-C` escapes bytes the way `%output` does.
+ * geometry, modes and runtime metadata (`cwd`, foreground command, title), the scrollback, the
+ * saved normal screen (empty unless an alternate screen is on), the visible screen, and the escape
+ * sequence the pane's parser has only half received. `-N` keeps physical rows with their background
+ * cells; `-C` escapes bytes the way `%output` does.
  */
 export function seedCommands(pane: string): string[][] {
   const capture = (...flags: string[]) => ['capture-pane', '-p', '-e', '-C', '-N', ...flags, '-t', pane];
+  const headerFormat = `${FORMATS.map(name => `#{${name}}`).join(' ')}\t#{pane_current_path}\t#{pane_current_command}\t#{pane_title}`;
   return [
-    ['display-message', '-p', '-t', pane, FORMATS.map(name => `#{${name}}`).join(' ')],
+    ['display-message', '-p', '-t', pane, headerFormat],
     capture('-S', `-${TERMINAL_SCROLLBACK_ROWS}`, '-E', '-1'),
     capture('-a', '-q'),
     capture(),
@@ -40,7 +42,14 @@ export interface TrackedModes {
   readonly cursorStyle: string;
 }
 
-export interface Seed { data: string; cols: number; rows: number }
+export interface Seed {
+  data: string;
+  cols: number;
+  rows: number;
+  cwd?: string;
+  foregroundCommand?: string;
+  paneTitle?: string;
+}
 
 const ESC = '\u001b';
 const rowsOf = (lines: Buffer[]) => lines.map(line => unescapeOctal(line).toString('utf8'));
@@ -68,10 +77,15 @@ function joinRows(rows: string[]): string {
  */
 export function assembleSeed(blocks: Buffer[][], tracked: TrackedModes, history: boolean): Seed | undefined {
   if (blocks.length < SEED_BLOCKS) return undefined;
-  const values = blocks[0]![0]?.toString('latin1').trim().split(' ').map(Number) ?? [];
+  const headerLine = blocks[0]![0]?.toString('utf8') ?? '';
+  const [numericPart = '', rawCwd = '', rawCommand = '', ...rawTitleParts] = headerLine.split('\t');
+  const values = numericPart.trim().split(' ').map(Number);
   const [cols, rows, historySize, alternateOn, cursorX, cursorY, cursorFlag, insertFlag, keypadCursor, keypad, wrap, origin,
     mouseStandard, mouseButton, mouseAny, mouseSgr, mouseUtf8, regionUpper, regionLower, savedX, savedY] = values as number[];
   if (values.length < FORMATS.length || !(cols! >= 1) || !(rows! >= 1) || values.some(Number.isNaN)) return undefined;
+  const cwd = rawCwd.trim() || undefined;
+  const foregroundCommand = rawCommand.trim().slice(0, 120) || undefined;
+  const paneTitle = rawTitleParts.join('\t').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 200) || undefined;
   const rowCount = rows!, colCount = cols!;
   // tmux reports an unset saved cursor as 4294967295.
   const clamp = (value: number | undefined, limit: number) => value === undefined || !(value >= 0) || value >= 2 ** 31 ? 0 : Math.min(value, limit - 1);
@@ -105,5 +119,12 @@ export function assembleSeed(blocks: Buffer[][], tracked: TrackedModes, history:
     `${ESC}[${clamp(cursorY, rowCount) + 1 - (origin ? regionTop : 0)};${clamp(cursorX, colCount) + 1}H`,
     unescapeOctal(blocks[4]![0] ?? Buffer.alloc(0)).toString('utf8'),
   );
-  return { data: parts.join(''), cols: colCount, rows: rowCount };
+  return {
+    data: parts.join(''),
+    cols: colCount,
+    rows: rowCount,
+    ...(cwd ? { cwd } : {}),
+    ...(foregroundCommand ? { foregroundCommand } : {}),
+    ...(paneTitle ? { paneTitle } : {}),
+  };
 }

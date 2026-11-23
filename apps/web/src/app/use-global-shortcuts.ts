@@ -13,10 +13,14 @@ export function useGlobalShortcuts(desktop: boolean, newSession: () => void) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const once = (run: () => void) => { event.preventDefault(); if (!event.repeat) run(); };
-      if (matches(event, 'search')) return once(() => ui.openSearch());
-      if (matches(event, 'commandPalette')) return once(() => ui.openPalette());
-      if (matches(event, 'toggleSidebar')) return once(() => { if (desktop) ui.setSidebarCollapsed((value) => !value); else ui.setMobileSidebar((value) => !value); });
+      const inTerminal = document.activeElement instanceof Element && Boolean(document.activeElement.closest('[data-terminal]'));
       if (matches(event, 'toggleTerminal')) return once(() => void nav.navigate(() => ui.setDockOpen((value) => !value)));
+      if (matches(event, 'commandPalette')) return once(() => ui.openPalette());
+      // When the terminal owns focus, pass control/alt chords (Ctrl+K, Ctrl+B, Alt+W, etc.)
+      // through to the shell/TUI instead of hijacking them for workbench navigation.
+      if (inTerminal) return;
+      if (matches(event, 'search')) return once(() => ui.openSearch());
+      if (matches(event, 'toggleSidebar')) return once(() => { if (desktop) ui.setSidebarCollapsed((value) => !value); else ui.setMobileSidebar((value) => !value); });
       if (!desktop) return;
       if (matches(event, 'sessionInfo')) {
         event.preventDefault();

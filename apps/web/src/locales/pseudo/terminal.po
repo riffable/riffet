@@ -45,12 +45,24 @@ msgstr ""
 msgid "上"
 msgstr ""
 
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "上一个匹配"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "上一条命令退出码"
+msgstr ""
+
 #: src/app/terminal/NativeSession.tsx
 msgid "上一条消息是否已执行仍无法确认"
 msgstr ""
 
 #: src/app/terminal/TerminalView.tsx
 msgid "下"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "下一个匹配"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
@@ -72,6 +84,10 @@ msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
 msgid "交接会话…"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "从预设新建终端"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
@@ -101,6 +117,14 @@ msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
 msgid "停止任务"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "关闭分屏"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "关闭查找"
 msgstr ""
 
 #: src/app/terminal/TerminalView.tsx
@@ -134,6 +158,10 @@ msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
 msgid "加入队列"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "区分大小写"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
@@ -176,6 +204,11 @@ msgstr ""
 msgid "在终端中"
 msgstr ""
 
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "在终端中查找"
+msgstr ""
+
 #: src/app/terminal/NativeSession.tsx
 msgid "存为自动化…"
 msgstr ""
@@ -215,6 +248,10 @@ msgstr ""
 
 #: src/app/terminal/TerminalView.tsx
 msgid "已退出"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "并排分屏"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
@@ -339,6 +376,19 @@ msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
 msgid "来源会话"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "查找"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "查找内容"
+msgstr ""
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "正则表达式"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
@@ -500,6 +550,10 @@ msgstr ""
 msgid "连接已断开"
 msgstr ""
 
+#: src/app/terminal/TerminalDock.tsx
+msgid "退出分屏"
+msgstr ""
+
 #: src/app/terminal/NativeSession.tsx
 msgctxt "terminal-model-picker-label"
 msgid "选择模型"
@@ -544,4 +598,8 @@ msgstr ""
 
 #: src/app/terminal/TerminalView.tsx
 msgid "附件正在上传"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "默认 Shell"
 msgstr ""

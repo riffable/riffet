@@ -73,6 +73,26 @@ export const TEXT_CACHE_BYTES = { mac: 32 * MIB, web: 32 * MIB, phone: 16 * MIB 
 export const TERMINAL_KEPT_ROWS = { mac: 10_000, web: 10_000, phone: 3_000 } as const;
 
 /**
+ * Operational ceilings for terminal connections, idle resource reclamation and protocol 4 framing
+ * (docs/TERMINAL-SOTA.md).
+ */
+export const TERMINAL_BUDGET = {
+  /** Detach the control client of an ordinary shell with no viewer or observer after this idle spell. */
+  idleDetachMs: 60_000,
+  /** Protocol 4 application-level WebSocket ping interval and pong timeout. */
+  heartbeatMs: 15_000,
+  heartbeatTimeoutMs: 10_000,
+  /** Maximum inactive terminal instances kept alive across tab switches on desktop clients. */
+  keepAliveLimit: 6,
+  /** Minimum snapshot byte size before protocol 4 applies raw deflate compression. */
+  compressMinBytes: 4 * KIB,
+  /** Maximum uncompressed snapshot size accepted when inflating a protocol 4 deflate frame. */
+  snapshotInflateMaxBytes: 32 * MIB,
+  /** Maximum unterminated escape sequence buffered by `OuterTerminalState` before resetting. */
+  protocolStatePendingBytes: 4 * KIB,
+} as const;
+
+/**
  * Frames a client queues between the stream and the code that applies them. Past it the client drops
  * the queue and resumes from its last applied seq, which costs one delta or snapshot instead of memory.
  */
@@ -589,4 +609,35 @@ export const TRACE_BUDGET = {
   requestContextChars: 4 * 1024 * 1024,
   /** Largest stored transcript the requests read parses; a larger one answers `tooLarge`. */
   requestFileBytes: 1024 * MIB,
+} as const;
+
+/** The code index of a project's declarations (`apps/server/src/workspace/symbols/`). */
+export const CODE_INDEX_BUDGET = {
+  /** Worker threads that parse files while an index is built; each holds the grammars and one file's tree. */
+  workers: 4,
+  /** Files handed to a worker at once: it compares them with the index, parses what changed and writes it in one transaction. */
+  batchFiles: 200,
+  /** Files larger than this are listed but not parsed: generated code, not something to navigate. */
+  fileBytes: 1 * MIB,
+  /** Most source files one project's index covers; past it the rest are left out and the status says so. */
+  maxFiles: 600_000,
+  /** Indexes kept open at once; the least recently used one is closed past it. */
+  openIndexes: 3,
+  /** An open index nobody asked anything of for this long is closed, and its workers stopped. */
+  idleCloseMs: 10 * 60_000,
+  /** A ready index compares the project's files with itself again when asked after this long: a pass stats every source file. */
+  recheckMs: 5 * 60_000,
+  /** Results of one symbol search, by default and at most. */
+  searchResults: 50,
+  maxSearchResults: 200,
+  /** Declarations one outline returns. */
+  outlineItems: 2_000,
+  /** The worker that parses single files for outlines is stopped after this long without one. */
+  outlineIdleMs: 60_000,
+  /** Rows one search tier (exact, prefix, initials, contains) reads before ranking; the rest of a very common name is not considered. */
+  candidateRows: 5_000,
+  /** Declarations of one name that definition lookup considers. */
+  definitionRows: 200,
+  /** Files a worker parses before it is replaced, so its WebAssembly heap does not keep what a large index once needed. */
+  workerRecycleFiles: 20_000,
 } as const;

@@ -140,6 +140,11 @@
     <string name="timeline_terminal_release_control">Release control</string>
     <string name="timeline_terminal_insert">Insert</string>
     <string name="timeline_terminal_send">Send</string>
+    <string name="timeline_terminal_customize_keys">Customize quick keys</string>
+    <string name="timeline_terminal_quick_keys_active">Active keys</string>
+    <string name="timeline_terminal_quick_keys_available">Available keys</string>
+    <string name="timeline_terminal_quick_keys_reset">Reset</string>
+    <string name="timeline_terminal_quick_keys_done">Done</string>
 
     <!-- Terminal render benchmark -->
     <string name="timeline_bench_measuring">Measuring…</string>

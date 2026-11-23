@@ -92,7 +92,7 @@ class TerminalSurfaceState(val emulator: TerminalEmulator, private val owner: Co
     }
 
     private fun publish() {
-        screen = TerminalFrame.of(emulator, ++frames, historyWindow)
+        screen = TerminalFrame.of(emulator, ++frames, historyWindow, previous = screen)
     }
 
     private companion object {
@@ -140,17 +140,37 @@ class TerminalFrame private constructor(
     }
 
     companion object {
-        fun of(emulator: TerminalEmulator, frame: Long, window: IntRange? = null): TerminalFrame {
+        fun of(emulator: TerminalEmulator, frame: Long, window: IntRange? = null, previous: TerminalFrame? = null): TerminalFrame {
             val screen = emulator.getScreen()
+            val columns = emulator.getColumns()
             val rows = emulator.getRows()
             val transcript = screen.getActiveTranscriptRows()
+            val scrolledRows = emulator.getScrolledRows()
             val first = if (window == null) 0 else maxOf(window.first, -transcript)
             val last = if (window == null) -1 else minOf(window.last, -1)
+            val reuseFrom = previous?.takeIf { it.columns == columns }
+            val scrollDelta = if (reuseFrom != null) scrolledRows - reuseFrom.scrolledRows else 0L
+
+            fun copyOrReuse(externalRow: Int, live: TerminalRow): TerminalRow {
+                if (reuseFrom != null && scrollDelta in -10_000L..10_000L) {
+                    val prevExternal = externalRow + scrollDelta.toInt()
+                    val candidate = when {
+                        prevExternal in 0 until reuseFrom.rows -> reuseFrom.lines[prevExternal]
+                        prevExternal < 0 -> reuseFrom.historyRow(prevExternal)
+                        else -> null
+                    }
+                    if (candidate != null && candidate.matchesSource(live)) return candidate
+                }
+                return live.copy()
+            }
+
             return TerminalFrame(
                 frame = frame,
-                columns = emulator.getColumns(),
+                columns = columns,
                 rows = rows,
-                lines = Array(rows) { row -> screen.allocateFullLineIfNecessary(screen.externalToInternalRow(row)).copy() },
+                lines = Array(rows) { row ->
+                    copyOrReuse(row, screen.allocateFullLineIfNecessary(screen.externalToInternalRow(row)))
+                },
                 reverseVideo = emulator.isReverseVideo(),
                 cursorEnabled = emulator.isCursorEnabled(),
                 cursorRow = emulator.getCursorRow(),
@@ -160,10 +180,11 @@ class TerminalFrame private constructor(
                 cursorKeysApplication = emulator.isCursorKeysApplicationMode(),
                 keypadApplication = emulator.isKeypadApplicationMode(),
                 transcriptRows = transcript,
-                scrolledRows = emulator.getScrolledRows(),
+                scrolledRows = scrolledRows,
                 historyFirst = if (first > last) 0 else first,
                 history = if (first > last) emptyArray() else Array(last - first + 1) { index ->
-                    screen.allocateFullLineIfNecessary(screen.externalToInternalRow(first + index)).copy()
+                    val ext = first + index
+                    copyOrReuse(ext, screen.allocateFullLineIfNecessary(screen.externalToInternalRow(ext)))
                 },
             )
         }
@@ -226,6 +247,26 @@ internal class ScreenPainter(private val measurer: TextMeasurer, private val bas
     private val advances = HashMap<Int, Float>()
     private val run = StringBuilder()
 
+    private data class RowCacheKey(val row: TerminalRow, val columns: Int, val reverse: Boolean)
+    private class BgSpan(val startCol: Int, val endCol: Int, val color: Int)
+    private class TextRun(val startCol: Int, val color: Int, val layout: TextLayoutResult)
+    private class BoxItem(val col: Int, val width: Int, val codePoint: Int, val color: Int)
+    private class FittedItem(val col: Int, val width: Int, val color: Int, val layout: TextLayoutResult)
+    private class DecoItem(val col: Int, val width: Int, val color: Int, val underline: Boolean, val strike: Boolean)
+    private class CompiledRow(
+        val backgrounds: List<BgSpan>,
+        val textRuns: List<TextRun>,
+        val boxItems: List<BoxItem>,
+        val fittedItems: List<FittedItem>,
+        val decorations: List<DecoItem>,
+    )
+
+    private var cachedPalette: TerminalPalette? = null
+    private var cachedCellWidth = -1f
+    private var cachedCellHeight = -1f
+    /** Bounded 512-entry LRU cache of compiled row layouts keyed by frozen [TerminalRow] identity. */
+    private val rowCache = LinkedHashMap<RowCacheKey, CompiledRow>(64)
+
     fun draw(scope: DrawScope, screen: TerminalFrame, palette: TerminalPalette, cell: CellMetrics) = with(scope) {
         drawRect(Color(palette.background))
         drawScreenRows(screen, palette, cell, firstRow = 0, top = 0f)
@@ -242,53 +283,74 @@ internal class ScreenPainter(private val measurer: TextMeasurer, private val bas
 
     /** Rows from any source (the live screen, the scrollback), [rows].first at [top] pixels. */
     fun DrawScope.drawRows(rows: IntRange, top: Float, columns: Int, palette: TerminalPalette, cell: CellMetrics, reverse: Boolean, rowAt: (Int) -> TerminalRow) {
+        if (cachedPalette != palette || cachedCellWidth != cell.width || cachedCellHeight != cell.height) {
+            rowCache.clear()
+            cachedPalette = palette
+            cachedCellWidth = cell.width
+            cachedCellHeight = cell.height
+        }
         var y = top
         for (row in rows) {
             if (y >= size.height) break
             if (y + cell.height > 0f) {
                 val line = rowAt(row)
-                drawRowBackground(line, y, columns, palette, cell, reverse)
-                drawRowText(line, y, columns, palette, cell, reverse)
+                val compiled = compiledRow(line, columns, palette, cell, reverse)
+                drawCompiledRow(compiled, y, cell)
             }
             y += cell.height
         }
     }
 
-    private fun DrawScope.drawRowBackground(line: TerminalRow, top: Float, columns: Int, palette: TerminalPalette, cell: CellMetrics, reverse: Boolean) {
-        var runStart = 0
-        var runColor = 0
+    private fun compiledRow(line: TerminalRow, columns: Int, palette: TerminalPalette, cell: CellMetrics, reverse: Boolean): CompiledRow {
+        val key = RowCacheKey(line, columns, reverse)
+        rowCache.remove(key)?.let { hit ->
+            rowCache[key] = hit
+            return hit
+        }
+        val compiled = compileRow(line, columns, palette, cell, reverse)
+        if (rowCache.size >= ROW_CACHE_LIMIT) {
+            val oldest = rowCache.entries.firstOrNull()?.key
+            if (oldest != null) rowCache.remove(oldest)
+        }
+        rowCache[key] = compiled
+        return compiled
+    }
+
+    private fun compileRow(line: TerminalRow, columns: Int, palette: TerminalPalette, cell: CellMetrics, reverse: Boolean): CompiledRow {
+        val backgrounds = ArrayList<BgSpan>(4)
+        var bgStart = 0
+        var bgColor = 0
         for (column in 0..columns) {
             val color = if (column < columns) backgroundOf(line.getStyle(column), palette, reverse) else Int.MIN_VALUE
             if (column == 0) {
-                runColor = color
+                bgColor = color
                 continue
             }
-            if (color != runColor) {
-                if (runColor != palette.background) {
-                    val left = (runStart * cell.width).roundToInt().toFloat()
-                    val right = (column * cell.width).roundToInt().toFloat()
-                    drawRect(Color(runColor), Offset(left, top), Size(right - left, cell.height))
-                }
-                runStart = column
-                runColor = color
+            if (color != bgColor) {
+                if (bgColor != palette.background) backgrounds.add(BgSpan(bgStart, column, bgColor))
+                bgStart = column
+                bgColor = color
             }
         }
-    }
 
-    private fun DrawScope.drawRowText(line: TerminalRow, top: Float, columns: Int, palette: TerminalPalette, cell: CellMetrics, reverse: Boolean) {
+        val textRuns = ArrayList<TextRun>(4)
+        var boxItems: ArrayList<BoxItem>? = null
+        var fittedItems: ArrayList<FittedItem>? = null
+        var decorations: ArrayList<DecoItem>? = null
+
         val text = line.mText
         val used = line.getSpaceUsed()
         var runStart = -1
         var runStyle = 0L
         var runColor = 0
+        run.setLength(0)
 
         fun flush() {
             if (runStart < 0) return
             val trimmed = run.trimEnd()
             if (trimmed.isNotEmpty()) {
                 val effect = TextStyle.decodeEffect(runStyle)
-                val layout = layout(trimmed.toString(), effect)
-                drawText(layout, color = Color(runColor), topLeft = Offset(runStart * cell.width, top + cell.textTop))
+                textRuns.add(TextRun(runStart, runColor, layout(trimmed.toString(), effect)))
             }
             run.setLength(0)
             runStart = -1
@@ -326,34 +388,76 @@ internal class ScreenPainter(private val measurer: TextMeasurer, private val bas
             } else {
                 flush()
                 if (!invisible && codePoint != ' '.code) {
-                    val left = column * cell.width
                     if (isBoxGlyph(codePoint)) {
-                        drawBoxGlyph(codePoint, left.roundToInt().toFloat(), top, ((column + width) * cell.width).roundToInt() - left.roundToInt().toFloat(), cell.height, Color(color))
+                        (boxItems ?: ArrayList<BoxItem>().also { boxItems = it }).add(BoxItem(column, width, codePoint, color))
                     } else {
-                        drawFitted(text.concatToString(start, index), effect, left, top, width * cell.width, cell, Color(color))
+                        val glyphLayout = layout(text.concatToString(start, index), effect)
+                        if (glyphLayout.size.width > 0) {
+                            (fittedItems ?: ArrayList<FittedItem>().also { fittedItems = it }).add(FittedItem(column, width, color, glyphLayout))
+                        }
                     }
                 }
             }
-            drawDecorations(effect, column, width, top, cell, color)
+            val underline = effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0
+            val strike = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
+            if (underline || strike) {
+                (decorations ?: ArrayList<DecoItem>().also { decorations = it }).add(DecoItem(column, width, color, underline, strike))
+            }
             column += width
         }
         flush()
+
+        return CompiledRow(
+            backgrounds = backgrounds,
+            textRuns = textRuns,
+            boxItems = boxItems ?: emptyList(),
+            fittedItems = fittedItems ?: emptyList(),
+            decorations = decorations ?: emptyList(),
+        )
     }
 
-    private fun DrawScope.drawDecorations(effect: Int, column: Int, width: Int, top: Float, cell: CellMetrics, color: Int) {
-        val underline = effect and TextStyle.CHARACTER_ATTRIBUTE_UNDERLINE != 0
-        val strike = effect and TextStyle.CHARACTER_ATTRIBUTE_STRIKETHROUGH != 0
-        if (!underline && !strike) return
-        val thickness = max(1f, (cell.height / 16f).roundToInt().toFloat())
-        val left = column * cell.width
-        val size = Size(width * cell.width, thickness)
-        if (underline) drawRect(Color(color), Offset(left, top + cell.height - thickness * 2), size)
-        if (strike) drawRect(Color(color), Offset(left, top + (cell.height / 2f).roundToInt()), size)
+    private fun DrawScope.drawCompiledRow(row: CompiledRow, top: Float, cell: CellMetrics) {
+        for (i in 0 until row.backgrounds.size) {
+            val bg = row.backgrounds[i]
+            val left = (bg.startCol * cell.width).roundToInt().toFloat()
+            val right = (bg.endCol * cell.width).roundToInt().toFloat()
+            drawRect(Color(bg.color), Offset(left, top), Size(right - left, cell.height))
+        }
+        for (i in 0 until row.textRuns.size) {
+            val tr = row.textRuns[i]
+            drawText(tr.layout, color = Color(tr.color), topLeft = Offset(tr.startCol * cell.width, top + cell.textTop))
+        }
+        for (i in 0 until row.boxItems.size) {
+            val item = row.boxItems[i]
+            val left = (item.col * cell.width).roundToInt().toFloat()
+            val right = ((item.col + item.width) * cell.width).roundToInt().toFloat()
+            drawBoxGlyph(item.codePoint, left, top, right - left, cell.height, Color(item.color))
+        }
+        for (i in 0 until row.fittedItems.size) {
+            val item = row.fittedItems[i]
+            drawFittedLayout(item.layout, item.col * cell.width, top, item.width * cell.width, cell, Color(item.color))
+        }
+        if (row.decorations.isNotEmpty()) {
+            val thickness = max(1f, (cell.height / 16f).roundToInt().toFloat())
+            val underlineY = top + cell.height - thickness * 2
+            val strikeY = top + (cell.height / 2f).roundToInt()
+            for (i in 0 until row.decorations.size) {
+                val deco = row.decorations[i]
+                val left = deco.col * cell.width
+                val decoSize = Size(deco.width * cell.width, thickness)
+                val color = Color(deco.color)
+                if (deco.underline) drawRect(color, Offset(left, underlineY), decoSize)
+                if (deco.strike) drawRect(color, Offset(left, strikeY), decoSize)
+            }
+        }
     }
 
     /** A glyph the run layout cannot place: centred in its cells and squeezed if it is too wide. */
     private fun DrawScope.drawFitted(text: String, effect: Int, left: Float, top: Float, span: Float, cell: CellMetrics, color: Color) {
-        val layout = layout(text, effect)
+        drawFittedLayout(layout(text, effect), left, top, span, cell, color)
+    }
+
+    private fun DrawScope.drawFittedLayout(layout: TextLayoutResult, left: Float, top: Float, span: Float, cell: CellMetrics, color: Color) {
         val advance = layout.size.width.toFloat()
         if (advance <= 0f) return
         val scale = if (advance > span) span / advance else 1f
@@ -364,6 +468,10 @@ internal class ScreenPainter(private val measurer: TextMeasurer, private val bas
         }) {
             drawText(layout, color = color, topLeft = Offset.Zero)
         }
+    }
+
+    private companion object {
+        const val ROW_CACHE_LIMIT = 512
     }
 
     private fun DrawScope.drawCursor(screen: TerminalFrame, palette: TerminalPalette, cell: CellMetrics, originY: Float) {

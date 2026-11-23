@@ -5,6 +5,30 @@ import { readStored, writeStored } from './utils';
 export type TextSize = (typeof WEB_DISPLAY_OPTIONS.textSize)[number];
 export const densities = WEB_DISPLAY_OPTIONS.density;
 export type Density = (typeof densities)[number];
+export type TerminalCursorStyle = 'block' | 'underline' | 'bar';
+export type TerminalBellMode = 'none' | 'visual' | 'sound';
+export type TerminalFontWeight = '300' | '400' | '500' | '600' | '700' | '800';
+export type TerminalRightClickBehavior = 'menu' | 'copyPaste';
+export type TerminalRendererMode = 'auto' | 'dom';
+export const ALL_TERMINAL_MOBILE_KEYS = [
+  'esc', 'tab', 'shiftTab', 'ctrlC', 'ctrlD', 'ctrlL', 'ctrlR',
+  'space', 'up', 'down', 'left', 'right',
+  'slash', 'pipe', 'tilde', 'dash', 'enter',
+] as const;
+export type TerminalMobileKeyId = (typeof ALL_TERMINAL_MOBILE_KEYS)[number];
+export const DEFAULT_TERMINAL_MOBILE_KEYS: readonly TerminalMobileKeyId[] = [
+  'esc', 'tab', 'space', 'up', 'down', 'left', 'right', 'enter',
+];
+export const TERMINAL_FONT_WEIGHTS: readonly TerminalFontWeight[] = ['300', '400', '500', '600', '700', '800'];
+export const TERMINAL_FONT_PRESETS: readonly string[] = [
+  'JetBrains Mono',
+  'SF Mono',
+  'Menlo',
+  'Monaco',
+  'Fira Code',
+  'Consolas',
+  'Courier New',
+];
 
 /**
  * Reading comfort, kept on this device only — the same stance the mobile client takes, and the
@@ -15,11 +39,43 @@ export interface DisplaySettings {
   textSize: TextSize;
   /** Scales the transcript's row gaps; it deliberately does not touch the touch-target sizes. */
   density: Density;
+  /** Optional custom monospace font family prepended to the terminal fallback stack (empty = default). */
+  terminalFontFamily: string;
   /** The terminal is a fixed-pitch surface and does not follow the text scale. */
   terminalFontSize: number;
   /** Insets around both the live terminal and its history, in CSS pixels. */
   terminalPaddingHorizontal: number;
   terminalPaddingVertical: number;
+  /** Terminal cursor shape (local C-class preference). */
+  terminalCursorStyle: TerminalCursorStyle;
+  /** Whether the terminal cursor blinks. */
+  terminalCursorBlink: boolean;
+  /** Multiplier applied to terminal row height (1.0–1.8). */
+  terminalLineHeight: number;
+  /** Extra horizontal spacing between terminal cells in pixels (-2–6). */
+  terminalLetterSpacing: number;
+  /** Font weight for regular terminal text. */
+  terminalFontWeight: TerminalFontWeight;
+  /** Font weight for bold terminal text. */
+  terminalFontWeightBold: TerminalFontWeight;
+  /** Copy non-empty terminal selection to the clipboard automatically. */
+  terminalCopyOnSelect: boolean;
+  /** Right-click behavior inside the terminal when the app isn't tracking the mouse. */
+  terminalRightClick: TerminalRightClickBehavior;
+  /** Scroll to bottom automatically when typing or pasting input. */
+  terminalScrollOnInput: boolean;
+  /** Scroll to bottom automatically when new terminal output arrives. */
+  terminalScrollOnOutput: boolean;
+  /** Wheel scroll speed multiplier inside the terminal (0.5–3.0). */
+  terminalScrollSensitivity: number;
+  /** Web terminal renderer preference (`auto` enables WebGL2 with DOM fallback; `dom` forces DOM). */
+  terminalRenderer: TerminalRendererMode;
+  /** Treat macOS Option as Meta (ESC prefix) inside the terminal. */
+  terminalMacOptionIsMeta: boolean;
+  /** How BEL (0x07) from the terminal is surfaced locally. */
+  terminalBell: TerminalBellMode;
+  /** Ordered list of quick keys shown on the mobile Web terminal bar. */
+  terminalMobileKeys: TerminalMobileKeyId[];
   /** Code syntax highlighting theme (`auto` follows the UI theme, or a built-in id). */
   codeTheme: CodeThemeSelection;
 }
@@ -33,11 +89,44 @@ export const MIN_TERMINAL_FONT_SIZE = WEB_DISPLAY_OPTIONS.minTerminalFontSize;
 export const MAX_TERMINAL_FONT_SIZE = WEB_DISPLAY_OPTIONS.maxTerminalFontSize;
 export const MAX_TERMINAL_PADDING_HORIZONTAL = WEB_DISPLAY_OPTIONS.maxHorizontalPadding;
 export const MAX_TERMINAL_PADDING_VERTICAL = WEB_DISPLAY_OPTIONS.maxVerticalPadding;
+export const MIN_TERMINAL_LINE_HEIGHT = 1.0;
+export const MAX_TERMINAL_LINE_HEIGHT = 1.8;
+export const MIN_TERMINAL_LETTER_SPACING = -2;
+export const MAX_TERMINAL_LETTER_SPACING = 6;
+export const MIN_TERMINAL_SCROLL_SENSITIVITY = 0.5;
+export const MAX_TERMINAL_SCROLL_SENSITIVITY = 3.0;
 export const defaultDisplaySettings: DisplaySettings = {
-  textSize: 'standard', density: 'standard', terminalFontSize: 12.5,
+  textSize: 'standard', density: 'standard', terminalFontFamily: '', terminalFontSize: 12.5,
   terminalPaddingHorizontal: 24, terminalPaddingVertical: 16,
+  terminalCursorStyle: 'block', terminalCursorBlink: true, terminalLineHeight: 1.3,
+  terminalLetterSpacing: 0, terminalFontWeight: '400', terminalFontWeightBold: '700',
+  terminalCopyOnSelect: false, terminalRightClick: 'menu',
+  terminalScrollOnInput: true, terminalScrollOnOutput: false, terminalScrollSensitivity: 1.0,
+  terminalRenderer: 'auto',
+  terminalMacOptionIsMeta: false, terminalBell: 'none',
+  terminalMobileKeys: [...DEFAULT_TERMINAL_MOBILE_KEYS],
   codeTheme: CODE_THEME_AUTO,
 };
+
+const VALID_MOBILE_KEYS = new Set<string>(ALL_TERMINAL_MOBILE_KEYS);
+const VALID_FONT_WEIGHTS = new Set<string>(TERMINAL_FONT_WEIGHTS);
+
+function parseFontWeight(value: unknown, fallback: TerminalFontWeight): TerminalFontWeight {
+  return typeof value === 'string' && VALID_FONT_WEIGHTS.has(value) ? (value as TerminalFontWeight) : fallback;
+}
+
+function parseMobileKeys(value: unknown): TerminalMobileKeyId[] {
+  if (!Array.isArray(value)) return [...DEFAULT_TERMINAL_MOBILE_KEYS];
+  const seen = new Set<string>();
+  const out: TerminalMobileKeyId[] = [];
+  for (const item of value) {
+    if (typeof item === 'string' && VALID_MOBILE_KEYS.has(item) && !seen.has(item)) {
+      seen.add(item);
+      out.push(item as TerminalMobileKeyId);
+    }
+  }
+  return out.length ? out : [...DEFAULT_TERMINAL_MOBILE_KEYS];
+}
 
 const hasOwn = <T extends object>(value: T, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key);
 
@@ -54,11 +143,15 @@ export function parseDisplaySettings(raw: string): DisplaySettings {
   const size = parsed.terminalFontSize;
   const horizontal = parsed.terminalPaddingHorizontal;
   const vertical = parsed.terminalPaddingVertical;
+  const lineHeight = parsed.terminalLineHeight;
+  const letterSpacing = parsed.terminalLetterSpacing;
+  const scrollSensitivity = parsed.terminalScrollSensitivity;
   return {
     textSize: parsed.textSize && hasOwn(textScales, parsed.textSize) ? parsed.textSize : defaultDisplaySettings.textSize,
     density: parsed.density === 'compact' || parsed.density === 'relaxed' ? parsed.density : defaultDisplaySettings.density,
+    terminalFontFamily: typeof parsed.terminalFontFamily === 'string' ? parsed.terminalFontFamily.trim().slice(0, 120) : defaultDisplaySettings.terminalFontFamily,
     terminalFontSize: typeof size === 'number' && Number.isFinite(size)
-      ? Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, size))
+      ? Math.round(Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, size)) * 2) / 2
       : defaultDisplaySettings.terminalFontSize,
     terminalPaddingHorizontal: typeof horizontal === 'number' && Number.isFinite(horizontal)
       ? Math.min(MAX_TERMINAL_PADDING_HORIZONTAL, Math.max(0, horizontal))
@@ -66,6 +159,35 @@ export function parseDisplaySettings(raw: string): DisplaySettings {
     terminalPaddingVertical: typeof vertical === 'number' && Number.isFinite(vertical)
       ? Math.min(MAX_TERMINAL_PADDING_VERTICAL, Math.max(0, vertical))
       : defaultDisplaySettings.terminalPaddingVertical,
+    terminalCursorStyle: parsed.terminalCursorStyle === 'underline' || parsed.terminalCursorStyle === 'bar'
+      ? parsed.terminalCursorStyle : defaultDisplaySettings.terminalCursorStyle,
+    terminalCursorBlink: typeof parsed.terminalCursorBlink === 'boolean'
+      ? parsed.terminalCursorBlink : defaultDisplaySettings.terminalCursorBlink,
+    terminalLineHeight: typeof lineHeight === 'number' && Number.isFinite(lineHeight)
+      ? Math.round(Math.min(MAX_TERMINAL_LINE_HEIGHT, Math.max(MIN_TERMINAL_LINE_HEIGHT, lineHeight)) * 10) / 10
+      : defaultDisplaySettings.terminalLineHeight,
+    terminalLetterSpacing: typeof letterSpacing === 'number' && Number.isFinite(letterSpacing)
+      ? Math.round(Math.min(MAX_TERMINAL_LETTER_SPACING, Math.max(MIN_TERMINAL_LETTER_SPACING, letterSpacing)) * 2) / 2
+      : defaultDisplaySettings.terminalLetterSpacing,
+    terminalFontWeight: parseFontWeight(parsed.terminalFontWeight, defaultDisplaySettings.terminalFontWeight),
+    terminalFontWeightBold: parseFontWeight(parsed.terminalFontWeightBold, defaultDisplaySettings.terminalFontWeightBold),
+    terminalCopyOnSelect: typeof parsed.terminalCopyOnSelect === 'boolean'
+      ? parsed.terminalCopyOnSelect : defaultDisplaySettings.terminalCopyOnSelect,
+    terminalRightClick: parsed.terminalRightClick === 'copyPaste'
+      ? 'copyPaste' : defaultDisplaySettings.terminalRightClick,
+    terminalScrollOnInput: typeof parsed.terminalScrollOnInput === 'boolean'
+      ? parsed.terminalScrollOnInput : defaultDisplaySettings.terminalScrollOnInput,
+    terminalScrollOnOutput: typeof parsed.terminalScrollOnOutput === 'boolean'
+      ? parsed.terminalScrollOnOutput : defaultDisplaySettings.terminalScrollOnOutput,
+    terminalScrollSensitivity: typeof scrollSensitivity === 'number' && Number.isFinite(scrollSensitivity)
+      ? Math.round(Math.min(MAX_TERMINAL_SCROLL_SENSITIVITY, Math.max(MIN_TERMINAL_SCROLL_SENSITIVITY, scrollSensitivity)) * 10) / 10
+      : defaultDisplaySettings.terminalScrollSensitivity,
+    terminalRenderer: parsed.terminalRenderer === 'dom' ? 'dom' : defaultDisplaySettings.terminalRenderer,
+    terminalMacOptionIsMeta: typeof parsed.terminalMacOptionIsMeta === 'boolean'
+      ? parsed.terminalMacOptionIsMeta : defaultDisplaySettings.terminalMacOptionIsMeta,
+    terminalBell: parsed.terminalBell === 'visual' || parsed.terminalBell === 'sound'
+      ? parsed.terminalBell : defaultDisplaySettings.terminalBell,
+    terminalMobileKeys: parseMobileKeys(parsed.terminalMobileKeys),
     codeTheme: parseCodeThemeSelection(parsed.codeTheme),
   };
 }

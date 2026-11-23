@@ -974,7 +974,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         <ErrorBoundary resetKey={`${project?.id ?? ''}:${session?.id ?? ''}`}>
           <Suspense fallback={loadingPanel}>{content}</Suspense>
         </ErrorBoundary>
-        <DockHost mode="desktop" show={desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
+        <DockHost mode="desktop" show={desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={createShell} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
       </main>
 
       <PanelHost
@@ -993,7 +993,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       </div>
       </TabChromeContext.Provider>
       </SidebarPeekTrigger.Provider>
-      <DockHost mode="mobile" show={!desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
+      <DockHost mode="mobile" show={!desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={createShell} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
 
       <WorkbenchOverlays
         addProject={addProject}

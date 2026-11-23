@@ -256,7 +256,7 @@ export async function createApp(options: AppOptions = {}) {
     return run.id;
   },workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
   // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
-  const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
+  const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),shellSettings:()=>settings.getSettings().terminal,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   // Warm CLIs a previous process reserved have no page left to renew them.
   void terminal.endPreviousWarmupsOnce().catch(error=>console.warn('[riffet] warm terminals of an earlier process were not ended',error));
   const git=new GitService({stateDir});

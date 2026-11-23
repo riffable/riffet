@@ -513,6 +513,10 @@ msgstr "material3 and expressive use Material's dialog; the other styles use the
 msgid "material3 风格的取值；其他风格的导航栏与底栏高度见「风格」一章。"
 msgstr "material3 values; the bar heights of the other styles are in the Styles chapter."
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "Option 作为 Meta 键"
+msgstr "Use Option as Meta key"
+
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 msgid "Prompt"
 msgstr "Prompt"
@@ -564,6 +568,18 @@ msgstr "Sheets, menus and notifications"
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "SheetScaffold 统一标题、正文、页脚和键盘操作，调用处只填内容和按钮。点 sheet 外部不关闭。"
 msgstr "SheetScaffold unifies the title, body, footer and keyboard handling; call sites only fill in content and buttons. Clicking outside the sheet does not close it."
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell Integration"
+msgstr "Shell Integration"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell 环境"
+msgstr "Shell environment"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell 预设"
+msgstr "Shell profiles"
 
 #: src/app/design/android/OverlayChapter.tsx
 msgid "Snackbar 整个应用一个队列，不压在底栏上"
@@ -806,6 +822,7 @@ msgid "下一章"
 msgstr "Next chapter"
 
 #: src/app/design/mac/notes.ts
+#: src/app/settings/PreferencesSections.tsx
 msgid "下划线"
 msgstr "Underline"
 
@@ -1206,6 +1223,10 @@ msgstr "The clash is whether reach or retention is the goal of a first version. 
 msgid "产品功能"
 msgstr "Product features"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅作用于 Riffet 启动的新 Shell，不修改本地 rc 文件"
+msgstr "Applies only to new shells launched by Riffet without modifying local rc files"
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器，不会回显"
@@ -1214,6 +1235,10 @@ msgstr "Saved on the server only; never shown"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器；留空保留现有 Key，不会回显"
 msgstr "Saved on the server only. Leave blank to keep the current key; it is never shown."
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅保存在这个浏览器"
+msgstr "Saved only in this browser"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "仅保存在这个浏览器。"
@@ -1228,7 +1253,7 @@ msgid "仅保存在这台服务器"
 msgstr "Saved only on this server"
 
 #: src/app/design/patterns/FormsChapter.tsx
-#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -1636,6 +1661,10 @@ msgid "保存后读取额度"
 msgstr "Save to read quota"
 
 #: src/app/settings/PreferencesSections.tsx
+msgid "保存在当前服务器"
+msgstr "Saved on this server"
+
+#: src/app/settings/PreferencesSections.tsx
 msgid "保存在服务器，所有设备生效。"
 msgstr "Saved on the server and applied to all devices."
 
@@ -1812,6 +1841,18 @@ msgstr "Run Codex first, then commit."
 msgid "先问选的是值，还是下方内容所属的对象；再问选项是固定的几个，还是随数据变化。"
 msgstr "First ask whether you are choosing a value or the object the content below belongs to; then ask whether the options are a fixed few or vary with data."
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标与交互"
+msgstr "Cursor & interaction"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标样式"
+msgstr "Cursor style"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标闪烁"
+msgstr "Cursor blink"
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "入口"
 msgstr "Entry"
@@ -1911,6 +1952,7 @@ msgstr "About Riffet"
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 #: src/app/settings/ModelProbeDialog.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "关闭"
 msgstr "Close"
 
@@ -2390,6 +2432,15 @@ msgstr "Delete rule"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "删除这个会话？"
 msgstr "Delete this session?"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "删除预设"
+msgstr "Delete profile"
+
+#. placeholder {0}: profile.name
+#: src/app/settings/PreferencesSections.tsx
+msgid "删除预设：{0}"
+msgstr "Delete profile: {0}"
 
 #. placeholder {0}: formatPercent(eventLoop.utilization)
 #. placeholder {1}: formatDuration(eventLoop.p99Ms)
@@ -2962,6 +3013,11 @@ msgstr "Right-aligned"
 msgid "右滑返回可以在设置里关掉，或只留屏幕边缘。"
 msgstr "Swipe back can be turned off in Settings, or kept to the screen edge."
 
+#. placeholder {0}: mobileKeyLabels[id]
+#: src/app/settings/PreferencesSections.tsx
+msgid "右移 {0}"
+msgstr "Move {0} right"
+
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "右键菜单"
@@ -2978,6 +3034,10 @@ msgstr "Context menus are system menus in every style."
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "右键菜单用系统菜单"
 msgstr "Context menus use the system menu"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "右键行为"
+msgstr "Right-click behavior"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "各栏独立"
@@ -3039,6 +3099,7 @@ msgstr "Two states of the same colour differ by filled and hollow; the pulse mar
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProfileSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "名称"
@@ -3129,6 +3190,10 @@ msgstr "Wed"
 msgid "命令"
 msgstr "Commands"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "命令，如 /bin/bash -l"
+msgstr "Command, e.g. /bin/bash -l"
+
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "命令、会话与项目，排在一个列表里"
 msgstr "Commands, conversations and projects, in one list"
@@ -3140,6 +3205,10 @@ msgstr "Commands and Skills"
 #: src/app/settings/LinksSection.tsx
 msgid "命令会默认开启「本机操作远端」；断线重连需要免交互 SSH（密钥或 ssh-agent）"
 msgstr "Allows operating the remote server by default; automatic reconnect requires non-interactive SSH (key or ssh-agent)"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "响铃提醒"
+msgstr "Bell"
 
 #: src/app/design/overview/Opening.tsx
 msgid "四个客户端共用的颜色、文字、间距、动效与组件。"
@@ -3479,6 +3548,10 @@ msgstr "Declarative description"
 msgid "声明式页面"
 msgstr "Declarative pages"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "声音"
+msgstr "Sound"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/channels/CardSettings.tsx
 msgid "处理中"
@@ -3511,6 +3584,10 @@ msgstr "Note"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "复制 App ID"
 msgstr "Copy App ID"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "复制或粘贴"
+msgstr "Copy or paste"
 
 #: src/app/settings/PairingDialogs.tsx
 msgid "复制配对码"
@@ -3616,8 +3693,13 @@ msgid "子进程"
 msgstr "Child process"
 
 #: src/app/design/foundations/TypeChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "字体"
 msgstr "Font"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字体 · 字距 · 行高 · 字重"
+msgstr "Font · Spacing · Line height · Weight"
 
 #: src/app/design/catalog.tsx
 msgid "字体、字阶与角色"
@@ -3626,6 +3708,10 @@ msgstr "Fonts, type scale and roles"
 #: src/app/design/mac/StylesChapter.tsx
 msgid "字体与图标"
 msgstr "Fonts and icons"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字体与排版"
+msgstr "Font & typography"
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "字体倍率与动画时长缩放"
@@ -3656,6 +3742,10 @@ msgstr "Fields and validation"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "字符与默认"
 msgstr "Characters and defaults"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字距"
+msgstr "Letter spacing"
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "字距一律为 0：Material 的拉丁字距会把中文标签撑开"
@@ -4131,6 +4221,11 @@ msgstr "Left padding 16 · phone 12"
 msgid "左右 12 · 16 · 48，顶 24 · 32，底 16"
 msgstr "Left and right 12 · 16 · 48, top 24 · 32, bottom 16"
 
+#. placeholder {0}: mobileKeyLabels[id]
+#: src/app/settings/PreferencesSections.tsx
+msgid "左移 {0}"
+msgstr "Move {0} left"
+
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "已丢弃"
@@ -4191,6 +4286,10 @@ msgstr "Rule deleted"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "已向 {0}（PID {1}）发送结束信号"
 msgstr "Sent a termination signal to {0} (PID {1})"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已启用按键"
+msgstr "Active keys"
 
 #. placeholder {0}: calls.length
 #: src/app/design/overview/Opening.tsx
@@ -4396,6 +4495,10 @@ msgstr "With change stats"
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
 msgstr "Until the seats are read, the stage stands with the format's opening seats, skeletons where the Agents and models go."
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "常规字重"
+msgstr "Font weight"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "常驻"
@@ -4799,6 +4902,26 @@ msgstr "Reset to default"
 #: src/app/settings/PreferencesSections.tsx
 msgid "恢复默认：{label}"
 msgstr "Reset to default: {label}"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：字号"
+msgstr "Reset font size"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：字距"
+msgstr "Reset letter spacing"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：滚轮速度"
+msgstr "Reset scroll speed"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：终端字体"
+msgstr "Reset terminal font"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：行高"
+msgstr "Reset to default: Line height"
 
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
@@ -5666,6 +5789,7 @@ msgstr "File access"
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "文字"
 msgstr "Type"
 
@@ -5812,6 +5936,14 @@ msgstr "Version {available}"
 msgid "新设置从下一条回复开始生效"
 msgstr "Applies from the next reply"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "新输出时滚到底部"
+msgstr "Scroll to bottom on output"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "方块"
+msgstr "Block"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "旁白"
 msgstr "Aside"
@@ -5891,6 +6023,10 @@ msgstr "Couldn't save the title rules"
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存消息输入设置"
 msgstr "Couldn't save the message input setting"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存终端设置"
+msgstr "Unable to save terminal settings"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存编辑器设置"
@@ -6209,6 +6345,7 @@ msgstr "Yes"
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "显示"
 msgstr "Display"
 
@@ -7308,6 +7445,7 @@ msgstr "Mixed text, punctuation, truncation, wrapping"
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/ChannelsSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加"
@@ -7316,6 +7454,10 @@ msgstr "Add"
 #: src/app/settings/LinksSection.tsx
 msgid "添加互联"
 msgstr "Add a link"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "添加按键"
+msgstr "Add keys"
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加规则"
@@ -7365,6 +7507,10 @@ msgstr "Clear"
 msgid "渐变"
 msgstr "Gradient"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "渲染器"
+msgstr "Renderer"
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "源"
 msgstr "Source"
@@ -7384,6 +7530,14 @@ msgstr "Full-bleed single layer"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "滚动"
 msgstr "Scroll"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "滚动与渲染"
+msgstr "Scrolling & rendering"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "滚轮速度"
+msgstr "Scroll speed"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "点击下方按钮选择要启用的技能与工具"
@@ -7862,6 +8016,10 @@ msgstr "Does the web version work offline?"
 msgid "离线的地位"
 msgstr "The role of offline"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "移动端快捷按键栏"
+msgstr "Mobile quick key bar"
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "移动端的底部面板"
 msgstr "Bottom sheets on phones"
@@ -7874,7 +8032,9 @@ msgstr "Bottom sheets on phones"
 msgid "移除"
 msgstr "Remove"
 
+#. placeholder {0}: mobileKeyLabels[id]
 #. placeholder {0}: model.value
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 msgid "移除 {0}"
 msgstr "Remove {0}"
@@ -7924,6 +8084,10 @@ msgstr "When empty it can show a shortcut hint, replaced by clear once there is 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "空时右侧提示聚焦键，有内容时换成清除。"
 msgstr "When empty, the right side hints at the focus key; with content, it becomes clear."
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "空格"
+msgstr "Space"
 
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -8001,6 +8165,10 @@ msgstr "Runs immediately, with undo in the toast"
 #: src/app/settings/StorageSection.tsx
 msgid "立即整理"
 msgstr "Clean up now"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "竖线"
+msgstr "Bar"
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "竖线分别是非文字 3:1 和文字 4.5:1。读自当前主题；占位和快捷键用的 fg-4 不承载需要读清的信息。"
@@ -8084,6 +8252,10 @@ msgstr "Type"
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "类型决定骨架与内容列；同一类型的页面不另起布局。"
 msgstr "The type determines the skeleton and content column; pages of the same type do not define their own layout."
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "粗体字重"
+msgstr "Bold font weight"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。"
@@ -8281,6 +8453,10 @@ msgstr "The terminal accepts only #rrggbb; transparency is ignored."
 #: src/app/settings/LinksSection.tsx
 msgid "终端命令"
 msgstr "Terminal command"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "终端字体"
+msgstr "Terminal font"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
@@ -8532,6 +8708,10 @@ msgstr "Describe it declaratively whenever possible."
 msgid "自动"
 msgstr "Auto"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "自动 (WebGL)"
+msgstr "Auto (WebGL)"
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
@@ -8583,6 +8763,14 @@ msgstr "Customize…"
 #: src/app/settings/ThemeEditor.tsx
 msgid "自定义代码高亮"
 msgstr "Customize code highlighting"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "自定义字体…"
+msgstr "Custom font…"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "自定义字体名"
+msgstr "Custom font name"
 
 #: src/app/design/mac/notes.ts
 msgid "自绘"
@@ -8725,6 +8913,7 @@ msgid "行距"
 msgstr "Line spacing"
 
 #: src/app/design/foundations/TypesetChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "行高"
 msgstr "Row height"
 
@@ -9282,6 +9471,10 @@ msgstr "Follow default"
 msgid "跟随默认 · {0}"
 msgstr "Default · {0}"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "跟随默认等宽字体"
+msgstr "Follow default monospace font"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "路径"
@@ -9350,6 +9543,10 @@ msgstr "Input and selection"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "输入新 Key 替换现有值"
 msgstr "Enter a new key to replace the current one"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "输入时滚到底部"
+msgstr "Scroll to bottom on input"
 
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/mac/notes.ts
@@ -9735,6 +9932,10 @@ msgstr "Applies to"
 msgid "选中"
 msgstr "Selected"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "选中即复制"
+msgstr "Copy on select"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "选中块在选项之间滑动。"
 msgstr "The selection slides between options."
@@ -10086,6 +10287,10 @@ msgstr "Wrap long lines"
 #: src/app/settings/PreferencesSections.tsx
 msgid "门禁"
 msgstr "Gate"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "闪烁"
+msgstr "Visual"
 
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "间距"
@@ -10459,6 +10664,14 @@ msgstr "Preview"
 msgid "预设"
 msgstr "Preset"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "预设名称"
+msgstr "Profile name"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "预设命令"
+msgstr "Profile command"
+
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/ColorChapter.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -10642,6 +10855,10 @@ msgstr "14 px by default, secondary text color; use text-current inside buttons.
 msgid "默认 Agent"
 msgstr "Default Agent"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "默认 Shell"
+msgstr "Default shell"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "默认（{size}）"
 msgstr "Default ({size})"
@@ -10668,6 +10885,10 @@ msgstr "Default provider"
 #: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认模型"
 msgstr "Default model"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "默认菜单"
+msgstr "Default menu"
 
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"

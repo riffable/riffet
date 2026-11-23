@@ -1,12 +1,11 @@
 import AppKit
 import UniformTypeIdentifiers
-import SwiftTerm
 import SwiftUI
 import RiffetKit
 
-/// The conversation's terminal (the CLI's own TUI) or a shell in the project, rendered by SwiftTerm
-/// over `WS /api/terminals/:id/ws`. Control and resize follow the phone's `TerminalConnection`: this
-/// Mac watches until it types, and only the controlling client resizes the pane.
+/// The conversation's terminal (the CLI's own TUI) or a shell in the project, rendered behind
+/// [TerminalSurfaceBackend] over `WS /api/terminals/:id/ws`. Control and resize follow the phone's
+/// `TerminalConnection`: this Mac watches until it types, and only the controlling client resizes the pane.
 struct TerminalPanel: View {
     let workbench: Workbench
     let project: Project
@@ -20,7 +19,12 @@ struct TerminalPanel: View {
     private var options: [(id: String, title: String)] {
         var result: [(String, String)] = []
         if let id = session?.terminalId { result.append((id, String(localized: "Agent 终端"))) }
-        result += shells.map { ($0.id, $0.title.isEmpty ? "Shell" : $0.title) }
+        result += shells.map { shell in
+            let name = [shell.paneTitle, shell.foregroundCommand, shell.title]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first { !$0.isEmpty } ?? "Shell"
+            return (shell.id, name)
+        }
         return result
     }
 
@@ -83,6 +87,7 @@ struct TerminalPanel: View {
         do {
             guard let api = workbench.host.api else { throw LocalPairing.Failure(message: String(localized: "服务器未连接，请稍后重试")) }
             _ = try await api.closeTerminal(id: id)
+            workbench.terminalDock.evictController(for: id)
             shells.removeAll { $0.id == id }
             error = nil
             if selection == id { workbench.terminalDock.select(options.first?.id, projectId: project.id) }
@@ -109,14 +114,25 @@ struct TerminalSurface<Accessory: View>: View {
     var onTerminate: (() -> Void)?
     var onCollapse: (() -> Void)?
     var focusRequest = 0
+    var allowPopOut = true
+    var clientIdOverride: String?
+    var controllerOverride: TerminalController?
     @ViewBuilder var accessory: Accessory
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var colorScheme
-    @State private var controller = TerminalController()
     @State private var confirmInterrupt = false
     @State private var confirmTerminate = false
     @State private var error: String?
     @State private var menuAnchor = MenuAnchor()
+    @State private var searchQuery = ""
+    @State private var searchCaseSensitive = false
+    @State private var searchRegex = false
+    @State private var searchSummary: (index: Int, total: Int) = (0, 0)
+    @FocusState private var searchFieldFocused: Bool
+
+    private var controller: TerminalController { controllerOverride ?? workbench.terminalDock.controller(for: terminalId) }
+    private var resolvedClientId: String { clientIdOverride ?? workbench.terminalClientId }
+    private var displayTitle: String { controller.displayTitle(fallback: title) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -124,7 +140,7 @@ struct TerminalSurface<Accessory: View>: View {
                 Button { showMenu() } label: {
                     HStack(spacing: 6) {
                         Image(icon: "terminal")
-                        Text(title).lineLimit(1)
+                        Text(displayTitle).lineLimit(1)
                         Image(icon: "ellipsis").font(.riffet(size: S(11), weight: .semibold))
                     }
                     .font(.riffet(size: S(12)))
@@ -132,11 +148,34 @@ struct TerminalSurface<Accessory: View>: View {
                 }
                 .buttonStyle(ChipButtonStyle())
                 .background(MenuAnchorView(anchor: menuAnchor))
-                .help("终端菜单 · \(controller.status)")
-                .accessibilityLabel("\(title)菜单")
+                .help(controller.cwd.map { "\($0) · \(controller.status)" } ?? "终端菜单 · \(controller.status)")
+                .accessibilityLabel("\(displayTitle)菜单")
+                if let code = controller.lastExitCode, code != 0 {
+                    Text("\(code)")
+                        .font(RiffetFont.codeSmall)
+                        .foregroundStyle(palette.danger)
+                        .padding(.horizontal, Space.xs)
+                        .padding(.vertical, Space.xxs)
+                        .background(palette.danger.opacity(0.12), in: RoundedRectangle(cornerRadius: Radius.control))
+                        .help("上一条命令退出码")
+                }
                 if !controller.live { Text(controller.status).font(.riffet(size: S(11))).foregroundStyle(palette.fg4).lineLimit(1) }
                 if controller.pasting { Spinner(size: .small) }
                 Spacer(minLength: Space.sm)
+                Button { toggleSearch() } label: {
+                    Image(icon: "magnifyingglass").font(RiffetFont.caption)
+                }
+                .buttonStyle(IconButtonStyle(size: 24))
+                .help("在终端中查找 (⌘F)")
+                .accessibilityLabel("在终端中查找")
+                if allowPopOut {
+                    Button { popOutWindow() } label: {
+                        Image(icon: "macwindow.badge.plus").font(RiffetFont.caption)
+                    }
+                    .buttonStyle(IconButtonStyle(size: 24))
+                    .help("在新窗口中打开")
+                    .accessibilityLabel("在新窗口中打开")
+                }
                 if let onCollapse {
                     Button(action: onCollapse) { Image(icon: "chevron.down").font(.riffet(size: S(11), weight: .semibold)) }
                         .buttonStyle(IconButtonStyle(size: 24))
@@ -156,16 +195,38 @@ struct TerminalSurface<Accessory: View>: View {
             .padding(.horizontal, Space.md)
             .frame(height: InspectorMetrics.headerHeight)
             PanelRule()
+            if controller.searchOpen {
+                searchBar
+                PanelRule()
+            }
             if let error { Text(error).font(RiffetFont.caption).foregroundStyle(palette.danger).padding(6) }
             if let notice = controller.pasteNotice { Text(notice).font(RiffetFont.caption).foregroundStyle(palette.danger).padding(6) }
             ZStack(alignment: .bottomTrailing) {
                 TerminalHost(
                     controller: controller, theme: ThemeStore.shared.entry,
-                    dark: colorScheme == .dark, fontSize: CGFloat(DisplayPreferences.shared.terminalFontSize),
-                    fonts: AppearanceStore.shared.fonts.key
+                    dark: colorScheme == .dark,
+                    fontFamily: DisplayPreferences.shared.terminalFontFamily,
+                    fontSize: CGFloat(DisplayPreferences.shared.terminalFontSize),
+                    fontWeight: DisplayPreferences.shared.terminalFontWeight,
+                    fonts: AppearanceStore.shared.fonts.key,
+                    cursorStyle: DisplayPreferences.shared.terminalCursorStyle,
+                    cursorBlink: DisplayPreferences.shared.terminalCursorBlink,
+                    optionAsMeta: DisplayPreferences.shared.terminalOptionAsMeta,
+                    copyOnSelect: DisplayPreferences.shared.terminalCopyOnSelect,
+                    rightClick: DisplayPreferences.shared.terminalRightClick,
+                    scrollOnInput: DisplayPreferences.shared.terminalScrollOnInput,
+                    scrollOnOutput: DisplayPreferences.shared.terminalScrollOnOutput,
+                    scrollSensitivity: DisplayPreferences.shared.terminalScrollSensitivity
                 )
                 .padding(.horizontal, CGFloat(DisplayPreferences.shared.terminalHorizontalPadding))
                 .padding(.vertical, CGFloat(DisplayPreferences.shared.terminalVerticalPadding))
+                .overlay {
+                    if controller.bellFlash {
+                        Rectangle()
+                            .strokeBorder(palette.accent, lineWidth: 2)
+                            .allowsHitTesting(false)
+                    }
+                }
                 if !controller.hasOutput, !controller.live, !controller.exited {
                     // Until the first snapshot arrives the surface is blank: say why.
                     VStack(spacing: Space.sm) {
@@ -178,7 +239,7 @@ struct TerminalSurface<Accessory: View>: View {
                 }
                 if !controller.atBottom {
                     Button {
-                        controller.scrollView?.scrollToLive()
+                        controller.backend?.scrollToLive()
                         controller.focus()
                     } label: {
                         Label("回到实时", icon: "arrow.down")
@@ -190,8 +251,13 @@ struct TerminalSurface<Accessory: View>: View {
             }
         }
         .background(palette.bg)
-        .onAppear { controller.start(host: workbench.host, terminalId: terminalId, clientId: workbench.terminalClientId) }
-        .onDisappear { controller.stop() }
+        .onAppear { controller.start(host: workbench.host, terminalId: terminalId, clientId: resolvedClientId) }
+        .onChange(of: controller.searchOpen) { _, open in
+            if open { searchFieldFocused = true; runSearch(forward: true) }
+        }
+        .onChange(of: searchQuery) { _, _ in if controller.searchOpen { runSearch(forward: true) } }
+        .onChange(of: searchCaseSensitive) { _, _ in if controller.searchOpen { runSearch(forward: true) } }
+        .onChange(of: searchRegex) { _, _ in if controller.searchOpen { runSearch(forward: true) } }
         .onChange(of: focusRequest, initial: true) { _, request in
             if request > 0, !workbench.terminalDock.automatic { controller.focus() }
         }
@@ -205,6 +271,86 @@ struct TerminalSurface<Accessory: View>: View {
         } message: {
             Text("这个 Shell 及其中运行的进程将结束。")
         }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: Space.xs) {
+            Image(icon: "magnifyingglass")
+                .font(RiffetFont.caption)
+                .foregroundStyle(palette.fg4)
+            TextField("查找", text: $searchQuery)
+                .textFieldStyle(.plain)
+                .font(RiffetFont.caption)
+                .focused($searchFieldFocused)
+                .onSubmit { runSearch(forward: true) }
+                .onExitCommand { closeSearch() }
+            if !searchQuery.isEmpty {
+                Text("\(searchSummary.index)/\(searchSummary.total)")
+                    .font(RiffetFont.codeSmall)
+                    .foregroundStyle(searchSummary.total == 0 ? palette.danger : palette.fg3)
+            }
+            Button { searchCaseSensitive.toggle() } label: {
+                Text("Aa").font(RiffetFont.codeSmall)
+                    .foregroundStyle(searchCaseSensitive ? palette.accent : palette.fg3)
+            }
+            .buttonStyle(IconButtonStyle(size: 22))
+            .help("区分大小写")
+            Button { searchRegex.toggle() } label: {
+                Text(".*").font(RiffetFont.codeSmall)
+                    .foregroundStyle(searchRegex ? palette.accent : palette.fg3)
+            }
+            .buttonStyle(IconButtonStyle(size: 22))
+            .help("正则表达式")
+            Button { runSearch(forward: false) } label: {
+                Image(icon: "arrow.up").font(RiffetFont.caption)
+            }
+            .buttonStyle(IconButtonStyle(size: 22))
+            .disabled(searchQuery.isEmpty)
+            .help("上一个匹配")
+            Button { runSearch(forward: true) } label: {
+                Image(icon: "arrow.down").font(RiffetFont.caption)
+            }
+            .buttonStyle(IconButtonStyle(size: 22))
+            .disabled(searchQuery.isEmpty)
+            .help("下一个匹配")
+            Button { closeSearch() } label: {
+                Image(icon: "xmark").font(RiffetFont.caption)
+            }
+            .buttonStyle(IconButtonStyle(size: 22))
+            .help("关闭查找")
+        }
+        .padding(.horizontal, Space.md)
+        .frame(height: InspectorMetrics.headerHeight)
+        .background(palette.bgElevated)
+    }
+
+    private func toggleSearch() {
+        if controller.searchOpen { closeSearch() }
+        else { controller.searchOpen = true; searchFieldFocused = true }
+    }
+
+    private func popOutWindow() {
+        if let onCollapse { onCollapse() }
+        WindowRouter.shared.openTerminal(terminalId)
+    }
+
+    private func closeSearch() {
+        controller.searchOpen = false
+        controller.backend?.clearSearch()
+        searchSummary = (0, 0)
+        controller.focus()
+    }
+
+    private func runSearch(forward: Bool) {
+        guard let backend = controller.backend else { return }
+        if searchQuery.isEmpty {
+            backend.clearSearch()
+            searchSummary = (0, 0)
+            return
+        }
+        if forward { _ = backend.findNext(searchQuery, caseSensitive: searchCaseSensitive, regex: searchRegex) }
+        else { _ = backend.findPrevious(searchQuery, caseSensitive: searchCaseSensitive, regex: searchRegex) }
+        searchSummary = backend.searchMatchSummary(searchQuery, caseSensitive: searchCaseSensitive, regex: searchRegex)
     }
 
     /// Connection updates leave this snapshot alone. Actions run after tracking ends so selecting
@@ -244,12 +390,20 @@ struct TerminalSurface<Accessory: View>: View {
             }
         }
         if !controller.atBottom {
-            add(String(localized: "返回实时终端")) { controller.scrollView?.scrollToLive() }
+            add(String(localized: "返回实时终端")) { controller.backend?.scrollToLive() }
+        }
+        add(String(localized: "在终端中查找…")) { controller.searchOpen = true; searchFieldFocused = true }
+        if allowPopOut {
+            add(String(localized: "在新窗口中打开")) { popOutWindow() }
+        }
+        if controller.backend?.hasPromptMarkers == true {
+            add(String(localized: "跳到上一条命令")) { controller.backend?.jumpToPreviousPrompt() }
+            add(String(localized: "跳到下一条命令")) { controller.backend?.jumpToNextPrompt() }
         }
         if controller.running { add(String(localized: "中断当前命令 (Ctrl+C)")) { if controller.running { confirmInterrupt = true } } }
         if !controller.live, !controller.exited {
             add(String(localized: "重新连接")) {
-                if !controller.live, !controller.exited { controller.reconnect(host: workbench.host, terminalId: terminalId, clientId: workbench.terminalClientId) }
+                if !controller.live, !controller.exited { controller.reconnect(host: workbench.host, terminalId: terminalId, clientId: resolvedClientId) }
             }
         }
         if onTerminate != nil {
@@ -272,10 +426,12 @@ struct TerminalSurface<Accessory: View>: View {
 extension TerminalSurface where Accessory == EmptyView {
     init(workbench: Workbench, terminalId: String, title: String = String(localized: "Agent 终端"), options: [(id: String, title: String)] = [],
          onSelect: ((String) -> Void)? = nil, onNew: (() -> Void)? = nil, onTerminate: (() -> Void)? = nil,
-         onCollapse: (() -> Void)? = nil, focusRequest: Int = 0) {
+         onCollapse: (() -> Void)? = nil, focusRequest: Int = 0, allowPopOut: Bool = true,
+         clientIdOverride: String? = nil, controllerOverride: TerminalController? = nil) {
         self.init(workbench: workbench, terminalId: terminalId, title: title, options: options,
                   onSelect: onSelect, onNew: onNew, onTerminate: onTerminate, onCollapse: onCollapse,
-                  focusRequest: focusRequest, accessory: { EmptyView() })
+                  focusRequest: focusRequest, allowPopOut: allowPopOut, clientIdOverride: clientIdOverride,
+                  controllerOverride: controllerOverride, accessory: { EmptyView() })
     }
 }
 
@@ -290,15 +446,31 @@ final class TerminalController {
     fileprivate(set) var atBottom = true
     /// The first snapshot (or output) has reached the screen; until then the area says it is connecting.
     private(set) var hasOutput = false
+    private(set) var bellFlash = false
+    private(set) var paneTitle: String?
+    private(set) var foregroundCommand: String?
+    private(set) var cwd: String?
+    private(set) var lastExitCode: Int?
+    var searchOpen = false
     private(set) var pasteNotice: String?
+
+    func displayTitle(fallback: String) -> String {
+        for candidate in [paneTitle, foregroundCommand] {
+            if let trimmed = candidate?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return fallback
+    }
     private(set) var pasting = false
     /// The connection cannot be made without the reader doing something (not paired, not connected).
     private(set) var failed = false
     @ObservationIgnored var connection: TerminalConnection?
-    weak var view: SwiftTerm.TerminalView?
-    weak var scrollView: TerminalScrollView?
+    /// Retained while this controller lives in [TerminalDock]'s bounded keep-alive pool so switching
+    /// tabs or collapsing the dock restores the live scrollback and selection instantly.
+    @ObservationIgnored private(set) var backend: (any TerminalSurfaceBackend)?
     private let subscriptions = FlowSubscriptions()
-    /// Output that arrived before the terminal view was attached; the newest [pendingLimit] bytes at most.
+    /// Output that arrived before the terminal surface was attached; the newest [pendingLimit] bytes at most.
     @ObservationIgnored private var pending: [(String, Bool, Int, Int)] = []
     @ObservationIgnored private var pendingBytes = 0
     private static let pendingLimit = 2 * 1024 * 1024
@@ -308,13 +480,7 @@ final class TerminalController {
     @ObservationIgnored private var launchAppearance: TerminalAppearance?
     @ObservationIgnored private var appearanceConfiguration: (theme: ThemeEntry, dark: Bool, fontSize: CGFloat)?
     @ObservationIgnored private var colors: (foreground: Int32, background: Int32, ansi: KotlinIntArray)?
-    /// Replay starts at the latest server reset. Bound memory for long-running output; if
-    /// exceeded, a theme change obtains a new server snapshot without ending the process.
-    @ObservationIgnored private var originalOutput: String? = ""
-    @ObservationIgnored private var originalOutputBytes = 0
     @ObservationIgnored private var refreshSnapshot: (() -> Void)?
-    @ObservationIgnored private(set) var repainting = false
-    @ObservationIgnored private var repaintRevision = 0
     @ObservationIgnored private var retintStore: TerminalRetint?
     private var retint: TerminalRetint {
         if let retintStore { return retintStore }
@@ -344,11 +510,13 @@ final class TerminalController {
         let dark = appearance.dark
         let foreground = RiffetRGBA(hex: appearance.foreground) ?? theme.values.dark.fg
         let background = RiffetRGBA(hex: appearance.background) ?? theme.values.dark.bg
-        guard let scrollView else { return }
+        guard let backend else { return }
         // The revision is part of the key: editing a custom theme keeps its id and changes every
         // colour, so id and mode alone would leave the running terminal on the old palette.
-        let key = "\(theme.id)|\(theme.revision)|\(appearance.foreground)|\(appearance.background)|\(fontSize)|\(AppearanceFonts.current.key)"
-        let changed = appearanceKey != key
+        // Font size and family stay out of `key` so typography changes never trigger a reconnect.
+        let key = "\(theme.id)|\(theme.revision)|\(appearance.foreground)|\(appearance.background)"
+        let hadApplied = !appearanceKey.isEmpty
+        let colorChanged = appearanceKey != key
         appearanceKey = key
         let palette = dark ? theme.values.dark : theme.values.light
         let ansi = TerminalANSI.colors(theme.ansi, dark: dark)
@@ -357,45 +525,60 @@ final class TerminalController {
             array.set(index: Int32(index), value: TerminalANSI.argb(color))
         }
         colors = (TerminalANSI.argb(foreground), TerminalANSI.argb(background), array)
-        if changed { retintStore = nil }
-        scrollView.drawsBackground = true
-        scrollView.backgroundColor = TerminalANSI.nativeColor(background)
-        scrollView.contentView.drawsBackground = true
-        scrollView.contentView.backgroundColor = TerminalANSI.nativeColor(background)
-        do {
-            let terminal = scrollView.live
-            terminal.font = AppearanceFonts.current.mono?.nsFont(size: fontSize) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-            terminal.nativeBackgroundColor = TerminalANSI.nativeColor(background)
-            terminal.nativeForegroundColor = TerminalANSI.nativeColor(foreground)
-            terminal.caretColor = TerminalANSI.nativeColor(foreground)
-            terminal.caretTextColor = TerminalANSI.nativeColor(background)
-            terminal.selectedTextBackgroundColor = TerminalANSI.nativeColor(palette.accent).withAlphaComponent(dark ? 0.3 : 0.18)
-            // The contrast resolver and the emulator must agree on the 256-color cube.
-            terminal.ansi256PaletteStrategy = .xterm
-            terminal.installColors(ansi.map(TerminalANSI.color))
-            terminal.updateColorScheme(dark ? .dark : .light, notify: false)
+        if colorChanged { retintStore = nil }
+        let prefs = DisplayPreferences.shared
+        let surfaceAppearance = TerminalSurfaceAppearance(
+            font: Self.resolveTerminalFont(family: prefs.terminalFontFamily, size: fontSize, weight: prefs.terminalFontWeight),
+            foreground: TerminalANSI.nativeColor(foreground),
+            background: TerminalANSI.nativeColor(background),
+            cursor: TerminalANSI.nativeColor(foreground),
+            cursorText: TerminalANSI.nativeColor(background),
+            selection: TerminalANSI.nativeColor(palette.accent).withAlphaComponent(dark ? 0.3 : 0.18),
+            ansiColors: ansi.map(TerminalANSI.color),
+            dark: dark,
+            cursorStyle: prefs.terminalCursorStyle,
+            cursorBlink: prefs.terminalCursorBlink,
+            optionAsMeta: prefs.terminalOptionAsMeta,
+            copyOnSelect: prefs.terminalCopyOnSelect,
+            rightClick: prefs.terminalRightClick,
+            scrollOnInput: prefs.terminalScrollOnInput,
+            scrollOnOutput: prefs.terminalScrollOnOutput,
+            scrollSensitivity: prefs.terminalScrollSensitivity
+        )
+        backend.applyAppearance(surfaceAppearance)
+        if let renderedGrid { backend.setRemoteGrid(cols: renderedGrid.cols, rows: renderedGrid.rows) }
+        // Re-fetching a compressed protocol 4 snapshot replaces the old 2 MiB in-memory replay buffer
+        // when the user switches themes on an already populated surface.
+        if colorChanged, hadApplied, hasOutput {
+            refreshSnapshot?()
         }
-        if let renderedGrid { scrollView.setRemoteGrid(cols: renderedGrid.cols, rows: renderedGrid.rows) }
-        if changed {
-            if let originalOutput {
-                repaintRevision += 1
-                let revision = repaintRevision
-                repainting = true
-                retint.reset()
-                scrollView.live.replay(retint.transform(data: originalOutput))
-                // SwiftTerm delivers clipboard/bell callbacks on the main queue. Let those
-                // drain without repeating side effects from old output during a repaint.
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, repaintRevision == revision else { return }
-                    repainting = false
-                }
-            } else {
-                refreshSnapshot?()
+        // Watching another client's terminal must not claim input just to announce our theme.
+        if colorChanged, hasControl { backend.notifyColorScheme() }
+    }
+
+    static func resolveTerminalFont(family: String, size: CGFloat, weight: TerminalFontWeight) -> NSFont {
+        let trimmed = family.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            if let weighted = NSFontManager.shared.font(withFamily: trimmed, traits: [], weight: weight.managerWeight, size: size) {
+                return weighted
+            }
+            if let exact = NSFont(name: trimmed, size: size) {
+                return exact
+            }
+            let descriptor = NSFontDescriptor(fontAttributes: [.family: trimmed])
+            if let matched = NSFont(descriptor: descriptor, size: size) {
+                return matched
             }
         }
-        scrollView.refreshAppearance()
-        // Watching another client's terminal must not claim input just to announce our theme.
-        if changed, hasControl { scrollView.live.notifyColorScheme() }
+        if weight == .regular, let pluginMono = AppearanceFonts.current.mono?.nsFont(size: size) {
+            return pluginMono
+        }
+        if let pluginMono = AppearanceFonts.current.mono?.nsFont(size: size),
+           let familyName = pluginMono.familyName,
+           let weighted = NSFontManager.shared.font(withFamily: familyName, traits: [], weight: weight.managerWeight, size: size) {
+            return weighted
+        }
+        return NSFont.monospacedSystemFont(ofSize: size, weight: weight.nsWeight)
     }
 
     /// The id the main window claims terminals with, kept across launches. The server treats it as the
@@ -442,13 +625,16 @@ final class TerminalController {
         subscriptions.observe(connection.info) { [weak self] info in
             guard let self else { return }
             hasControl = connection.hasControl
-            scrollView?.controlsRemote = hasControl
+            backend?.controlsRemote = hasControl
             if let info {
                 if launchAppearance?.foreground != info.appearance?.foreground || launchAppearance?.background != info.appearance?.background {
                     launchAppearance = info.appearance
                     if let config = appearanceConfiguration { applyAppearance(theme: config.theme, dark: config.dark, fontSize: config.fontSize) }
                 }
                 running = info.state == .running
+                paneTitle = info.paneTitle
+                foregroundCommand = info.foregroundCommand
+                cwd = info.cwd
             }
         }
         subscriptions.observe(connection.notice) { [weak self] notice in
@@ -456,7 +642,8 @@ final class TerminalController {
         }
     }
 
-    func stop() {
+    /// Tears down the socket while preserving any attached view so `reconnect` resumes painting in place.
+    private func disconnect() {
         connectionRevision += 1
         refreshSnapshot = nil
         subscriptions.cancelAll()
@@ -467,30 +654,56 @@ final class TerminalController {
         hasOutput = false
         pasting = false
         pasteNotice = nil
-        originalOutput = ""
-        originalOutputBytes = 0
+    }
+
+    func stop() {
+        disconnect()
+        backend = nil
     }
 
     func reconnect(host: MacHost, terminalId: String, clientId: String) {
-        stop()
+        disconnect()
         start(host: host, terminalId: terminalId, clientId: clientId)
     }
 
     func focus() {
         // SwiftUI may request focus before the represented view has entered its window.
         DispatchQueue.main.async { [weak self] in
-            guard let view = self?.view, let window = view.window else { return }
-            window.makeFirstResponder(view)
+            self?.backend?.focusSurface()
         }
     }
 
-    func attach(_ scrollView: TerminalScrollView) {
-        self.scrollView = scrollView
-        view = scrollView.live
-        scrollView.live.onAttachmentPaste = { [weak self] board in self?.pasteAttachments(board) ?? false }
-        scrollView.live.onReply = { [weak self] text in self?.connection?.sendReply(data: text) }
-        scrollView.live.onTextPaste = { [weak self] text in self?.connection?.paste(text: text) }
-        scrollView.onViewportSize = { [weak self] cols, rows in self?.connection?.requestSize(cols: Int32(cols), rows: Int32(rows)) }
+    func attach(_ backend: any TerminalSurfaceBackend) {
+        self.backend = backend
+        backend.controlsRemote = hasControl
+        backend.onInput = { [weak self] text in self?.connection?.sendInput(data: text) }
+        backend.onAttachmentPaste = { [weak self] board in self?.pasteAttachments(board) ?? false }
+        backend.onReply = { [weak self] text in self?.connection?.sendReply(data: text) }
+        backend.onTextPaste = { [weak self] text in self?.connection?.paste(text: text) }
+        backend.onViewportSize = { [weak self] cols, rows in self?.connection?.requestSize(cols: Int32(cols), rows: Int32(rows)) }
+        backend.onScrollPositionChange = { [weak self] bottom in
+            guard let self, self.atBottom != bottom else { return }
+            self.atBottom = bottom
+        }
+        backend.onBell = { [weak self] in
+            switch DisplayPreferences.shared.terminalBell {
+            case .none: break
+            case .sound: NSSound.beep()
+            case .visual:
+                guard let self, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+                self.bellFlash = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(180)) { [weak self] in
+                    self?.bellFlash = false
+                }
+            }
+        }
+        backend.onClipboardCopy = { text in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+        backend.onOpenLink = { url in NSWorkspace.shared.open(url) }
+        backend.onCommandExitCode = { [weak self] code in self?.lastExitCode = code }
+        backend.onOpenSearch = { [weak self] in self?.searchOpen = true }
         let waiting = pending
         pending.removeAll()
         pendingBytes = 0
@@ -537,7 +750,7 @@ final class TerminalController {
     }
 
     func output(_ data: String, fresh: Bool, cols: Int, rows: Int) {
-        guard let view else {
+        guard let backend else {
             if fresh { pending.removeAll(); pendingBytes = 0 }
             pending.append((data, fresh, cols, rows))
             pendingBytes += data.utf8.count
@@ -550,18 +763,9 @@ final class TerminalController {
         if !hasOutput { hasOutput = true }
         if fresh {
             renderedGrid = (cols, rows)
-            scrollView?.setRemoteGrid(cols: cols, rows: rows)
-            originalOutput = ""
-            originalOutputBytes = 0
-            view.resetToInitialState()
             retint.reset()
         }
-        if originalOutput != nil {
-            originalOutputBytes += data.utf8.count
-            if originalOutputBytes <= 2 * 1024 * 1024 { originalOutput?.append(data) }
-            else { originalOutput = nil }
-        }
-        view.feed(text: retint.transform(data: data))
+        backend.feed(retint.transform(data: data), fresh: fresh, cols: cols, rows: rows)
     }
 }
 
@@ -569,79 +773,50 @@ private struct TerminalHost: NSViewRepresentable {
     let controller: TerminalController
     let theme: ThemeEntry
     let dark: Bool
+    let fontFamily: String
     let fontSize: CGFloat
+    let fontWeight: TerminalFontWeight
     /// The plugin fonts in effect; a change re-applies the surface.
     let fonts: String
+    let cursorStyle: TerminalCursorShape
+    let cursorBlink: Bool
+    let optionAsMeta: Bool
+    let copyOnSelect: Bool
+    let rightClick: TerminalRightClickBehavior
+    let scrollOnInput: Bool
+    let scrollOnOutput: Bool
+    let scrollSensitivity: Double
+    var backendKind: TerminalBackendKind = .swiftTerm
 
-    func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
-    func makeNSView(context: Context) -> TerminalScrollView {
-        let view = TerminalScrollView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
-        view.live.terminalDelegate = context.coordinator
-        controller.attach(view)
-        apply(view, coordinator: context.coordinator)
-        return view
+    func makeNSView(context: Context) -> NSView {
+        if let existing = controller.backend {
+            context.coordinator.backend = existing
+            apply(coordinator: context.coordinator)
+            return existing.surfaceView
+        }
+        let backend = backendKind.makeSurface(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+        context.coordinator.backend = backend
+        controller.attach(backend)
+        apply(coordinator: context.coordinator)
+        return backend.surfaceView
     }
 
-    func updateNSView(_ view: TerminalScrollView, context: Context) {
-        apply(view, coordinator: context.coordinator)
+    func updateNSView(_ view: NSView, context: Context) {
+        apply(coordinator: context.coordinator)
     }
 
     /// The surface follows the app's palette and the ANSI set follows its theme (`terminal-theme.ts`).
-    private func apply(_ scrollView: TerminalScrollView, coordinator: Coordinator) {
-        let key = "\(theme.id)|\(theme.revision)|\(dark)|\(fontSize)|\(fonts)"
+    private func apply(coordinator: Coordinator) {
+        let key = "\(theme.id)|\(theme.revision)|\(dark)|\(fontFamily)|\(fontSize)|\(fontWeight.rawValue)|\(fonts)|\(cursorStyle.rawValue)|\(cursorBlink)|\(optionAsMeta)|\(copyOnSelect)|\(rightClick.rawValue)|\(scrollOnInput)|\(scrollOnOutput)|\(scrollSensitivity)"
         guard coordinator.applied != key else { return }
         coordinator.applied = key
         controller.applyAppearance(theme: theme, dark: dark, fontSize: fontSize)
     }
 
-    final class Coordinator: NSObject, TerminalViewDelegate {
-        let controller: TerminalController
+    final class Coordinator {
         var applied = ""
-
-        init(controller: TerminalController) { self.controller = controller }
-
-        // Only the enclosing viewport proposes a pane size. The emulator follows snapshots.
-        func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {}
-
-        func send(source: SwiftTerm.TerminalView, data: ArraySlice<UInt8>) {
-            let text = String(decoding: Array(data), as: UTF8.self)
-            MainActor.assumeIsolated {
-                guard source === controller.view else { return }
-                if !controller.atBottom { controller.scrollView?.scrollToLive() }
-                controller.connection?.sendInput(data: text)
-            }
-        }
-
-        func setTerminalTitle(source: SwiftTerm.TerminalView, title: String) {}
-
-        func hostCurrentDirectoryUpdate(source: SwiftTerm.TerminalView, directory: String?) {}
-
-        func scrolled(source: SwiftTerm.TerminalView, position: Double) {
-            MainActor.assumeIsolated {
-                guard source === controller.view else { return }
-                let bottom = controller.scrollView?.atBottom ?? true
-                if controller.atBottom != bottom { controller.atBottom = bottom }
-            }
-        }
-
-        func requestOpenLink(source: SwiftTerm.TerminalView, link: String, params: [String: String]) {
-            if let url = URL(string: link) { NSWorkspace.shared.open(url) }
-        }
-
-        func bell(source: SwiftTerm.TerminalView) {
-            guard !controller.repainting else { return }
-            NSSound.beep()
-        }
-
-        func clipboardCopy(source: SwiftTerm.TerminalView, content: Data) {
-            guard !controller.repainting else { return }
-            if let text = String(data: content, encoding: .utf8) {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
-            }
-        }
-
-        func rangeChanged(source: SwiftTerm.TerminalView, startY: Int, endY: Int) {}
+        var backend: (any TerminalSurfaceBackend)?
     }
 }

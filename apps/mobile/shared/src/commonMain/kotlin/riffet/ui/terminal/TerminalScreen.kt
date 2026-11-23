@@ -21,6 +21,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.ime
@@ -92,6 +96,14 @@ import riffet_mobile.shared.generated.resources.*
 private const val BASE_FONT_SP = 12.5f
 /** A viewer squeezes a wider pane into the screen down to this size, then scrolls sideways. */
 private const val MIN_FONT_SP = 8f
+/** Upper bound for two-finger pinch-to-zoom on mobile screens. */
+private const val MAX_FONT_SP = 20f
+
+private fun compactPath(path: String?): String? {
+    val trimmed = path?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() } ?: return null
+    val parts = trimmed.split('/').filter { it.isNotEmpty() }
+    return if (parts.size <= 2) trimmed else "…/${parts.takeLast(2).joinToString("/")}"
+}
 
 /**
  * A session's terminal on the phone (docs/MOBILE-TERMINAL.md, T2): the pane's live screen, read only.
@@ -134,8 +146,7 @@ internal fun TerminalScreen(
                 surface.emulator.reset()
                 scroll.toLiveNow()
             }
-            val bytes = data.encodeToByteArray()
-            surface.emulator.append(bytes, bytes.size)
+            surface.emulator.append(data)
             // Published at most once per frame, however many output frames arrive meanwhile.
             surface.invalidate()
         }, onSnapshotGrid = { cols, rows ->
@@ -151,8 +162,11 @@ internal fun TerminalScreen(
     var keyboardOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     var actionsOpen by remember(terminalId) { mutableStateOf(false) }
+    var customizeKeysOpen by remember(terminalId) { mutableStateOf(false) }
     var confirmInterrupt by remember(terminalId) { mutableStateOf(false) }
+    val displaySettings = riffet.shared.DisplaySettings.shared
     var lineInput by remember { mutableStateOf(false) }
+    var userFontScale by remember(terminalId) { mutableFloatStateOf(1f) }
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
     var attachmentError by remember(terminalId) { mutableStateOf<String?>(null) }
@@ -251,7 +265,11 @@ internal fun TerminalScreen(
                     owner != null -> stringResource(Res.string.timeline_terminal_other_controller)
                     else -> stringResource(Res.string.timeline_terminal_read_only)
                 }
-                PageTopBar(title = title, onBack = onBack, subtitle = listOfNotNull(linkLabel, leaseLabel).joinToString(" · ").ifEmpty { null }) {
+                val displayTitle = info?.paneTitle?.takeIf { it.isNotBlank() }
+                    ?: info?.foregroundCommand?.takeIf { it.isNotBlank() }
+                    ?: title
+                val cwdLabel = compactPath(info?.cwd)
+                PageTopBar(title = displayTitle, onBack = onBack, subtitle = listOfNotNull(linkLabel, leaseLabel, cwdLabel).joinToString(" · ").ifEmpty { null }) {
                     if (uploading) { riffet.ui.design.RiffetProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp) }
                     if (link is TerminalLink.Live && owner != null && !mine) {
                         SettingsButton(text = stringResource(Res.string.timeline_terminal_take_over), onClick = { connection.takeOver() })
@@ -264,6 +282,14 @@ internal fun TerminalScreen(
                         )
                         RiffetDropdownMenu(expanded = actionsOpen, onDismissRequest = { actionsOpen = false }) {
                             RiffetMenuItem(
+                                text = stringResource(Res.string.timeline_terminal_customize_keys),
+                                icon = RiffetIcons.Keyboard,
+                                onClick = {
+                                    actionsOpen = false
+                                    customizeKeysOpen = true
+                                },
+                            )
+                            RiffetMenuItem(
                                 text = stringResource(Res.string.timeline_terminal_interrupt_process),
                                 icon = RiffetIcons.OctagonX,
                                 enabled = info?.state == TerminalState.RUNNING,
@@ -274,6 +300,13 @@ internal fun TerminalScreen(
                                 },
                             )
                         }
+                    }
+                    if (customizeKeysOpen) {
+                        TerminalQuickKeysDialog(
+                            keys = displaySettings.terminalQuickKeys,
+                            onChange = { displaySettings.changeTerminalQuickKeys(it) },
+                            onDismiss = { customizeKeysOpen = false },
+                        )
                     }
                     if (confirmInterrupt) {
                         ConfirmDialog(
@@ -300,6 +333,7 @@ internal fun TerminalScreen(
                     onToggleKeyboard = { if (keyboardOpen) closeKeyboard() else openKeyboard() },
                     moreOpen = moreOpen,
                     onToggleMore = { moreOpen = !moreOpen },
+                    quickKeys = displaySettings.terminalQuickKeys,
                     moreActions = listOfNotNull(
                         stringResource(Res.string.timeline_terminal_paste) to { pasteClipboard() },
                         if (picker.available) stringResource(Res.string.timeline_attachment) to { if (!uploading) picker.launch() } else null,
@@ -339,11 +373,32 @@ internal fun TerminalScreen(
                 val cols = paneCols ?: fitCols
                 val rows = paneRows ?: fitRows
                 // Owner: the pane is being sized to fit at the base size. Viewer: shrink to the pane's width.
-                val fontSp = if (mine || cols <= fitCols) BASE_FONT_SP else maxOf(MIN_FONT_SP, BASE_FONT_SP * fitCols / cols)
+                val autoFontSp = if (mine || cols <= fitCols) BASE_FONT_SP else maxOf(MIN_FONT_SP, BASE_FONT_SP * fitCols / cols)
+                val fontSp = (autoFontSp * userFontScale).coerceIn(MIN_FONT_SP, MAX_FONT_SP)
                 val metrics = rememberTerminalCellMetrics(fontSp.sp)
                 val gridWidth = with(LocalDensity.current) { (cols * metrics.width).toDp() }
                 riffet.ui.app.PageBody(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().riffetHorizontalScroll(rememberScrollState())) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .pointerInput(terminalId) {
+                                awaitEachGesture {
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val pressed = event.changes.count { it.pressed }
+                                        if (pressed >= 2) {
+                                            val zoom = event.calculateZoom()
+                                            if (zoom != 1f) {
+                                                userFontScale = (userFontScale * zoom).coerceIn(MIN_FONT_SP / BASE_FONT_SP, MAX_FONT_SP / BASE_FONT_SP)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                        if (pressed == 0) break
+                                    }
+                                }
+                            }
+                            .riffetHorizontalScroll(rememberScrollState()),
+                    ) {
                         TerminalScrollView(
                             surface = surface,
                             scroll = scroll,

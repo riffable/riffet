@@ -675,6 +675,27 @@ class TerminalEmulator(
             processByte(buffer[i])
     }
 
+    /**
+     * Fast path for callers that already hold decoded UTF-16 text (e.g. WebSocket frames): feeds
+     * code points directly into [processCodePoint] without allocating a UTF-8 [ByteArray] and
+     * re-decoding it byte by byte.
+     */
+    fun append(text: String) {
+        val len = text.length
+        var i = 0
+        while (i < len) {
+            val ch = text[i++]
+            val codePoint = if (ch.isHighSurrogate() && i < len && text[i].isLowSurrogate()) {
+                val low = text[i++]
+                ((ch.code - 0xD800) shl 10) + (low.code - 0xDC00) + 0x10000
+            } else {
+                ch.code
+            }
+            if (codePoint in 0x80..0x9F) continue
+            processCodePoint(if (isUnassignedOrSurrogate(codePoint)) UNICODE_REPLACEMENT_CHAR else codePoint)
+        }
+    }
+
     private fun processByte(byteToProcess: Byte) {
         val byteValue = byteToProcess.toInt()
         if (mUtf8ToFollow > 0) {

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource, type TerminalProfile, type TerminalServerSettings } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { isContributionOf, PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 import { AppError } from '../errors.js';
@@ -336,7 +336,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules', 'terminal']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -456,6 +456,10 @@ export class SettingsService {
       const rules = validateTitleRules(values.titleRules);
       if (rules.length) result.titleRules = rules;
     }
+    if (values.terminal !== undefined) {
+      const terminal = validateTerminalSettings(values.terminal);
+      if (Object.keys(terminal).length) result.terminal = terminal;
+    }
     if (values.cursorCli !== undefined) result.cursorCli = this.cursor.validate(values.cursorCli);
     return result;
   }
@@ -507,6 +511,12 @@ export class SettingsService {
       input.workItems=merged;
     }
     if(input.voiceInput!==undefined)input.voiceInput=mergeVoiceInput(generalCurrent.voiceInput,input.voiceInput);
+    if(input.terminal===null){delete input.terminal;delete generalCurrent.terminal;}
+    else if(input.terminal&&typeof input.terminal==='object'&&!Array.isArray(input.terminal)){
+      const merged:Record<string,unknown>={...generalCurrent.terminal,...input.terminal as Record<string,unknown>};
+      for(const key of Object.keys(merged))if(merged[key]===null)delete merged[key];
+      input.terminal=merged;
+    }
     // The provider→model record is the server's: rebuilt from what is stored and the pair in this save.
     if(input.nativeBackendDefaults&&typeof input.nativeBackendDefaults==='object'&&!Array.isArray(input.nativeBackendDefaults)){
       input.nativeBackendDefaults=Object.fromEntries(Object.entries(input.nativeBackendDefaults as Record<string,unknown>).map(([backendId,raw])=>[backendId,raw&&typeof raw==='object'&&!Array.isArray(raw)
@@ -721,6 +731,82 @@ function validateVoiceInput(raw: unknown): VoiceInputSettings {
     }
     if (fields.apiKey !== undefined) stored.apiKey = validateApiKey(fields.apiKey, 'voiceInput.remote.apiKey');
     if (Object.keys(stored).length) result.remote = stored;
+  }
+  return result;
+}
+
+const TERMINAL_PROFILE_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+const MAX_TERMINAL_PROFILES = 32;
+
+function validateTerminalSettings(raw: unknown): TerminalServerSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'terminal must be an object');
+  const values = raw as Record<string, unknown>;
+  if (Object.keys(values).some(key => !['defaultShell', 'shellIntegration', 'profiles'].includes(key))) {
+    throw new AppError('INVALID_SETTINGS', 'terminal contains an unknown field');
+  }
+  const result: TerminalServerSettings = {};
+  if (values.defaultShell !== undefined) {
+    if (typeof values.defaultShell !== 'string' || !values.defaultShell.trim() || values.defaultShell.length > 1024 || /[\0\r\n]/.test(values.defaultShell)) {
+      throw new AppError('INVALID_SETTINGS', 'terminal.defaultShell is invalid');
+    }
+    result.defaultShell = values.defaultShell.trim();
+  }
+  if (values.shellIntegration !== undefined) {
+    if (typeof values.shellIntegration !== 'boolean') throw new AppError('INVALID_SETTINGS', 'terminal.shellIntegration must be a boolean');
+    result.shellIntegration = values.shellIntegration;
+  }
+  if (values.profiles !== undefined) {
+    if (!Array.isArray(values.profiles) || values.profiles.length > MAX_TERMINAL_PROFILES) {
+      throw new AppError('INVALID_SETTINGS', `terminal.profiles must be an array of at most ${MAX_TERMINAL_PROFILES} profiles`);
+    }
+    const seen = new Set<string>();
+    const profiles: TerminalProfile[] = [];
+    for (const item of values.profiles) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new AppError('INVALID_SETTINGS', 'Each terminal profile must be an object');
+      const fields = item as Record<string, unknown>;
+      if (Object.keys(fields).some(key => !['id', 'name', 'command', 'args', 'cwd', 'env'].includes(key))) {
+        throw new AppError('INVALID_SETTINGS', 'terminal profile contains an unknown field');
+      }
+      if (typeof fields.id !== 'string' || !TERMINAL_PROFILE_ID.test(fields.id)) throw new AppError('INVALID_SETTINGS', 'terminal profile id is invalid');
+      if (seen.has(fields.id)) throw new AppError('INVALID_SETTINGS', `Duplicate terminal profile id: ${fields.id}`);
+      seen.add(fields.id);
+      if (typeof fields.name !== 'string' || !fields.name.trim() || fields.name.length > 80 || /[\0\r\n]/.test(fields.name)) {
+        throw new AppError('INVALID_SETTINGS', 'terminal profile name is invalid');
+      }
+      const profile: TerminalProfile = { id: fields.id, name: fields.name.trim() };
+      if (fields.command !== undefined) {
+        if (typeof fields.command !== 'string' || !fields.command.trim() || fields.command.length > 1024 || /[\0\r\n]/.test(fields.command)) {
+          throw new AppError('INVALID_SETTINGS', `terminal profile ${fields.id}: command is invalid`);
+        }
+        profile.command = fields.command.trim();
+      }
+      if (fields.args !== undefined) {
+        if (!Array.isArray(fields.args) || fields.args.length > 64 || !fields.args.every(arg => typeof arg === 'string' && arg.length <= 4096 && !/[\0\r\n]/.test(arg))) {
+          throw new AppError('INVALID_SETTINGS', `terminal profile ${fields.id}: args is invalid`);
+        }
+        if (fields.args.length) profile.args = fields.args as string[];
+      }
+      if (fields.cwd !== undefined) {
+        profile.cwd = validateNativeProfilePath(fields.cwd, `terminal.profiles.${fields.id}.cwd`);
+      }
+      if (fields.env !== undefined) {
+        if (!fields.env || typeof fields.env !== 'object' || Array.isArray(fields.env)) {
+          throw new AppError('INVALID_SETTINGS', `terminal profile ${fields.id}: env must be an object`);
+        }
+        const entries = Object.entries(fields.env as Record<string, unknown>);
+        if (entries.length > 64) throw new AppError('INVALID_SETTINGS', `terminal profile ${fields.id}: env may hold at most 64 entries`);
+        const env: Record<string, string> = {};
+        for (const [key, value] of entries) {
+          if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== 'string' || value.length > 16 * 1024 || /[\0\r\n]/.test(value)) {
+            throw new AppError('INVALID_SETTINGS', `terminal profile ${fields.id}: env.${key} is invalid`);
+          }
+          env[key] = value;
+        }
+        if (Object.keys(env).length) profile.env = env;
+      }
+      profiles.push(profile);
+    }
+    if (profiles.length) result.profiles = profiles;
   }
   return result;
 }

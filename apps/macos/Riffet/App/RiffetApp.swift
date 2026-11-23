@@ -48,6 +48,16 @@ struct RiffetApp: App {
         .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified(showsTitle: false))
 
+        WindowGroup("终端", id: TerminalWindow.id, for: String.self) { $terminalId in
+            TerminalWindow(terminalId: terminalId)
+                .environment(model)
+                .environment(\.palette, theme.palette)
+                .tint(theme.palette.accent)
+                .modifier(TerminalLaunchAppearance(host: model.host, theme: theme.entry))
+        }
+        .defaultSize(width: 820, height: 520)
+        .windowResizability(.contentMinSize)
+
         MenuBarExtra {
             MenuBarPanel()
                 .environment(model)
@@ -111,6 +121,11 @@ final class WindowRouter {
         }
         NSApp.activate()
         opener?(id: ConversationWindow.id, value: sessionId)
+    }
+
+    func openTerminal(_ terminalId: String) {
+        NSApp.activate()
+        opener?(id: TerminalWindow.id, value: terminalId)
     }
 
     func showMain() {

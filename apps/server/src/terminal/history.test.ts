@@ -2,13 +2,16 @@ import { createRequire } from 'node:module';
 import type { TerminalAppearance, TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../store.js';
+import { SettingsService } from '../settings/index.js';
 import { sendKeysLines } from './control.js';
+import { OuterTerminalState } from './protocol-state.js';
 import { TerminalService, type TerminalBehaviour } from './service.js';
+import { decodeClientBinaryFrame, decodeServerBinaryFrame, encodeInputFrame, encodeOutputFrame, encodePingFrame, encodePongFrame, encodeSnapshotFrame } from './wire.js';
 
 /**
  * tmux must not only exist but be able to start a session: a restricted host can answer `-V` and
@@ -548,6 +551,127 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     await vi.waitFor(() => expect(kept.map(message => 'data' in message ? message.data : '').join('')).toContain('FLOW_DONE'));
     expect(kept.filter(message => message.type === 'snapshot')).toHaveLength(1);
   }, 40_000);
+
+  it('applies modern tmux options, syncs pane metadata, and idle-detaches unwatched shells without killing them', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'riffet-sota-m1-'));
+    const store = new Store(join(directory, 'db.sqlite'));
+    const service = new TerminalService(store, { stateDir: join(directory, 'state'), idleDetachMs: 150 });
+    const project = store.createProject(directory, 'sota');
+    const previousShell = process.env.SHELL;
+    process.env.SHELL = '/bin/sh';
+    const terminal = await service.create(project, { kind: 'shell', cols: 80, rows: 12 });
+    process.env.SHELL = previousShell;
+    cleanups.push(async () => { await service.stop(terminal.id).catch(() => undefined); await service.closeAll(); store.close(); rmSync(directory, { recursive: true, force: true }); });
+
+    const execAsync = promisify(execFile);
+    const escapeTime = (await execAsync('tmux', ['-S', service.socket, 'show-option', '-sv', 'escape-time'])).stdout.trim();
+    const focusEvents = (await execAsync('tmux', ['-S', service.socket, 'show-option', '-gv', 'focus-events'])).stdout.trim();
+    expect(escapeTime).toBe('10');
+    expect(focusEvents).toBe('on');
+
+    // Subscribe once to capture initial seed metadata, then unsubscribe to let idle detach kick in.
+    const seen: TerminalServerMessage[] = [];
+    const sub = service.subscribe(terminal.id, message => seen.push(message), { protocol: 3 });
+    await vi.waitFor(() => expect(seen.some(message => message.type === 'snapshot')).toBe(true), { timeout: 5000 });
+    const afterSeed = store.getTerminal(terminal.id);
+    expect(afterSeed.cwd).toBeTruthy();
+    expect(afterSeed.foregroundCommand).toBeTruthy();
+    sub();
+
+    // Ordinary shell without viewers/observers detaches its control client after idleDetachMs, keeping the tmux session alive.
+    await vi.waitFor(() => expect(store.getTerminal(terminal.id).state).toBe('detached'), { timeout: 5000 });
+    const reattached: TerminalServerMessage[] = [];
+    const sub2 = service.subscribe(terminal.id, message => reattached.push(message), { protocol: 3 });
+    cleanups.push(sub2);
+    await vi.waitFor(() => expect(reattached.some(message => message.type === 'snapshot')).toBe(true), { timeout: 5000 });
+    expect(store.getTerminal(terminal.id).state).toBe('running');
+  }, 20_000);
+
+  it('injects non-invasive OSC 133/7 shell integration for zsh/bash and launches configured shell profiles', async () => {
+    const shellBin = existsSync('/bin/zsh') ? '/bin/zsh' : existsSync('/bin/bash') ? '/bin/bash' : undefined;
+    if (!shellBin) return;
+    const directory = mkdtempSync(join(tmpdir(), 'riffet-sota-si-'));
+    const subDir = join(directory, 'nested dir');
+    mkdirSync(subDir, { recursive: true });
+    const stateDir = join(directory, 'state');
+    const store = new Store(join(directory, 'db.sqlite'));
+    const settings = new SettingsService({ stateDir });
+    settings.setSettings({
+      terminal: {
+        defaultShell: shellBin,
+        shellIntegration: true,
+        profiles: [
+          { id: 'ops', name: 'Ops Shell', command: shellBin, cwd: subDir, env: { RIFFET_TEST_PROFILE: 'ops-ok' } },
+        ],
+      },
+    });
+    const service = new TerminalService(store, { stateDir, shellSettings: () => settings.getSettings().terminal });
+    const project = store.createProject(directory, 'si');
+    const created = await service.create(project, { kind: 'shell', profileId: 'ops', cols: 80, rows: 12 });
+    cleanups.push(async () => { await service.stop(created.id).catch(() => undefined); await service.closeAll(); store.close(); rmSync(directory, { recursive: true, force: true }); });
+    expect(created.title).toBe('Ops Shell');
+    expect(created.cwd).toBe(subDir);
+
+    const rawChunks: string[] = [];
+    const sub = service.subscribe(created.id, message => {
+      if (message.type === 'output' || message.type === 'snapshot') rawChunks.push(message.data);
+    }, { protocol: 3 });
+    cleanups.push(sub);
+
+    await vi.waitFor(() => expect(rawChunks.join('')).toContain('\u001b]133;A'), { timeout: 8000 });
+    await service.paste(created.id, 'printf "PROF=%s\\n" "$RIFFET_TEST_PROFILE"', true);
+    await vi.waitFor(() => {
+      const joined = rawChunks.join('');
+      expect(joined).toContain('PROF=ops-ok');
+      expect(joined).toContain('\u001b]133;C');
+      expect(joined).toContain('\u001b]133;D;0');
+      expect(joined).toContain('\u001b]7;file://');
+    }, { timeout: 8000 });
+
+    // Unknown profile fails cleanly with 404.
+    await expect(service.create(project, { kind: 'shell', profileId: 'missing' })).rejects.toMatchObject({ code: 'TERMINAL_PROFILE_NOT_FOUND', statusCode: 404 });
+
+    // Turning shellIntegration off suppresses injection without breaking launch.
+    settings.setSettings({ terminal: { shellIntegration: false } });
+    const plain = await service.create(project, { kind: 'shell', cols: 80, rows: 12 });
+    cleanups.push(async () => { await service.stop(plain.id).catch(() => undefined); });
+    const plainChunks: string[] = [];
+    const plainSub = service.subscribe(plain.id, message => {
+      if (message.type === 'output' || message.type === 'snapshot') plainChunks.push(message.data);
+    }, { protocol: 3 });
+    cleanups.push(plainSub);
+    await service.paste(plain.id, 'printf "SI=%s\\n" "${RIFFET_SHELL_INTEGRATION:-off}"', true);
+    await vi.waitFor(() => expect(plainChunks.join('')).toContain('SI=off'), { timeout: 8000 });
+  }, 30_000);
+});
+
+describe('protocol 4 binary framing and OuterTerminalState resilience', () => {
+  it('round-trips output, compressed snapshots, input and heartbeat frames', () => {
+    const out = encodeOutputFrame(42, 'stream-a', 'hello 中文\u001b[32m!\u001b[0m');
+    expect(decodeServerBinaryFrame(out)).toEqual({ type: 'output', sequence: 42, streamId: 'stream-a', data: 'hello 中文\u001b[32m!\u001b[0m' });
+
+    const large = '\u001b[38;2;200;100;50m' + 'repeat-line-payload-0123456789\r\n'.repeat(400);
+    const snap = encodeSnapshotFrame(9, 120, 40, 'stream-b', large);
+    expect(snap.length).toBeLessThan(Buffer.byteLength(large, 'utf8') * 0.25);
+    expect(decodeServerBinaryFrame(snap)).toEqual({ type: 'snapshot', sequence: 9, cols: 120, rows: 40, streamId: 'stream-b', data: large, compressed: true });
+
+    const input = encodeInputFrame('web-1', 7, 'ls -la\r');
+    expect(decodeClientBinaryFrame(input)).toEqual({ type: 'input', clientId: 'web-1', epoch: 7, data: 'ls -la\r' });
+
+    const ping = encodePingFrame(123456789);
+    expect(decodeClientBinaryFrame(ping)).toEqual({ type: 'ping', timestamp: 123456789 });
+    const pong = encodePongFrame(123456789);
+    expect(decodeServerBinaryFrame(pong)).toEqual({ type: 'pong', timestamp: 123456789 });
+  });
+
+  it('bounds unterminated escape sequences and extracts OSC 0/2/7 metadata', () => {
+    const state = new OuterTerminalState();
+    state.accept('\u001b[' + '1'.repeat(8192));
+    state.accept('\u001b[?2004h\u001b]2;nvim app.ts\u0007\u001b]7;file://mac.local/Users/dev/my%20repo\u001b\\');
+    expect(state.mode(2004)).toBe(true);
+    expect(state.paneTitle).toBe('nvim app.ts');
+    expect(state.cwd).toBe('/Users/dev/my repo');
+  });
 });
 
 describe('sendKeysLines UTF-8 chunking', () => {

@@ -140,7 +140,7 @@ internal fun TerminalScrollView(
     onTap: () -> Unit = {},
 ) {
     val tap by rememberUpdatedState(onTap)
-    val measurer = rememberTextMeasurer(cacheSize = 0)
+    val measurer = rememberTextMeasurer(cacheSize = 1024)
     val density = LocalDensity.current
     val font = appearanceTerminalFontFamily()
     val base = remember(fontSize, font) { ComposeTextStyle(fontFamily = font, fontSize = fontSize) }

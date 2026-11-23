@@ -542,6 +542,9 @@ data class TerminalInfo(
     val createdAt: String,
     val exitCode: Long? = null,
     val appearance: TerminalAppearance? = null,
+    val cwd: String? = null,
+    val foregroundCommand: String? = null,
+    val paneTitle: String? = null,
 )
 
 /**

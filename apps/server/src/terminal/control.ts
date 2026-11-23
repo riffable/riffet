@@ -70,6 +70,8 @@ export interface ControlHandlers {
   output: (pane: string, data: string) => void;
   /** tmux stopped sending a pane's output (`pause-after`); its stream has a gap until it is re-seeded. */
   pause: (pane: string) => void;
+  /** tmux reported a window rename (`%window-renamed @<id> <name>`). */
+  windowRenamed?: (name: string) => void;
   /** The control client ended (`%exit`, the process exiting, or a spawn failure). Called once. */
   exit: () => void;
 }
@@ -159,27 +161,38 @@ export class ControlClient {
   private line(line: Buffer): void {
     const block = this.block;
     if (block) {
-      if (line[0] === 0x25 && (startsWith(line, '%end ') || startsWith(line, '%error ')) && line.toString('latin1').split(' ')[2] === block.number) {
-        this.block = undefined;
-        if (block.ours) this.complete(block.lines, startsWith(line, '%error '));
-      } else block.lines.push(line);
+      if (line[0] === 0x25) {
+        const isEnd = startsWithBytes(line, PREFIX_END);
+        const isError = !isEnd && startsWithBytes(line, PREFIX_ERROR);
+        if ((isEnd || isError) && blockField(line, 2) === block.number) {
+          this.block = undefined;
+          if (block.ours) this.complete(block.lines, isError);
+          return;
+        }
+      }
+      block.lines.push(line);
       return;
     }
     if (line[0] !== 0x25) return;
-    if (startsWith(line, '%output ')) {
-      const space = line.indexOf(0x20, 8);
-      if (space > 0) this.output(line.toString('latin1', 8, space), line.subarray(space + 1));
-    } else if (startsWith(line, '%extended-output ')) {
+    if (startsWithBytes(line, PREFIX_OUTPUT)) {
+      const space = line.indexOf(0x20, PREFIX_OUTPUT.length);
+      if (space > 0) this.output(line.toString('latin1', PREFIX_OUTPUT.length, space), line.subarray(space + 1));
+    } else if (startsWithBytes(line, PREFIX_EXT_OUTPUT)) {
       // %extended-output %<pane> <age> ... : <data> — tmux may add arguments before the colon.
-      const paneEnd = line.indexOf(0x20, 17), colon = paneEnd < 0 ? -1 : line.indexOf(' : ', paneEnd);
-      if (colon > 0) this.output(line.toString('latin1', 17, paneEnd), line.subarray(colon + 3));
-    } else if (startsWith(line, '%begin ')) {
-      const [, , number, flags] = line.toString('latin1').split(' ');
+      const paneEnd = line.indexOf(0x20, PREFIX_EXT_OUTPUT.length);
+      const colon = paneEnd < 0 ? -1 : line.indexOf(EXT_COLON, paneEnd);
+      if (colon > 0) this.output(line.toString('latin1', PREFIX_EXT_OUTPUT.length, paneEnd), line.subarray(colon + 3));
+    } else if (startsWithBytes(line, PREFIX_BEGIN)) {
+      const number = blockField(line, 2) ?? '';
+      const flags = blockField(line, 3);
       // The attach command's own block (and any hook's) carries flags 0; only this client's commands are ours.
-      this.block = { number: number ?? '', lines: [], ours: !this.aligned || (Number(flags) & 1) === 1 };
-    } else if (startsWith(line, '%pause ')) this.handlers.pause(line.toString('latin1', 7));
-    else if (startsWith(line, '%exit')) this.finish();
-    // Everything else (%continue, %config-error, %session-changed, %window-renamed, ...) is not needed.
+      this.block = { number, lines: [], ours: !this.aligned || (Number(flags) & 1) === 1 };
+    } else if (startsWithBytes(line, PREFIX_PAUSE)) this.handlers.pause(line.toString('latin1', PREFIX_PAUSE.length));
+    else if (startsWithBytes(line, PREFIX_WINDOW_RENAMED)) {
+      const space = line.indexOf(0x20, PREFIX_WINDOW_RENAMED.length);
+      if (space > 0) this.handlers.windowRenamed?.(line.toString('utf8', space + 1));
+    } else if (startsWithBytes(line, PREFIX_EXIT)) this.finish();
+    // Everything else (%continue, %config-error, %session-changed, ...) is not needed.
   }
 
   private output(pane: string, escaped: Buffer): void {
@@ -210,6 +223,28 @@ export class ControlClient {
   }
 }
 
-function startsWith(line: Buffer, prefix: string): boolean {
-  return line.length >= prefix.length && line.toString('latin1', 0, prefix.length) === prefix;
+const PREFIX_OUTPUT = Buffer.from('%output ');
+const PREFIX_EXT_OUTPUT = Buffer.from('%extended-output ');
+const PREFIX_BEGIN = Buffer.from('%begin ');
+const PREFIX_END = Buffer.from('%end ');
+const PREFIX_ERROR = Buffer.from('%error ');
+const PREFIX_PAUSE = Buffer.from('%pause ');
+const PREFIX_EXIT = Buffer.from('%exit');
+const PREFIX_WINDOW_RENAMED = Buffer.from('%window-renamed ');
+const EXT_COLON = Buffer.from(' : ');
+
+function startsWithBytes(line: Buffer, prefix: Buffer): boolean {
+  return line.length >= prefix.length && line.compare(prefix, 0, prefix.length, 0, prefix.length) === 0;
+}
+
+/** Reads the `index`-th space-separated ASCII token without decoding or splitting the whole line. */
+function blockField(line: Buffer, index: number): string | undefined {
+  let start = 0;
+  for (let current = 0; current <= index; current++) {
+    const end = line.indexOf(0x20, start);
+    if (current === index) return line.toString('latin1', start, end < 0 ? line.length : end);
+    if (end < 0) return undefined;
+    start = end + 1;
+  }
+  return undefined;
 }

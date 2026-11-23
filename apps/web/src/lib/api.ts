@@ -128,7 +128,7 @@ import type {
   WorktreeInfo,
   ReleaseNotes,
 } from '@contracts';
-import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARANCE_HEADER, TERMINAL_PROTOCOL } from '@contracts';
+import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARANCE_HEADER, TERMINAL_BINARY_PROTOCOL } from '@contracts';
 import { pageTerminalAppearance } from './terminal-theme';
 import { HttpError } from './errors';
 import { newId } from './utils';
@@ -725,7 +725,7 @@ export const api = {
   events: (id: string, after = 0) => request<WorkbenchEvent[]>(`/api/sessions/${encodeURIComponent(id)}/events?after=${after}`),
   runs: (id: string, commandId?: string) => request<Run[]>(`/api/sessions/${encodeURIComponent(id)}/runs${commandId ? `?commandId=${encodeURIComponent(commandId)}` : ''}`),
   exportSession: (id: string) => request<unknown>(`/api/sessions/${encodeURIComponent(id)}/export`),
-  createTerminal: (body: { projectId: string; sessionId?: string; kind?: 'shell' | 'login'; title?: string; args?: string[] }) => request<TerminalInfo>(serverPath('/api/terminals', serverOfObject(body.projectId)), json('POST', body)),
+  createTerminal: (body: { projectId: string; sessionId?: string; kind?: 'shell' | 'login'; title?: string; args?: string[]; profileId?: string; cwd?: string }) => request<TerminalInfo>(serverPath('/api/terminals', serverOfObject(body.projectId)), json('POST', body)),
   terminals: () => request<TerminalInfo[]>('/api/terminals'),
   terminalsIfChanged: (etag?: string) => requestList<TerminalInfo[]>('/api/terminals', etag, timeout()),
   getTerminal: (id: string) => request<TerminalInfo>(`/api/terminals/${encodeURIComponent(id)}`),
@@ -1211,7 +1211,7 @@ export function terminalSocketUrl(id: string): string {
   const url = new URL(serverPath(`/api/terminals/${encodeURIComponent(id)}/ws`), window.location.href);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('features', CLIENT_FEATURES);
-  url.searchParams.set('protocol', String(TERMINAL_PROTOCOL));
+  url.searchParams.set('protocol', String(TERMINAL_BINARY_PROTOCOL));
   return url.toString();
 }
 

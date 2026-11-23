@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import { readFile, readlink, realpath } from 'node:fs/promises';
 import { constants as osConstants, homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type Session, type TerminalAppearance, type TerminalGridDiagnostics, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
+import { basename, isAbsolute, join, resolve } from 'node:path';
+import { TERMINAL_BUDGET, TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type Session, type TerminalAppearance, type TerminalGridDiagnostics, type TerminalInfo, type TerminalProfile, type TerminalServerMessage, type TerminalServerSettings } from '../../../../packages/contracts/src/index.js';
 import { normalizeWarmup } from '../session-identity.js';
 import { terminalEnvironment } from '../environment.js';
 import { AppError, requireString } from '../errors.js';
@@ -20,6 +20,7 @@ import { assembleSeed, seedCommands, seedLine, SEED_BLOCKS, type Seed } from './
 import { resolveTerminalAppearance, sameTerminalAppearance } from './appearance.js';
 import { claimTmuxServerCommands } from './orphans.js';
 import { launchArgAccepted, tmuxArgument } from './launch-args.js';
+import { detectShellKind, prepareShellLaunch } from './shell-integration.js';
 import { stripTerminalSequences } from '../../../../packages/plugin-api/src/kit/terminal-text.js';
 
 /**
@@ -57,6 +58,10 @@ export interface TerminalServiceOptions {
    * since nothing comes back for them (docs/guide/performance.md §3.10).
    */
   ephemeral?: boolean;
+  /** Override idle-detach delay for ordinary shells (defaults to `TERMINAL_BUDGET.idleDetachMs`). */
+  idleDetachMs?: number;
+  /** Server-local B-class terminal settings (default shell, shell integration, profiles). */
+  shellSettings?: () => TerminalServerSettings | undefined;
 }
 
 export interface TerminalCreateInput {
@@ -68,6 +73,10 @@ export interface TerminalCreateInput {
   rows?: number;
   /** Arguments of a shell; every other kind is launched from `launchSpec`. */
   args?: string[];
+  /** Optional B-class server shell profile id (only for `kind === 'shell'`). */
+  profileId?: string;
+  /** Optional starting directory for a new shell (e.g. inherited from an active terminal's CWD). */
+  cwd?: string;
   /** Trusted server adapter launch specification (kinds other than `shell`). Browser terminal requests cannot provide this. */
   launchSpec?: { command: string; args: string[]; env?: Record<string, string>; secretEnv?: Record<string, string>; cwd: string; launchMarker?: string };
   /** A live terminal of the session (same kind) is returned instead of launching another; concurrent creations of one session share one start. */
@@ -350,6 +359,8 @@ export class TerminalService {
   /** Capability of the tmux server on our socket, not the version of a different CLI binary. */
   private tmuxPaneFeatures?: Promise<boolean>;
   private tmuxVersion?: Promise<string>;
+  /** One-shot modern tmux server options (extended-keys, terminal-features) on this socket. */
+  private modernServerOptions?: Promise<void>;
   private launchRecordRead?: { at: number; read: Promise<Map<string, PaneLaunchRecord> | undefined> };
   /** Kept as a resolved compatibility barrier; restoration is now scoped to one terminal. */
   private readonly ready = Promise.resolve();
@@ -360,6 +371,8 @@ export class TerminalService {
   private readonly attachFailures = new Map<string, number>();
   /** Debounced post-resize snapshot pushes, keyed by terminal id. */
   private readonly snapshotTimers = new Map<string, NodeJS.Timeout>();
+  /** Delayed control-client detach timers for idle ordinary shells with no viewers or observers. */
+  private readonly idleDetachTimers = new Map<string, NodeJS.Timeout>();
   private listeners = new Map<string, Set<Viewer>>();
   private observers = new Map<string, Set<TerminalObserver>>();
   /** Terminals being created with `reuseLive`, by session. */
@@ -455,7 +468,9 @@ export class TerminalService {
     const appearance = resolveTerminalAppearance(input.appearance ?? (input.sessionId ? this.store.getSession(input.sessionId).terminalAppearance : undefined));
     const terminalId = randomUUID();
     const behaviour = this.behaviourFor(kind, input.sessionId, input.warmup?.backendId);
-    const title = input.title?.trim().slice(0, 120) || behaviour?.title || (kind === 'shell' ? 'Shell' : kind === 'login' ? 'Login' : 'Native Agent');
+    const profile = kind === 'shell' ? this.resolveProfile(input.profileId) : undefined;
+    const launchCwd = kind === 'shell' ? this.resolveShellCwd(input.cwd ?? profile?.cwd, currentProject.cwd) : currentProject.cwd;
+    const title = input.title?.trim().slice(0, 120) || profile?.name || behaviour?.title || (kind === 'shell' ? 'Shell' : kind === 'login' ? 'Login' : 'Native Agent');
     const info: TerminalInfo = {
       id: terminalId,
       projectId: currentProject.id,
@@ -468,11 +483,12 @@ export class TerminalService {
       cols,
       rows,
       ...(appearance ? { appearance } : {}),
+      ...(kind === 'shell' ? { cwd: launchCwd } : {}),
       createdAt: new Date().toISOString(),
       ...(input.warmup ? { warmup: input.warmup } : {}),
     };
     this.prepareSocketDirectory();
-    const { command, args, tmuxEnv, env: commandEnv } = this.commandFor(kind, input);
+    const { command, args, tmuxEnv, env: commandEnv } = this.commandFor(kind, input, profile);
     // A secret reaches the session through tmux's `update-environment` from this client's own
     // environment, which other users cannot read; `-e KEY=VALUE` would put it on the client's argv.
     const secretEnv = kind === 'shell' ? {} : input.launchSpec?.secretEnv ?? {};
@@ -484,12 +500,12 @@ export class TerminalService {
       // user installed since. Every session states the daemon's own environment explicitly.
       const sessionEnv = { ...terminalEnvironment(), ...(tmuxEnv ?? {}) };
       // The markers go first: whatever else the command does, `ps` shows whose server this is (`terminal/orphans.ts`).
-      const tmuxCommands=['start-server',';',...claimTmuxServerCommands(this.stateDir),...[...this.launchEnv().managed,...Object.keys(secretEnv)].flatMap(name=>[';','if-shell','-F',`#{m:*${name}*,#{update-environment}}`,'',`set-option -ga update-environment ${name}`]),';','set-option','-g','history-limit',String(HISTORY_LIMIT),';','set-option','-g','remain-on-exit','on',';','new-session'];
+      const tmuxCommands=['start-server',';',...claimTmuxServerCommands(this.stateDir),...[...this.launchEnv().managed,...Object.keys(secretEnv)].flatMap(name=>[';','if-shell','-F',`#{m:*${name}*,#{update-environment}}`,'',`set-option -ga update-environment ${name}`]),';','set-option','-s','escape-time','10',';','set-option','-g','focus-events','on',';','set-option','-g','history-limit',String(HISTORY_LIMIT),';','set-option','-g','remain-on-exit','on',';','new-session'];
       await this.runTmux([
         ...tmuxCommands,
         // Every value that is not Riffet's own can end in `;`, which tmux would read as the end of the command.
         ...Object.entries(sessionEnv).flatMap(([key, value]) => ['-e', tmuxArgument(`${key}=${value}`)]), '-d', '-P', '-F', '#{session_id}',
-        '-x', String(cols), '-y', String(rows), '-s', terminalName(terminalId), '-c', tmuxArgument(currentProject.cwd), tmuxArgument(command), ...args.map(tmuxArgument),
+        '-x', String(cols), '-y', String(rows), '-s', terminalName(terminalId), '-c', tmuxArgument(launchCwd), tmuxArgument(command), ...args.map(tmuxArgument),
         // Per window, never `-g`: tmux 3.6b's server exits when a session is created while the global option is `manual`.
         ';', 'set-option', '-w', '-t', terminalName(terminalId), 'window-size', 'manual',
         // The driver's opaque launch fingerprint, bound to the pane process it describes in the same
@@ -497,6 +513,7 @@ export class TerminalService {
         ...(launchMarker ? this.launchRecordCommands(terminalId, launchMarker) : []),
         ...(await this.paneFeatures().catch(() => false) ? this.appearanceCommands(terminalId, appearance) : []),
       ],5000,env);
+      await this.ensureModernServerOptions();
       if (launchMarker) this.launchRecordRead = undefined;
       await this.runTmux(['set-hook', '-t', terminalName(terminalId), 'pane-died', `detach-client -s ${terminalName(terminalId)}`]);
       this.store.saveTerminal(info);
@@ -648,6 +665,7 @@ export class TerminalService {
     const group = this.listeners.get(id) ?? new Set<Viewer>();
     group.add(viewer);
     this.listeners.set(id, group);
+    this.cancelIdleDetach(id);
     void this.ensureRestored(id).then(async () => {
       if (viewer.closed) return;
       const info = this.store.getTerminal(id);
@@ -665,6 +683,7 @@ export class TerminalService {
       if (group.size === 0 && this.listeners.get(id) === group) {
         this.listeners.delete(id);
         setTimeout(() => this.restoreBackgroundSize(id), BACKGROUND_RESIZE_DELAY_MS).unref?.();
+        this.scheduleIdleDetach(id);
       }
     };
     return Object.assign(unsubscribe, {
@@ -708,12 +727,19 @@ export class TerminalService {
       const blocks = all.slice(all.length - SEED_BLOCKS);
       const seeds = new Map<boolean, Seed | undefined>();
       const failed: Viewer[] = [];
+      let metadataSynced = false;
       for (const viewer of targets) {
         if (!current(viewer)) continue;
         const history = viewer.protocol >= 3;
         if (!seeds.has(history)) seeds.set(history, assembleSeed(blocks, runtime.modes, history));
         const seed = seeds.get(history);
-        if (seed) this.sendSnapshot(viewer, runtime, seed); else failed.push(viewer);
+        if (seed) {
+          if (!metadataSynced) {
+            metadataSynced = true;
+            this.updateMetadata(id, { cwd: seed.cwd, foregroundCommand: seed.foregroundCommand, paneTitle: seed.paneTitle });
+          }
+          this.sendSnapshot(viewer, runtime, seed);
+        } else failed.push(viewer);
       }
       retry(failed);
     }).catch(() => retry(targets));
@@ -758,6 +784,7 @@ export class TerminalService {
     const group = this.observers.get(id) ?? new Set<TerminalObserver>();
     group.add(callback);
     this.observers.set(id, group);
+    this.cancelIdleDetach(id);
     const runtime = this.runtime.get(id);
     if (runtime?.output.length) this.deliver(id, { type: 'output', terminalId: id, data: runtime.output.text(), sequence: runtime.sequence });
     let closed = false;
@@ -770,7 +797,10 @@ export class TerminalService {
       if (closed) return;
       closed = true;
       group.delete(callback);
-      if (group.size === 0) this.observers.delete(id);
+      if (group.size === 0) {
+        this.observers.delete(id);
+        this.scheduleIdleDetach(id);
+      }
     };
   }
 
@@ -1413,6 +1443,7 @@ export class TerminalService {
     this.stopping.add(id);
     const pendingSnapshot = this.snapshotTimers.get(id);
     if (pendingSnapshot) { clearTimeout(pendingSnapshot); this.snapshotTimers.delete(id); }
+    this.cancelIdleDetach(id);
     const attached = this.runtime.get(id);
     if (attached) attached.snapshotGeneration += 1;
     // Bump the control epoch before the first await so any active interaction becomes stale
@@ -1461,6 +1492,8 @@ export class TerminalService {
     this.observers.clear();
     for (const timer of this.snapshotTimers.values()) clearTimeout(timer);
     this.snapshotTimers.clear();
+    for (const timer of this.idleDetachTimers.values()) clearTimeout(timer);
+    this.idleDetachTimers.clear();
     if (this.options.ephemeral) await this.runTmux(['kill-server'], 3000).catch(() => undefined);
   }
 
@@ -1545,6 +1578,79 @@ export class TerminalService {
       .catch(error => { this.tmuxPaneFeatures = undefined; throw error; });
   }
 
+  /**
+   * Apply modern tmux server capabilities once per private server instance in a single tmux round
+   * trip; only older tmux 3.2/3.3 builds fall back to applying supported options individually.
+   */
+  private ensureModernServerOptions(): Promise<void> {
+    return this.modernServerOptions ??= (async () => {
+      try {
+        await this.tmux([
+          'set-option', '-s', 'escape-time', '10',
+          ';', 'set-option', '-g', 'focus-events', 'on',
+          ';', 'set-option', '-s', 'extended-keys', 'on',
+          ';', 'set-option', '-s', 'extended-keys-format', 'csi-u',
+          // Fixed slot [90] keeps repeated application idempotent without growing the array.
+          ';', 'set-option', '-s', 'terminal-features[90]', 'xterm*:RGB:strikethrough:usstyle:overline:sync:extkeys:hyperlinks',
+        ]);
+      } catch {
+        await this.tmux(['set-option', '-s', 'escape-time', '10']).catch(() => undefined);
+        await this.tmux(['set-option', '-g', 'focus-events', 'on']).catch(() => undefined);
+        await this.tmux(['set-option', '-s', 'extended-keys', 'on']).catch(() => undefined);
+        await this.tmux(['set-option', '-s', 'extended-keys-format', 'csi-u']).catch(() => undefined);
+        await this.tmux(['set-option', '-s', 'terminal-features[90]', 'xterm*:RGB:strikethrough:usstyle:overline:sync']).catch(() => undefined);
+      }
+    })();
+  }
+
+  private updateMetadata(id: string, patch: { cwd?: string; foregroundCommand?: string; paneTitle?: string }): void {
+    if (this.shuttingDown) return;
+    const current = this.store.findTerminal(id);
+    if (!current || current.state === 'exited') return;
+    const nextPatch: Partial<TerminalInfo> = {};
+    if (patch.cwd && patch.cwd !== current.cwd) nextPatch.cwd = patch.cwd;
+    if (patch.foregroundCommand && patch.foregroundCommand !== current.foregroundCommand) nextPatch.foregroundCommand = patch.foregroundCommand;
+    if (patch.paneTitle && patch.paneTitle !== current.paneTitle) nextPatch.paneTitle = patch.paneTitle;
+    if (!Object.keys(nextPatch).length) return;
+    const updated = this.store.updateTerminal(id, nextPatch);
+    this.emit(id, { type: 'state', terminal: updated });
+  }
+
+  private cancelIdleDetach(id: string): void {
+    const timer = this.idleDetachTimers.get(id);
+    if (timer) { clearTimeout(timer); this.idleDetachTimers.delete(id); }
+  }
+
+  /**
+   * Ordinary shells with no active viewers or observers release their `tmux -C` control client
+   * after an idle spell; the tmux session stays alive and reattaches transparently on demand.
+   */
+  private scheduleIdleDetach(id: string): void {
+    const delay = this.options.idleDetachMs ?? TERMINAL_BUDGET.idleDetachMs;
+    if (!(delay > 0) || this.shuttingDown) return;
+    const info = this.store.findTerminal(id);
+    if (!info || info.kind !== 'shell' || info.state === 'exited') return;
+    if (this.listeners.has(id) || this.observers.has(id)) return;
+    this.cancelIdleDetach(id);
+    const timer = setTimeout(() => {
+      this.idleDetachTimers.delete(id);
+      if (this.shuttingDown || this.listeners.has(id) || this.observers.has(id) || this.hasExclusiveOperation(id)) return;
+      const attached = this.runtime.get(id);
+      if (!attached || attached.kind !== 'shell') return;
+      const current = this.store.findTerminal(id);
+      if (!current || current.state === 'exited') return;
+      this.runtime.delete(id);
+      attached.snapshotGeneration += 1;
+      const pendingSnapshot = this.snapshotTimers.get(id);
+      if (pendingSnapshot) { clearTimeout(pendingSnapshot); this.snapshotTimers.delete(id); }
+      attached.control.kill();
+      const updated = this.store.updateTerminal(id, { state: 'detached', ownerId: undefined });
+      this.emit(id, { type: 'state', terminal: updated });
+    }, delay);
+    timer.unref?.();
+    this.idleDetachTimers.set(id, timer);
+  }
+
   /** No appearance leaves the pane on tmux's defaults, which each viewer paints with its own theme. */
   private appearanceCommands(id: string, appearance: TerminalAppearance | undefined): string[] {
     const style = appearance ? `fg=${appearance.foreground},bg=${appearance.background}` : 'default';
@@ -1556,6 +1662,7 @@ export class TerminalService {
     // from a stale record that would undo the controller's newer one.
     if (this.shuttingDown || this.runtime.has(info.id)) return;
     await this.assertTmuxVersion();
+    await this.ensureModernServerOptions();
     const name = terminalName(info.id);
     await this.tmux(['set-option', '-w', '-t', name, 'remain-on-exit', 'on', ';', 'set-hook', '-t', name, 'pane-died', `detach-client -s ${name}`, ...(await this.paneFeatures().catch(() => false) ? this.appearanceCommands(info.id, info.appearance) : [])]);
     const dead = await this.paneExitCode(info.id);
@@ -1582,6 +1689,11 @@ export class TerminalService {
         if (viewers.length) this.seedViewers(info.id, viewers, { resume: true });
         else void control.request(`refresh-client -A '${pane}:continue'`).catch(() => undefined);
       },
+      windowRenamed: renamed => {
+        if (this.runtime.get(info.id) !== runtime || this.shuttingDown) return;
+        const cleaned = renamed.replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 200);
+        if (cleaned) this.updateMetadata(info.id, { paneTitle: cleaned });
+      },
       exit: () => { void this.onAttachExit(info.id, runtime); },
     }, {
       // The client's cwd is irrelevant to the tmux session, but a missing one makes the spawn exit at once.
@@ -1596,7 +1708,10 @@ export class TerminalService {
     this.emit(info.id, { type: 'state', terminal: updated });
     // Viewers that were waiting for a pane (or watched the last attach) start over on this stream.
     this.seedViewers(info.id, this.listeners.get(info.id) ?? []);
-    if (!this.listeners.has(info.id)) setTimeout(() => this.restoreBackgroundSize(info.id), BACKGROUND_RESIZE_DELAY_MS).unref?.();
+    if (!this.listeners.has(info.id)) {
+      setTimeout(() => this.restoreBackgroundSize(info.id), BACKGROUND_RESIZE_DELAY_MS).unref?.();
+      this.scheduleIdleDetach(info.id);
+    }
   }
 
   /**
@@ -1615,7 +1730,15 @@ export class TerminalService {
     runtime.lastOutputAt = Date.now();
     runtime.sequence += 1;
     runtime.output.append(data);
+    const prevCwd = runtime.modes.cwd;
+    const prevTitle = runtime.modes.paneTitle;
     runtime.modes.accept(data);
+    if (runtime.modes.cwd !== prevCwd || runtime.modes.paneTitle !== prevTitle) {
+      this.updateMetadata(id, {
+        ...(runtime.modes.cwd !== prevCwd ? { cwd: runtime.modes.cwd } : {}),
+        ...(runtime.modes.paneTitle !== prevTitle ? { paneTitle: runtime.modes.paneTitle } : {}),
+      });
+    }
     if (runtime.behaviour?.ready && !runtime.agentReady) runtime.agentReady = runtime.behaviour.ready(stripTerminalSequences(runtime.output.tail(16 * 1024)));
     this.emit(id, { type: 'output', data, sequence: runtime.sequence, streamId: runtime.streamId });
   }
@@ -1625,6 +1748,7 @@ export class TerminalService {
     runtime.snapshotGeneration += 1;
     const pendingSnapshot = this.snapshotTimers.get(id);
     if (pendingSnapshot) { clearTimeout(pendingSnapshot); this.snapshotTimers.delete(id); }
+    this.cancelIdleDetach(id);
     if (this.shuttingDown) return;
     const dead = await this.paneExitCode(id).catch(() => undefined);
     if (this.shuttingDown) return;
@@ -1702,6 +1826,7 @@ export class TerminalService {
       if (this.shuttingDown || this.stopping.has(id)) return;
     }
     const updated = this.store.updateTerminal(id, { state: 'exited', exitCode: exitCode ?? undefined, ownerId: undefined, epoch: info.epoch + 1 });
+    this.cancelIdleDetach(id);
     const attached = this.runtime.get(id);
     this.runtime.delete(id);
     if (attached) attached.control.kill();
@@ -1724,8 +1849,38 @@ export class TerminalService {
     return behaviour.startupError?.(text);
   }
 
-  private commandFor(kind: TerminalInfo['kind'], input: TerminalCreateInput): { command: string; args: string[]; env?:NodeJS.ProcessEnv; tmuxEnv?: Record<string, string> } {
-    if (kind === 'shell') return { command: defaultShell(), args: ['-i', ...(input.args ?? [])] };
+  private resolveProfile(profileId: string | undefined): TerminalProfile | undefined {
+    if (profileId === undefined) return undefined;
+    const id = requireString(profileId, 'profileId', 64);
+    const profile = this.options.shellSettings?.()?.profiles?.find(item => item.id === id);
+    if (!profile) throw new AppError('TERMINAL_PROFILE_NOT_FOUND', `Terminal profile "${id}" not found`, 404);
+    return profile;
+  }
+
+  private resolveShellCwd(candidate: string | undefined, fallback: string): string {
+    if (!candidate) return fallback;
+    const trimmed = candidate.trim();
+    if (!trimmed || trimmed.length > 4096 || /[\0\r\n]/.test(trimmed)) throw new AppError('INVALID_TERMINAL_CWD', 'Terminal working directory is invalid', 400);
+    const expanded = trimmed === '~' || trimmed.startsWith('~/') ? join(homedir(), trimmed.slice(trimmed === '~' ? 1 : 2)) : trimmed;
+    if (!isAbsolute(expanded)) throw new AppError('INVALID_TERMINAL_CWD', 'Terminal working directory must be an absolute path', 400);
+    const resolvedPath = resolve(expanded);
+    try {
+      if (statSync(resolvedPath).isDirectory()) return resolvedPath;
+    } catch { /* fall through to project directory */ }
+    return fallback;
+  }
+
+  private commandFor(kind: TerminalInfo['kind'], input: TerminalCreateInput, profile?: TerminalProfile): { command: string; args: string[]; env?: NodeJS.ProcessEnv; tmuxEnv?: Record<string, string> } {
+    if (kind === 'shell') {
+      const shellConfig = this.options.shellSettings?.();
+      const command = profile?.command || shellConfig?.defaultShell || defaultShell();
+      const baseArgs = profile?.args !== undefined
+        ? [...profile.args]
+        : (detectShellKind(command) || ['sh', 'dash', 'ash', 'ksh', 'nu'].includes(basename(command).replace(/^-/, '').toLowerCase())) ? ['-i'] : [];
+      const args = [...baseArgs, ...(input.args ?? [])];
+      const integrationEnabled = shellConfig?.shellIntegration !== false;
+      return prepareShellLaunch(this.stateDir, { command, args, ...(profile?.env ? { tmuxEnv: { ...profile.env } } : {}) }, integrationEnabled);
+    }
     const spec = input.launchSpec;
     if (!spec) throw new AppError('NATIVE_LAUNCH_REQUIRED', 'A native terminal needs an adapter launch specification', 400);
     return { command: spec.command, args: [...spec.args], tmuxEnv: spec.env };

@@ -7,6 +7,12 @@ export interface TerminalInfo {
   persistent: boolean; ownerId?: string; epoch: number; cols: number; rows: number;
   createdAt: string; exitCode?: number;
   appearance?: TerminalAppearance;
+  /** Current working directory reported by tmux or OSC 7 when known. */
+  cwd?: string;
+  /** Foreground process name reported by tmux (`pane_current_command`) when known. */
+  foregroundCommand?: string;
+  /** Dynamic title set by the running program (OSC 0/2 or tmux `pane_title`). */
+  paneTitle?: string;
 }
 /** The live grid's dimensions and one-based row positions. Blank cells do not count as content. */
 export interface TerminalGridDiagnostics {
@@ -21,6 +27,21 @@ export interface TerminalGridDiagnostics {
  * client keeps its own scrollback. Protocol 2 snapshots carry the screen only.
  */
 export const TERMINAL_PROTOCOL = 3;
+/**
+ * Terminal socket protocol 4 (docs/TERMINAL-SOTA.md): binary data frames for output, optionally
+ * deflate-raw compressed snapshots, raw input, and application-level ping/pong heartbeats.
+ * Control messages (`claim`, `release`, `resize`, `paste`, `ack`, `state`, `error`, `exit`) stay JSON.
+ */
+export const TERMINAL_BINARY_PROTOCOL = 4;
+/** Leading type byte for protocol 4 binary WebSocket frames. */
+export const TERMINAL_WIRE_FRAME = {
+  OUTPUT: 0x01,
+  SNAPSHOT_RAW: 0x02,
+  SNAPSHOT_DEFLATE: 0x03,
+  INPUT: 0x04,
+  PING: 0x05,
+  PONG: 0x06,
+} as const;
 /** Scrollback rows a seed carries and a client emulator keeps. */
 export const TERMINAL_SCROLLBACK_ROWS = 10_000;
 /** A client acks written output in steps of this many characters. */
@@ -46,3 +67,23 @@ export interface TerminalAttachmentPaste {
   clientId: string; epoch: number; requestId: string; attachmentIds: string[]; text?: string;
 }
 export interface TerminalPasteResult { requestId: string; status: 'completed' | 'unknown'; }
+/** A server-configured shell launch preset (B-class setting, docs/TERMINAL-SOTA.md §3.3). */
+export interface TerminalProfile {
+  id: string;
+  name: string;
+  /** Executable path or shell binary; unset falls back to the server's default shell. */
+  command?: string;
+  args?: string[];
+  /** Optional starting working directory; unset uses the project's workspace directory. */
+  cwd?: string;
+  env?: Record<string, string>;
+}
+/** Server-local terminal launch configuration (B-class setting). */
+export interface TerminalServerSettings {
+  /** Default interactive shell executable path; unset uses `$SHELL` or `/bin/sh`. */
+  defaultShell?: string;
+  /** Inject lightweight OSC 133/7 shell integration for zsh/bash/fish. Defaults to true when unset. */
+  shellIntegration?: boolean;
+  /** Named shell launch presets available when creating a new shell terminal. */
+  profiles?: TerminalProfile[];
+}

@@ -513,6 +513,10 @@ msgstr ""
 msgid "material3 风格的取值；其他风格的导航栏与底栏高度见「风格」一章。"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "Option 作为 Meta 键"
+msgstr ""
+
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 msgid "Prompt"
 msgstr ""
@@ -563,6 +567,18 @@ msgstr ""
 
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "SheetScaffold 统一标题、正文、页脚和键盘操作，调用处只填内容和按钮。点 sheet 外部不关闭。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell Integration"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell 环境"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Shell 预设"
 msgstr ""
 
 #: src/app/design/android/OverlayChapter.tsx
@@ -806,6 +822,7 @@ msgid "下一章"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
+#: src/app/settings/PreferencesSections.tsx
 msgid "下划线"
 msgstr ""
 
@@ -1206,6 +1223,10 @@ msgstr ""
 msgid "产品功能"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅作用于 Riffet 启动的新 Shell，不修改本地 rc 文件"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器，不会回显"
@@ -1213,6 +1234,10 @@ msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器；留空保留现有 Key，不会回显"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅保存在这个浏览器"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -1228,7 +1253,7 @@ msgid "仅保存在这台服务器"
 msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
-#: src/app/settings/SettingsPage.tsx
+#: src/app/settings/ShortcutSettings.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -1636,6 +1661,10 @@ msgid "保存后读取额度"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
+msgid "保存在当前服务器"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
 msgid "保存在服务器，所有设备生效。"
 msgstr ""
 
@@ -1812,6 +1841,18 @@ msgstr ""
 msgid "先问选的是值，还是下方内容所属的对象；再问选项是固定的几个，还是随数据变化。"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标与交互"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标样式"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "光标闪烁"
+msgstr ""
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "入口"
 msgstr ""
@@ -1911,6 +1952,7 @@ msgstr ""
 #: src/app/settings/AuxiliaryInspectDialog.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 #: src/app/settings/ModelProbeDialog.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "关闭"
 msgstr ""
 
@@ -2389,6 +2431,15 @@ msgstr ""
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "删除这个会话？"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "删除预设"
+msgstr ""
+
+#. placeholder {0}: profile.name
+#: src/app/settings/PreferencesSections.tsx
+msgid "删除预设：{0}"
 msgstr ""
 
 #. placeholder {0}: formatPercent(eventLoop.utilization)
@@ -2962,6 +3013,11 @@ msgstr ""
 msgid "右滑返回可以在设置里关掉，或只留屏幕边缘。"
 msgstr ""
 
+#. placeholder {0}: mobileKeyLabels[id]
+#: src/app/settings/PreferencesSections.tsx
+msgid "右移 {0}"
+msgstr ""
+
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "右键菜单"
@@ -2977,6 +3033,10 @@ msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "右键菜单用系统菜单"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "右键行为"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -3039,6 +3099,7 @@ msgstr ""
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProfileSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "名称"
@@ -3129,6 +3190,10 @@ msgstr ""
 msgid "命令"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "命令，如 /bin/bash -l"
+msgstr ""
+
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "命令、会话与项目，排在一个列表里"
 msgstr ""
@@ -3139,6 +3204,10 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "命令会默认开启「本机操作远端」；断线重连需要免交互 SSH（密钥或 ssh-agent）"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "响铃提醒"
 msgstr ""
 
 #: src/app/design/overview/Opening.tsx
@@ -3479,6 +3548,10 @@ msgstr ""
 msgid "声明式页面"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "声音"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/channels/CardSettings.tsx
 msgid "处理中"
@@ -3510,6 +3583,10 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "复制 App ID"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "复制或粘贴"
 msgstr ""
 
 #: src/app/settings/PairingDialogs.tsx
@@ -3616,7 +3693,12 @@ msgid "子进程"
 msgstr ""
 
 #: src/app/design/foundations/TypeChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "字体"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字体 · 字距 · 行高 · 字重"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -3625,6 +3707,10 @@ msgstr ""
 
 #: src/app/design/mac/StylesChapter.tsx
 msgid "字体与图标"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字体与排版"
 msgstr ""
 
 #: src/app/design/android/PlatformChapter.tsx
@@ -3655,6 +3741,10 @@ msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "字符与默认"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字距"
 msgstr ""
 
 #: src/app/design/android/TypeChapter.tsx
@@ -4131,6 +4221,11 @@ msgstr ""
 msgid "左右 12 · 16 · 48，顶 24 · 32，底 16"
 msgstr ""
 
+#. placeholder {0}: mobileKeyLabels[id]
+#: src/app/settings/PreferencesSections.tsx
+msgid "左移 {0}"
+msgstr ""
+
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "已丢弃"
@@ -4190,6 +4285,10 @@ msgstr ""
 #. placeholder {1}: process.pid
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "已向 {0}（PID {1}）发送结束信号"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已启用按键"
 msgstr ""
 
 #. placeholder {0}: calls.length
@@ -4395,6 +4494,10 @@ msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "席位读完前，舞台按方式的初始席位立好，Agent 与模型处是骨架。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "常规字重"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
@@ -4798,6 +4901,26 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "恢复默认：{label}"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：字号"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：字距"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：滚轮速度"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：终端字体"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：行高"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -5666,6 +5789,7 @@ msgstr ""
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "文字"
 msgstr ""
 
@@ -5812,6 +5936,14 @@ msgstr ""
 msgid "新设置从下一条回复开始生效"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "新输出时滚到底部"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "方块"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "旁白"
 msgstr ""
@@ -5890,6 +6022,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存消息输入设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存终端设置"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -6209,6 +6345,7 @@ msgstr ""
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "显示"
 msgstr ""
 
@@ -7308,6 +7445,7 @@ msgstr ""
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/ChannelsSection.tsx
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加"
@@ -7315,6 +7453,10 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "添加互联"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "添加按键"
 msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
@@ -7365,6 +7507,10 @@ msgstr ""
 msgid "渐变"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "渲染器"
+msgstr ""
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "源"
 msgstr ""
@@ -7383,6 +7529,14 @@ msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "滚动"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "滚动与渲染"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "滚轮速度"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -7862,6 +8016,10 @@ msgstr ""
 msgid "离线的地位"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "移动端快捷按键栏"
+msgstr ""
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "移动端的底部面板"
 msgstr ""
@@ -7874,7 +8032,9 @@ msgstr ""
 msgid "移除"
 msgstr ""
 
+#. placeholder {0}: mobileKeyLabels[id]
 #. placeholder {0}: model.value
+#: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 msgid "移除 {0}"
 msgstr ""
@@ -7923,6 +8083,10 @@ msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "空时右侧提示聚焦键，有内容时换成清除。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "空格"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -8000,6 +8164,10 @@ msgstr ""
 
 #: src/app/settings/StorageSection.tsx
 msgid "立即整理"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "竖线"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -8083,6 +8251,10 @@ msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "类型决定骨架与内容列；同一类型的页面不另起布局。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "粗体字重"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
@@ -8280,6 +8452,10 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "终端命令"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "终端字体"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -8532,6 +8708,10 @@ msgstr ""
 msgid "自动"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "自动 (WebGL)"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
@@ -8582,6 +8762,14 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "自定义代码高亮"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "自定义字体…"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "自定义字体名"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -8725,6 +8913,7 @@ msgid "行距"
 msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "行高"
 msgstr ""
 
@@ -9282,6 +9471,10 @@ msgstr ""
 msgid "跟随默认 · {0}"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "跟随默认等宽字体"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "路径"
@@ -9349,6 +9542,10 @@ msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "输入新 Key 替换现有值"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "输入时滚到底部"
 msgstr ""
 
 #: src/app/design/foundations/StatesChapter.tsx
@@ -9735,6 +9932,10 @@ msgstr ""
 msgid "选中"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "选中即复制"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "选中块在选项之间滑动。"
 msgstr ""
@@ -10085,6 +10286,10 @@ msgstr ""
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "门禁"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "闪烁"
 msgstr ""
 
 #: src/app/design/foundations/SpaceChapter.tsx
@@ -10459,6 +10664,14 @@ msgstr ""
 msgid "预设"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "预设名称"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "预设命令"
+msgstr ""
+
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/ColorChapter.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -10642,6 +10855,10 @@ msgstr ""
 msgid "默认 Agent"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "默认 Shell"
+msgstr ""
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "默认（{size}）"
 msgstr ""
@@ -10667,6 +10884,10 @@ msgstr ""
 #: src/app/settings/QuickChatSection.tsx
 #: src/app/settings/WorkItemSettingsSection.tsx
 msgid "默认模型"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "默认菜单"
 msgstr ""
 
 #: src/app/design/android/notes.ts

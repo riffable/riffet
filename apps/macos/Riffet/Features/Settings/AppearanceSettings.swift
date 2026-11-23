@@ -362,14 +362,63 @@ struct TypographySettings: View {
     }
 }
 
-/// 终端: the embedded terminal's font size and padding.
+/// 终端: the embedded terminal's typography, interaction, and scroll behavior.
 struct TerminalSettings: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.palette) private var palette
+
+    private static let monospaceFamilies: [String] = {
+        let manager = NSFontManager.shared
+        return manager.availableFontFamilies
+            .filter { family in
+                guard let font = manager.font(withFamily: family, traits: [], weight: 5, size: 12) else { return false }
+                return manager.traits(of: font).contains(.fixedPitchFontMask)
+            }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }()
+
     var body: some View {
         @Bindable var prefs = DisplayPreferences.shared
+        let families = (!prefs.terminalFontFamily.isEmpty && !Self.monospaceFamilies.contains(prefs.terminalFontFamily))
+            ? [prefs.terminalFontFamily] + Self.monospaceFamilies
+            : Self.monospaceFamilies
         Form {
             Section {
+                terminalPreview(prefs: prefs)
+            }
+
+            Section {
+                SettingsRow("字体") {
+                    Picker("", selection: $prefs.terminalFontFamily) {
+                        Text("跟随应用等宽字体").tag("")
+                        Divider()
+                        ForEach(families, id: \.self) { family in
+                            Text(family).tag(family)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 220)
+                }
+
                 SettingsRow("字号") {
-                    SettingsNumberSlider(value: $prefs.terminalFontSize, range: 11...16, step: 0.5, suffix: " pt", defaultValue: 12.5)
+                    SettingsNumberSlider(
+                        value: $prefs.terminalFontSize,
+                        range: DisplayPreferences.terminalFontSizeRange,
+                        step: 0.5,
+                        suffix: " pt",
+                        defaultValue: DisplayPreferences.defaultTerminalFontSize
+                    )
+                }
+
+                SettingsRow("字重") {
+                    Picker("", selection: $prefs.terminalFontWeight) {
+                        Text("常规").tag(TerminalFontWeight.regular)
+                        Text("中等").tag(TerminalFontWeight.medium)
+                        Text("半粗").tag(TerminalFontWeight.semibold)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                 }
 
                 SettingsRow("水平边距") {
@@ -387,9 +436,164 @@ struct TerminalSettings: View {
                 }
             }
 
+            Section {
+                SettingsRow("光标样式") {
+                    Picker("", selection: $prefs.terminalCursorStyle) {
+                        Text("方块").tag(TerminalCursorShape.block)
+                        Text("下划线").tag(TerminalCursorShape.underline)
+                        Text("竖线").tag(TerminalCursorShape.bar)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+
+                SettingsRow("光标闪烁") {
+                    Toggle("", isOn: $prefs.terminalCursorBlink).labelsHidden()
+                }
+
+                SettingsRow("选中即复制") {
+                    Toggle("", isOn: $prefs.terminalCopyOnSelect).labelsHidden()
+                }
+
+                SettingsRow("右键行为") {
+                    Picker("", selection: $prefs.terminalRightClick) {
+                        Text("菜单").tag(TerminalRightClickBehavior.menu)
+                        Text("复制或粘贴").tag(TerminalRightClickBehavior.copyPaste)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+
+                SettingsRow("Option 作为 Meta 键") {
+                    Toggle("", isOn: $prefs.terminalOptionAsMeta).labelsHidden()
+                }
+
+                SettingsRow("响铃提醒") {
+                    Picker("", selection: $prefs.terminalBell) {
+                        Text("关闭").tag(TerminalBellMode.none)
+                        Text("闪烁").tag(TerminalBellMode.visual)
+                        Text("声音").tag(TerminalBellMode.sound)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+            }
+
+            Section {
+                SettingsRow("输入时滚到底部") {
+                    Toggle("", isOn: $prefs.terminalScrollOnInput).labelsHidden()
+                }
+
+                SettingsRow("新输出时滚到底部") {
+                    Toggle("", isOn: $prefs.terminalScrollOnOutput).labelsHidden()
+                }
+
+                SettingsRow("滚轮速度") {
+                    SettingsNumberSlider(
+                        value: $prefs.terminalScrollSensitivity,
+                        range: DisplayPreferences.terminalScrollSensitivityRange,
+                        step: 0.1,
+                        suffix: "×",
+                        defaultValue: DisplayPreferences.defaultTerminalScrollSensitivity
+                    )
+                }
+            }
+
             SettingsScopeFooter()
         }
         .riffetForm()
+    }
+
+    @ViewBuilder
+    private func terminalPreview(prefs: DisplayPreferences) -> some View {
+        let dark = colorScheme == .dark
+        let entry = ThemeStore.shared.entry
+        let page = dark ? entry.values.dark : entry.values.light
+        let ansi = TerminalANSI.colors(entry.ansi, dark: dark)
+        let bg = Color(nsColor: TerminalANSI.nativeColor(page.bg))
+        let fg = Color(nsColor: TerminalANSI.nativeColor(page.fg))
+        let green = ansi.count > 2 ? Color(nsColor: TerminalANSI.nativeColor(ansi[2])) : palette.accent
+        let cyan = ansi.count > 6 ? Color(nsColor: TerminalANSI.nativeColor(ansi[6])) : palette.accent
+        let yellow = ansi.count > 3 ? Color(nsColor: TerminalANSI.nativeColor(ansi[3])) : palette.fg2
+        let muted = ansi.count > 8 ? Color(nsColor: TerminalANSI.nativeColor(ansi[8])) : palette.fg3
+        let resolvedFont = TerminalController.resolveTerminalFont(
+            family: prefs.terminalFontFamily,
+            size: CGFloat(prefs.terminalFontSize),
+            weight: prefs.terminalFontWeight
+        )
+        let swiftFont = Font(resolvedFont)
+        let hPad = CGFloat(prefs.terminalHorizontalPadding)
+        let vPad = CGFloat(prefs.terminalVerticalPadding)
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Space.xs) {
+                Image(icon: "terminal")
+                    .font(RiffetFont.caption)
+                    .foregroundStyle(palette.fg3)
+                Text("zsh · ~/riffet")
+                    .font(RiffetFont.codeSmall)
+                    .foregroundStyle(palette.fg3)
+                Spacer()
+                Text("\(Int(prefs.terminalHorizontalPadding))×\(Int(prefs.terminalVerticalPadding))")
+                    .font(RiffetFont.codeSmall)
+                    .foregroundStyle(palette.fg4)
+            }
+            .padding(.horizontal, Space.md)
+            .padding(.vertical, Space.xs)
+            .background(palette.formFill(palette.bgElevated))
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: Space.xxs) {
+                HStack(spacing: Space.xs) {
+                    Text("~/riffet").foregroundStyle(green)
+                    Text("main").foregroundStyle(cyan)
+                    Text("pnpm test").bold()
+                }
+                HStack(spacing: Space.xs) {
+                    Text("✓").foregroundStyle(green)
+                    Text("terminal").bold()
+                    Text("12 passed").foregroundStyle(muted)
+                    Text("42ms").foregroundStyle(yellow)
+                }
+                HStack(spacing: Space.xs) {
+                    Text("❯").foregroundStyle(green)
+                    Text("git status")
+                    terminalCursorPreview(style: prefs.terminalCursorStyle, color: fg, size: CGFloat(prefs.terminalFontSize))
+                }
+            }
+            .font(swiftFont)
+            .foregroundStyle(fg)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, hPad)
+            .padding(.vertical, vPad)
+            .background(bg)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(palette.line)
+        )
+        .padding(.vertical, Space.xs)
+    }
+
+    @ViewBuilder
+    private func terminalCursorPreview(style: TerminalCursorShape, color: Color, size: CGFloat) -> some View {
+        switch style {
+        case .block:
+            Rectangle().fill(color).frame(width: max(6, size * 0.58), height: size * 1.15)
+        case .underline:
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Rectangle().fill(color).frame(width: max(6, size * 0.58), height: 2)
+            }
+            .frame(height: size * 1.15)
+        case .bar:
+            Rectangle().fill(color).frame(width: 2, height: size * 1.15)
+        }
     }
 }
 

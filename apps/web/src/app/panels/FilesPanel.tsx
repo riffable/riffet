@@ -538,8 +538,8 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     if (!wide || !shown || !panelOpen) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || !matches(event, 'quickOpen')) return;
-      // Another dialog keeps its keys; Quick Open over it would open behind its focus trap.
-      if (document.activeElement?.closest('[role="dialog"]')) return;
+      // Another dialog or the terminal keeps its keys (e.g. Ctrl+P for previous history command).
+      if (document.activeElement?.closest('[role="dialog"], [data-terminal]')) return;
       event.preventDefault();
       setQuickOpen('name');
     };

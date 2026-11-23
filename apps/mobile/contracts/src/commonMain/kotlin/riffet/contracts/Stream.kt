@@ -98,6 +98,22 @@ sealed interface TerminalClientMessage {
 /** Terminal socket protocol (docs/TERMINAL.md): 3 streams the pane's own output; a snapshot carries scrollback. */
 const val TERMINAL_PROTOCOL = 3
 
+/**
+ * Terminal socket protocol 4 (docs/TERMINAL-SOTA.md): binary data frames for output, optionally
+ * deflate-raw compressed snapshots, raw input, and application-level ping/pong heartbeats.
+ */
+const val TERMINAL_BINARY_PROTOCOL = 4
+
+/** Leading type byte for protocol 4 binary WebSocket frames. */
+object TerminalWireFrame {
+    const val OUTPUT: Byte = 0x01
+    const val SNAPSHOT_RAW: Byte = 0x02
+    const val SNAPSHOT_DEFLATE: Byte = 0x03
+    const val INPUT: Byte = 0x04
+    const val PING: Byte = 0x05
+    const val PONG: Byte = 0x06
+}
+
 /** Scrollback rows a seed carries and a client emulator keeps. */
 const val TERMINAL_SCROLLBACK_ROWS = 10_000
 

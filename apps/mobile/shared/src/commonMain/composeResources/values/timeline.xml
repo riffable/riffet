@@ -140,6 +140,11 @@
     <string name="timeline_terminal_release_control">释放控制权</string>
     <string name="timeline_terminal_insert">插入</string>
     <string name="timeline_terminal_send">发送</string>
+    <string name="timeline_terminal_customize_keys">自定义快捷按键</string>
+    <string name="timeline_terminal_quick_keys_active">当前按键</string>
+    <string name="timeline_terminal_quick_keys_available">可选按键</string>
+    <string name="timeline_terminal_quick_keys_reset">恢复默认</string>
+    <string name="timeline_terminal_quick_keys_done">完成</string>
 
     <!-- Terminal render benchmark -->
     <string name="timeline_bench_measuring">测量中…</string>

@@ -200,7 +200,11 @@ class TerminalBuffer(
     }
 
     fun setLineWrap(row: Int) {
-        mLines[externalToInternalRow(row)]!!.mLineWrap = true
+        val line = mLines[externalToInternalRow(row)]!!
+        if (!line.mLineWrap) {
+            line.mLineWrap = true
+            line.markDirty()
+        }
     }
 
     fun getLineWrap(row: Int): Boolean {
@@ -208,7 +212,11 @@ class TerminalBuffer(
     }
 
     fun clearLineWrap(row: Int) {
-        mLines[externalToInternalRow(row)]!!.mLineWrap = false
+        val line = mLines[externalToInternalRow(row)]!!
+        if (line.mLineWrap) {
+            line.mLineWrap = false
+            line.markDirty()
+        }
     }
 
     /**
@@ -525,6 +533,7 @@ class TerminalBuffer(
                 }
                 line.mStyle[x] = TextStyle.encode(foreColor, backColor, effect)
             }
+            line.markDirty()
         }
     }
 

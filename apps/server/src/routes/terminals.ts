@@ -3,10 +3,11 @@ import { LEGACY_DEFAULT_BACKEND_ID } from '../session-identity.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
-import type { TerminalClientMessage } from '../../../../packages/contracts/src/index.js';
+import { TERMINAL_BINARY_PROTOCOL, TERMINAL_BUDGET, type TerminalClientMessage } from '../../../../packages/contracts/src/index.js';
 import { revisionedList } from './params.js';
 import type { RouteDeps } from './deps.js';
 import { readTerminalAppearance, resolveTerminalAppearance, sameTerminalAppearance } from '../terminal/appearance.js';
+import { decodeClientBinaryFrame, encodeOutputFrame, encodePingFrame, encodePongFrame, encodeSnapshotFrame } from '../terminal/wire.js';
 import { registerTerminalAttachmentRoutes } from './terminal-attachments.js';
 
 /** A protocol 3 socket may hold this much unsent data before it is closed: a few seeds and the output between them. */
@@ -21,7 +22,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
     if('warmup' in info)throw new AppError('TERMINAL_NOT_FOUND','Terminal not found',404);
     return info;
   });
-  app.post<{Body:{projectId:string;sessionId?:string;kind?:'shell'|'cursor'|'login';title?:string;args?:string[];backendId?:string}}>('/api/terminals',async(request)=>{
+  app.post<{Body:{projectId:string;sessionId?:string;kind?:'shell'|'cursor'|'login';title?:string;args?:string[];backendId?:string;profileId?:string;cwd?:string}}>('/api/terminals',async(request)=>{
     const body=request.body,project=store.getProject(requireString(body?.projectId,'projectId',100));
     if(body.sessionId&&store.getSession(body.sessionId).projectId!==project.id)throw new AppError('INVALID_TERMINAL','Conversation belongs to another project');
     if(body.kind==='cursor')throw new AppError('CURSOR_SESSION_REQUIRED','Start native Cursor through a native conversation so workspace ownership and recovery are tracked',400);
@@ -35,7 +36,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
       const launchSpec=await nativeBackends.admin.loginLaunchSpec(backendId,project);
       return terminal.create(project,{kind:'login',...(body.sessionId?{sessionId:body.sessionId}:{}),title:body.title??launchSpec.title,appearance,launchSpec});
     }
-    return terminal.create(project,{kind:body.kind,...(body.sessionId?{sessionId:body.sessionId}:{}),...(body.title!==undefined?{title:body.title}:{}),...(body.args!==undefined?{args:body.args}:{}),appearance});
+    return terminal.create(project,{kind:body.kind,...(body.sessionId?{sessionId:body.sessionId}:{}),...(body.title!==undefined?{title:body.title}:{}),...(body.args!==undefined?{args:body.args}:{}),...(body.profileId!==undefined?{profileId:body.profileId}:{}),...(body.cwd!==undefined?{cwd:body.cwd}:{}),appearance});
   });
   // A viewer's theme. It becomes the conversation's colours for later launches and is applied to
   // the running pane now: recoloured in place, or by relaunching a CLI that probes colours once.
@@ -68,15 +69,36 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
   });
   app.get<{Params:{id:string};Querystring:{protocol?:string}}>('/api/terminals/:id/ws',{websocket:true},(socket,request)=>{
     const id=request.params.id;store.getTerminal(id);let clientId:string|undefined,epoch:number|undefined,closed=false;
-    const unwatch=auth.onRevoke(request,()=>{closed=true;socket.terminate();});
+    const unwatch=auth.onRevoke(request,()=>{closed=true;stopHeartbeat();socket.terminate();});
     socket.once('close',unwatch);
     let chain=Promise.resolve();
     const protocol=Number(request.query.protocol)||1;
+    const binaryProtocol=protocol>=TERMINAL_BINARY_PROTOCOL;
+    let heartbeatTimer:NodeJS.Timeout|undefined;
+    let heartbeatTimeout:NodeJS.Timeout|undefined;
+    const clearHeartbeatTimeout=()=>{if(heartbeatTimeout){clearTimeout(heartbeatTimeout);heartbeatTimeout=undefined;}};
+    const stopHeartbeat=()=>{if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=undefined;}clearHeartbeatTimeout();};
+    if(binaryProtocol){
+      heartbeatTimer=setInterval(()=>{
+        if(closed||socket.readyState!==1||heartbeatTimeout)return;
+        socket.send(encodePingFrame(Date.now()));
+        heartbeatTimeout=setTimeout(()=>{
+          heartbeatTimeout=undefined;
+          if(!closed&&socket.readyState===1){closed=true;socket.terminate();}
+        },TERMINAL_BUDGET.heartbeatTimeoutMs);
+        heartbeatTimeout.unref?.();
+      },TERMINAL_BUDGET.heartbeatMs);
+      heartbeatTimer.unref?.();
+    }
     const unsubscribe=terminal.subscribe(id,event=>{
       if(socket.readyState!==1)return;
-      // Protocol 3 sheds a viewer that stops reading by reseeding it (see TerminalService.subscribe);
+      // Protocol 3+ sheds a viewer that stops reading by reseeding it (see TerminalService.subscribe);
       // this is only the bound on what a stalled socket may hold, since each reseed queues a snapshot.
       if(socket.bufferedAmount>(protocol>=3?TERMINAL_SOCKET_BUFFER_LIMIT:4*1024*1024)){socket.close(1013,'Terminal output exceeded this connection buffer; reconnect to restore the screen');return;}
+      if(binaryProtocol){
+        if(event.type==='output'){socket.send(encodeOutputFrame(event.sequence,event.streamId??'',event.data));return;}
+        if(event.type==='snapshot'){socket.send(encodeSnapshotFrame(event.sequence,event.cols,event.rows,event.streamId,event.data));return;}
+      }
       // Older clients only understand output frames. New clients opt into explicit replacement
       // boundaries and geometry; the pane bytes are compatible with legacy viewers.
       const message = protocol>=2 ? event
@@ -84,7 +106,23 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
         : event.type === 'exit' ? { ...event, exitCode: event.exitCode ?? -1 } : event;
       socket.send(JSON.stringify(message));
     },{protocol});
-    socket.on('message',raw=>{
+    socket.on('message',(raw,isBinary)=>{
+      clearHeartbeatTimeout();
+      if(binaryProtocol&&isBinary){
+        const buffer=Buffer.isBuffer(raw)?raw:Array.isArray(raw)?Buffer.concat(raw):Buffer.from(raw as ArrayBuffer);
+        const frame=decodeClientBinaryFrame(buffer);
+        if(!frame)return;
+        if(frame.type==='ping'){if(!closed&&socket.readyState===1)socket.send(encodePongFrame(frame.timestamp));return;}
+        if(frame.type==='pong')return;
+        chain=chain.then(async()=>{
+          if(closed)return;
+          auth.authenticate(request);
+          if(frame.clientId!==clientId||frame.epoch!==epoch)throw new AppError('TERMINAL_LEASE_REQUIRED','Claim terminal control before sending input',409);
+          if(frame.data.length>128*1024)throw new AppError('INPUT_TOO_LARGE','Paste at most 128 KiB at once');
+          await terminal.input(id,frame.clientId,frame.epoch,frame.data);
+        }).catch(error=>{const e=error as AppError;if(socket.readyState===1)socket.send(JSON.stringify({type:'error',code:e.code??'TERMINAL_ERROR',message:e.message}));});
+        return;
+      }
       // Acks only settle a counter. Behind a long claim/paste/resize they would arrive late and make a
       // client that keeps up look as if it had stopped reading, so they skip the chain.
       let parsed:TerminalClientMessage|undefined;
@@ -117,6 +155,6 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
         else throw new AppError('INVALID_MESSAGE','Unknown terminal message');
       }).catch(error=>{const e=error as AppError;if(socket.readyState===1)socket.send(JSON.stringify({type:'error',code:e.code??'TERMINAL_ERROR',message:e.message}));});
     });
-    socket.on('close',()=>{closed=true;unsubscribe();if(clientId&&epoch!==undefined)void terminal.release(id,clientId,epoch).catch(()=>undefined);});
+    socket.on('close',()=>{closed=true;stopHeartbeat();unsubscribe();if(clientId&&epoch!==undefined)void terminal.release(id,clientId,epoch).catch(()=>undefined);});
   });
 }

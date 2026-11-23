@@ -23,6 +23,47 @@ final class TerminalDock {
     private(set) var openingShell = false
     var error: String?
     @ObservationIgnored private var navigationRevision = 0
+    /// Bounded LRU keep-alive pool of terminal controllers (`TERMINAL_BUDGET_KEEP_ALIVE_LIMIT`) so
+    /// switching shells or collapsing the dock preserves live sockets, scrollback, and selection.
+    @ObservationIgnored private var controllers: [String: TerminalController] = [:]
+    @ObservationIgnored private var controllerOrder: [String] = []
+
+    func controller(for terminalId: String) -> TerminalController {
+        if let existing = controllers[terminalId] {
+            controllerOrder.removeAll { $0 == terminalId }
+            controllerOrder.append(terminalId)
+            return existing
+        }
+        let created = TerminalController()
+        controllers[terminalId] = created
+        controllerOrder.append(terminalId)
+        let limit = max(1, Int(BudgetsKt.TERMINAL_BUDGET_KEEP_ALIVE_LIMIT))
+        var evicted: [TerminalController] = []
+        while controllerOrder.count > limit {
+            let evictedId = controllerOrder.removeFirst()
+            if let removed = controllers.removeValue(forKey: evictedId) {
+                evicted.append(removed)
+            }
+        }
+        if !evicted.isEmpty {
+            // Defer observable mutations out of SwiftUI `body` evaluation.
+            DispatchQueue.main.async {
+                for controller in evicted { controller.stop() }
+            }
+        }
+        return created
+    }
+
+    func evictController(for terminalId: String) {
+        controllerOrder.removeAll { $0 == terminalId }
+        controllers.removeValue(forKey: terminalId)?.stop()
+    }
+
+    func stopAllControllers() {
+        for controller in controllers.values { controller.stop() }
+        controllers.removeAll()
+        controllerOrder.removeAll()
+    }
 
     /// Shared by the conversation menu, home page, command palette and keyboard shortcut.
     /// Fetching the list also excludes shells that have exited since this window last saw them.

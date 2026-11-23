@@ -83,8 +83,7 @@ export function ViewsSection() {
     else setSessionSide('rail', option === 'rail-dot' ? 'dot' : 'line');
   };
   return <div className="flex flex-col gap-6">
-    <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
-    <Group title={t`会话右侧`}>
+    <Group title={t`会话右侧`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这台设备</Trans></span>}>
       <SettingsThumbChoice<SessionSideOption>
         label={t`会话右侧`}
         value={sideOption}

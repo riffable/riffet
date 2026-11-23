@@ -45,6 +45,14 @@ msgstr "Agent 正在运行，等它停下后再回退代码"
 msgid "上"
 msgstr "上"
 
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "上一个匹配"
+msgstr "上一个匹配"
+
+#: src/app/terminal/TerminalView.tsx
+msgid "上一条命令退出码"
+msgstr "上一条命令退出码"
+
 #: src/app/terminal/NativeSession.tsx
 msgid "上一条消息是否已执行仍无法确认"
 msgstr "上一条消息是否已执行仍无法确认"
@@ -52,6 +60,10 @@ msgstr "上一条消息是否已执行仍无法确认"
 #: src/app/terminal/TerminalView.tsx
 msgid "下"
 msgstr "下"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "下一个匹配"
+msgstr "下一个匹配"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "下次启动时生效"
@@ -73,6 +85,10 @@ msgstr "中断进程 (SIGINT)"
 #: src/app/terminal/NativeSession.tsx
 msgid "交接会话…"
 msgstr "交接会话…"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "从预设新建终端"
+msgstr "从预设新建终端"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "代码与本轮开始前一致，无需回退"
@@ -102,6 +118,14 @@ msgstr "停止中"
 #: src/app/terminal/NativeSession.tsx
 msgid "停止任务"
 msgstr "停止任务"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "关闭分屏"
+msgstr "关闭分屏"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "关闭查找"
+msgstr "关闭查找"
 
 #: src/app/terminal/TerminalView.tsx
 msgid "关闭终端"
@@ -135,6 +159,10 @@ msgstr "删除"
 #: src/app/terminal/NativeSession.tsx
 msgid "加入队列"
 msgstr "加入队列"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "区分大小写"
+msgstr "区分大小写"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "发送给 {backendLabel}"
@@ -176,6 +204,11 @@ msgstr "回退代码到本轮开始前？"
 msgid "在终端中"
 msgstr "在终端中"
 
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "在终端中查找"
+msgstr "在终端中查找"
+
 #: src/app/terminal/NativeSession.tsx
 msgid "存为自动化…"
 msgstr "存为自动化…"
@@ -216,6 +249,10 @@ msgstr "已连接"
 #: src/app/terminal/TerminalView.tsx
 msgid "已退出"
 msgstr "已退出"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "并排分屏"
+msgstr "并排分屏"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "当前任务暂不接受补充"
@@ -340,6 +377,19 @@ msgstr "本轮结束后生效"
 #: src/app/terminal/NativeSession.tsx
 msgid "来源会话"
 msgstr "来源会话"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "查找"
+msgstr "查找"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "查找内容"
+msgstr "查找内容"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "正则表达式"
+msgstr "正则表达式"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "正在停止"
@@ -500,6 +550,10 @@ msgstr "连接冲突"
 msgid "连接已断开"
 msgstr "连接已断开"
 
+#: src/app/terminal/TerminalDock.tsx
+msgid "退出分屏"
+msgstr "退出分屏"
+
 #: src/app/terminal/NativeSession.tsx
 msgctxt "terminal-model-picker-label"
 msgid "选择模型"
@@ -545,3 +599,7 @@ msgstr "附件"
 #: src/app/terminal/TerminalView.tsx
 msgid "附件正在上传"
 msgstr "附件正在上传"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "默认 Shell"
+msgstr "默认 Shell"

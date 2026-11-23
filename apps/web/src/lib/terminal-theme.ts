@@ -2,7 +2,36 @@ import type { ITheme } from '@xterm/xterm';
 import { colorToHex, composite, parseColor, type TerminalAppearance } from '@contracts';
 import { ansiSlots, ansiSlotsFrom } from './terminal-ansi';
 
-export const terminalFont = { fontFamily: '"SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace', fontSize: 12.5, lineHeight: 1.3 };
+export const terminalFont = {
+  fontFamily: '"JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "PingFang SC", monospace',
+  fontSize: 12.5,
+  lineHeight: 1.3,
+};
+
+/**
+ * Resolve a user's chosen terminal font name into a concrete CSS font-family stack.
+ *
+ * - "JetBrains Mono" maps first to the bundled `@fontsource-variable/jetbrains-mono` face
+ *   ("JetBrains Mono Variable") so weights 300–900 work even when the font is not installed locally.
+ * - "SF Mono" uses CSS `ui-monospace` first because WebKit/Blink hide the literal "SF Mono" name
+ *   from web pages for fingerprinting protection.
+ */
+export function resolveTerminalFontFamily(choice: string): string {
+  const trimmed = choice.trim();
+  if (!trimmed) return terminalFont.fontFamily;
+  const lower = trimmed.toLowerCase();
+  if (lower === 'jetbrains mono') {
+    return '"JetBrains Mono Variable", "JetBrains Mono", "PingFang SC", monospace';
+  }
+  if (lower === 'sf mono') {
+    return 'ui-monospace, "SF Mono", Menlo, "PingFang SC", monospace';
+  }
+  const hasMultiple = trimmed.includes(',');
+  const quoted = !hasMultiple && /\s/.test(trimmed) && !trimmed.includes('"') && !trimmed.includes("'")
+    ? `"${trimmed}"`
+    : trimmed;
+  return `${quoted}, "PingFang SC", monospace`;
+}
 
 /**
  * A terminal theme built from the palette that is actually on screen.

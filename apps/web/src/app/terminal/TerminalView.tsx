@@ -2,12 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconCornerDownLeft, IconDownload, IconEllipsis, IconHand, IconOctagonX, IconRefreshCw, IconUnlock, IconX } from '@/components/icons';
-import { Terminal, type IDisposable } from '@xterm/xterm';
+import { IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconCornerDownLeft, IconDownload, IconEllipsis, IconHand, IconOctagonX, IconRefreshCw, IconSearch, IconUnlock, IconX } from '@/components/icons';
+import { Terminal, type IDisposable, type IMarker } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
+import { Unicode11Addon } from '@xterm/addon-unicode11';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import '@xterm/xterm/css/xterm.css';
-import { TERMINAL_ACK_CHARS, TERMINAL_KEPT_ROWS, type TerminalInfo, type TerminalServerMessage } from '@contracts';
+import { TERMINAL_ACK_CHARS, TERMINAL_BUDGET, TERMINAL_KEPT_ROWS, type TerminalInfo, type TerminalServerMessage } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -15,16 +18,41 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, terminalSocketUrl } from '@/lib/api';
 import { boundedCache } from '@/lib/bounded-cache';
 import { confirmDialog } from '@/lib/dialogs';
-import { pageTerminalAppearance, terminalFont, terminalTheme } from '@/lib/terminal-theme';
+import { pageTerminalAppearance, resolveTerminalFontFamily, terminalFont, terminalTheme } from '@/lib/terminal-theme';
 import { customThemeAnsi } from '@/lib/theme-library';
 import { useTheme } from '@/lib/theme';
-import { useDisplaySettings } from '@/lib/display-settings';
+import { defaultDisplaySettings, MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE, setDisplaySettings, useDisplaySettings, type TerminalMobileKeyId } from '@/lib/display-settings';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { cn, downloadJson, errorMessage, reconnectDelay } from '@/lib/utils';
+import { useStores } from '../state/stores';
 import { clipboardFiles, readUploadData, uploadName } from '../session/image-upload';
 import { attachmentMimeType, planIntake } from '../session/composerAttachmentIntake';
 import { attachSmoothScroll } from './smooth-scroll';
 import { readTerminalGrid } from './grid-diagnostics';
+import { registerFilePathLinks } from './links';
+import { TerminalSearchBar } from './TerminalSearchBar';
+import { decodeServerBinaryFrame, encodeInputFrame, encodePingFrame, encodePongFrame } from './wire';
+import { matches } from '../shortcuts';
+
+let audioContext: AudioContext | null = null;
+function playTerminalBell(): void {
+  try {
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return;
+    audioContext ??= new Ctor();
+    if (audioContext.state === 'suspended') void audioContext.resume();
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.06, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.09);
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    osc.start();
+    osc.stop(audioContext.currentTime + 0.09);
+  } catch { /* Audio blocked or unsupported */ }
+}
 
 type ClientMessage =
   | { type: 'claim'; clientId: string; takeover?: boolean }
@@ -48,10 +76,14 @@ const SOCKET_AWAY_MS = 20_000;
 const REQUESTED_APPEARANCE_LIMIT = 6;
 /** Set once a WebGL context is lost or cannot be made: later terminals in this page use the DOM renderer. */
 let webglUnavailable = false;
-/** WebGL only on desktop Chromium; WebKit (Safari, WKWebView) and touch devices keep the DOM renderer. */
+/**
+ * Capability-based WebGL2 check across desktop Chromium, Firefox, and Safari.
+ * Touch / mobile WebViews keep the DOM renderer to respect tight GPU context limits and battery.
+ */
 const useWebgl = () => !webglUnavailable
-  && /Chrome\/|Chromium\//.test(navigator.userAgent) && !/CriOS|FxiOS|Android|Mobile/.test(navigator.userAgent)
-  && !window.matchMedia('(pointer: coarse)').matches;
+  && !/CriOS|FxiOS|Android|Mobile/.test(navigator.userAgent)
+  && !window.matchMedia('(pointer: coarse)').matches
+  && typeof WebGL2RenderingContext !== 'undefined';
 
 /** The colours this page last asked each conversation's pane for. */
 const requestedAppearances = boundedCache<string, { key: string } | null>({ limit: REQUESTED_APPEARANCE_LIMIT });
@@ -87,25 +119,101 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
   const left = t`左`;
   const right = t`右`;
   const enter = t`回车`;
-  const mobileKeys: Array<{ label: ReactNode; name: string; data: string; repeat?: boolean }> = [
-    { label: 'Esc', name: 'Esc', data: '\x1b' }, { label: 'Tab', name: 'Tab', data: '\t' }, { label: space, name: space, data: ' ' },
-    { label: <IconArrowUp className="size-3.5" />, name: up, data: '\x1b[A', repeat: true }, { label: <IconArrowDown className="size-3.5" />, name: down, data: '\x1b[B', repeat: true },
-    { label: <IconArrowLeft className="size-3.5" />, name: left, data: '\x1b[D', repeat: true }, { label: <IconArrowRight className="size-3.5" />, name: right, data: '\x1b[C', repeat: true },
-    { label: <IconCornerDownLeft className="size-3.5" />, name: enter, data: '\r' }, { label: '^C', name: 'Ctrl+C', data: '\x03' },
-  ];
+  const mobileKeyCatalog: Record<TerminalMobileKeyId, { label: ReactNode; name: string; data: string; repeat?: boolean }> = {
+    esc: { label: 'Esc', name: 'Esc', data: '\x1b' },
+    tab: { label: 'Tab', name: 'Tab', data: '\t' },
+    shiftTab: { label: '⇧Tab', name: 'Shift+Tab', data: '\x1b[Z' },
+    ctrlC: { label: '^C', name: 'Ctrl+C', data: '\x03' },
+    ctrlD: { label: '^D', name: 'Ctrl+D', data: '\x04' },
+    ctrlL: { label: '^L', name: 'Ctrl+L', data: '\x0c' },
+    ctrlR: { label: '^R', name: 'Ctrl+R', data: '\x12' },
+    space: { label: space, name: space, data: ' ' },
+    up: { label: <IconArrowUp className="size-3.5" />, name: up, data: '\x1b[A', repeat: true },
+    down: { label: <IconArrowDown className="size-3.5" />, name: down, data: '\x1b[B', repeat: true },
+    left: { label: <IconArrowLeft className="size-3.5" />, name: left, data: '\x1b[D', repeat: true },
+    right: { label: <IconArrowRight className="size-3.5" />, name: right, data: '\x1b[C', repeat: true },
+    slash: { label: '/', name: '/', data: '/' },
+    pipe: { label: '|', name: '|', data: '|' },
+    tilde: { label: '~', name: '~', data: '~' },
+    dash: { label: '-', name: '-', data: '-' },
+    enter: { label: <IconCornerDownLeft className="size-3.5" />, name: enter, data: '\r' },
+  };
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const webglRef = useRef<WebglAddon | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  /** True once the current socket receives a protocol 4 binary frame; older linked servers stay on JSON. */
+  const binaryProtocolRef = useRef(false);
   const pendingWriteCharsRef = useRef(0);
   const clientId = useMemo(createClientId, [terminal.id]);
-  const { terminalFontSize, terminalPaddingHorizontal, terminalPaddingVertical } = useDisplaySettings();
+  const {
+    terminalFontFamily, terminalFontSize, terminalPaddingHorizontal, terminalPaddingVertical,
+    terminalCursorStyle, terminalCursorBlink, terminalLineHeight,
+    terminalLetterSpacing, terminalFontWeight, terminalFontWeightBold,
+    terminalCopyOnSelect, terminalRightClick,
+    terminalScrollOnInput, terminalScrollOnOutput, terminalScrollSensitivity,
+    terminalRenderer, terminalMacOptionIsMeta, terminalBell, terminalMobileKeys,
+  } = useDisplaySettings();
+  const mobileKeys = terminalMobileKeys.map((id) => ({ id, ...mobileKeyCatalog[id] }));
   /**
-   * The size the terminal was built with. Read through a ref so a later change does not re-run the
+   * The options the terminal was built with. Read through refs so a later change does not re-run the
    * construction effect — that would dispose the socket and the pane's scrollback.
    */
-  const fontSizeRef = useRef(terminalFontSize);
-  fontSizeRef.current = terminalFontSize;
+  const terminalOptionsRef = useRef({
+    fontFamily: resolveTerminalFontFamily(terminalFontFamily),
+    fontSize: terminalFontSize,
+    cursorStyle: terminalCursorStyle,
+    cursorBlink: terminalCursorBlink,
+    lineHeight: terminalLineHeight,
+    letterSpacing: terminalLetterSpacing,
+    fontWeight: terminalFontWeight,
+    fontWeightBold: terminalFontWeightBold,
+    macOptionIsMeta: terminalMacOptionIsMeta,
+    copyOnSelect: terminalCopyOnSelect,
+    rightClick: terminalRightClick,
+    scrollOnInput: terminalScrollOnInput,
+    scrollOnOutput: terminalScrollOnOutput,
+    scrollSensitivity: terminalScrollSensitivity,
+    renderer: terminalRenderer,
+    bell: terminalBell,
+  });
+  terminalOptionsRef.current = {
+    fontFamily: resolveTerminalFontFamily(terminalFontFamily),
+    fontSize: terminalFontSize,
+    cursorStyle: terminalCursorStyle,
+    cursorBlink: terminalCursorBlink,
+    lineHeight: terminalLineHeight,
+    letterSpacing: terminalLetterSpacing,
+    fontWeight: terminalFontWeight,
+    fontWeightBold: terminalFontWeightBold,
+    macOptionIsMeta: terminalMacOptionIsMeta,
+    copyOnSelect: terminalCopyOnSelect,
+    rightClick: terminalRightClick,
+    scrollOnInput: terminalScrollOnInput,
+    scrollOnOutput: terminalScrollOnOutput,
+    scrollSensitivity: terminalScrollSensitivity,
+    renderer: terminalRenderer,
+    bell: terminalBell,
+  };
+  const [bellFlash, setBellFlash] = useState(false);
+  const bellTimerRef = useRef<number | undefined>(undefined);
+  const stores = useStores();
+  const searchAddonRef = useRef<SearchAddon | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [searchRegex, setSearchRegex] = useState(false);
+  const [searchResults, setSearchResults] = useState({ index: -1, count: 0 });
+  /** xterm markers recorded from OSC 133;A prompt boundaries (auto-tracked across scrollback eviction). */
+  const promptMarkersRef = useRef<IMarker[]>([]);
+  const clearPromptMarkers = useCallback(() => {
+    for (const marker of promptMarkersRef.current) marker.dispose();
+    promptMarkersRef.current = [];
+  }, []);
+  const [lastExitCode, setLastExitCode] = useState<number | null>(null);
+  const terminalMetaRef = useRef({ projectId: terminal.projectId, cwd: terminal.cwd });
+  terminalMetaRef.current = { projectId: terminal.projectId, cwd: terminal.cwd };
   const epochRef = useRef(terminal.epoch);
   const terminalStateRef = useRef(terminal.state);
   terminalStateRef.current = terminal.state;
@@ -174,12 +282,18 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
 
   const send = useCallback((message: ClientMessage) => {
     const socket = socketRef.current;
-    if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    if (message.type === 'input' && binaryProtocolRef.current) {
+      socket.send(encodeInputFrame(message.clientId, message.epoch, message.data));
+      return;
+    }
+    socket.send(JSON.stringify(message));
   }, []);
 
   /** Typing, a key tap or a paste from a device without control takes the terminal over, then delivers it. */
   const deliver = useCallback((data: string, paste: boolean) => {
     inputRevisionRef.current += 1;
+    if (terminalOptionsRef.current.scrollOnInput) termRef.current?.scrollToBottom();
     if (controlRef.current) { send({ type: paste ? 'paste' : 'input', clientId, epoch: epochRef.current, data }); return; }
     const pending = pendingInputRef.current;
     const last = pending[pending.length - 1];
@@ -283,37 +397,193 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
   useEffect(() => () => window.clearTimeout(resizeRetryRef.current), []);
   useEffect(() => {
     if (!hostRef.current || termRef.current) return;
+    const initial = terminalOptionsRef.current;
     const term = new Terminal({
-      cursorBlink: true,
+      cursorStyle: initial.cursorStyle,
+      cursorBlink: initial.cursorBlink,
+      macOptionIsMeta: initial.macOptionIsMeta,
+      scrollOnUserInput: initial.scrollOnInput,
       cols: remoteSizeRef.current.cols,
       rows: remoteSizeRef.current.rows,
       minimumContrastRatio: 4.5,
-      ...terminalFont,
-      fontSize: fontSizeRef.current,
+      fontFamily: initial.fontFamily,
+      fontSize: initial.fontSize,
+      lineHeight: initial.lineHeight,
+      letterSpacing: initial.letterSpacing,
+      fontWeight: initial.fontWeight,
+      fontWeightBold: initial.fontWeightBold,
       // The server's snapshot carries the pane's history, so the emulator owns scrollback.
       scrollback: window.matchMedia(MOBILE_LAYOUT_QUERY).matches ? TERMINAL_KEPT_ROWS.phone : TERMINAL_KEPT_ROWS.web,
       convertEol: false,
-      allowProposedApi: false,
+      allowProposedApi: true,
       theme: paletteRef.current,
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    const unicode11 = new Unicode11Addon();
+    term.loadAddon(unicode11);
+    term.unicode.activeVersion = '11';
+    const searchAddon = new SearchAddon();
+    term.loadAddon(searchAddon);
+    searchAddonRef.current = searchAddon;
+    const searchResultsSubscription = searchAddon.onDidChangeResults((event) => {
+      setSearchResults({ index: event.resultIndex, count: event.resultCount });
+    });
+    const webLinks = new WebLinksAddon((_event, uri) => {
+      window.open(uri, '_blank', 'noopener,noreferrer');
+    });
+    term.loadAddon(webLinks);
+    const fileLinks = registerFilePathLinks(
+      term,
+      (path, line) => stores.ui.preview(path, line),
+      () => {
+        const meta = terminalMetaRef.current;
+        const projectCwd = stores.lists.get().projects.find((item) => item.id === meta.projectId)?.cwd;
+        return { projectCwd, terminalCwd: meta.cwd };
+      },
+    );
+    const osc133Subscription = term.parser.registerOscHandler(133, (data) => {
+      const code = data.charAt(0);
+      if (code === 'A') {
+        const list = promptMarkersRef.current;
+        const last = list[list.length - 1];
+        const currentLine = term.buffer.active.baseY + term.buffer.active.cursorY;
+        if (!last || last.line !== currentLine) {
+          const marker = term.registerMarker(0);
+          if (marker) {
+            list.push(marker);
+            if (list.length > 500) {
+              const evicted = list.splice(0, list.length - 500);
+              for (const item of evicted) item.dispose();
+            }
+          }
+        }
+      } else if (code === 'D') {
+        const parts = data.split(';');
+        const parsed = parts[1] !== undefined ? Number.parseInt(parts[1], 10) : NaN;
+        if (Number.isFinite(parsed)) setLastExitCode(parsed);
+      }
+      return true;
+    });
+    const jumpPrompt = (direction: -1 | 1): boolean => {
+      const markers = promptMarkersRef.current;
+      // Prune markers evicted from scrollback (line < 0).
+      let writeIdx = 0;
+      for (let i = 0; i < markers.length; i += 1) {
+        const marker = markers[i]!;
+        if (marker.line >= 0) markers[writeIdx++] = marker;
+        else marker.dispose();
+      }
+      markers.length = writeIdx;
+      if (!markers.length) return false;
+      const currentLine = term.buffer.active.viewportY;
+      if (direction < 0) {
+        for (let i = markers.length - 1; i >= 0; i -= 1) {
+          if (markers[i]!.line < currentLine) { term.scrollToLine(markers[i]!.line); return true; }
+        }
+      } else {
+        for (let i = 0; i < markers.length; i += 1) {
+          if (markers[i]!.line > currentLine) { term.scrollToLine(markers[i]!.line); return true; }
+        }
+      }
+      return false;
+    };
     term.open(hostRef.current);
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true;
+      // Let global terminal toggle and command palette bubble out to the workbench.
+      if (matches(event, 'toggleTerminal') || matches(event, 'commandPalette')) return false;
+      // Use Cmd+<key> on macOS and Ctrl+Shift+<key> on other platforms so plain Ctrl+F / Ctrl+- / Ctrl+Up/Down reach shells and TUIs.
+      const isCmdPlain = event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+      const isCtrlShift = event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey;
+      const isTerminalShortcut = isCmdPlain || isCtrlShift;
+      // Open terminal search on Cmd+F (macOS) or Ctrl+Shift+F.
+      if (event.code === 'KeyF' && isTerminalShortcut) {
+        event.preventDefault();
+        setSearchOpen(true);
+        return false;
+      }
+      // Clear scrollback and screen on Cmd+K (macOS) or Ctrl+Shift+K.
+      if (event.code === 'KeyK' && isTerminalShortcut) {
+        event.preventDefault();
+        clearPromptMarkers();
+        term.clear();
+        return false;
+      }
+      // Jump between OSC 133 shell prompt boundaries on Cmd+Up/Down (macOS) or Ctrl+Shift+Up/Down.
+      if ((event.code === 'ArrowUp' || event.code === 'ArrowDown') && isTerminalShortcut) {
+        if (jumpPrompt(event.code === 'ArrowUp' ? -1 : 1)) {
+          event.preventDefault();
+          return false;
+        }
+      }
+      // Zoom terminal font size with Cmd + =/-/0 (macOS) or Ctrl+Shift + =/-/0.
+      // On macOS allow Shift with Equal so Cmd++ works on US keyboards.
+      const isZoomMod = (event.metaKey && !event.ctrlKey && !event.altKey) || isCtrlShift;
+      if (isZoomMod) {
+        if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+          event.preventDefault();
+          const next = Math.min(MAX_TERMINAL_FONT_SIZE, Math.round((terminalOptionsRef.current.fontSize + 1) * 2) / 2);
+          setDisplaySettings({ terminalFontSize: next });
+          return false;
+        }
+        if ((event.code === 'Minus' || event.code === 'NumpadSubtract') && (!event.metaKey || !event.shiftKey)) {
+          event.preventDefault();
+          const next = Math.max(MIN_TERMINAL_FONT_SIZE, Math.round((terminalOptionsRef.current.fontSize - 1) * 2) / 2);
+          setDisplaySettings({ terminalFontSize: next });
+          return false;
+        }
+        if ((event.code === 'Digit0' || event.code === 'Numpad0') && (!event.metaKey || !event.shiftKey)) {
+          event.preventDefault();
+          setDisplaySettings({ terminalFontSize: defaultDisplaySettings.terminalFontSize });
+          return false;
+        }
+      }
+      // Copy active selection on Ctrl+Shift+C (all platforms) or Cmd+C (macOS) without sending SIGINT.
+      if (event.code === 'KeyC' && term.hasSelection() && ((event.metaKey && !event.ctrlKey && !event.altKey) || (event.ctrlKey && event.shiftKey && !event.altKey))) {
+        const selected = term.getSelection();
+        if (selected) void navigator.clipboard?.writeText(selected).catch(() => undefined);
+        event.preventDefault();
+        return false;
+      }
+      return true;
+    });
     termRef.current = term;
     fitRef.current = fitAddon;
-    if (useWebgl()) {
+    if (initial.renderer === 'auto' && useWebgl()) {
       try {
         const webgl = new WebglAddon();
         webgl.onContextLoss(() => {
           webglUnavailable = true;
           webgl.dispose();
+          if (webglRef.current === webgl) webglRef.current = null;
           requestAnimationFrame(() => fitCallbackRef.current());
         });
         term.loadAddon(webgl);
+        webglRef.current = webgl;
       } catch {
         webglUnavailable = true;
       }
     }
+    let copyTimer: number | undefined;
+    const selectionSubscription = term.onSelectionChange(() => {
+      if (!terminalOptionsRef.current.copyOnSelect) return;
+      window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(() => {
+        const selected = term.getSelection();
+        if (selected) void navigator.clipboard?.writeText(selected).catch(() => undefined);
+      }, 120);
+    });
+    const bellSubscription = term.onBell(() => {
+      const mode = terminalOptionsRef.current.bell;
+      if (mode === 'sound') {
+        playTerminalBell();
+      } else if (mode === 'visual' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        setBellFlash(true);
+        window.clearTimeout(bellTimerRef.current);
+        bellTimerRef.current = window.setTimeout(() => setBellFlash(false), 180);
+      }
+    });
     const syncBottom = () => setAtBottom(term.buffer.active.viewportY >= term.buffer.active.baseY);
     const scrollSubscription = term.onScroll(syncBottom);
     // xterm 6's public onData merges parser replies with user input. Its pinned CoreService
@@ -337,35 +607,90 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
       else if (text) deliverRef.current(text, true);
     };
     hostRef.current.addEventListener('paste', onPaste, true);
-    const smoothScroll = attachSmoothScroll(term, hostRef.current);
+    const smoothScroll = attachSmoothScroll(term, hostRef.current, () => terminalOptionsRef.current.scrollSensitivity);
     const host = hostRef.current;
     const resizeObserver = new ResizeObserver(() => fitCallbackRef.current());
     resizeObserver.observe(host);
     requestAnimationFrame(() => fitCallbackRef.current());
     return () => {
+      window.clearTimeout(copyTimer);
+      window.clearTimeout(bellTimerRef.current);
+      searchResultsSubscription.dispose();
+      fileLinks.dispose();
+      osc133Subscription.dispose();
+      selectionSubscription.dispose();
+      bellSubscription.dispose();
       inputSubscription.dispose();
       sourceSubscription.dispose();
       scrollSubscription.dispose();
       host.removeEventListener('paste', onPaste, true);
       smoothScroll.dispose();
       resizeObserver.disconnect();
+      webglRef.current?.dispose();
+      webglRef.current = null;
+      clearPromptMarkers();
       term.dispose();
       pendingWriteCharsRef.current = 0;
+      searchAddonRef.current = null;
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [clientId, send]);
+  }, [clientId, send, stores]);
 
   /**
-   * A size change is applied in place and re-measured. Rebuilding the terminal would drop the
-   * socket, the claim and the scrollback just to change a font size.
+   * Local display options are applied in place and re-measured. Rebuilding the terminal would drop
+   * the socket, the claim and the scrollback just to change a font size, line height, or cursor.
    */
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
+    term.options.fontFamily = resolveTerminalFontFamily(terminalFontFamily);
     term.options.fontSize = terminalFontSize;
+    term.options.lineHeight = terminalLineHeight;
+    term.options.letterSpacing = terminalLetterSpacing;
+    term.options.fontWeight = terminalFontWeight;
+    term.options.fontWeightBold = terminalFontWeightBold;
+    term.options.cursorStyle = terminalCursorStyle;
+    term.options.cursorBlink = terminalCursorBlink;
+    term.options.macOptionIsMeta = terminalMacOptionIsMeta;
+    term.options.scrollOnUserInput = terminalScrollOnInput;
+    webglRef.current?.clearTextureAtlas();
     fitCallbackRef.current();
-  }, [terminalFontSize]);
+  }, [
+    terminalFontFamily, terminalFontSize, terminalLineHeight, terminalLetterSpacing,
+    terminalFontWeight, terminalFontWeightBold, terminalCursorStyle, terminalCursorBlink,
+    terminalMacOptionIsMeta, terminalScrollOnInput,
+  ]);
+
+  /** Switch between WebGL and DOM renderers live without tearing down the terminal or socket. */
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (terminalRenderer === 'dom') {
+      if (webglRef.current) {
+        webglRef.current.dispose();
+        webglRef.current = null;
+        requestAnimationFrame(() => fitCallbackRef.current());
+      }
+      return;
+    }
+    if (!webglRef.current && useWebgl()) {
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => {
+          webglUnavailable = true;
+          webgl.dispose();
+          if (webglRef.current === webgl) webglRef.current = null;
+          requestAnimationFrame(() => fitCallbackRef.current());
+        });
+        term.loadAddon(webgl);
+        webglRef.current = webgl;
+        requestAnimationFrame(() => fitCallbackRef.current());
+      } catch {
+        webglUnavailable = true;
+      }
+    }
+  }, [terminalRenderer]);
 
   useEffect(() => {
     viewGenerationRef.current += 1;
@@ -373,6 +698,22 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
     let connectedOnce = false;
     let exited = terminalStateRef.current === 'exited';
     let socket: WebSocket | null = null;
+    let watchdogTimer: number | undefined;
+    const clearWatchdog = () => {
+      if (watchdogTimer !== undefined) { window.clearTimeout(watchdogTimer); watchdogTimer = undefined; }
+    };
+    const armWatchdog = (target: WebSocket) => {
+      clearWatchdog();
+      if (!binaryProtocolRef.current || closed || exited) return;
+      const staleMs = TERMINAL_BUDGET.heartbeatMs * 2 + TERMINAL_BUDGET.heartbeatTimeoutMs;
+      watchdogTimer = window.setTimeout(() => {
+        watchdogTimer = undefined;
+        if (closed || exited || document.visibilityState !== 'visible') return;
+        if (socketRef.current === target && target.readyState === WebSocket.OPEN) {
+          target.close(4000, 'Heartbeat timeout');
+        }
+      }, staleMs);
+    };
     const connect = () => {
       if (closed) return;
       // A fresh connection starts with a full snapshot, so nothing is left half-parsed.
@@ -383,11 +724,14 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
         return;
       }
       setConnection(retryCount.current ? 'reconnecting' : 'connecting');
+      binaryProtocolRef.current = false;
+      clearWatchdog();
       let ready = false;
       let streamId: string | undefined;
       const retiredStreams = new Set<string>();
       let sequence = -1;
       socket = new WebSocket(terminalSocketUrl(terminal.id));
+      socket.binaryType = 'arraybuffer';
       socketRef.current = socket;
       let overloaded = false;
       // Characters written since the last ack; the server reseeds a listener that falls far behind.
@@ -411,12 +755,36 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
           pendingWriteCharsRef.current = Math.max(0, pendingWriteCharsRef.current - data.length);
           if (snapshot) seedPending -= data.length;
           if (snapshot) fitCallbackRef.current();
+          else if (terminalOptionsRef.current.scrollOnOutput) term.scrollToBottom();
           unacked += data.length;
           if (unacked >= TERMINAL_ACK_CHARS && socket?.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'ack', chars: unacked } satisfies ClientMessage));
             unacked = 0;
           }
         });
+      };
+      const applySnapshot = (nextStreamId: string, nextSeq: number, cols: number, rows: number, data: string) => {
+        if (retiredStreams.has(nextStreamId) || (streamId === nextStreamId && nextSeq < sequence)) return;
+        if (streamId && streamId !== nextStreamId) retiredStreams.add(streamId);
+        streamId = nextStreamId;
+        sequence = nextSeq;
+        ready = true;
+        remoteSizeRef.current = { cols, rows };
+        const term = termRef.current;
+        if (term) {
+          clearPromptMarkers();
+          // xterm can parse the first write after user input synchronously. Geometry must
+          // therefore be established before enqueueing the replacement, not after write().
+          if (term.cols !== cols || term.rows !== rows) term.resize(cols, rows);
+          // The seed starts with a reset; it runs in the parser queue after preceding writes.
+          writeOutput(data.startsWith('\x1bc') ? data : `\x1bc${data}`, true);
+        }
+      };
+      const applyOutput = (nextStreamId: string | undefined, nextSeq: number, data: string) => {
+        if (!ready && !nextStreamId) { ready = true; termRef.current?.write('\x1bc'); }
+        if (!ready || (nextStreamId && nextStreamId !== streamId) || nextSeq <= sequence) return;
+        sequence = nextSeq;
+        writeOutput(data);
       };
       socket.onopen = () => {
         retryCount.current = 0;
@@ -427,31 +795,29 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
         requestAnimationFrame(() => fitCallbackRef.current());
       };
       socket.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          binaryProtocolRef.current = true;
+          if (socket) armWatchdog(socket);
+          const frame = decodeServerBinaryFrame(event.data);
+          if (!frame) return;
+          if (frame.type === 'ping') {
+            if (socket?.readyState === WebSocket.OPEN) socket.send(encodePongFrame(frame.timestamp));
+            return;
+          }
+          if (frame.type === 'pong') return;
+          if (frame.type === 'snapshot') applySnapshot(frame.streamId, frame.sequence, frame.cols, frame.rows, frame.data);
+          else if (frame.type === 'output') applyOutput(frame.streamId, frame.sequence, frame.data);
+          return;
+        }
+        if (socket) armWatchdog(socket);
         let message: TerminalServerMessage;
         try { message = JSON.parse(String(event.data)) as TerminalServerMessage; }
         catch { return; }
         if (message.type === 'snapshot') {
-          if (retiredStreams.has(message.streamId) || (streamId === message.streamId && message.sequence < sequence)) return;
-          if (streamId && streamId !== message.streamId) retiredStreams.add(streamId);
-          streamId = message.streamId;
-          sequence = message.sequence;
-          ready = true;
-          remoteSizeRef.current = { cols: message.cols, rows: message.rows };
-          const term = termRef.current;
-          if (term) {
-            // xterm can parse the first write after user input synchronously. Geometry must
-            // therefore be established before enqueueing the replacement, not after write().
-            if (term.cols !== message.cols || term.rows !== message.rows) term.resize(message.cols, message.rows);
-            // The seed starts with a reset; it runs in the parser queue after preceding writes.
-            writeOutput(message.data.startsWith('\x1bc') ? message.data : `\x1bc${message.data}`, true);
-          }
+          applySnapshot(message.streamId, message.sequence, message.cols, message.rows, message.data);
         } else if (message.type === 'output') {
-          if (!ready && !message.streamId) { ready = true; termRef.current?.write('\x1bc'); }
-          if (!ready || (message.streamId && message.streamId !== streamId) || message.sequence <= sequence) return;
-          sequence = message.sequence;
-          writeOutput(message.data);
-        }
-        else if (message.type === 'state') {
+          applyOutput(message.streamId, message.sequence, message.data);
+        } else if (message.type === 'state') {
           const next = message.terminal;
           epochRef.current = next.epoch;
           setStreamAppearance(current => current && current.value?.foreground === next.appearance?.foreground && current.value?.background === next.appearance?.background
@@ -481,6 +847,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
           if (message.code !== 'LEASE_REQUIRED') onErrorRef.current(message.message);
         } else if (message.type === 'exit') {
           exited = true;
+          clearWatchdog();
           setConnection('closed');
           const label = message.exitCode === undefined ? i18n._(msg`[进程已退出]`) : i18n._(msg`[进程已退出，退出码 ${message.exitCode}]`);
           termRef.current?.write(`\r\n\x1b[90m${label}\x1b[0m\r\n`);
@@ -488,6 +855,8 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
       };
       socket.onerror = () => setConnection('reconnecting');
       socket.onclose = () => {
+        clearWatchdog();
+        binaryProtocolRef.current = false;
         if (closed) return;
         const waiter = leaseWaiterRef.current;
         if (waiter) { window.clearTimeout(waiter.timer); leaseWaiterRef.current = undefined; waiter.reject(new Error(i18n._(msg`终端正在重连，请稍后再试。`))); }
@@ -510,9 +879,19 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
       const away = hiddenAt !== undefined && Date.now() - hiddenAt > SOCKET_AWAY_MS;
       hiddenAt = undefined;
       const current = socketRef.current;
-      if (current?.readyState === WebSocket.CONNECTING || (current?.readyState === WebSocket.OPEN && !away)) return;
+      if (current?.readyState === WebSocket.CONNECTING) return;
+      if (current?.readyState === WebSocket.OPEN && !away) {
+        // If the watchdog expired while hidden and bailed out, re-arm it and probe the socket now.
+        if (binaryProtocolRef.current && watchdogTimer === undefined) {
+          armWatchdog(current);
+          try { current.send(encodePingFrame()); } catch { /* close handler will reconnect */ }
+        }
+        return;
+      }
       if (current) {
         // A dead socket can take minutes to report its close; drop it without waiting.
+        clearWatchdog();
+        binaryProtocolRef.current = false;
         current.onopen = current.onmessage = current.onerror = current.onclose = null;
         current.close();
         controlRef.current = false;
@@ -542,6 +921,8 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
       window.removeEventListener('pageshow', revive);
       window.removeEventListener('online', revive);
       if (retryRef.current !== undefined) window.clearTimeout(retryRef.current);
+      clearWatchdog();
+      binaryProtocolRef.current = false;
       const current = socketRef.current;
       if (current?.readyState === WebSocket.OPEN && controlRef.current) current.send(JSON.stringify({ type: 'release', clientId, epoch: epochRef.current } satisfies ClientMessage));
       current?.close();
@@ -605,6 +986,45 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
     downloadJson('riffet-terminal-grid.json', { sampledAt, receivedAt: new Date().toISOString(), browser, tmux });
   };
 
+  const searchOptions = useMemo(() => {
+    const highlight = palette.yellow ?? palette.foreground ?? 'currentColor';
+    return {
+      caseSensitive: searchCaseSensitive,
+      regex: searchRegex,
+      decorations: {
+        ...(palette.selectionBackground ? { matchBackground: palette.selectionBackground } : {}),
+        matchOverviewRuler: highlight,
+        activeMatchBackground: highlight,
+        activeMatchColorOverviewRuler: highlight,
+      },
+    };
+  }, [palette.foreground, palette.selectionBackground, palette.yellow, searchCaseSensitive, searchRegex]);
+
+  const runSearch = useCallback((direction: 'next' | 'previous', query = searchQuery) => {
+    const addon = searchAddonRef.current;
+    if (!addon) return;
+    if (!query) {
+      addon.clearDecorations();
+      setSearchResults({ index: -1, count: 0 });
+      return;
+    }
+    if (direction === 'next') addon.findNext(query, searchOptions);
+    else addon.findPrevious(query, searchOptions);
+  }, [searchOptions, searchQuery]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    runSearch('next', searchQuery);
+  }, [runSearch, searchOpen, searchQuery]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    searchAddonRef.current?.clearDecorations();
+    setSearchResults({ index: -1, count: 0 });
+    termRef.current?.focus();
+  }, []);
+
+  const displayTitle = terminal.paneTitle || terminal.foregroundCommand || terminal.title;
   const tone = connection === 'connected' ? 'success' : connection === 'closed' ? 'idle' : 'warning';
   const connectionLabel = { connecting: t`连接中`, connected: t`已连接`, reconnecting: t`重连中`, closed: t`已退出` }[connection];
 
@@ -626,7 +1046,12 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
           {leading}
           <Tip label={connectionLabel}><span className="grid size-4 place-items-center"><StatusDot tone={tone} pulse={connection === 'reconnecting'} /></span></Tip>
           {uploading && <Spinner className="size-3.5" />}
-          {showTitle && <span className="min-w-0 truncate text-sm font-medium text-fg">{terminal.title}</span>}
+          {showTitle && <span title={terminal.cwd ?? displayTitle} className="min-w-0 truncate text-sm font-medium text-fg">{displayTitle}</span>}
+          {lastExitCode !== null && lastExitCode !== 0 && (
+            <span className="rounded-sm bg-danger/10 px-1.5 py-0.5 font-mono text-2xs tabular-nums text-danger" title={t`上一条命令退出码`}>
+              {lastExitCode}
+            </span>
+          )}
           {/* Nobody holds the terminal, so control is one safe click away; taking it from another
               device stays in the menu. */}
           {(leaseMessage === 'readonly' || leaseMessage === 'requesting') && !terminal.ownerId && terminal.state !== 'exited'
@@ -637,6 +1062,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
               : leaseMessage.text}</span>}
           <div className="ml-auto flex max-w-full flex-wrap items-center gap-0.5 md:shrink-0 md:flex-nowrap">
             {actions}
+            <Tip label={t`查找`} kbd="⌘F"><Button size="icon-xs" variant={searchOpen ? 'secondary' : 'quiet'} aria-label={t`在终端中查找`} aria-pressed={searchOpen} className="no-hover:size-11" onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}><IconSearch /></Button></Tip>
             {/* The control actions live in one menu; `actions` (e.g. switching back to the
                 conversation) stays outside it as the one quick button. */}
             <DropdownMenu>
@@ -654,11 +1080,43 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
           </div>
         </div>
       )}
-      <div className="relative min-h-0 flex-1" style={{ backgroundColor: palette.background, color: palette.foreground, padding: `${terminalPaddingVertical}px ${terminalPaddingHorizontal}px` }}>
+      <div className={cn('relative min-h-0 flex-1 transition-shadow duration-150', bellFlash && 'ring-2 ring-inset ring-accent')} style={{ backgroundColor: palette.background, color: palette.foreground, padding: `${terminalPaddingVertical}px ${terminalPaddingHorizontal}px` }}>
+        {searchOpen && (
+          <TerminalSearchBar
+            query={searchQuery}
+            caseSensitive={searchCaseSensitive}
+            regex={searchRegex}
+            resultIndex={searchResults.index}
+            resultCount={searchResults.count}
+            onQueryChange={setSearchQuery}
+            onToggleCaseSensitive={() => setSearchCaseSensitive((v) => !v)}
+            onToggleRegex={() => setSearchRegex((v) => !v)}
+            onNext={() => runSearch('next')}
+            onPrevious={() => runSearch('previous')}
+            onClose={closeSearch}
+          />
+        )}
         {/* xterm scrolls its own history. The wrapper only moves sideways (or both ways for a remote grid
             larger than this view); a one-finger vertical swipe is handled by the touch listeners above. */}
         <div className="h-full touch-pan-x overflow-auto overscroll-contain">
-          <div className={cn("h-full no-hover:[&_.xterm]:pointer-events-none", !hasControl && "min-w-max")} onClick={() => termRef.current?.focus()}>
+          <div
+            className={cn("h-full no-hover:[&_.xterm]:pointer-events-none", !hasControl && "min-w-max")}
+            onClick={() => termRef.current?.focus()}
+            onContextMenu={(event) => {
+              const term = termRef.current;
+              if (!term || terminalOptionsRef.current.rightClick !== 'copyPaste' || term.modes.mouseTrackingMode !== 'none') return;
+              event.preventDefault();
+              if (term.hasSelection()) {
+                const selected = term.getSelection();
+                if (selected) void navigator.clipboard?.writeText(selected).catch(() => undefined);
+                term.clearSelection();
+              } else {
+                void navigator.clipboard?.readText().then((text) => {
+                  if (text) deliverRef.current(text, true);
+                }).catch(() => undefined);
+              }
+            }}
+          >
             <div ref={hostRef} className="h-full w-full" />
           </div>
         </div>
@@ -669,10 +1127,10 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
         )}
       </div>
       {active && (
-        <div className="flex h-12 shrink-0 touch-none items-center gap-1 edge-t px-1.5 md:hidden">
+        <div className="flex h-12 shrink-0 touch-none items-center gap-1 overflow-x-auto edge-t px-1.5 md:hidden">
           {mobileKeys.map((key) => (
             <button
-              key={key.name}
+              key={key.id}
               type="button"
               aria-label={key.name}
               onPointerDown={(event) => { event.preventDefault(); pressKey(key.data, key.repeat); }}
@@ -681,7 +1139,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
               onPointerCancel={stopRepeat}
               onContextMenu={(event) => event.preventDefault()}
               onClick={(event) => { if (event.detail === 0) sendInput(key.data); }}
-              className="grid h-10 min-w-0 flex-1 select-none place-items-center rounded-md border border-line bg-elevated font-mono text-xs text-fg-2 active:bg-hover"
+              className="grid h-10 min-w-10 flex-1 shrink-0 select-none place-items-center rounded-md border border-line bg-elevated px-1.5 font-mono text-xs text-fg-2 active:bg-hover"
             >
               {key.label}
             </button>

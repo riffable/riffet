@@ -9,9 +9,11 @@ import type { TerminalInfo } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
 import type { PromptContextReference } from '@/lib/api';
 import { isShellTerminal } from '@/lib/backends';
+import { serverOfObject } from '@/lib/server-routing';
 import { cn } from '@/lib/utils';
 import { FloatingPanelFrame } from './panels/FloatingPanelFrame';
-import { useLists, useNav, useStores, useUi } from './state/stores';
+import { useLists, useNav, useSettings, useStores, useUi } from './state/stores';
+import type { CreateShellOptions } from './use-terminal-actions';
 import { PANEL_DEFAULT, PANEL_MAX, PANEL_MIN, paintPaneWidth, panelDockMinWidth } from './state/uiStore';
 const ContextPanel = lazy(() => import('./panels/ContextPanel').then((module) => ({ default: module.ContextPanel })));
 const TerminalDock = lazy(() => import('./terminal/TerminalDock').then((module) => ({ default: module.TerminalDock })));
@@ -145,7 +147,7 @@ export function DockHost({ mode, show, onCreate, onChanged, onClose, onError }: 
   mode: 'desktop' | 'mobile';
   /** A project is open and no full-page view covers the dock. */
   show: boolean;
-  onCreate: () => void;
+  onCreate: (options?: CreateShellOptions) => Promise<TerminalInfo | undefined>;
   onChanged: (terminal: TerminalInfo) => void;
   onClose: (terminal: TerminalInfo) => void;
   onError: (message: string) => void;
@@ -156,14 +158,17 @@ export function DockHost({ mode, show, onCreate, onChanged, onClose, onError }: 
   const selectedId = useUi((state) => state.selectedTerminalId);
   const projectId = useNav((state) => state.projectId);
   const terminals = useLists((state) => state.terminals);
+  const profiles = useSettings((state) => state.terminal?.profiles);
+  const localProfiles = serverOfObject(projectId) ? undefined : profiles;
   const shell = useMemo(() => terminals.filter((terminal) => !terminal.sessionId && isShellTerminal(terminal) && terminal.projectId === projectId), [terminals, projectId]);
   if (!show) return null;
   const dock = (fullscreen: boolean) => (
     // The fallback already stands at the dock's height, so the first open grows once instead of
     // opening to a spinner's height and then jumping when the chunk lands.
-    <ErrorBoundary resetKey={selectedId ?? ''}><Suspense fallback={fullscreen ? loadingPanel : <div className="flex shrink-0 items-center justify-center edge-t bg-bg" style={{ height }}><Spinner /></div>}><TerminalDock
+    <ErrorBoundary resetKey={projectId ?? ''}><Suspense fallback={fullscreen ? loadingPanel : <div className="flex shrink-0 items-center justify-center edge-t bg-bg" style={{ height }}><Spinner /></div>}><TerminalDock
       {...(fullscreen ? { fullscreen: true } : {})}
       terminals={shell}
+      {...(localProfiles ? { profiles: localProfiles } : {})}
       selectedId={selectedId}
       height={height}
       onHeightChange={(dockHeight) => ui.set({ dockHeight })}

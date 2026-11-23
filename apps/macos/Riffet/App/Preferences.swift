@@ -10,11 +10,25 @@ enum PreferenceKey {
     static let textScale = "riffet.text-scale"
     /// Transcript spacing: 0.75, 1.0 or 1.25.
     static let density = "riffet.density"
-    /// Terminal font size in points, 11–16.
+    /// Terminal font family name; empty follows the app's mono font or system monospaced font.
+    static let terminalFontFamily = "riffet.terminal-font-family"
+    /// Terminal font size in points, 10–24.
     static let terminalFontSize = "riffet.terminal-font-size"
+    /// Terminal font weight (`regular`, `medium`, `semibold`).
+    static let terminalFontWeight = "riffet.terminal-font-weight"
     /// Terminal content padding in points.
     static let terminalHorizontalPadding = "riffet.terminal-horizontal-padding"
     static let terminalVerticalPadding = "riffet.terminal-vertical-padding"
+    /// Terminal cursor shape (`block`, `underline`, `bar`), blink, Option-as-Meta, copy-on-select, right-click, scroll, and bell.
+    static let terminalCursorStyle = "riffet.terminal-cursor-style"
+    static let terminalCursorBlink = "riffet.terminal-cursor-blink"
+    static let terminalOptionAsMeta = "riffet.terminal-option-as-meta"
+    static let terminalCopyOnSelect = "riffet.terminal-copy-on-select"
+    static let terminalRightClick = "riffet.terminal-right-click"
+    static let terminalScrollOnInput = "riffet.terminal-scroll-on-input"
+    static let terminalScrollOnOutput = "riffet.terminal-scroll-on-output"
+    static let terminalScrollSensitivity = "riffet.terminal-scroll-sensitivity"
+    static let terminalBell = "riffet.terminal-bell"
     /// Reading column width in points, 640–1600.
     static let contentWidth = "riffet.content-width"
     /// Whether an answer shows its chapter navigation.
@@ -184,7 +198,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .sidebar: String(localized: "侧栏 导航 页面 固定 更多 sidebar pin navigation", comment: "Search terms, space-separated")
         case .tabs: String(localized: "标签 标签栏 会话 快捷键 tab tabs shortcut", comment: "Search terms, space-separated")
         case .typography: String(localized: "外观 文字 字号 字体 间距 宽度 预览 font", comment: "Search terms, space-separated")
-        case .terminal: String(localized: "外观 终端 字号 边距 terminal", comment: "Search terms, space-separated")
+        case .terminal: String(localized: "外观 终端 字体 字号 字重 边距 光标 右键 滚动 滚轮 terminal font scroll", comment: "Search terms, space-separated")
         case .appIcon: String(localized: "外观 图标 dock icon", comment: "Search terms, space-separated")
         case .input: String(localized: "回车 enter 发送 排队 引导 steer queue 键盘", comment: "Search terms, space-separated")
         case .shortcuts: String(localized: "快捷 热键 快捷键 键盘 hotkey shortcut command", comment: "Search terms, space-separated")
@@ -262,19 +276,74 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
 }
 
 /// The display preferences as observable values, so changing one re-renders what reads it.
+enum TerminalCursorShape: String, CaseIterable {
+    case block
+    case underline
+    case bar
+}
+
+enum TerminalBellMode: String, CaseIterable {
+    case none
+    case visual
+    case sound
+}
+
+enum TerminalFontWeight: String, CaseIterable {
+    case regular
+    case medium
+    case semibold
+
+    var nsWeight: NSFont.Weight {
+        switch self {
+        case .regular: .regular
+        case .medium: .medium
+        case .semibold: .semibold
+        }
+    }
+
+    /// `NSFontManager` weight index (5 = regular, 6 = medium, 8 = semibold).
+    var managerWeight: Int {
+        switch self {
+        case .regular: 5
+        case .medium: 6
+        case .semibold: 8
+        }
+    }
+}
+
+enum TerminalRightClickBehavior: String, CaseIterable {
+    case menu
+    case copyPaste
+}
+
 @MainActor
 @Observable
 final class DisplayPreferences {
     static let shared = DisplayPreferences()
+    static let defaultTerminalFontSize: Double = 12.5
+    static let terminalFontSizeRange: ClosedRange<Double> = 10...24
     static let defaultTerminalHorizontalPadding: Double = 24
     static let defaultTerminalVerticalPadding: Double = 16
+    static let defaultTerminalScrollSensitivity: Double = 1.0
+    static let terminalScrollSensitivityRange: ClosedRange<Double> = 0.5...3.0
 
     var appearance: String { didSet { save(PreferenceKey.appearance, appearance); applyAppearance() } }
     var textScale: Double { didSet { save(PreferenceKey.textScale, textScale) } }
     var density: Double { didSet { save(PreferenceKey.density, density) } }
+    var terminalFontFamily: String { didSet { save(PreferenceKey.terminalFontFamily, terminalFontFamily) } }
     var terminalFontSize: Double { didSet { save(PreferenceKey.terminalFontSize, terminalFontSize) } }
+    var terminalFontWeight: TerminalFontWeight { didSet { save(PreferenceKey.terminalFontWeight, terminalFontWeight.rawValue) } }
     var terminalHorizontalPadding: Double { didSet { save(PreferenceKey.terminalHorizontalPadding, terminalHorizontalPadding) } }
     var terminalVerticalPadding: Double { didSet { save(PreferenceKey.terminalVerticalPadding, terminalVerticalPadding) } }
+    var terminalCursorStyle: TerminalCursorShape { didSet { save(PreferenceKey.terminalCursorStyle, terminalCursorStyle.rawValue) } }
+    var terminalCursorBlink: Bool { didSet { save(PreferenceKey.terminalCursorBlink, terminalCursorBlink) } }
+    var terminalOptionAsMeta: Bool { didSet { save(PreferenceKey.terminalOptionAsMeta, terminalOptionAsMeta) } }
+    var terminalCopyOnSelect: Bool { didSet { save(PreferenceKey.terminalCopyOnSelect, terminalCopyOnSelect) } }
+    var terminalRightClick: TerminalRightClickBehavior { didSet { save(PreferenceKey.terminalRightClick, terminalRightClick.rawValue) } }
+    var terminalScrollOnInput: Bool { didSet { save(PreferenceKey.terminalScrollOnInput, terminalScrollOnInput) } }
+    var terminalScrollOnOutput: Bool { didSet { save(PreferenceKey.terminalScrollOnOutput, terminalScrollOnOutput) } }
+    var terminalScrollSensitivity: Double { didSet { save(PreferenceKey.terminalScrollSensitivity, terminalScrollSensitivity) } }
+    var terminalBell: TerminalBellMode { didSet { save(PreferenceKey.terminalBell, terminalBell.rawValue) } }
     var contentWidth: Double { didSet { save(PreferenceKey.contentWidth, contentWidth) } }
     /// The reading column until the reader drags or sets it; 640 is the narrowest it goes.
     static let defaultContentWidth: Double = 760
@@ -313,7 +382,13 @@ final class DisplayPreferences {
         appearance = defaults.string(forKey: PreferenceKey.appearance) ?? "system"
         textScale = defaults.object(forKey: PreferenceKey.textScale) as? Double ?? 1.0
         density = defaults.object(forKey: PreferenceKey.density) as? Double ?? 1.0
-        terminalFontSize = defaults.object(forKey: PreferenceKey.terminalFontSize) as? Double ?? 12.5
+        terminalFontFamily = defaults.string(forKey: PreferenceKey.terminalFontFamily) ?? ""
+        terminalFontSize = Self.terminalPadding(
+            defaults.object(forKey: PreferenceKey.terminalFontSize),
+            defaultValue: Self.defaultTerminalFontSize, in: Self.terminalFontSizeRange
+        )
+        terminalFontWeight = defaults.string(forKey: PreferenceKey.terminalFontWeight)
+            .flatMap(TerminalFontWeight.init(rawValue:)) ?? .regular
         terminalHorizontalPadding = Self.terminalPadding(
             defaults.object(forKey: PreferenceKey.terminalHorizontalPadding),
             defaultValue: Self.defaultTerminalHorizontalPadding, in: 0...48
@@ -322,6 +397,21 @@ final class DisplayPreferences {
             defaults.object(forKey: PreferenceKey.terminalVerticalPadding),
             defaultValue: Self.defaultTerminalVerticalPadding, in: 0...32
         )
+        terminalCursorStyle = defaults.string(forKey: PreferenceKey.terminalCursorStyle)
+            .flatMap(TerminalCursorShape.init(rawValue:)) ?? .block
+        terminalCursorBlink = defaults.object(forKey: PreferenceKey.terminalCursorBlink) as? Bool ?? true
+        terminalOptionAsMeta = defaults.object(forKey: PreferenceKey.terminalOptionAsMeta) as? Bool ?? true
+        terminalCopyOnSelect = defaults.object(forKey: PreferenceKey.terminalCopyOnSelect) as? Bool ?? false
+        terminalRightClick = defaults.string(forKey: PreferenceKey.terminalRightClick)
+            .flatMap(TerminalRightClickBehavior.init(rawValue:)) ?? .menu
+        terminalScrollOnInput = defaults.object(forKey: PreferenceKey.terminalScrollOnInput) as? Bool ?? true
+        terminalScrollOnOutput = defaults.object(forKey: PreferenceKey.terminalScrollOnOutput) as? Bool ?? false
+        terminalScrollSensitivity = Self.terminalPadding(
+            defaults.object(forKey: PreferenceKey.terminalScrollSensitivity),
+            defaultValue: Self.defaultTerminalScrollSensitivity, in: Self.terminalScrollSensitivityRange
+        )
+        terminalBell = defaults.string(forKey: PreferenceKey.terminalBell)
+            .flatMap(TerminalBellMode.init(rawValue:)) ?? .sound
         contentWidth = defaults.object(forKey: PreferenceKey.contentWidth) as? Double ?? DisplayPreferences.defaultContentWidth
         chapterNavigation = defaults.object(forKey: PreferenceKey.chapterNavigation) as? Bool ?? true
         sessionOverview = defaults.object(forKey: PreferenceKey.sessionOverview) as? Bool ?? true

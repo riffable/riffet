@@ -75,7 +75,12 @@ export function ShortcutSettings() {
       <Group
         key={group}
         title={i18n._(title)}
-        action={index === 0 && customized ? <Button size="xs" variant="ghost" onClick={() => { resetAllBindings(); setNotice(undefined); }}><Trans>全部恢复默认</Trans></Button> : undefined}
+        action={index === 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="text-2xs text-fg-4"><Trans>仅保存在这台设备</Trans></span>
+            {customized && <Button size="xs" variant="ghost" onClick={() => { resetAllBindings(); setNotice(undefined); }}><Trans>全部恢复默认</Trans></Button>}
+          </div>
+        ) : undefined}
       >
         {hostShortcuts.filter((shortcut) => shortcut.group === group).map(row)}
       </Group>

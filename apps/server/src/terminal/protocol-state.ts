@@ -1,8 +1,11 @@
+import { TERMINAL_BUDGET } from '../../../../packages/contracts/src/index.js';
+
 /**
  * What a program's own output set, read from a raw byte stream: the private modes and cursor shape
- * tmux has no format variable for (bracketed paste, focus reporting, DECSCUSR), and the SGR pen for
- * history tails. A seed takes these from here; everything tmux does state comes from its formats.
- * Whatever was set before the stream was first observed reads as its default.
+ * tmux has no format variable for (bracketed paste, focus reporting, DECSCUSR), OSC 0/2/7 metadata
+ * (title and cwd), and the SGR pen for history tails. A seed takes these from here; everything tmux
+ * does state comes from its formats. Whatever was set before the stream was first observed reads as
+ * its default.
  */
 export class OuterTerminalState {
   private pending = '';
@@ -10,6 +13,10 @@ export class OuterTerminalState {
   private attributes = new Map<string, string>();
   /** The last DECSCUSR sequence, or '' for the terminal's own shape. */
   cursorStyle = '';
+  /** The last dynamic title from OSC 0 / OSC 2, if observed on the raw stream. */
+  paneTitle?: string;
+  /** The last working directory from OSC 7 (`file://host/path`), if observed on the raw stream. */
+  cwd?: string;
 
   mode(mode: number): boolean { return this.modes.get(mode) === true; }
 
@@ -18,11 +25,11 @@ export class OuterTerminalState {
     this.pending = '';
     let at = 0;
     while ((at = text.indexOf('\u001b', at)) >= 0) {
-      if (at + 1 >= text.length) { this.pending = text.slice(at); return; }
+      if (at + 1 >= text.length) { this.bufferPending(text.slice(at)); return; }
       const kind = text[at + 1];
       if (kind === '[') {
         const match = /^[\x20-\x3f]*[\x40-\x7e]/.exec(text.slice(at + 2));
-        if (!match) { this.pending = text.slice(at); return; }
+        if (!match) { this.bufferPending(text.slice(at)); return; }
         const command = match[0];
         const args = command.slice(0, -1);
         const final = command.at(-1);
@@ -38,12 +45,37 @@ export class OuterTerminalState {
         const end = text.indexOf('\u001b\\', at + 2);
         const bell = kind === ']' ? text.indexOf('\u0007', at + 2) : -1;
         const stop = end < 0 ? bell : bell < 0 ? end : Math.min(end, bell);
-        if (stop < 0) { this.pending = `\u001b${kind}${text.endsWith('\u001b') ? '\u001b' : ''}`; return; }
+        if (stop < 0) {
+          // Keep full OSC 0/2/7 bodies within budget so split titles/cwds still parse; drop huge DCS/OSC payloads.
+          const tail = kind === ']' ? text.slice(at) : `\u001b${kind}${text.endsWith('\u001b') ? '\u001b' : ''}`;
+          this.bufferPending(tail);
+          return;
+        }
+        if (kind === ']') this.osc(text.slice(at + 2, stop));
         at = stop + (stop === bell ? 1 : 2);
       } else {
         if (kind === 'c') { this.modes.clear(); this.attributes.clear(); this.cursorStyle = ''; }
         at += 2;
       }
+    }
+  }
+
+  /** Guard against malformed or unterminated escape sequences pinning memory or stalling mode tracking. */
+  private bufferPending(fragment: string): void {
+    this.pending = fragment.length <= TERMINAL_BUDGET.protocolStatePendingBytes ? fragment : '';
+  }
+
+  private osc(body: string): void {
+    const sep = body.indexOf(';');
+    if (sep <= 0) return;
+    const code = body.slice(0, sep);
+    const value = body.slice(sep + 1);
+    if (code === '0' || code === '2') {
+      const cleaned = value.replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 200);
+      if (cleaned) this.paneTitle = cleaned;
+    } else if (code === '7') {
+      const parsed = parseOsc7Path(value);
+      if (parsed) this.cwd = parsed;
     }
   }
 
@@ -81,5 +113,17 @@ export class OuterTerminalState {
   /** The drawing attributes in effect, from a reset. */
   style(): string {
     return '\u001b[0m' + (this.attributes.size ? `\u001b[${[...this.attributes.values()].join(';')}m` : '');
+  }
+}
+
+function parseOsc7Path(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed.toLowerCase().startsWith('file://')) return undefined;
+  try {
+    const url = new URL(trimmed);
+    const decoded = decodeURIComponent(url.pathname);
+    return decoded.startsWith('/') && decoded.length <= 4096 ? decoded : undefined;
+  } catch {
+    return undefined;
   }
 }

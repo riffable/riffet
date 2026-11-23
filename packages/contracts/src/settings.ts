@@ -2,6 +2,7 @@ import type { NativeBackendId } from './agent-ids.js';
 import type { AssistantJob } from './session.js';
 import type { WorkItemStatus } from './work-items.js';
 import type { TitleRule } from './title-rules.js';
+import type { TerminalProfile, TerminalServerSettings } from './terminal.js';
 
 /** What a message's `{name}` placeholders are filled with. */
 export type TextParams = Record<string, string | number>;
@@ -92,6 +93,8 @@ export interface AppSettings {
   voiceInput?: VoiceInputSettings;
   /** 会话标题规则 (docs/SESSION-TITLES.md), in order; the first that matches a conversation names it. */
   titleRules?: TitleRule[];
+  /** Server-local terminal launch configuration (default shell, shell integration, profiles). */
+  terminal?: TerminalServerSettings;
 }
 /**
  * How dictation is transcribed: `recognizer` is `REMOTE_SPEECH_RECOGNIZER` for the service in `remote`, or the id of a
@@ -278,4 +281,10 @@ export type AuxiliaryModelsUpdate = Partial<Record<AuxiliaryModelPurpose, Auxili
 export type QuickChatSettingsUpdate = Omit<QuickChatSettings, 'presets'> & { presets?: QuickChatPreset[] | null };
 /** Only the uses given change; `null` clears one. */
 export type PluginModelsUpdate = Record<string, AuxiliaryModelRef | null>;
-export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant' | 'workItems' | 'voiceInput'> & { cursorCli?: never; voiceInput?: VoiceInputSettingsUpdate; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate; workItems?: WorkItemSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };
+/** Each field given replaces its own; `null` clears that field or the entire block. */
+export type TerminalServerSettingsUpdate = {
+  defaultShell?: string | null;
+  shellIntegration?: boolean | null;
+  profiles?: TerminalProfile[] | null;
+};
+export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant' | 'workItems' | 'voiceInput' | 'terminal'> & { cursorCli?: never; voiceInput?: VoiceInputSettingsUpdate; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate; workItems?: WorkItemSettingsUpdate; terminal?: TerminalServerSettingsUpdate | null }) | { cursorCli: CursorCliSettingsUpdate };

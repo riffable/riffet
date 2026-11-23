@@ -12,7 +12,9 @@ Riffet 私有 tmux 服务器上的终端：创建与回收 pane，经 control mo
 
 - `service.ts#TerminalService`：所有终端操作；Agent CLI、shell 与预热终端共用。
 - `control.ts#ControlClient`：每个 tmux 会话一条 `tmux -C` 连接，命令回复与 `%output` 严格有序。
-- `seed.ts#seedCommands`：新连接的快照由 tmux 生成，客户端不回放历史。
+- `seed.ts#seedCommands`：新连接的快照由 tmux 生成，客户端不回放历史，并同步 `pane_current_path`、`pane_current_command`、`pane_title`。
+- `wire.ts#encodeSnapshotFrame`：`protocol=4` 二进制帧编解码（输出、raw deflate 大快照压缩、原始输入、应用层心跳）。
+- `shell-integration.ts#prepareShellLaunch`：zsh/bash/fish 的非侵入式 OSC 133/7 注入（脚本留在私有 `stateDir`，不改 `$HOME`）。
 - `orphans.ts#claimTmuxServerCommands`：tmux 服务器的归属标记，回收规则见 docs/guide/performance.md §3.10。
 
 ## 不变量

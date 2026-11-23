@@ -8,7 +8,7 @@ import io.ktor.http.HttpHeaders
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import riffet.contracts.TerminalAppearance
-import riffet.contracts.TERMINAL_PROTOCOL
+import riffet.contracts.TERMINAL_BINARY_PROTOCOL
 import riffet.contracts.TerminalInfo
 
 // RiffetApi endpoints — terminals: shells and the live socket. Transport and auth rules: see RiffetApi.kt.
@@ -19,10 +19,22 @@ suspend fun RiffetApi.terminal(id: String): TerminalInfo = get("/api/terminals/$
 /** A new persistent shell in the project's directory. */
 @Throws(Exception::class)
 suspend fun RiffetApi.createShellTerminal(projectId: String, title: String? = null): TerminalInfo =
+    createShellTerminal(projectId = projectId, title = title, profileId = null, cwd = null)
+
+/** A new persistent shell launched with an optional server profile or starting working directory. */
+@Throws(Exception::class)
+suspend fun RiffetApi.createShellTerminal(
+    projectId: String,
+    title: String?,
+    profileId: String?,
+    cwd: String?,
+): TerminalInfo =
     post("/api/terminals", buildJsonObject {
         put("projectId", projectId)
         put("kind", "shell")
         title?.let { put("title", it) }
+        profileId?.let { put("profileId", it) }
+        cwd?.let { put("cwd", it) }
     }).decode()
 
 /** This device's theme for the pane; the server may answer with a relaunched terminal of the same conversation. */
@@ -42,13 +54,14 @@ suspend fun RiffetApi.closeTerminal(id: String): TerminalInfo = delete("/api/ter
 suspend fun RiffetApi.interruptTerminal(id: String): TerminalInfo = post("/api/terminals/${id.enc()}/interrupt").decode()
 
 /**
- * `WS /api/terminals/:id/ws` with the device token. The server's frames are JSON text
- * ([riffet.contracts.TerminalServerMessage]); [block] runs for the life of the socket.
+ * `WS /api/terminals/:id/ws` with the device token. Requests protocol 4 (binary data frames with
+ * deflate-raw snapshots and ping/pong heartbeats) while remaining compatible with protocol 3 JSON
+ * servers; [block] runs for the life of the socket.
  */
 @Throws(Exception::class)
 suspend fun RiffetApi.terminalSocket(id: String, block: suspend DefaultClientWebSocketSession.() -> Unit) {
     val token = readToken()
-    val url = baseUrl.replaceFirst(Regex("^http"), "ws") + "/api/terminals/${id.enc()}/ws?protocol=$TERMINAL_PROTOCOL"
+    val url = baseUrl.replaceFirst(Regex("^http"), "ws") + "/api/terminals/${id.enc()}/ws?protocol=$TERMINAL_BINARY_PROTOCOL"
     http.webSocket(url, request = {
         if (!token.isNullOrEmpty()) header(HttpHeaders.Authorization, "Bearer $token")
         if (config.features.isNotEmpty()) header(FeaturesHeader, config.features.joinToString(","))

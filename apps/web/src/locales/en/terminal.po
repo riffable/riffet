@@ -45,6 +45,14 @@ msgstr "The agent is running; wait for it to stop before rewinding the code"
 msgid "上"
 msgstr "Up"
 
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "上一个匹配"
+msgstr "Previous match"
+
+#: src/app/terminal/TerminalView.tsx
+msgid "上一条命令退出码"
+msgstr "Last command exit code"
+
 #: src/app/terminal/NativeSession.tsx
 msgid "上一条消息是否已执行仍无法确认"
 msgstr "Still can't confirm whether the previous message ran"
@@ -52,6 +60,10 @@ msgstr "Still can't confirm whether the previous message ran"
 #: src/app/terminal/TerminalView.tsx
 msgid "下"
 msgstr "Down"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "下一个匹配"
+msgstr "Next match"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "下次启动时生效"
@@ -73,6 +85,10 @@ msgstr "Interrupt process (SIGINT)"
 #: src/app/terminal/NativeSession.tsx
 msgid "交接会话…"
 msgstr "Hand off conversation…"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "从预设新建终端"
+msgstr "New terminal from profile"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "代码与本轮开始前一致，无需回退"
@@ -102,6 +118,14 @@ msgstr "Stopping"
 #: src/app/terminal/NativeSession.tsx
 msgid "停止任务"
 msgstr "Stop task"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "关闭分屏"
+msgstr "Close split"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "关闭查找"
+msgstr "Close search"
 
 #: src/app/terminal/TerminalView.tsx
 msgid "关闭终端"
@@ -135,6 +159,10 @@ msgstr "Delete"
 #: src/app/terminal/NativeSession.tsx
 msgid "加入队列"
 msgstr "Add to queue"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "区分大小写"
+msgstr "Match case"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "发送给 {backendLabel}"
@@ -176,6 +204,11 @@ msgstr "Revert code to before this turn?"
 msgid "在终端中"
 msgstr "In terminal"
 
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "在终端中查找"
+msgstr "Find in terminal"
+
 #: src/app/terminal/NativeSession.tsx
 msgid "存为自动化…"
 msgstr "Save as automation…"
@@ -216,6 +249,10 @@ msgstr "Connected"
 #: src/app/terminal/TerminalView.tsx
 msgid "已退出"
 msgstr "Exited"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "并排分屏"
+msgstr "Split side by side"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "当前任务暂不接受补充"
@@ -340,6 +377,19 @@ msgstr "Takes effect after this turn"
 #: src/app/terminal/NativeSession.tsx
 msgid "来源会话"
 msgstr "Source conversation"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "查找"
+msgstr "Find"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "查找内容"
+msgstr "Search term"
+
+#: src/app/terminal/TerminalSearchBar.tsx
+msgid "正则表达式"
+msgstr "Use regular expression"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "正在停止"
@@ -500,6 +550,10 @@ msgstr "Connection conflict"
 msgid "连接已断开"
 msgstr "Disconnected"
 
+#: src/app/terminal/TerminalDock.tsx
+msgid "退出分屏"
+msgstr "Exit split"
+
 #: src/app/terminal/NativeSession.tsx
 msgctxt "terminal-model-picker-label"
 msgid "选择模型"
@@ -545,3 +599,7 @@ msgstr "Attachment"
 #: src/app/terminal/TerminalView.tsx
 msgid "附件正在上传"
 msgstr "Uploading attachments"
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "默认 Shell"
+msgstr "Default shell"
