@@ -19,6 +19,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Question prompts and plan review tools now stay outside the folded process block across Web, Mac, iOS, Android, and shared exports, so long responses written before an `AskQuestion` or plan review are no longer hidden inside "Processed", and pre-question process blocks finish cleanly instead of staying "Working" alongside post-answer work.
 - Claude Code's synthetic `No response requested.` placeholder written on resume after a manual stop is no longer shown as an extra reply or counted as a model step.
 - On Android, banners and interaction cards sliding in above the composer ignore touches until the opening animation settles, preventing accidental taps on newly arrived controls.
+- Cursor shell commands that time out into the background now pick up their terminal log file reliably (tracking completion promptly instead of spinning until a later notification) and `<task>` notifications no longer append `output_path:` onto the task title or command.
 
 ## 0.10.0 - 2026-11-22
 

@@ -471,7 +471,7 @@ const FILE_LIMIT = 256 * 1024;
  * arrive as prose inside a tool result, so they are read here once instead of in the interface.
  */
 const JOB_STARTED = /Shell ID:\s*(\d+)/i;
-const JOB_OUTPUT_PATH = /(?:output_file_path:|Output will be written to)\s*(\S+\.txt)/i;
+const JOB_OUTPUT_PATH = /(?:output_file_path:|output (?:will be|is being) written to)\s*([^\s"'()<>]+\.txt)/i;
 const JOB_DONE = /Task completed in (\d+)ms with exit code:\s*(-?\d+)/i;
 const JOB_PENDING = /timed out|still running|not (?:yet )?completed|did not complete/i;
 const JOB_PATTERN = /Pattern matched:\s*([^\n]*)/i;
@@ -524,11 +524,12 @@ interface TaskNotification {
     title: string;
     command?: string;
     detail?: string;
+    outputPath?: string;
     exitCode?: number;
   }>;
 }
 
-const TASK_FIELDS = /^(kind|status|task_id|title|detail):\s*(.*)$/i;
+const TASK_FIELDS = /^(kind|status|task_id|title|detail|output_path):\s*(.*)$/i;
 
 /** Decode the XML escaping used when CLI command text is embedded in a notification. */
 function decodeNotificationText(value: string): string {
@@ -586,17 +587,32 @@ function taskNotification(message: ChatMessage): TaskNotification | undefined {
         const field = TASK_FIELDS.exec(line);
         if (field) fields.set(field[1]!.toLowerCase(), field[2]!.trim());
       }
-      const titleLines = titleLine >= 0
+      const titleSection = titleLine >= 0
         ? [lines[titleLine]!.replace(/^\s*title:\s*/i, ''), ...lines.slice(titleLine + 1, detailLine >= 0 ? detailLine : undefined)]
         : [];
-      const fullTitle = decodeNotificationText(titleLines.join('\n').trim());
+      const detailSection = detailLine >= 0
+        ? [lines[detailLine]!.replace(/^\s*detail:\s*/i, ''), ...lines.slice(detailLine + 1)]
+        : [];
+      let outputPath = fields.get('output_path')?.trim();
+      const stripTrailingOutputPath = (section: string[]) => {
+        if (section.length <= 1) return;
+        let last = section.length - 1;
+        while (last > 0 && !section[last]!.trim()) last -= 1;
+        const match = last > 0 ? /^\s*output_path:\s*(.+?)\s*$/i.exec(section[last]!) : null;
+        if (!match) return;
+        outputPath ||= match[1]!.trim();
+        section.splice(last, section.length - last);
+      };
+      // Newer CLI notifications append `output_path:` after `title:` (or `detail:`); strip only a trailing line so literal text inside a multiline command stays intact.
+      stripTrailingOutputPath(titleSection);
+      stripTrailingOutputPath(detailSection);
+      const fullTitle = decodeNotificationText(titleSection.join('\n').trim());
       const rawKind = fields.get('kind')?.trim();
       const sourceStatus = fields.get('status')?.trim();
       const status = taskStatus(sourceStatus);
       const taskId = fields.get('task_id')?.trim();
-      const detailText = detailLine >= 0
-        ? decodeNotificationText([lines[detailLine]!.replace(/^\s*detail:\s*/i, ''), ...lines.slice(detailLine + 1)].join('\n').trim())
-        : undefined;
+      const detailText = detailSection.length ? decodeNotificationText(detailSection.join('\n').trim()) || undefined : undefined;
+      const decodedOutputPath = outputPath ? decodeNotificationText(outputPath) : undefined;
       const rawTask = decodeNotificationText(block[1]!.trim());
       const incompleteMetadata = !fullTitle || !taskId || !sourceStatus;
       const exitMatch = detailText && /\bexit[_ ]code\s*[:=]\s*(-?\d+)/i.exec(detailText);
@@ -609,6 +625,7 @@ function taskNotification(message: ChatMessage): TaskNotification | undefined {
         title: fullTitle || `CLI task (${kind})`,
         ...(kind.toLowerCase() === 'shell' && fullTitle ? { command: fullTitle } : {}),
         ...(incompleteMetadata && rawTask ? { detail: rawTask } : detailText ? { detail: detailText } : {}),
+        ...(decodedOutputPath ? { outputPath: decodedOutputPath } : {}),
         ...(exitMatch ? { exitCode: Number(exitMatch[1]) } : {}),
       });
     }
@@ -943,7 +960,9 @@ function describeToolOutcome(part: ToolResultPart, message: ChatMessage, call?: 
       const raw = resultText(part.result);
       const shellId = typeof success?.shellId === 'number' ? String(success.shellId) : str(success?.shellId) ?? JOB_STARTED.exec(raw)?.[1];
       const announcedPath = JOB_OUTPUT_PATH.exec(raw)?.[1];
-      const outputPath = announcedPath && isJobLogPath(announcedPath) ? announcedPath : undefined;
+      const terminalsFolder = str(output?.terminalsFolder);
+      const folderPath = terminalsFolder && shellId && /^\d+$/.test(shellId) ? join(terminalsFolder, `${shellId}.txt`) : undefined;
+      const outputPath = [announcedPath, folderPath].find((path): path is string => Boolean(path && isJobLogPath(path)));
       const background = status !== 'failed' && Boolean(shellId || success?.backgroundReason || outputPath);
       if (background) {
         return { status, hidden: true, job: { ...(shellId ? { id: shellId } : {}), status: 'running', ...(outputPath ? { outputPath } : {}) } };
@@ -1136,8 +1155,9 @@ export class TranscriptMapper {
           const jobStatus = task.status === 'completed' ? 'succeeded'
             : task.status === 'failed' ? 'failed'
               : task.status === 'running' ? 'running' : undefined;
+          const jobOutputPath = task.outputPath && isJobLogPath(task.outputPath) ? task.outputPath : undefined;
           const jobResult = task.kind.toLowerCase() === 'shell' && task.taskId && jobStatus
-            ? { id: task.taskId, status: jobStatus, ...(task.exitCode !== undefined ? { exitCode: task.exitCode } : {}) }
+            ? { id: task.taskId, status: jobStatus, ...(task.exitCode !== undefined ? { exitCode: task.exitCode } : {}), ...(jobOutputPath ? { outputPath: jobOutputPath } : {}) }
             : undefined;
           events.push({
             type: 'task_notification',

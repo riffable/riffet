@@ -345,6 +345,31 @@ describe('transcript mapping', () => {
     expect(events.at(-1)?.data).toMatchObject({ status: 'completed', hidden: true, job: { id: '12345', status: 'running' } });
   });
 
+  it('extracts background shell log paths from timeout wording and terminalsFolder fallback', () => {
+    const logPath = '/home/dev/.cursor/projects/my-repo/terminals/16926.txt';
+    const fromText = mapTranscript([
+      { id: 'p1', message: { role: 'user', content: query('count lines') } },
+      { id: 'c1', message: { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'sh-timeout', toolName: 'Shell', args: { command: 'wc -l' } }] } },
+      { id: 'r1', message: {
+        role: 'tool',
+        content: [{ type: 'tool-result', toolCallId: 'sh-timeout', toolName: 'Shell', result: `The command did not complete in 30000ms and was sent to the background.\nShell ID: 16926\nThe output is being written to ${logPath}. Don't mention Shell ID to the user.` }],
+        providerOptions: { cursor: { highLevelToolCallResult: { output: { success: { command: 'wc -l', shellId: 16926, backgroundReason: 'SHELL_BACKGROUND_REASON_TIMEOUT' } }, isError: false } } },
+      } },
+    ]);
+    expect(fromText.at(-1)?.data).toMatchObject({ status: 'completed', hidden: true, job: { id: '16926', status: 'running', outputPath: logPath } });
+
+    const fromFolder = mapTranscript([
+      { id: 'p2', message: { role: 'user', content: query('count lines') } },
+      { id: 'c2', message: { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 'sh-folder', toolName: 'Shell', args: { command: 'wc -l' } }] } },
+      { id: 'r2', message: {
+        role: 'tool',
+        content: [{ type: 'tool-result', toolCallId: 'sh-folder', toolName: 'Shell', result: 'Sent to background.' }],
+        providerOptions: { cursor: { highLevelToolCallResult: { output: { success: { command: 'wc -l', shellId: 16926, backgroundReason: 'SHELL_BACKGROUND_REASON_TIMEOUT' }, terminalsFolder: '/home/dev/.cursor/projects/my-repo/terminals' }, isError: false } } },
+      } },
+    ]);
+    expect(fromFolder.at(-1)?.data).toMatchObject({ status: 'completed', hidden: true, job: { id: '16926', status: 'running', outputPath: logPath } });
+  });
+
   it('keeps normal Shell output visible while recording its completion state', () => {
     const events = mapTranscript([
       { id: 'prompt', message: { role: 'user', content: query('run a command') } },
@@ -565,6 +590,33 @@ describe('transcript mapping', () => {
     const missingMetadataEvent = mapTranscript([{ id: 'missing-metadata', message: { role: 'user', content: missingMetadata } }])[0]!;
     expect(missingMetadataEvent.data).toMatchObject({ kind: 'shell', status: 'unknown', title: 'CLI task (shell)' });
     expect(missingMetadataEvent.data.detail).toContain('new_field: retained command metadata');
+
+    const withOutputPath = [
+      '<timestamp>Monday, Nov 23, 2026, 11:55 AM (UTC+8)</timestamp>',
+      '<system_notification>',
+      '<task>',
+      'kind: shell',
+      'status: success',
+      'task_id: 16926',
+      'title: Count LOC across all platforms',
+      'output_path: /home/dev/.cursor/projects/my-repo/agent-tools/25c622ba-5a68-4093-b322-a8aab377f2c5.txt',
+      '</task>',
+      '</system_notification>',
+    ].join('\n');
+    const outputPathEvent = mapTranscript([{ id: 'with-output-path', message: { role: 'user', content: withOutputPath } }])[0]!;
+    expect(outputPathEvent.data).toMatchObject({
+      taskId: '16926', kind: 'shell', status: 'completed', sourceStatus: 'success',
+      title: 'Count LOC across all platforms', command: 'Count LOC across all platforms',
+      jobResult: { id: '16926', status: 'succeeded' },
+    });
+    expect((outputPathEvent.data.jobResult as Record<string, unknown>).outputPath).toBeUndefined();
+
+    const withTerminalLogPath = withOutputPath.replace('agent-tools/25c622ba-5a68-4093-b322-a8aab377f2c5.txt', 'terminals/16926.txt');
+    const terminalLogEvent = mapTranscript([{ id: 'with-terminal-log', message: { role: 'user', content: withTerminalLogPath } }])[0]!;
+    expect(terminalLogEvent.data).toMatchObject({
+      title: 'Count LOC across all platforms',
+      jobResult: { id: '16926', status: 'succeeded', outputPath: '/home/dev/.cursor/projects/my-repo/terminals/16926.txt' },
+    });
   });
 });
 
