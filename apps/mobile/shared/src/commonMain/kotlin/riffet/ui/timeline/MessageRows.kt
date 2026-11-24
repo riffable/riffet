@@ -40,7 +40,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,6 +72,29 @@ import org.jetbrains.compose.resources.stringResource
  */
 
 private val IN_FLIGHT = setOf(NativeDeliveryState.QUEUED, NativeDeliveryState.PREPARING, NativeDeliveryState.DISPATCHING, NativeDeliveryState.INPUT_SENT)
+
+/** Plain prompt text with bare web links annotated and optional find highlight overlaid. */
+private fun userMessageText(
+    text: String,
+    highlight: FindHighlight?,
+    mark: Color,
+    linkColor: Color,
+    linkListener: LinkInteractionListener,
+): AnnotatedString {
+    val links = findBareUrls(text)
+    val findAt = findOccurrenceOffset(text, highlight)
+    if (links.isEmpty() && findAt < 0) return AnnotatedString(text)
+    val linkStyles = TextLinkStyles(style = SpanStyle(color = linkColor))
+    return buildAnnotatedString {
+        append(text)
+        for (link in links) {
+            addLink(LinkAnnotation.Url(link.url, linkStyles, linkListener), link.start, link.end)
+        }
+        if (findAt >= 0 && highlight != null) {
+            addStyle(SpanStyle(background = mark), findAt, findAt + highlight.needle.length)
+        }
+    }
+}
 
 /** The prompt: right-aligned bubble, attachments, delivery state and time. */
 @Composable
@@ -107,9 +138,18 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true, hasTurn
             // untouched and a row that scrolls off simply unregisters its own selection.
             val find = LocalFindHighlight.current
             val findMark = colors.warningSoft
-            val text = remember(item.text, find, findMark) { highlightedText(item.text, find, findMark) }
+            val linkColor = colors.accent
+            val uriHandler = LocalUriHandler.current
+            val linkListener = remember(uriHandler) {
+                LinkInteractionListener { annotation ->
+                    if (annotation is LinkAnnotation.Url) runCatching { uriHandler.openUri(annotation.url) }
+                }
+            }
+            val text = remember(item.text, find, findMark, linkColor, linkListener) {
+                userMessageText(item.text, find, findMark, linkColor, linkListener)
+            }
             // The marked line, for find to bring it into view in a prompt taller than the screen.
-            val markedAt = text.spanStyles.firstOrNull()?.start
+            val markedAt = remember(item.text, find) { findOccurrenceOffset(item.text, find).takeIf { it >= 0 } }
             val markLine = remember { FloatArray(2) }
             val anchor = LocalFindAnchor.current
             SelectableText {

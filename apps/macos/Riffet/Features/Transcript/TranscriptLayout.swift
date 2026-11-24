@@ -492,7 +492,7 @@ struct RowBuilder {
             cursor += flow(items, right: x + width, width: limit, y: cursor, spacing: 6) + 6
         }
         if !item.text.isEmpty {
-            let body = text.plain(item.text, size: 14, color: style.color(\.fg), lineHeight: 22)
+            let body = text.plain(item.text, size: 14, color: style.color(\.fg), lineHeight: 22, linkify: true)
             let layout = TextLayout(body, width: limit - 28)
             let bubble = CGSize(width: layout.size.width + 28, height: layout.size.height + 20)
             let origin = CGPoint(x: x + width - bubble.width, y: cursor)

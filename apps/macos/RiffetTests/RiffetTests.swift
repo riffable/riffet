@@ -62,8 +62,8 @@ final class RiffetTests: XCTestCase {
     }
 
     func testBareUrlsFollowGfmBoundaries() {
-        func pieces(_ text: String) -> [(String, String?)] {
-            BareURLs.split(text).map { ($0.text, $0.link?.absoluteString) }
+        func pieces(_ text: String, includeEmails: Bool = true) -> [(String, String?)] {
+            BareURLs.split(text, includeEmails: includeEmails).map { ($0.text, $0.link?.absoluteString) }
         }
         XCTAssertEqual(pieces("见 http://131.0.0.1:4311，然后").map(\.0), ["见 ", "http://131.0.0.1:4311", "，然后"])
         XCTAssertEqual(pieces("www.x.dev").map(\.0), ["www.x.dev"])
@@ -71,10 +71,19 @@ final class RiffetTests: XCTestCase {
         XCTAssertEqual(pieces("www.x").map(\.1), [nil])
         XCTAssertEqual(pieces("xhttp://a").map(\.1), [nil])
         XCTAssertEqual(pieces("a@b.co").first?.1, "mailto:a@b.co")
+        XCTAssertEqual(pieces("a@b.co", includeEmails: false).map(\.1), [nil])
         XCTAssertEqual(pieces("a@b").map(\.1), [nil])
         XCTAssertEqual(pieces("http://x/a.").map(\.0), ["http://x/a", "."])
         XCTAssertEqual(pieces("http://x/a_(b)").map(\.0), ["http://x/a_(b)"])
         XCTAssertEqual(pieces("http://x/wiki/北京，好").map(\.0), ["http://x/wiki/北京", "，好"])
+        XCTAssertEqual(pieces("访问https://example.com看看").map(\.0), ["访问", "https://example.com", "看看"])
+        XCTAssertEqual(pieces("把http://改成https://").map(\.1), [nil])
+        XCTAssertEqual(pieces("(https://a.com/x)和(https://b.com/y)").compactMap(\.1), ["https://a.com/x", "https://b.com/y"])
+        XCTAssertEqual(pieces("[https://a.com/x](https://b.com/y)").compactMap(\.1), ["https://a.com/x", "https://b.com/y"])
+        XCTAssertEqual(pieces("http://[::1]:8080/api?a[0]=1, HTTPS://Example.COM/P").filter { $0.1 != nil }.map(\.0), ["http://[::1]:8080/api?a[0]=1", "HTTPS://Example.COM/P"])
+        XCTAssertEqual(pieces("http://[::1]:8080/api?a[0]=1, HTTPS://Example.COM/P").compactMap(\.1), ["http://[::1]:8080/api?a%5B0%5D=1", "https://Example.COM/P"])
+        XCTAssertEqual(pieces("https://example.com.: 说明, http://example.com,a@b.com", includeEmails: false).compactMap(\.1), ["https://example.com", "http://example.com"])
+        XCTAssertEqual(pieces("a.www.example.com http://localhost:99999 www.foo.1").compactMap(\.1), [])
     }
 
     func testFootnoteReferencesNumberByFirstUse() {

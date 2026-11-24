@@ -14,7 +14,7 @@ struct TranscriptText {
 
     // MARK: Plain runs
 
-    func plain(_ string: String, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor, mono: Bool = false, lineHeight: CGFloat? = nil) -> NSAttributedString {
+    func plain(_ string: String, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor, mono: Bool = false, lineHeight: CGFloat? = nil, linkify: Bool = false) -> NSAttributedString {
         let font = mono ? style.mono(size, weight) : style.font(size, weight)
         var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         if let lineHeight {
@@ -22,7 +22,24 @@ struct TranscriptText {
             paragraph.lineSpacing = style.lineGap(size: size, lineHeight: lineHeight)
             attributes[.paragraphStyle] = paragraph
         }
-        return NSAttributedString(string: string, attributes: attributes)
+        guard linkify else { return NSAttributedString(string: string, attributes: attributes) }
+        let pieces = BareURLs.split(string, includeEmails: false)
+        guard pieces.contains(where: { $0.link != nil }) else { return NSAttributedString(string: string, attributes: attributes) }
+        let result = NSMutableAttributedString()
+        var linkAttributes = attributes
+        linkAttributes[.foregroundColor] = style.color(style.link)
+        linkAttributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        linkAttributes[.underlineColor] = style.color(\.lineStrong)
+        for piece in pieces {
+            if let link = piece.link {
+                var run = linkAttributes
+                run[.link] = link
+                result.append(NSAttributedString(string: piece.text, attributes: run))
+            } else {
+                result.append(NSAttributedString(string: piece.text, attributes: attributes))
+            }
+        }
+        return result
     }
 
     /// An SF Symbol as a text attachment, centred on the cap height of a [size]pt line.

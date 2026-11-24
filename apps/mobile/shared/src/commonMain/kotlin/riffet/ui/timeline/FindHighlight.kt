@@ -111,13 +111,18 @@ private class FindAnchorNode(var anchor: FindAnchor?, var active: Boolean, var s
     }
 }
 
+/** The character offset of [highlight]'s selected occurrence in [text], or -1. */
+internal fun findOccurrenceOffset(text: String, highlight: FindHighlight?): Int {
+    if (highlight == null) return -1
+    val lowered = text.lowercase()
+    if (lowered.length != text.length) return -1
+    return occurrenceAt(lowered, highlight.needle, highlight.nth)
+}
+
 /** [text] with the occurrence of [highlight] marked; the plain text itself when there is none. */
 internal fun highlightedText(text: String, highlight: FindHighlight?, mark: Color): AnnotatedString {
-    if (highlight == null) return AnnotatedString(text)
-    val lowered = text.lowercase()
-    if (lowered.length != text.length) return AnnotatedString(text)
-    val at = occurrenceAt(lowered, highlight.needle, highlight.nth)
-    if (at < 0) return AnnotatedString(text)
+    val at = findOccurrenceOffset(text, highlight)
+    if (at < 0 || highlight == null) return AnnotatedString(text)
     return buildAnnotatedString {
         append(text.substring(0, at))
         withStyle(SpanStyle(background = mark)) { append(text.substring(at, at + highlight.needle.length)) }

@@ -11,15 +11,19 @@ enum BareURLs {
         let link: URL
     }
 
-    /// [text] in runs, with a link on the URLs among them.
-    static func split(_ text: String) -> [(text: String, link: URL?)] {
-        guard text.contains("://") || text.contains("www.") || text.contains("@") else { return [(text, nil)] }
+    /// [text] in runs, with a link on the URLs among them. Pass `includeEmails: false` for plain
+    /// user messages where only web links (`http(s)://` and `www.`) should become clickable.
+    static func split(_ text: String, includeEmails: Bool = true) -> [(text: String, link: URL?)] {
+        let hasHint = text.contains("://")
+            || text.range(of: "www.", options: .caseInsensitive) != nil
+            || (includeEmails && text.contains("@"))
+        guard hasHint else { return [(text, nil)] }
         let scalars = Array(text.unicodeScalars)
         var pieces: [(text: String, link: URL?)] = []
         var plain = 0
         var index = 0
         while index < scalars.count {
-            guard let found = match(in: scalars, at: index) else {
+            guard let found = match(in: scalars, at: index, includeEmails: includeEmails) else {
                 index += 1
                 continue
             }
@@ -32,35 +36,95 @@ enum BareURLs {
         return pieces
     }
 
-    private static func match(in scalars: [Unicode.Scalar], at index: Int) -> Match? {
+    private static func match(in scalars: [Unicode.Scalar], at index: Int, includeEmails: Bool) -> Match? {
         if let match = url(in: scalars, at: index) { return match }
-        return email(in: scalars, at: index)
+        return includeEmails ? email(in: scalars, at: index) : nil
     }
 
     private static func url(in scalars: [Unicode.Scalar], at index: Int) -> Match? {
-        guard wordBoundary(scalars, at: index) else { return nil }
         if let scheme = schemeMatch(in: scalars, at: index) { return scheme }
-        guard starts(scalars, at: index, with: www) else { return nil }
-        let end = bodyEnd(in: scalars, from: index)
-        // GFM wants a dot in the host — the part before any path — not merely somewhere in the URL.
-        let hostEnd = scalars[index..<end].firstIndex { $0 == "/" || $0 == "?" || $0 == "#" } ?? end
-        guard hostEnd > index + 4, scalars[(index + 4)..<hostEnd].contains(".") else { return nil }
+        return wwwMatch(in: scalars, at: index)
+    }
+
+    private static func schemeMatch(in scalars: [Unicode.Scalar], at index: Int) -> Match? {
+        let schemeLen: Int
+        let normalizedScheme: String
+        if startsIgnoreCase(scalars, at: index, with: http) {
+            schemeLen = 7
+            normalizedScheme = "http://"
+        } else if startsIgnoreCase(scalars, at: index, with: https) {
+            schemeLen = 8
+            normalizedScheme = "https://"
+        } else {
+            return nil
+        }
+        guard schemeBoundary(scalars, at: index) else { return nil }
+        let authStart = index + schemeLen
+        // Optional `userinfo@` before host.
+        var hostStart = authStart
+        var probe = authStart
+        while probe < scalars.count, isUserInfo(scalars[probe]) { probe += 1 }
+        if probe > authStart, probe < scalars.count, scalars[probe] == "@" {
+            hostStart = probe + 1
+        }
+        let hostEnd: Int
+        if hostStart < scalars.count, scalars[hostStart] == "[" {
+            var close = hostStart + 1
+            var hasColon = false
+            while close < scalars.count, isIPv6Scalar(scalars[close]) {
+                if scalars[close] == ":" { hasColon = true }
+                close += 1
+            }
+            guard hasColon, close > hostStart + 2, close < scalars.count, scalars[close] == "]" else { return nil }
+            hostEnd = close + 1
+        } else {
+            var scanEnd = hostStart
+            while scanEnd < scalars.count, isHostScalar(scalars[scanEnd]) { scanEnd += 1 }
+            var trimmedEnd = scanEnd
+            if scanEnd < scalars.count, scalars[scanEnd] == "/", trimmedEnd > hostStart, scalars[trimmedEnd - 1] == "." {
+                trimmedEnd -= 1
+            } else {
+                while trimmedEnd > hostStart, scalars[trimmedEnd - 1] == "." { trimmedEnd -= 1 }
+                scanEnd = trimmedEnd
+            }
+            guard isValidHostname(scalars[hostStart..<trimmedEnd]) else { return nil }
+            hostEnd = scanEnd
+        }
+        guard let authEnd = scanPort(in: scalars, from: hostEnd) else { return nil }
+        let end = authEnd < scalars.count && isTailStart(scalars[authEnd]) ? scanTail(in: scalars, from: authEnd) : authEnd
+        let raw = normalizedScheme + string(scalars[authStart..<end])
+        guard let link = URL(string: raw) else { return nil }
+        return Match(start: index, end: end, link: link)
+    }
+
+    private static func wwwMatch(in scalars: [Unicode.Scalar], at index: Int) -> Match? {
+        guard startsIgnoreCase(scalars, at: index, with: www), wwwBoundary(scalars, at: index) else { return nil }
+        var scanEnd = index
+        while scanEnd < scalars.count, isHostScalar(scalars[scanEnd]) { scanEnd += 1 }
+        var trimmedEnd = scanEnd
+        if scanEnd < scalars.count, scalars[scanEnd] == "/", trimmedEnd > index, scalars[trimmedEnd - 1] == "." {
+            trimmedEnd -= 1
+        } else {
+            while trimmedEnd > index, scalars[trimmedEnd - 1] == "." { trimmedEnd -= 1 }
+            scanEnd = trimmedEnd
+        }
+        guard isValidWwwHost(scalars[index..<trimmedEnd]) else { return nil }
+        guard let authEnd = scanPort(in: scalars, from: scanEnd) else { return nil }
+        let end = authEnd < scalars.count && isTailStart(scalars[authEnd]) ? scanTail(in: scalars, from: authEnd) : authEnd
         guard let link = URL(string: "http://" + string(scalars[index..<end])) else { return nil }
         return Match(start: index, end: end, link: link)
     }
 
-    private static func schemeMatch(in scalars: [Unicode.Scalar], at index: Int) -> Match? {
-        let scheme: Int
-        if starts(scalars, at: index, with: http) {
-            scheme = 7
-        } else if starts(scalars, at: index, with: https) {
-            scheme = 8
-        } else {
-            return nil
-        }
-        let end = bodyEnd(in: scalars, from: index)
-        guard end > index + scheme, let link = URL(string: string(scalars[index..<end])) else { return nil }
-        return Match(start: index, end: end, link: link)
+    /// Parses optional `:port` at `start`. Returns `nil` when `:` introduces an invalid port.
+    private static func scanPort(in scalars: [Unicode.Scalar], from start: Int) -> Int? {
+        guard start < scalars.count, scalars[start] == ":" else { return start }
+        var end = start + 1
+        while end < scalars.count, isASCIIDigit(scalars[end]) { end += 1 }
+        if end == start + 1 { return start }
+        if end < scalars.count, isASCIIAlphanumeric(scalars[end]) { return nil }
+        let digits = end - (start + 1)
+        guard digits <= 5, let port = Int(string(scalars[(start + 1)..<end])), (1...65535).contains(port) else { return nil }
+        return end
     }
 
     /// `local@domain.tld`: at least one domain dot, and a last label of two or more letters.
@@ -92,28 +156,60 @@ enum BareURLs {
         return Match(start: index, end: cursor, link: link)
     }
 
-    /// GFM keeps URL syntax and write-as-is paths (`/wiki/北京`); punctuation and symbols end the
-    /// URL, as do quotes, `<>`, `*`, backticks and whitespace.
-    private static func bodyEnd(in scalars: [Unicode.Scalar], from start: Int) -> Int {
+    /// Scans path/query/fragment from [start], stopping on punctuation/symbols or unmatched `)` / `]`.
+    private static func scanTail(in scalars: [Unicode.Scalar], from start: Int) -> Int {
         var end = start
-        while end < scalars.count, keeps(scalars[end]) { end += 1 }
+        var parenDepth = 0
+        var bracketDepth = 0
+        while end < scalars.count {
+            let scalar = scalars[end]
+            if scalar == "(" {
+                parenDepth += 1
+                end += 1
+                continue
+            }
+            if scalar == ")" {
+                if parenDepth == 0 { break }
+                parenDepth -= 1
+                end += 1
+                continue
+            }
+            if scalar == "[" {
+                bracketDepth += 1
+                end += 1
+                continue
+            }
+            if scalar == "]" {
+                if bracketDepth == 0 { break }
+                bracketDepth -= 1
+                end += 1
+                continue
+            }
+            guard keeps(scalar) else { break }
+            end += 1
+        }
         while end > start {
             let last = scalars[end - 1]
-            if last == ")" {
-                var open = 0
-                var close = 0
-                for index in start..<end {
-                    if scalars[index] == "(" { open += 1 }
-                    else if scalars[index] == ")" { close += 1 }
-                }
-                if close <= open { break }
+            if trailing.contains(last) {
                 end -= 1
                 continue
             }
-            guard trailing.contains(last) else { break }
-            end -= 1
+            if (last == "(" || last == "["), hasUnclosedOpen(scalars, start: start, end: end, open: last, close: last == "(" ? ")" : "]") {
+                end -= 1
+                continue
+            }
+            break
         }
         return end
+    }
+
+    private static func hasUnclosedOpen(_ scalars: [Unicode.Scalar], start: Int, end: Int, open: Unicode.Scalar, close: Unicode.Scalar) -> Bool {
+        var depth = 0
+        for index in start..<end {
+            if scalars[index] == open { depth += 1 }
+            else if scalars[index] == close, depth > 0 { depth -= 1 }
+        }
+        return depth > 0
     }
 
     private static func keeps(_ scalar: Unicode.Scalar) -> Bool {
@@ -133,14 +229,73 @@ enum BareURLs {
         index == 0 || !isASCIIAlphanumeric(scalars[index - 1])
     }
 
-    private static func starts(_ scalars: [Unicode.Scalar], at index: Int, with prefix: [Unicode.Scalar]) -> Bool {
+    private static func schemeBoundary(_ scalars: [Unicode.Scalar], at index: Int) -> Bool {
+        index == 0 || (!isASCIIAlphanumeric(scalars[index - 1]) && scalars[index - 1] != "_")
+    }
+
+    private static func wwwBoundary(_ scalars: [Unicode.Scalar], at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        let prev = scalars[index - 1]
+        return !isASCIIAlphanumeric(prev) && prev != "." && prev != "_" && prev != "/" && prev != "-" && prev != "@"
+    }
+
+    private static func startsIgnoreCase(_ scalars: [Unicode.Scalar], at index: Int, with prefix: [Unicode.Scalar]) -> Bool {
         guard index + prefix.count <= scalars.count else { return false }
-        return scalars[index..<(index + prefix.count)].elementsEqual(prefix)
+        for offset in 0..<prefix.count {
+            let scalar = scalars[index + offset]
+            let lower = (scalar.value >= 0x41 && scalar.value <= 0x5A) ? Unicode.Scalar(scalar.value + 32)! : scalar
+            if lower != prefix[offset] { return false }
+        }
+        return true
+    }
+
+    private static func isValidHostname(_ host: ArraySlice<Unicode.Scalar>) -> Bool {
+        guard !host.isEmpty else { return false }
+        var labelStart = host.startIndex
+        var cursor = host.startIndex
+        while cursor <= host.endIndex {
+            if cursor == host.endIndex || host[cursor] == "." {
+                guard cursor > labelStart else { return false }
+                guard isASCIIAlphanumeric(host[labelStart]), isASCIIAlphanumeric(host[cursor - 1]) else { return false }
+                labelStart = cursor + 1
+            } else if !isDomainLabel(host[cursor]) {
+                return false
+            }
+            cursor += 1
+        }
+        return true
+    }
+
+    private static func isValidWwwHost(_ host: ArraySlice<Unicode.Scalar>) -> Bool {
+        guard isValidHostname(host) else { return false }
+        var dots = 0
+        var lastLabelStart = host.startIndex
+        for index in host.indices where host[index] == "." {
+            dots += 1
+            lastLabelStart = index + 1
+        }
+        guard dots >= 2 else { return false }
+        let tld = host[lastLabelStart..<host.endIndex]
+        guard tld.count >= 2 else { return false }
+        if tld.allSatisfy(isASCIILetter) { return true }
+        let tldArray = Array(tld)
+        return tldArray.count >= 6
+            && startsIgnoreCase(tldArray, at: 0, with: xnPrefix)
+            && tldArray[4...].allSatisfy(isASCIIAlphanumeric)
     }
 
     private static let http = Array("http://".unicodeScalars)
     private static let https = Array("https://".unicodeScalars)
     private static let www = Array("www.".unicodeScalars)
+    private static let xnPrefix = Array("xn--".unicodeScalars)
+
+    private static func isTailStart(_ scalar: Unicode.Scalar) -> Bool {
+        scalar == "/" || scalar == "?" || scalar == "#"
+    }
+
+    private static func isASCIIDigit(_ scalar: Unicode.Scalar) -> Bool {
+        (0x30...0x39).contains(scalar.value)
+    }
 
     private static func isASCIIAlphanumeric(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar.value {
@@ -154,6 +309,18 @@ enum BareURLs {
         case 0x41...0x5A, 0x61...0x7A: return true
         default: return false
         }
+    }
+
+    private static func isHostScalar(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIIAlphanumeric(scalar) || scalar == "." || scalar == "-"
+    }
+
+    private static func isIPv6Scalar(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIIDigit(scalar) || (0x41...0x46).contains(scalar.value) || (0x61...0x66).contains(scalar.value) || scalar == ":" || scalar == "."
+    }
+
+    private static func isUserInfo(_ scalar: Unicode.Scalar) -> Bool {
+        isASCIIAlphanumeric(scalar) || userInfoExtra.contains(scalar)
     }
 
     private static func isEmailLocal(_ scalar: Unicode.Scalar) -> Bool {
@@ -171,6 +338,7 @@ enum BareURLs {
     }
 
     private static let asciiURL: Set<Unicode.Scalar> = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~:/?#[]@!$&()+,;=%".unicodeScalars)
+    private static let userInfoExtra: Set<Unicode.Scalar> = Set("-._~%:+".unicodeScalars)
     /// Punctuation GFM trims from the end of an autolink literal.
     private static let trailing: Set<Unicode.Scalar> = Set("?!.,:;_~".unicodeScalars)
 }

@@ -12,6 +12,24 @@ func conversationAgentSender(_ from: String?) -> String? {
     }
 }
 
+/// Plain user prompt text with bare web URLs (`http(s)://`, `www.`) styled and clickable, keeping
+/// all other characters literal.
+private func conversationUserMessageText(_ text: String, linkColor: Color, underlineColor: Color) -> AttributedString {
+    let pieces = BareURLs.split(text, includeEmails: false)
+    guard pieces.contains(where: { $0.link != nil }) else { return AttributedString(text) }
+    var result = AttributedString()
+    for piece in pieces {
+        var part = AttributedString(piece.text)
+        if let link = piece.link {
+            part.link = link
+            part.foregroundColor = linkColor
+            part.underlineStyle = Text.LineStyle(pattern: .solid, color: underlineColor)
+        }
+        result.append(part)
+    }
+    return result
+}
+
 struct ConversationTimelineRow: View, Equatable {
     let row: any TimelineRow
     let workbench: Workbench
@@ -266,7 +284,7 @@ struct ConversationTimelineItem: View {
                     ConversationSessionReferenceChip(workbench: workbench, recipientID: user.event.sessionId, reference: reference)
                 }
                 if !user.text.isEmpty {
-                    Text(AttributedString(user.text).highlighting(findHighlight, only: findHighlight?.nth, color: palette.warning.opacity(0.4))).riffetFont(.body).lineSpacing(5).foregroundStyle(palette.fg).textSelection(.enabled)
+                    Text(conversationUserMessageText(user.text, linkColor: palette.accent, underlineColor: palette.lineStrong).highlighting(findHighlight, only: findHighlight?.nth, color: palette.warning.opacity(0.4))).riffetFont(.body).lineSpacing(5).foregroundStyle(palette.fg).tint(palette.accent).textSelection(.enabled)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.selected, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .frame(maxWidth: 300, alignment: .trailing)

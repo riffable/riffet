@@ -4,6 +4,7 @@ import type { AgentMention, NativeBackendCatalogEntry, NativeBackendId } from '@
 import { api, isAgentReference, type AgentContextReference, type PromptContextReference } from '@/lib/api';
 import { backendLabel } from '@/lib/backends';
 import { useAgentModelChoice, type AgentModelValue } from './agentModelChoice';
+import { splitBareUrls } from './bareUrls';
 import { ModelPicker } from './ModelPicker';
 
 /*
@@ -70,12 +71,24 @@ export function droppedMentions(text: string, references: readonly PromptContext
 
 /** The composer's mark for a mention; the same as a search hit's (`SessionSearchDialog`). */
 const MARK = 'rounded-sm bg-accent-soft';
+/** Matches `.md a` (`docs/design/DECISIONS.md` 2026-11-18): accent text with an always-visible subtle underline. */
+const LINK = 'text-accent underline decoration-line-strong decoration-1 underline-offset-3 hover:decoration-accent';
 
-/** A sent message's mentions drawn where they were written; the Agents mentioned elsewhere are listed after it. */
+function renderBareLinks(text: string): ReactNode {
+  const parts = splitBareUrls(text);
+  if (parts.length === 1 && !parts[0]!.href) return text;
+  return parts.map((part, index) => (
+    part.href
+      ? <a key={index} href={part.href} target="_blank" rel="noreferrer noopener" className={LINK}>{part.text}</a>
+      : <Fragment key={index}>{part.text}</Fragment>
+  ));
+}
+
+/** A sent message's mentions drawn where they were written; bare web links stay clickable while other formatting stays plain text. */
 export function MessageWithMentions({ text, agents }: { text: string; agents?: readonly AgentMention[] }) {
-  if (!agents?.length) return <>{text}</>;
+  if (!agents?.length) return <>{renderBareLinks(text)}</>;
   const labels = agents.map(agent => backendLabel(agent.backendId));
-  return <>{withMentionMarks(text, labels, (value, _index, key) => <mark key={key} className={`${MARK} text-fg`}>{value}</mark>)}</>;
+  return <>{withMentionMarks(text, labels, (value, _index, key) => <mark key={key} className={`${MARK} text-fg`}>{value}</mark>, renderBareLinks)}</>;
 }
 
 /** The Agents a message mentioned that its text does not name; older messages carried them beside the text. */
