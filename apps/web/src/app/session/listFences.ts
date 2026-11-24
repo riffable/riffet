@@ -92,8 +92,7 @@ function indentLine(rawLine: string, extraCols: number): string {
   const carriage = rawLine.endsWith('\r') ? '\r' : '';
   const line = carriage ? rawLine.slice(0, -1) : rawLine;
   if (!line.trim()) return carriage;
-  const { chars, cols } = leadingIndent(line);
-  return `${' '.repeat(cols + extraCols)}${line.slice(chars)}${carriage}`;
+  return `${' '.repeat(extraCols)}${line}${carriage}`;
 }
 
 function findMatchingCloser(

@@ -296,4 +296,25 @@ describe('alignListFences', () => {
     expect(items).toHaveLength(2);
     expect(items[1]!.children.map((c) => c.type)).toEqual(['paragraph', 'code']);
   });
+
+  it('preserves leading tabs inside indented code blocks verbatim', () => {
+    const input = [
+      '- Makefile target:',
+      '',
+      '```1:3:Makefile',
+      'all:',
+      '\techo ok',
+      '```',
+    ].join('\n');
+
+    const aligned = alignListFences(input);
+    const tree = unified().use(remarkParse).use(remarkGfm).parse(aligned) as {
+      children: Array<{
+        children?: Array<{ children: Array<{ type: string; value?: string }> }>;
+      }>;
+    };
+    const code = tree.children[0]!.children![0]!.children[1]!;
+    expect(code.type).toBe('code');
+    expect(code.value).toBe('all:\n\techo ok');
+  });
 });
