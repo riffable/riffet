@@ -167,9 +167,19 @@ export class NativeInteractions {
             if (other) {
               if (otherIndex < 0) throw stale();
               await move(otherIndex);
-              // The CLI's Other editor supports Ctrl+U after End; clear before bracketed paste.
-              await write(() => control.keys(['End', 'C-u']));
-              await this.changed(control, info, identity, item => !item.interaction.otherValue);
+              // Only clear when there is existing text, and send End and Ctrl+U separately: an
+              // idle Ctrl+U (`\x15`) can sit unread during a brief TUI stall and coalesce with the
+              // following bracketed paste, causing CLIs whose Ctrl+U handler matches `startsWith`
+              // to discard the entire paste.
+              if (current.interaction.otherValue) {
+                await write(() => control.keys(['End']));
+                await pause();
+                current = await readSame();
+                if (current.interaction.otherValue) {
+                  await write(() => control.keys(['C-u']));
+                  current = await this.changed(control, info, identity, item => !item.interaction.otherValue);
+                }
+              }
               await write(() => control.paste(other, false));
               current = await this.changed(control, info, identity, item => matchesOtherValue(item, other) && item.interaction.otherSelected === true);
             }

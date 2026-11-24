@@ -28,6 +28,7 @@ verify:
 ## 外部行为
 
 - 输入是终端服务的画面文本（`interactions.ts#DialogTerminal`）：Claude Code 与 Codex 的 TUI 对话框、Cursor 的批准卡。这里没有自己的录制；Claude 画面夹具在 `apps/server/src/backends/claude/fixtures/screens/`，测试在 `interaction-choice.test.ts`、`interaction-screen.test.ts`。
+- 提问卡的「Other」编辑框只有在 `otherValue` 非空时才分步发 `End` 和 `C-u` 并等其清空再粘贴（`interactions.ts#NativeInteractions`）：空框时发出的 `C-u`（`\x15`）会在 CLI 瞬间卡顿时与紧跟的 bracketed paste 合并进同一个 stdin chunk，被以 `startsWith("\u0015")` 处理 Ctrl+U 的 CLI 整包吞掉。
 - CLI 升级后对话框样式变化时，先补夹具再改解析；标题白名单在 `interaction-choice.ts#isKnownBlockingTitle`。
 
 ## 排障

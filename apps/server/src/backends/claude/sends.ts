@@ -341,7 +341,7 @@ export class ClaudeSends {
         pending.fenced = true;
         await control.paste(text, false);
         const pressed = await this.deps.composer.submitPaste(control, text, composerBefore, !untested, pending);
-        if (!isSlashCommand) await this.awaitReceipt(pending, control, text, pressed ? undefined : { before: composerBefore });
+        if (!isSlashCommand) await this.awaitReceipt(pending, control, text, composerBefore, !pressed);
       });
     } catch (error) {
       if (!pending.receiptSettled) pending.rejectReceipt(error instanceof Error ? error : new Error(String(error)));
@@ -365,11 +365,14 @@ export class ClaudeSends {
    * After `SUBMIT_RESEND_LIMIT` presses the CLI is left alone: it is refusing the write for a reason
    * this process cannot see, and the timeout reports that honestly.
    */
-  private async awaitReceipt(pending: PendingSend, control: TerminalInteractionControl, text: string, unpressed?: { before: string | undefined }): Promise<void> {
+  private async awaitReceipt(pending: PendingSend, control: TerminalInteractionControl, text: string, composerBefore: string | undefined, initialUnpressed: boolean): Promise<void> {
     // With no Enter pressed yet (the paste had not shown), the first press is the send itself, not a resend, and the
     // box is watched for it at a short cadence and for longer; the receipt window starts when that press is made.
+    let unpressed = initialUnpressed;
     let deadline = Date.now() + (unpressed ? SUBMIT_LATE_WATCH_MS : RECEIPT_TIMEOUT_MS);
     let resends = unpressed ? -1 : 0;
+    const textLines = text.split(/\r?\n/).filter(line => line.trim());
+    const imageOnly = textLines.length > 0 && textLines.every(line => /^\s*\/[^\s/]+\/\S+\s*$/.test(line));
     const woken = new Promise<true>(resolve => { pending.receiptWake = () => resolve(true); });
     try {
       // The CLI holding the text in its own queue is a receipt too: it will turn it into a prompt when
@@ -394,9 +397,13 @@ export class ClaudeSends {
         // A screen that cannot be read is not proof of a stuck composer; leave the write alone.
         const screen = await control.screen().catch(() => undefined);
         checkSendInterrupt(pending);
-        if (screen === undefined || !claudeComposerHoldsPrompt(screen, text)) continue;
+        if (screen === undefined) continue;
+        const box = claudeComposer(screen);
+        const holdsPrompt = claudeComposerHoldsPrompt(screen, text)
+          || (imageOnly && box !== undefined && box !== composerBefore && /\[Image #\d+\]/.test(box));
+        if (!holdsPrompt) continue;
         // Before the first press the box must also differ from what it held before the paste: an old draft's placeholder is not ours.
-        if (unpressed && claudeComposer(screen) === unpressed.before) continue;
+        if (unpressed && box === composerBefore) continue;
         // A menu can be drawn over a box that still shows the paste; Enter would answer it. `send()` refuses the same before pasting.
         const terminalId = this.deps.terminalId();
         const info = terminalId ? await this.deps.host.terminal.get(terminalId).catch(() => undefined) : undefined;
@@ -408,7 +415,7 @@ export class ClaudeSends {
         await control.keys(['Enter']);
         if (unpressed) {
           console.warn('[claude] paste shown late; Enter pressed by the receipt wait', { sessionId: this.deps.session().id });
-          unpressed = undefined;
+          unpressed = false;
           deadline = Date.now() + RECEIPT_TIMEOUT_MS;
         }
       }

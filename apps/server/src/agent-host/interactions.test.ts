@@ -314,7 +314,6 @@ describe('NativeInteractions Cursor question execution', () => {
     const h = harness(question(1), [
       { keys: ['Down'], screen: question(1, { focus: 1 }) },
       { keys: ['Down'], screen: question(1, { focus: 2 }) },
-      { keys: ['End', 'C-u'], screen: question(1, { focus: 2 }) },
       { paste: other, submit: false, screen: question(1, { focus: 2, other: wrapped }) },
       { keys: ['Enter'], screen: question(2) },
       { keys: ['Space'], screen: question(2, { selected: 0 }) },
@@ -328,15 +327,35 @@ describe('NativeInteractions Cursor question execution', () => {
     expect(advanced.status).toBe('advanced');
     expect(advanced.interaction).toMatchObject({ questionIndex: 2, questionCount: 2 });
     expect(advanced.interaction!.id).not.toBe(first.id);
-    expect(h.calls).toHaveLength(5);
+    expect(h.calls).toHaveLength(4);
     expect(await h.interactions.respond(session, request)).toEqual(advanced);
-    expect(h.calls).toHaveLength(5);
+    expect(h.calls).toHaveLength(4);
 
     const completed = await settle(h.interactions.respond(session, response(advanced.interaction!, 'last-answer', { selectedIds: ['option-0'] })));
     expect(completed.status).toBe('completed');
     expect(h.remaining).toEqual([]);
     expect(await h.interactions.current(session)).toBeNull();
     expect(h.interactions.isResponding('terminal-1')).toBe(false);
+  });
+
+  it('clears an existing Other value with separate End and Ctrl+U keys before pasting', async () => {
+    const other = '新的自定义回答';
+    const h = harness(question(1, { focus: 2, other: ['旧草稿'] }), [
+      { keys: ['End'], screen: question(1, { focus: 2, other: ['旧草稿'] }) },
+      { keys: ['C-u'], screen: question(1, { focus: 2 }) },
+      { paste: other, submit: false, screen: question(1, { focus: 2, other: [other] }) },
+      { keys: ['Enter'], screen: question(2) },
+    ]);
+    const first = (await h.interactions.current(session))!;
+    const advanced = await settle(h.interactions.respond(session, response(first, 'replace-other', { otherText: other })));
+    expect(advanced.status).toBe('advanced');
+    expect(h.calls).toEqual([
+      { keys: ['End'] },
+      { keys: ['C-u'] },
+      { paste: other, submit: false },
+      { keys: ['Enter'] },
+    ]);
+    expect(h.remaining).toEqual([]);
   });
 
   it('answers two ordinary questions consecutively', async () => {
@@ -380,29 +399,28 @@ describe('NativeInteractions Cursor question execution', () => {
   ])('never submits an unverified Other answer (%s), including a repeated request', async (_name, visible) => {
     const other = '只跟 feed 场景相关，如果不只是服务于 feed，那就改名';
     const h = harness(question(1, { focus: 2 }), [
-      { keys: ['End', 'C-u'], screen: question(1, { focus: 2 }) },
       { paste: other, submit: false, screen: question(1, { focus: 2, other: visible }) },
     ]);
     const current = (await h.interactions.current(session))!;
     const request = response(current, 'unverified-answer', { otherText: other });
     const uncertain = await settle(h.interactions.respond(session, request));
     expect(uncertain.status).toBe('uncertain');
-    expect(h.calls).toEqual([{ keys: ['End', 'C-u'] }, { paste: other, submit: false }]);
+    expect(h.calls).toEqual([{ paste: other, submit: false }]);
     expect(await h.interactions.respond(session, request)).toEqual(uncertain);
-    expect(h.calls).toHaveLength(2);
+    expect(h.calls).toHaveLength(1);
     expect(h.remaining).toEqual([]);
     expect(h.interactions.isResponding('terminal-1')).toBe(false);
   });
 
   it('stops immediately if the CLI changes question during input', async () => {
-    const h = harness(question(1, { focus: 2 }), [
-      { keys: ['End', 'C-u'], screen: question(2) },
+    const h = harness(question(1, { focus: 2, other: ['旧内容'] }), [
+      { keys: ['End'], screen: question(2) },
     ]);
     const first = (await h.interactions.current(session))!;
     const request = response(first, 'question-changed', { otherText: '只跟 feed 场景相关' });
     const uncertain = await settle(h.interactions.respond(session, request));
     expect(uncertain.status).toBe('uncertain');
-    expect(h.calls).toEqual([{ keys: ['End', 'C-u'] }]);
+    expect(h.calls).toEqual([{ keys: ['End'] }]);
     expect(await h.interactions.respond(session, request)).toEqual(uncertain);
     expect(h.calls).toHaveLength(1);
     expect(h.remaining).toEqual([]);
