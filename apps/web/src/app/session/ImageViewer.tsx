@@ -239,14 +239,18 @@ function ZoomableImageFrame({ src, name, label, path, className, size, maxHeight
 /** A close is played by the open viewer: it calls `done` once the viewer has left the screen. */
 type Closer = (done: () => void) => void;
 
-const FALLBACK_EASING = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+const FALLBACK_ENTER_EASING = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+const FALLBACK_STANDARD_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 
 /** The shared duration and easing tokens, read where WAAPI cannot resolve `var()` itself. */
 function motionTokens() {
   const style = getComputedStyle(document.documentElement);
   return {
-    duration: cssDurationMs(style.getPropertyValue('--duration-slow'), 300),
-    easing: style.getPropertyValue('--ease-out-soft').trim() || FALLBACK_EASING,
+    enterDuration: cssDurationMs(style.getPropertyValue('--duration-slow'), 300),
+    enterEasing: style.getPropertyValue('--ease-out-soft').trim() || FALLBACK_ENTER_EASING,
+    exitDuration: cssDurationMs(style.getPropertyValue('--duration-base'), 200),
+    exitFadeDuration: cssDurationMs(style.getPropertyValue('--duration-exit-base'), 140),
+    standardEasing: style.getPropertyValue('--ease-standard').trim() || FALLBACK_STANDARD_EASING,
   };
 }
 
@@ -314,13 +318,15 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
   const initialSize: Size | undefined = known ? { w: known.width, h: known.height } : undefined;
 
   const fades = (from: number, to: number, { zoomStage = false }: { zoomStage?: boolean } = {}, done?: () => void) => {
-    const { duration } = motionTokens();
-    const fadeEasing = 'cubic-bezier(0.25, 0.1, 0.25, 1)';
+    const tokens = motionTokens();
+    const entering = from < to;
+    const duration = entering ? tokens.enterDuration : tokens.exitFadeDuration;
+    const fadeEasing = entering ? 'cubic-bezier(0.25, 0.1, 0.25, 1)' : tokens.standardEasing;
     const stops = [backdrop, bar, stage].map((target, index) => {
       const element = target.current;
       if (!element) return () => {};
       const keyframes = zoomStage && target === stage
-        ? (from < to
+        ? (entering
             ? [{ opacity: from, transform: 'scale(0.96)' }, { opacity: to, transform: 'none' }]
             : [{ opacity: from, transform: 'none' }, { opacity: to, transform: 'scale(0.96)' }])
         : [{ opacity: from }, { opacity: to }];
@@ -335,7 +341,9 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
 
   /** Flies a copy of the image between two rects; `laid` is where the copy is laid out. */
   const fly = (root: HTMLElement, source: DOMRect, laid: DOMRect, forward: boolean, thumbEl: Element | null | undefined, done: () => void) => {
-    const { duration, easing } = motionTokens();
+    const tokens = motionTokens();
+    const duration = forward ? tokens.enterDuration : tokens.exitDuration;
+    const easing = forward ? tokens.enterEasing : tokens.standardEasing;
     const bounds = root.getBoundingClientRect();
     const copy = document.createElement('img');
     copy.src = thumbEl instanceof HTMLImageElement && thumbEl.complete && thumbEl.naturalWidth > 0 ? (thumbEl.currentSrc || src) : src;
@@ -470,7 +478,7 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
         hiddenThumb.style.visibility = 'hidden';
       }
       fly(root, target, current, false, thumbEl, () => { restoreThumb(); done(); });
-      // The backdrop and bar go with the flight; the stage's own fade would show the real image's toolbar leaving late.
+      // Fade the backdrop, bar and stage out ahead of the flight so the dark scrim never lingers after the image lands.
       fades(1, 0);
     };
     return () => { closer.current = null; restoreThumb(); };
@@ -557,8 +565,8 @@ export function ImageViewer({ src, name, open: controlledOpen, onOpenChange, thu
         aria-describedby={undefined}
         overlayClassName="hidden"
         className="left-0 top-[var(--app-top,0px)] h-[var(--app-height,100dvh)] max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none bg-transparent p-0 text-white shadow-none"
-        // The viewer plays its own enter and exit; the dialog's default zoom and fade would stack on it.
-        style={{ animation: 'none' }}
+        // The viewer plays its own enter and exit, and its shell stays unstyled even when an underlay theme styles `.ui-dialog-content`.
+        style={{ animation: 'none', backgroundColor: 'transparent', backdropFilter: 'none', WebkitBackdropFilter: 'none', boxShadow: 'none' }}
         onOpenAutoFocus={() => { fromField.current = isTextField(document.activeElement); }}
         onPointerDownCapture={() => { pointer.current = true; }}
         onKeyDownCapture={() => { pointer.current = false; }}

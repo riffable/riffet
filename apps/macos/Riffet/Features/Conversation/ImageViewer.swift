@@ -428,14 +428,20 @@ private struct ZoomableImage: NSViewRepresentable {
             CATransaction.flush()
             let target = item.origin?.geometry(in: self)
             let moves = target != nil && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            let exitTiming = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
             if moves {
                 item.origin?.hide()
-                roundCorners(to: 8, duration: 0.24)
+                roundCorners(to: 8, duration: 0.20, timing: exitTiming)
             }
-            animate(duration: moves ? 0.24 : 0.14, changes: {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.14
+                context.timingFunction = exitTiming
+                context.allowsImplicitAnimation = true
+                self.dimming.animator().alphaValue = 0
+            }
+            animate(duration: moves ? 0.20 : 0.14, timing: exitTiming, changes: {
                 if moves, let target { self.placeAnimated(frame: target.frame, visible: target.visible) }
                 else { self.picture.animator().alphaValue = 0 }
-                self.dimming.animator().alphaValue = 0
             }, completion: {
                 item.origin?.restore()
                 self.didClose?()
@@ -447,13 +453,13 @@ private struct ZoomableImage: NSViewRepresentable {
             pixels.animator().frame = frame.offsetBy(dx: -visible.minX, dy: -visible.minY)
         }
 
-        private func roundCorners(to radius: CGFloat, duration: TimeInterval) {
+        private func roundCorners(to radius: CGFloat, duration: TimeInterval, timing: CAMediaTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)) {
             guard let layer = picture.layer else { return }
             let animation = CABasicAnimation(keyPath: "cornerRadius")
             animation.fromValue = layer.presentation()?.cornerRadius ?? layer.cornerRadius
             animation.toValue = radius
             animation.duration = duration
-            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animation.timingFunction = timing
             layer.cornerRadius = radius
             layer.add(animation, forKey: "cornerRadius")
         }
@@ -467,12 +473,12 @@ private struct ZoomableImage: NSViewRepresentable {
             view.alphaValue = CGFloat(opacity)
         }
 
-        private func animate(duration: TimeInterval, changes: @escaping () -> Void, completion: @escaping () -> Void) {
+        private func animate(duration: TimeInterval, timing: CAMediaTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut), changes: @escaping () -> Void, completion: @escaping () -> Void) {
             generation += 1
             let current = generation
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = duration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.timingFunction = timing
                 context.allowsImplicitAnimation = true
                 changes()
             } completionHandler: { [weak self] in
