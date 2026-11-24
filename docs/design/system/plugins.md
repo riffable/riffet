@@ -38,6 +38,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 
 - 视图按容器宽度排版，不假定 380：悬浮或全屏时宽度会变，手机上侧栏与设置是全屏。
 - 视图的内边距、标题、关闭按钮由宿主绘制，视图内容从容器边缘开始。声明式页面的内边距由宿主给出。
+- `main` 视图的页头由宿主画（标题、返回、关闭）。视图读的是哪台服务器、哪个项目这类页面范围，用 `ViewProps.header` 放进页头标题之后，不在内容里另起一行工具栏；选项是菜单（[DropdownMenu](components/overlays.md)），只有一个取值的维度不显示。
 - Web 隔离视图可出现在 `session-view`、`sidebar`、`file` 与单实例 `main`。顶层页面出现在侧栏「更多」中，可在侧栏设置里固定和排序；`settings` 位置只能由内置入口绘制（PLUGIN_ARCHITECTURE「自定义视图」）。
 - 视图实例按 `serviceId`、`projectId`、`sessionId`、`instanceId` 定 key；`ViewContext.visible` 为 false 时暂停轮询和动画。
 
@@ -102,12 +103,17 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 | `Tip` | 悬停提示，可带 `kbd` | `components/ui/tooltip.tsx` |
 | `Markdown`、`DiffView` | 正文与差异 | `app/session/` |
 | `ModelField` | 选模型及其选项 | `plugins/ModelField.tsx` |
-| `CodeFile`、`FileIcon` | 只读显示一个项目文件（文本高亮、图片、二进制），⌘ 点击标识符交给视图；可选 `baseline`（行号右侧的改动标记）与 `blame`（行号左侧的作者列）；文件面板的文件图标 | `plugins/CodeFile.tsx`，内部是 `app/panels/CodeView.tsx` |
+| `CodeFile`、`FileIcon` | 只读显示一个项目文件（文本高亮、图片、二进制），⌘ 点击标识符交给视图；可选 `baseline`（行号右侧的改动标记）与 `blame`（行号左侧的作者列）；给了 `onCaret` 就有光标（键盘移动、光标处的词在文件里标出、括号配对，F12 / ⌥F7 把光标处的标识符交给 `onSymbol`，触屏不弹键盘），`folding` 按花括号、块注释和连续 import 折叠（`app/panels/codeFolding.ts`）；`onMenu` 接管代码区、行号与作者标注栏上的全部右键（浏览器菜单不出现，光标先移到点击处；在标注栏上带那一行的提交 `blame`），`command` 让视图执行查找、折叠、全选；文件面板的文件图标 | `plugins/CodeFile.tsx`，内部是 `app/panels/CodeView.tsx` |
 | `Menu` | 应用的 `DropdownMenu`，按条目表画：命令、单选（连续的单选项为一组，当前项打勾）、开关、分隔线、组标题；`tip` 给图标触发按钮加 `Tip` | `plugins/PluginOverlays.tsx` |
+| `ContextMenu` | 同一种菜单，开在指针处（右键）；条目可以是 `submenu`（宿主的 `MenuSub`）：`at` 有值时打开，选中或关闭时 `onClose` | `plugins/PluginOverlays.tsx`，锚点做法同标签栏的右键菜单 |
+| `ResizeHandle` | 侧栏和文件树用的那条拖动条：放在面板边缘内侧（绝对定位），方向键调整、双击复原 | `components/ui/resize-handle.tsx` |
+| `Popover` | 应用的弹出面板，放菜单装不下的详情（进度、几行数值、一个按钮）；宽度与内边距由插件给 | `components/ui/popover.tsx` |
+| `Progress` | 确定进度条，`value` 0–1 | `components/ui/progress.tsx` |
+| `ProjectView` | 别的插件给一个项目的侧栏视图（构建、Logcat），画在请求它的页面里当工具窗口；列表由 `useProjectViews(projectId)` 给出，按侧栏的条件判断、不含请求者自己的。`onOpenFile` 接住视图打开的文件（构建错误的文件与行），否则去侧栏的文件预览；宽度至少按侧栏的 320 给 | `plugins/ProjectViews.tsx`，文件去向经 `ProjectFileOpener` 交给 `TasksView`、`DeclarativeView`、`navigation.openPath` 与隔离视图 |
 | `QuickPanel` | ⌘P、⌘K 那一种搜索弹窗（内容档 768，列表高 `min(480px, 56dvh)`）：查询行、范围页签与右侧工具、固定高度的列表区，可选的下方预览占列表区的一部分；选项由插件画，焦点留在查询行 | `plugins/PluginOverlays.tsx`，查询行是 `QuickInput` |
 | `icon(name)`、`toolIcon(kind)`、`copy(text)` | 图标、工具图标、复制并提示 | |
 
-- `Select`、`Segmented`、`Field`、`Notice`、`EmptyState`、`CodeFile`、`FileIcon`、`Menu`、`QuickPanel` 与 `Button` 的 `busy` 是 web API 1 之后加的，没有升版本号（升号会让声明 `^1` 的现有插件全部不兼容）。2026-11 之前的宿主没有这些成员：`UiKit` 里它们是可选的，SDK 的同名包装在旧宿主上退回成无样式的文字或不渲染，插件直接用 `ui.*` 时先判断是否存在。
+- `Select`、`Segmented`、`Field`、`Notice`、`EmptyState`、`CodeFile`、`FileIcon`、`Menu`（及其 `onOpenChange`）、`ContextMenu`、`ResizeHandle`、`QuickPanel`、`Popover`、`Progress`、`ProjectView`、`PluginHost.useProjectViews` 与 `Button` 的 `busy` 是 web API 1 之后加的，没有升版本号（升号会让声明 `^1` 的现有插件全部不兼容）。2026-11 之前的宿主没有这些成员：`UiKit` 里它们是可选的，SDK 的同名包装在旧宿主上退回成无样式的文字或不渲染，插件直接用 `ui.*` 时先判断是否存在。
 - 选用规则同[组件](components/TEMPLATE.md)与[模式](patterns.md)：几个并列的值用 `Segmented`、更多用选择菜单。`UiKit` 没有 `Dialog`，视图需要弹窗时先看能否改成声明式页面。
 - 隔离视图没有组件。用原生元素，靠基础样式获得宿主外观；需要弹窗、确认、通知时，经桥调 `notify.info`、`notify.error` 或 `commands.execute`，由宿主绘制。
 

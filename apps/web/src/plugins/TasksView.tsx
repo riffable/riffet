@@ -19,6 +19,7 @@ import { cn, errorMessage, formatBytes, newId, timeAgo } from '@/lib/utils';
 import { useStores } from '../app/state/stores';
 import type { DeclarativeViewProps } from './catalog';
 import { RecordsLog } from './LogRecords';
+import { useOpenProjectFile } from './projectFileOpener';
 import { TaskConfirmDialog } from './TaskConfirmDialog';
 
 /*
@@ -453,7 +454,7 @@ function TaskDetail({ task, log, visible, title, stateLabel, logStyle, cancelBus
   task: Task; log: string; visible: boolean; title: string; stateLabel: Record<TaskState, string>; logStyle: { rules: readonly TaskLogRule[]; records?: TaskLogRecords } | undefined; cancelBusy: boolean; onCancel: () => void;
 }) {
   const { t } = useLingui();
-  const { ui } = useStores();
+  const openFile = useOpenProjectFile();
   // Elapsed time of an open task.
   const [now, setNow] = useState(() => Date.now());
   const open = isOpen(task);
@@ -518,7 +519,7 @@ function TaskDetail({ task, log, visible, title, stateLabel, logStyle, cancelBus
                 return (
                   <li key={index}>
                     {item.file
-                      ? <button type="button" title={`${item.file}${item.line ? `:${item.line}` : ''}`} className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover max-md:min-h-11" onClick={() => ui.preview(item.file!, item.line)}>{body}</button>
+                      ? <button type="button" title={`${item.file}${item.line ? `:${item.line}` : ''}`} className="flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-hover max-md:min-h-11" onClick={() => openFile(item.file!, item.line)}>{body}</button>
                       : <div className="flex items-start gap-2 px-2 py-1.5">{body}</div>}
                   </li>
                 );

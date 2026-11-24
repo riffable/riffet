@@ -233,11 +233,15 @@ export function useTree(api: CodeApi | undefined, roots: TreeNode[] | undefined,
     });
   }, [load, loaded, open]);
 
-  // The single root that starts open is read as soon as it is known.
-  useEffect(() => {
-    const only = roots?.length === 1 ? roots[0] : undefined;
-    if (only && !loaded.has(only.id) && open.has(only.id)) void load(only);
-  }, [roots, open, loaded, load]);
+  /** Reads every folder again, keeping what is open (after a checkout changed the files). */
+  const refresh = useCallback(() => {
+    controller.current.abort();
+    controller.current = new AbortController();
+    reads.current = new Map();
+    known.current = new Map();
+    setLoaded(new Map());
+    setFolded(new Map());
+  }, []);
 
   const rows = useMemo(() => {
     const out: TreeRow[] = [];
@@ -257,8 +261,13 @@ export function useTree(api: CodeApi | undefined, roots: TreeNode[] | undefined,
     return out;
   }, [roots, open, loaded, folded]);
 
+  // An open folder not read yet is read: the single root that starts open, and after `refresh` every open one, top down.
+  useEffect(() => {
+    for (const row of rows) if (row.open && !loaded.has(row.node.id)) void load(row.node);
+  }, [rows, loaded, load]);
+
   /** Closes everything but a single root, as the project view's "collapse all" does. */
   const collapse = useCallback(() => setOpen(new Set(roots?.length === 1 ? [roots[0]!.id] : [])), [roots]);
 
-  return { rows, toggle, reveal, collapse };
+  return { rows, toggle, reveal, collapse, refresh };
 }

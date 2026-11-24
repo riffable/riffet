@@ -1,5 +1,5 @@
 import type {
-  CodeDefinitions, CodeIndexStatus, CodeModules, CodeOutline, CodeReferences, CodeSymbolResults, FileEntry, GitBlame, GitFileAtRev, GitHead, SearchHit, SearchResults,
+  CodeDefinitions, CodeIndexStatus, CodeModules, CodeOutline, CodeReferences, CodeSymbolResults, FileEntry, FilePreview, GitBlame, GitCommitDetail, GitFileAtRev, GitHead, GitRefs, SearchHit, SearchResults,
 } from '@contracts';
 import type { RequestService } from '@riffet/plugin-web';
 
@@ -38,7 +38,15 @@ export function codeApi(request: () => RequestService, projectId: string) {
       get<CodeDefinitions>('/code/definition', { path: at.path, line: String(at.line), column: String(at.column), word: at.word }, signal),
     references: (at: { path: string; word: string; scope: 'module' | 'project' }, signal?: AbortSignal) => get<CodeReferences>('/code/references', at, signal),
     head: (signal?: AbortSignal) => get<GitHead>('/git/head', {}, signal),
+    /** The file as it is on disk, as the reader sees it (text cut at the preview limit). */
+    file: (path: string, signal?: AbortSignal) => get<FilePreview>('/file', { path }, signal),
     fileAtHead: (path: string, signal?: AbortSignal) => get<GitFileAtRev>('/git/file', { path, rev: 'HEAD' }, signal),
+    /** The file as it is in a commit (`rev` a hash). */
+    fileAt: (path: string, rev: string, signal?: AbortSignal) => get<GitFileAtRev>('/git/file', { path, rev }, signal),
+    commit: (hash: string, signal?: AbortSignal) => get<GitCommitDetail>(`/git/commits/${encodeURIComponent(hash)}`, {}, signal),
+    refs: (signal?: AbortSignal) => get<GitRefs>('/git/refs', {}, signal),
+    /** Checks out a local branch; the server refuses while a turn is editing the project, or when changes would be overwritten. */
+    switchBranch: (branch: string) => request().post<GitRefs>(`${base}/git/switch`, { branch }),
     blame: (path: string, start: number, end: number, signal?: AbortSignal) => get<GitBlame>('/git/blame', { path, start: String(start), end: String(end) }, signal),
   };
 }
@@ -78,15 +86,36 @@ export const fileName = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 export const dirName = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
 export const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 
-/** Find in files: what to match, and where. `mask` is file masks (`*.kt, *.java`); `module` is the open file's module. */
-export interface TextOptions { matchCase: boolean; word: boolean; regex: boolean; mask: string; scope: 'project' | 'module' }
+/**
+ * Find in files: what to match, and where. `mask` is file masks (`*.kt, *.java`); `module` is the open
+ * file's module, `folder` the folder last searched from the tree (`folder`).
+ */
+export interface TextOptions { matchCase: boolean; word: boolean; regex: boolean; mask: string; scope: 'project' | 'module' | 'folder'; folder?: string }
 export const TEXT_OPTIONS: TextOptions = { matchCase: false, word: false, regex: false, mask: '', scope: 'project' };
 
-/** What the page remembers in this browser, per server and project: C class (docs/guide/multi-server.md), not synced. */
-export interface Saved { tabs: string[]; active?: string; mode?: 'modules' | 'project'; outline?: boolean; recent?: string[]; find?: TextOptions }
+/**
+ * What the page remembers in this browser, per server and project: C class (docs/guide/multi-server.md), not synced.
+ * `preview` is the tab a single click in the tree or the find results opened: the next such click reuses it, as
+ * the IDE's preview tab does, until it is kept (double click, or a jump from inside it). `side` is what the right pane
+ * shows: `structure`, or another plugin's view of the project (a build, Logcat) by its id.
+ */
+export interface Saved { tabs: string[]; active?: string; preview?: string; mode?: 'modules' | 'project'; outline?: boolean; recent?: string[]; find?: TextOptions; side?: string }
 /** Files the search lists as recently opened. */
 export const MAX_RECENT = 30;
-const KEY = 'riffet.studio.v1';
+const KEY = 'riffet.code-studio.v1';
+const LAYOUT_KEY = 'riffet.code-studio.layout.v1';
+
+/** Carries what the page kept under the plugin's first name (`riffet.studio`, until 2026-11-24) over to the new keys, once. */
+(function moveOldKeys() {
+  try {
+    for (const [from, to] of [['riffet.studio.v1', KEY], ['riffet.studio.layout.v1', LAYOUT_KEY]] as const) {
+      const old = window.localStorage.getItem(from);
+      if (old === null) continue;
+      if (window.localStorage.getItem(to) === null) window.localStorage.setItem(to, old);
+      window.localStorage.removeItem(from);
+    }
+  } catch { /* As below. */ }
+})();
 const MAX_TABS = 30;
 
 export function loadSaved(scope: string): Saved {
@@ -121,4 +150,27 @@ export function rememberProject(project: string, server: string): void {
     all.projects = { ...(all.projects as Record<string, string> | undefined), [server]: project };
     window.localStorage.setItem(KEY, JSON.stringify(all));
   } catch { /* As above. */ }
+}
+
+/** Pane sizes and which side panes show, for every project: they follow the screen, not the code. */
+export interface Layout { tree: number; outline: number; results: number; treeHidden?: boolean }
+export const LAYOUT: Layout = { tree: 300, outline: 260, results: 260 };
+
+export function loadLayout(): Layout {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(LAYOUT_KEY) ?? '{}') as Partial<Layout>;
+    return { ...LAYOUT, ...value };
+  } catch { return LAYOUT; }
+}
+
+export function storeLayout(layout: Layout): void {
+  try { window.localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch { /* As above. */ }
+}
+
+/** A path a tool reports (a build error's file) as one of the project's, or `undefined` when it is outside the project. */
+export function projectPath(root: string, path: string): string | undefined {
+  const base = root.replace(/\/+$/, '');
+  if (path.startsWith(`${base}/`)) return path.slice(base.length + 1);
+  if (path.startsWith('/') || path.startsWith('~')) return undefined;
+  return path.replace(/^\.\//, '');
 }

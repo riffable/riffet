@@ -1561,6 +1561,11 @@ msgstr ""
 msgid "无法打开文件"
 msgstr ""
 
+#: src/plugins/DirectoryRequest.tsx
+#: src/plugins/host.ts
+msgid "无法打开目录"
+msgstr ""
+
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
 msgstr ""
@@ -2567,6 +2572,10 @@ msgstr ""
 #: src/app/onboarding/Onboarding.tsx
 #: src/app/ProjectHome.tsx
 msgid "选择目录…"
+msgstr ""
+
+#: src/plugins/host.ts
+msgid "选择要打开的目录"
 msgstr ""
 
 #: src/app/ProjectHome.tsx

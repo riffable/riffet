@@ -1043,6 +1043,10 @@ msgstr "它太大，删除后无法撤销。"
 msgid "定位当前文件"
 msgstr "定位当前文件"
 
+#: src/app/panels/CodeView.tsx
+msgid "展开"
+msgstr "展开"
+
 #. placeholder {0}: nameOf(path)
 #: src/app/panels/useFileOperations.ts
 msgid "已删除「{0}」"

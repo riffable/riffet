@@ -57,7 +57,7 @@ function kotlinBody(node, depth, container, out) {
       case 'class_declaration': {
         const name = nameOf(member);
         if (!name) break;
-        out.push(entry(name, kotlinKind(member), container, depth));
+        out.push(entry(name, kotlinKind(member), container, depth, undefined, member));
         for (const part of member.namedChildren) {
           if (part.type === 'class_body' || part.type === 'enum_class_body') kotlinBody(part, depth + 1, name.text, out);
           else if (part.type === 'primary_constructor') kotlinParameters(part, depth + 1, name.text, out);
@@ -68,14 +68,14 @@ function kotlinBody(node, depth, container, out) {
       case 'companion_object': {
         const name = nameOf(member);
         const label = name?.text ?? 'Companion';
-        out.push(entry(name ?? member, 'object', container, depth, label));
+        out.push(entry(name ?? member, 'object', container, depth, label, member));
         const body = child(member, 'class_body');
         if (body) kotlinBody(body, depth + 1, label, out);
         break;
       }
       case 'function_declaration': {
         const name = kotlinFunctionName(member);
-        if (name) out.push(entry(name, 'function', container, depth));
+        if (name) out.push(entry(name, 'function', container, depth, undefined, member));
         break;
       }
       case 'property_declaration':
@@ -90,7 +90,7 @@ function kotlinBody(node, depth, container, out) {
         break;
       }
       case 'secondary_constructor':
-        if (container) out.push(entry(member, 'constructor', container, depth, container));
+        if (container) out.push(entry(member, 'constructor', container, depth, container, member));
         break;
       case 'enum_entry': {
         const name = nameOf(member);
@@ -142,7 +142,7 @@ function javaBody(node, depth, container, out) {
     if (kind) {
       const name = javaName(member);
       if (!name) continue;
-      out.push(entry(name, kind, container, depth));
+      out.push(entry(name, kind, container, depth, undefined, member));
       for (const part of member.namedChildren) if (/_body$/.test(part.type)) javaBody(part, depth + 1, name.text, out);
       continue;
     }
@@ -150,13 +150,13 @@ function javaBody(node, depth, container, out) {
       case 'method_declaration':
       case 'annotation_type_element_declaration': {
         const name = javaName(member);
-        if (name) out.push(entry(name, 'function', container, depth));
+        if (name) out.push(entry(name, 'function', container, depth, undefined, member));
         break;
       }
       case 'constructor_declaration':
       case 'compact_constructor_declaration': {
         const name = javaName(member);
-        if (name) out.push(entry(name, 'constructor', container, depth));
+        if (name) out.push(entry(name, 'constructor', container, depth, undefined, member));
         break;
       }
       case 'field_declaration':
@@ -191,9 +191,11 @@ function javaFile(root) {
   return { package: pkg, imports, symbols };
 }
 
-function entry(at, kind, container, depth, name = at.text) {
+/** `span` is the whole declaration, for a type or a function: an outline marks the one a line falls in by where it ends. */
+function entry(at, kind, container, depth, name = at.text, span) {
   const position = at.startPosition;
-  return { name, kind, ...(container ? { container } : {}), line: position.row + 1, column: position.column + 1, depth };
+  const end = span ? span.endPosition.row + 1 : undefined;
+  return { name, kind, ...(container ? { container } : {}), line: position.row + 1, column: position.column + 1, depth, ...(end && end > position.row + 1 ? { end } : {}) };
 }
 
 // ── Words ────────────────────────────────────────────────────────────────────

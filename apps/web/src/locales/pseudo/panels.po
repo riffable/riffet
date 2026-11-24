@@ -1043,6 +1043,10 @@ msgstr ""
 msgid "定位当前文件"
 msgstr ""
 
+#: src/app/panels/CodeView.tsx
+msgid "展开"
+msgstr ""
+
 #. placeholder {0}: nameOf(path)
 #: src/app/panels/useFileOperations.ts
 msgid "已删除「{0}」"

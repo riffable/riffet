@@ -4,6 +4,9 @@ import {
   IconFileCode2, IconFolder, IconFolderClosed, IconGitBranch, IconGitCommitHorizontal, IconGitCompare, IconGitFork, IconGlobe, IconGraph, IconInfo, IconListChecks, IconMaximize,
   IconMessageCircleQuestion, IconMessagesSquare, IconMinus, IconPaperclip, IconPause, IconPanelRight, IconPlay, IconPlus, IconRefreshCw, IconSave, IconSearch, IconSparkle, IconSparkles,
   IconSquareArrowOutUpRight, IconSquareTerminal, IconTarget, IconWrench, IconX, IconListFilter, IconHistory, IconChevronsDownUp, IconCaseSensitive, IconWholeWord, IconRegex,
+  IconArrowLeft, IconArrowRight, IconPanelLeft, IconPackage, IconFolderDot, IconFolderCode, IconFolderKanban, IconFolderArchive, IconFolderCog, IconTextQuote, IconServer,
+  IconFile, IconFileSearch, IconFolderSearch, IconFolderOpen, IconListTree, IconArrowUpRight, IconLink, IconTextSelect, IconPin, IconMinimize,
+  IconRotateCcw, IconCopyX, IconArrowRightToLine, IconSquareX, IconChevronsUpDown, IconHash,
 } from '@/components/icons';
 
 /** What each name of the plugin SDK's icon vocabulary draws. */
@@ -16,6 +19,11 @@ const ICONS: Record<PluginIconName, IconComponent> = {
   paperclip: IconPaperclip, pause: IconPause, play: IconPlay, plus: IconPlus, 'refresh-cw': IconRefreshCw, save: IconSave, search: IconSearch, sparkle: IconSparkle, sparkles: IconSparkles,
   'square-arrow-out-up-right': IconSquareArrowOutUpRight, 'square-terminal': IconSquareTerminal, target: IconTarget, wrench: IconWrench, x: IconX,
   'list-filter': IconListFilter, history: IconHistory, 'chevrons-down-up': IconChevronsDownUp, 'case-sensitive': IconCaseSensitive, 'whole-word': IconWholeWord, regex: IconRegex,
+  'arrow-left': IconArrowLeft, 'arrow-right': IconArrowRight, 'panel-left': IconPanelLeft, package: IconPackage, 'folder-dot': IconFolderDot, 'folder-code': IconFolderCode,
+  'folder-kanban': IconFolderKanban, 'folder-archive': IconFolderArchive, 'folder-cog': IconFolderCog, 'text-quote': IconTextQuote, server: IconServer,
+  file: IconFile, 'file-search': IconFileSearch, 'folder-search': IconFolderSearch, 'folder-open': IconFolderOpen, 'list-tree': IconListTree, 'arrow-up-right': IconArrowUpRight,
+  link: IconLink, 'text-select': IconTextSelect, pin: IconPin, minimize: IconMinimize, 'rotate-ccw': IconRotateCcw, 'copy-x': IconCopyX, 'arrow-right-to-line': IconArrowRightToLine,
+  'square-x': IconSquareX, 'chevrons-up-down': IconChevronsUpDown, hash: IconHash,
 };
 
 export const pluginIcon = (name: PluginIconName): IconComponent => ICONS[name] ?? IconWrench;

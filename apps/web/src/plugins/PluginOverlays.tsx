@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import type { MenuEntry, MenuProps, QuickPanelProps } from '@riffet/plugin-web';
+import type { ContextMenuProps, MenuEntry, MenuProps, PopoverProps, QuickPanelProps } from '@riffet/plugin-web';
 import { Spinner, UnderlineTabs } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { QuickInput, quickListClass, quickListTallClass } from '../app/SessionSearchDialog';
@@ -23,6 +24,7 @@ function entryOf(entry: Exclude<MenuEntry, RadioEntry>, key: number) {
   switch (entry.kind) {
     case 'separator': return <DropdownMenuSeparator key={key} />;
     case 'label': return <DropdownMenuLabel key={key}>{entry.label}</DropdownMenuLabel>;
+    case 'submenu': return <MenuSub key={key} icon={entry.icon} label={entry.label} disabled={entry.disabled} className="min-w-48">{menuEntries(entry.entries)}</MenuSub>;
     case 'check': return <DropdownMenuCheckboxItem key={key} checked={entry.checked} disabled={entry.disabled} onCheckedChange={(value) => entry.onCheckedChange(value === true)}>{entry.icon}{entry.label}</DropdownMenuCheckboxItem>;
     default: return (
       <DropdownMenuItem key={key} disabled={entry.disabled} variant={entry.danger ? 'danger' : undefined} onSelect={entry.onSelect}>
@@ -32,19 +34,49 @@ function entryOf(entry: Exclude<MenuEntry, RadioEntry>, key: number) {
   }
 }
 
+function menuEntries(entries: readonly MenuEntry[]) {
+  return groups(entries).map((group, index) => Array.isArray(group) ? (
+    // A run of `radio` entries is one choice: its checked entry is the group's value.
+    <DropdownMenuRadioGroup key={index} value={String(group.findIndex((entry) => entry.checked))}>
+      {group.map((entry, at) => <DropdownMenuRadioItem key={at} value={String(at)} disabled={entry.disabled} onSelect={entry.onSelect}>{entry.icon}{entry.label}</DropdownMenuRadioItem>)}
+    </DropdownMenuRadioGroup>
+  ) : entryOf(group, index));
+}
+
 /** `UiKit.Menu`: the app's dropdown menu over a list of entries, so a plugin's menu is the app's. */
-export function PluginMenu({ trigger, tip, entries, align = 'start', mobileSheet }: MenuProps) {
+export function PluginMenu({ trigger, tip, entries, align = 'start', mobileSheet, onOpenChange }: MenuProps) {
   const opener = <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>;
   return (
-    <DropdownMenu>
+    <DropdownMenu {...(onOpenChange ? { onOpenChange } : {})}>
       {tip ? <Tip label={tip}>{opener}</Tip> : opener}
       <DropdownMenuContent align={align} className="min-w-48" {...(mobileSheet === false ? { mobileSheet: false } : {})}>
-        {groups(entries).map((group, index) => Array.isArray(group) ? (
-          // A run of `radio` entries is one choice: its checked entry is the group's value.
-          <DropdownMenuRadioGroup key={index} value={String(group.findIndex((entry) => entry.checked))}>
-            {group.map((entry, at) => <DropdownMenuRadioItem key={at} value={String(at)} disabled={entry.disabled} onSelect={entry.onSelect}>{entry.icon}{entry.label}</DropdownMenuRadioItem>)}
-          </DropdownMenuRadioGroup>
-        ) : entryOf(group, index))}
+        {menuEntries(entries)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** `UiKit.Popover`: the app's popover on a trigger; the plugin sizes and pads the panel. */
+export function PluginPopover({ trigger, tip, children, align = 'start', side = 'bottom', className, onOpenChange }: PopoverProps) {
+  const opener = <PopoverTrigger asChild>{trigger}</PopoverTrigger>;
+  return (
+    <Popover {...(onOpenChange ? { onOpenChange } : {})}>
+      {tip ? <Tip label={tip}>{opener}</Tip> : opener}
+      <PopoverContent align={align} side={side} className={className}>{children}</PopoverContent>
+    </Popover>
+  );
+}
+
+/** `UiKit.ContextMenu`: the same menu at the pointer, anchored as the tab bar's right-click menu is (`TabBar.tsx`). */
+export function PluginContextMenu({ at, entries, onClose }: ContextMenuProps) {
+  if (!at) return null;
+  return (
+    <DropdownMenu open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DropdownMenuTrigger asChild>
+        <span aria-hidden className="pointer-events-none fixed size-0" style={{ left: at.x, top: at.y }} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={0} className="min-w-52" mobileSheet={false}>
+        {menuEntries(entries)}
       </DropdownMenuContent>
     </DropdownMenu>
   );

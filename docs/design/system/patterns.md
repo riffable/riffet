@@ -403,5 +403,5 @@
 **现状**：
 
 - 输入框的键（`composerKeyboard.ts`）不在登记表里，随「回车键行为」设置变化。
-- Code Studio（`plugins/riffet/studio/web/CodeStudio.tsx`）的页内键（⇧⇧、⌘O、⌘⇧O、⌥⌘O、⌘⇧F）由视图自己在页面有焦点时监听，不经 `registerKeybindings`，也不在设置的快捷键页里：插件命令要求含 Ctrl、Alt 或 ⌘，连按两次 Shift 表达不了。
+- Code Studio（`plugins/riffet/code-studio/web/CodeStudio.tsx`）的页内键（⇧⇧、⌘O、⌘⇧O、⌥⌘O、⌘⇧F）由视图自己在页面有焦点时监听，不经 `registerKeybindings`，也不在设置的快捷键页里：插件命令要求含 Ctrl、Alt 或 ⌘，连按两次 Shift 表达不了。
 

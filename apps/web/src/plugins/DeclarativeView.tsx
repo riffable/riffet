@@ -6,6 +6,7 @@ import { Field, Input, Select, Switch } from '@/components/ui/controls';
 import { localizedText, pluginTitle, runPluginCommand, usePlugins } from '@/lib/plugins';
 import { errorMessage } from '@/lib/utils';
 import { focusTask, taskConfirmation, tasksApi } from '@/lib/tasks';
+import { useOpenProjectFile } from './projectFileOpener';
 import { TaskConfirmDialog } from './TaskConfirmDialog';
 import { useViewCatalog } from './registry';
 import { useStores } from '../app/state/stores';
@@ -17,6 +18,7 @@ const initial = (field: TaskParamField): string | number | boolean => field.defa
 export function DeclarativeView({ declaration, context }: DeclarativeViewProps) {
   const { i18n } = useLingui();
   const { handlers, ui, lists, nav } = useStores();
+  const openFile = useOpenProjectFile();
   const catalog = useViewCatalog();
   const plugins = usePlugins();
   const [values, setValues] = useState<Record<string, string | number | boolean>>({});
@@ -30,7 +32,7 @@ export function DeclarativeView({ declaration, context }: DeclarativeViewProps) 
     else if (result.kind === 'open') {
       if (result.sessionId) { const session = lists.get().sessions.find(item => item.id === result.sessionId); if (session) handlers.selectSession(session); }
       if (result.view) { ui.set({ panelTab: result.view }); ui.setPanelOpen(true); }
-      if (result.path) ui.preview(result.path);
+      if (result.path) openFile(result.path);
     } else if (result.kind === 'task') {
       const task = await tasksApi.get(result.taskId, context.signal);
       if (context.signal.aborted || nav.get().projectId !== task.projectId) return;

@@ -48,12 +48,20 @@ export function changeGutter(baseline: string | undefined): Extension {
 }
 
 class BlameMarker extends GutterMarker {
-  constructor(readonly text: string, readonly title: string, readonly hash: string) { super(); }
-  override eq(other: GutterMarker) { return other instanceof BlameMarker && other.text === this.text && other.hash === this.hash && other.title === this.title; }
+  constructor(readonly date: string, readonly author: string, readonly title: string, readonly hash: string) { super(); }
+  override eq(other: GutterMarker) { return other instanceof BlameMarker && other.date === this.date && other.author === this.author && other.hash === this.hash && other.title === this.title; }
   override toDOM() {
+    // Date and author apart, so the dates line up (tabular figures) and a long name is cut, not the date.
     const element = document.createElement('span');
-    element.textContent = this.text;
+    element.className = 'cm-blame-entry';
     element.title = this.title;
+    const date = document.createElement('span');
+    date.className = 'cm-blame-date';
+    date.textContent = this.date;
+    const author = document.createElement('span');
+    author.className = 'cm-blame-author';
+    author.textContent = this.author;
+    element.append(date, author);
     return element;
   }
 }
@@ -63,9 +71,9 @@ const UNCOMMITTED = /^0+$/;
 /**
  * Who last changed each line, as a column left of the line numbers: the date and author on the first
  * line of each run from one commit, the commit's summary on hover. Lines not committed yet are blank,
- * with `labels.uncommitted` on hover; a click hands the commit to `onCommit`.
+ * with `labels.uncommitted` on hover; a click hands the commit to `onCommit`, a right-click to `onMenu`.
  */
-export function blameGutter(blame: BlameView | undefined, labels: { uncommitted: string }, onCommit?: (hash: string) => void): Extension {
+export function blameGutter(blame: BlameView | undefined, labels: { uncommitted: string }, onCommit?: (hash: string) => void, onMenu?: (hash: string | undefined, line: number, event: MouseEvent) => boolean): Extension {
   if (!blame) return [];
   const byLine = new Map<number, BlameMarker>();
   const hashOf = new Map<number, string>();
@@ -73,9 +81,10 @@ export function blameGutter(blame: BlameView | undefined, labels: { uncommitted:
     const commit = blame.commits[range.hash];
     const uncommitted = UNCOMMITTED.test(range.hash);
     // Lines not committed yet stay blank, as in the IDE; the hover says why.
-    const text = uncommitted ? '' : commit ? `${commit.date.slice(0, 10)}  ${commit.author}` : range.hash.slice(0, 8);
-    const title = uncommitted ? labels.uncommitted : !commit ? text : `${range.hash.slice(0, 10)} · ${commit.author} · ${commit.date.slice(0, 10)}\n${commit.summary}`;
-    byLine.set(range.start, new BlameMarker(text, title, range.hash));
+    const date = uncommitted ? '' : commit ? commit.date.slice(0, 10) : range.hash.slice(0, 8);
+    const author = !uncommitted && commit ? commit.author : '';
+    const title = uncommitted ? labels.uncommitted : !commit ? date : `${range.hash.slice(0, 10)} · ${commit.author} · ${commit.date.slice(0, 10)}\n${commit.summary}`;
+    byLine.set(range.start, new BlameMarker(date, author, title, range.hash));
     for (let line = range.start; line < range.start + range.count; line++) hashOf.set(line, range.hash);
   }
   const starts = [...byLine].sort((a, b) => a[0] - b[0]);
@@ -87,11 +96,18 @@ export function blameGutter(blame: BlameView | undefined, labels: { uncommitted:
     class: 'cm-blame-gutter',
     markers,
     domEventHandlers: {
-      mousedown(view, block) {
+      mousedown(view, block, event) {
+        if (!(event instanceof MouseEvent) || event.button !== 0) return false;
         const hash = hashOf.get(view.state.doc.lineAt(block.from).number);
         if (!hash || UNCOMMITTED.test(hash) || !onCommit) return false;
         onCommit(hash);
         return true;
+      },
+      contextmenu(view, block, event) {
+        if (!onMenu || !(event instanceof MouseEvent)) return false;
+        const line = view.state.doc.lineAt(block.from).number;
+        const hash = hashOf.get(line);
+        return onMenu(hash && !UNCOMMITTED.test(hash) ? hash : undefined, line, event);
       },
     },
   });

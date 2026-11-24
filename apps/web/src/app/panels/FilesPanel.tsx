@@ -454,7 +454,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       if (request === definitionRequest.current) setNavigating(false);
     }
   };
-  const onSymbol = (at: SymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }) => {
+  const onSymbol = (at: SymbolAt, intent: 'definition' | 'usages' | 'menu', point: { x: number; y: number }) => {
     if (preview) here.current = { path: preview.path, line: at.line };
     if (intent === 'definition') void goToDefinition(at, point);
     else setSymbolMenu({ at, ...point });

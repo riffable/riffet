@@ -10,6 +10,7 @@ import { ImportSessionDialog } from './ImportSessionDialog';
 import { SessionDeletionDialog } from './SessionDeletion';
 import { whenIdle } from './session/useEarlierHistory';
 import { useLists, useNav, useStores, useUi } from './state/stores';
+import { PluginDirectoryHost } from '../plugins/DirectoryRequest';
 
 /**
  * Dialogs opened from anywhere (add project, command palette, directory browser). Each reads its
@@ -87,6 +88,7 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
         onPick={(path, server) => void startSessionInDirectory(path, server)}
         onError={onError}
       />
+      <PluginDirectoryHost />
     </>
   );
 }

@@ -1,3 +1,5 @@
+import { i18n } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { createElement } from 'react';
 import type { AppSettings, Run, Session, SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
 import type { ButtonProps as PluginButtonProps, PluginAccess, PluginHost, SegmentedProps, SelectProps, SettingsPageService, ToolCall } from '@riffet/plugin-web';
@@ -5,6 +7,8 @@ import { IconWrench } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, StatusDot, Switch } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
+import { Progress } from '@/components/ui/progress';
+import { ResizeHandle } from '@/components/ui/resize-handle';
 import { Tip } from '@/components/ui/tooltip';
 import { api, attachmentPath, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
@@ -23,7 +27,9 @@ import { allowedRequestPath, assertDeclaredSettings, declaredSettings } from './
 import { pluginIcon } from './icons';
 import { ModelField } from './ModelField';
 import { CodeFile, FileIcon } from './CodeFile';
-import { PluginMenu, PluginQuickPanel } from './PluginOverlays';
+import { PluginContextMenu, PluginMenu, PluginPopover, PluginQuickPanel } from './PluginOverlays';
+import { PluginProjectView, projectViewsHook } from './ProjectViews';
+import { openDirectory } from './DirectoryRequest';
 
 const NO_SETTINGS_PAGE: SettingsPageService = { setDirty: () => undefined, setBusy: () => undefined };
 
@@ -46,7 +52,7 @@ function PluginSegmented({ options, ...props }: SegmentedProps) {
   return createElement(Segmented, { ...props, options: [...options] });
 }
 
-export function createPluginHost({ stores, pluginId, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE }: {
+export function createPluginHost({ stores, pluginId, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE, openPath }: {
   stores: WorkbenchStores;
   /** The plugin the view belongs to; absent for the app's own views. */
   pluginId?: string | undefined;
@@ -56,6 +62,8 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
   access?: PluginAccess | undefined;
   /** Set where the view is a page of the settings dialog. */
   settingsPage?: SettingsPageService;
+  /** Where `navigation.openPath` goes when the view is drawn inside a page that reads files itself (`ProjectFileOpener`). */
+  openPath?: ((path: string) => void) | undefined;
 }): PluginHost {
   const { lists, nav, ui, handlers, settings: settingsStore } = stores;
   // One snapshot object until a declared key changes, as `useSyncExternalStore` needs.
@@ -109,13 +117,14 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       // Image loads cannot send the features header, so it travels in the URL.
       mediaUrl: (id, path) => withClientFeatures(`/api/sessions/${encodeURIComponent(id)}/media?path=${encodeURIComponent(path)}`),
       attachmentUrl: (id) => attachmentPath(id, sessionId),
+      openDirectory: (options = {}) => openDirectory(lists, { ...options, prompt: i18n._(msg`选择要打开的目录`), failed: i18n._(msg`无法打开目录`) }),
     },
     navigation: {
       openTurn: (target: Session, turn) => {
         if (target.id !== sessionId) handlers.selectSession(target);
         nav.set({ focusMessage: { sessionId: target.id, focus: { messageId: turn?.nativeId ?? '', ...(turn?.runId ? { runId: turn.runId } : {}) } } });
       },
-      openPath: (path) => ui.preview(path),
+      openPath: (path) => (openPath ? openPath(path) : ui.preview(path)),
       openSession: (id) => {
         const target = lists.get().sessions.find((item) => item.id === id);
         if (target) handlers.selectSession(target);
@@ -160,10 +169,11 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       lineDiff: (before, after, context) => lineDiff(before, after, context),
     },
     ui: {
-      Button: PluginButton, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, Select: PluginSelect, Segmented: PluginSegmented, Field, Notice, EmptyState, ModelField, CodeFile, FileIcon, Menu: PluginMenu, QuickPanel: PluginQuickPanel,
+      Button: PluginButton, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, Select: PluginSelect, Segmented: PluginSegmented, Field, Notice, EmptyState, ModelField, CodeFile, FileIcon, Menu: PluginMenu, QuickPanel: PluginQuickPanel, ContextMenu: PluginContextMenu, ResizeHandle, Popover: PluginPopover, Progress, ProjectView: PluginProjectView,
       icon: pluginIcon,
       toolIcon: (kind) => toolIcons[kind] ?? IconWrench,
       copy: copyWithToast,
     },
+    useProjectViews: projectViewsHook(pluginId),
   };
 }

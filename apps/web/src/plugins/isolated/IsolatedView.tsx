@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { BridgeViewContext, ViewContext } from '@riffet/plugin-web';
 import { Spinner } from '@/components/ui/controls';
@@ -11,6 +11,7 @@ import type { BridgeGrant } from './bridgeHost';
 import { bootstrapStyle, pluginFrameUrl, pluginPolicy, readTheme } from './document';
 import { loadEntryCode } from './entry';
 import { attachFrame, type FrameChannel } from './frameHost';
+import { ProjectFileOpener } from '../projectFileOpener';
 import { createIsolatedServices } from './services';
 
 /**
@@ -44,8 +45,11 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
   const network = source.capabilities.includes('network');
   const entryKey = JSON.stringify([source.pluginId, source.path, source.integrity, source.version]);
   const code = loadedEntry?.key === entryKey ? loadedEntry.code : undefined;
+  const fileOpener = useContext(ProjectFileOpener);
+  const opener = useRef(fileOpener);
+  opener.current = fileOpener;
   const services = useMemo(() => createIsolatedServices({
-    stores, context: () => latest.current, label: () => label.current, pluginId: source.pluginId,
+    stores, context: () => latest.current, label: () => label.current, pluginId: source.pluginId, openPath: () => opener.current,
     // The frame has the keyboard focus only after the user clicked or tabbed into it.
     active: () => latest.current.visible && frame.current !== null && document.activeElement === frame.current,
   }), [stores, source.pluginId]);

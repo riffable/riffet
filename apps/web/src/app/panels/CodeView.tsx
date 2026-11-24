@@ -5,16 +5,25 @@ import { Decoration, EditorView, highlightActiveLine, keymap, lineNumbers, type 
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, search, searchKeymap, searchPanelOpen } from '@codemirror/search';
 import { unifiedMergeView } from '@codemirror/merge';
+import { bracketMatching, foldAll, foldCode, unfoldAll, unfoldCode } from '@codemirror/language';
+import { openSearchPanel } from '@codemirror/search';
 import type { FilePreview } from '@contracts';
 import type { PromptContextReference } from '@/lib/api';
 import { codeTokens } from '@/lib/code-tokens';
 import { blameGutter, changeGutter, type BlameView } from './codeGutters';
+import { codeFoldingExtension } from './codeFolding';
 import { isApplePlatform } from '@/lib/platform';
 import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 /** An identifier in the shown file; `line` and `column` are 1-based. */
 export interface SymbolAt { word: string; line: number; column: number }
+/** What a right-click in the file was on: the line and column it moved the caret to, the identifier there, and the selection it fell inside. */
+export interface CodeMenuAt { line: number; column: number; symbol?: SymbolAt; selection?: string; gutter?: boolean; blame?: string }
+/** Commands a caller can run in the shown file, as its menus do; a new `token` runs one again. */
+export type CodeCommandName = 'find' | 'fold' | 'unfold' | 'foldAll' | 'unfoldAll' | 'selectAll';
+export interface CodeCommand { name: CodeCommandName; token: number }
+
 /**
  * A place to show: the view scrolls it to the middle and marks its line for a moment, or with
  * `restore` puts it back at the top, as it was when the file was last left.
@@ -60,8 +69,12 @@ const flash = StateField.define<DecorationSet>({
 /** The identifier under a point, with its range; `undefined` off the text or on anything else. */
 function symbolAt(view: EditorView, x: number, y: number): (SymbolAt & { from: number; to: number }) | undefined {
   const pos = view.posAtCoords({ x, y });
-  if (pos === null) return undefined;
-  const range = view.state.wordAt(pos);
+  return pos === null ? undefined : symbolAtPos(view, pos);
+}
+
+/** The identifier at a position of the text, the caret touching either end of it. */
+function symbolAtPos(view: EditorView, pos: number): (SymbolAt & { from: number; to: number }) | undefined {
+  const range = view.state.wordAt(pos) ?? (pos > 0 ? view.state.wordAt(pos - 1) : null);
   if (!range) return undefined;
   const word = view.state.sliceDoc(range.from, range.to);
   if (!IDENTIFIER.test(word)) return undefined;
@@ -80,10 +93,18 @@ function symbolAt(view: EditorView, x: number, y: number): (SymbolAt & { from: n
  * replaces the document. `original` shows the document against it, change by change, each of which
  * can be kept or taken back.
  */
-export function CodeView({ preview, text = preview.content, editing = false, original, baseline, blame, onBlameCommit, target, onReference, onSymbol, onTopLine, onViewport, onChange, onSave, onEscape }: {
+export function CodeView({ preview, text = preview.content, editing = false, caret = false, folding = false, original, baseline, blame, onBlameCommit, target, command, onReference, onSymbol, onMenu, onTopLine, onViewport, onCaret, onChange, onSave, onEscape }: {
   preview: FilePreview;
   text?: string;
   editing?: boolean;
+  /**
+   * Read with a caret, as an IDE reads a file it will not let you change: arrows and selection move
+   * through the text (no keyboard on a touch screen), the word at the caret is marked where else it
+   * appears, brackets are paired, and F12 / ⌥F7 (⇧F12) hand the identifier at the caret to `onSymbol`.
+   */
+  caret?: boolean;
+  /** Blocks fold at braces, block comments and runs of imports (`codeFolding.ts`). */
+  folding?: boolean;
   original?: string | undefined;
   /** The file as committed: lines changed since are marked beside the line numbers. */
   baseline?: string | undefined;
@@ -92,13 +113,22 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   /** A line's commit in the blame column was clicked. */
   onBlameCommit?: (hash: string) => void;
   target?: CodeTarget | undefined;
+  command?: CodeCommand | undefined;
   onReference: (reference: PromptContextReference) => void;
+  /**
+   * With it, every right-click in the text or on the line numbers is the caller's (the browser's menu never
+   * shows): the caret moves to the click unless it falls inside the selection, and `onSymbol`'s `menu` is
+   * not called.
+   */
+  onMenu?: (at: CodeMenuAt, point: { x: number; y: number }) => void;
   /** `menu` carries where the pointer was, for a menu at it. */
-  onSymbol?: (at: SymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }) => void;
+  onSymbol?: (at: SymbolAt, intent: 'definition' | 'usages' | 'menu', point: { x: number; y: number }) => void;
   /** The first line in view, as the reader scrolls. */
   onTopLine?: (line: number) => void;
   /** The first and last line in view, as the reader scrolls. */
   onViewport?: (first: number, last: number) => void;
+  /** Where the caret is, 1-based, as it moves (with `caret`). */
+  onCaret?: (line: number, column: number) => void;
   /** The document after an edit. */
   onChange?: (text: string) => void;
   /** ⌘S (Ctrl-S) while editing. */
@@ -109,9 +139,9 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   const { t } = useLingui();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | undefined>(undefined);
-  const compartments = useRef<{ theme: Compartment; edit: Compartment; merge: Compartment; changes: Compartment; blame: Compartment } | null>(null);
-  if (compartments.current === null) compartments.current = { theme: new Compartment(), edit: new Compartment(), merge: new Compartment(), changes: new Compartment(), blame: new Compartment() };
-  const { theme: themeCompartment, edit: editCompartment, merge: mergeCompartment, changes: changesCompartment, blame: blameCompartment } = compartments.current;
+  const compartments = useRef<{ theme: Compartment; edit: Compartment; merge: Compartment; changes: Compartment; blame: Compartment; reading: Compartment; folding: Compartment } | null>(null);
+  if (compartments.current === null) compartments.current = { theme: new Compartment(), edit: new Compartment(), merge: new Compartment(), changes: new Compartment(), blame: new Compartment(), reading: new Compartment(), folding: new Compartment() };
+  const { theme: themeCompartment, edit: editCompartment, merge: mergeCompartment, changes: changesCompartment, blame: blameCompartment, reading: readingCompartment, folding: foldingCompartment } = compartments.current;
   const { resolved } = useTheme();
   const dark = resolved === 'dark';
   const darkRef = useRef(dark);
@@ -125,6 +155,12 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   topLine.current = onTopLine;
   const viewport = useRef(onViewport);
   viewport.current = onViewport;
+  const menu = useRef(onMenu);
+  menu.current = onMenu;
+  const caretMoved = useRef(onCaret);
+  caretMoved.current = onCaret;
+  const reading = useRef({ caret, folding });
+  reading.current = { caret, folding };
   const baselineRef = useRef(baseline);
   baselineRef.current = baseline;
   const blameRef = useRef(blame);
@@ -133,7 +169,12 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   blameCommit.current = onBlameCommit;
   const blameLabels = useRef({ uncommitted: '' });
   blameLabels.current = { uncommitted: t`未提交` };
-  const blameExtension = (value: BlameView | undefined) => blameGutter(value, blameLabels.current, (hash) => blameCommit.current?.(hash));
+  const blameExtension = (value: BlameView | undefined) => blameGutter(value, blameLabels.current, (hash) => blameCommit.current?.(hash), (hash, line, event) => {
+    if (!menu.current) return false;
+    event.preventDefault();
+    menu.current({ line, column: 1, gutter: true, ...(hash ? { blame: hash } : {}) }, { x: event.clientX, y: event.clientY });
+    return true;
+  });
   const callbacks = useRef({ onChange, onSave, onEscape });
   callbacks.current = { onChange, onSave, onEscape };
   const editingRef = useRef(editing);
@@ -155,7 +196,43 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
       indentWithTab, ...historyKeymap, ...defaultKeymap,
     ]),
     EditorView.updateListener.of((update) => { if (update.docChanged) callbacks.current.onChange?.(update.state.doc.toString()); }),
-  ] : [EditorState.readOnly.of(true), EditorView.editable.of(false)];
+  ] : reading.current.caret
+    // Focusable with a caret but not writable; `inputmode` keeps a touch keyboard down.
+    ? [EditorState.readOnly.of(true), EditorView.contentAttributes.of({ inputmode: 'none' })]
+    : [EditorState.readOnly.of(true), EditorView.editable.of(false)];
+  /** The IDE's reading aids, with `caret` and `folding`. */
+  const readingExtension = (): Extension => {
+    const withCaret = reading.current.caret;
+    const atCaret = (intent: 'definition' | 'usages') => (view: EditorView) => {
+      const at = symbolAtPos(view, view.state.selection.main.head);
+      if (!at || !symbol.current) return false;
+      const coords = view.coordsAtPos(at.from);
+      symbol.current({ word: at.word, line: at.line, column: at.column }, intent, { x: coords?.left ?? 0, y: coords?.bottom ?? 0 });
+      return true;
+    };
+    return [
+      withCaret ? [
+        EditorView.editorAttributes.of({ class: 'cm-caret-reading' }),
+        highlightSelectionMatches({ highlightWordAroundCursor: true, minSelectionLength: 2 }),
+        bracketMatching(),
+        keymap.of([
+          { key: 'F12', run: atCaret('definition'), preventDefault: true },
+          { key: 'Alt-F7', run: atCaret('usages'), preventDefault: true },
+          { key: 'Shift-F12', run: atCaret('usages'), preventDefault: true },
+        ]),
+        EditorView.updateListener.of((update) => {
+          if (!update.selectionSet && !update.docChanged) return;
+          const head = update.state.selection.main.head;
+          const line = update.state.doc.lineAt(head);
+          caretMoved.current?.(line.number, head - line.from + 1);
+        }),
+      ] : highlightSelectionMatches(),
+    ];
+  };
+  /** After the change marks, so the chevrons sit against the text as an IDE's do. */
+  const foldingExtension = (): Extension => (reading.current.folding ? codeFoldingExtension({ unfold: foldLabel.current }) : []);
+  const foldLabel = useRef('');
+  foldLabel.current = t`展开`;
   const mergeExtension = (against: string | undefined): Extension => against === undefined ? [] : unifiedMergeView({
     original: against, gutter: true, highlightChanges: false, syntaxHighlightDeletions: false,
     mergeControls: (type, action) => {
@@ -178,15 +255,26 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
         mergeCompartment.of(mergeExtension(originalRef.current)),
         themeCompartment.of(EditorView.theme({}, { dark: darkRef.current })),
         EditorView.contentAttributes.of({ tabindex: '0', 'aria-label': preview.path }),
-        highlightActiveLine(), highlightSelectionMatches(), search({ top: true }), keymap.of(searchKeymap), syntax, link, flash,
+        highlightActiveLine(), readingCompartment.of(readingExtension()), search({ top: true }), keymap.of(searchKeymap), syntax, link, flash,
         blameCompartment.of(blameExtension(blameRef.current)),
-        lineNumbers({ domEventHandlers: { mousedown(view, block, event) {
-          if (!(event instanceof MouseEvent) || event.button !== 0) return false;
-          const line = view.state.doc.lineAt(block.from);
-          reference.current({ path: preview.path, line: line.number, text: line.text });
-          return true;
-        } } }),
+        lineNumbers({ domEventHandlers: {
+          mousedown(view, block, event) {
+            if (!(event instanceof MouseEvent) || event.button !== 0) return false;
+            const line = view.state.doc.lineAt(block.from);
+            reference.current({ path: preview.path, line: line.number, text: line.text });
+            return true;
+          },
+          contextmenu(view, block, event) {
+            if (!menu.current || !(event instanceof MouseEvent)) return false;
+            event.preventDefault();
+            const line = view.state.doc.lineAt(block.from);
+            view.dispatch({ selection: { anchor: line.from } });
+            menu.current({ line: line.number, column: 1, gutter: true }, { x: event.clientX, y: event.clientY });
+            return true;
+          },
+        } }),
         changesCompartment.of(changeGutter(baselineRef.current)),
+        foldingCompartment.of(foldingExtension()),
         EditorView.domEventHandlers({
           mousemove(event, view) {
             const at = symbol.current && modifier(event) ? symbolAt(view, event.clientX, event.clientY) : undefined;
@@ -207,6 +295,22 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
             return true;
           },
           contextmenu(event, view) {
+            if (menu.current) {
+              event.preventDefault();
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.head;
+              const selection = view.state.selection.main;
+              const inSelection = !selection.empty && selection.from <= pos && pos <= selection.to;
+              const word = symbolAtPos(view, pos);
+              if (!inSelection) view.dispatch({ selection: word ? { anchor: word.from, head: word.to } : { anchor: pos } });
+              const head = inSelection ? selection.head : pos;
+              const line = view.state.doc.lineAt(head);
+              menu.current({
+                line: line.number, column: head - line.from + 1,
+                ...(word ? { symbol: { word: word.word, line: word.line, column: word.column } } : {}),
+                ...(inSelection ? { selection: view.state.sliceDoc(selection.from, selection.to) } : {}),
+              }, { x: event.clientX, y: event.clientY });
+              return true;
+            }
             const at = symbol.current ? symbolAt(view, event.clientX, event.clientY) : undefined;
             if (!at) return false;
             // Inside a longer selection the browser's own menu stays, for Copy.
@@ -229,8 +333,19 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
           '.cm-flash-line': { backgroundColor: 'var(--accent-soft)' },
           '.cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'var(--accent-soft) !important' },
           '.cm-selectionMatch': { backgroundColor: 'var(--bg-active)' },
+          // The word at the caret is marked while the reader is in the file; a file just opened has its caret parked on the first word.
+          '&.cm-caret-reading:not(.cm-focused) .cm-selectionMatch': { backgroundColor: 'transparent' },
           '.cm-cursor': { borderLeftColor: 'var(--accent)' },
           '.cm-symbol-link, .cm-symbol-link *': { color: 'var(--accent) !important', textDecoration: 'underline', cursor: 'pointer' },
+          '.cm-matchingBracket, &.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--bg-active)', outline: '1px solid var(--line-strong)' },
+          '.cm-nonmatchingBracket, &.cm-focused .cm-nonmatchingBracket': { backgroundColor: 'transparent', color: 'var(--danger)' },
+          '.cm-foldGutter .cm-gutterElement': { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '16px', paddingRight: '4px', color: 'var(--fg-4)' },
+          '.cm-foldGutter .cm-gutterElement:hover': { color: 'var(--fg)' },
+          '.cm-foldGutter svg': { width: '12px', height: '12px' },
+          '.cm-foldGutter .cm-fold-open': { display: 'flex', opacity: '0', transition: 'opacity var(--duration-fast) var(--ease-standard)' },
+          '.cm-gutters:hover .cm-foldGutter .cm-fold-open': { opacity: '1' },
+          '.cm-foldGutter .cm-fold-closed': { display: 'flex', color: 'var(--fg-2)' },
+          '.cm-foldPlaceholder': { display: 'inline-block', margin: '0 2px', padding: '0 4px', border: 'none', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--bg-active)', color: 'var(--fg-3)', cursor: 'pointer' },
           '&.cm-focused': { outline: 'none' },
         }),
     ];
@@ -302,6 +417,13 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
   }, [editing]);
 
   useEffect(() => { editor.current?.dispatch({ effects: mergeCompartment.reconfigure(mergeExtension(original)) }); }, [original]);
+  const readingSet = useRef({ caret, folding });
+  useEffect(() => {
+    const view = editor.current;
+    if (!view || (readingSet.current.caret === caret && readingSet.current.folding === folding)) return;
+    readingSet.current = { caret, folding };
+    view.dispatch({ effects: [readingCompartment.reconfigure(readingExtension()), foldingCompartment.reconfigure(foldingExtension()), editCompartment.reconfigure(editExtension(editing))] });
+  }, [caret, folding]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { editor.current?.dispatch({ effects: changesCompartment.reconfigure(changeGutter(baseline)) }); }, [baseline]);
   useEffect(() => { editor.current?.dispatch({ effects: blameCompartment.reconfigure(blameExtension(blame)) }); }, [blame]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -315,6 +437,14 @@ export function CodeView({ preview, text = preview.content, editing = false, ori
     const timer = window.setTimeout(() => { if (editor.current === view) view.dispatch({ effects: setFlash.of(null) }); }, FLASH_MS);
     return () => window.clearTimeout(timer);
   }, [preview.path, target?.line, target?.column, target?.restore, target?.token]);
+
+  useEffect(() => {
+    const view = editor.current;
+    if (!view || !command) return;
+    const run = { find: openSearchPanel, fold: foldCode, unfold: unfoldCode, foldAll, unfoldAll, selectAll: (target: EditorView) => { target.dispatch({ selection: { anchor: 0, head: target.state.doc.length } }); return true; } }[command.name];
+    run(view);
+    view.focus();
+  }, [command?.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const view = editor.current;

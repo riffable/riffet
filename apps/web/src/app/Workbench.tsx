@@ -3,6 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { SETTING_DEFAULTS, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { EmptyState, UnderlineTabs } from '@/components/ui/controls';
@@ -298,6 +299,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const viewCatalog = useViewCatalog();
   const mainViews = useMemo(() => mainViewsIn(viewCatalog), [viewCatalog]);
   const activeMainView = mainViewId ? mainViews.find((view) => view.id === mainViewId) : undefined;
+  // A main view's own part of the page header, after the title (`ViewProps.header`).
+  const [mainViewHeader, setMainViewHeader] = useState<HTMLDivElement | null>(null);
+  const MainViewHeader = useMemo(() => ({ children }: { children: ReactNode }) => (mainViewHeader ? createPortal(children, mainViewHeader) : null), [mainViewHeader]);
   const openMainView = (viewId: string) => {
     void nav.navigate(() => { nav.openMainView(viewId); ui.setMobileSidebar(false); });
   };
@@ -687,6 +691,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         column="none"
         divided
         title={activeMainView?.title ?? mainViewId}
+        meta={<div ref={setMainViewHeader} className="flex min-w-0 items-center gap-1" />}
         sidebarCollapsed={desktop && sidebarCollapsed}
         onClose={() => nav.set({ mainViewId: '' })}
         onOpenSidebar={openMobileSidebar}
@@ -694,7 +699,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         actions={activeMainView?.pluginId ? <Button size="sm" variant="quiet" onClick={() => { void nav.navigate(() => nav.openPlugins(activeMainView.pluginId!)); }}><Trans>管理插件</Trans></Button> : undefined}
       >
         <div className="flex h-full min-h-0 flex-col">
-          {activeMainView ? <PluginView entry={activeMainView} /> : <EmptyState title={t`这个插件视图当前不可用`} />}
+          {activeMainView ? <PluginView entry={activeMainView} header={MainViewHeader} /> : <EmptyState title={t`这个插件视图当前不可用`} />}
         </div>
       </PageScaffold>
     );

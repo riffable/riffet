@@ -204,12 +204,16 @@ export class SymbolIndexes implements SymbolLookup {
     const abort = new AbortController();
     entry.abort = abort;
     // Under way from now: listing the files of a large project takes seconds before the first batch.
-    if (entry.status.state === 'idle') entry.status = { ...entry.status, state: 'building', done: 0 };
+    entry.status = { ...entry.status, phase: 'listing', ...(entry.status.state === 'idle' ? { state: 'building' as const, done: 0 } : {}) };
     entry.building = this.build(entry, force, abort.signal).finally(() => {
       entry.building = undefined;
       entry.abort = undefined;
       // Stopped: a first build is not running any more, and an index that was ready answers as before.
       if (abort.signal.aborted) entry.status = entry.status.state === 'building' ? { ...entry.status, state: 'idle' } : { ...entry.status, done: entry.status.files };
+      // Nothing runs any more: no phase to report.
+      const settled = { ...entry.status };
+      delete settled.phase;
+      entry.status = settled;
     });
   }
 
@@ -271,7 +275,7 @@ export class SymbolIndexes implements SymbolLookup {
       const all = sourceFiles(list);
       const files = all.slice(0, this.budget.maxFiles);
       const truncated = all.length > files.length;
-      entry.status = { ...entry.status, state: first ? 'building' : 'ready', files: files.length, done: 0 };
+      entry.status = { ...entry.status, state: first ? 'building' : 'ready', files: files.length, done: 0, phase: 'parsing' };
       await pool.run({ type: 'sweep', db: store.file, present: files, reset: force }, 0);
       if (signal.aborted) return;
 
@@ -287,6 +291,7 @@ export class SymbolIndexes implements SymbolLookup {
       };
       await Promise.all(Array.from({ length: this.budget.workers }, lane));
       if (signal.aborted) return;
+      entry.status = { ...entry.status, phase: 'finishing' };
 
       await pool.run({ type: 'optimize', db: store.file }, 0);
       if (signal.aborted) return;
@@ -462,7 +467,7 @@ export function outlineTree(symbols: readonly ParsedSymbol[]): CodeOutlineItem[]
   const roots: CodeOutlineItem[] = [];
   const stack: Array<{ depth: number; item: CodeOutlineItem }> = [];
   for (const symbol of symbols) {
-    const item: CodeOutlineItem = { name: symbol.name, kind: symbol.kind, line: symbol.line, column: symbol.column };
+    const item: CodeOutlineItem = { name: symbol.name, kind: symbol.kind, line: symbol.line, column: symbol.column, ...(symbol.end ? { endLine: symbol.end } : {}) };
     while (stack.length && stack.at(-1)!.depth >= symbol.depth) stack.pop();
     const parent = stack.at(-1)?.item;
     if (parent) (parent.children ??= []).push(item); else roots.push(item);

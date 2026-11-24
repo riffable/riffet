@@ -6,9 +6,9 @@
 import { PLUGIN_API_VERSION, type Plugin } from '@riffet/plugin-api';
 import { STUDIO_TOOL_GROUP, toolGroup } from './tools.js';
 
-export const studio: Plugin = {
+export const codeStudio: Plugin = {
   manifest: {
-    id: 'riffet.studio', vendor: 'riffet', name: 'studio', apiVersion: PLUGIN_API_VERSION, defaultEnabled: true, version: '0.1.0',
+    id: 'riffet.code-studio', vendor: 'riffet', name: 'code-studio', apiVersion: PLUGIN_API_VERSION, defaultEnabled: true, version: '0.1.0',
     title: { 'zh-Hans': 'Code Studio', en: 'Code Studio' },
     description: { 'zh-Hans': '按模块浏览项目代码，跳转定义、查找引用、按类名或符号搜索，大型 Android 仓库无需 Android Studio。', en: 'Browse a project’s code by module, go to definitions, find usages and search by class or symbol, without opening Android Studio on a large repository.' },
     contributes: {
@@ -19,7 +19,7 @@ export const studio: Plugin = {
         icon: { sfSymbol: 'chevron.left.forwardslash.chevron.right' },
       }],
       views: [{
-        id: 'riffet.studio/studio', title: { 'zh-Hans': 'Code Studio', en: 'Code Studio' }, icon: { sfSymbol: 'chevron.left.forwardslash.chevron.right' },
+        id: 'riffet.code-studio/code-studio', title: { 'zh-Hans': 'Code Studio', en: 'Code Studio' }, icon: { sfSymbol: 'chevron.left.forwardslash.chevron.right' },
         locations: ['main'], defaultLocation: 'main', clients: ['web'], instances: 'single',
       }],
     },

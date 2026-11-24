@@ -58,6 +58,11 @@ export interface ViewProps {
    * conversation takes no messages (archived, unavailable) and in views that are not per session.
    */
   composer?: ComponentType<ComposerSlotProps>;
+  /**
+   * Draws its children in the page header after the title, for a `main` view: what the page is showing,
+   * such as the project it reads, as a quiet chooser. Absent elsewhere and from a host before 2026-11.
+   */
+  header?: ComponentType<{ children: ReactNode }>;
 }
 
 /** One contribution id (`<pluginId>/<name>`, as declared in the manifest) to the component that draws it. */
@@ -147,6 +152,13 @@ export interface SessionService {
   mediaUrl(sessionId: string, path: string): string;
   /** A URL for an attachment of a message. */
   attachmentUrl(id: string): string;
+  /**
+   * Opens a folder as a project, as New Session's "choose another directory" does: the native chooser on the
+   * entry server's own screen, else the app's folder browser (on `server`'s disk when one is named, with a
+   * choice of server). A folder that is not a project yet becomes one. Resolves to the project's id, or
+   * `undefined` when the reader cancels. Added 2026-11: absent from an older host.
+   */
+  openDirectory?(options?: { server?: string; initialPath?: string }): Promise<string | undefined>;
 }
 
 export interface NavigationService {
@@ -252,7 +264,10 @@ export type PluginIconName =
   | 'list-checks' | 'maximize' | 'message-circle-question' | 'messages-square' | 'minus' | 'paperclip' | 'pause' | 'play' | 'plus' | 'search'
   | 'sparkle' | 'sparkles' | 'square-arrow-out-up-right' | 'square-terminal' | 'target' | 'wrench' | 'x' | 'arrow-right-left'
   | 'chevron-right' | 'refresh-cw' | 'save' | 'activity' | 'file-code' | 'panel-right'
-  | 'list-filter' | 'history' | 'chevrons-down-up' | 'case-sensitive' | 'whole-word' | 'regex';
+  | 'list-filter' | 'history' | 'chevrons-down-up' | 'case-sensitive' | 'whole-word' | 'regex'
+  | 'arrow-left' | 'arrow-right' | 'panel-left' | 'package' | 'folder-dot' | 'folder-code' | 'folder-kanban' | 'folder-archive' | 'folder-cog' | 'text-quote' | 'server'
+  | 'file' | 'file-search' | 'folder-search' | 'folder-open' | 'list-tree' | 'arrow-up-right' | 'link' | 'text-select' | 'pin' | 'minimize'
+  | 'rotate-ccw' | 'copy-x' | 'arrow-right-to-line' | 'square-x' | 'chevrons-up-down' | 'hash';
 
 export type IconComponent = ComponentType<{ className?: string }>;
 
@@ -362,7 +377,8 @@ export interface CodeFileProps {
   projectId: string;
   path: string;
   target?: CodeFileTarget | undefined;
-  onSymbol?(at: CodeSymbolAt, intent: 'definition' | 'menu', point: { x: number; y: number }): void;
+  /** `usages` (added 2026-11) comes from ⌥F7 or ⇧F12 at the caret, with `onCaret`. */
+  onSymbol?(at: CodeSymbolAt, intent: 'definition' | 'usages' | 'menu', point: { x: number; y: number }): void;
   /** The first line in view, as the reader scrolls. */
   onTopLine?(line: number): void;
   /** A line number was clicked. */
@@ -375,7 +391,27 @@ export interface CodeFileProps {
   blame?: CodeBlameView | undefined;
   /** A commit in the blame column was clicked. */
   onBlameCommit?(hash: string): void;
+  /**
+   * Added 2026-11. With it the file has a caret, as an IDE's read-only editor does: the keyboard moves
+   * through the text, the word at the caret is marked where else it appears, brackets pair up, and F12 /
+   * ⌥F7 hand the identifier at the caret to `onSymbol`. Called with the caret's 1-based line and column.
+   */
+  onCaret?(line: number, column: number): void;
+  /** Added 2026-11: blocks fold at braces, block comments and runs of imports, with a gutter of chevrons. */
+  folding?: boolean;
+  /**
+   * Added 2026-11. With it every right-click in the text or on the line numbers is the view's, for its own
+   * menu (the browser's never shows): the caret moves to the click unless it is inside the selection.
+   */
+  onMenu?(at: CodeMenuAt, point: { x: number; y: number }): void;
+  /** Added 2026-11: runs a command in the file, as a menu entry does; a new `token` runs it again. */
+  command?: { name: 'find' | 'fold' | 'unfold' | 'foldAll' | 'unfoldAll' | 'selectAll'; token: number } | undefined;
 }
+/**
+ * A right-click in a `CodeFile`: where the caret went, the identifier there, the selected text it was inside, or a line number (`gutter`).
+ * `blame` (added 2026-11) is the commit of the line when the click was in the blame column (not for lines not committed yet).
+ */
+export interface CodeMenuAt { line: number; column: number; symbol?: CodeSymbolAt; selection?: string; gutter?: boolean; blame?: string }
 /** Consecutive lines from one commit, and the commits by hash; a hash of zeros is lines not committed yet. */
 export interface CodeBlameView {
   ranges: ReadonlyArray<{ start: number; count: number; hash: string }>;
@@ -390,7 +426,9 @@ export type MenuEntry =
   | { kind: 'radio'; label: string; icon?: ReactNode; checked: boolean; disabled?: boolean; onSelect(): void }
   | { kind: 'check'; label: string; icon?: ReactNode; checked: boolean; disabled?: boolean; onCheckedChange(checked: boolean): void }
   | { kind: 'separator' }
-  | { kind: 'label'; label: string };
+  | { kind: 'label'; label: string }
+  /** Added 2026-11: a row that opens more entries beside it; an older host leaves it out. */
+  | { kind: 'submenu'; label: string; icon?: ReactNode; disabled?: boolean; entries: readonly MenuEntry[] };
 /** The app's dropdown menu, opened by `trigger` (one element that takes a ref, such as a `Button`). */
 export interface MenuProps {
   trigger: ReactElement;
@@ -400,6 +438,56 @@ export interface MenuProps {
   align?: 'start' | 'center' | 'end';
   /** Narrow menus that must stay by their trigger on a phone; otherwise a phone shows the menu as a bottom sheet. */
   mobileSheet?: boolean;
+  /** Added 2026-11: told when the menu opens or closes, to read what it lists only when it is opened. */
+  onOpenChange?(open: boolean): void;
+}
+/** The app's popover: a small panel opened by `trigger` (one element that takes a ref), for detail a menu cannot hold. */
+export interface PopoverProps {
+  trigger: ReactElement;
+  /** The trigger's tooltip, for an icon button. */
+  tip?: string;
+  children: ReactNode;
+  align?: 'start' | 'center' | 'end';
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  /** Width and padding of the panel; it has none of its own. */
+  className?: string;
+  onOpenChange?(open: boolean): void;
+}
+/** A determinate bar, `value` 0–1: how much of some work is done. */
+export interface ProgressProps { value: number; label: string; className?: string }
+/** A per-project view another plugin offers (one of the side panel's plugin views: a build, a log), as `useProjectViews` lists it. */
+export interface ProjectViewInfo { id: string; title: string; icon: IconComponent }
+/**
+ * One of those views, drawn in the asking page (a tool window). Its instance and state are the side panel's for
+ * that project. `visible: false` pauses it; `onOpenFile` takes the files it opens (a build error's file and line),
+ * which otherwise go to the side panel's file preview. A path may be absolute.
+ */
+export interface ProjectViewProps { projectId: string; viewId: string; visible?: boolean; onOpenFile?(path: string, line?: number): void }
+/**
+ * The drag strip on a resizable pane's edge (the app's own, as the sidebar and file tree use): arrows
+ * step it from the keyboard, double click resets. Place it absolutely on the edge inside the pane.
+ */
+export interface ResizeHandleProps {
+  /** `x` sizes a column from its side edge, `y` a row from its top or bottom edge. */
+  axis: 'x' | 'y';
+  value: number;
+  min: number;
+  max: number;
+  /** 1 when moving right (or down) grows the pane, -1 when moving left (or up) does. */
+  grow: 1 | -1;
+  label: string;
+  /** Every frame of a drag; without it each frame goes to `onChange`. */
+  onPreview?(value: number): void;
+  /** The settled value: a released drag or a key press. */
+  onChange(value: number): void;
+  onReset?(): void;
+  className?: string;
+}
+/** The app's menu at a point, for a right-click: open while `at` is set, `onClose` when it is dismissed or an entry is chosen. */
+export interface ContextMenuProps {
+  at: { x: number; y: number } | undefined;
+  entries: readonly MenuEntry[];
+  onClose(): void;
 }
 /**
  * The app's search dialog, as ⌘P and ⌘K open it: a query row, an optional row of scopes, and a list
@@ -466,6 +554,14 @@ export interface UiKit {
   /** Added 2026-11 (see `Select`): the app's dropdown menu and its search dialog. Test for the member before use. */
   Menu?: ComponentType<MenuProps>;
   QuickPanel?: ComponentType<QuickPanelProps>;
+  /** Added 2026-11 (see `Select`): the app's menu at the pointer, and its pane resize handle. Test for the member before use. */
+  ContextMenu?: ComponentType<ContextMenuProps>;
+  ResizeHandle?: ComponentType<ResizeHandleProps>;
+  /** Added 2026-11 (see `Select`): the app's popover and progress bar. Test for the member before use. */
+  Popover?: ComponentType<PopoverProps>;
+  Progress?: ComponentType<ProgressProps>;
+  /** Added 2026-11 (see `Select`): another plugin's per-project view (from `useProjectViews`), hosted as a tool window. Test for the member before use. */
+  ProjectView?: ComponentType<ProjectViewProps>;
   icon(name: PluginIconName): IconComponent;
   /** The icon of a tool kind (`read`, `execute`...); a wrench for one it does not know. */
   toolIcon(kind: string): IconComponent;
@@ -484,6 +580,12 @@ export interface PluginHost {
   readonly settingsPage: SettingsPageService;
   readonly timeline: TimelineService;
   readonly ui: UiKit;
+  /**
+   * Added 2026-11, absent on an older host: a hook (call it as one, through `useProjectViews`) listing the plugin
+   * views offered for a project outside a conversation, other than the asking plugin's own, judged as the side
+   * panel judges them (the project's type, the views the reader hid there).
+   */
+  readonly useProjectViews?: (projectId: string | undefined) => readonly ProjectViewInfo[];
 }
 
 /* ------------------------------------------------------------------ glue */
@@ -494,6 +596,15 @@ export function usePluginHost(): PluginHost {
   const host = useContext(PluginHostContext);
   if (!host) throw new Error('usePluginHost() was called outside a plugin view');
   return host;
+}
+
+const NO_PROJECT_VIEWS: readonly ProjectViewInfo[] = [];
+
+/** Other plugins' per-project views for `projectId` (`PluginHost.useProjectViews`); none on a host without it. */
+export function useProjectViews(projectId: string | undefined): readonly ProjectViewInfo[] {
+  const host = usePluginHost();
+  // The member is fixed for the host's lifetime, so the hooks run in the same order on every render.
+  return host.useProjectViews ? host.useProjectViews(projectId) : NO_PROJECT_VIEWS;
 }
 
 /** Every conversation, and re-renders when one changes. */

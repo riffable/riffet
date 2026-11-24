@@ -2158,14 +2158,28 @@ html.dark {
 }
 /* Who last changed each line: the date and author once per run of lines from one commit. */
 .cm-editor .cm-blame-gutter .cm-gutterElement {
-  width: 18ch;
+  width: 20ch;
   overflow: hidden;
   padding: 0 8px;
   font-family: var(--font-sans);
   font-size: var(--text-2xs);
   white-space: nowrap;
-  text-overflow: ellipsis;
   cursor: pointer;
+}
+/* The dates in one column (tabular figures), the author after them, cut rather than the date. */
+.cm-editor .cm-blame-entry {
+  display: flex;
+  gap: 1ch;
+  min-width: 0;
+}
+.cm-editor .cm-blame-date {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.cm-editor .cm-blame-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cm-editor .cm-blame-gutter .cm-gutterElement:hover {
   color: var(--fg-2);

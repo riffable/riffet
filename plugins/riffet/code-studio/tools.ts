@@ -6,7 +6,7 @@
 
 import type { AgentToolContext, AgentToolDefinition, AgentToolGroup, AgentToolResult, PluginCodeNavigation, PluginHost } from '@riffet/plugin-api';
 
-export const STUDIO_TOOL_GROUP = 'riffet.studio/code';
+export const STUDIO_TOOL_GROUP = 'riffet.code-studio/code';
 
 const MAX_ITEMS = 40;
 const DEFAULT_LIMIT = 20;

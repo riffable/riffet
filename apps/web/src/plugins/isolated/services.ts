@@ -36,7 +36,7 @@ export function bridgeSession(session: Session): BridgeSession {
  * navigation through the workbench's handlers, and nothing returns a store or a credential. The
  * bridge host has already settled who may ask and for which project; these only do the work.
  */
-export function createIsolatedServices({ stores, context, label, pluginId, active }: {
+export function createIsolatedServices({ stores, context, label, pluginId, active, openPath }: {
   stores: WorkbenchStores;
   /** The view's context as it is now. */
   context: () => BridgeViewContext;
@@ -44,6 +44,8 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
   label: () => string;
   /** The package the view belongs to: the only one whose commands it can run. */
   pluginId: string;
+  /** Where the files it opens go when it is drawn in a page that reads files itself (`ProjectFileOpener`). */
+  openPath?: () => ((path: string) => void) | undefined;
   /** Whether the user is working in the view now. */
   active: () => boolean;
 }): BridgeServices {
@@ -74,6 +76,8 @@ export function createIsolatedServices({ stores, context, label, pluginId, activ
       if (target) handlers.selectSession(target);
     },
     openPath: (path) => {
+      const opener = openPath?.();
+      if (opener) { opener(path); return; }
       // The files panel shows the project that is open; a view of another project does not steer it.
       if (nav.get().projectId === context().projectId) ui.preview(path);
     },

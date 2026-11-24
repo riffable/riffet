@@ -1561,6 +1561,11 @@ msgstr "Couldn't start this task"
 msgid "无法打开文件"
 msgstr "Couldn't open the file"
 
+#: src/plugins/DirectoryRequest.tsx
+#: src/plugins/host.ts
+msgid "无法打开目录"
+msgstr "Could not open the folder"
+
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
 msgstr "Couldn't open the system folder picker"
@@ -2568,6 +2573,10 @@ msgstr "Choose folder"
 #: src/app/ProjectHome.tsx
 msgid "选择目录…"
 msgstr "Choose Directory…"
+
+#: src/plugins/host.ts
+msgid "选择要打开的目录"
+msgstr "Choose a folder to open"
 
 #: src/app/ProjectHome.tsx
 msgid "选择运行服务器的电脑上的代码目录，所选 Agent 会在其中读写文件、执行命令。"

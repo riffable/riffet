@@ -27,14 +27,17 @@ export type CodeSymbolKind = 'class' | 'interface' | 'object' | 'enum' | 'annota
 /** A declaration found by the code index; `container` is the enclosing type, `package` the file's. */
 export interface CodeSymbol { name: string; kind: CodeSymbolKind; path: string; line: number; column: number; container?: string; package?: string; }
 /** One declaration of a file and the ones nested in it, as an outline shows them. */
-export interface CodeOutlineItem { name: string; kind: CodeSymbolKind; line: number; column: number; children?: CodeOutlineItem[]; }
+/** `endLine` is where a type or function that spans several lines ends; absent for one-line declarations and properties. */
+export interface CodeOutlineItem { name: string; kind: CodeSymbolKind; line: number; column: number; endLine?: number; children?: CodeOutlineItem[]; }
 /** A file's declarations; empty for a language the index does not read. */
 export interface CodeOutline { path: string; package?: string; items: CodeOutlineItem[]; }
 /**
  * The code index of a project. `idle` has never been built; `building` counts `done` of `files`;
  * `ready` answers queries, and may be rebuilding changed files meanwhile (`done < files`).
+ * `phase` is set while a build or a check runs: listing the project's files (`files` not known yet),
+ * comparing and parsing them, then compacting the database.
  */
-export interface CodeIndexStatus { state: 'idle' | 'building' | 'ready' | 'failed'; files: number; done: number; symbols: number; builtAt?: string; error?: string; }
+export interface CodeIndexStatus { state: 'idle' | 'building' | 'ready' | 'failed'; files: number; done: number; symbols: number; builtAt?: string; error?: string; phase?: 'listing' | 'parsing' | 'finishing'; }
 export interface CodeSymbolResults { items: CodeSymbol[]; index: CodeIndexStatus; }
 /** A directory that is a module of its build system (`build.gradle`, `package.json`...), project-relative; `''` is the root. */
 export interface CodeModule { path: string; name: string; marker: string; }

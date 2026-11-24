@@ -2,7 +2,7 @@ import {
   Clock, Blocks, Link, Activity, Archive, ArchiveRestore, ArrowDown, ArrowDownToLine, ArrowLeft, ArrowRightLeft, ArrowUp, ArrowUpRight, AtSign, Binary, Bookmark, BookmarkMinus, BookmarkPlus,
   BookOpen, Bot, Brain, CaseSensitive, ChartColumn, ChevronRight, ChevronsDownUp, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine, FilePlus,
-  FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
+  FileText, FoldHorizontal, Folder, FolderArchive, FolderClosed, FolderCode, FolderCog, FolderDot, FolderKanban, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   Keyboard, KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, Mic, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareQuote, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
@@ -10,6 +10,7 @@ import {
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, TextQuote, SquareKanban, List, Inbox, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Volume2, WholeWord, Workflow, WrapText, Wrench, Zap,
+  FileSearch, FolderSearch, ListTree, TextSelect, CopyX, ArrowRightToLine, SquareX, ChevronsUpDown, Hash,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
 
@@ -73,7 +74,12 @@ export const IconBookOpen = icon(BookOpen);
 export const IconMessageSquareQuote = icon(MessageSquareQuote);
 export const IconVolume2 = icon(Volume2);
 export const IconFolder = icon(Folder);
+export const IconFolderArchive = icon(FolderArchive);
 export const IconFolderClosed = icon(FolderClosed);
+export const IconFolderCode = icon(FolderCode);
+export const IconFolderCog = icon(FolderCog);
+export const IconFolderDot = icon(FolderDot);
+export const IconFolderKanban = icon(FolderKanban);
 export const IconFolderOpen = icon(FolderOpen);
 export const IconFolderPlus = icon(FolderPlus);
 export const IconFilePlus = icon(FilePlus);
@@ -179,3 +185,12 @@ export const IconTextQuote = icon(TextQuote);
 export const IconSquareCheck = icon(SquareCheck);
 export const IconColumns2 = icon(Columns2);
 export const IconPackage = icon(Package);
+export const IconFileSearch = icon(FileSearch);
+export const IconFolderSearch = icon(FolderSearch);
+export const IconListTree = icon(ListTree);
+export const IconTextSelect = icon(TextSelect);
+export const IconCopyX = icon(CopyX);
+export const IconArrowRightToLine = icon(ArrowRightToLine);
+export const IconSquareX = icon(SquareX);
+export const IconChevronsUpDown = icon(ChevronsUpDown);
+export const IconHash = icon(Hash);

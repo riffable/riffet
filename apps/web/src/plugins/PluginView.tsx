@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { Suspense, useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { PluginHostContext, type ComposerSlotProps, type SettingsPageService, type ViewContext } from '@riffet/plugin-web';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -9,6 +9,7 @@ import { useStores } from '../app/state/stores';
 import type { ViewEntry } from './catalog';
 import { createPluginHost } from './host';
 import { IsolatedView } from './isolated/IsolatedView';
+import { ProjectFileOpener } from './projectFileOpener';
 
 /** Where a plugin view is mounted. `visible` is the one field that may change without a new instance. */
 export interface PluginViewProps {
@@ -24,6 +25,8 @@ export interface PluginViewProps {
   fallback?: ReactNode;
   /** The conversation's composer, handed to a session view that draws it in place. Its identity must be stable. */
   composer?: ComponentType<ComposerSlotProps> | undefined;
+  /** For a main view: draws into the page header after the title. Its identity must be stable. */
+  header?: ComponentType<{ children: ReactNode }> | undefined;
 }
 
 /**
@@ -32,15 +35,15 @@ export interface PluginViewProps {
  * session or project is a fresh instance with fresh state, and the previous one's signal aborts,
  * cancelling its requests, before it unmounts.
  */
-export function PluginView({ entry, projectId, sessionId, path, visible = true, settingsPage, fallback, composer }: PluginViewProps) {
+export function PluginView({ entry, projectId, sessionId, path, visible = true, settingsPage, fallback, composer, header }: PluginViewProps) {
   const serviceId = window.location.origin;
   // A file view is one instance per file, whatever it declares.
   const instanceId = path !== undefined ? `${entry.id}:${projectId ?? ''}:${path}` : entry.instances === 'per-session' ? `${entry.id}:${sessionId ?? ''}` : entry.instances === 'per-project' ? `${entry.id}:${projectId ?? ''}` : entry.id;
   const key = [serviceId, projectId ?? '', sessionId ?? '', path ?? '', instanceId].join('|');
-  return <Instance key={key} entry={entry} serviceId={serviceId} instanceId={instanceId} projectId={projectId} sessionId={sessionId} path={path} visible={visible} settingsPage={settingsPage} fallback={fallback} composer={composer} />;
+  return <Instance key={key} entry={entry} serviceId={serviceId} instanceId={instanceId} projectId={projectId} sessionId={sessionId} path={path} visible={visible} settingsPage={settingsPage} fallback={fallback} composer={composer} header={header} />;
 }
 
-function Instance({ entry, serviceId, instanceId, projectId, sessionId, path, visible, settingsPage, fallback, composer }: Omit<PluginViewProps, 'visible'> & { serviceId: string; instanceId: string; visible: boolean }) {
+function Instance({ entry, serviceId, instanceId, projectId, sessionId, path, visible, settingsPage, fallback, composer, header }: Omit<PluginViewProps, 'visible'> & { serviceId: string; instanceId: string; visible: boolean }) {
   const stores = useStores();
   const { i18n } = useLingui();
   // Created in an effect, not in render: React may mount, unmount and mount an instance again, and each mount needs its own live signal.
@@ -63,7 +66,8 @@ function Instance({ entry, serviceId, instanceId, projectId, sessionId, path, vi
   }, [entry.pluginId, entry.id, entry.active, entry.unavailable, entry.activateOnView, entry.activationState, visible]);
   const render = entry.render;
   const access = render?.kind === 'plugin' ? render.access : undefined;
-  const host = useMemo(() => createPluginHost({ stores, pluginId: entry.pluginId, sessionId, locale: i18n.locale, access, ...(settingsPage ? { settingsPage } : {}) }), [stores, entry.pluginId, sessionId, i18n.locale, access, settingsPage]);
+  const openPath = useContext(ProjectFileOpener);
+  const host = useMemo(() => createPluginHost({ stores, pluginId: entry.pluginId, sessionId, locale: i18n.locale, access, openPath, ...(settingsPage ? { settingsPage } : {}) }), [stores, entry.pluginId, sessionId, i18n.locale, access, settingsPage, openPath]);
   // The page's flags belong to this instance: whatever it left set is cleared with it.
   useEffect(() => () => { settingsPage?.setDirty(false); settingsPage?.setBusy(false); }, [settingsPage]);
   const context = useMemo<ViewContext | undefined>(() => controller && ({
@@ -78,7 +82,7 @@ function Instance({ entry, serviceId, instanceId, projectId, sessionId, path, vi
       <Suspense fallback={fallback ?? <div className="flex min-h-0 flex-1 items-center justify-center"><Spinner /></div>}>
         {render.kind === 'isolated' ? <IsolatedView source={render.source} context={context} /> : (
           <PluginHostContext.Provider value={host}>
-            {render.kind === 'plugin' ? <render.component context={context} {...(composer ? { composer } : {})} /> : <render.component declaration={render.declaration} context={context} />}
+            {render.kind === 'plugin' ? <render.component context={context} {...(composer ? { composer } : {})} {...(header ? { header } : {})} /> : <render.component declaration={render.declaration} context={context} />}
           </PluginHostContext.Provider>
         )}
       </Suspense>

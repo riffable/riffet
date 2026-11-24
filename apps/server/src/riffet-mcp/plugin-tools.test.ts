@@ -74,7 +74,7 @@ describe('plugin agent tools through Riffet MCP', () => {
       await mkdir(root);
       await writeFile(join(root, 'Feed.kt'), 'package demo\n\nclass Feed {\n  fun load() {}\n}\n');
       const project = booted.store.createProject(root, 'code');
-      const chosen = booted.store.createSession({ projectId: project.id, kind: 'native', toolGroups: ['riffet.studio/code'] });
+      const chosen = booted.store.createSession({ projectId: project.id, kind: 'native', toolGroups: ['riffet.code-studio/code'] });
       const spec = booted.riffetMcp.server(chosen.id)!;
       const token = (JSON.parse(await readFile(spec.args[spec.args.indexOf('--credential') + 1]!, 'utf8')) as { credential: string }).credential;
       const rpc = (method: string, params?: unknown) => booted.app.inject({ method: 'POST', url: '/api/riffet-mcp', headers: { authorization: `Bearer ${token}` }, payload: { method, params } }).then(response => response.json().result);

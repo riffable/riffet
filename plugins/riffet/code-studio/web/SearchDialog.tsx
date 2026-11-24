@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from
 import type { CodeIndexStatus, CodeSymbol, FileEntry, SearchHit, SearchResults } from '@contracts';
 import { usePluginHost } from '@riffet/plugin-web';
 import { cn } from './cn';
-import { dirName, fileName, findInFiles, KIND_MARK, type CodeApi, type TextOptions } from './data';
+import { dirName, fileName, findInFiles, type CodeApi, type TextOptions } from './data';
+import { KindMark } from './Kind';
 import type { Messages } from './messages';
 
 export type SearchTab = 'all' | 'classes' | 'files' | 'symbols' | 'text' | 'actions';
@@ -12,7 +13,7 @@ const TABS: readonly SearchTab[] = ['all', 'classes', 'files', 'symbols', 'text'
 export interface Place { path: string; line?: number; column?: number }
 
 /** A command of the page, listed under Actions and matched by its label. */
-export interface StudioAction { id: string; label: string; icon?: ReactNode; run(): void }
+export interface StudioAction { id: string; label: string; icon?: ReactNode; shortcut?: string; run(): void }
 
 type Row =
   | { key: string; type: 'heading'; label: string }
@@ -83,7 +84,7 @@ export function SearchDialog({ api, projectId, messages: m, open, onOpenChange, 
   const { ui } = usePluginHost();
   const parsed = parseQuery(query);
   const needle = tab === 'text' ? query : parsed.name;
-  const within = options.scope === 'module' && module !== undefined ? module : undefined;
+  const within = scopeDir(options, module);
   const fetchKey = `${tab}\n${needle}\n${tab === 'text' ? JSON.stringify(options) + (within ?? '') : ''}`;
   const remote = needle.trim() && tab !== 'actions';
   const [found, setFound] = useState<Found>();
@@ -229,10 +230,11 @@ export function SearchDialog({ api, projectId, messages: m, open, onOpenChange, 
       {ui.Menu ? (
         <ui.Menu
           align="end"
-          trigger={<ui.Button size="xs" variant="quiet">{options.scope === 'module' && module !== undefined ? m.scope.module : m.scope.project}</ui.Button>}
+          trigger={<ui.Button size="xs" variant="quiet" className="max-w-40"><span className="truncate">{options.scope === 'folder' && options.folder !== undefined ? fileName(options.folder) || '/' : options.scope === 'module' && module !== undefined ? m.scope.module : m.scope.project}</span></ui.Button>}
           entries={[
-            { kind: 'radio', label: m.scope.project, checked: options.scope !== 'module' || module === undefined, onSelect: () => onOptionsChange({ ...options, scope: 'project' }) },
+            { kind: 'radio', label: m.scope.project, checked: within === undefined, onSelect: () => onOptionsChange({ ...options, scope: 'project' }) },
             { kind: 'radio', label: m.scope.module, checked: options.scope === 'module' && module !== undefined, disabled: module === undefined, onSelect: () => onOptionsChange({ ...options, scope: 'module' }) },
+            ...(options.folder !== undefined ? [{ kind: 'radio' as const, label: m.folder(options.folder || '/'), checked: options.scope === 'folder', onSelect: () => onOptionsChange({ ...options, scope: 'folder' }) }] : []),
           ]}
         />
       ) : null}
@@ -266,6 +268,12 @@ export function SearchDialog({ api, projectId, messages: m, open, onOpenChange, 
   );
 }
 
+/** The folder a text search is limited to by its scope: the open file's module, a folder from the tree, or none (the project). */
+export function scopeDir(options: TextOptions, module: string | undefined): string | undefined {
+  if (options.scope === 'folder' && options.folder !== undefined) return options.folder || undefined;
+  return options.scope === 'module' ? module : undefined;
+}
+
 const KIND_TYPES = new Set(['class', 'interface', 'object', 'enum', 'annotation', 'typealias']);
 const isApple = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 const MOD_ENTER = isApple ? '⌘↵' : 'Ctrl+↵';
@@ -279,7 +287,7 @@ function RowBody({ row, needle, options, messages: m }: { row: Row; needle: stri
       const { symbol } = row;
       return (
         <>
-          <span className="w-4 shrink-0 text-center font-mono text-2xs text-fg-3">{KIND_MARK[symbol.kind] ?? '·'}</span>
+          <KindMark kind={symbol.kind} />
           <span className="shrink-0 truncate text-sm text-fg">{marked(symbol.name, name)}</span>
           <span className="min-w-0 flex-1 truncate text-xs text-fg-4">{[symbol.container, symbol.package].filter(Boolean).join(' · ')}</span>
           <span className="shrink-0 font-mono text-2xs tabular-nums text-fg-4">{fileName(symbol.path)}:{symbol.line}</span>
@@ -303,7 +311,13 @@ function RowBody({ row, needle, options, messages: m }: { row: Row; needle: stri
         </>
       );
     case 'action':
-      return <>{row.action.icon && <span className="grid size-4 shrink-0 place-items-center text-fg-3 [&_svg]:size-4">{row.action.icon}</span>}<span className="min-w-0 flex-1 truncate text-sm text-fg">{row.action.label}</span></>;
+      return (
+        <>
+          {row.action.icon && <span className="grid size-4 shrink-0 place-items-center text-fg-3 [&_svg]:size-4">{row.action.icon}</span>}
+          <span className="min-w-0 flex-1 truncate text-sm text-fg">{row.action.label}</span>
+          {row.action.shortcut && <kbd className="shrink-0 font-sans text-xs text-fg-4">{row.action.shortcut}</kbd>}
+        </>
+      );
     case 'line':
       return <span className="min-w-0 flex-1 truncate text-sm text-fg">{m.goToLine(row.line)}</span>;
     default:

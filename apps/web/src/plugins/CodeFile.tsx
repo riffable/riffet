@@ -17,10 +17,10 @@ type Loaded = { state: 'loading' } | { state: 'ready'; preview: FilePreview } | 
 
 /**
  * `UiKit.CodeFile`: a project file read the way the files panel reads it, for a plugin view that
- * lays out its own reading surface (`plugins/riffet/studio`). Read only: editing stays in the files
+ * lays out its own reading surface (`plugins/riffet/code-studio`). Read only: editing stays in the files
  * panel, where drafts, conflicts and saves are handled.
  */
-export function CodeFile({ projectId, path, target, onSymbol, onTopLine, onLine, onViewport, baseline, blame, onBlameCommit }: CodeFileProps) {
+export function CodeFile({ projectId, path, target, command, onSymbol, onMenu, onTopLine, onLine, onViewport, onCaret, folding, baseline, blame, onBlameCommit }: CodeFileProps) {
   const { t } = useLingui();
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -66,6 +66,11 @@ export function CodeFile({ projectId, path, target, onSymbol, onTopLine, onLine,
           target={target}
           baseline={baseline}
           blame={blame}
+          caret={Boolean(onCaret)}
+          command={command}
+          {...(onMenu ? { onMenu } : {})}
+          folding={Boolean(folding)}
+          {...(onCaret ? { onCaret } : {})}
           {...(onViewport ? { onViewport } : {})}
           {...(onBlameCommit ? { onBlameCommit } : {})}
           onReference={(reference) => { if (isFileReference(reference) && reference.line !== undefined) onLine?.({ path: reference.path, line: reference.line, text: reference.text ?? '' }); }}

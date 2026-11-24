@@ -34,7 +34,7 @@ export const TYPE_KINDS: readonly CodeSymbolKind[] = ['class', 'interface', 'obj
 const TYPE_LIST = TYPE_KINDS.map(kind => `'${kind}'`).join(',');
 export const isTypeKind = (kind: string): boolean => (TYPE_KINDS as readonly string[]).includes(kind);
 
-export interface ParsedSymbol { name: string; kind: CodeSymbolKind; container?: string; line: number; column: number; depth: number }
+export interface ParsedSymbol { name: string; kind: CodeSymbolKind; container?: string; line: number; column: number; depth: number; /** The declaration's last line, for a type or a function spanning several. */ end?: number }
 export interface ParsedFile { path: string; package?: string; imports?: string[]; symbols?: ParsedSymbol[]; failed?: boolean; skipped?: boolean }
 export interface SymbolRow { name: string; kind: CodeSymbolKind; container: string | null; path: string; line: number; column: number; initials?: string }
 export interface Declaration extends SymbolRow { package: string }
