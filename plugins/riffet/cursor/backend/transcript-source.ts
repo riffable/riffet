@@ -443,6 +443,19 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
 
+  /** Read-only check for recovery (`canReleaseInput`): true while the serving lane tracks an open turn or active draft. */
+  hasOpenTurn(w: AgentLaneWriter): boolean {
+    const cursor = (w.scratch ?? w).cursor;
+    if (!cursor) {
+      const view = this.open();
+      if (!view) return false;
+      try { return Boolean(view.meta()); } finally { view.close(); }
+    }
+    const state = parseState(cursor);
+    if (!state) return true;
+    return Boolean((state.turn && !state.turn.ended) || state.draft);
+  }
+
   settleTurnEnd(w: AgentLaneWriter, end: { turnId: string; status: AgentTurnStatus; at: string; error?: string }): Promise<boolean> {
     return this.endTurn(w, end);
   }

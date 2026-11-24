@@ -5,10 +5,10 @@ import { AppError, estimatedTokens, isCliMissing, materializeNativeInput, queryD
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
   type AgentControlMessage, type AgentDelivery, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
-  type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentSendRequest, type AgentSessionView, type AgentStopOptions,
+  type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentStopOptions,
   type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
 } from '@riffet/plugin-api/experimental/agent';
-import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError } from './cli-adapter.js';
+import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError, cursorPromptBarEmpty } from './cli-adapter.js';
 import { CURSOR_LAUNCH_ENV, cursorApiFrontable, cursorLaunchProfileOf, setCursorApiFront, cursorLaunchSpec, redactCursorOutput, runCursor, type CursorLaunchProfile } from './cli-driver.js';
 import { cursorCapabilityReport, cursorNeedsLogin, describeCursorProfile, runCursorOperation } from './config.js';
 import { cursorPort, type CursorPort } from './host-port.js';
@@ -28,7 +28,7 @@ import { workspaceChatsDir } from './native/chat-store.js';
 import { CursorLive } from './native/live.js';
 import { nativeModelCatalogFromVariants } from './native/model-catalog.js';
 import { emptyRuntimeStats, NativeRuntimeManager } from './native/runtime.js';
-import { promptSettled } from './native/screen.js';
+import { parseScreen, promptSettled, turnControls } from './native/screen.js';
 import { NativeService } from './native/service.js';
 import type { WatchMessage } from './native/watch.js';
 import { ResumeTitleWatcher } from './title-watcher.js';
@@ -616,6 +616,60 @@ export class CursorBackend implements AgentBackend {
   status(host: AgentHost, context: AgentContext) {
     const status = this.parts(host, context.profile).native.status(context.session.id);
     return this.activities.get(context.session.id)?.tracker.status(status) ?? status;
+  }
+
+  /**
+   * Read-only proof that `run`'s input is no longer sitting in Cursor's composer, follow-up queue,
+   * or an active turn. Mirrors Claude's passive `canReleaseInput` check so "Check status" can
+   * offer "Continue" when an unconfirmed prompt was genuinely dropped.
+   */
+  async canReleaseInput(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+    try {
+      const { native, steering, port, live } = this.parts(host, context.profile);
+      const sessionId = context.session.id;
+      await native.refreshStatus(sessionId);
+      await host.transcript.drain(sessionId);
+      const session = port.getSession(sessionId);
+      const terminalId = session.terminalId;
+      const chatId = session.nativeSessionId;
+      if (session.archivedAt || !terminalId || !chatId || !run.nativeSessionId || run.nativeSessionId !== chatId) return false;
+      const status = this.status(host, context);
+      if (status.phase !== 'idle' || status.activeTurn || status.interaction
+        || status.activity?.background || status.activity?.compacting) return false;
+      if (steering.activeTurn(session) || port.dialogs.isResponding(terminalId)) return false;
+      const liveBefore = live.read(chatId);
+      if (liveBefore && !liveBefore.sealed) return false;
+      const hasOpenTurn = await host.transcript.withSource(sessionId, (source, w) =>
+        source instanceof CursorTranscriptSource ? source.hasOpenTurn(w) : true);
+      if (hasOpenTurn !== false) return false;
+      const terminalView = port.findTerminal(terminalId);
+      if (!terminalView || terminalView.kind !== 'cursor' || terminalView.sessionId !== session.id
+        || terminalView.projectId !== session.projectId || terminalView.state === 'exited') return false;
+      const terminal = await host.terminals.get(terminalId);
+      if (!terminal || terminal.state === 'exited') return false;
+      const screen = await host.terminals.screen(terminalId, { fresh: true });
+      if (!screen) return false;
+      const parsed = parseScreen(screen);
+      const controls = turnControls(screen);
+      if (!parsed.footer || parsed.phase !== 'idle' || parsed.subview) return false;
+      if (controls.stoppable || controls.exitArmed || controls.followUps) return false;
+      if (!cursorPromptBarEmpty(screen)) return false;
+      if (await port.dialogs.current(sessionId)) return false;
+      // Re-verify terminal epoch, ownership, session binding, and idle state after screen capture.
+      const checked = await host.terminals.get(terminalId);
+      const checkedView = port.findTerminal(terminalId);
+      if (!checked || checked.epoch !== terminal.epoch || checked.state === 'exited'
+        || !checkedView || checkedView.kind !== 'cursor' || checkedView.sessionId !== session.id
+        || checkedView.projectId !== session.projectId || checkedView.state === 'exited') return false;
+      const latest = port.getSession(sessionId);
+      const latestStatus = this.status(host, context);
+      const liveAfter = live.read(chatId);
+      return !latest.archivedAt && latest.terminalId === terminalId && latest.nativeSessionId === chatId
+        && latestStatus.phase === 'idle' && !latestStatus.activeTurn && !latestStatus.interaction
+        && !latestStatus.activity?.background && !latestStatus.activity?.compacting
+        && !steering.activeTurn(latest) && !port.dialogs.isResponding(terminalId)
+        && !(liveAfter && !liveAfter.sealed);
+    } catch { return false; }
   }
 
   /** One conversation's activity tracker and its live listeners, shared by subscribers and the compaction hook. */

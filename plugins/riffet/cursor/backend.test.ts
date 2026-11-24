@@ -5,8 +5,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { UsageObservation } from '@riffet/plugin-api/kit';
-import type { AgentContext, AgentSessionView } from '@riffet/plugin-api/experimental/agent';
+import type { AgentContext, AgentRunRef, AgentSessionView, AgentStatus } from '@riffet/plugin-api/experimental/agent';
 import { CursorBackend } from './backend.js';
+import { CursorTranscriptSource } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
 import { chatStorePath } from './native/chat-store.js';
 import { CursorLive, type CursorUsageCapture } from './native/live.js';
@@ -193,6 +194,115 @@ describe('Cursor usageService.subscribeLive', () => {
     } finally {
       await backend.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('CursorBackend.canReleaseInput', () => {
+  const IDLE_SCREEN = [
+    'Previous reply finished.',
+    '→ Add a follow-up',
+    '  Gemini 4 Neon High · 12%       Run Everything',
+    '  /srv/home/alice/project · main',
+  ].join('\n');
+
+  const runRef: AgentRunRef = {
+    id: 'run-1', sessionId: 'session-1', commandId: 'cmd-1', state: 'interrupted',
+    delivery: 'uncertain', stage: 'confirmation', nativeSessionId: 'chat-1',
+  };
+
+  function setupRelease(options: {
+    screen?: string;
+    status?: AgentStatus;
+    cursor?: string | null;
+    liveSealed?: boolean;
+    epochDrift?: boolean;
+    dialog?: boolean;
+    activeSteerTurn?: boolean;
+    terminalKind?: 'cursor' | 'shell';
+    drainError?: boolean;
+  } = {}) {
+    const sess: AgentSessionView = { ...session, nativeSessionId: 'chat-1', terminalId: 'terminal-1' };
+    const ctx: AgentContext = { ...context, session: sess };
+    const host = new FakeHost({ sessions: [sess], projects: [project] });
+    let epoch = 1;
+    const termView = {
+      id: 'terminal-1', projectId: project.id, sessionId: sess.id, title: 'cursor',
+      kind: options.terminalKind ?? 'cursor', state: 'running' as const, epoch: 1,
+      persistent: true, cols: 100, rows: 30, createdAt: '2026-11-24T00:00:00.000Z',
+    };
+    host.view.terminal = (id) => id === 'terminal-1' ? { ...termView, epoch } : undefined;
+    host.terminals.get = async () => ({
+      id: 'terminal-1', state: 'running', epoch: options.epochDrift ? epoch++ : epoch,
+    });
+    host.terminals.screen = async () => options.screen ?? IDLE_SCREEN;
+    if (options.dialog) host.dialogs.current = async () => ({ id: 'dlg-1', kind: 'approval', revision: 1, title: 'Approve', options: [], actions: [], transport: 'terminal' } as never);
+    const source = new CursorTranscriptSource({ sessionId: sess.id, chatsDir: () => '/nonexistent', chatId: () => 'chat-1' });
+    const closedCursor = JSON.stringify({ v: 1, mapping: 3, from: 0, n: 2, len: 2, digest: '', mapper: {}, turn: { id: 't1', at: '2026-11-24T00:00:00.000Z', ended: true }, recent: ['t1'], placed: {}, children: [] });
+    const writer = { cursor: options.cursor === undefined ? closedCursor : options.cursor } as never;
+    host.transcript.drain = vi.fn(async () => { if (options.drainError) throw new Error('store busy'); });
+    host.transcript.withSource = async (_sid, task) => await task(source, writer);
+    const backend = new CursorBackend({ stateDir: '' });
+    const status = options.status ?? { phase: 'idle' };
+    const liveStep = options.liveSealed === undefined ? undefined : { turn: 't2', at: '2026-11-24T00:00:01.000Z', step: 's1', sealed: options.liveSealed, parts: [] };
+    Object.assign(backend, {
+      built: {
+        native: { status: () => status, refreshStatus: vi.fn(async () => undefined) },
+        steering: { activeTurn: () => options.activeSteerTurn ? { nativeSessionId: 'chat-1', turnId: 't2' } : undefined },
+        live: { read: () => liveStep },
+        port: cursorPort(host),
+        runtime: {},
+        profile: {},
+      },
+    });
+    return { backend, host, ctx };
+  }
+
+  it('allows releasing an uncertain run when Cursor is idle with an empty prompt bar and no open turn', async () => {
+    const { backend, host, ctx } = setupRelease();
+    expect(await backend.canReleaseInput(host, ctx, runRef)).toBe(true);
+  });
+
+  it('refuses release when the prompt bar still holds unsent draft text', async () => {
+    const { backend, host, ctx } = setupRelease({
+      screen: [
+        '→ unsent prompt still sitting in composer',
+        '  Gemini 4 Neon High · 12%       Run Everything',
+        '  /srv/home/alice/project · main',
+      ].join('\n'),
+    });
+    expect(await backend.canReleaseInput(host, ctx, runRef)).toBe(false);
+  });
+
+  it('refuses release when Cursor displays a follow-up queue, busy hint, or subagent subview', async () => {
+    const withFollowUps = setupRelease({
+      screen: [
+        '┌─ follow-ups ──────────────────────────────────────┐',
+        '│○ queued message waiting in CLI                    │',
+        '│ enter interrupt and send · ↑ select/edit          │',
+        '└───────────────────────────────────────────────────┘',
+        '→ Add a follow-up',
+        '  Gemini 4 Neon High · 12%       Run Everything',
+        '  /srv/home/alice/project · main',
+      ].join('\n'),
+    });
+    expect(await withFollowUps.backend.canReleaseInput(withFollowUps.host, withFollowUps.ctx, runRef)).toBe(false);
+
+    const busy = setupRelease({
+      screen: [
+        '→ Add a follow-up                      ctrl+c to stop',
+        '  Gemini 4 Neon High · 12%       Run Everything',
+        '  /srv/home/alice/project · main',
+      ].join('\n'),
+    });
+    expect(await busy.backend.canReleaseInput(busy.host, busy.ctx, runRef)).toBe(false);
+  });
+
+  it('refuses release when transcript has an open turn, live step is unsealed, dialog is open, terminal drifts, or drain fails', async () => {
+    const openCursor = JSON.stringify({ v: 1, mapping: 3, from: 0, n: 1, len: 1, digest: '', mapper: {}, turn: { id: 't2', at: '2026-11-24T00:00:01.000Z' }, recent: ['t2'], placed: {}, children: [] });
+    for (const opts of [{ cursor: openCursor }, { cursor: '{"v":999}' }, { liveSealed: false }, { dialog: true }, { epochDrift: true }, { activeSteerTurn: true }, { terminalKind: 'shell' as const }, { drainError: true }]) {
+      const { backend, host, ctx } = setupRelease(opts);
+      expect(await backend.canReleaseInput(host, ctx, runRef)).toBe(false);
     }
   });
 });
