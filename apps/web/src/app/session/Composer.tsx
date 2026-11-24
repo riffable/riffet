@@ -18,7 +18,7 @@ import { SendLaterMenu } from '../automations/SendLater';
 import { useSettings } from '../state/stores';
 import { ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, referenceLabel } from './agentMentions';
 import { ComposerAttachments } from './ComposerAttachments';
-import { acknowledgeRecoveredCreationDraft, readDraft, readVoiceMode, unsavedDrafts, writeVoiceMode } from './composerDraft';
+import { acknowledgeRecoveredCreationDraft, readDraft, readVoiceMode, unsavedDrafts, writeDraft, writeVoiceMode } from './composerDraft';
 import { ComposerFullscreen } from './ComposerFullscreen';
 import { shouldForwardWheel } from './composerFullscreenGeometry';
 import { primaryEnterHint, readEnterKeyBehavior, type EnterKeyBehavior } from './composerKeyboard';
@@ -43,7 +43,7 @@ import { useComposerUploads } from './useComposerUploads';
 import { followContentHeight, useComposerWindowDrop } from './useComposerWindowDrop';
 import { useDictation } from './useDictation';
 
-export { acknowledgeRecoveredCreationDraft, compactTokens, ModePicker };
+export { acknowledgeRecoveredCreationDraft, compactTokens, ModePicker, readDraft, writeDraft };
 export type { ComposerProps };
 
 const NO_COMMANDS: SlashCommand[] = [];
