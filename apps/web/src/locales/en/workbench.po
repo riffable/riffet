@@ -1789,7 +1789,7 @@ msgstr "Not allowed to operate"
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
-#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
 msgid "未关联项目"
 msgstr "No project"
 

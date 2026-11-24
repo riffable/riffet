@@ -7,7 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Workbench
 
 - In 1v1 debates, the first sentence answers the opponent’s question. The judge marks a question as pending until the other side has had a turn to answer. Closing speeches use only arguments and evidence already heard. Roundtable summaries explain which arguments advanced the discussion. Repeated rounds shorten the next speeches, and the moderator looks for a fresh angle.
-- A background browser tab now counts conversations waiting for you or with unread results. Results read on another device clear from the count and from open conversation tabs after sync. In the default sidebar scope, Mark all as read also covers conversations started from this server on a linked server.
+- Results read on another device clear from the browser tab count and from open conversation tabs after sync. In the default sidebar scope, Mark all as read also covers conversations started from this server on a linked server.
 - The web new-session picker hides agents missing from the selected server. Reopening it after installing an agent shows the new choice.
 - On the web, ⌘K opens a wider, taller search dialog on desktop so more matches and longer snippets are visible at once. Recent search terms appear as chips above recent sessions. Select a term to search again in its original Title or Content mode, or use × to remove it. History stays in this browser for this Riffet site.
 - All four model collaboration formats now use Chinese instructions for roles, turns and structured records. The book icon opens the current role instructions or the input originally sent for a speech. Switching roles or speeches updates the selection and its text together without moving the dialog. Moderator summaries refer to participants by model name. Expanding a speech’s process shows the recorded steps, an empty state or a retry action.
@@ -27,6 +27,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The count in a background browser tab now follows the sidebar's filters. It counts conversations with unread results that you can find under “Unread only”. Conversations waiting for confirmation keep their status indicators.
 - On the web, task status rings in the sidebar now sit in the leading icon column instead of inline before the title, and conversation rows match the horizontal inset of navigation and project rows so all titles align on one vertical axis.
 - On the web, reading a reply above the bottom no longer jumps vertically when a turn finishes: the turn's process block updates to "Processed" and stays open above your reading position until you return to the bottom or scroll above it.
 - Question prompts and plan review tools now stay outside the folded process block across Web, Mac, iOS, Android, and shared exports, so long responses written before an `AskQuestion` or plan review are no longer hidden inside "Processed", and pre-question process blocks finish cleanly instead of staying "Working" alongside post-answer work.

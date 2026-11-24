@@ -20,7 +20,7 @@ import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
 import { cn, isJustNow, readStored, relativeTime, writeStored } from '@/lib/utils';
 import { isActiveSession, sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
-import { isAssistantProject, sidebarProjectMap } from '@/lib/project-family';
+import { inSidebarServerScope, type useSidebarSessions } from './useSidebarSessions';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { useLocale } from '@/lib/i18n';
 import { useShortcutHint } from './shortcuts';
@@ -46,6 +46,7 @@ export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';
 interface Props {
   projects: ProjectRecord[];
   sessions: Session[];
+  sessionList: ReturnType<typeof useSidebarSessions>;
   selectedProjectId: string;
   selectedSessionId: string;
   backend?: NativeBackendCatalogEntry;
@@ -106,19 +107,11 @@ interface Props {
 const COLLAPSED_KEY = 'riffet.collapsedProjects';
 const LAYOUT_KEY = 'riffet.sidebarLayout';
 const SORT_KEY = 'riffet.sidebarSort';
-const SERVER_FILTER_KEY = 'riffet.sidebarServerFilter';
 const PROJECT_SESSION_LIMIT = 5;
 
 type SidebarLayout = 'project' | 'time';
 /** 按标签页顺序 orders the pinned conversations as the tab bar's pinned zone does. */
 type SidebarSort = 'activity' | 'tabs';
-/** `'relevant'` shows this server's own conversations plus remote ones launched from here; a server id narrows to that peer. */
-type SidebarServerFilter = 'relevant' | 'all' | 'local' | (string & {});
-
-function startedFromServer(session: Session, serverId: string | undefined): boolean {
-  return Boolean(serverId) && session.origin?.kind === 'link' && session.origin.serverId === serverId;
-}
-
 export function timeBucket(session: Session, now: Date): string {
   if (session.pinnedAt) return i18n._(msg`置顶`);
   if (isActiveSession(session)) return i18n._(msg({ message: '进行中', context: 'workbench-session-status-active' }));
@@ -323,24 +316,9 @@ export function Sidebar(props: Props) {
   const { projects, sessions, selectedProjectId, selectedSessionId } = props;
   // The phone drawer keeps its own established look; the desktop restyle stops at the breakpoint.
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
-  const [showArchived, setShowArchived] = useState(false);
-  const [unreadOnly, setUnreadOnly] = useState(false);
-  const [filterTag, setFilterTag] = useState('');
-  const [storedServerFilter, setStoredServerFilter] = useState<SidebarServerFilter>(() => (readStored(SERVER_FILTER_KEY) as SidebarServerFilter) || 'relevant');
-  const setServerFilter = (value: string) => {
-    const next = (value || 'relevant') as SidebarServerFilter;
-    writeStored(SERVER_FILTER_KEY, next === 'relevant' ? undefined : next);
-    setStoredServerFilter(next);
-  };
-  const servers = useLists((state) => state.servers);
-  const selfServerId = useMemo(() => servers.find((item) => item.self)?.id, [servers]);
-  const peerServers = useMemo(() => servers.filter((item) => !item.self && item.outbound && item.compatible), [servers]);
+  const { rows, tags, visibleProjects, peerServers, selfServerId, serverFilter, setServerFilter,
+    showArchived, setShowArchived, filterTag, setFilterTag, unreadOnly, setUnreadOnly } = props.sessionList;
   const hasLinkedServers = peerServers.length > 0;
-  const serverFilter: SidebarServerFilter = !hasLinkedServers
-    ? 'relevant'
-    : storedServerFilter === 'relevant' || storedServerFilter === 'all' || storedServerFilter === 'local' || peerServers.some((item) => item.id === storedServerFilter)
-      ? storedServerFilter
-      : 'relevant';
   const [layout, setLayoutState] = useState<SidebarLayout>(() => readStored(LAYOUT_KEY) === 'project' ? 'project' : 'time');
   const setLayout = (value: string) => {
     const next: SidebarLayout = value === 'time' ? 'time' : 'project';
@@ -373,30 +351,12 @@ export function Sidebar(props: Props) {
     return next;
   });
 
-  // Quick chats live on their own page; the sidebar lists only the ordinary conversations. A called Agent's conversation
-  // (docs/AGENT-CALLS.md §6) is reached from its caller while the caller is listed, unless it is the one open.
-  const listedSessions = useMemo(() => {
-    const live = new Set(sessions.filter((session) => !session.archivedAt).map((session) => session.id));
-    return sessions.filter((session) => {
-      if (sessionBackend(session) === 'chat') return false;
-      if (session.origin?.kind === 'call' && session.origin.sessionId && live.has(session.origin.sessionId) && session.id !== selectedSessionId) return false;
-      if (!hasLinkedServers || serverFilter === 'all' || session.id === selectedSessionId) return true;
-      const ownerServer = serverOfObject(session.id);
-      if (serverFilter === 'local') return !ownerServer;
-      if (serverFilter === 'relevant') return !ownerServer || startedFromServer(session, selfServerId);
-      return ownerServer === serverFilter;
-    });
-  }, [sessions, selectedSessionId, hasLinkedServers, serverFilter, selfServerId]);
-  const tags = useMemo(() => [...new Set(listedSessions.filter((session) => !session.archivedAt).flatMap((session) => session.tags ?? []))].sort(), [listedSessions]);
-  // The 助理 has its own row above and its conversations are not listed (docs/ASSISTANT.md).
-  const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, t`未关联项目`), [projects, showArchived, t]);
   const selectedSidebarProjectId = visibleProjects.get(selectedProjectId)?.id;
   const canStartSession = Boolean(selectedProjectId || props.onSelectNoProject || projects.some((project) => !project.system && !project.archivedAt));
   const groups = useMemo(() => {
     if (layout !== 'project') return [];
     const byProject = new Map<string, Session[]>();
-    for (const session of listedSessions) {
-      if ((!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag)) || (unreadOnly && session.id !== selectedSessionId && !isDoneUnseen(session))) continue;
+    for (const session of rows) {
       const projectId = visibleProjects.get(session.projectId)?.id;
       if (!projectId) continue;
       const bucket = byProject.get(projectId) ?? [];
@@ -407,33 +367,29 @@ export function Sidebar(props: Props) {
     return [...new Set(visibleProjects.values())]
       .map((project) => ({ project, sessions: byProject.get(project.id) ?? [] }))
       .filter((group) => {
-        if ((filterTag || unreadOnly) && !group.sessions.length) return false;
-        if (group.project.system && !group.sessions.length) return false;
+        // The shared selector already admitted these rows, including the open conversation.
+        if (group.sessions.length) return true;
+        if (filterTag || unreadOnly || group.project.system) return false;
         if (!hasLinkedServers || serverFilter === 'all') return true;
         const ownerServer = serverOfObject(group.project.id);
         if (serverFilter === 'local') return !ownerServer;
-        if (serverFilter === 'relevant') return !ownerServer || group.sessions.length > 0 || group.project.id === selectedSidebarProjectId;
+        if (serverFilter === 'relevant') return !ownerServer || group.project.id === selectedSidebarProjectId;
         return ownerServer === serverFilter;
       });
-  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, pinnedOrder, hasLinkedServers, serverFilter, selectedSidebarProjectId]);
+  }, [layout, visibleProjects, rows, filterTag, unreadOnly, pinnedOrder, hasLinkedServers, serverFilter, selectedSidebarProjectId]);
 
   const timeline = useMemo(() => {
     if (layout !== 'time') return [];
-    const matches = listedSessions.filter((session) => {
-      const project = visibleProjects.get(session.projectId);
-      if (!project || (!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag)) || (unreadOnly && session.id !== selectedSessionId && !isDoneUnseen(session))) return false;
-      return true;
-    });
     const now = new Date();
     const buckets: { label: string; items: { session: Session; project: ProjectRecord }[] }[] = [];
-    for (const session of sortSessionsByActivity(matches, { pinned: pinnedOrder })) {
+    for (const session of sortSessionsByActivity(rows, { pinned: pinnedOrder })) {
       const label = timeBucket(session, now);
       let bucket = buckets.at(-1);
       if (bucket?.label !== label) buckets.push(bucket = { label, items: [] });
       bucket.items.push({ session, project: visibleProjects.get(session.projectId)! });
     }
     return buckets;
-  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, locale, pinnedOrder]);
+  }, [layout, visibleProjects, rows, locale, pinnedOrder]);
 
   const renderSession = (session: Session, project?: ProjectRecord) => (
     <SessionRow
@@ -572,7 +528,7 @@ export function Sidebar(props: Props) {
       const idsByServer = new Map<string, string[]>(targets.map((peer) => [peer.id, []]));
       // Only sessions shared with this workbench. Each peer's assistant and quick chats stay private to it.
       for (const session of sessions) {
-        if (serverFilter === 'relevant' && !startedFromServer(session, selfServerId)) continue;
+        if (!inSidebarServerScope(session, serverFilter, selfServerId)) continue;
         const serverId = serverOfObject(session.id);
         if (serverId) idsByServer.get(serverId)?.push(session.id);
       }

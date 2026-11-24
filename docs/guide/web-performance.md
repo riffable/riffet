@@ -184,7 +184,7 @@ pnpm perf:web stream $D --turns 20 --every 500   # 让「进行中」会话持�
 
 - §1、§2.4：打开会话时，转录在一帧里渲染出整个窗口（`app/session/useSessionSync.ts` 的 `coalesced` flush）。图片会话桌面 46 ms，`--cpu 4` 下 310 ms；刷新后打开 260 轮的会话，首个长帧约 200 ms，在会话流的 `hello` 之后。可以把首次挂载分帧，或用 transition 让它可中断，但要先确认阅读锚点在可中断的渲染下仍然成立。
 - §2.2：转录滑动时，每个 scroll 事件都要逐行读一遍挂载行的矩形（`TranscriptView.tsx` 的 `ensureWindow` → `syncMounted`，`readingAnchor.ts` 的 `captureReadingAnchor`）。桌面每帧约 1.5 ms，`--cpu 4` 下约 6 ms。应合并到每帧一次，滚动路径上不重复 ResizeObserver 已经量过的高度。
-- §2.3：`Workbench` 订阅整份会话列表，每次列表更新都要做几件 O(n) 的事（`keepSessionPanels` 的 Set、`recentModel` 的日期解析、收件箱计数、标签页标题的 attention），侧栏的每一行订阅 6 个 store。按现在的数据量测下来不贵（进行中的会话 9 秒里忙碌 198 ms），但开销随会话数增长。
+- §2.3：`Workbench` 订阅整份会话列表，每次列表更新都要做几件 O(n) 的事（`keepSessionPanels` 的 Set、`recentModel` 的日期解析、收件箱计数、侧栏会话筛选与未读计数），侧栏的每一行订阅 6 个 store。按现在的数据量测下来不贵（进行中的会话 9 秒里忙碌 198 ms），但开销随会话数增长。
 - §2.4：上传把文件读成 base64 放进 JSON（`app/session/image-upload.ts`、`lib/api.ts` 的 `upload`），内存里的副本约为文件大小的 1.33 倍，序列化时还要再复制一次。改成二进制上传需要服务端配合。
 - §2.4：每张 Mermaid 图起一个 iframe，各自加载渲染器（`app/session/MermaidDiagram.tsx`），没有共享的渲染器，也没有并发上限。
 - §2.4：转录分组每次发布都对整个窗口做几遍扫描（[performance.md](performance.md) §6 的 `transcriptTurns`）：打开 260 轮的会话时，桌面自身时间 18 ms，`--cpu 4` 下 77 ms。

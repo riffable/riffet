@@ -26,6 +26,7 @@ import { sendSessionCommand } from '@/lib/session-commands';
 import type { HeaderSlots } from './Header';
 import { NoProjects, NewSessionHome } from './ProjectHome';
 import { Sidebar, type SessionAction } from './Sidebar';
+import { useSidebarSessions } from './useSidebarSessions';
 import { MobileSidebar } from './MobileSidebar';
 import { NativeSession } from './terminal/NativeSession';
 import { AttemptGroupPage } from './session/Attempts';
@@ -299,11 +300,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const pageOpen = settingsOpen || pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || Boolean(mainViewId);
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
+  const sidebarSelectedSessionId = anyPageOpen ? '' : session?.id ?? '';
+  const sidebarSessions = useSidebarSessions(sidebarProjects, sessions, sidebarSelectedSessionId, t`未关联项目`);
   /** On the 助理 page: its project, with no page over it, showing its main conversation or the empty state. Derived, so it has no address of its own. */
   const assistantPage = isAssistantProject(project) && !anyPageOpen && (!session || session.id === mainSessionIdOf(project));
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -525,11 +528,12 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
   const sidebar = (mobile: boolean) => (
     <Sidebar
+      sessionList={sidebarSessions}
       projects={sidebarProjects}
       onSelectNoProject={projectlessTasks ? selectNoProject : undefined}
       sessions={sessions}
       selectedProjectId={anyPageOpen ? '' : selectedProjectId}
-      selectedSessionId={anyPageOpen ? '' : session?.id ?? ''}
+      selectedSessionId={sidebarSelectedSessionId}
       backend={backend}
       onSelectProject={selectProject}
       onSelectSession={selectFromSidebar}
