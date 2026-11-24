@@ -323,6 +323,14 @@ export class NativeService {
     return this.watches.get(sessionId)?.status ?? { phase: 'offline' };
   }
 
+  /** Passive read-only refresh of a session watch (creating a short-lived passive watch if absent) before recovery checks. */
+  async refreshStatus(sessionId: string): Promise<void> {
+    const watch = this.ensureWatch(sessionId, true);
+    if (watch.closed) return;
+    if (watch.ticking) await watch.tickPromise;
+    else await this.tick(watch);
+  }
+
   interaction(session: AgentSessionView) { return this.port.dialogs.current(session.id); }
 
   async respondInteraction(session: AgentSessionView, response: NativeInteractionResponse) {
