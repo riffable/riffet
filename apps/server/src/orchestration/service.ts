@@ -31,6 +31,7 @@ import { NativeEventLog } from '../journal/native-log.js';
 import { resolveNativeSessionInput, type NativeSessionRequest } from '../native/session-input.js';
 import { extractIndexable } from '../search/messages.js';
 import type { IdentifiedSession } from '../session-identity.js';
+import { fingerprint, PENDING_FORK_BRIEF_PREFIX, type PendingForkBrief } from '../store/shared.js';
 import { AttemptManager } from './attempts.js';
 import { AutomationEngine } from './automations-engine.js';
 import { continuationSection, sourceLanguage, summaryHeading, writeBrief, writeMaterial, type BriefSource } from './brief.js';
@@ -128,6 +129,49 @@ export class OrchestrationService {
     if (!run || (ids.commandId && run.commandId !== ids.commandId) || !session.origin || (['kind', 'sessionId', 'runId', 'groupId', 'automationId', 'templateId', 'scheduleId'] as const).some(key => session.origin?.[key] !== origin[key])
       || (projectId && project.id !== projectId && project.worktree?.originProjectId !== projectId)) throw new AppError('SESSION_ID_CONFLICT', 'This clientSessionId was already used for a different session creation request', 409);
     return { session, run };
+  }
+
+  private idleForkFingerprint(origin: SessionOrigin, commandId?: string, isolate = false): string {
+    return fingerprint({ kind: 'idle-fork', origin, isolate, ...(commandId ? { commandId } : {}) });
+  }
+
+  private relaunchedFork(ids: Ids, origin: SessionOrigin, expectsRun: boolean, isolate = false): { session: Session; run?: Run } | undefined {
+    if (!ids.sessionId) return undefined;
+    let session: Session;
+    try { session = this.deps.store.getSession(ids.sessionId); } catch (error) { if (error instanceof AppError && error.code === 'SESSION_DELETED') throw error; return undefined; }
+    const sameOrigin = Boolean(session.origin)
+      && !(['kind', 'sessionId', 'runId', 'groupId', 'automationId', 'templateId', 'scheduleId'] as const).some(key => session.origin?.[key] !== origin[key]);
+    if (!sameOrigin) {
+      throw new AppError('SESSION_ID_CONFLICT', 'This clientSessionId was already used for a different session creation request', 409);
+    }
+    if (expectsRun) {
+      const run = this.deps.store.listRuns(session.id)[0];
+      if (!run || (ids.commandId && run.commandId !== ids.commandId)) {
+        throw new AppError('SESSION_ID_CONFLICT', 'This clientSessionId was already used for a different session creation request', 409);
+      }
+      return { session, run };
+    }
+    if (session.creationFingerprint !== this.idleForkFingerprint(origin, ids.commandId, isolate)) {
+      throw new AppError('SESSION_ID_CONFLICT', 'This clientSessionId was already used for a different session creation request', 409);
+    }
+    return { session };
+  }
+
+  /** Opens an idle forked conversation without sending an opening turn. */
+  private launchIdle(input: NativeSessionInput, origin: SessionOrigin, ids: Ids = {}, isolate = false, afterCreate?: (session: Session) => void): { session: Session } {
+    if (this.closed) throw new AppError('SERVICE_CLOSED', 'The workbench is shutting down', 503);
+    const { store } = this.deps;
+    const session = store.transaction(() => {
+      const { session: saved, created } = store.createIdleNativeSession(
+        ids.sessionId ?? randomUUID(),
+        { ...input, origin },
+        this.idleForkFingerprint(origin, ids.commandId, isolate),
+      );
+      if (!created || !afterCreate) return saved;
+      afterCreate(saved);
+      return store.getSession(saved.id);
+    });
+    return { session };
   }
 
   /**
@@ -281,11 +325,12 @@ export class OrchestrationService {
    * from that turn's checkpoint when one exists, and otherwise from `HEAD`. [attach] puts the new
    * conversation on its own task in the same write.
    */
-  async fork(sessionId: string, options: { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string; attach?: (session: Session, source: Session) => void } & Ids): Promise<{ session: Session; run: Run }> {
+  async fork(sessionId: string, options: { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string; attach?: (session: Session, source: Session) => void } & Ids): Promise<{ session: Session; run?: Run }> {
     return this.withOperation(`launch:${options.sessionId ?? randomUUID()}`, async () => {
       const { store } = this.deps;
+      const note = options.note?.trim() || undefined;
       const provenance: SessionOrigin = { kind: 'fork', sessionId, ...(options.runId ? { runId: options.runId } : {}) };
-      const again = this.relaunched(options, provenance);
+      const again = this.relaunchedFork(options, provenance, Boolean(note), Boolean(options.isolate));
       if (again) return again;
       const source = store.getSession(sessionId);
       const targetRun = options.runId ? store.getRun(options.runId) : undefined;
@@ -316,28 +361,42 @@ export class OrchestrationService {
           ...(targetRun?.native?.nativeTurnId ? { upToNativeTurnId: targetRun.native.nativeTurnId } : {}),
           ...(targetRun?.native?.nativeMessageId ? { upToNativeMessageId: targetRun.native.nativeMessageId } : {}),
         });
-        let text: string;
-        if (nativeFork) {
-          const lang = sourceLanguage({ session: source, runs: store.listRuns(source.id), messages: store.indexedMessages(source.id), ...(options.runId ? { upToRunId: options.runId } : {}) });
-          text = options.note?.trim() || (lang === 'en'
-            ? 'Briefly confirm your understanding of the current state, then wait for my next instruction without modifying files yet.'
-            : '先用几句话确认你理解的现状，然后等我的下一步指示，暂时不要修改文件。');
-        } else {
-          const material = await this.briefSource(source, options.runId);
-          text = `${writeBrief(material)}${continuationSection(sourceLanguage(material), 'fork', options.note)}`;
-        }
-        // Recheck at the synchronous acceptance boundary for non-isolated forks.
-        if (!options.isolate && this.activelyRunning(source.id)) {
-          throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before forking in the same workspace, or isolate the fork in a new worktree', 409);
-        }
-        // A continuation keeps the tool groups its source was created with (docs/DEVICES.md §2).
-        return this.launch({
+        const sessionInput: NativeSessionInput = {
           ...input,
           projectId: project.id,
           ...(nativeFork ? { nativeSessionId: nativeFork.nativeSessionId } : {}),
           ...(source.toolGroups?.length ? { toolGroups: source.toolGroups } : {}),
           ...sameLaunchExtensions(source, input),
-        }, text, provenance, options, options.attach && (session => options.attach!(session, source)));
+        };
+        if (note) {
+          let text: string;
+          if (nativeFork) {
+            text = note;
+          } else {
+            const material = await this.briefSource(source, options.runId);
+            text = `${writeBrief(material)}${continuationSection(sourceLanguage(material), 'fork', note)}`;
+          }
+          // Recheck at the synchronous acceptance boundary for non-isolated forks.
+          if (!options.isolate && this.activelyRunning(source.id)) {
+            throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before forking in the same workspace, or isolate the fork in a new worktree', 409);
+          }
+          // A continuation keeps the tool groups its source was created with (docs/DEVICES.md §2).
+          return this.launch(sessionInput, text, provenance, options, options.attach && (session => options.attach!(session, source)));
+        }
+        const pendingBrief: PendingForkBrief | undefined = nativeFork ? undefined : await (async () => {
+          const material = await this.briefSource(source, options.runId);
+          return { brief: writeBrief(material), language: sourceLanguage(material) };
+        })();
+        // Recheck at the synchronous acceptance boundary for non-isolated forks.
+        if (!options.isolate && this.activelyRunning(source.id)) {
+          throw new AppError('SESSION_BUSY', 'Stop or finish the current turn before forking in the same workspace, or isolate the fork in a new worktree', 409);
+        }
+        // Without a user note, fork opens an idle conversation instead of spending a turn asking the
+        // agent to restate the status. Non-native forks attach their brief to the user's first message.
+        return this.launchIdle(sessionInput, provenance, options, Boolean(options.isolate), session => {
+          if (pendingBrief) store.setSetting(`${PENDING_FORK_BRIEF_PREFIX}${session.id}`, pendingBrief);
+          options.attach?.(session, source);
+        });
       } catch (error) {
         await nativeFork?.cleanup?.().catch(() => undefined);
         if (options.isolate && project.id !== origin.id) {

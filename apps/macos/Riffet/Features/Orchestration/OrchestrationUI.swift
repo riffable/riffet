@@ -149,8 +149,16 @@ extension Workbench {
     /// Opens the conversation a launch (fork, handoff) created. The server already has it, so it is
     /// put in the store first: the list has not reloaded yet, and the open must not wait for it.
     func openLaunched(_ result: NativeSessionCreateResult) {
-        store.applySession(session: result.session)
-        open(result.session)
+        openLaunched(session: result.session)
+    }
+
+    func openLaunched(_ result: ForkSessionResult) {
+        openLaunched(session: result.session)
+    }
+
+    private func openLaunched(session: Session) {
+        store.applySession(session: session)
+        open(session)
         refresh()
     }
 }

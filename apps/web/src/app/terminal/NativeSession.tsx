@@ -10,7 +10,7 @@ import { FeedbackNotice, FeedbackNotices, type FeedbackMessage } from '@/compone
 import { Collapse } from '@/components/ui/collapse';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tip } from '@/components/ui/tooltip';
-import { api, HttpError, isSessionReference, restoreContext, type NativeSessionCreateResult, type PromptContextReference } from '@/lib/api';
+import { api, HttpError, isSessionReference, restoreContext, type ForkSessionResult, type PromptContextReference } from '@/lib/api';
 import { serverOfObject } from '@/lib/server-routing';
 import { workbenchAppearanceConnection } from '@/lib/workbench-appearance';
 import { confirmDialog } from '@/lib/dialogs';
@@ -272,7 +272,7 @@ interface Props {
   /** `AppSettings.composerSendLater`: shows the clock in the input box. */
   sendLaterEnabled?: boolean;
   /** A conversation this one started (a fork) was created; the workbench opens it. */
-  onLaunched?: (result: NativeSessionCreateResult) => void;
+  onLaunched?: (result: ForkSessionResult) => void;
   /** The handoff dialog offers every other backend, with why an unavailable one cannot be picked. */
   backends?: NativeBackendCatalogEntry[];
   /** Resolves the conversation a fork or handoff links to, for the line naming it. */

@@ -10,7 +10,7 @@ import { Notice } from '@/components/ui/notice';
 import { Progress } from '@/components/ui/progress';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { Tip } from '@/components/ui/tooltip';
-import { api, attachmentPath, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
+import { api, attachmentPath, request, withClientFeatures, type ForkSessionResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
 import { copyWithToast } from '@/lib/files';
 import { serverOfObject } from '@/lib/server-routing';
@@ -106,7 +106,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       },
       // A fork is the user's act: it is not cancelled with the view that asked for it.
       fork: async (id, runId, { note }: { note?: string } = {}) => {
-        const result: NativeSessionCreateResult = await api.forkSession(id, { clientSessionId: newId(), commandId: newId(), runId, ...(note?.trim() ? { note: note.trim() } : {}) });
+        const result: ForkSessionResult = await api.forkSession(id, { clientSessionId: newId(), commandId: newId(), runId, ...(note?.trim() ? { note: note.trim() } : {}) });
         if (result.project) lists.upsertProject(result.project);
         lists.upsertSession(result.session);
       },

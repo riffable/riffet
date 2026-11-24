@@ -23,10 +23,10 @@
 
 - 每个原生回合（斜杠命令除外）开始前，调度器调用 `beforeTurn` 钩子自动建立检查点，记录 `sessionId` 与 `runId`。同一回合只尝试采集一次，重试或服务重启不会改写起点。钩子最多等待 10 秒，失败或超时不阻塞回合；超时或取消后才完成的检查点会自行删除。每个项目保留最近 50 个回合检查点。
 - `GET /api/sessions/:id/checkpoints`：该会话的回合检查点，最新在前。回退沿用已有的 `/api/projects/:id/checkpoints/:checkpointId/changes`（预览）与 `/restore`（带 `expectedChanges` 校验），不另设接口。
-- `POST /api/sessions/:id/fork`：`{clientSessionId, commandId, runId?, target?, isolate?, note?}`。新会话以一份简报开始（各回合的请求、回复结尾与动过的文件和命令、当前 Git 状态，约 24k 字符，超出时先丢最早的回合）。`runId` 截止到指定回合，`target` 换后端/模型，`isolate` 在新 worktree 中继续。
+- `POST /api/sessions/:id/fork`：`{clientSessionId, commandId, runId?, target?, isolate?, note?}`。同后端支持原生分叉（Claude Code、Pi）时直接克隆原生转录文件（可选截断到 `runId`）；不支持原生分叉或跨后端时生成文本简报（各回合的请求、回复结尾与动过的文件和命令、当前 Git 状态，约 24k 字符，超出时先丢最早的回合）。未传 `note` 时不自动发消息，新会话以空闲状态打开，非原生分叉的简报会随用户发送的第一条消息一并送出；传入 `note` 时立即作为首条消息发起。`runId` 截止到指定回合，`target` 换后端/模型，`isolate` 在新 worktree 中继续。
 - 分叉从不回退代码。撤销某个回合的改动是检查点恢复，单独预览、单独确认，分叉不会悄悄改文件。
 - 恢复检查点、合并和采纳尝试会预留对应工作目录及其中的子项目；已有活动回合时拒绝操作。预留期间新接收的普通消息保留在队列中，文件操作完成后才执行。外部终端中的 Git 命令和人工文件写入不受服务内预留机制管理。
-- 上下文以文本摘要传递，而不是复制各后端的原生会话文件：六个后端的会话格式互不兼容，摘要是唯一通用的形式。
+- 跨后端或不支持原生分叉的后端以文本摘要传递上下文：各后端的会话格式互不兼容，摘要是通用的兜底形式。
 
 ## 3. 多后端并行尝试
 

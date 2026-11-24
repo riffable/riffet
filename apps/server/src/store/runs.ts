@@ -7,8 +7,8 @@ import { AppError } from '../errors.js';
 import { restartObservation, type IdentifiedRun } from '../session-identity.js';
 import { hitFromSession } from './derived-search.js';
 import {
-  fingerprint, normalizeNativeConfig, now, searchScope,
-  type MessageSearchHit, type StorePort,
+  fingerprint, normalizeNativeConfig, now, PENDING_FORK_BRIEF_PREFIX, searchScope,
+  type MessageSearchHit, type PendingForkBrief, type StorePort,
 } from './shared.js';
 
 export function createRun(port: StorePort, sessionId: string, commandId: string, prompt: string): Run {
@@ -59,10 +59,25 @@ export function acceptNativeRun(
       throw new AppError('NATIVE_CONFIG_CHANGED', 'Native conversation settings changed before this submission was accepted', 409, { expected: expectedConfigRevision, actual: configRevision });
     }
     const stamp = now();
+    let effectiveInput = normalizedInput;
+    if (!steer) {
+      const briefKey = `${PENDING_FORK_BRIEF_PREFIX}${sessionId}`;
+      const pendingBrief = port.getSetting<PendingForkBrief | undefined>(briefKey, undefined);
+      if (pendingBrief) {
+        const trimmedStart = normalizedInput.text.trimStart();
+        if (trimmedStart.startsWith('/')) {
+          if (/^\/(?:clear|new)(?:\s|$)/i.test(trimmedStart)) port.deleteSetting(briefKey);
+        } else {
+          const heading = pendingBrief.language === 'en' ? '## Next step' : '## 接下来';
+          effectiveInput = { ...normalizedInput, text: `${pendingBrief.brief}\n\n${heading}\n${normalizedInput.text}` };
+          port.deleteSetting(briefKey);
+        }
+      }
+    }
     const run = port.identified({
-      id: randomUUID(), sessionId, commandId, prompt: normalizedInput.text, state: 'queued', createdAt: stamp, updatedAt: stamp,
+      id: randomUUID(), sessionId, commandId, prompt: effectiveInput.text, state: 'queued', createdAt: stamp, updatedAt: stamp,
       native: {
-        input: normalizedInput,
+        input: effectiveInput,
         ...(contextSnapshots?.length ? { contextSnapshots } : {}),
         config: normalizedConfig,
         fingerprint: idempotencyFingerprint,

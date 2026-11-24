@@ -315,6 +315,7 @@ export interface NativeSessionCreateInput {
 }
 
 export interface NativeSessionCreateResult { session: Session; run: Run; project?: ProjectRecord; }
+export interface ForkSessionResult { session: Session; run?: Run; project?: ProjectRecord; }
 export interface NativeSendOutboxEntry { sessionId: string; body: NativeMessageInput; createdAt: string; mode?: 'interrupt'; steerTarget?: NativeTurnTarget; sourceRunId?: string; ownerRunId?: string; version?: 2; invalidReason?: string; }
 
 let sessionReferencesSupported: boolean | undefined;
@@ -809,7 +810,7 @@ export const api = {
   sendReview: (sessionId: string, body: { commandId: string; comments: ReviewComment[]; note?: string }) => request<Run>(`/api/sessions/${encodeURIComponent(sessionId)}/review`, json('POST', body)),
   /** The checkpoints taken before each turn of this conversation, newest first. */
   sessionCheckpoints: (sessionId: string) => request<Checkpoint[]>(`/api/sessions/${encodeURIComponent(sessionId)}/checkpoints`),
-  forkSession: (sessionId: string, body: LaunchIds & { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string }) => request<NativeSessionCreateResult>(`/api/sessions/${encodeURIComponent(sessionId)}/fork`, json('POST', body)),
+  forkSession: (sessionId: string, body: LaunchIds & { runId?: string; target?: LaunchTarget; isolate?: boolean; note?: string }) => request<ForkSessionResult>(`/api/sessions/${encodeURIComponent(sessionId)}/fork`, json('POST', body)),
   /** The Agent calls a conversation made (docs/AGENT-CALLS.md). */
   agentCalls: async (sessionId: string, signal?: AbortSignal) => (await request<{ calls: AgentCall[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/calls`, { signal })).calls,
   discussions: async (sessionId: string, signal?: AbortSignal) => (await request<Session[]>(`/api/sessions/${encodeURIComponent(sessionId)}/discussions`, { signal })).map(withShownTitle),

@@ -22,8 +22,11 @@ export const INTERACTION_RECEIPTS_PER_SESSION = 200;
 export const STORED_BACKEND_ID_SQL = `COALESCE(json_extract(s.json,'$.backendId'),'${LEGACY_DEFAULT_BACKEND_ID}')`;
 /** A deleted conversation's id is kept here (settings key `session-deleted:<id>`), so no retried request recreates it. */
 export const DELETED_PREFIX = 'session-deleted:';
+/** Deferred fork brief waiting for the user's first message on a non-native fork; removed once consumed or when the session is deleted. */
+export const PENDING_FORK_BRIEF_PREFIX = 'pending-fork-brief:';
+export interface PendingForkBrief { brief: string; language: 'zh' | 'en'; }
 /** Settings a conversation owns outright, by key; removed with it. */
-export const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', 'riffet-mcp:binding:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:'];
+export const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', PENDING_FORK_BRIEF_PREFIX, 'riffet-mcp:binding:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:'];
 export const ACTIVE_SESSION_STATES: ReadonlySet<Session['state']> = new Set(['starting', 'running', 'waiting', 'cancelling']);
 
 /** What remains of a deleted conversation: no title, message or transcript, only enough to refuse its id. */
@@ -188,6 +191,7 @@ export interface StorePort {
   getTerminal(id: string): TerminalInfo;
   getSetting<T>(key: string, fallback: T): T;
   setSetting(key: string, value: unknown): void;
+  deleteSetting(key: string): void;
   getSettings(): AppSettings;
   updateRun(id: string, patch: Partial<Run>): IdentifiedRun;
   transitionNativeRun(id: string, expectedDelivery: NativeRunDetails['delivery'][], nativePatch: Partial<NativeRunDetails>, runPatch?: Partial<Run>): IdentifiedRun | undefined;

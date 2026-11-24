@@ -119,6 +119,9 @@ data class NativeSessionCreateInput(
 data class NativeSessionCreateResult(val session: riffet.contracts.Session, val run: riffet.contracts.Run, val project: riffet.contracts.Project? = null)
 
 @Serializable
+data class ForkSessionResult(val session: riffet.contracts.Session, val run: riffet.contracts.Run? = null, val project: riffet.contracts.Project? = null)
+
+@Serializable
 data class TaskWorkspaceLocation(val path: String, val source: String, val available: Boolean, val error: String? = null)
 
 @Serializable

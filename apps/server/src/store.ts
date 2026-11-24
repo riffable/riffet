@@ -194,6 +194,7 @@ export class Store {
       getTerminal: id => this.getTerminal(id),
       getSetting: (key, fallback) => this.getSetting(key, fallback),
       setSetting: (key, value) => this.setSetting(key, value),
+      deleteSetting: key => this.deleteSetting(key),
       getSettings: () => this.getSettings(),
       updateRun: (id, patch) => this.updateRun(id, patch),
       transitionNativeRun: (id, expectedDelivery, nativePatch, runPatch) => this.transitionNativeRun(id, expectedDelivery, nativePatch, runPatch),
@@ -537,6 +538,34 @@ export class Store {
     if (!patch) return;
     const session = this.updateSession(sessionId, patch);
     this.appendEvent(sessionId, 'session', { session });
+  }
+  createIdleNativeSession(clientSessionId: string, sessionInput: NativeSessionInput, creationFingerprint: string): { session: IdentifiedSession; created: boolean } {
+    if (typeof clientSessionId !== 'string' || !clientSessionId || clientSessionId.length > 200) throw new AppError('INVALID_SESSION_ID', 'clientSessionId must be a non-empty string up to 200 characters');
+    const normalized = normalizedNativeSessionInput(sessionInput);
+    return this.transaction(() => {
+      if (this.isSessionDeleted(clientSessionId)) throw sessionDeleted(clientSessionId);
+      const stored = this.get<Session>('sessions', clientSessionId);
+      const existing = stored && normalizeSessionIdentity(stored);
+      if (existing) {
+        if (existing.kind !== 'native' || existing.creationFingerprint !== creationFingerprint) {
+          throw new AppError('SESSION_ID_CONFLICT', 'This clientSessionId was already used for a different session creation request', 409);
+        }
+        return { session: existing, created: false };
+      }
+      this.getProject(normalized.projectId);
+      const stamp = now();
+      let session: IdentifiedSession = {
+        ...normalized,
+        ...clientTitleSource(normalized.title),
+        id: clientSessionId, kind: 'native', state: 'idle', configRevision: 0, creationFingerprint,
+        lastActivityAt: stamp, seenActivityAt: stamp, createdAt: stamp, updatedAt: stamp,
+      };
+      this.assertNativeIdentityAvailable(session);
+      session = this.withDisplayTitle(session);
+      this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(session.id, session.projectId, JSON.stringify(session));
+      this.sessionsChanged([session.id]);
+      return { session, created: true };
+    });
   }
   createNativeSubmission(clientSessionId: string, sessionInput: NativeSessionInput, commandId: string, input: NativeRunInput, contextSnapshots?: CapturedSessionReference[]): { session: IdentifiedSession; run: IdentifiedRun } {
     if (typeof clientSessionId !== 'string' || !clientSessionId || clientSessionId.length > 200) throw new AppError('INVALID_SESSION_ID', 'clientSessionId must be a non-empty string up to 200 characters');

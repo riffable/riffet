@@ -1855,8 +1855,22 @@ describe('orchestration submissions', () => {
     vi.spyOn(nativeBackends, 'indexableTranscript').mockResolvedValue([]);
     const fork = await call('POST', `/api/sessions/${source.id}/fork`, { clientSessionId: 'history-fork', commandId: 'fork-command' });
     expect(fork.statusCode).toBe(202);
-    expect(fork.json().run.prompt).toContain('Keep the migration backwards compatible');
-    expect(fork.json().run.prompt).toContain('The old reader still accepts the new format');
+    expect(fork.json().run).toBeUndefined();
+    expect(store.listRuns('history-fork')).toHaveLength(0);
+    // Retrying an idle fork with the same idempotency keys returns the created session.
+    expect((await call('POST', `/api/sessions/${source.id}/fork`, { clientSessionId: 'history-fork', commandId: 'fork-command' })).json()).toMatchObject({ session: { id: 'history-fork' } });
+    // The deferred brief rides along with the user's first message, stays idempotent on retry, and is not repeated.
+    const firstSend = await call('POST', '/api/sessions/history-fork/native/send', { commandId: 'fork-first-msg', text: 'Continue with v2' });
+    expect(firstSend.statusCode).toBe(202);
+    expect(firstSend.json().prompt).toContain('Keep the migration backwards compatible');
+    expect(firstSend.json().prompt).toContain('The old reader still accepts the new format');
+    expect(firstSend.json().prompt).toContain('Continue with v2');
+    const retrySend = await call('POST', '/api/sessions/history-fork/native/send', { commandId: 'fork-first-msg', text: 'Continue with v2' });
+    expect(retrySend.statusCode).toBe(202);
+    expect(retrySend.json().id).toBe(firstSend.json().id);
+    const secondSend = await call('POST', '/api/sessions/history-fork/native/send', { commandId: 'fork-second-msg', text: 'Second turn only' });
+    expect(secondSend.statusCode).toBe(202);
+    expect(secondSend.json().prompt).toBe('Second turn only');
     vi.spyOn(nativeBackends, 'indexableTranscript').mockImplementationOnce(async () => {
       store.acceptNativeRun(source.id, 'new-source-command', { text: 'continue', attachmentIds: [], context: [] }, { mode: 'agent' });
       return [];
@@ -1919,13 +1933,13 @@ describe('orchestration submissions', () => {
     store.transitionNativeRun(first.id, ['queued'], { delivery: 'observed', timings: { dispatchAt: at, completedAt: at + 3_000 } }, { state: 'completed' });
     store.indexMessages([{ sessionId: session.id, messageId: 'answer-first', kind: 'assistant', text: 'answer to first question', at: new Date(at + 2_000).toISOString() }]);
     vi.spyOn(nativeBackends, 'indexableTranscript').mockResolvedValue([]);
-    const fork = await call('POST', `/api/sessions/${session.id}/fork`, { clientSessionId: 'queued-fork', commandId: 'fork-command', runId: first.id });
+    const fork = await call('POST', `/api/sessions/${session.id}/fork`, { clientSessionId: 'queued-fork', commandId: 'fork-command', runId: first.id, note: 'follow up' });
     expect(fork.statusCode).toBe(202);
     expect(fork.json().run.prompt).toContain('answer to first question');
     expect(fork.json().run.prompt).not.toContain('queued question');
     store.transitionNativeRun(queued.id, ['queued'], { delivery: 'observed', timings: { dispatchAt: at + 4_000, completedAt: at + 6_000 } }, { state: 'completed' });
     store.indexMessages([{ sessionId: session.id, messageId: 'answer-queued', kind: 'assistant', text: 'answer to queued question', at: new Date(at + 5_000).toISOString() }]);
-    const laterFork = await call('POST', `/api/sessions/${session.id}/fork`, { clientSessionId: 'later-queued-fork', commandId: 'fork-command', runId: first.id });
+    const laterFork = await call('POST', `/api/sessions/${session.id}/fork`, { clientSessionId: 'later-queued-fork', commandId: 'fork-command', runId: first.id, note: 'follow up' });
     expect(laterFork.statusCode).toBe(202);
     expect(laterFork.json().run.prompt).toContain('answer to first question');
     expect(laterFork.json().run.prompt).not.toContain('answer to queued question');
@@ -1940,7 +1954,7 @@ describe('orchestration submissions', () => {
       { kind: 'agent_message_chunk', nativeId: 'a1', at: '2026-01-01T00:00:01.000Z', payload: { type: 'agent_message_chunk', nativeId: 'a1', createdAt: '2026-01-01T00:00:01.000Z', data: { content: { type: 'text', text: 'P0 P1 P2 proposal' } } } },
       { kind: 'user_message_chunk', nativeId: 'u2', at: '2026-01-01T00:01:05.000Z', payload: { type: 'user_message_chunk', nativeId: 'u2', createdAt: '2026-01-01T00:01:05.000Z', data: { content: { type: 'text', text: 'explain messages' } } } },
     ]);
-    const roundedFork = await call('POST', `/api/sessions/${rounded.id}/fork`, { clientSessionId: 'rounded-fork', commandId: 'rounded-fork-command', runId: turnOne.id });
+    const roundedFork = await call('POST', `/api/sessions/${rounded.id}/fork`, { clientSessionId: 'rounded-fork', commandId: 'rounded-fork-command', runId: turnOne.id, note: 'follow up' });
     expect(roundedFork.statusCode).toBe(202);
     expect(roundedFork.json().run.prompt).toContain('P0 P1 P2 proposal');
     expect(roundedFork.json().run.prompt).not.toContain('explain messages');
@@ -1971,11 +1985,27 @@ describe('orchestration submissions', () => {
       { kind: 'agent_message_chunk', nativeId: 'a-dup-2', turnId: 't-dup-2', at: '2026-01-01T00:00:04.000Z', payload: { type: 'agent_message_chunk', nativeId: 'a-dup-2', nativeTurnId: 't-dup-2', runId: r2.id, createdAt: '2026-01-01T00:00:04.000Z', data: { content: { type: 'text', text: 'SECOND-TURN-EXCLUDED' } } } },
     ]);
     vi.spyOn(nativeBackends, 'indexableTranscript').mockResolvedValue([]);
-    const midFork = await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'dup-mid-fork', commandId: 'dup-mid-cmd', runId: r1.id });
+    const midFork = await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'dup-mid-fork', commandId: 'dup-mid-cmd', runId: r1.id, note: 'Try approach B' });
     expect(midFork.statusCode).toBe(202);
     expect(midFork.json().run.prompt).toContain('FIRST-TURN-ONLY');
     expect(midFork.json().run.prompt).not.toContain('SECOND-TURN-EXCLUDED');
     expect(midFork.json().run.prompt).toContain('## Next step');
+    expect(midFork.json().run.prompt).toContain('Try approach B');
+
+    // 2b) Native fork without a note stays idle with cloned nativeSessionId and no auto-sent run.
+    const nativeForkSpy = vi.spyOn(nativeBackends, 'forkNativeSession').mockResolvedValue({ nativeSessionId: 'native-fork-idle' });
+    const nativeIdle = await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'native-idle-fork', commandId: 'native-idle-cmd', runId: r1.id });
+    expect(nativeIdle.statusCode).toBe(202);
+    expect(nativeIdle.json().run).toBeUndefined();
+    expect(nativeIdle.json().session).toMatchObject({ id: 'native-idle-fork', state: 'idle', nativeSessionId: 'native-fork-idle' });
+    expect(store.listRuns('native-idle-fork')).toHaveLength(0);
+    // Sending a message on a natively forked session sends only the user's text (no deferred brief).
+    const nativeMsg = await call('POST', '/api/sessions/native-idle-fork/native/send', { commandId: 'native-user-msg', text: 'Switch to approach B' });
+    expect(nativeMsg.statusCode).toBe(202);
+    expect(nativeMsg.json().prompt).toBe('Switch to approach B');
+    // Late retry of the fork request still resolves idempotently after user turns exist.
+    expect((await call('POST', `/api/sessions/${dup.id}/fork`, { clientSessionId: 'native-idle-fork', commandId: 'native-idle-cmd', runId: r1.id })).json()).toMatchObject({ session: { id: 'native-idle-fork' } });
+    nativeForkSpy.mockRestore();
 
     // 3) Session reference skips fork/handoff brief boilerplate in excerpt and records compact tool summaries.
     const forkedSource = store.createSession({ projectId: project.id, kind: 'native', title: 'Forked thread' });

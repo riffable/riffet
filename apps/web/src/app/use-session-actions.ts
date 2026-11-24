@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { Attachment, AttemptGroup, MarkLocation, NativeBackendId, Session, TerminalInfo, ToolGroupId } from '@contracts';
-import { api, apiFor, HttpError, messageContext, restoreNewSessionContext, listNativeCreateRequests, removeNativeCreateRequest, saveNativeCreateRequest, type MessageSearchHit, type NativeSessionCreateInput, type NativeSessionCreateResult, type ProjectRecord, type PromptContextReference, type Bootstrap } from '@/lib/api';
+import { api, apiFor, HttpError, messageContext, restoreNewSessionContext, listNativeCreateRequests, removeNativeCreateRequest, saveNativeCreateRequest, type ForkSessionResult, type MessageSearchHit, type NativeSessionCreateInput, type NativeSessionCreateResult, type ProjectRecord, type PromptContextReference, type Bootstrap } from '@/lib/api';
 import { isShellTerminal } from '@/lib/backends';
 import { serverOfObject } from '@/lib/server-routing';
 import { promptDialog } from '@/lib/dialogs';
@@ -210,14 +210,14 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   };
 
   /** Opens a conversation the workbench launched on the reader's behalf (fork, handoff, attempt, template). */
-  const openLaunched = useCallback((result: NativeSessionCreateResult) => {
+  const openLaunched = useCallback((result: ForkSessionResult) => {
     const show = () => {
       if (result.project) lists.upsertProject(result.project);
       upsertSession(result.session);
       // The server marks the source handed off in the same request; reflect it before the next refresh.
       const origin = result.session.origin;
       if (origin?.kind === 'handoff' && origin.sessionId) lists.markHandedOff(origin.sessionId, result.session.id);
-      ui.set({ nativeRunSeed: { sessionId: result.session.id, run: result.run } });
+      if (result.run) ui.set({ nativeRunSeed: { sessionId: result.session.id, run: result.run } });
       handlers.selectSession(result.session);
     };
     // Isolated templates create a new worktree project along with the session. Opening that

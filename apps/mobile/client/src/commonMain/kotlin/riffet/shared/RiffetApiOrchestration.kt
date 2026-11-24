@@ -37,7 +37,7 @@ suspend fun RiffetApi.forkSession(
     target: LaunchTarget? = null,
     isolate: Boolean = false,
     note: String? = null,
-): NativeSessionCreateResult =
+): ForkSessionResult =
     post(
         "/api/sessions/${sessionId.enc()}/fork",
         wireBody(ForkSessionBody(clientSessionId, commandId, runId, target, isolate, note)),
