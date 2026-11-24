@@ -13,8 +13,7 @@ export class SessionLock {
 
   /** Reentrant per-session lock; an inherited async context is ignored after its scope closes. */
   async withSession<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
-    const inherited = this.context.getStore()?.find(scope => scope.sessionId === sessionId);
-    if (inherited?.active) return fn();
+    if (this.context.getStore()?.some(scope => scope.sessionId === sessionId && scope.active)) return fn();
 
     const previous = this.tails.get(sessionId);
     let release!: () => void;
@@ -22,8 +21,8 @@ export class SessionLock {
     const tail = (previous ?? Promise.resolve()).catch(() => undefined).then(() => gate);
     this.tails.set(sessionId, tail);
     const scope: LockScope = { sessionId, active: true };
-    const parent = this.context.getStore() ?? [];
     const run = async () => {
+      const parent = (this.context.getStore() ?? []).filter(item => item.active);
       try { return await this.context.run([...parent, scope], fn); }
       finally {
         scope.active = false;
